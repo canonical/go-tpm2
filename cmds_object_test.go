@@ -39,8 +39,7 @@ func createPrimary(t *testing.T, tpm TPM) (Resource, Name) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil,
-		PCRSelectionList{}, "")
+	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Failed to create primary object: %v", err)
 	}
@@ -128,8 +127,7 @@ func TestLoad(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &SensitiveCreate{}, &template, nil,
-		PCRSelectionList{}, "")
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -166,8 +164,7 @@ func TestReadPublic(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &SensitiveCreate{}, &template, nil,
-		PCRSelectionList{}, "")
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -210,8 +207,7 @@ func TestLoadExternal(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	_, outPublic, _, _, _, err := tpm.Create(primary, &SensitiveCreate{}, &template, nil,
-		PCRSelectionList{}, "")
+	_, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
