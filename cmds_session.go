@@ -49,7 +49,7 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 			return nil, InvalidParamError{fmt.Sprintf("invalid auth value: %v", auth)}
 		}
 	} else {
-		bind = &permanentContext{handle: HandleNull}
+		bind, _ = t.WrapHandle(HandleNull)
 	}
 
 	nonceCaller := make([]byte, digestSize)
@@ -68,6 +68,7 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 
 	sessionContext := &sessionContext{handle: sessionHandle,
 		hashAlg: authHash,
+		boundResource: bind,
 		nonceCaller: Nonce(nonceCaller),
 		nonceTPM: nonceTPM}
 

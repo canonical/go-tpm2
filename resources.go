@@ -85,8 +85,9 @@ func (r *nvIndexContext) SetTpm(t *tpmImpl) {
 
 type sessionContext struct {
 	tpm *tpmImpl
-	hashAlg AlgorithmId
 	handle Handle
+	hashAlg AlgorithmId
+	boundResource ResourceContext
 	sessionKey []byte
 	nonceCaller Nonce
 	nonceTPM Nonce

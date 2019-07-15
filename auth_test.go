@@ -50,11 +50,10 @@ func TestHMACUnboundSession(t *testing.T) {
 	}
 	defer flushContext(t, tpm, objectHandle)
 
-	// TODO: The response HMAC is calculated with the new auth value, and this currently fails
-	//if err := tpm.HierarchyChangeAuth(HandleOwner, Auth{}, session); err != nil {
-	//	t.Fatalf("HierarchyChangeAuth failed: %v", err)
-	//}
-	//resetAuth = false
+	if err := tpm.HierarchyChangeAuth(HandleOwner, Auth{}, session); err != nil {
+		t.Fatalf("HierarchyChangeAuth failed: %v", err)
+	}
+	resetAuth = false
 }
 
 func TestHMACBoundSession(t *testing.T) {

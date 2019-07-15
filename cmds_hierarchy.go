@@ -39,6 +39,22 @@ func (t *tpmImpl) ClearControl(authHandle Handle, disable bool, session interfac
 }
 
 func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, session interface{}) error {
-	return t.RunCommand(CommandHierarchyChangeAuth, Format{1, 1}, Format{0, 0}, authHandle,
-		newAuth, session)
+	responseCode, responseTag, response, err :=
+		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth, Format{1, 1}, authHandle, newAuth,
+			session)
+	if err != nil {
+		return err
+	}
+
+	updatedSession := session
+
+	switch s := session.(type) {
+	case *Session:
+		if s.Handle.(*sessionContext).boundResource.Handle() != authHandle {
+			updatedSession = &Session{Handle: s.Handle, Attributes: s.Attributes, AuthValue: newAuth}
+		}
+	}
+
+	return ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Format{0, 0},
+		updatedSession)
 }
