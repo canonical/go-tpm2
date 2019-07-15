@@ -61,15 +61,17 @@ func (a *commandAuthArea) Unmarshal(buf io.Reader) error {
 	return errors.New("no need to unmarshal a command's auth area")
 }
 
-func buildCommandPasswordAuth(password []byte) authCommand {
-	return authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: password}
+func buildCommandPasswordAuth(authValue Auth) authCommand {
+	return authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: authValue}
 }
 
 func buildCommandAuth(auth interface{}) (authCommand, error) {
 	switch a := auth.(type) {
 	case string:
-		return buildCommandPasswordAuth([]byte(a)), nil
+		return buildCommandPasswordAuth(Auth(a)), nil
 	case []byte:
+		return buildCommandPasswordAuth(Auth(a)), nil
+	case Auth:
 		return buildCommandPasswordAuth(a), nil
 	}
 	return authCommand{}, InvalidAuthParamError{fmt.Sprintf("unexpected type (%s)", reflect.TypeOf(auth))}
