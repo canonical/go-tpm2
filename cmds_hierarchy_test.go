@@ -127,3 +127,57 @@ func TestCreateStoragePrimaryECC(t *testing.T) {
 		t.Errorf("CreatePrimary returned object with invalid ECC coords")
 	}
 }
+
+func TestHierarchyChangeAuth(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	if err := tpm.HierarchyChangeAuth(HandleOwner, Auth("1234"), ""); err != nil {
+		t.Fatalf("HierarchyChangeAuth failed: %v", err)
+	}
+	resetAuth := true
+	defer func() {
+		if !resetAuth {
+			return
+		}
+		if err := tpm.HierarchyChangeAuth(HandleOwner, Auth{}, "1234"); err != nil {
+			t.Errorf("Failed to reset hierarchy auth: %v", err)
+		}
+	}()
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+			AttrRestricted | AttrDecrypt,
+		Params: PublicParamsU{
+			RSADetail: &RSAParams{
+				Symmetric: SymDefObject{
+					Algorithm: AlgorithmAES,
+					KeyBits:   KeyBitsU{Sym: 128},
+					Mode:      SymModeU{Sym: AlgorithmCFB}},
+				Scheme:   RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(
+		HandleOwner, &SensitiveCreate{}, &template, nil, PCRSelectionList{}, "1234")
+	if err != nil {
+		t.Fatalf("CreatePrimary failed: %v", err)
+	}
+	defer flushContext(t, tpm, objectHandle)
+
+	persistHandle, err := tpm.EvictControl(HandleOwner, objectHandle, Handle(0x81020000), "1234")
+	if err != nil {
+		t.Fatalf("EvictControl failed: %v", err)
+	}
+
+	if err := tpm.HierarchyChangeAuth(HandleOwner, Auth{}, "1234"); err != nil {
+		t.Fatalf("HierarchyChangeAuth failed: %v", err)
+	}
+	resetAuth = false
+
+	_, err = tpm.EvictControl(HandleOwner, persistHandle, persistHandle.Handle(), "")
+	if err != nil {
+		t.Errorf("EvictControl failed: %v", err)
+	}
+}

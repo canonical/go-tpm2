@@ -36,7 +36,7 @@ func TestEvictControl(t *testing.T) {
 	persist := Handle(0x81020000)
 	outHandle, err := tpm.EvictControl(HandleOwner, objectHandle, persist, "")
 	if err != nil {
-		t.Errorf("EvictControl failed: %v", err)
+		t.Fatalf("EvictControl failed: %v", err)
 	}
 
 	if outHandle.Handle() != persist {
