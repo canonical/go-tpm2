@@ -801,7 +801,3 @@ type TaggedPCRPropertyList []TaggedPCRSelect
 func (l TaggedPCRPropertyList) SliceType() SliceType {
 	return SliceTypeList
 }
-
-type Resource interface {
-	Handle() Handle
-}

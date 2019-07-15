@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+type Resource interface {
+	Handle() Handle
+}
+
 type resourcePrivate interface {
 	Tpm() *tpmImpl
 	SetTpm(t *tpmImpl)

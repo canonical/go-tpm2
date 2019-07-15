@@ -39,7 +39,7 @@ func createPrimary(t *testing.T, tpm TPM) (Resource, Name) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &SensitiveCreate{}, &template, nil,
+	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil,
 		PCRSelectionList{}, "")
 	if err != nil {
 		t.Fatalf("Failed to create primary object: %v", err)
@@ -70,7 +70,7 @@ func TestCreate(t *testing.T) {
 		PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 	outPrivate, outPublic, creationData, creationHash, creationTicket, err := tpm.Create(primary,
-		&SensitiveCreate{}, &template, nil, creationPCR, "")
+		nil, &template, nil, creationPCR, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}

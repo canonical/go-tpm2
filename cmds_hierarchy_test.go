@@ -76,7 +76,7 @@ func TestCreateStoragePrimaryRSA(t *testing.T) {
 		PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 	objectHandle, outPublic, creationData, creationHash, creationTicket, name, err := tpm.CreatePrimary(
-		HandleOwner, &SensitiveCreate{}, &template, nil, creationPCR, "")
+		HandleOwner, nil, &template, nil, creationPCR, "")
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestCreateStoragePrimaryECC(t *testing.T) {
 		PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 	objectHandle, outPublic, creationData, creationHash, creationTicket, name, err := tpm.CreatePrimary(
-		HandleOwner, &SensitiveCreate{}, &template, nil, creationPCR, "")
+		HandleOwner, nil, &template, nil, creationPCR, "")
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}

@@ -4,7 +4,7 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 	outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (Resource, *Public, *CreationData,
 	Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
-		return nil, nil, nil, nil, nil, nil, InvalidParamError{"nil inSensitive"}
+		inSensitive = &SensitiveCreate{}
 	}
 	if inPublic == nil {
 		return nil, nil, nil, nil, nil, nil, InvalidParamError{"nil inPublic"}

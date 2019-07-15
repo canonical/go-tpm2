@@ -7,7 +7,7 @@ func (t *tpmImpl) Create(parentHandle Resource, inSensitive *SensitiveCreate, in
 		return nil, nil, nil, nil, nil, InvalidParamError{"nil parentHandle"}
 	}
 	if inSensitive == nil {
-		return nil, nil, nil, nil, nil, InvalidParamError{"nil inSensitive"}
+		inSensitive = &SensitiveCreate{}
 	}
 	if inPublic == nil {
 		return nil, nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
