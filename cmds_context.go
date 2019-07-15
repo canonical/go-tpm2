@@ -1,22 +1,22 @@
 package tpm2
 
-func (t *tpmImpl) FlushContext(flushHandle Resource) error {
+func (t *tpmImpl) FlushContext(flushHandle ResourceContext) error {
 	if flushHandle == nil {
 		return InvalidParamError{"nil flushHandle"}
 	}
-	if err := t.checkResourceParam(flushHandle); err != nil {
+	if err := t.checkResourceContextParam(flushHandle); err != nil {
 		return err
 	}
 
 	return t.RunCommand(CommandFlushContext, Format{0, 1}, Format{0, 0}, flushHandle.Handle())
 }
 
-func (t *tpmImpl) EvictControl(auth Handle, objectHandle Resource, persistentHandle Handle,
-	session interface{}) (Resource, error) {
+func (t *tpmImpl) EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
+	session interface{}) (ResourceContext, error) {
 	if objectHandle == nil {
 		return nil, InvalidParamError{"nil objectHandle"}
 	}
-	if err := t.checkResourceParam(objectHandle); err != nil {
+	if err := t.checkResourceContextParam(objectHandle); err != nil {
 		return nil, err
 	}
 
@@ -26,7 +26,7 @@ func (t *tpmImpl) EvictControl(auth Handle, objectHandle Resource, persistentHan
 	}
 
 	if objectHandle.Handle() == persistentHandle {
-		t.evictResource(objectHandle)
+		t.evictResourceContext(objectHandle)
 		return nil, nil
 	}
 	return t.WrapHandle(persistentHandle)

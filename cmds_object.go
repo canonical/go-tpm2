@@ -1,8 +1,8 @@
 package tpm2
 
-func (t *tpmImpl) Create(parentHandle Resource, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-	creationPCR PCRSelectionList, session interface{}) (Private, *Public, *CreationData, Digest, *TkCreation,
-	error) {
+func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+	outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (Private, *Public, *CreationData,
+	Digest, *TkCreation, error) {
 	if parentHandle == nil {
 		return nil, nil, nil, nil, nil, InvalidParamError{"nil parentHandle"}
 	}
@@ -12,7 +12,7 @@ func (t *tpmImpl) Create(parentHandle Resource, inSensitive *SensitiveCreate, in
 	if inPublic == nil {
 		return nil, nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
 	}
-	if err := t.checkResourceParam(parentHandle); err != nil {
+	if err := t.checkResourceContextParam(parentHandle); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -31,15 +31,15 @@ func (t *tpmImpl) Create(parentHandle Resource, inSensitive *SensitiveCreate, in
 	return outPrivate, &outPublic, &creationData, creationHash, &creationTicket, nil
 }
 
-func (t *tpmImpl) Load(parentHandle Resource, inPrivate Private, inPublic *Public, session interface{}) (Resource,
-	Name, error) {
+func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
+	session interface{}) (ResourceContext, Name, error) {
 	if parentHandle == nil {
 		return nil, nil, InvalidParamError{"nil parentHandle"}
 	}
 	if inPublic == nil {
 		return nil, nil, InvalidParamError{"nil inPublic"}
 	}
-	if err := t.checkResourceParam(parentHandle); err != nil {
+	if err := t.checkResourceContextParam(parentHandle); err != nil {
 		return nil, nil, err
 	}
 
@@ -56,13 +56,13 @@ func (t *tpmImpl) Load(parentHandle Resource, inPrivate Private, inPublic *Publi
 		return nil, nil, err
 	}
 
-	resource := &objectResource{handle: objectHandle, public: *pubCopy, name: name}
-	t.addResource(resource)
+	objectHandleRc := &objectContext{handle: objectHandle, public: *pubCopy, name: name}
+	t.addResourceContext(objectHandleRc)
 
-	return resource, name, nil
+	return objectHandleRc, name, nil
 }
 
-func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (Resource, Name,
+func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name,
 	error) {
 	if inPublic == nil {
 		return nil, nil, InvalidParamError{"nil inPublic"}
@@ -81,10 +81,10 @@ func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy
 		return nil, nil, err
 	}
 
-	resource := &objectResource{handle: objectHandle, public: *pubCopy, name: name}
-	t.addResource(resource)
+	objectHandleRc := &objectContext{handle: objectHandle, public: *pubCopy, name: name}
+	t.addResourceContext(objectHandleRc)
 
-	return resource, name, nil
+	return objectHandleRc, name, nil
 }
 
 func (t *tpmImpl) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
@@ -98,11 +98,11 @@ func (t *tpmImpl) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
 	return &outPublic, name, qualifiedName, nil
 }
 
-func (t *tpmImpl) ReadPublic(objectHandle Resource) (*Public, Name, Name, error) {
+func (t *tpmImpl) ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error) {
 	if objectHandle == nil {
 		return nil, nil, nil, InvalidParamError{"nil objectHandle"}
 	}
-	if err := t.checkResourceParam(objectHandle); err != nil {
+	if err := t.checkResourceContextParam(objectHandle); err != nil {
 		return nil, nil, nil, err
 	}
 	return t.readPublic(objectHandle.Handle())

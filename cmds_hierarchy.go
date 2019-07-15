@@ -1,8 +1,8 @@
 package tpm2
 
 func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
-	outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (Resource, *Public, *CreationData,
-	Digest, *TkCreation, Name, error) {
+	outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public,
+	*CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -24,10 +24,10 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
-	resource := &objectResource{handle: objectHandle, public: outPublic, name: name}
-	t.addResource(resource)
+	objectHandleRc := &objectContext{handle: objectHandle, public: outPublic, name: name}
+	t.addResourceContext(objectHandleRc)
 
-	return resource, &outPublic, &creationData, creationHash, &creationTicket, name, nil
+	return objectHandleRc, &outPublic, &creationData, creationHash, &creationTicket, name, nil
 }
 
 func (t *tpmImpl) Clear(authHandle Handle, session interface{}) error {

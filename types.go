@@ -20,6 +20,7 @@ type ObjectAttributes uint32
 type Property uint32
 type PropertyPCR uint32
 type ResponseCode uint32
+type SessionType uint8
 type StartupType uint16
 type StructTag uint16
 
@@ -277,16 +278,16 @@ func (p PublicParamsU) Select(selector interface{}, u reflect.Value) (reflect.Va
 	return reflect.Value{}, invalidSelectorError{selector}
 }
 
-type KeyBitsU struct {
+type SymKeyBitsU struct {
 	Sym uint16
 	XOR AlgorithmId
 }
 
-func (b KeyBitsU) StructFlags() StructFlags {
+func (b SymKeyBitsU) StructFlags() StructFlags {
 	return StructFlagUnion
 }
 
-func (b KeyBitsU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (b SymKeyBitsU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmXOR:
 		return u.FieldByName("XOR"), nil
@@ -521,9 +522,23 @@ type KeyedHashParams struct {
 	Scheme KeyedHashScheme
 }
 
+type SymDef struct {
+	Algorithm AlgorithmId
+	KeyBits SymKeyBitsU
+	Mode SymModeU
+}
+
+func (d SymDef) StructFlags() StructFlags {
+	return StructFlagContainsUnion
+}
+
+func (d SymDef) Selector(field reflect.StructField) interface{} {
+	return d.Algorithm
+}
+
 type SymDefObject struct {
 	Algorithm AlgorithmId
-	KeyBits   KeyBitsU
+	KeyBits   SymKeyBitsU
 	Mode      SymModeU
 }
 

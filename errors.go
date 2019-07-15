@@ -52,6 +52,14 @@ func (e InvalidResponseError) Error() string {
 	return fmt.Sprintf("invalid response from TPM: %s", e.msg)
 }
 
+type InvalidAuthResponseError struct {
+	msg string
+}
+
+func (e InvalidAuthResponseError) Error() string {
+	return fmt.Sprintf("invalid auth response from TPM: %s", e.msg)
+}
+
 type TPMReadError struct {
 	IOError error
 }

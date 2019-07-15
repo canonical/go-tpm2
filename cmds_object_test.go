@@ -24,7 +24,7 @@ func verifyPublicAgainstTemplate(t *testing.T, template, public *Public) {
 	}
 }
 
-func createPrimary(t *testing.T, tpm TPM) (Resource, Name) {
+func createPrimary(t *testing.T, tpm TPM) (ResourceContext, Name) {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
@@ -34,7 +34,7 @@ func createPrimary(t *testing.T, tpm TPM) (Resource, Name) {
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   KeyBitsU{Sym: 128},
+					KeyBits:   SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Sym: AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,

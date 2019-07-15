@@ -18,7 +18,7 @@ func openTPMForTesting(t *testing.T) TPM {
 	return tpm
 }
 
-func flushContext(t *testing.T, tpm TPM, handle Resource) {
+func flushContext(t *testing.T, tpm TPM, handle ResourceContext) {
 	if err := tpm.FlushContext(handle); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func verifyCreatePrimaryCommon(t *testing.T, objectHandle Resource, nameAlgSize int, template, outPublic *Public,
-	creationPCR PCRSelectionList, creationData *CreationData, creationHash Digest,
+func verifyCreatePrimaryCommon(t *testing.T, objectHandle ResourceContext, nameAlgSize int, template,
+	outPublic *Public, creationPCR PCRSelectionList, creationData *CreationData, creationHash Digest,
 	creationTicket *TkCreation, name Name) {
 	if objectHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
 		t.Errorf("CreatePrimary returned an invalid handle 0x%08x", objectHandle.Handle())
@@ -65,7 +65,7 @@ func TestCreateStoragePrimaryRSA(t *testing.T) {
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   KeyBitsU{Sym: 128},
+					KeyBits:   SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Sym: AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
@@ -103,7 +103,7 @@ func TestCreateStoragePrimaryECC(t *testing.T) {
 			ECCDetail: &ECCParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits: KeyBitsU{Sym: 128},
+					KeyBits: SymKeyBitsU{Sym: 128},
 					Mode: SymModeU{Sym: AlgorithmCFB}},
 				Scheme: ECCScheme{Scheme: AlgorithmNull},
 				CurveID: ECCCurveNIST_P256,
@@ -154,7 +154,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   KeyBitsU{Sym: 128},
+					KeyBits:   SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Sym: AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,

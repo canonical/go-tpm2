@@ -29,6 +29,7 @@ const (
 	CommandLoadExternal        CommandCode = 0x00000167
 	CommandNVReadPublic        CommandCode = 0x00000169
 	CommandReadPublic          CommandCode = 0x00000173
+	CommandStartAuthSession	   CommandCode = 0x00000176
 	CommandGetCapability       CommandCode = 0x0000017A
 	CommandGetTestResult       CommandCode = 0x0000017C
 )
@@ -408,9 +409,8 @@ const (
 	ECCCurveFirst ECCCurve = ECCCurveNIST_P192
 )
 
-var digestSizes = map[AlgorithmId]uint16{
-	AlgorithmSHA1:   20,
-	AlgorithmSHA256: 32,
-	AlgorithmSHA384: 48,
-	AlgorithmSHA512: 64,
-}
+const (
+	SessionTypeHMAC SessionType = iota
+	SessionTypePolicy
+	SessionTypeTrial = iota + 1
+)

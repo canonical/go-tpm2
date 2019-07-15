@@ -17,7 +17,7 @@ func TestEvictControl(t *testing.T) {
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   KeyBitsU{Sym: 128},
+					KeyBits:   SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Sym: AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,

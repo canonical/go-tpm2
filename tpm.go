@@ -3,6 +3,7 @@ package tpm2
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -19,12 +20,10 @@ type Format struct {
 type TPM interface {
 	Close() error
 
-	RunCommandBytesRaw(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte,
-		error)
-	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (StructTag, []byte, error)
+	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte, error)
 	RunCommand(commandCode CommandCode, commandFormat, responseFormat Format, params ...interface{}) error
 
-	WrapHandle(handle Handle) (Resource, error)
+	WrapHandle(handle Handle) (ResourceContext, error)
 
 	// Start-up
 	Startup(startupType StartupType) error
@@ -35,27 +34,31 @@ type TPM interface {
 	IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error)
 	GetTestResult() (MaxBuffer, ResponseCode, error)
 
+	// Session Commands
+	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
+		authHash AlgorithmId, auth interface{}) (ResourceContext, error)
+
 	// Object Commands
-	Create(parentHandle Resource, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
+	Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
 		creationPCR PCRSelectionList, session interface{}) (Private, *Public, *CreationData, Digest,
 		*TkCreation, error)
-	Load(parentHandle Resource, inPrivate Private, inPublic *Public, session interface{}) (Resource, Name,
-		error)
-	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (Resource, Name, error)
-	ReadPublic(objectHandle Resource) (*Public, Name, Name, error)
+	Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
+		session interface{}) (ResourceContext, Name, error)
+	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name, error)
+	ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error)
 
 	// Hierarchy Commands
 	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, session interface{}) (Resource, *Public, *CreationData, Digest,
-		*TkCreation, Name, error)
+		creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public, *CreationData,
+		Digest, *TkCreation, Name, error)
 	Clear(authHandle Handle, session interface{}) error
 	ClearControl(authHandle Handle, disable bool, session interface{}) error
 	HierarchyChangeAuth(authHandle Handle, newAuth Auth, session interface{}) error
 
 	// Context Management
-	FlushContext(flushHandle Resource) error
-	EvictControl(auth Handle, objectHandle Resource, persistentHandle Handle, session interface{}) (Resource,
-		error)
+	FlushContext(flushHandle ResourceContext) error
+	EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
+		session interface{}) (ResourceContext, error)
 
 	// Capability Commands
 	GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData, error)
@@ -71,7 +74,7 @@ type TPM interface {
 	GetCapabilityAuthPolicies(first Handle, propertyCount uint32) (TaggedPolicyList, error)
 
 	// Non-volatile Storage
-	NVReadPublic(nvIndex Resource) (*NVPublic, Name, error)
+	NVReadPublic(nvIndex ResourceContext) (*NVPublic, Name, error)
 }
 
 func concat(chunks ...[]byte) []byte {
@@ -100,7 +103,7 @@ type responseHeader struct {
 
 type tpmImpl struct {
 	tpm       io.ReadWriteCloser
-	resources map[Handle]Resource
+	resources map[Handle]ResourceContext
 }
 
 func (t *tpmImpl) Close() error {
@@ -108,14 +111,14 @@ func (t *tpmImpl) Close() error {
 		return err
 	}
 
-	for _, resource := range t.resources {
-		resource.(resourcePrivate).SetTpm(nil)
+	for _, rc := range t.resources {
+		rc.(resourceContextPrivate).SetTpm(nil)
 	}
 
 	return nil
 }
 
-func (t *tpmImpl) RunCommandBytesRaw(tag StructTag, commandCode CommandCode, commandBytes []byte) (ResponseCode,
+func (t *tpmImpl) RunCommandBytes(tag StructTag, commandCode CommandCode, commandBytes []byte) (ResponseCode,
 	StructTag, []byte, error) {
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
@@ -144,27 +147,29 @@ func (t *tpmImpl) RunCommandBytesRaw(tag StructTag, commandCode CommandCode, com
 
 	responseBytes = responseBytes[rHeaderLen:]
 
+	if err := DecodeResponseCode(rHeader.ResponseCode); err != nil {
+		return rHeader.ResponseCode, rHeader.Tag, nil, err
+	}
+
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
-}
-
-func (t *tpmImpl) RunCommandBytes(tag StructTag, commandCode CommandCode, commandBytes []byte) (StructTag,
-	[]byte, error) {
-	responseCode, responseTag, responseBytes, err := t.RunCommandBytesRaw(tag, commandCode, commandBytes)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	if err := DecodeResponseCode(responseCode); err != nil {
-		return 0, nil, err
-	}
-
-	return responseTag, responseBytes, nil
 }
 
 func (t *tpmImpl) RunCommand(commandCode CommandCode, commandFormat, responseFormat Format,
 	params ...interface{}) error {
 	i := 0
-	commandHandles := params[i : i+commandFormat.NumOfHandles]
+	var commandHandles []interface{}
+	var commandHandleNames []Name
+	for i := 0; i < commandFormat.NumOfHandles; i++ {
+		rc, isRc := params[i].(ResourceContext)
+		if !isRc {
+			commandHandles = append(commandHandles, params[i])
+			commandHandleNames = append(commandHandleNames,
+				(&permanentContext{handle: params[i].(Handle)}).Name())
+		} else {
+			commandHandles = append(commandHandles, rc.Handle())
+			commandHandleNames = append(commandHandleNames, rc.Name())
+		}
+	}
 	i += commandFormat.NumOfHandles
 	commandParams := params[i : i+commandFormat.NumOfParams]
 	i += commandFormat.NumOfParams
@@ -197,7 +202,8 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, commandFormat, responseFor
 	tag := TagNoSessions
 	if len(commandAuthParams) > 0 {
 		tag = TagSessions
-		authArea, err := buildCommandAuthArea(commandAuthParams...)
+		authArea, err := buildCommandAuthArea(commandCode, commandHandleNames, cpBytes,
+			commandAuthParams...)
 		if err != nil {
 			return err
 		}
@@ -207,7 +213,8 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, commandFormat, responseFor
 		}
 	}
 
-	responseTag, responseBytes, err := t.RunCommandBytes(tag, commandCode, concat(chBytes, caBytes, cpBytes))
+	responseCode, responseTag, responseBytes, err :=
+		t.RunCommandBytes(tag, commandCode, concat(chBytes, caBytes, cpBytes))
 	if err != nil {
 		return err
 	}
@@ -220,26 +227,39 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, commandFormat, responseFor
 		}
 	}
 
-	var parameterSize uint32
+	rpBuf := responseBuf
+	var rpBytes []byte
+
 	if responseTag == TagSessions {
+		var parameterSize uint32
 		if err := UnmarshalFromReader(responseBuf, &parameterSize); err != nil {
 			return wrapUnmarshallingError(err)
 		}
+		rpBytes = make([]byte, parameterSize)
+		n, err := responseBuf.Read(rpBytes)
+		if err != nil {
+			return wrapUnmarshallingError(fmt.Errorf("error reading response params: %v", err))
+		}
+		if n < int(parameterSize) {
+			return wrapUnmarshallingError(
+				errors.New("error reading response parmams: insufficient data"))
+		}
+		rpBuf = bytes.NewReader(rpBytes)
 	}
-	// TODO: Verify parameterSize
 
 	if len(responseParams) > 0 {
-		if err := UnmarshalFromReader(responseBuf, responseParams...); err != nil {
+		if err := UnmarshalFromReader(rpBuf, responseParams...); err != nil {
 			return wrapUnmarshallingError(err)
 		}
 	}
 
-	if len(commandAuthParams) > 0 && responseTag == TagSessions {
+	if responseTag == TagSessions {
 		authArea := make([]authResponse, len(commandAuthParams))
 		if err := UnmarshalFromReader(responseBuf, RawSlice(authArea)); err != nil {
 			return wrapUnmarshallingError(err)
 		}
-		if err := processAuthResponse(authArea); err != nil {
+		if err := processAuthResponseArea(responseCode, commandCode, rpBytes, authArea,
+			commandAuthParams...); err != nil {
 			return err
 		}
 	}
@@ -250,7 +270,7 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, commandFormat, responseFor
 func newTPMImpl(t io.ReadWriteCloser) *tpmImpl {
 	r := new(tpmImpl)
 	r.tpm = t
-	r.resources = make(map[Handle]Resource)
+	r.resources = make(map[Handle]ResourceContext)
 
 	return r
 }
