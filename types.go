@@ -2,6 +2,7 @@ package tpm2
 
 import (
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"encoding/binary"
 	"errors"
@@ -658,8 +659,16 @@ func (p *Public) Key() (crypto.PublicKey, error) {
 			exp = defaultRSAExponent
 		}
 		return &rsa.PublicKey{N: new(big.Int).SetBytes(p.Unique.RSA), E: exp}, nil
+	case AlgorithmECC:
+		curve := cryptTPMCurveToGoCurve(p.Params.ECCDetail.CurveID)
+		if curve == nil {
+			return nil, fmt.Errorf("unsupported curve: %v", p.Params.ECCDetail.CurveID)
+		}
+		return &ecdsa.PublicKey{
+			Curve: curve,
+			X:     new(big.Int).SetBytes(p.Unique.ECC.X),
+			Y:     new(big.Int).SetBytes(p.Unique.ECC.Y)}, nil
 	}
-
 	return nil, fmt.Errorf("unsupported key type: %v", p.Type)
 }
 

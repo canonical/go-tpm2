@@ -2,6 +2,8 @@ package tpm2
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -37,6 +39,20 @@ func hashAlgToGoConstructor(hashAlg AlgorithmId) func() hash.Hash {
 	default:
 		panic("unsupported algorithm")
 	}
+}
+
+func cryptTPMCurveToGoCurve(curve ECCCurve) elliptic.Curve {
+	switch curve {
+	case ECCCurveNIST_P224:
+		return elliptic.P224()
+	case ECCCurveNIST_P256:
+		return elliptic.P256()
+	case ECCCurveNIST_P384:
+		return elliptic.P384()
+	case ECCCurveNIST_P521:
+		return elliptic.P521()
+	}
+	return nil
 }
 
 func cryptComputeCpHash(hashAlg AlgorithmId, commandCode CommandCode, commandHandles []Name,
@@ -113,18 +129,47 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 
 		h := hmac.New(hashAlgToGoConstructor(hashAlg), key)
 
-		counterRaw := make([]byte, 4)
-		binary.BigEndian.PutUint32(counterRaw, counter)
-		h.Write(counterRaw)
-
+		binary.Write(h, binary.BigEndian, counter)
 		h.Write(label)
 		h.Write([]byte{0})
 		h.Write(contextU)
 		h.Write(contextV)
+		binary.Write(h, binary.BigEndian, uint32(sizeInBits))
 
-		sizeInBitsRaw := make([]byte, 4)
-		binary.BigEndian.PutUint32(sizeInBitsRaw, uint32(sizeInBits))
-		h.Write(sizeInBitsRaw)
+		buf.Write(h.Sum(nil)[0:digestSize])
+	}
+
+	outKey := buf.Bytes()
+
+	if sizeInBits%8 != 0 {
+		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
+	}
+	return outKey, nil
+}
+
+func cryptKDFe(hashAlg AlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits uint) ([]byte, error) {
+	digestSize, knownDigest := digestSizes[hashAlg]
+	if !knownDigest {
+		return nil, fmt.Errorf("unknown hashAlg: %v", hashAlg)
+	}
+
+	var counter uint32 = 0
+	buf := new(bytes.Buffer)
+
+	for bytes := (sizeInBits + 7) / 8; bytes > 0; bytes -= digestSize {
+		if bytes < digestSize {
+			digestSize = bytes
+		}
+		counter++
+
+		h := hashAlgToGoConstructor(hashAlg)()
+
+		binary.Write(h, binary.BigEndian, counter)
+		h.Write(z)
+		h.Write(label)
+		h.Write([]byte{0})
+		h.Write(partyUInfo)
+		h.Write(partyVInfo)
 
 		buf.Write(h.Sum(nil)[0:digestSize])
 	}
@@ -179,6 +224,33 @@ func cryptEncryptRSA(public *Public, padding AlgorithmId, data, label []byte) ([
 	return nil, fmt.Errorf("unsupported RSA scheme: %v", padding)
 }
 
+func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
+	pubKey, err := public.Key()
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot obtain public key: %v", err)
+	}
+
+	tpmPubKey, isEccPubKey := pubKey.(*ecdsa.PublicKey)
+	if !isEccPubKey {
+		return nil, nil, errors.New("public key is not an ECC key")
+	}
+
+	ephPriv, ephX, ephY, err := elliptic.GenerateKey(tpmPubKey.Curve, rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot generate ephemeral ECC key: %v", err)
+	}
+
+	if !tpmPubKey.Curve.IsOnCurve(ephX, ephY) {
+		return nil, nil, fmt.Errorf("ephemeral public key is not on curve")
+	}
+
+	mulX, _ := tpmPubKey.Curve.ScalarMult(tpmPubKey.X, tpmPubKey.Y, ephPriv)
+
+	return ECCParameter(mulX.Bytes()),
+		&ECCPoint{X: ECCParameter(ephX.Bytes()), Y: ECCParameter(ephY.Bytes())},
+		nil
+}
+
 func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
 	digestSize, knownDigest := digestSizes[public.NameAlg]
 	if !knownDigest {
@@ -194,6 +266,26 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 	case AlgorithmRSA:
 		encryptedSalt, err := cryptEncryptRSA(public, AlgorithmOAEP, salt, []byte("SECRET"))
 		return encryptedSalt, salt, err
+	case AlgorithmECC:
+		z, q, err := cryptGetECDHPoint(public)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to compute secret: %v", err)
+		}
+		encryptedSalt, err := MarshalToBytes(q)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
+		}
+		pubKey, _ := public.Key()
+		salt, err := cryptKDFe(public.NameAlg,
+			[]byte(z),
+			[]byte("SECRET"),
+			[]byte(q.X),
+			pubKey.(*ecdsa.PublicKey).X.Bytes(),
+			digestSize*8)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed KDFe: %v", err)
+		}
+		return EncryptedSecret(encryptedSalt), salt, nil
 	}
 
 	return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
