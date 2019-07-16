@@ -2,7 +2,6 @@ package tpm2
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -81,8 +80,8 @@ func buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpB
 	var hmac []byte
 
 	if len(context.sessionKey) > 0 || (len(session.AuthValue) > 0 && useAuthValue) {
-		if _, err := rand.Read(context.nonceCaller); err != nil {
-			return authCommand{}, fmt.Errorf("cannot read random bytes for nonceCaller: %v", err)
+		if err := cryptComputeNonce(context.nonceCaller); err != nil {
+			return authCommand{}, fmt.Errorf("cannot compute new nonceCaller: %v", err)
 		}
 
 		var authValue []byte

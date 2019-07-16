@@ -1,7 +1,6 @@
 package tpm2
 
 import (
-	"crypto/rand"
 	"fmt"
 )
 
@@ -53,8 +52,8 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 	}
 
 	nonceCaller := make([]byte, digestSize)
-	if _, err := rand.Read(nonceCaller); err != nil {
-		return nil, fmt.Errorf("cannot read random bytes for nonceCaller: %v", err)
+	if err := cryptComputeNonce(nonceCaller); err != nil {
+		return nil, fmt.Errorf("cannot compute initial nonceCaller: %v", err)
 	}
 
 	var sessionHandle Handle

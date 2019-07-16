@@ -3,6 +3,7 @@ package tpm2
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -129,4 +130,9 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
 	}
 	return outKey, nil
+}
+
+func cryptComputeNonce(nonce []byte) error {
+	_, err := rand.Read(nonce)
+	return err
 }
