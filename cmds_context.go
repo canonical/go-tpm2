@@ -8,7 +8,12 @@ func (t *tpmImpl) FlushContext(flushHandle ResourceContext) error {
 		return err
 	}
 
-	return t.RunCommand(CommandFlushContext, Separator, flushHandle.Handle())
+	if err := t.RunCommand(CommandFlushContext, Separator, flushHandle.Handle()); err != nil {
+		return err
+	}
+
+	t.evictResourceContext(flushHandle)
+	return nil
 }
 
 func (t *tpmImpl) EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
@@ -21,7 +26,7 @@ func (t *tpmImpl) EvictControl(auth Handle, objectHandle ResourceContext, persis
 	}
 
 	if err := t.RunCommand(CommandEvictControl, HandleWithAuth{Handle: auth, Auth: authAuth},
-		objectHandle.Handle(), Separator, persistentHandle); err != nil {
+		objectHandle, Separator, persistentHandle); err != nil {
 		return nil, err
 	}
 

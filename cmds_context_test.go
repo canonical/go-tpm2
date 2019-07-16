@@ -59,3 +59,50 @@ func TestEvictControl(t *testing.T) {
 		t.Errorf("EvictControl returned an unexpected error: %v", err)
 	}
 }
+
+func TestFlushContext(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+			AttrRestricted | AttrDecrypt,
+		Params: PublicParamsU{
+			RSADetail: &RSAParams{
+				Symmetric: SymDefObject{
+					Algorithm: AlgorithmAES,
+					KeyBits:   SymKeyBitsU{Sym: 128},
+					Mode:      SymModeU{Sym: AlgorithmCFB}},
+				Scheme:   RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &SensitiveCreate{}, &template, nil,
+		PCRSelectionList{}, "")
+	if err != nil {
+		t.Fatalf("Failed to create primary object: %v", err)
+	}
+
+	h := objectHandle.Handle()
+
+	if err := tpm.FlushContext(objectHandle); err != nil {
+		t.Errorf("FlushContext failed: %v", err)
+	}
+
+	handles, err := tpm.GetCapabilityHandles(h, 1)
+	if err != nil {
+		t.Errorf("GetCapability failed: %v", err)
+	}
+	if len(handles) != 0 {
+		t.Errorf("FlushContext didn't flush the transient handle")
+	}
+
+	err = tpm.FlushContext(objectHandle)
+	if err == nil {
+		t.Errorf("Calling FlushContext on a dead resource context should fail")
+	}
+	if err.Error() != "invalid resource object supplied: resource has been closed" {
+		t.Errorf("FlushContext returned an unexpected error: %v", err)
+	}
+}
