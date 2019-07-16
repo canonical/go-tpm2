@@ -2,7 +2,6 @@ package tpm2
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/rand"
@@ -11,9 +10,9 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash"
+	"math/big"
 )
 
 var (
@@ -41,7 +40,7 @@ func hashAlgToGoConstructor(hashAlg AlgorithmId) func() hash.Hash {
 	}
 }
 
-func cryptTPMCurveToGoCurve(curve ECCCurve) elliptic.Curve {
+func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 	switch curve {
 	case ECCCurveNIST_P224:
 		return elliptic.P224()
@@ -188,15 +187,15 @@ func cryptComputeNonce(nonce []byte) error {
 }
 
 func cryptEncryptRSA(public *Public, padding AlgorithmId, data, label []byte) ([]byte, error) {
-	pubKey, err := public.Key()
-	if err != nil {
-		return nil, fmt.Errorf("cannot obtain public key: %v", err)
+	if public.Type != AlgorithmRSA {
+		return nil, fmt.Errorf("unsupported key type %v", public.Type)
 	}
 
-	rsaPubKey, isRsaPubKey := pubKey.(*rsa.PublicKey)
-	if !isRsaPubKey {
-		return nil, errors.New("public key is not an RSA key")
+	exp := int(public.Params.RSADetail.Exponent)
+	if exp == 0 {
+		exp = defaultRSAExponent
 	}
+	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA), E: exp}
 
 	if padding == AlgorithmNull {
 		padding = public.Params.RSADetail.Scheme.Scheme
@@ -217,34 +216,36 @@ func cryptEncryptRSA(public *Public, padding AlgorithmId, data, label []byte) ([
 		hash := hashAlgToGoConstructor(schemeHashAlg)()
 		labelCopy := make([]byte, len(label)+1)
 		copy(labelCopy, label)
-		return rsa.EncryptOAEP(hash, rand.Reader, rsaPubKey, data, labelCopy)
+		return rsa.EncryptOAEP(hash, rand.Reader, pubKey, data, labelCopy)
 	case AlgorithmRSAES:
-		return rsa.EncryptPKCS1v15(rand.Reader, rsaPubKey, data)
+		return rsa.EncryptPKCS1v15(rand.Reader, pubKey, data)
 	}
 	return nil, fmt.Errorf("unsupported RSA scheme: %v", padding)
 }
 
 func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
-	pubKey, err := public.Key()
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot obtain public key: %v", err)
+	if public.Type != AlgorithmECC {
+		return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
 	}
 
-	tpmPubKey, isEccPubKey := pubKey.(*ecdsa.PublicKey)
-	if !isEccPubKey {
-		return nil, nil, errors.New("public key is not an ECC key")
+	curve := eccCurveToGoCurve(public.Params.ECCDetail.CurveID)
+	if curve == nil {
+		return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail.CurveID)
 	}
 
-	ephPriv, ephX, ephY, err := elliptic.GenerateKey(tpmPubKey.Curve, rand.Reader)
+	ephPriv, ephX, ephY, err := elliptic.GenerateKey(curve, rand.Reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot generate ephemeral ECC key: %v", err)
 	}
 
-	if !tpmPubKey.Curve.IsOnCurve(ephX, ephY) {
+	if !curve.IsOnCurve(ephX, ephY) {
 		return nil, nil, fmt.Errorf("ephemeral public key is not on curve")
 	}
 
-	mulX, _ := tpmPubKey.Curve.ScalarMult(tpmPubKey.X, tpmPubKey.Y, ephPriv)
+	tpmX := new(big.Int).SetBytes(public.Unique.ECC.X)
+	tpmY := new(big.Int).SetBytes(public.Unique.ECC.Y)
+
+	mulX, _ := curve.ScalarMult(tpmX, tpmY, ephPriv)
 
 	return ECCParameter(mulX.Bytes()),
 		&ECCPoint{X: ECCParameter(ephX.Bytes()), Y: ECCParameter(ephY.Bytes())},
@@ -275,12 +276,11 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}
-		pubKey, _ := public.Key()
 		salt, err := cryptKDFe(public.NameAlg,
 			[]byte(z),
 			[]byte("SECRET"),
 			[]byte(q.X),
-			pubKey.(*ecdsa.PublicKey).X.Bytes(),
+			[]byte(public.Unique.ECC.X),
 			digestSize*8)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed KDFe: %v", err)
