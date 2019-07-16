@@ -1,10 +1,13 @@
 package tpm2
 
 import (
+	"crypto"
+	"crypto/rsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"reflect"
 )
 
@@ -67,6 +70,12 @@ func (d Digest) SliceType() SliceType {
 type ECCParameter []byte
 
 func (e ECCParameter) SliceType() SliceType {
+	return SliceTypeSizedBufferU16
+}
+
+type EncryptedSecret []byte
+
+func (s EncryptedSecret) SliceType() SliceType {
 	return SliceTypeSizedBufferU16
 }
 
@@ -639,6 +648,19 @@ func (p *Public) Copy() *Public {
 		return nil
 	}
 	return &c
+}
+
+func (p *Public) Key() (crypto.PublicKey, error) {
+	switch p.Type {
+	case AlgorithmRSA:
+		exp := int(p.Params.RSADetail.Exponent)
+		if exp == 0 {
+			exp = defaultRSAExponent
+		}
+		return &rsa.PublicKey{N: new(big.Int).SetBytes(p.Unique.RSA), E: exp}, nil
+	}
+
+	return nil, fmt.Errorf("unsupported key type: %v", p.Type)
 }
 
 type NVPublic struct {

@@ -257,3 +257,55 @@ func TestHMACBoundSessionOnOtherResource(t *testing.T) {
 	}
 	resetAuth = false
 }
+
+func TestHMACUnboundSaltedSession(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+			AttrRestricted | AttrDecrypt,
+		Params: PublicParamsU{
+			RSADetail: &RSAParams{
+				Symmetric: SymDefObject{
+					Algorithm: AlgorithmAES,
+					KeyBits:   SymKeyBitsU{Sym: 128},
+					Mode:      SymModeU{Sym: AlgorithmCFB}},
+				Scheme:   RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreatePrimary failed: %v", err)
+	}
+	defer flushContext(t, tpm, objectHandle)
+
+	if err := tpm.HierarchyChangeAuth(HandleOwner, Auth("1234"), ""); err != nil {
+		t.Fatalf("HierarchyChangeAuth failed: %v", err)
+	}
+	resetAuth := true
+	defer func() {
+		if !resetAuth {
+			return
+		}
+		if err := tpm.HierarchyChangeAuth(HandleOwner, Auth{}, "1234"); err != nil {
+			t.Errorf("Failed to reset hierarchy auth: %v", err)
+		}
+	}()
+
+	sessionHandle, err := tpm.StartAuthSession(objectHandle, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer flushContext(t, tpm, sessionHandle)
+
+	session := &Session{Handle: sessionHandle, AuthValue: []byte("1234"), Attributes: AttrContinueSession}
+
+	if err := tpm.HierarchyChangeAuth(HandleOwner, Auth{}, session); err != nil {
+		t.Fatalf("HierarchyChangeAuth failed: %v", err)
+	}
+	resetAuth = false
+}

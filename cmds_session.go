@@ -4,16 +4,12 @@ import (
 	"fmt"
 )
 
-type encryptedSecret []byte
-
-func (s encryptedSecret) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
-}
-
 func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 	authHash AlgorithmId, authValue interface{}) (ResourceContext, error) {
 	if tpmKey != nil {
-		return nil, InvalidParamError{"no support for salted sessions yet"}
+		if err := t.checkResourceContextParam(tpmKey); err != nil {
+			return nil, err
+		}
 	}
 	if bind != nil {
 		if err := t.checkResourceContextParam(bind); err != nil {
@@ -29,9 +25,19 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 	}
 
 	var salt []byte
-	//var encryptedSalt []byte
+	var encryptedSalt EncryptedSecret
+
 	if tpmKey != nil {
-		// TODO: Create and encrypt a salt
+		object, isObject := tpmKey.(*objectContext)
+		if !isObject {
+			return nil, InvalidParamError{"tpmKey is not an object"}
+		}
+
+		var err error
+		encryptedSalt, salt, err = cryptComputeEncryptedSalt(&object.public)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute encrypted salt: %v", err)
+		}
 	} else {
 		tpmKey = &permanentContext{handle: HandleNull}
 	}
@@ -60,7 +66,7 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 	var nonceTPM Nonce
 
 	if err := t.RunCommand(CommandStartAuthSession, tpmKey, bind, Separator, Nonce(nonceCaller),
-		encryptedSecret{}, sessionType, &SymDef{Algorithm: AlgorithmNull}, authHash, Separator,
+		encryptedSalt, sessionType, &SymDef{Algorithm: AlgorithmNull}, authHash, Separator,
 		&sessionHandle, Separator, &nonceTPM); err != nil {
 		return nil, err
 	}
@@ -72,7 +78,6 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 		nonceTPM:      nonceTPM}
 
 	if tpmKey.Handle() != HandleNull || bind.Handle() != HandleNull {
-		// TODO: concatenate salt on to authValue
 		key := make([]byte, len(authB)+len(salt))
 		copy(key, authB)
 		copy(key[len(authB):], salt)

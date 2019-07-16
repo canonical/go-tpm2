@@ -4,20 +4,25 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash"
 )
 
-var digestSizes = map[AlgorithmId]uint{
-	AlgorithmSHA1:   20,
-	AlgorithmSHA256: 32,
-	AlgorithmSHA384: 48,
-	AlgorithmSHA512: 64,
-}
+var (
+	defaultRSAExponent = 65537
+
+	digestSizes = map[AlgorithmId]uint{
+		AlgorithmSHA1:   20,
+		AlgorithmSHA256: 32,
+		AlgorithmSHA384: 48,
+		AlgorithmSHA512: 64}
+)
 
 func hashAlgToGoConstructor(hashAlg AlgorithmId) func() hash.Hash {
 	switch hashAlg {
@@ -135,4 +140,61 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 func cryptComputeNonce(nonce []byte) error {
 	_, err := rand.Read(nonce)
 	return err
+}
+
+func cryptEncryptRSA(public *Public, padding AlgorithmId, data, label []byte) ([]byte, error) {
+	pubKey, err := public.Key()
+	if err != nil {
+		return nil, fmt.Errorf("cannot obtain public key: %v", err)
+	}
+
+	rsaPubKey, isRsaPubKey := pubKey.(*rsa.PublicKey)
+	if !isRsaPubKey {
+		return nil, errors.New("public key is not an RSA key")
+	}
+
+	if padding == AlgorithmNull {
+		padding = public.Params.RSADetail.Scheme.Scheme
+	}
+
+	switch padding {
+	case AlgorithmOAEP:
+		schemeHashAlg := public.NameAlg
+		if padding == AlgorithmNull {
+			schemeHashAlg = public.Params.RSADetail.Scheme.Details.OAEP.HashAlg
+		}
+		if schemeHashAlg == AlgorithmNull {
+			schemeHashAlg = public.NameAlg
+		}
+		if _, known := digestSizes[schemeHashAlg]; !known {
+			return nil, fmt.Errorf("unknown scheme hash algorithm: %v", schemeHashAlg)
+		}
+		hash := hashAlgToGoConstructor(schemeHashAlg)()
+		labelCopy := make([]byte, len(label)+1)
+		copy(labelCopy, label)
+		return rsa.EncryptOAEP(hash, rand.Reader, rsaPubKey, data, labelCopy)
+	case AlgorithmRSAES:
+		return rsa.EncryptPKCS1v15(rand.Reader, rsaPubKey, data)
+	}
+	return nil, fmt.Errorf("unsupported RSA scheme: %v", padding)
+}
+
+func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
+	digestSize, knownDigest := digestSizes[public.NameAlg]
+	if !knownDigest {
+		return nil, nil, fmt.Errorf("unsupported nameAlg: %v", public.NameAlg)
+	}
+
+	salt := make([]byte, digestSize)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, nil, fmt.Errorf("cannot read random bytes for salt: %v", err)
+	}
+
+	switch public.Type {
+	case AlgorithmRSA:
+		encryptedSalt, err := cryptEncryptRSA(public, AlgorithmOAEP, salt, []byte("SECRET"))
+		return encryptedSalt, salt, err
+	}
+
+	return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
 }
