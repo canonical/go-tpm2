@@ -22,9 +22,9 @@ func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCre
 	var creationHash Digest
 	var creationTicket TkCreation
 
-	if err := t.RunCommand(CommandCreate, Format{1, 4}, Format{0, 5}, parentHandle.Handle(), inSensitive,
-		inPublic, outsideInfo, creationPCR, &outPrivate, &outPublic, &creationData, &creationHash,
-		&creationTicket, session); err != nil {
+	if err := t.RunCommand(CommandCreate, parentHandle.Handle(), Separator, inSensitive, inPublic,
+		outsideInfo, creationPCR, Separator, Separator, &outPrivate, &outPublic, &creationData,
+		&creationHash, &creationTicket, Separator, session); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -51,8 +51,8 @@ func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoad, Format{1, 2}, Format{1, 1}, parentHandle.Handle(), inPrivate,
-		inPublic, &objectHandle, &name, session); err != nil {
+	if err := t.RunCommand(CommandLoad, parentHandle.Handle(), Separator, inPrivate, inPublic, Separator,
+		&objectHandle, Separator, &name, Separator, session); err != nil {
 		return nil, nil, err
 	}
 
@@ -76,8 +76,8 @@ func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoadExternal, Format{0, 3}, Format{1, 1}, inPrivate, inPublic,
-		hierarchy, &objectHandle, &name); err != nil {
+	if err := t.RunCommand(CommandLoadExternal, Separator, inPrivate, inPublic, hierarchy, Separator,
+		&objectHandle, Separator, &name); err != nil {
 		return nil, nil, err
 	}
 
@@ -91,8 +91,8 @@ func (t *tpmImpl) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
 	var outPublic Public
 	var name Name
 	var qualifiedName Name
-	if err := t.RunCommand(CommandReadPublic, Format{1, 0}, Format{0, 3}, objectHandle, &outPublic, &name,
-		&qualifiedName); err != nil {
+	if err := t.RunCommand(CommandReadPublic, objectHandle, Separator, Separator, Separator, &outPublic,
+		&name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
 	}
 	return &outPublic, name, qualifiedName, nil

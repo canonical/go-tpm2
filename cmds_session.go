@@ -60,21 +60,21 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 	var sessionHandle Handle
 	var nonceTPM Nonce
 
-	if err := t.RunCommand(CommandStartAuthSession, Format{2, 5}, Format{1, 1}, tpmKey, bind,
-		Nonce(nonceCaller), encryptedSecret{}, sessionType, &SymDef{Algorithm: AlgorithmNull}, authHash,
-		&sessionHandle, &nonceTPM); err != nil {
+	if err := t.RunCommand(CommandStartAuthSession, tpmKey, bind, Separator, Nonce(nonceCaller),
+		encryptedSecret{}, sessionType, &SymDef{Algorithm: AlgorithmNull}, authHash, Separator,
+		&sessionHandle, Separator, &nonceTPM); err != nil {
 		return nil, err
 	}
 
 	sessionContext := &sessionContext{handle: sessionHandle,
-		hashAlg: authHash,
+		hashAlg:       authHash,
 		boundResource: bind,
-		nonceCaller: Nonce(nonceCaller),
-		nonceTPM: nonceTPM}
+		nonceCaller:   Nonce(nonceCaller),
+		nonceTPM:      nonceTPM}
 
 	if tpmKey.Handle() != HandleNull || bind.Handle() != HandleNull {
 		// TODO: concatenate salt on to authValue
-		key := make([]byte, len(authB) + len(salt))
+		key := make([]byte, len(authB)+len(salt))
 		copy(key, authB)
 		copy(key[len(authB):], salt)
 

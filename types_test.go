@@ -82,9 +82,8 @@ func TestPublicIDUnion(t *testing.T) {
 }
 
 type TestSchemeKeyedHashUContainer struct {
-	Scheme AlgorithmId
+	Scheme  AlgorithmId
 	Details SchemeKeyedHashU
-
 }
 
 func (c TestSchemeKeyedHashUContainer) StructFlags() StructFlags {
@@ -97,7 +96,7 @@ func (c TestSchemeKeyedHashUContainer) Selector(field reflect.StructField) inter
 
 func TestSchemeKeyedHashUnion(t *testing.T) {
 	a := TestSchemeKeyedHashUContainer{
-		Scheme: AlgorithmHMAC,
+		Scheme:  AlgorithmHMAC,
 		Details: SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: AlgorithmSHA256}}}
 	out, err := MarshalToBytes(a)
 	if err != nil {
@@ -149,8 +148,8 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshaToBytes should fail to marshal a union with an invalid selector value")
 	}
-	if err.Error() != "cannot marshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot marshal " +
-		"field Details: cannot marshal struct type tpm2.SchemeKeyedHashU: error marshalling union " +
+	if err.Error() != "cannot marshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot marshal "+
+		"field Details: cannot marshal struct type tpm2.SchemeKeyedHashU: error marshalling union "+
 		"struct: cannot select union member: invalid selector value: 11" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
@@ -259,7 +258,7 @@ func TestTaggedHash(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshaToBytes should fail to marshal a TaggedHash with an unknown algorithm")
 	}
-	if err.Error() != "cannot marshal type *tpm2.TaggedHash with custom marshaller: unknown digest size " +
+	if err.Error() != "cannot marshal type *tpm2.TaggedHash with custom marshaller: unknown digest size "+
 		"for algorithm 5" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
@@ -269,7 +268,7 @@ func TestTaggedHash(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
 	}
-	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot read digest: " +
+	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot read digest: "+
 		"EOF" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
@@ -292,7 +291,7 @@ func TestTaggedHash(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
 	}
-	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: unknown digest size " +
+	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: unknown digest size "+
 		"for algorithm 5" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}

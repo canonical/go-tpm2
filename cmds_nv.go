@@ -3,7 +3,7 @@ package tpm2
 func (t *tpmImpl) nvReadPublic(nvIndex Handle) (*NVPublic, Name, error) {
 	var nvPublic NVPublic
 	var nvName Name
-	if err := t.RunCommand(CommandNVReadPublic, Format{1, 0}, Format{0, 2}, nvIndex, &nvPublic,
+	if err := t.RunCommand(CommandNVReadPublic, nvIndex, Separator, Separator, Separator, &nvPublic,
 		&nvName); err != nil {
 		return nil, nil, err
 	}

@@ -93,10 +93,10 @@ func (n Name) IsHandle() bool {
 }
 
 func (n Name) Handle() Handle {
-    if !n.IsHandle() {
-	    panic("Name is not a handle")
-    }
-    return Handle(binary.BigEndian.Uint32(n))
+	if !n.IsHandle() {
+		panic("Name is not a handle")
+	}
+	return Handle(binary.BigEndian.Uint32(n))
 }
 
 type Nonce Digest
@@ -524,8 +524,8 @@ type KeyedHashParams struct {
 
 type SymDef struct {
 	Algorithm AlgorithmId
-	KeyBits SymKeyBitsU
-	Mode SymModeU
+	KeyBits   SymKeyBitsU
+	Mode      SymModeU
 }
 
 func (d SymDef) StructFlags() StructFlags {

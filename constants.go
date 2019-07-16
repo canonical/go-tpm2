@@ -25,11 +25,11 @@ const (
 	CommandShutdown            CommandCode = 0x00000145
 	CommandCreate              CommandCode = 0x00000153
 	CommandLoad                CommandCode = 0x00000157
-	CommandFlushContext	   CommandCode = 0x00000165
+	CommandFlushContext        CommandCode = 0x00000165
 	CommandLoadExternal        CommandCode = 0x00000167
 	CommandNVReadPublic        CommandCode = 0x00000169
 	CommandReadPublic          CommandCode = 0x00000173
-	CommandStartAuthSession	   CommandCode = 0x00000176
+	CommandStartAuthSession    CommandCode = 0x00000176
 	CommandGetCapability       CommandCode = 0x0000017A
 	CommandGetTestResult       CommandCode = 0x0000017C
 )
@@ -272,9 +272,9 @@ const (
 )
 
 const (
-	CapabilityMaxAlgs     uint32 = 169
-	CapabilityMaxHandles  uint32 = 254
-	CapabilityMaxCommands uint32 = 254
+	CapabilityMaxAlgs          uint32 = 169
+	CapabilityMaxHandles       uint32 = 254
+	CapabilityMaxCommands      uint32 = 254
 	CapabilityMaxTPMProperties uint32 = 127
 	CapabilityMaxPCRProperties uint32 = 112
 	CapabilityMaxECCCurves     uint32 = 508

@@ -47,7 +47,7 @@ func verifyCreatePrimaryCommon(t *testing.T, objectHandle ResourceContext, nameA
 		t.Errorf("CreatePrimary returned an invalid creationTicket.hierarchy value")
 	}
 
-	if len(name) != nameAlgSize + 2 {
+	if len(name) != nameAlgSize+2 {
 		t.Errorf("CreatePrimary returned a name of the wrong length %d", len(name))
 	}
 }
@@ -84,7 +84,7 @@ func TestCreateStoragePrimaryRSA(t *testing.T) {
 
 	verifyCreatePrimaryCommon(t, objectHandle, 32, &template, outPublic, creationPCR, creationData,
 		creationHash, creationTicket, name)
-	if len(outPublic.Unique.RSA) != 2048 / 8 {
+	if len(outPublic.Unique.RSA) != 2048/8 {
 		t.Errorf("CreatePrimary returned object with wrong public key length %d",
 			len(outPublic.Unique.RSA))
 	}
@@ -103,11 +103,11 @@ func TestCreateStoragePrimaryECC(t *testing.T) {
 			ECCDetail: &ECCParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits: SymKeyBitsU{Sym: 128},
-					Mode: SymModeU{Sym: AlgorithmCFB}},
-				Scheme: ECCScheme{Scheme: AlgorithmNull},
+					KeyBits:   SymKeyBitsU{Sym: 128},
+					Mode:      SymModeU{Sym: AlgorithmCFB}},
+				Scheme:  ECCScheme{Scheme: AlgorithmNull},
 				CurveID: ECCCurveNIST_P256,
-				KDF: KDFScheme{Scheme: AlgorithmNull}}},
+				KDF:     KDFScheme{Scheme: AlgorithmNull}}},
 		Unique: PublicIDU{ECC: &ECCPoint{}}}
 
 	creationPCR := PCRSelectionList{

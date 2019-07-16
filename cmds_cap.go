@@ -15,8 +15,8 @@ func (t *tpmImpl) GetCapability(capability Capability, property, propertyCount u
 		var moreData bool
 		var data CapabilityData
 
-		if err := t.RunCommand(CommandGetCapability, Format{0, 3}, Format{0, 2}, capability, nextProperty,
-			remaining, &moreData, &data); err != nil {
+		if err := t.RunCommand(CommandGetCapability, Separator, capability, nextProperty, remaining,
+			Separator, Separator, &moreData, &data); err != nil {
 			return nil, err
 		}
 

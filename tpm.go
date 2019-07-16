@@ -6,29 +6,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 )
 
 const (
 	maxCommandSize int = 4096
 )
 
-type Format struct {
-	NumOfHandles int
-	NumOfParams  int
-}
+type separatorSentinel struct{}
 
-func (f Format) total() int {
-	return f.NumOfHandles + f.NumOfParams
-}
+var Separator separatorSentinel
 
 type TPM interface {
 	Close() error
 
 	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte,
 		error)
-	RunCommandAndReturnRawResponse(commandCode CommandCode, format Format,
-		params ...interface{}) (ResponseCode, StructTag, []byte, error)
-	RunCommand(commandCode CommandCode, commandFormat, responseFormat Format, params ...interface{}) error
+	RunCommandAndReturnRawResponse(commandCode CommandCode, params ...interface{}) (ResponseCode, StructTag, []byte, error)
+	RunCommand(commandCode CommandCode, params ...interface{}) error
 
 	WrapHandle(handle Handle) (ResourceContext, error)
 
@@ -109,13 +104,32 @@ type responseHeader struct {
 }
 
 func ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag, response []byte,
-	format Format, params ...interface{}) error {
-	i := 0
-	responseHandles := params[i:i+format.NumOfHandles]
-	i += format.NumOfHandles
-	responseParams := params[i:i+format.NumOfParams]
-	i += format.NumOfParams
-	sessionParams := params[i:]
+	params ...interface{}) error {
+	responseHandles := make([]interface{}, 0, len(params))
+	responseParams := make([]interface{}, 0, len(params))
+	sessionParams := make([]interface{}, 0, len(params))
+
+	sentinels := 0
+	for _, param := range params {
+		if param == Separator {
+			sentinels++
+			continue
+		}
+
+		switch sentinels {
+		case 0:
+			_, isHandle := param.(*Handle)
+			if !isHandle {
+				return InvalidParamError{fmt.Sprintf("invalid response handle type %s",
+					reflect.TypeOf(param))}
+			}
+			responseHandles = append(responseHandles, param)
+		case 1:
+			responseParams = append(responseParams, param)
+		case 2:
+			sessionParams = append(sessionParams, param)
+		}
+	}
 
 	buf := bytes.NewReader(response)
 
@@ -218,26 +232,43 @@ func (t *tpmImpl) RunCommandBytes(tag StructTag, commandCode CommandCode, comman
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, format Format,
-	params ...interface{}) (ResponseCode, StructTag, []byte, error) {
-	i := 0
-	var commandHandles []interface{}
-	var commandHandleNames []Name
-	for i := 0; i < format.NumOfHandles; i++ {
-		rc, isRc := params[i].(ResourceContext)
-		if !isRc {
-			commandHandles = append(commandHandles, params[i])
-			commandHandleNames = append(commandHandleNames,
-				(&permanentContext{handle: params[i].(Handle)}).Name())
-		} else {
-			commandHandles = append(commandHandles, rc.Handle())
-			commandHandleNames = append(commandHandleNames, rc.Name())
+func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params ...interface{}) (ResponseCode,
+	StructTag, []byte, error) {
+	commandHandles := make([]interface{}, 0, len(params))
+	commandHandleNames := make([]Name, 0, len(params))
+	commandParams := make([]interface{}, 0, len(params))
+	sessionParams := make([]interface{}, 0, len(params))
+
+	sentinels := 0
+	for _, param := range params {
+		if param == Separator {
+			sentinels++
+			continue
+		}
+
+		switch sentinels {
+		case 0:
+			rc, isRc := param.(ResourceContext)
+			if !isRc {
+				handle, isHandle := param.(Handle)
+				if !isHandle {
+					return 0, 0, nil, InvalidParamError{
+						fmt.Sprintf("invalid command handle type %s",
+							reflect.TypeOf(param))}
+				}
+				commandHandles = append(commandHandles, param)
+				commandHandleNames = append(commandHandleNames,
+					(&permanentContext{handle: handle}).Name())
+			} else {
+				commandHandles = append(commandHandles, rc.Handle())
+				commandHandleNames = append(commandHandleNames, rc.Name())
+			}
+		case 1:
+			commandParams = append(commandParams, param)
+		case 2:
+			sessionParams = append(sessionParams, param)
 		}
 	}
-	i += format.NumOfHandles
-	commandParams := params[i:i+format.NumOfParams]
-	i += format.NumOfParams
-	sessionParams := params[i:]
 
 	var chBytes []byte
 	var cpBytes []byte
@@ -281,28 +312,39 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, format
 	return responseCode, responseTag, responseBytes, nil
 }
 
-func (t *tpmImpl) RunCommand(commandCode CommandCode, commandFormat, responseFormat Format,
-	params ...interface{}) error {
-	numberOfSessions := len(params) - commandFormat.total() - responseFormat.total()
-	commandArgs := make([]interface{}, commandFormat.total() + numberOfSessions)
-	responseArgs := make([]interface{}, responseFormat.total() + numberOfSessions)
+func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) error {
+	commandArgs := make([]interface{}, 0, len(params))
+	responseArgs := make([]interface{}, 0, len(params))
 
-	i := 0
-	copy(commandArgs, params[i:i+commandFormat.total()])
-	i += commandFormat.total()
-	copy(responseArgs, params[i:i+responseFormat.total()])
-	i += responseFormat.total()
-	copy(commandArgs[commandFormat.total():], params[i:])
-	copy(responseArgs[responseFormat.total():], params[i:])
+	sentinels := 0
+	for _, param := range params {
+		switch sentinels {
+		case 0, 1:
+			commandArgs = append(commandArgs, param)
+			if param == Separator {
+				sentinels++
+			}
+		case 2, 3:
+			responseArgs = append(responseArgs, param)
+			if param == Separator {
+				sentinels++
+			}
+		case 4:
+			commandArgs = append(commandArgs, param)
+			responseArgs = append(responseArgs, param)
+			if param == Separator {
+				sentinels++
+			}
+		}
+	}
 
 	responseCode, responseTag, responseBytes, err :=
-		t.RunCommandAndReturnRawResponse(commandCode, commandFormat, commandArgs...)
+		t.RunCommandAndReturnRawResponse(commandCode, commandArgs...)
 	if err != nil {
 		return err
 	}
 
-	return ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseFormat,
-		responseArgs...)
+	return ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
 }
 
 func newTPMImpl(t io.ReadWriteCloser) *tpmImpl {

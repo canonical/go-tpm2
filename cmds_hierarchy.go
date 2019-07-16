@@ -18,9 +18,9 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 	var creationTicket TkCreation
 	var name Name
 
-	if err := t.RunCommand(CommandCreatePrimary, Format{1, 4}, Format{1, 5}, primaryObject,
-		inSensitive, inPublic, outsideInfo, creationPCR, &objectHandle, &outPublic, &creationData,
-		&creationHash, &creationTicket, &name, session); err != nil {
+	if err := t.RunCommand(CommandCreatePrimary, primaryObject, Separator, inSensitive, inPublic,
+		outsideInfo, creationPCR, Separator, &objectHandle, Separator, &outPublic, &creationData,
+		&creationHash, &creationTicket, &name, Separator, session); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
@@ -31,17 +31,18 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 }
 
 func (t *tpmImpl) Clear(authHandle Handle, session interface{}) error {
-	return t.RunCommand(CommandClear, Format{1, 0}, Format{0, 0}, authHandle, session)
+	return t.RunCommand(CommandClear, authHandle, Separator, Separator, Separator, Separator, session)
 }
 
 func (t *tpmImpl) ClearControl(authHandle Handle, disable bool, session interface{}) error {
-	return t.RunCommand(CommandClearControl, Format{1, 1}, Format{0, 0}, authHandle, disable, session)
+	return t.RunCommand(CommandClearControl, authHandle, Separator, disable, Separator, Separator,
+		Separator, session)
 }
 
 func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, session interface{}) error {
 	responseCode, responseTag, response, err :=
-		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth, Format{1, 1}, authHandle, newAuth,
-			session)
+		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth, authHandle, Separator, newAuth,
+			Separator, session)
 	if err != nil {
 		return err
 	}
@@ -55,6 +56,6 @@ func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, session i
 		}
 	}
 
-	return ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Format{0, 0},
-		updatedSession)
+	return ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
+		Separator, updatedSession)
 }

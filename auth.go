@@ -16,7 +16,7 @@ const (
 	attrContinueSession sessionAttrs = 1 << iota
 	attrAuditExclusive
 	attrAuditReset
-	attrDecrypt = 1 << iota + 2
+	attrDecrypt = 1<<iota + 2
 	attrEncrypt
 	attrAudit
 )
@@ -28,8 +28,8 @@ const (
 )
 
 type Session struct {
-	Handle ResourceContext
-	AuthValue []byte
+	Handle     ResourceContext
+	AuthValue  []byte
 	Attributes SessionAttributes
 }
 
@@ -99,9 +99,9 @@ func buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpB
 	}
 
 	return authCommand{SessionHandle: session.Handle.Handle(),
-		Nonce: context.nonceCaller,
+		Nonce:        context.nonceCaller,
 		SessionAttrs: attrs,
-		HMAC: hmac}, nil
+		HMAC:         hmac}, nil
 }
 
 func buildCommandPasswordAuth(authValue Auth) authCommand {

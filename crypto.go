@@ -18,7 +18,7 @@ var digestSizes = map[AlgorithmId]uint{
 	AlgorithmSHA512: 64,
 }
 
-func hashAlgToGoConstructor(hashAlg AlgorithmId) func () hash.Hash {
+func hashAlgToGoConstructor(hashAlg AlgorithmId) func() hash.Hash {
 	switch hashAlg {
 	case AlgorithmSHA1:
 		return sha1.New
@@ -62,7 +62,7 @@ func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandC
 
 func cryptComputeSessionHMAC(context *sessionContext, authValue, pHash []byte, attrs sessionAttrs,
 	command bool) []byte {
-	key := make([]byte, len(context.sessionKey) + len(authValue))
+	key := make([]byte, len(context.sessionKey)+len(authValue))
 	copy(key, context.sessionKey)
 	copy(key[len(context.sessionKey):], authValue)
 
@@ -125,7 +125,7 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 
 	outKey := buf.Bytes()
 
-	if sizeInBits % 8 != 0 {
+	if sizeInBits%8 != 0 {
 		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
 	}
 	return outKey, nil

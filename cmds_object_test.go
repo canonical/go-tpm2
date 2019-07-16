@@ -61,9 +61,9 @@ func TestCreate(t *testing.T) {
 		Params: PublicParamsU{
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
+				Scheme:    RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:   2048,
+				Exponent:  0}}}
 	creationPCR := PCRSelectionList{
 		PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
 		PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
@@ -124,9 +124,9 @@ func TestLoad(t *testing.T) {
 		Params: PublicParamsU{
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
+				Scheme:    RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:   2048,
+				Exponent:  0}}}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -161,9 +161,9 @@ func TestReadPublic(t *testing.T) {
 		Params: PublicParamsU{
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
+				Scheme:    RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:   2048,
+				Exponent:  0}}}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -200,13 +200,13 @@ func TestLoadExternal(t *testing.T) {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
-		Attrs: AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 		Params: PublicParamsU{
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
+				Scheme:    RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:   2048,
+				Exponent:  0}}}
 	_, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
