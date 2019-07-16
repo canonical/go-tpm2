@@ -1,8 +1,8 @@
 package tpm2
 
 func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
-	outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (Private, *Public, *CreationData,
-	Digest, *TkCreation, error) {
+	outsideInfo Data, creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public,
+	*CreationData, Digest, *TkCreation, error) {
 	if parentHandle == nil {
 		return nil, nil, nil, nil, nil, InvalidParamError{"nil parentHandle"}
 	}
@@ -22,9 +22,9 @@ func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCre
 	var creationHash Digest
 	var creationTicket TkCreation
 
-	if err := t.RunCommand(CommandCreate, parentHandle.Handle(), Separator, inSensitive, inPublic,
-		outsideInfo, creationPCR, Separator, Separator, &outPrivate, &outPublic, &creationData,
-		&creationHash, &creationTicket, Separator, session); err != nil {
+	if err := t.RunCommand(CommandCreate, ResourceWithAuth{Handle: parentHandle, Auth: parentHandleAuth},
+		Separator, inSensitive, inPublic, outsideInfo, creationPCR, Separator, Separator, &outPrivate,
+		&outPublic, &creationData, &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -32,7 +32,7 @@ func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCre
 }
 
 func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
-	session interface{}) (ResourceContext, Name, error) {
+	parentHandleAuth interface{}) (ResourceContext, Name, error) {
 	if parentHandle == nil {
 		return nil, nil, InvalidParamError{"nil parentHandle"}
 	}
@@ -51,8 +51,8 @@ func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoad, parentHandle.Handle(), Separator, inPrivate, inPublic, Separator,
-		&objectHandle, Separator, &name, Separator, session); err != nil {
+	if err := t.RunCommand(CommandLoad, ResourceWithAuth{Handle: parentHandle, Auth: parentHandleAuth},
+		Separator, inPrivate, inPublic, Separator, &objectHandle, Separator, &name); err != nil {
 		return nil, nil, err
 	}
 

@@ -1,7 +1,7 @@
 package tpm2
 
 func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
-	outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public,
+	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
 	*CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
@@ -18,9 +18,10 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 	var creationTicket TkCreation
 	var name Name
 
-	if err := t.RunCommand(CommandCreatePrimary, primaryObject, Separator, inSensitive, inPublic,
-		outsideInfo, creationPCR, Separator, &objectHandle, Separator, &outPublic, &creationData,
-		&creationHash, &creationTicket, &name, Separator, session); err != nil {
+	if err := t.RunCommand(CommandCreatePrimary,
+		HandleWithAuth{Handle: primaryObject, Auth: primaryObjectAuth}, Separator, inSensitive,
+		inPublic, outsideInfo, creationPCR, Separator, &objectHandle, Separator, &outPublic,
+		&creationData, &creationHash, &creationTicket, &name); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
@@ -30,32 +31,33 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 	return objectHandleRc, &outPublic, &creationData, creationHash, &creationTicket, name, nil
 }
 
-func (t *tpmImpl) Clear(authHandle Handle, session interface{}) error {
-	return t.RunCommand(CommandClear, authHandle, Separator, Separator, Separator, Separator, session)
+func (t *tpmImpl) Clear(authHandle Handle, authHandleAuth interface{}) error {
+	return t.RunCommand(CommandClear, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
 }
 
-func (t *tpmImpl) ClearControl(authHandle Handle, disable bool, session interface{}) error {
-	return t.RunCommand(CommandClearControl, authHandle, Separator, disable, Separator, Separator,
-		Separator, session)
+func (t *tpmImpl) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
+	return t.RunCommand(CommandClearControl, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth},
+		Separator, disable)
 }
 
-func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, session interface{}) error {
+func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error {
 	responseCode, responseTag, response, err :=
-		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth, authHandle, Separator, newAuth,
-			Separator, session)
+		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth,
+			HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator, newAuth)
 	if err != nil {
 		return err
 	}
 
-	updatedSession := session
+	updatedAuthHandleAuth := authHandleAuth
 
-	switch s := session.(type) {
+	switch s := authHandleAuth.(type) {
 	case *Session:
 		if s.Handle.(*sessionContext).boundResource.Handle() != authHandle {
-			updatedSession = &Session{Handle: s.Handle, Attributes: s.Attributes, AuthValue: newAuth}
+			updatedAuthHandleAuth =
+				&Session{Handle: s.Handle, Attributes: s.Attributes, AuthValue: newAuth}
 		}
 	}
 
 	return ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
-		Separator, updatedSession)
+		Separator, updatedAuthHandleAuth)
 }

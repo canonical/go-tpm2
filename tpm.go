@@ -17,12 +17,35 @@ type separatorSentinel struct{}
 
 var Separator separatorSentinel
 
+type SessionAttributes int
+
+const (
+	AttrContinueSession SessionAttributes = 1 << iota
+)
+
+type Session struct {
+	Handle     ResourceContext
+	AuthValue  []byte
+	Attributes SessionAttributes
+}
+
+type HandleWithAuth struct {
+	Handle Handle
+	Auth   interface{}
+}
+
+type ResourceWithAuth struct {
+	Handle ResourceContext
+	Auth   interface{}
+}
+
 type TPM interface {
 	Close() error
 
 	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte,
 		error)
-	RunCommandAndReturnRawResponse(commandCode CommandCode, params ...interface{}) (ResponseCode, StructTag, []byte, error)
+	RunCommandAndReturnRawResponse(commandCode CommandCode, params ...interface{}) (ResponseCode, StructTag,
+		[]byte, error)
 	RunCommand(commandCode CommandCode, params ...interface{}) error
 
 	WrapHandle(handle Handle) (ResourceContext, error)
@@ -38,29 +61,29 @@ type TPM interface {
 
 	// Session Commands
 	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
-		authHash AlgorithmId, auth interface{}) (ResourceContext, error)
+		authHash AlgorithmId, authValue interface{}) (ResourceContext, error)
 
 	// Object Commands
 	Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, session interface{}) (Private, *Public, *CreationData, Digest,
-		*TkCreation, error)
+		creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public, *CreationData,
+		Digest, *TkCreation, error)
 	Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
-		session interface{}) (ResourceContext, Name, error)
+		parentHandleAuth interface{}) (ResourceContext, Name, error)
 	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name, error)
 	ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error)
 
 	// Hierarchy Commands
 	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public, *CreationData,
-		Digest, *TkCreation, Name, error)
-	Clear(authHandle Handle, session interface{}) error
-	ClearControl(authHandle Handle, disable bool, session interface{}) error
-	HierarchyChangeAuth(authHandle Handle, newAuth Auth, session interface{}) error
+		creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
+		*CreationData, Digest, *TkCreation, Name, error)
+	Clear(authHandle Handle, authHandleAuth interface{}) error
+	ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error
+	HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error
 
 	// Context Management
 	FlushContext(flushHandle ResourceContext) error
 	EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
-		session interface{}) (ResourceContext, error)
+		authAuth interface{}) (ResourceContext, error)
 
 	// Capability Commands
 	GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData, error)
@@ -248,18 +271,31 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 
 		switch sentinels {
 		case 0:
-			rc, isRc := param.(ResourceContext)
-			if !isRc {
-				handle, isHandle := param.(Handle)
-				if !isHandle {
-					return 0, 0, nil, InvalidParamError{
-						fmt.Sprintf("invalid command handle type %s",
-							reflect.TypeOf(param))}
+			wrapHandle := func(handle Handle) ResourceContext {
+				return &permanentContext{handle: handle}
+			}
+
+			switch p := param.(type) {
+			case HandleWithAuth:
+				rc := wrapHandle(p.Handle)
+				commandHandles = append(commandHandles, p.Handle)
+				commandHandleNames = append(commandHandleNames, rc.Name())
+				sessionParams = append(sessionParams, ResourceWithAuth{Handle: rc, Auth: p.Auth})
+			case ResourceWithAuth:
+				commandHandles = append(commandHandles, p.Handle.Handle())
+				commandHandleNames = append(commandHandleNames, p.Handle.Name())
+				sessionParams = append(sessionParams, p)
+			default:
+				rc, isRc := param.(ResourceContext)
+				if !isRc {
+					handle, isHandle := param.(Handle)
+					if !isHandle {
+						return 0, 0, nil, InvalidParamError{
+							fmt.Sprintf("invalid command handle type %s",
+								reflect.TypeOf(param))}
+					}
+					rc = wrapHandle(handle)
 				}
-				commandHandles = append(commandHandles, param)
-				commandHandleNames = append(commandHandleNames,
-					(&permanentContext{handle: handle}).Name())
-			} else {
 				commandHandles = append(commandHandles, rc.Handle())
 				commandHandleNames = append(commandHandleNames, rc.Name())
 			}
@@ -315,19 +351,35 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) error {
 	commandArgs := make([]interface{}, 0, len(params))
 	responseArgs := make([]interface{}, 0, len(params))
+	authSessions := make([]interface{}, 0, len(params))
 
 	sentinels := 0
 	for _, param := range params {
 		switch sentinels {
-		case 0, 1:
+		case 0:
+			commandArgs = append(commandArgs, param)
+			if param == Separator {
+				sentinels++
+			} else if hwa, isHwa := param.(HandleWithAuth); isHwa {
+				authSessions = append(authSessions, hwa.Auth)
+			} else if rwa, isRwa := param.(ResourceWithAuth); isRwa {
+				authSessions = append(authSessions, rwa.Auth)
+			}
+		case 1:
 			commandArgs = append(commandArgs, param)
 			if param == Separator {
 				sentinels++
 			}
-		case 2, 3:
+		case 2:
 			responseArgs = append(responseArgs, param)
 			if param == Separator {
 				sentinels++
+			}
+		case 3:
+			responseArgs = append(responseArgs, param)
+			if param == Separator {
+				sentinels++
+				responseArgs = append(responseArgs, authSessions...)
 			}
 		case 4:
 			commandArgs = append(commandArgs, param)
@@ -336,6 +388,13 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) err
 				sentinels++
 			}
 		}
+	}
+
+	if sentinels < 4 {
+		for i := sentinels; i < 4; i++ {
+			responseArgs = append(responseArgs, Separator)
+		}
+		responseArgs = append(responseArgs, authSessions...)
 	}
 
 	responseCode, responseTag, responseBytes, err :=

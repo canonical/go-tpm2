@@ -21,18 +21,6 @@ const (
 	attrAudit
 )
 
-type SessionAttributes int
-
-const (
-	AttrContinueSession SessionAttributes = 1 << iota
-)
-
-type Session struct {
-	Handle     ResourceContext
-	AuthValue  []byte
-	Attributes SessionAttributes
-}
-
 type authCommand struct {
 	SessionHandle Handle
 	Nonce         Nonce
@@ -81,21 +69,29 @@ func attrsFromSession(session *Session) sessionAttrs {
 }
 
 func buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	session *Session) (authCommand, error) {
+	session *Session, handle ResourceContext) (authCommand, error) {
 	context, isSessionContext := session.Handle.(*sessionContext)
 	if !isSessionContext {
 		return authCommand{}, InvalidAuthParamError{"handle is not a session handle"}
 	}
 
+	useAuthValue := !bytes.Equal(handle.Name(), context.boundResource.Name())
+
 	attrs := attrsFromSession(session)
 	var hmac []byte
 
-	if len(context.sessionKey) > 0 || len(session.AuthValue) > 0 {
+	if len(context.sessionKey) > 0 || (len(session.AuthValue) > 0 && useAuthValue) {
 		if _, err := rand.Read(context.nonceCaller); err != nil {
 			return authCommand{}, fmt.Errorf("cannot read random bytes for nonceCaller: %v", err)
 		}
+
+		var authValue []byte
+		if useAuthValue {
+			authValue = session.AuthValue
+		}
+
 		cpHash := cryptComputeCpHash(context.hashAlg, commandCode, commandHandles, cpBytes)
-		hmac = cryptComputeSessionCommandHMAC(context, session.AuthValue, cpHash, attrs)
+		hmac = cryptComputeSessionCommandHMAC(context, authValue, cpHash, attrs)
 	}
 
 	return authCommand{SessionHandle: session.Handle.Handle(),
@@ -109,27 +105,29 @@ func buildCommandPasswordAuth(authValue Auth) authCommand {
 }
 
 func buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	auth interface{}) (authCommand, error) {
-	switch a := auth.(type) {
+	session interface{}, handle ResourceContext) (authCommand, error) {
+	switch s := session.(type) {
+	case ResourceWithAuth:
+		return buildCommandAuth(commandCode, commandHandles, cpBytes, s.Auth, s.Handle)
 	case string:
-		return buildCommandPasswordAuth(Auth(a)), nil
+		return buildCommandPasswordAuth(Auth(s)), nil
 	case []byte:
-		return buildCommandPasswordAuth(Auth(a)), nil
+		return buildCommandPasswordAuth(Auth(s)), nil
 	case Auth:
-		return buildCommandPasswordAuth(a), nil
+		return buildCommandPasswordAuth(s), nil
 	case nil:
 		return buildCommandPasswordAuth(nil), nil
 	case *Session:
-		return buildCommandSessionAuth(commandCode, commandHandles, cpBytes, a)
+		return buildCommandSessionAuth(commandCode, commandHandles, cpBytes, s, handle)
 	}
-	return authCommand{}, InvalidAuthParamError{fmt.Sprintf("unexpected type (%s)", reflect.TypeOf(auth))}
+	return authCommand{}, InvalidAuthParamError{fmt.Sprintf("unexpected type (%s)", reflect.TypeOf(session))}
 }
 
 func buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	auths ...interface{}) (commandAuthArea, error) {
+	sessions ...interface{}) (commandAuthArea, error) {
 	var area commandAuthArea
-	for _, auth := range auths {
-		a, err := buildCommandAuth(commandCode, commandHandles, cpBytes, auth)
+	for _, session := range sessions {
+		a, err := buildCommandAuth(commandCode, commandHandles, cpBytes, session, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -157,18 +155,18 @@ func processAuthSessionResponse(responseCode ResponseCode, commandCode CommandCo
 }
 
 func processAuthResponse(responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
-	resp authResponse, auth interface{}) error {
-	switch a := auth.(type) {
+	resp authResponse, session interface{}) error {
+	switch s := session.(type) {
 	case *Session:
-		return processAuthSessionResponse(responseCode, commandCode, rpBytes, resp, a)
+		return processAuthSessionResponse(responseCode, commandCode, rpBytes, resp, s)
 	}
 	return nil
 }
 
 func processAuthResponseArea(responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
-	authResponses []authResponse, auths ...interface{}) error {
+	authResponses []authResponse, sessions ...interface{}) error {
 	for i, resp := range authResponses {
-		if err := processAuthResponse(responseCode, commandCode, rpBytes, resp, auths[i]); err != nil {
+		if err := processAuthResponse(responseCode, commandCode, rpBytes, resp, sessions[i]); err != nil {
 			return err
 		}
 	}

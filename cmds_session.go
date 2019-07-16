@@ -12,7 +12,7 @@ func (s encryptedSecret) SliceType() SliceType {
 }
 
 func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
-	authHash AlgorithmId, auth interface{}) (ResourceContext, error) {
+	authHash AlgorithmId, authValue interface{}) (ResourceContext, error) {
 	if tpmKey != nil {
 		return nil, InvalidParamError{"no support for salted sessions yet"}
 	}
@@ -39,14 +39,14 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 
 	var authB []byte
 	if bind != nil {
-		switch a := auth.(type) {
+		switch a := authValue.(type) {
 		case string:
 			authB = []byte(a)
 		case []byte:
 			authB = a
 		case nil:
 		default:
-			return nil, InvalidParamError{fmt.Sprintf("invalid auth value: %v", auth)}
+			return nil, InvalidParamError{fmt.Sprintf("invalid auth value: %v", authValue)}
 		}
 	} else {
 		bind, _ = t.WrapHandle(HandleNull)

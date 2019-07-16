@@ -12,7 +12,7 @@ func (t *tpmImpl) FlushContext(flushHandle ResourceContext) error {
 }
 
 func (t *tpmImpl) EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
-	session interface{}) (ResourceContext, error) {
+	authAuth interface{}) (ResourceContext, error) {
 	if objectHandle == nil {
 		return nil, InvalidParamError{"nil objectHandle"}
 	}
@@ -20,8 +20,8 @@ func (t *tpmImpl) EvictControl(auth Handle, objectHandle ResourceContext, persis
 		return nil, err
 	}
 
-	if err := t.RunCommand(CommandEvictControl, auth, objectHandle.Handle(), Separator, persistentHandle,
-		Separator, Separator, Separator, session); err != nil {
+	if err := t.RunCommand(CommandEvictControl, HandleWithAuth{Handle: auth, Auth: authAuth},
+		objectHandle.Handle(), Separator, persistentHandle); err != nil {
 		return nil, err
 	}
 
