@@ -1,7 +1,6 @@
 package tpm2
 
 import (
-	"errors"
 )
 
 func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
@@ -41,11 +40,6 @@ func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic
 		return nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
-	pubCopy := inPublic.Copy()
-	if pubCopy == nil {
-		return nil, nil, makeInvalidParamError("inPublic", "couldn't be copied")
-	}
-
 	var objectHandle Handle
 	var name Name
 
@@ -54,7 +48,11 @@ func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic
 		return nil, nil, err
 	}
 
-	objectHandleRc := &objectContext{handle: objectHandle, public: *pubCopy, name: name}
+	objectHandleRc := &objectContext{handle: objectHandle, name: name}
+	pubCopy := inPublic.Copy()
+	if pubCopy != nil {
+		objectHandleRc.public = *pubCopy
+	}
 	t.addResourceContext(objectHandleRc)
 
 	return objectHandleRc, name, nil
@@ -66,11 +64,6 @@ func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy
 		return nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
-	pubCopy := inPublic.Copy()
-	if pubCopy == nil {
-		return nil, nil, makeInvalidParamError("inPublic", "couldn't be copied")
-	}
-
 	var objectHandle Handle
 	var name Name
 
@@ -79,7 +72,11 @@ func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy
 		return nil, nil, err
 	}
 
-	objectHandleRc := &objectContext{handle: objectHandle, public: *pubCopy, name: name}
+	objectHandleRc := &objectContext{handle: objectHandle, name: name}
+	pubCopy := inPublic.Copy()
+	if pubCopy != nil {
+		objectHandleRc.public = *pubCopy
+	}
 	t.addResourceContext(objectHandleRc)
 
 	return objectHandleRc, name, nil
@@ -176,12 +173,12 @@ func (t *tpmImpl) CreateLoaded(parentHandle ResourceContext, inSensitive *Sensit
 		return nil, nil, nil, nil, err
 	}
 
-	outPubCopy := outPublic.Copy()
-	if outPubCopy == nil {
-		return nil, nil, nil, nil, errors.New("cannot copy returned outPublic")
-	}
 
-	objectHandleRc := &objectContext{handle: objectHandle, public: *outPubCopy, name: name}
+	objectHandleRc := &objectContext{handle: objectHandle, name: name}
+	outPubCopy := outPublic.Copy()
+	if outPubCopy != nil {
+		objectHandleRc.public = *outPubCopy
+	}
 	t.addResourceContext(objectHandleRc)
 
 	return objectHandleRc, outPrivate, &outPublic, name, nil

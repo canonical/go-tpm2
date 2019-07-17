@@ -25,7 +25,11 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
-	objectHandleRc := &objectContext{handle: objectHandle, public: outPublic, name: name}
+	objectHandleRc := &objectContext{handle: objectHandle, name: name}
+	outPubCopy := outPublic.Copy()
+	if outPubCopy != nil {
+		objectHandleRc.public = *outPubCopy
+	}
 	t.addResourceContext(objectHandleRc)
 
 	return objectHandleRc, &outPublic, &creationData, creationHash, &creationTicket, name, nil
