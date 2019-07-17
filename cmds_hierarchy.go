@@ -7,7 +7,7 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 		inSensitive = &SensitiveCreate{}
 	}
 	if inPublic == nil {
-		return nil, nil, nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
+		return nil, nil, nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
 	var objectHandle Handle

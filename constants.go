@@ -16,7 +16,7 @@ const (
 
 	CommandEvictControl        CommandCode = 0x00000120
 	CommandClear               CommandCode = 0x00000126
-	CommandClearControl        CommandCode = 0x00000126
+	CommandClearControl        CommandCode = 0x00000127
 	CommandHierarchyChangeAuth CommandCode = 0x00000129
 	CommandCreatePrimary       CommandCode = 0x00000131
 	CommandIncrementalSelfTest CommandCode = 0x00000142
@@ -44,7 +44,7 @@ const (
 )
 
 const (
-	ErrorInitialize ErrorCode = iota
+	ErrorInitialize ErrorCode0 = iota
 	ErrorFailure
 	ErrorSequence = iota + 1
 	ErrorDisabled = iota + 29
@@ -79,7 +79,7 @@ const (
 )
 
 const (
-	ErrorAsymmetric ErrorCode = iota + 1
+	ErrorAsymmetric ErrorCode1 = iota + 1
 	ErrorAttributes
 	ErrorHash
 	ErrorValue
@@ -115,7 +115,7 @@ const (
 )
 
 const (
-	WarningContextGap ErrorCode = iota + 1
+	WarningContextGap WarningCode = iota + 1
 	WarningObjectMemory
 	WarningSessionMemory
 	WarningMemory

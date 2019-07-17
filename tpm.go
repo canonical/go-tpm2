@@ -3,7 +3,6 @@ package tpm2
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -117,12 +116,16 @@ func concat(chunks ...[]byte) []byte {
 	return bytes.Join(chunks, nil)
 }
 
-func wrapMarshallingError(err error) error {
-	return MarshallingError{err: err}
+func makeInvalidParamError(name, msg string) error {
+	return fmt.Errorf("invalid %s parameter: %s", name, msg)
 }
 
-func wrapUnmarshallingError(err error) error {
-	return UnmarshallingError{err: err}
+func wrapMarshallingError(commandCode CommandCode, context string, err error) error {
+	return fmt.Errorf("cannot marshal %s for command %s: %v", context, commandCode, err)
+}
+
+func wrapUnmarshallingError(commandCode CommandCode, context string, err error) error {
+	return UnmarshallingError{Command: commandCode, context: context, err: err}
 }
 
 type commandHeader struct {
@@ -154,8 +157,9 @@ func ProcessResponse(commandCode CommandCode, responseCode ResponseCode, respons
 		case 0:
 			_, isHandle := param.(*Handle)
 			if !isHandle {
-				return InvalidParamError{fmt.Sprintf("invalid response handle type %s",
-					reflect.TypeOf(param))}
+				return wrapUnmarshallingError(commandCode, "response handles",
+					fmt.Errorf("invalid response handle parameter type (%s)",
+						reflect.TypeOf(param)))
 			}
 			responseHandles = append(responseHandles, param)
 		case 1:
@@ -169,7 +173,7 @@ func ProcessResponse(commandCode CommandCode, responseCode ResponseCode, respons
 
 	if len(responseHandles) > 0 {
 		if err := UnmarshalFromReader(buf, responseHandles...); err != nil {
-			return wrapUnmarshallingError(err)
+			return wrapUnmarshallingError(commandCode, "response handles", err)
 		}
 	}
 
@@ -179,30 +183,27 @@ func ProcessResponse(commandCode CommandCode, responseCode ResponseCode, respons
 	if responseTag == TagSessions {
 		var parameterSize uint32
 		if err := UnmarshalFromReader(buf, &parameterSize); err != nil {
-			return wrapUnmarshallingError(err)
+			return wrapUnmarshallingError(commandCode, "parameter size", err)
 		}
 		rpBytes = make([]byte, parameterSize)
-		n, err := buf.Read(rpBytes)
+		_, err := io.ReadFull(buf, rpBytes)
 		if err != nil {
-			return wrapUnmarshallingError(fmt.Errorf("error reading response params: %v", err))
-		}
-		if n < int(parameterSize) {
-			return wrapUnmarshallingError(
-				errors.New("error reading response parmams: insufficient data"))
+			return wrapUnmarshallingError(commandCode, "response parameters",
+				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
 		}
 		rpBuf = bytes.NewReader(rpBytes)
 	}
 
 	if len(responseParams) > 0 {
 		if err := UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-			return wrapUnmarshallingError(err)
+			return wrapUnmarshallingError(commandCode, "response parameters", err)
 		}
 	}
 
 	if responseTag == TagSessions {
 		authArea := make([]authResponse, len(sessionParams))
 		if err := UnmarshalFromReader(buf, RawSlice(authArea)); err != nil {
-			return wrapUnmarshallingError(err)
+			return wrapUnmarshallingError(commandCode, "response auth area", err)
 		}
 		if err := processAuthResponseArea(responseCode, commandCode, rpBytes, authArea,
 			sessionParams...); err != nil {
@@ -237,29 +238,29 @@ func (t *tpmImpl) RunCommandBytes(tag StructTag, commandCode CommandCode, comman
 
 	headerBytes, err := MarshalToBytes(cHeader)
 	if err != nil {
-		return 0, 0, nil, wrapMarshallingError(err)
+		return 0, 0, nil, wrapMarshallingError(commandCode, "command header", err)
 	}
 
 	if _, err := t.tpm.Write(concat(headerBytes, commandBytes)); err != nil {
-		return 0, 0, nil, TPMWriteError{IOError: err}
+		return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
 	}
 
 	responseBytes := make([]byte, maxCommandSize)
 	responseLen, err := t.tpm.Read(responseBytes)
 	if err != nil {
-		return 0, 0, nil, TPMReadError{IOError: err}
+		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
 	}
 	responseBytes = responseBytes[:responseLen]
 
 	var rHeader responseHeader
 	rHeaderLen, err := UnmarshalFromBytes(responseBytes, &rHeader)
 	if err != nil {
-		return 0, 0, nil, wrapUnmarshallingError(err)
+		return 0, 0, nil, wrapUnmarshallingError(commandCode, "response header", err)
 	}
 
 	responseBytes = responseBytes[rHeaderLen:]
 
-	if err := DecodeResponseCode(rHeader.ResponseCode); err != nil {
+	if err := DecodeResponseCode(commandCode, rHeader.ResponseCode); err != nil {
 		return rHeader.ResponseCode, rHeader.Tag, nil, err
 	}
 
@@ -301,9 +302,10 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 				if !isRc {
 					handle, isHandle := param.(Handle)
 					if !isHandle {
-						return 0, 0, nil, InvalidParamError{
-							fmt.Sprintf("invalid command handle type %s",
-								reflect.TypeOf(param))}
+						return 0, 0, nil, wrapMarshallingError(
+							commandCode, "command handles",
+							fmt.Errorf("invalid handle parameter type (%s)",
+								reflect.TypeOf(param)))
 					}
 					rc = wrapHandle(handle)
 				}
@@ -326,14 +328,14 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 	if len(commandHandles) > 0 {
 		chBytes, err = MarshalToBytes(commandHandles...)
 		if err != nil {
-			return 0, 0, nil, wrapMarshallingError(err)
+			return 0, 0, nil, wrapMarshallingError(commandCode, "command handles", err)
 		}
 	}
 
 	if len(commandParams) > 0 {
 		cpBytes, err = MarshalToBytes(commandParams...)
 		if err != nil {
-			return 0, 0, nil, wrapMarshallingError(err)
+			return 0, 0, nil, wrapMarshallingError(commandCode, "command parameters", err)
 		}
 	}
 
@@ -346,7 +348,7 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 		}
 		caBytes, err = MarshalToBytes(&authArea)
 		if err != nil {
-			return 0, 0, nil, wrapMarshallingError(err)
+			return 0, 0, nil, wrapMarshallingError(commandCode, "command auth area", err)
 		}
 	}
 

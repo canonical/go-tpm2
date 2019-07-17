@@ -6,13 +6,13 @@ import (
 )
 
 func TestDecodeResponse(t *testing.T) {
-	if err := DecodeResponseCode(Success); err != nil {
+	if err := DecodeResponseCode(CommandClear, Success); err != nil {
 		t.Errorf("Expected no error for success")
 	}
 
-	err := DecodeResponseCode(ResponseCode(0x00000155))
+	err := DecodeResponseCode(CommandClear, ResponseCode(0x00000155))
 	switch e := err.(type) {
-	case Error:
+	case TPMError:
 		if e.Code != ErrorSensitive {
 			t.Errorf("Unexpected error code %v (expected %v)", e.Code, ErrorSensitive)
 		}
@@ -21,9 +21,9 @@ func TestDecodeResponse(t *testing.T) {
 	}
 
 	vendorErrResp := ResponseCode(0xa5a5057e)
-	err = DecodeResponseCode(vendorErrResp)
+	err = DecodeResponseCode(CommandClear, vendorErrResp)
 	switch e := err.(type) {
-	case VendorError:
+	case TPMVendorError:
 		if e.Code != vendorErrResp {
 			t.Errorf("Unexpected error code %v (expected %v)", e.Code, vendorErrResp)
 		}
@@ -31,9 +31,9 @@ func TestDecodeResponse(t *testing.T) {
 		t.Errorf("Unexpected error type %s", reflect.TypeOf(err))
 	}
 
-	err = DecodeResponseCode(ResponseCode(0x00000923))
+	err = DecodeResponseCode(CommandClear, ResponseCode(0x00000923))
 	switch e := err.(type) {
-	case Warning:
+	case TPMWarning:
 		if e.Code != WarningNVUnavailable {
 			t.Errorf("Unexpected error code %v (expected %v)", e.Code, WarningNVUnavailable)
 		}
@@ -41,9 +41,9 @@ func TestDecodeResponse(t *testing.T) {
 		t.Errorf("Unexpected error type %s", reflect.TypeOf(err))
 	}
 
-	err = DecodeResponseCode(ResponseCode(0x000005e7))
+	err = DecodeResponseCode(CommandClear, ResponseCode(0x000005e7))
 	switch e := err.(type) {
-	case ParameterError:
+	case TPMParameterError:
 		if e.Code != ErrorECCPoint {
 			t.Errorf("Unexpected error code %v (expected %v)", e.Code, ErrorECCPoint)
 		}
@@ -54,9 +54,9 @@ func TestDecodeResponse(t *testing.T) {
 		t.Errorf("Unexpected error type %s", reflect.TypeOf(err))
 	}
 
-	err = DecodeResponseCode(ResponseCode(0x000000b9c))
+	err = DecodeResponseCode(CommandClear, ResponseCode(0x000000b9c))
 	switch e := err.(type) {
-	case SessionError:
+	case TPMSessionError:
 		if e.Code != ErrorKey {
 			t.Errorf("Unexpected error code %v (expected %v)", e.Code, ErrorKey)
 		}
@@ -67,9 +67,9 @@ func TestDecodeResponse(t *testing.T) {
 		t.Errorf("Unexpected error type %s", reflect.TypeOf(err))
 	}
 
-	err = DecodeResponseCode(ResponseCode(0x00000496))
+	err = DecodeResponseCode(CommandClear, ResponseCode(0x00000496))
 	switch e := err.(type) {
-	case HandleError:
+	case TPMHandleError:
 		if e.Code != ErrorSymmetric {
 			t.Errorf("Unexpected error code %v (expected %v)", e.Code, ErrorSymmetric)
 		}

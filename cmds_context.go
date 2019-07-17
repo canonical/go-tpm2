@@ -22,7 +22,7 @@ func (t *tpmImpl) ContextSave(saveHandle ResourceContext) (*Context, error) {
 
 func (t *tpmImpl) ContextLoad(context *Context) (ResourceContext, error) {
 	if context == nil {
-		return nil, InvalidParamError{"nil context"}
+		return nil, makeInvalidParamError("context", "nil value")
 	}
 
 	var loadedHandle Handle

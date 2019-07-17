@@ -21,7 +21,8 @@ func (t *tpmImpl) GetCapability(capability Capability, property, propertyCount u
 		}
 
 		if data.Capability != capability {
-			return nil, InvalidResponseError{fmt.Sprintf("unexpected capability %v", data.Capability)}
+			return nil, fmt.Errorf("TPM responded with data for the wrong capability for command "+
+				"%s (got %s)", CommandGetCapability, data.Capability)
 		}
 
 		if capabilityData == nil {
@@ -69,9 +70,6 @@ func (t *tpmImpl) GetCapability(capability Capability, property, propertyCount u
 				capabilityData.Data.AuthPolicies =
 					append(capabilityData.Data.AuthPolicies, data.Data.AuthPolicies...)
 				s = len(data.Data.AuthPolicies)
-			default:
-				return nil, InvalidResponseError{
-					fmt.Sprintf("unexpected capability %v", data.Capability)}
 			}
 			nextProperty += uint32(s)
 			remaining -= uint32(s)
@@ -82,8 +80,8 @@ func (t *tpmImpl) GetCapability(capability Capability, property, propertyCount u
 		}
 
 		if remaining < 1 {
-			return nil, InvalidResponseError{"expected number of responses received but the TPM " +
-				"indicates there are more to fetch"}
+			return nil, fmt.Errorf("expected number of responses to %s command received from the "+
+				"TPM, but it indicates that there are more to fetch", CommandGetCapability)
 		}
 	}
 

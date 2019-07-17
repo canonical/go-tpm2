@@ -2,6 +2,7 @@ package tpm2
 
 import (
 	"fmt"
+	"reflect"
 )
 
 func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
@@ -17,11 +18,13 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 		}
 	}
 	if symmetric != nil {
-		return nil, InvalidParamError{"no support for parameter / response encryption yet"}
+		return nil,
+			makeInvalidParamError("symmetric", "no support for parameter / response encryption yet")
 	}
 	digestSize, knownDigest := digestSizes[authHash]
 	if !knownDigest {
-		return nil, InvalidParamError{fmt.Sprintf("unsupported authHash value %v", authHash)}
+		return nil, makeInvalidParamError("authHash",
+			fmt.Sprintf("unsupported digest algorithm %v", authHash))
 	}
 
 	var salt []byte
@@ -30,13 +33,13 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 	if tpmKey != nil {
 		object, isObject := tpmKey.(*objectContext)
 		if !isObject {
-			return nil, InvalidParamError{"tpmKey is not an object"}
+			return nil, makeInvalidParamError("tpmKey", "not an object")
 		}
 
 		var err error
 		encryptedSalt, salt, err = cryptComputeEncryptedSalt(&object.public)
 		if err != nil {
-			return nil, fmt.Errorf("failed to compute encrypted salt: %v", err)
+			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
 	} else {
 		tpmKey = &permanentContext{handle: HandleNull}
@@ -51,7 +54,8 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 			authB = a
 		case nil:
 		default:
-			return nil, InvalidParamError{fmt.Sprintf("invalid auth value: %v", authValue)}
+			return nil, makeInvalidParamError("authValue", fmt.Sprintf("unexpected type: %s",
+				reflect.TypeOf(authValue)))
 		}
 	} else {
 		bind, _ = t.WrapHandle(HandleNull)

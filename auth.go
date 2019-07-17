@@ -42,15 +42,15 @@ func (a *commandAuthArea) Marshal(buf io.Writer) error {
 	}
 
 	if err := binary.Write(buf, binary.BigEndian, uint32(tmpBuf.Len())); err != nil {
-		return fmt.Errorf("failed to write size of auth area to buffer: %v", err)
+		return fmt.Errorf("cannot write size of auth area to buffer: %v", err)
 	}
 
 	n, err := buf.Write(tmpBuf.Bytes())
 	if err != nil {
-		return fmt.Errorf("failed to write marshalled auth area to buffer: %v", err)
+		return fmt.Errorf("cannot write marshalled auth area to buffer: %v", err)
 	}
 	if n != tmpBuf.Len() {
-		return errors.New("failed to write complete marshalled auth area to buffer")
+		return errors.New("cannot write complete marshalled auth area to buffer")
 	}
 	return nil
 }
@@ -71,7 +71,7 @@ func buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpB
 	session *Session, handle ResourceContext) (authCommand, error) {
 	context, isSessionContext := session.Handle.(*sessionContext)
 	if !isSessionContext {
-		return authCommand{}, InvalidAuthParamError{"handle is not a session handle"}
+		return authCommand{}, errors.New("resource context is not a session handle")
 	}
 
 	useAuthValue := !bytes.Equal(handle.Name(), context.boundResource.Name())
@@ -119,7 +119,8 @@ func buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []
 	case *Session:
 		return buildCommandSessionAuth(commandCode, commandHandles, cpBytes, s, handle)
 	}
-	return authCommand{}, InvalidAuthParamError{fmt.Sprintf("unexpected type (%s)", reflect.TypeOf(session))}
+	return authCommand{}, fmt.Errorf("unexpected type %s for session / auth parameter",
+		reflect.TypeOf(session))
 }
 
 func buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte,
@@ -128,7 +129,7 @@ func buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpByte
 	for _, session := range sessions {
 		a, err := buildCommandAuth(commandCode, commandHandles, cpBytes, session, nil)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot build auth area for command %s: %v", commandCode, err)
 		}
 		area = append(area, a)
 	}
@@ -147,7 +148,7 @@ func processAuthSessionResponse(responseCode ResponseCode, commandCode CommandCo
 	hmac := cryptComputeSessionResponseHMAC(context, session.AuthValue, rpHash, attrsFromSession(session))
 
 	if !bytes.Equal(hmac, resp.HMAC) {
-		return InvalidAuthResponseError{"incorrect HMAC"}
+		return InvalidAuthResponseError{Command: commandCode, msg: "incorrect HMAC"}
 	}
 
 	return nil

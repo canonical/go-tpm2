@@ -24,7 +24,9 @@ type SessionType uint8
 type StartupType uint16
 type StructTag uint16
 
-type ErrorCode ResponseCode
+type WarningCode ResponseCode
+type ErrorCode0 ResponseCode
+type ErrorCode1 ResponseCode
 
 type CommandAttributes uint32
 

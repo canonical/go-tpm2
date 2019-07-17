@@ -14,7 +14,7 @@ func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCre
 		inSensitive = &SensitiveCreate{}
 	}
 	if inPublic == nil {
-		return nil, nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
+		return nil, nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
 	var outPrivate Private
@@ -38,12 +38,12 @@ func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic
 		return nil, nil, err
 	}
 	if inPublic == nil {
-		return nil, nil, InvalidParamError{"nil inPublic"}
+		return nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
 	pubCopy := inPublic.Copy()
 	if pubCopy == nil {
-		return nil, nil, InvalidParamError{"inPublic couldn't be copied"}
+		return nil, nil, makeInvalidParamError("inPublic", "couldn't be copied")
 	}
 
 	var objectHandle Handle
@@ -63,12 +63,12 @@ func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic
 func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name,
 	error) {
 	if inPublic == nil {
-		return nil, nil, InvalidParamError{"nil inPublic"}
+		return nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
 	pubCopy := inPublic.Copy()
 	if pubCopy == nil {
-		return nil, nil, InvalidParamError{"inPublic couldn't be copied"}
+		return nil, nil, makeInvalidParamError("inPublic", "couldn't be copied")
 	}
 
 	var objectHandle Handle
@@ -162,7 +162,7 @@ func (t *tpmImpl) CreateLoaded(parentHandle ResourceContext, inSensitive *Sensit
 		inSensitive = &SensitiveCreate{}
 	}
 	if inPublic == nil {
-		return nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
+		return nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
 	var objectHandle Handle
