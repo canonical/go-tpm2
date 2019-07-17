@@ -170,8 +170,8 @@ func TestHMACBoundUncontinuedSession(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Subsequent use of the session should fail")
 	}
-	if err.Error() != "TPM returned a warning whilst executing command TPM_CC_HierarchyChangeAuth: "+
-		"TPM_RC_REFERENCE_S0" {
+	warning, isWarning := err.(TPMWarning)
+	if !isWarning || warning.Code != WarningReferenceS0 {
 		t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 	}
 	sessionConsumed = true

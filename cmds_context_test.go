@@ -151,7 +151,7 @@ func TestEvictControl(t *testing.T) {
 	if err == nil {
 		t.Fatalf("EvictControl should return an error when called with a dead resource")
 	}
-	if err.Error() != "invalid resource object supplied: resource objectHandle has been closed" {
+	if err.Error() != "invalid resource context for objectHandle: resource has been closed" {
 		t.Errorf("EvictControl returned an unexpected error: %v", err)
 	}
 }
@@ -197,7 +197,7 @@ func TestFlushContext(t *testing.T) {
 	if err == nil {
 		t.Errorf("Calling ReadPublic on a dead resource context should fail")
 	}
-	if err.Error() != "invalid resource object supplied: resource objectHandle has been closed" {
+	if err.Error() != "invalid resource context for objectHandle: resource has been closed" {
 		t.Errorf("ReadPublic returned an unexpected error: %v", err)
 	}
 }

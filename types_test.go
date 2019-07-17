@@ -76,7 +76,7 @@ func TestPublicIDUnion(t *testing.T) {
 	}
 	if err.Error() != "cannot marshal struct type tpm2.TestPublicIDUContainer: cannot marshal field "+
 		"Unique: cannot marshal struct type tpm2.PublicIDU: error marshalling union struct: cannot "+
-		"select union member: invalid selector value: 16" {
+		"select union member: invalid selector value: TPM_ALG_NULL" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }
@@ -150,7 +150,7 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 	}
 	if err.Error() != "cannot marshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot marshal "+
 		"field Details: cannot marshal struct type tpm2.SchemeKeyedHashU: error marshalling union "+
-		"struct: cannot select union member: invalid selector value: 11" {
+		"struct: cannot select union member: invalid selector value: TPM_ALG_SHA256" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }
@@ -259,7 +259,7 @@ func TestTaggedHash(t *testing.T) {
 		t.Fatalf("MarshaToBytes should fail to marshal a TaggedHash with an unknown algorithm")
 	}
 	if err.Error() != "cannot marshal type *tpm2.TaggedHash with custom marshaller: unknown digest size "+
-		"for algorithm 5" {
+		"for algorithm TPM_ALG_HMAC" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 

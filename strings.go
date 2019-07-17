@@ -78,7 +78,7 @@ func (c CommandCode) String() string {
 
 func (c CommandCode) Format(s fmt.State, f rune) {
 	switch f {
-	case 's':
+	case 's', 'v':
 		fmt.Fprintf(s, "%s", c.String())
 	default:
 		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(c))
@@ -152,16 +152,16 @@ func (e ErrorCode0) String() string {
 	case ErrorSensitive:
 		return "TPM_RC_SENSITIVE"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(e))
+		return fmt.Sprintf("0x%02x", uint8(e))
 	}
 }
 
 func (e ErrorCode0) Format(s fmt.State, f rune) {
 	switch f {
-	case 's':
+	case 's', 'v':
 		fmt.Fprintf(s, "%s", e.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(e))
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint8(e))
 	}
 }
 
@@ -234,16 +234,16 @@ func (e ErrorCode1) String() string {
 	case ErrorECCPoint:
 		return "TPM_RC_ECC_POINT"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(e))
+		return fmt.Sprintf("0x%02x", uint8(e))
 	}
 }
 
 func (e ErrorCode1) Format(s fmt.State, f rune) {
 	switch f {
-	case 's':
+	case 's', 'v':
 		fmt.Fprintf(s, "%s", e.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(e))
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint8(e))
 	}
 }
 
@@ -306,16 +306,16 @@ func (e WarningCode) String() string {
 	case WarningNVUnavailable:
 		return "TPM_RC_NV_UNAVAILABLE"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(e))
+		return fmt.Sprintf("0x%02x", uint8(e))
 	}
 }
 
 func (e WarningCode) Format(s fmt.State, f rune) {
 	switch f {
-	case 's':
+	case 's', 'v':
 		fmt.Fprintf(s, "%s", e.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(e))
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint8(e))
 	}
 }
 
@@ -390,16 +390,16 @@ func (a AlgorithmId) String() string {
 	case AlgorithmECB:
 		return "TPM_ALG_ECB"
 	default:
-		return fmt.Sprintf("0x%08x", uint32(a))
+		return fmt.Sprintf("0x%04x", uint16(a))
 	}
 }
 
 func (a AlgorithmId) Format(s fmt.State, f rune) {
 	switch f {
-	case 's':
+	case 's', 'v':
 		fmt.Fprintf(s, "%s", a.String())
 	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(a))
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint16(a))
 	}
 }
 
@@ -432,7 +432,7 @@ func (c Capability) String() string {
 
 func (c Capability) Format(s fmt.State, f rune) {
 	switch f {
-	case 's':
+	case 's', 'v':
 		fmt.Fprintf(s, "%s", c.String())
 	default:
 		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(c))
