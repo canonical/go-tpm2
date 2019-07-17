@@ -225,3 +225,114 @@ func TestLoadExternal(t *testing.T) {
 		t.Errorf("LoadExternal returned a name of the wrong length")
 	}
 }
+
+func TestUnseal(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	primary, _ := createPrimary(t, tpm)
+	defer flushContext(t, tpm, primary)
+
+	template := Public{
+		Type:       AlgorithmKeyedHash,
+		NameAlg:    AlgorithmSHA256,
+		Attrs:      AttrFixedTPM | AttrFixedParent,
+		AuthPolicy: make([]byte, 32),
+		Params: PublicParamsU{
+			KeyedHashDetail: &KeyedHashParams{
+				Scheme: KeyedHashScheme{
+					Scheme: AlgorithmNull}}}}
+
+	secret := []byte("sensitive data")
+	sensitive := SensitiveCreate{Data: secret}
+
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, "")
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	objectHandle, _, err := tpm.Load(primary, outPrivate, outPublic, "")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer flushContext(t, tpm, objectHandle)
+
+	session, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer flushContext(t, tpm, session)
+
+	sensitiveData, err := tpm.Unseal(objectHandle, &Session{Handle: session, Attributes: AttrContinueSession})
+	if err != nil {
+		t.Fatalf("Unseal failed: %v", err)
+	}
+
+	if !bytes.Equal(sensitiveData, secret) {
+		t.Errorf("Unseal didn't return the expected data (got %x)", sensitiveData)
+	}
+}
+
+func TestObjectChangeAuth(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	primary, _ := createPrimary(t, tpm)
+	defer flushContext(t, tpm, primary)
+
+	template := Public{
+		Type:       AlgorithmKeyedHash,
+		NameAlg:    AlgorithmSHA256,
+		Attrs:      AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
+		AuthPolicy: make([]byte, 32),
+		Params: PublicParamsU{
+			KeyedHashDetail: &KeyedHashParams{
+				Scheme: KeyedHashScheme{
+					Scheme: AlgorithmNull}}}}
+
+	secret := []byte("sensitive data")
+	sensitive := SensitiveCreate{Data: secret}
+
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, "")
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	objectHandle, _, err := tpm.Load(primary, outPrivate, outPublic, "")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	needFlush := true
+	defer func() {
+		if !needFlush {
+			return
+		}
+		flushContext(t, tpm, objectHandle)
+	}()
+
+	_, err = tpm.Unseal(objectHandle, nil)
+	if err != nil {
+		t.Fatalf("Unseal failed: %v", err)
+	}
+
+	newPrivate, err := tpm.ObjectChangeAuth(objectHandle, primary, Auth("1234"), nil)
+	if err != nil {
+		t.Fatalf("ObjectChangeAuth failed: %v", err)
+	}
+
+	if err := tpm.FlushContext(objectHandle); err != nil {
+		t.Errorf("FlushContext failed: %v", err)
+	}
+	needFlush = false
+
+	newObjectHandle, _, err := tpm.Load(primary, newPrivate, outPublic, "")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer flushContext(t, tpm, newObjectHandle)
+
+	_, err = tpm.Unseal(newObjectHandle, "1234")
+	if err != nil {
+		t.Fatalf("Unseal failed: %v", err)
+	}
+}

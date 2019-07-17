@@ -71,6 +71,15 @@ type TPM interface {
 		parentHandleAuth interface{}) (ResourceContext, Name, error)
 	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name, error)
 	ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error)
+	//ActivateCredential(activateHandle, keyHandle ResourceContext, credentialBlob IDObject,
+	//	secret EncryptedSecret, activateHandleAuth, keyHandleAuth interface{}) (Digest, error)
+	//MakeCredential(handle ResourceContext, credential Digest, objectName Name) (IDObject,
+	//	EncryptedSecret, error)
+	Unseal(itemHandle ResourceContext, itemHandleAuth interface{}) (SensitiveData, error)
+	ObjectChangeAuth(objectHandle, parentHandle ResourceContext, newAuth Auth,
+		objectHandleAuth interface{}) (Private, error)
+	CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+		parentHandleAuth interface{}) (ResourceContext, Private, *Public, Name, error)
 
 	// Hierarchy Commands
 	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
@@ -81,6 +90,8 @@ type TPM interface {
 	HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error
 
 	// Context Management
+	ContextSave(saveHandle ResourceContext) (*Context, error)
+	ContextLoad(context *Context) (ResourceContext, error)
 	FlushContext(flushHandle ResourceContext) error
 	EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
 		authAuth interface{}) (ResourceContext, error)

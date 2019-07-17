@@ -1,5 +1,9 @@
 package tpm2
 
+import (
+	"errors"
+)
+
 func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public,
 	*CreationData, Digest, *TkCreation, error) {
@@ -106,4 +110,100 @@ func (t *tpmImpl) ReadPublic(objectHandle ResourceContext) (*Public, Name, Name,
 		return nil, nil, nil, err
 	}
 	return t.readPublic(objectHandle.Handle())
+}
+
+func (t *tpmImpl) Unseal(itemHandle ResourceContext, itemHandleAuth interface{}) (SensitiveData, error) {
+	if itemHandle == nil {
+		return nil, InvalidParamError{"nil itemHandle"}
+	}
+	if err := t.checkResourceContextParam(itemHandle); err != nil {
+		return nil, err
+	}
+
+	var outData SensitiveData
+
+	if err := t.RunCommand(CommandUnseal, ResourceWithAuth{Handle: itemHandle, Auth: itemHandleAuth},
+		Separator, Separator, Separator, &outData); err != nil {
+		return nil, err
+	}
+
+	return outData, nil
+}
+
+func (t *tpmImpl) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, newAuth Auth,
+	objectHandleAuth interface{}) (Private, error) {
+	if objectHandle == nil {
+		return nil, InvalidParamError{"nil objectHandle"}
+	}
+	if parentHandle == nil {
+		return nil, InvalidParamError{"nil parentHandle"}
+	}
+	if err := t.checkResourceContextParam(objectHandle); err != nil {
+		return nil, err
+	}
+	if err := t.checkResourceContextParam(parentHandle); err != nil {
+		return nil, err
+	}
+
+	var outPrivate Private
+
+	responseCode, responseTag, response, err := t.RunCommandAndReturnRawResponse(CommandObjectChangeAuth,
+		ResourceWithAuth{Handle: objectHandle, Auth: objectHandleAuth}, parentHandle, Separator, newAuth)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedObjectHandleAuth := objectHandleAuth
+
+	switch s := objectHandleAuth.(type) {
+	case *Session:
+		if s.Handle.(*sessionContext).boundResource != objectHandle {
+			updatedObjectHandleAuth =
+				&Session{Handle: s.Handle, Attributes: s.Attributes, AuthValue: newAuth}
+		}
+	}
+
+	if err := ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
+		&outPrivate, Separator, updatedObjectHandleAuth); err != nil {
+		return nil, err
+	}
+
+	return outPrivate, nil
+}
+
+func (t *tpmImpl) CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+	parentHandleAuth interface{}) (ResourceContext, Private, *Public, Name, error) {
+	if parentHandle == nil {
+		return nil, nil, nil, nil, InvalidParamError{"nil parentHandle"}
+	}
+	if inSensitive == nil {
+		inSensitive = &SensitiveCreate{}
+	}
+	if inPublic == nil {
+		return nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
+	}
+	if err := t.checkResourceContextParam(parentHandle); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	var objectHandle Handle
+	var outPrivate Private
+	var outPublic Public
+	var name Name
+
+	if err := t.RunCommand(CommandCreateLoaded,
+		ResourceWithAuth{Handle: parentHandle, Auth: parentHandleAuth}, Separator, inSensitive, inPublic,
+		Separator, &objectHandle, Separator, &outPrivate, &outPublic, &name); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	outPubCopy := outPublic.Copy()
+	if outPubCopy == nil {
+		return nil, nil, nil, nil, errors.New("cannot copy returned outPublic")
+	}
+
+	objectHandleRc := &objectContext{handle: objectHandle, public: *outPubCopy, name: name}
+	t.addResourceContext(objectHandleRc)
+
+	return objectHandleRc, outPrivate, &outPublic, name, nil
 }

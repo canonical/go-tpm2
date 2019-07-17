@@ -52,6 +52,12 @@ func (a Auth) SliceType() SliceType {
 	return SliceTypeSizedBufferU16
 }
 
+type ContextData []byte
+
+func (d ContextData) SliceType() SliceType {
+	return SliceTypeSizedBufferU16
+}
+
 type Data []byte
 
 func (d Data) SliceType() SliceType {
@@ -387,6 +393,13 @@ func (c CapabilitiesU) Select(selector interface{}, u reflect.Value) (reflect.Va
 		return u.FieldByName("AuthPolicies"), nil
 	}
 	return reflect.Value{}, invalidSelectorError{selector}
+}
+
+type Context struct {
+	Sequence    uint64
+	SavedHandle Handle
+	Hierarchy   Handle
+	Blob        ContextData
 }
 
 type TkCreation struct {

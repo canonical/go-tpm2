@@ -23,8 +23,12 @@ const (
 	CommandSelfTest            CommandCode = 0x00000143
 	CommandStartup             CommandCode = 0x00000144
 	CommandShutdown            CommandCode = 0x00000145
+	CommandObjectChangeAuth    CommandCode = 0x00000150
 	CommandCreate              CommandCode = 0x00000153
 	CommandLoad                CommandCode = 0x00000157
+	CommandUnseal              CommandCode = 0x0000015E
+	CommandContextLoad         CommandCode = 0x00000161
+	CommandContextSave         CommandCode = 0x00000162
 	CommandFlushContext        CommandCode = 0x00000165
 	CommandLoadExternal        CommandCode = 0x00000167
 	CommandNVReadPublic        CommandCode = 0x00000169
@@ -32,6 +36,7 @@ const (
 	CommandStartAuthSession    CommandCode = 0x00000176
 	CommandGetCapability       CommandCode = 0x0000017A
 	CommandGetTestResult       CommandCode = 0x0000017C
+	CommandCreateLoaded        CommandCode = 0x00000191
 )
 
 const (

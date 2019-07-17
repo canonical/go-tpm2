@@ -159,8 +159,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(
-		HandleOwner, &SensitiveCreate{}, &template, nil, PCRSelectionList{}, "1234")
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, "1234")
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}

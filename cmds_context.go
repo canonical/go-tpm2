@@ -1,5 +1,42 @@
 package tpm2
 
+func (t *tpmImpl) ContextSave(saveHandle ResourceContext) (*Context, error) {
+	if saveHandle == nil {
+		return nil, InvalidParamError{"nil saveHandle"}
+	}
+	if err := t.checkResourceContextParam(saveHandle); err != nil {
+		return nil, err
+	}
+
+	var context Context
+
+	if err := t.RunCommand(CommandContextSave, saveHandle, Separator, Separator, Separator,
+		&context); err != nil {
+		return nil, err
+	}
+
+	if saveHandle.Handle()&HandleTypeHMACSession == HandleTypeHMACSession ||
+		saveHandle.Handle()&HandleTypePolicySession == HandleTypePolicySession {
+		t.evictResourceContext(saveHandle)
+	}
+
+	return &context, nil
+}
+
+func (t *tpmImpl) ContextLoad(context *Context) (ResourceContext, error) {
+	if context == nil {
+		return nil, InvalidParamError{"nil context"}
+	}
+
+	var loadedHandle Handle
+
+	if err := t.RunCommand(CommandContextLoad, Separator, context, Separator, &loadedHandle); err != nil {
+		return nil, err
+	}
+
+	return t.WrapHandle(loadedHandle)
+}
+
 func (t *tpmImpl) FlushContext(flushHandle ResourceContext) error {
 	if flushHandle == nil {
 		return InvalidParamError{"nil flushHandle"}

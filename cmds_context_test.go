@@ -1,8 +1,105 @@
 package tpm2
 
 import (
+	"bytes"
 	"testing"
 )
+
+func TestContextSaveTransient(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+			AttrRestricted | AttrDecrypt,
+		Params: PublicParamsU{
+			RSADetail: &RSAParams{
+				Symmetric: SymDefObject{
+					Algorithm: AlgorithmAES,
+					KeyBits:   SymKeyBitsU{Sym: 128},
+					Mode:      SymModeU{Sym: AlgorithmCFB}},
+				Scheme:   RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, "")
+	if err != nil {
+		t.Fatalf("Failed to create primary object: %v", err)
+	}
+	defer flushContext(t, tpm, objectHandle)
+
+	context, err := tpm.ContextSave(objectHandle)
+	if err != nil {
+		t.Fatalf("ContextSave failed: %v", err)
+	}
+	if context.SavedHandle != objectHandle.Handle() {
+		t.Errorf("context has an unexpected handle (0x%08x)", context.SavedHandle)
+	}
+	if context.Hierarchy != HandleOwner {
+		t.Errorf("context specifies the wrong hierarchy (0x%08x)", context.Hierarchy)
+	}
+}
+
+func TestContextLoadTransient(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+			AttrRestricted | AttrDecrypt,
+		Params: PublicParamsU{
+			RSADetail: &RSAParams{
+				Symmetric: SymDefObject{
+					Algorithm: AlgorithmAES,
+					KeyBits:   SymKeyBitsU{Sym: 128},
+					Mode:      SymModeU{Sym: AlgorithmCFB}},
+				Scheme:   RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, "")
+	if err != nil {
+		t.Fatalf("Failed to create primary object: %v", err)
+	}
+	flushed := false
+	defer func() {
+		if flushed {
+			return
+		}
+		flushContext(t, tpm, objectHandle)
+	}()
+
+	context, err := tpm.ContextSave(objectHandle)
+	if err != nil {
+		t.Fatalf("ContextSave failed: %v", err)
+	}
+
+	if err := tpm.FlushContext(objectHandle); err != nil {
+		t.Fatalf("FlushContext failed: %v", err)
+	}
+	flushed = true
+
+	restoredHandle, err := tpm.ContextLoad(context)
+	if err != nil {
+		t.Fatalf("ContextLoad failed: %v", err)
+	}
+	defer flushContext(t, tpm, restoredHandle)
+
+	if restoredHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+		t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredHandle.Handle())
+	}
+
+	_, restoredName, _, err := tpm.ReadPublic(restoredHandle)
+	if err != nil {
+		t.Fatalf("ReadPublic failed: %v", err)
+	}
+
+	if !bytes.Equal(name, restoredName) {
+		t.Errorf("Name of restored object doesn't match that of the saved object")
+	}
+}
 
 func TestEvictControl(t *testing.T) {
 	tpm := openTPMForTesting(t)
@@ -22,8 +119,7 @@ func TestEvictControl(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &SensitiveCreate{}, &template, nil,
-		PCRSelectionList{}, "")
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Failed to create primary object: %v", err)
 	}
@@ -78,8 +174,7 @@ func TestFlushContext(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &SensitiveCreate{}, &template, nil,
-		PCRSelectionList{}, "")
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Failed to create primary object: %v", err)
 	}
@@ -98,11 +193,11 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("FlushContext didn't flush the transient handle")
 	}
 
-	err = tpm.FlushContext(objectHandle)
+	_, _, _, err = tpm.ReadPublic(objectHandle)
 	if err == nil {
-		t.Errorf("Calling FlushContext on a dead resource context should fail")
+		t.Errorf("Calling ReadPublic on a dead resource context should fail")
 	}
 	if err.Error() != "invalid resource object supplied: resource has been closed" {
-		t.Errorf("FlushContext returned an unexpected error: %v", err)
+		t.Errorf("ReadPublic returned an unexpected error: %v", err)
 	}
 }
