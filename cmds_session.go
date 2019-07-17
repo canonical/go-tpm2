@@ -7,12 +7,12 @@ import (
 func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 	authHash AlgorithmId, authValue interface{}) (ResourceContext, error) {
 	if tpmKey != nil {
-		if err := t.checkResourceContextParam(tpmKey); err != nil {
+		if err := t.checkResourceContextParam(tpmKey, "tpmKey"); err != nil {
 			return nil, err
 		}
 	}
 	if bind != nil {
-		if err := t.checkResourceContextParam(bind); err != nil {
+		if err := t.checkResourceContextParam(bind, "bind"); err != nil {
 			return nil, err
 		}
 	}

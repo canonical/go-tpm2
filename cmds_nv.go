@@ -11,10 +11,7 @@ func (t *tpmImpl) nvReadPublic(nvIndex Handle) (*NVPublic, Name, error) {
 }
 
 func (t *tpmImpl) NVReadPublic(nvIndex ResourceContext) (*NVPublic, Name, error) {
-	if nvIndex == nil {
-		return nil, nil, InvalidParamError{"nil nvIndex"}
-	}
-	if err := t.checkResourceContextParam(nvIndex); err != nil {
+	if err := t.checkResourceContextParam(nvIndex, "nvIndex"); err != nil {
 		return nil, nil, err
 	}
 	return t.nvReadPublic(nvIndex.Handle())

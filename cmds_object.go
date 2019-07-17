@@ -7,17 +7,14 @@ import (
 func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public,
 	*CreationData, Digest, *TkCreation, error) {
-	if parentHandle == nil {
-		return nil, nil, nil, nil, nil, InvalidParamError{"nil parentHandle"}
+	if err := t.checkResourceContextParam(parentHandle, "parentHandle"); err != nil {
+		return nil, nil, nil, nil, nil, err
 	}
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
 	if inPublic == nil {
 		return nil, nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
-	}
-	if err := t.checkResourceContextParam(parentHandle); err != nil {
-		return nil, nil, nil, nil, nil, err
 	}
 
 	var outPrivate Private
@@ -37,14 +34,11 @@ func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCre
 
 func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
 	parentHandleAuth interface{}) (ResourceContext, Name, error) {
-	if parentHandle == nil {
-		return nil, nil, InvalidParamError{"nil parentHandle"}
+	if err := t.checkResourceContextParam(parentHandle, "parentHandle"); err != nil {
+		return nil, nil, err
 	}
 	if inPublic == nil {
 		return nil, nil, InvalidParamError{"nil inPublic"}
-	}
-	if err := t.checkResourceContextParam(parentHandle); err != nil {
-		return nil, nil, err
 	}
 
 	pubCopy := inPublic.Copy()
@@ -103,20 +97,14 @@ func (t *tpmImpl) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
 }
 
 func (t *tpmImpl) ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error) {
-	if objectHandle == nil {
-		return nil, nil, nil, InvalidParamError{"nil objectHandle"}
-	}
-	if err := t.checkResourceContextParam(objectHandle); err != nil {
+	if err := t.checkResourceContextParam(objectHandle, "objectHandle"); err != nil {
 		return nil, nil, nil, err
 	}
 	return t.readPublic(objectHandle.Handle())
 }
 
 func (t *tpmImpl) Unseal(itemHandle ResourceContext, itemHandleAuth interface{}) (SensitiveData, error) {
-	if itemHandle == nil {
-		return nil, InvalidParamError{"nil itemHandle"}
-	}
-	if err := t.checkResourceContextParam(itemHandle); err != nil {
+	if err := t.checkResourceContextParam(itemHandle, "itemHandle"); err != nil {
 		return nil, err
 	}
 
@@ -132,16 +120,10 @@ func (t *tpmImpl) Unseal(itemHandle ResourceContext, itemHandleAuth interface{})
 
 func (t *tpmImpl) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, newAuth Auth,
 	objectHandleAuth interface{}) (Private, error) {
-	if objectHandle == nil {
-		return nil, InvalidParamError{"nil objectHandle"}
-	}
-	if parentHandle == nil {
-		return nil, InvalidParamError{"nil parentHandle"}
-	}
-	if err := t.checkResourceContextParam(objectHandle); err != nil {
+	if err := t.checkResourceContextParam(objectHandle, "objectHandle"); err != nil {
 		return nil, err
 	}
-	if err := t.checkResourceContextParam(parentHandle); err != nil {
+	if err := t.checkResourceContextParam(parentHandle, "parentHandle"); err != nil {
 		return nil, err
 	}
 
@@ -173,17 +155,14 @@ func (t *tpmImpl) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, n
 
 func (t *tpmImpl) CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	parentHandleAuth interface{}) (ResourceContext, Private, *Public, Name, error) {
-	if parentHandle == nil {
-		return nil, nil, nil, nil, InvalidParamError{"nil parentHandle"}
+	if err := t.checkResourceContextParam(parentHandle, "parentHandle"); err != nil {
+		return nil, nil, nil, nil, err
 	}
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
 	if inPublic == nil {
 		return nil, nil, nil, nil, InvalidParamError{"nil inPublic"}
-	}
-	if err := t.checkResourceContextParam(parentHandle); err != nil {
-		return nil, nil, nil, nil, err
 	}
 
 	var objectHandle Handle

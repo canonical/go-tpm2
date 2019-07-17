@@ -150,13 +150,16 @@ func (t *tpmImpl) addResourceContext(rc ResourceContext) {
 
 }
 
-func (t *tpmImpl) checkResourceContextParam(rc ResourceContext) error {
+func (t *tpmImpl) checkResourceContextParam(rc ResourceContext, name string) error {
+	if rc == nil {
+		return InvalidResourceParamError{fmt.Sprintf("nil %s", name)}
+	}
 	rcp := rc.(resourceContextPrivate)
 	if rcp.Tpm() == nil {
-		return InvalidResourceParamError{fmt.Sprintf("resource has been closed")}
+		return InvalidResourceParamError{fmt.Sprintf("resource %s has been closed", name)}
 	}
 	if rcp.Tpm() != t {
-		return InvalidResourceParamError{fmt.Sprintf("resource belongs to another TPM instance")}
+		return InvalidResourceParamError{fmt.Sprintf("resource %s belongs to another TPM instance", name)}
 	}
 	return nil
 }
