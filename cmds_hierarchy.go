@@ -62,6 +62,6 @@ func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandl
 		}
 	}
 
-	return ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
+	return t.ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
 		Separator, updatedAuthHandleAuth)
 }

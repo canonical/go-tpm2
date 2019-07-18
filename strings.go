@@ -453,7 +453,7 @@ var (
 		ErrorPCRChanged:      "PCR have changed since checked",
 		ErrorTooManyContexts: "context ID counter is at maximum",
 		ErrorAuthUnavailable: "authValue or authPolicy is not available for selected entity",
-		ErrorReboot:          "a _TPM_Init and Startup(CLEAR) is required before the TPM can resume " +
+		ErrorReboot: "a _TPM_Init and Startup(CLEAR) is required before the TPM can resume " +
 			"operation",
 		ErrorUnbalanced: "the protection algorithms (hash and symmetric) are not reasonably balanced. " +
 			"The digest size of the hash must be larger than the key size of the symmetric algorithm",

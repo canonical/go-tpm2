@@ -45,6 +45,9 @@ type TPM interface {
 		error)
 	RunCommandAndReturnRawResponse(commandCode CommandCode, params ...interface{}) (ResponseCode, StructTag,
 		[]byte, error)
+	ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
+		response []byte, params ...interface{}) error
+
 	RunCommand(commandCode CommandCode, params ...interface{}) error
 
 	WrapHandle(handle Handle) (ResourceContext, error)
@@ -138,80 +141,6 @@ type responseHeader struct {
 	Tag          StructTag
 	ResponseSize uint32
 	ResponseCode ResponseCode
-}
-
-func ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag, response []byte,
-	params ...interface{}) error {
-	responseHandles := make([]interface{}, 0, len(params))
-	responseParams := make([]interface{}, 0, len(params))
-	sessionParams := make([]interface{}, 0, len(params))
-
-	sentinels := 0
-	for _, param := range params {
-		if param == Separator {
-			sentinels++
-			continue
-		}
-
-		switch sentinels {
-		case 0:
-			_, isHandle := param.(*Handle)
-			if !isHandle {
-				return wrapUnmarshallingError(commandCode, "response handles",
-					fmt.Errorf("invalid response handle parameter type (%s)",
-						reflect.TypeOf(param)))
-			}
-			responseHandles = append(responseHandles, param)
-		case 1:
-			responseParams = append(responseParams, param)
-		case 2:
-			sessionParams = append(sessionParams, param)
-		}
-	}
-
-	buf := bytes.NewReader(response)
-
-	if len(responseHandles) > 0 {
-		if err := UnmarshalFromReader(buf, responseHandles...); err != nil {
-			return wrapUnmarshallingError(commandCode, "response handles", err)
-		}
-	}
-
-	rpBuf := buf
-	var rpBytes []byte
-
-	if responseTag == TagSessions {
-		var parameterSize uint32
-		if err := UnmarshalFromReader(buf, &parameterSize); err != nil {
-			return wrapUnmarshallingError(commandCode, "parameter size", err)
-		}
-		rpBytes = make([]byte, parameterSize)
-		_, err := io.ReadFull(buf, rpBytes)
-		if err != nil {
-			return wrapUnmarshallingError(commandCode, "response parameters",
-				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
-		}
-		rpBuf = bytes.NewReader(rpBytes)
-	}
-
-	if len(responseParams) > 0 {
-		if err := UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-			return wrapUnmarshallingError(commandCode, "response parameters", err)
-		}
-	}
-
-	if responseTag == TagSessions {
-		authArea := make([]authResponse, len(sessionParams))
-		if err := UnmarshalFromReader(buf, RawSlice(authArea)); err != nil {
-			return wrapUnmarshallingError(commandCode, "response auth area", err)
-		}
-		if err := processAuthResponseArea(responseCode, commandCode, rpBytes, authArea,
-			sessionParams...); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 type tpmImpl struct {
@@ -342,7 +271,8 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 	tag := TagNoSessions
 	if len(sessionParams) > 0 {
 		tag = TagSessions
-		authArea, err := buildCommandAuthArea(commandCode, commandHandleNames, cpBytes, sessionParams...)
+		authArea, err := buildCommandAuthArea(t, commandCode, commandHandleNames, cpBytes,
+			sessionParams...)
 		if err != nil {
 			return 0, 0, nil, err
 		}
@@ -359,6 +289,80 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 	}
 
 	return responseCode, responseTag, responseBytes, nil
+}
+
+func (t *tpmImpl) ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
+	response []byte, params ...interface{}) error {
+	responseHandles := make([]interface{}, 0, len(params))
+	responseParams := make([]interface{}, 0, len(params))
+	sessionParams := make([]interface{}, 0, len(params))
+
+	sentinels := 0
+	for _, param := range params {
+		if param == Separator {
+			sentinels++
+			continue
+		}
+
+		switch sentinels {
+		case 0:
+			_, isHandle := param.(*Handle)
+			if !isHandle {
+				return wrapUnmarshallingError(commandCode, "response handles",
+					fmt.Errorf("invalid response handle parameter type (%s)",
+						reflect.TypeOf(param)))
+			}
+			responseHandles = append(responseHandles, param)
+		case 1:
+			responseParams = append(responseParams, param)
+		case 2:
+			sessionParams = append(sessionParams, param)
+		}
+	}
+
+	buf := bytes.NewReader(response)
+
+	if len(responseHandles) > 0 {
+		if err := UnmarshalFromReader(buf, responseHandles...); err != nil {
+			return wrapUnmarshallingError(commandCode, "response handles", err)
+		}
+	}
+
+	rpBuf := buf
+	var rpBytes []byte
+
+	if responseTag == TagSessions {
+		var parameterSize uint32
+		if err := UnmarshalFromReader(buf, &parameterSize); err != nil {
+			return wrapUnmarshallingError(commandCode, "parameter size", err)
+		}
+		rpBytes = make([]byte, parameterSize)
+		_, err := io.ReadFull(buf, rpBytes)
+		if err != nil {
+			return wrapUnmarshallingError(commandCode, "response parameters",
+				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
+		}
+		rpBuf = bytes.NewReader(rpBytes)
+	}
+
+	if len(responseParams) > 0 {
+		if err := UnmarshalFromReader(rpBuf, responseParams...); err != nil {
+			return wrapUnmarshallingError(commandCode, "response parameters", err)
+		}
+	}
+
+	if responseTag == TagSessions {
+		authArea := make([]authResponse, len(sessionParams))
+		if err := UnmarshalFromReader(buf, RawSlice(authArea)); err != nil {
+			return wrapUnmarshallingError(commandCode, "response auth area", err)
+		}
+		if err := processAuthResponseArea(t, responseCode, commandCode, rpBytes, authArea,
+			sessionParams...); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) error {
@@ -416,7 +420,7 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) err
 		return err
 	}
 
-	return ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
+	return t.ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
 }
 
 func newTPMImpl(t io.ReadWriteCloser) *tpmImpl {

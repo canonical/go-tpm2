@@ -1,7 +1,6 @@
 package tpm2
 
-import (
-)
+import ()
 
 func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public,
@@ -142,7 +141,7 @@ func (t *tpmImpl) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, n
 		}
 	}
 
-	if err := ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
+	if err := t.ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
 		&outPrivate, Separator, updatedObjectHandleAuth); err != nil {
 		return nil, err
 	}
@@ -172,7 +171,6 @@ func (t *tpmImpl) CreateLoaded(parentHandle ResourceContext, inSensitive *Sensit
 		Separator, &objectHandle, Separator, &outPrivate, &outPublic, &name); err != nil {
 		return nil, nil, nil, nil, err
 	}
-
 
 	objectHandleRc := &objectContext{handle: objectHandle, name: name}
 	outPubCopy := outPublic.Copy()

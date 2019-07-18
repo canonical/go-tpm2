@@ -67,11 +67,14 @@ func attrsFromSession(session *Session) sessionAttrs {
 	return attrs
 }
 
-func buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	session *Session, handle ResourceContext) (authCommand, error) {
+func buildCommandSessionAuth(tpm *tpmImpl, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
+	session *Session, handle ResourceContext) (*authCommand, error) {
+	if err := tpm.checkResourceContextParam(session.Handle, "session"); err != nil {
+		return nil, err
+	}
 	context, isSessionContext := session.Handle.(*sessionContext)
 	if !isSessionContext {
-		return authCommand{}, errors.New("resource context is not a session handle")
+		return nil, errors.New("invalid resource context for session: not a session handle")
 	}
 
 	useAuthValue := !bytes.Equal(handle.Name(), context.boundResource.Name())
@@ -81,7 +84,7 @@ func buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpB
 
 	if len(context.sessionKey) > 0 || (len(session.AuthValue) > 0 && useAuthValue) {
 		if err := cryptComputeNonce(context.nonceCaller); err != nil {
-			return authCommand{}, fmt.Errorf("cannot compute new nonceCaller: %v", err)
+			return nil, fmt.Errorf("cannot compute new nonceCaller: %v", err)
 		}
 
 		var authValue []byte
@@ -93,21 +96,21 @@ func buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpB
 		hmac = cryptComputeSessionCommandHMAC(context, authValue, cpHash, attrs)
 	}
 
-	return authCommand{SessionHandle: session.Handle.Handle(),
+	return &authCommand{SessionHandle: session.Handle.Handle(),
 		Nonce:        context.nonceCaller,
 		SessionAttrs: attrs,
 		HMAC:         hmac}, nil
 }
 
-func buildCommandPasswordAuth(authValue Auth) authCommand {
-	return authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: authValue}
+func buildCommandPasswordAuth(authValue Auth) *authCommand {
+	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: authValue}
 }
 
-func buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	session interface{}, handle ResourceContext) (authCommand, error) {
+func buildCommandAuth(tpm *tpmImpl, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
+	session interface{}, handle ResourceContext) (*authCommand, error) {
 	switch s := session.(type) {
 	case ResourceWithAuth:
-		return buildCommandAuth(commandCode, commandHandles, cpBytes, s.Auth, s.Handle)
+		return buildCommandAuth(tpm, commandCode, commandHandles, cpBytes, s.Auth, s.Handle)
 	case string:
 		return buildCommandPasswordAuth(Auth(s)), nil
 	case []byte:
@@ -117,29 +120,33 @@ func buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []
 	case nil:
 		return buildCommandPasswordAuth(nil), nil
 	case *Session:
-		return buildCommandSessionAuth(commandCode, commandHandles, cpBytes, s, handle)
+		return buildCommandSessionAuth(tpm, commandCode, commandHandles, cpBytes, s, handle)
 	}
-	return authCommand{}, fmt.Errorf("unexpected type %s for session / auth parameter",
-		reflect.TypeOf(session))
+	return nil, fmt.Errorf("unexpected type %s for session / auth parameter", reflect.TypeOf(session))
 }
 
-func buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte,
+func buildCommandAuthArea(tpm *tpmImpl, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
 	sessions ...interface{}) (commandAuthArea, error) {
 	var area commandAuthArea
 	for _, session := range sessions {
-		a, err := buildCommandAuth(commandCode, commandHandles, cpBytes, session, nil)
+		a, err := buildCommandAuth(tpm, commandCode, commandHandles, cpBytes, session, nil)
 		if err != nil {
 			return nil, fmt.Errorf("cannot build auth area for command %s: %v", commandCode, err)
 		}
-		area = append(area, a)
+		area = append(area, *a)
 	}
 	return area, nil
 }
 
-func processAuthSessionResponse(responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
+func processAuthSessionResponse(tpm *tpmImpl, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
 	resp authResponse, session *Session) error {
 	context := session.Handle.(*sessionContext)
 	context.nonceTPM = resp.Nonce
+
+	if resp.SessionAttrs&attrContinueSession == 0 {
+		tpm.evictResourceContext(context)
+	}
+
 	if len(context.sessionKey) == 0 && len(session.AuthValue) == 0 {
 		return nil
 	}
@@ -154,19 +161,20 @@ func processAuthSessionResponse(responseCode ResponseCode, commandCode CommandCo
 	return nil
 }
 
-func processAuthResponse(responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
+func processAuthResponse(tpm *tpmImpl, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
 	resp authResponse, session interface{}) error {
 	switch s := session.(type) {
 	case *Session:
-		return processAuthSessionResponse(responseCode, commandCode, rpBytes, resp, s)
+		return processAuthSessionResponse(tpm, responseCode, commandCode, rpBytes, resp, s)
 	}
 	return nil
 }
 
-func processAuthResponseArea(responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
+func processAuthResponseArea(tpm *tpmImpl, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
 	authResponses []authResponse, sessions ...interface{}) error {
 	for i, resp := range authResponses {
-		if err := processAuthResponse(responseCode, commandCode, rpBytes, resp, sessions[i]); err != nil {
+		if err := processAuthResponse(tpm, responseCode, commandCode, rpBytes, resp,
+			sessions[i]); err != nil {
 			return err
 		}
 	}
