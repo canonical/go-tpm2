@@ -4,110 +4,111 @@ import (
 	"testing"
 )
 
-func TestStartAuthSessionHMACUnbound(t *testing.T) {
+func TestStartAuthSession(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionHandle)
+	auth := []byte("foo")
+	primary := createRSASrkForTesting(t, tpm, Auth(auth))
+	defer flushContext(t, tpm, primary)
+	primaryECC := createECCSrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primaryECC)
 
-	if sessionHandle.Handle()&HandleTypeHMACSession != HandleTypeHMACSession {
-		t.Errorf("StartAuthSession returned a handle of the wrong type")
-	}
-}
+	owner, _ := tpm.WrapHandle(HandleOwner)
 
-func TestStartAuthSessionHMACBound(t *testing.T) {
-	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	for _, data := range []struct{
+		desc string
+		tpmKey ResourceContext
+		bind ResourceContext
+		sessionType SessionType
+		alg AlgorithmId
+		bindAuth []byte
+		handleType Handle
+		errMsg string
+	}{
+		{
+			desc: "HMACUnboundUnsaltedSHA256",
+			sessionType: SessionTypeHMAC,
+			alg: AlgorithmSHA256,
+			handleType: HandleTypeHMACSession,
+		},
+		{
+			desc: "HMACBoundUnsaltedSHA256",
+			bind: primary,
+			sessionType: SessionTypeHMAC,
+			alg: AlgorithmSHA256,
+			bindAuth: auth,
+			handleType: HandleTypeHMACSession,
+		},
+		{
+			desc: "HMACUnboundSaltedRSASHA256",
+			tpmKey: primary,
+			sessionType: SessionTypeHMAC,
+			alg: AlgorithmSHA256,
+			handleType: HandleTypeHMACSession,
+		},
+		{
+			desc: "HMACUnboundSaltedECCSHA256",
+			tpmKey: primaryECC,
+			sessionType: SessionTypeHMAC,
+			alg: AlgorithmSHA256,
+			handleType: HandleTypeHMACSession,
+		},
+		{
+			desc: "HMACBoundSaltedRSASHA1",
+			tpmKey: primary,
+			bind: primary,
+			sessionType: SessionTypeHMAC,
+			alg: AlgorithmSHA1,
+			bindAuth: auth,
+			handleType: HandleTypeHMACSession,
+		},
+		{
+			desc: "TrialSessionSHA256",
+			sessionType: SessionTypeTrial,
+			alg: AlgorithmSHA256,
+			handleType: HandleTypePolicySession,
+		},
+		{
+			desc: "PolicySessionSHA256",
+			sessionType: SessionTypePolicy,
+			alg: AlgorithmSHA256,
+			handleType: HandleTypePolicySession,
+		},
+		{
+			desc: "HMACUnboundUnsaltedInvalidAlg",
+			sessionType: SessionTypeHMAC,
+			alg: AlgorithmNull,
+			errMsg: "invalid authHash parameter: unsupported digest algorithm TPM_ALG_NULL",
+		},
+		{
+			desc: "HMACUnboundSaltedInvalidKey",
+			tpmKey: owner,
+			sessionType: SessionTypeHMAC,
+			alg: AlgorithmSHA256,
+			errMsg: "invalid tpmKey parameter: not an object",
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionHandle, err := tpm.StartAuthSession(data.tpmKey, data.bind, data.sessionType, nil,
+				data.alg, data.bindAuth)
+			if data.errMsg == "" {
+				if err != nil {
+					t.Fatalf("StartAuthSession returned an error: %v", err)
+				}
+				defer flushContext(t, tpm, sessionHandle)
 
-	owner, err := tpm.WrapHandle(HandleOwner)
-	if err != nil {
-		t.Fatalf("WrapHandle failed: %v", err)
-	}
-
-	sessionHandle, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionHandle)
-
-	if sessionHandle.Handle()&HandleTypeHMACSession != HandleTypeHMACSession {
-		t.Errorf("StartAuthSession returned a handle of the wrong type")
-	}
-}
-
-func TestStartAuthSessionHMACUnboundSaltedRSA(t *testing.T) {
-	tpm := openTPMForTesting(t)
-	defer tpm.Close()
-
-	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrDecrypt,
-		Params: PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Sym: AlgorithmCFB}},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("CreatePrimary failed: %v", err)
-	}
-	defer flushContext(t, tpm, objectHandle)
-
-	sessionHandle, err := tpm.StartAuthSession(objectHandle, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionHandle)
-
-	if sessionHandle.Handle()&HandleTypeHMACSession != HandleTypeHMACSession {
-		t.Errorf("StartAuthSession returned a handle of the wrong type")
-	}
-}
-
-func TestStartAuthSessionHMACUnboundSaltedECC(t *testing.T) {
-	tpm := openTPMForTesting(t)
-	defer tpm.Close()
-
-	template := Public{
-		Type:    AlgorithmECC,
-		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrDecrypt,
-		Params: PublicParamsU{
-			ECCDetail: &ECCParams{
-				Symmetric: SymDefObject{
-					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Sym: AlgorithmCFB}},
-				Scheme:  ECCScheme{Scheme: AlgorithmNull},
-				CurveID: ECCCurveNIST_P256,
-				KDF:     KDFScheme{Scheme: AlgorithmNull}}},
-		Unique: PublicIDU{ECC: &ECCPoint{}}}
-
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("CreatePrimary failed: %v", err)
-	}
-	defer flushContext(t, tpm, objectHandle)
-
-	sessionHandle, err := tpm.StartAuthSession(objectHandle, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionHandle)
-
-	if sessionHandle.Handle()&HandleTypeHMACSession != HandleTypeHMACSession {
-		t.Errorf("StartAuthSession returned a handle of the wrong type")
+				if sessionHandle.Handle()&data.handleType != data.handleType {
+					t.Errorf("StartAuthSession returned a handle of the wrong type")
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("StartAuthSession should have returned an error")
+				}
+				if err.Error() != data.errMsg {
+					t.Errorf("StartAuthSession returned an unexpected error: %v", err)
+				}
+			}
+		})
 	}
 }
