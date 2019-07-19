@@ -62,7 +62,7 @@ func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandl
 		sc = s.Handle.(*sessionContext)
 		if sc.boundResource.Handle() != authHandle {
 			updatedAuthHandleAuth =
-				&Session{Handle: s.Handle, Attributes: s.Attributes, AuthValue: newAuth}
+				&Session{Handle: s.Handle, Attrs: s.Attrs, AuthValue: newAuth}
 		}
 	}
 

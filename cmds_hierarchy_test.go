@@ -380,7 +380,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession}
 
 		run1(t, HandleOwner, auth, &session)
 		defer resetHierarchyAuth(t, HandleOwner, auth)
@@ -398,7 +398,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession}
 
 		run1(t, HandleOwner, auth, &session)
 		defer resetHierarchyAuth(t, HandleOwner, auth)

@@ -94,7 +94,7 @@ func TestHMACSessions(t *testing.T) {
 						Exponent:  0}}}
 
 			session := &Session{Handle: sessionHandle, AuthValue: data.sessionAuth,
-				Attributes: data.sessionAttrs}
+				Attrs: data.sessionAttrs}
 			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
 			if err != nil {
 				t.Errorf("Create failed: %v", err)

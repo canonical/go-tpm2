@@ -61,7 +61,7 @@ func (a *commandAuthArea) Unmarshal(buf io.Reader) error {
 
 func attrsFromSession(session *Session) sessionAttrs {
 	var attrs sessionAttrs
-	if session.Attributes&AttrContinueSession > 0 {
+	if session.Attrs&AttrContinueSession > 0 {
 		attrs |= attrContinueSession
 	}
 	return attrs

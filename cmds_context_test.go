@@ -148,7 +148,7 @@ func TestEvictControl(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionHandle)
 		run(t, objectHandle, Handle(0x81020001),
-			&Session{Handle: sessionHandle, Attributes: AttrContinueSession})
+			&Session{Handle: sessionHandle, Attrs: AttrContinueSession})
 	})
 }
 

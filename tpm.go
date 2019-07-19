@@ -25,7 +25,7 @@ const (
 type Session struct {
 	Handle     ResourceContext
 	AuthValue  []byte
-	Attributes SessionAttributes
+	Attrs SessionAttributes
 }
 
 type HandleWithAuth struct {

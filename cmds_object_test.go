@@ -253,7 +253,7 @@ func TestLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession}
 
 		run(t, primary, &session)
 	})
