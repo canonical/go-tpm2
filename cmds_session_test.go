@@ -15,78 +15,79 @@ func TestStartAuthSession(t *testing.T) {
 	defer flushContext(t, tpm, primaryECC)
 
 	owner, _ := tpm.WrapHandle(HandleOwner)
+	null, _ := tpm.WrapHandle(HandleNull)
 
-	for _, data := range []struct{
-		desc string
-		tpmKey ResourceContext
-		bind ResourceContext
+	for _, data := range []struct {
+		desc        string
+		tpmKey      ResourceContext
+		bind        ResourceContext
 		sessionType SessionType
-		alg AlgorithmId
-		bindAuth []byte
-		handleType Handle
-		errMsg string
+		alg         AlgorithmId
+		bindAuth    []byte
+		handleType  Handle
+		errMsg      string
 	}{
 		{
-			desc: "HMACUnboundUnsaltedSHA256",
+			desc:        "HMACUnboundUnsaltedSHA256",
 			sessionType: SessionTypeHMAC,
-			alg: AlgorithmSHA256,
-			handleType: HandleTypeHMACSession,
+			alg:         AlgorithmSHA256,
+			handleType:  HandleTypeHMACSession,
 		},
 		{
-			desc: "HMACBoundUnsaltedSHA256",
-			bind: primary,
+			desc:        "HMACBoundUnsaltedSHA256",
+			bind:        primary,
 			sessionType: SessionTypeHMAC,
-			alg: AlgorithmSHA256,
-			bindAuth: auth,
-			handleType: HandleTypeHMACSession,
+			alg:         AlgorithmSHA256,
+			bindAuth:    auth,
+			handleType:  HandleTypeHMACSession,
 		},
 		{
-			desc: "HMACUnboundSaltedRSASHA256",
-			tpmKey: primary,
+			desc:        "HMACUnboundSaltedRSASHA256",
+			tpmKey:      primary,
 			sessionType: SessionTypeHMAC,
-			alg: AlgorithmSHA256,
-			handleType: HandleTypeHMACSession,
+			alg:         AlgorithmSHA256,
+			handleType:  HandleTypeHMACSession,
 		},
 		{
-			desc: "HMACUnboundSaltedECCSHA256",
-			tpmKey: primaryECC,
+			desc:        "HMACUnboundSaltedECCSHA256",
+			tpmKey:      primaryECC,
 			sessionType: SessionTypeHMAC,
-			alg: AlgorithmSHA256,
-			handleType: HandleTypeHMACSession,
+			alg:         AlgorithmSHA256,
+			handleType:  HandleTypeHMACSession,
 		},
 		{
-			desc: "HMACBoundSaltedRSASHA1",
-			tpmKey: primary,
-			bind: primary,
+			desc:        "HMACBoundSaltedRSASHA1",
+			tpmKey:      primary,
+			bind:        primary,
 			sessionType: SessionTypeHMAC,
-			alg: AlgorithmSHA1,
-			bindAuth: auth,
-			handleType: HandleTypeHMACSession,
+			alg:         AlgorithmSHA1,
+			bindAuth:    auth,
+			handleType:  HandleTypeHMACSession,
 		},
 		{
-			desc: "TrialSessionSHA256",
+			desc:        "TrialSessionSHA256",
 			sessionType: SessionTypeTrial,
-			alg: AlgorithmSHA256,
-			handleType: HandleTypePolicySession,
+			alg:         AlgorithmSHA256,
+			handleType:  HandleTypePolicySession,
 		},
 		{
-			desc: "PolicySessionSHA256",
+			desc:        "PolicySessionSHA256",
 			sessionType: SessionTypePolicy,
-			alg: AlgorithmSHA256,
-			handleType: HandleTypePolicySession,
+			alg:         AlgorithmSHA256,
+			handleType:  HandleTypePolicySession,
 		},
 		{
-			desc: "HMACUnboundUnsaltedInvalidAlg",
+			desc:        "HMACUnboundUnsaltedInvalidAlg",
 			sessionType: SessionTypeHMAC,
-			alg: AlgorithmNull,
-			errMsg: "invalid authHash parameter: unsupported digest algorithm TPM_ALG_NULL",
+			alg:         AlgorithmNull,
+			errMsg:      "invalid authHash parameter: unsupported digest algorithm TPM_ALG_NULL",
 		},
 		{
-			desc: "HMACUnboundSaltedInvalidKey",
-			tpmKey: owner,
+			desc:        "HMACUnboundSaltedInvalidKey",
+			tpmKey:      owner,
 			sessionType: SessionTypeHMAC,
-			alg: AlgorithmSHA256,
-			errMsg: "invalid tpmKey parameter: not an object",
+			alg:         AlgorithmSHA256,
+			errMsg:      "invalid tpmKey parameter: not an object",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -100,6 +101,39 @@ func TestStartAuthSession(t *testing.T) {
 
 				if sessionHandle.Handle()&data.handleType != data.handleType {
 					t.Errorf("StartAuthSession returned a handle of the wrong type")
+				}
+
+				context, isSessionContext := sessionHandle.(*sessionContext)
+				if !isSessionContext {
+					t.Fatalf("StartAuthSession didn't return a session context")
+				}
+				if context.hashAlg != data.alg {
+					t.Errorf("The returned session context has the wrong algorithm (got %v)",
+						context.hashAlg)
+				}
+				boundResource := data.bind
+				if data.bind == nil {
+					boundResource = null
+				}
+				if context.boundResource != boundResource {
+					t.Errorf("The returned session context has the wrong bound resource")
+				}
+				digestSize, _ := digestSizes[data.alg]
+				sessionKeySize := int(digestSize)
+				if data.bind == nil && data.tpmKey == nil {
+					sessionKeySize = 0
+				}
+				if len(context.sessionKey) != sessionKeySize {
+					t.Errorf("The returned session key has the wrong length (got %d)",
+						len(context.sessionKey))
+				}
+				if len(context.nonceCaller) != int(digestSize) {
+					t.Errorf("The returned caller nonce has the wrong length (got %d)",
+						len(context.nonceCaller))
+				}
+				if len(context.nonceTPM) != int(digestSize) {
+					t.Errorf("The returned TPM nonce has the wrong length (got %d)",
+						len(context.nonceTPM))
 				}
 			} else {
 				if err == nil {
