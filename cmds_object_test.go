@@ -38,7 +38,7 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-		    Type:    AlgorithmRSA,
+			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrDecrypt | AttrSign,
@@ -68,9 +68,9 @@ func TestCreate(t *testing.T) {
 			Params: PublicParamsU{
 				ECCDetail: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:  ECCScheme{Scheme: AlgorithmNull},
-					CurveID: ECCCurveNIST_P256,
-					KDF:     KDFScheme{Scheme: AlgorithmNull}}},
+					Scheme:    ECCScheme{Scheme: AlgorithmNull},
+					CurveID:   ECCCurveNIST_P256,
+					KDF:       KDFScheme{Scheme: AlgorithmNull}}},
 			Unique: PublicIDU{ECC: &ECCPoint{}}}
 
 		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, nil)
@@ -87,7 +87,7 @@ func TestCreate(t *testing.T) {
 
 		sensitive := SensitiveCreate{UserAuth: Auth(auth)}
 		template := Public{
-		    Type:    AlgorithmRSA,
+			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
@@ -97,9 +97,9 @@ func TestCreate(t *testing.T) {
 						Algorithm: AlgorithmAES,
 						KeyBits:   SymKeyBitsU{Sym: 128},
 						Mode:      SymModeU{Sym: AlgorithmCFB}},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
-					KeyBits:   2048,
-					Exponent:  0}}}
+					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:  2048,
+					Exponent: 0}}}
 
 		pub, priv := run(t, primary, HandleOwner, &sensitive, &template, Data{}, PCRSelectionList{}, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)
@@ -118,7 +118,7 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-		    Type:    AlgorithmRSA,
+			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrDecrypt | AttrSign,
@@ -141,7 +141,7 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-		    Type:    AlgorithmRSA,
+			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrDecrypt | AttrSign,
@@ -163,7 +163,7 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-		    Type:    AlgorithmRSA,
+			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrDecrypt | AttrSign,
@@ -318,7 +318,7 @@ func TestLoadExternal(t *testing.T) {
 			t.Errorf("LoadExternal returned an invalid handle 0x%08x", objectHandle.Handle())
 		}
 		nameAlgSize, _ := digestSizes[template.NameAlg]
-		if len(name) != int(nameAlgSize) + 2 {
+		if len(name) != int(nameAlgSize)+2 {
 			t.Errorf("LoadExternal returned a name of the wrong length")
 		}
 	}
@@ -329,18 +329,18 @@ func TestLoadExternal(t *testing.T) {
 			t.Fatalf("Generating an RSA key failed: %v", err)
 		}
 		sensitive := Sensitive{
-			Type: AlgorithmRSA,
+			Type:      AlgorithmRSA,
 			Sensitive: SensitiveCompositeU{RSA: key.Primes[0].Bytes()}}
 		public := Public{
-			Type: AlgorithmRSA,
+			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme: RSAScheme{Scheme: AlgorithmNull},
-					KeyBits: 2048,
-					Exponent: uint32(key.PublicKey.E)}},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  uint32(key.PublicKey.E)}},
 			Unique: PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 
 		run(t, &sensitive, &public, HandleNull)
@@ -352,18 +352,18 @@ func TestLoadExternal(t *testing.T) {
 			t.Fatalf("Generating an ECC key failed: %v", err)
 		}
 		sensitive := Sensitive{
-			Type: AlgorithmECC,
+			Type:      AlgorithmECC,
 			Sensitive: SensitiveCompositeU{ECC: priv}}
 		public := Public{
-			Type: AlgorithmECC,
+			Type:    AlgorithmECC,
 			NameAlg: AlgorithmSHA1,
-			Attrs: AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				ECCDetail: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme: ECCScheme{Scheme: AlgorithmNull},
-					CurveID: ECCCurveNIST_P256,
-					KDF: KDFScheme{Scheme: AlgorithmNull}}},
+					Scheme:    ECCScheme{Scheme: AlgorithmNull},
+					CurveID:   ECCCurveNIST_P256,
+					KDF:       KDFScheme{Scheme: AlgorithmNull}}},
 			Unique: PublicIDU{ECC: &ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
 
 		run(t, &sensitive, &public, HandleNull)
@@ -376,15 +376,15 @@ func TestLoadExternal(t *testing.T) {
 		}
 
 		public := Public{
-			Type: AlgorithmRSA,
+			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme: RSAScheme{Scheme: AlgorithmNull},
-					KeyBits: 2048,
-					Exponent: uint32(key.PublicKey.E)}},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  uint32(key.PublicKey.E)}},
 			Unique: PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 
 		run(t, nil, &public, HandleOwner)
@@ -483,9 +483,9 @@ func TestObjectChangeAuth(t *testing.T) {
 	create := func(t *testing.T, userAuth Auth) (ResourceContext, *Public) {
 		sensitive := SensitiveCreate{Data: []byte("sensitive data"), UserAuth: userAuth}
 		template := Public{
-			Type:       AlgorithmKeyedHash,
-			NameAlg:    AlgorithmSHA256,
-			Attrs:      AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
+			Type:    AlgorithmKeyedHash,
+			NameAlg: AlgorithmSHA256,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 			Params: PublicParamsU{
 				KeyedHashDetail: &KeyedHashParams{
 					Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
