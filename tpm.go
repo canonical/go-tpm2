@@ -408,7 +408,7 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) err
 	}
 
 	if sentinels < 4 {
-		for i := sentinels; i < 4; i++ {
+		for i := 4; i > sentinels && i > 2; i-- {
 			responseArgs = append(responseArgs, Separator)
 		}
 		responseArgs = append(responseArgs, authSessions...)

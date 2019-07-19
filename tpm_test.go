@@ -7,7 +7,7 @@ import (
 
 var tpmPath = flag.String("tpm-path", "", "")
 
-func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) ResourceContext {
+func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceContext, Name) {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
@@ -23,15 +23,15 @@ func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) ResourceContex
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
+	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
 		nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
-	return objectHandle
+	return objectHandle, name
 }
 
-func createECCSrkForTesting(t *testing.T, tpm TPM, userAuth Auth) ResourceContext {
+func createECCSrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceContext, Name) {
 	template := Public{
 		Type:    AlgorithmECC,
 		NameAlg: AlgorithmSHA256,
@@ -48,12 +48,12 @@ func createECCSrkForTesting(t *testing.T, tpm TPM, userAuth Auth) ResourceContex
 				KDF:     KDFScheme{Scheme: AlgorithmNull}}},
 		Unique: PublicIDU{ECC: &ECCPoint{}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
+	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
 		nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
-	return objectHandle
+	return objectHandle, name
 }
 
 func createRSAEkForTesting(t *testing.T, tpm TPM) ResourceContext {

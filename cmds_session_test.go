@@ -9,9 +9,9 @@ func TestStartAuthSession(t *testing.T) {
 	defer tpm.Close()
 
 	auth := []byte("foo")
-	primary := createRSASrkForTesting(t, tpm, Auth(auth))
+	primary, _ := createRSASrkForTesting(t, tpm, Auth(auth))
 	defer flushContext(t, tpm, primary)
-	primaryECC := createECCSrkForTesting(t, tpm, nil)
+	primaryECC, _ := createECCSrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primaryECC)
 
 	owner, _ := tpm.WrapHandle(HandleOwner)
