@@ -59,6 +59,13 @@ func TestHMACSessions(t *testing.T) {
 			sessionAuth:  auth,
 			sessionAttrs: AttrContinueSession,
 		},
+		{
+			desc:         "BoundSaltedRSA",
+			tpmKey:       primary,
+			bind:         primary,
+			bindAuth:     auth,
+			sessionAttrs: AttrContinueSession,
+		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			sessionHandle, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC,
