@@ -1,11 +1,31 @@
 package tpm2
 
 import (
+	"bytes"
 	"flag"
+	"reflect"
 	"testing"
 )
 
 var tpmPath = flag.String("tpm-path", "", "")
+
+func verifyPublicAgainstTemplate(t *testing.T, template, public *Public) {
+	if public.Type != template.Type {
+		t.Errorf("public object has wrong type: %v", public.Type)
+	}
+	if public.NameAlg != template.NameAlg {
+		t.Errorf("public object has wrong name alg: %v", public.NameAlg)
+	}
+	if public.Attrs != template.Attrs {
+		t.Errorf("public object has wrong name attrs: %v", public.Attrs)
+	}
+	if !bytes.Equal(public.AuthPolicy, template.AuthPolicy) {
+		t.Errorf("public object has wrong auth policy")
+	}
+	if !reflect.DeepEqual(public.Params, template.Params) {
+		t.Errorf("public object has wrong params")
+	}
+}
 
 func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceContext, Name) {
 	template := Public{

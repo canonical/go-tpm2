@@ -53,14 +53,29 @@ func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandl
 	}
 
 	updatedAuthHandleAuth := authHandleAuth
+	var sc *sessionContext
 
+	// If the session is not bound to authHandle, the TPM will respond with a HMAC generated with a key
+	// derived from newAuth
 	switch s := authHandleAuth.(type) {
 	case *Session:
-		if s.Handle.(*sessionContext).boundResource.Handle() != authHandle {
+		sc = s.Handle.(*sessionContext)
+		if sc.boundResource.Handle() != authHandle {
 			updatedAuthHandleAuth =
 				&Session{Handle: s.Handle, Attributes: s.Attributes, AuthValue: newAuth}
 		}
 	}
+
+	defer func() {
+		// If the session was bound to authHandle, it becomes unbound now. Future commands must provide
+		// the value of newAuth with the session for commands operating on authHandle that require
+		// an authorization.
+		// This is deferred because the HMAC in the response is generated from the original session key
+		if sc != nil && sc.boundResource.Handle() == authHandle {
+			null, _ := t.WrapHandle(HandleNull)
+			sc.boundResource = null
+		}
+	}()
 
 	return t.ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
 		Separator, updatedAuthHandleAuth)
