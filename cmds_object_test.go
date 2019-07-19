@@ -179,15 +179,12 @@ func TestCreate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
+		defer verifySessionFlushed(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		session := Session{Handle: sessionHandle}
 
 		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
 		verifyRSAAgainstTemplate(t, pub, &template)
-
-		// use the session a second time to ensure the previous response was processed
-		run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
 	})
 }
 
@@ -460,9 +457,8 @@ func TestUnseal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
-		run(t, handle, &session)
+		defer verifySessionFlushed(t, tpm, sessionHandle)
+		run(t, handle, &Session{Handle: sessionHandle})
 	})
 
 	t.Run("WithPolicyAuth", func(t *testing.T) {
@@ -472,9 +468,8 @@ func TestUnseal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
-		run(t, handle, &session)
+		defer verifySessionFlushed(t, tpm, sessionHandle)
+		run(t, handle, &Session{Handle: sessionHandle})
 	})
 }
 
@@ -547,9 +542,8 @@ func TestObjectChangeAuth(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession, AuthValue: auth}
-		run(t, handle, pub, Auth("1234"), &session)
+		defer verifySessionFlushed(t, tpm, sessionHandle)
+		session := Session{Handle: sessionHandle, AuthValue: auth}
 		run(t, handle, pub, Auth("1234"), &session)
 	})
 
@@ -562,8 +556,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
-		run(t, handle, pub, Auth("1234"), &session)
+		defer verifySessionFlushed(t, tpm, sessionHandle)
+		run(t, handle, pub, Auth("1234"), &Session{Handle: sessionHandle})
 	})
 }

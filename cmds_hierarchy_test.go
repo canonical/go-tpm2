@@ -202,9 +202,9 @@ func TestCreatePrimary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
+		defer verifySessionFlushed(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		session := Session{Handle: sessionHandle}
 
 		template := Public{
 			Type:    AlgorithmRSA,

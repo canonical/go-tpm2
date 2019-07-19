@@ -183,3 +183,15 @@ func flushContext(t *testing.T, tpm TPM, handle ResourceContext) {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 }
+
+func verifySessionFlushed(t *testing.T, tpm TPM, handle ResourceContext) {
+	context, isSession := handle.(*sessionContext)
+	if !isSession {
+		t.Errorf("handle is not a session context")
+	}
+	if context.tpm == nil {
+		return
+	}
+	t.Errorf("Session is still live")
+	flushContext(t, tpm, handle)
+}
