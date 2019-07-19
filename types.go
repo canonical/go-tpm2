@@ -102,17 +102,6 @@ func (n Name) SliceType() SliceType {
 	return SliceTypeSizedBufferU16
 }
 
-func (n Name) IsHandle() bool {
-	return len(n) == 4
-}
-
-func (n Name) Handle() Handle {
-	if !n.IsHandle() {
-		panic("Name is not a handle")
-	}
-	return Handle(binary.BigEndian.Uint32(n))
-}
-
 type Nonce Digest
 
 func (n Nonce) SliceType() SliceType {

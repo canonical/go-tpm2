@@ -2,137 +2,271 @@ package tpm2
 
 import (
 	"bytes"
-	"reflect"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"testing"
 )
-
-func createPrimary(t *testing.T, tpm TPM) (ResourceContext, Name) {
-	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrDecrypt,
-		Params: PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Sym: AlgorithmCFB}},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, "")
-	if err != nil {
-		t.Fatalf("Failed to create primary object: %v", err)
-	}
-	return objectHandle, name
-}
 
 func TestCreate(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	primary, primaryName := createPrimary(t, tpm)
-	defer flushContext(t, tpm, primary)
+	run := func(t *testing.T, parent ResourceContext, hierarchy Handle, sensitive *SensitiveCreate,
+		template *Public, outsideInfo Data, creationPCR PCRSelectionList,
+		session interface{}) (*Public, Private) {
+		outPrivate, outPublic, creationData, creationHash, creationTicket, err := tpm.Create(
+			parent, sensitive, template, outsideInfo, creationPCR, session)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
 
-	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrDecrypt | AttrSign,
-		Params: PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:    RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:   2048,
-				Exponent:  0}}}
-	creationPCR := PCRSelectionList{
-		PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-		PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+		if len(outPrivate) == 0 {
+			t.Errorf("Create returned a zero sized private part")
+		}
 
-	outPrivate, outPublic, creationData, creationHash, creationTicket, err := tpm.Create(primary,
-		nil, &template, nil, creationPCR, "")
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
+		verifyPublicAgainstTemplate(t, outPublic, template)
+		verifyCreationData(t, tpm, creationData, template, outsideInfo, creationPCR, parent)
+		verifyCreationHash(t, creationHash, template)
+		verifyCreationTicket(t, creationTicket, hierarchy)
+
+		return outPublic, outPrivate
 	}
 
-	if len(outPrivate) == 0 {
-		t.Errorf("Create returned a zero sized private part")
-	}
+	t.Run("RSA", func(t *testing.T) {
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, primary)
 
-	verifyPublicAgainstTemplate(t, &template, outPublic)
+		template := Public{
+		    Type:    AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  0}}}
+		creationPCR := PCRSelectionList{
+			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
+			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
-	if !reflect.DeepEqual(creationData.PCRSelect, creationPCR) {
-		t.Errorf("Create returned invalid creationData.pcrSelect")
-	}
-	if len(creationData.PCRDigest) != 32 {
-		t.Errorf("Create returned a creationData.pcrDigest of the wrong length %d",
-			len(creationData.PCRDigest))
-	}
-	if creationData.ParentNameAlg != AlgorithmSHA256 {
-		t.Errorf("Create returned the wrong creationData.parentNameAlg")
-	}
-	if !bytes.Equal(creationData.ParentName, primaryName) {
-		t.Errorf("Create returned the wrong creationData.parentName")
-	}
-	if len(creationData.ParentQualifiedName) != 34 {
-		t.Errorf("Create returned the a creationData.parentQualifiedName of the wrong length")
-	}
+		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, creationPCR, nil)
+		verifyRSAAgainstTemplate(t, pub, &template)
+	})
 
-	if len(creationHash) != 32 {
-		t.Errorf("Create returned a creation hash of the wrong length %d", len(creationHash))
-	}
+	t.Run("ECC", func(t *testing.T) {
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, primary)
 
-	if creationTicket.Tag != TagCreation {
-		t.Errorf("Create returned an invalid creationTicket.tag value")
-	}
-	if creationTicket.Hierarchy != HandleOwner {
-		t.Errorf("Create returned an invalid creationTicket.hierarchy value")
-	}
+		template := Public{
+			Type:    AlgorithmECC,
+			NameAlg: AlgorithmSHA1,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				ECCDetail: &ECCParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme:  ECCScheme{Scheme: AlgorithmNull},
+					CurveID: ECCCurveNIST_P256,
+					KDF:     KDFScheme{Scheme: AlgorithmNull}}},
+			Unique: PublicIDU{ECC: &ECCPoint{}}}
+
+		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, nil)
+		if len(pub.Unique.ECC.X) != 32 || len(pub.Unique.ECC.Y) != 32 {
+			t.Errorf("CreatePrimary returned object with invalid ECC coords")
+		}
+	})
+
+	t.Run("WithAuth", func(t *testing.T) {
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, primary)
+
+		auth := []byte("1234")
+
+		sensitive := SensitiveCreate{UserAuth: Auth(auth)}
+		template := Public{
+		    Type:    AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrRestricted | AttrDecrypt,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{
+						Algorithm: AlgorithmAES,
+						KeyBits:   SymKeyBitsU{Sym: 128},
+						Mode:      SymModeU{Sym: AlgorithmCFB}},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  0}}}
+
+		pub, priv := run(t, primary, HandleOwner, &sensitive, &template, Data{}, PCRSelectionList{}, nil)
+		verifyRSAAgainstTemplate(t, pub, &template)
+
+		handle, _, err := tpm.Load(primary, priv, pub, nil)
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+		defer flushContext(t, tpm, handle)
+
+		run(t, handle, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, auth)
+	})
+
+	t.Run("WithOutsideInfo", func(t *testing.T) {
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, primary)
+
+		template := Public{
+		    Type:    AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  0}}}
+		outsideInfo := Data("foo")
+
+		pub, _ := run(t, primary, HandleOwner, nil, &template, outsideInfo, PCRSelectionList{}, nil)
+		verifyRSAAgainstTemplate(t, pub, &template)
+	})
+
+	t.Run("RequireAuthPW", func(t *testing.T) {
+		auth := []byte("foo")
+
+		primary := createRSASrkForTesting(t, tpm, auth)
+		defer flushContext(t, tpm, primary)
+
+		template := Public{
+		    Type:    AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  0}}}
+
+		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, auth)
+		verifyRSAAgainstTemplate(t, pub, &template)
+	})
+
+	t.Run("RequireAuthSession", func(t *testing.T) {
+		auth := []byte("1234")
+
+		primary := createRSASrkForTesting(t, tpm, auth)
+		defer flushContext(t, tpm, primary)
+
+		template := Public{
+		    Type:    AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  0}}}
+
+		sessionHandle, err :=
+			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, auth)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionHandle)
+
+		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+
+		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
+		verifyRSAAgainstTemplate(t, pub, &template)
+
+		// use the session a second time to ensure the previous response was processed
+		run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
+	})
 }
 
 func TestLoad(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	primary, _ := createPrimary(t, tpm)
-	defer flushContext(t, tpm, primary)
+	run := func(t *testing.T, parent ResourceContext, session interface{}) {
+		template := Public{
+			Type:    AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:   2048,
+					Exponent:  0}}}
 
-	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrDecrypt | AttrSign,
-		Params: PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:    RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:   2048,
-				Exponent:  0}}}
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
+		outPrivate, outPublic, _, _, _, err := tpm.Create(parent, nil, &template, nil, nil, session)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+
+		objectHandle, name, err := tpm.Load(parent, outPrivate, outPublic, session)
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+		defer flushContext(t, tpm, objectHandle)
+
+		if objectHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+			t.Errorf("Create returned an invalid handle 0x%08x", objectHandle.Handle())
+		}
+		if len(name) != 34 {
+			t.Errorf("Create returned a name of the wrong length %d", len(name))
+		}
 	}
 
-	objectHandle, name, err := tpm.Load(primary, outPrivate, outPublic, "")
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	defer flushContext(t, tpm, objectHandle)
+	t.Run("NoAuth", func(t *testing.T) {
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, primary)
 
-	if objectHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
-		t.Errorf("Create returned an invalid handle 0x%08x", objectHandle.Handle())
-	}
-	if len(name) != 34 {
-		t.Errorf("Create returned a name of the wrong length %d", len(name))
-	}
+		run(t, primary, nil)
+	})
+
+	t.Run("RequireAuthPW", func(t *testing.T) {
+		auth := []byte("foo")
+
+		primary := createRSASrkForTesting(t, tpm, auth)
+		defer flushContext(t, tpm, primary)
+
+		run(t, primary, auth)
+	})
+
+	t.Run("RequireAuthSession", func(t *testing.T) {
+		auth := []byte("foo")
+
+		primary := createRSASrkForTesting(t, tpm, auth)
+		defer flushContext(t, tpm, primary)
+
+		sessionHandle, err :=
+			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, auth)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionHandle)
+
+		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+
+		run(t, primary, &session)
+	})
 }
 
 func TestReadPublic(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	primary, _ := createPrimary(t, tpm)
+	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
 
 	template := Public{
@@ -146,12 +280,12 @@ func TestReadPublic(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:   2048,
 				Exponent:  0}}}
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	objectHandle, name1, err := tpm.Load(primary, outPrivate, outPublic, "")
+	objectHandle, name1, err := tpm.Load(primary, outPrivate, outPublic, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -176,145 +310,260 @@ func TestLoadExternal(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	primary, _ := createPrimary(t, tpm)
-	defer flushContext(t, tpm, primary)
+	run := func(t *testing.T, sensitive *Sensitive, template *Public, hierarchy Handle) {
+		objectHandle, name, err := tpm.LoadExternal(sensitive, template, hierarchy)
+		if err != nil {
+			t.Fatalf("LoadExternal failed: %v", err)
+		}
+		defer flushContext(t, tpm, objectHandle)
 
-	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
-		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-		Params: PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:    RSAScheme{Scheme: AlgorithmNull},
-				KeyBits:   2048,
-				Exponent:  0}}}
-	_, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, "")
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
+		if objectHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+			t.Errorf("LoadExternal returned an invalid handle 0x%08x", objectHandle.Handle())
+		}
+		nameAlgSize, _ := digestSizes[template.NameAlg]
+		if len(name) != int(nameAlgSize) + 2 {
+			t.Errorf("LoadExternal returned a name of the wrong length")
+		}
 	}
 
-	objectHandle, name, err := tpm.LoadExternal(nil, outPublic, HandleOwner)
-	if err != nil {
-		t.Fatalf("LoadExternal failed: %v", err)
-	}
-	defer flushContext(t, tpm, objectHandle)
+	t.Run("RSA", func(t *testing.T) {
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			t.Fatalf("Generating an RSA key failed: %v", err)
+		}
+		sensitive := Sensitive{
+			Type: AlgorithmRSA,
+			Sensitive: SensitiveCompositeU{RSA: key.Primes[0].Bytes()}}
+		public := Public{
+			Type: AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme: RSAScheme{Scheme: AlgorithmNull},
+					KeyBits: 2048,
+					Exponent: uint32(key.PublicKey.E)}},
+			Unique: PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 
-	if objectHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
-		t.Errorf("LoadExternal returned an invalid handle 0x%08x", objectHandle.Handle())
-	}
-	if len(name) != 34 {
-		t.Errorf("LoadExternal returned a name of the wrong length")
-	}
+		run(t, &sensitive, &public, HandleNull)
+	})
+
+	t.Run("ECC", func(t *testing.T) {
+		priv, x, y, err := elliptic.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatalf("Generating an ECC key failed: %v", err)
+		}
+		sensitive := Sensitive{
+			Type: AlgorithmECC,
+			Sensitive: SensitiveCompositeU{ECC: priv}}
+		public := Public{
+			Type: AlgorithmECC,
+			NameAlg: AlgorithmSHA1,
+			Attrs: AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				ECCDetail: &ECCParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme: ECCScheme{Scheme: AlgorithmNull},
+					CurveID: ECCCurveNIST_P256,
+					KDF: KDFScheme{Scheme: AlgorithmNull}}},
+			Unique: PublicIDU{ECC: &ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
+
+		run(t, &sensitive, &public, HandleNull)
+	})
+
+	t.Run("PublicOnly", func(t *testing.T) {
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			t.Fatalf("Generating an RSA key failed: %v", err)
+		}
+
+		public := Public{
+			Type: AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Scheme: RSAScheme{Scheme: AlgorithmNull},
+					KeyBits: 2048,
+					Exponent: uint32(key.PublicKey.E)}},
+			Unique: PublicIDU{RSA: key.PublicKey.N.Bytes()}}
+
+		run(t, nil, &public, HandleOwner)
+	})
 }
 
 func TestUnseal(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	primary, _ := createPrimary(t, tpm)
+	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
 
-	template := Public{
-		Type:       AlgorithmKeyedHash,
-		NameAlg:    AlgorithmSHA256,
-		Attrs:      AttrFixedTPM | AttrFixedParent,
-		AuthPolicy: make([]byte, 32),
-		Params: PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{
-					Scheme: AlgorithmNull}}}}
-
 	secret := []byte("sensitive data")
-	sensitive := SensitiveCreate{Data: secret}
 
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, "")
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
+	create := func(t *testing.T, authPolicy Digest, authValue Auth,
+		extraAttrs ObjectAttributes) ResourceContext {
+		template := Public{
+			Type:       AlgorithmKeyedHash,
+			NameAlg:    AlgorithmSHA256,
+			Attrs:      AttrFixedTPM | AttrFixedParent | extraAttrs,
+			AuthPolicy: authPolicy,
+			Params: PublicParamsU{
+				KeyedHashDetail: &KeyedHashParams{
+					Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+
+		sensitive := SensitiveCreate{Data: secret, UserAuth: authValue}
+
+		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+
+		objectHandle, _, err := tpm.Load(primary, outPrivate, outPublic, "")
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+		return objectHandle
 	}
 
-	objectHandle, _, err := tpm.Load(primary, outPrivate, outPublic, "")
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	defer flushContext(t, tpm, objectHandle)
-
-	session, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, session)
-
-	sensitiveData, err := tpm.Unseal(objectHandle, &Session{Handle: session, Attributes: AttrContinueSession})
-	if err != nil {
-		t.Fatalf("Unseal failed: %v", err)
+	run := func(t *testing.T, handle ResourceContext, session interface{}) {
+		sensitiveData, err := tpm.Unseal(handle, session)
+		if err != nil {
+			t.Fatalf("Unseal failed: %v", err)
+		}
+		if !bytes.Equal(sensitiveData, secret) {
+			t.Errorf("Unseal didn't return the expected data (got %x)", sensitiveData)
+		}
 	}
 
-	if !bytes.Equal(sensitiveData, secret) {
-		t.Errorf("Unseal didn't return the expected data (got %x)", sensitiveData)
-	}
+	t.Run("NoAuth", func(t *testing.T) {
+		handle := create(t, nil, nil, AttrUserWithAuth)
+		defer flushContext(t, tpm, handle)
+		run(t, handle, nil)
+	})
+
+	t.Run("WithPWAuth", func(t *testing.T) {
+		auth := []byte("foo")
+		handle := create(t, nil, Auth(auth), AttrUserWithAuth)
+		defer flushContext(t, tpm, handle)
+		run(t, handle, auth)
+	})
+
+	t.Run("WithHMACAuth", func(t *testing.T) {
+		auth := []byte("foo")
+		handle := create(t, nil, Auth(auth), AttrUserWithAuth)
+		defer flushContext(t, tpm, handle)
+		sessionHandle, err :=
+			tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256, auth)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionHandle)
+		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		run(t, handle, &session)
+	})
+
+	t.Run("WithPolicyAuth", func(t *testing.T) {
+		handle := create(t, make([]byte, 32), nil, 0)
+		defer flushContext(t, tpm, handle)
+		sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionHandle)
+		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		run(t, handle, &session)
+	})
 }
 
 func TestObjectChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	primary, _ := createPrimary(t, tpm)
+	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
 
-	template := Public{
-		Type:       AlgorithmKeyedHash,
-		NameAlg:    AlgorithmSHA256,
-		Attrs:      AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
-		AuthPolicy: make([]byte, 32),
-		Params: PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{
-					Scheme: AlgorithmNull}}}}
+	create := func(t *testing.T, userAuth Auth) (ResourceContext, *Public) {
+		sensitive := SensitiveCreate{Data: []byte("sensitive data"), UserAuth: userAuth}
+		template := Public{
+			Type:       AlgorithmKeyedHash,
+			NameAlg:    AlgorithmSHA256,
+			Attrs:      AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
+			Params: PublicParamsU{
+				KeyedHashDetail: &KeyedHashParams{
+					Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 
-	secret := []byte("sensitive data")
-	sensitive := SensitiveCreate{Data: secret}
-
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, "")
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	objectHandle, _, err := tpm.Load(primary, outPrivate, outPublic, "")
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	needFlush := true
-	defer func() {
-		if !needFlush {
-			return
+		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
 		}
-		flushContext(t, tpm, objectHandle)
-	}()
 
-	_, err = tpm.Unseal(objectHandle, nil)
-	if err != nil {
-		t.Fatalf("Unseal failed: %v", err)
+		objectHandle, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+
+		return objectHandle, outPublic
 	}
 
-	newPrivate, err := tpm.ObjectChangeAuth(objectHandle, primary, Auth("1234"), nil)
-	if err != nil {
-		t.Fatalf("ObjectChangeAuth failed: %v", err)
+	run := func(t *testing.T, handle ResourceContext, pub *Public, authValue Auth, session interface{}) {
+		priv, err := tpm.ObjectChangeAuth(handle, primary, authValue, session)
+		if err != nil {
+			t.Fatalf("ObjectChangeAuth failed: %v", err)
+		}
+
+		newHandle, _, err := tpm.Load(primary, priv, pub, nil)
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+		defer flushContext(t, tpm, newHandle)
+
+		_, err = tpm.Unseal(newHandle, authValue)
+		if err != nil {
+			t.Errorf("Unseal failed: %v", err)
+		}
 	}
 
-	if err := tpm.FlushContext(objectHandle); err != nil {
-		t.Errorf("FlushContext failed: %v", err)
-	}
-	needFlush = false
+	t.Run("WithNoAuth", func(t *testing.T) {
+		handle, pub := create(t, nil)
+		defer flushContext(t, tpm, handle)
+		run(t, handle, pub, Auth("foo"), nil)
+	})
 
-	newObjectHandle, _, err := tpm.Load(primary, newPrivate, outPublic, "")
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	defer flushContext(t, tpm, newObjectHandle)
+	t.Run("WithPWAuth", func(t *testing.T) {
+		auth := []byte("foo")
+		handle, pub := create(t, Auth(auth))
+		defer flushContext(t, tpm, handle)
+		run(t, handle, pub, Auth("1234"), auth)
+	})
 
-	_, err = tpm.Unseal(newObjectHandle, "1234")
-	if err != nil {
-		t.Fatalf("Unseal failed: %v", err)
-	}
+	t.Run("WithUnboundSession", func(t *testing.T) {
+		auth := []byte("foo")
+		handle, pub := create(t, Auth(auth))
+		defer flushContext(t, tpm, handle)
+		sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionHandle)
+		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession, AuthValue: auth}
+		run(t, handle, pub, Auth("1234"), &session)
+		run(t, handle, pub, Auth("1234"), &session)
+	})
+
+	t.Run("WithBoundSession", func(t *testing.T) {
+		auth := []byte("foo")
+		handle, pub := create(t, Auth(auth))
+		defer flushContext(t, tpm, handle)
+		sessionHandle, err := tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256,
+			auth)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionHandle)
+		session := Session{Handle: sessionHandle, Attributes: AttrContinueSession}
+		run(t, handle, pub, Auth("1234"), &session)
+	})
 }

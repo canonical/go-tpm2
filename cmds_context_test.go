@@ -9,7 +9,7 @@ func TestContextSaveTransient(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	objectHandle, _ := createRSASrkForTesting(t, tpm, nil)
+	objectHandle := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, objectHandle)
 
 	context, err := tpm.ContextSave(objectHandle)
@@ -28,7 +28,7 @@ func TestContextLoadTransient(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	objectHandle, name := createRSASrkForTesting(t, tpm, nil)
+	objectHandle := createRSASrkForTesting(t, tpm, nil)
 	flushed := false
 	defer func() {
 		if flushed {
@@ -36,6 +36,8 @@ func TestContextLoadTransient(t *testing.T) {
 		}
 		flushContext(t, tpm, objectHandle)
 	}()
+
+	name := objectHandle.Name()
 
 	context, err := tpm.ContextSave(objectHandle)
 	if err != nil {
@@ -122,19 +124,19 @@ func TestEvictControl(t *testing.T) {
 	}
 
 	t.Run("NoAuth", func(t *testing.T) {
-		objectHandle, _ := createRSASrkForTesting(t, tpm, nil)
+		objectHandle := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, objectHandle)
 		run(t, objectHandle, Handle(0x81020000), nil)
 	})
 	t.Run("PasswordAuth", func(t *testing.T) {
-		objectHandle, _ := createRSASrkForTesting(t, tpm, nil)
+		objectHandle := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, objectHandle)
 		setupOwnerAuth(t)
 		defer resetOwnerAuth(t)
 		run(t, objectHandle, Handle(0x81020001), auth)
 	})
 	t.Run("SessionAuth", func(t *testing.T) {
-		objectHandle, _ := createRSASrkForTesting(t, tpm, nil)
+		objectHandle := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, objectHandle)
 		setupOwnerAuth(t)
 		defer resetOwnerAuth(t)
@@ -154,7 +156,7 @@ func TestFlushContext(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	objectHandle, _ := createRSASrkForTesting(t, tpm, nil)
+	objectHandle := createRSASrkForTesting(t, tpm, nil)
 	h := objectHandle.Handle()
 
 	handles, err := tpm.GetCapabilityHandles(h, 1)

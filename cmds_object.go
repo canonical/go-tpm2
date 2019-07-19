@@ -125,24 +125,9 @@ func (t *tpmImpl) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, n
 
 	var outPrivate Private
 
-	responseCode, responseTag, response, err := t.RunCommandAndReturnRawResponse(CommandObjectChangeAuth,
-		ResourceWithAuth{Handle: objectHandle, Auth: objectHandleAuth}, parentHandle, Separator, newAuth)
-	if err != nil {
-		return nil, err
-	}
-
-	updatedObjectHandleAuth := objectHandleAuth
-
-	switch s := objectHandleAuth.(type) {
-	case *Session:
-		if s.Handle.(*sessionContext).boundResource != objectHandle {
-			updatedObjectHandleAuth =
-				&Session{Handle: s.Handle, Attributes: s.Attributes, AuthValue: newAuth}
-		}
-	}
-
-	if err := t.ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
-		&outPrivate, Separator, updatedObjectHandleAuth); err != nil {
+	if err := t.RunCommand(CommandObjectChangeAuth,
+		ResourceWithAuth{Handle: objectHandle, Auth: objectHandleAuth}, parentHandle, Separator, newAuth,
+		Separator, Separator, &outPrivate, Separator); err != nil {
 		return nil, err
 	}
 

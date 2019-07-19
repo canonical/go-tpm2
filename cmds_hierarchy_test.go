@@ -1,8 +1,6 @@
 package tpm2
 
 import (
-	"bytes"
-	"reflect"
 	"testing"
 )
 
@@ -21,59 +19,18 @@ func TestCreatePrimary(t *testing.T) {
 		if objectHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
 			t.Errorf("CreatePrimary returned an invalid handle 0x%08x", objectHandle.Handle())
 		}
-		verifyPublicAgainstTemplate(t, template, outPublic)
+		verifyPublicAgainstTemplate(t, outPublic, template)
+		h, _ := tpm.WrapHandle(hierarchy)
+		verifyCreationData(t, tpm, creationData, template, outsideInfo, creationPCR, h)
+		verifyCreationHash(t, creationHash, template)
+		verifyCreationTicket(t, creationTicket, hierarchy)
 
 		nameAlgSize, _ := digestSizes[template.NameAlg]
-		if !reflect.DeepEqual(creationData.PCRSelect, creationPCR) {
-			t.Errorf("CreatePrimary returned invalid creationData.pcrSelect")
-		}
-		if len(creationData.PCRDigest) != int(nameAlgSize) {
-			t.Errorf("CreatePrimary returned a creationData.pcrDigest of the wrong length %d",
-				len(creationData.PCRDigest))
-		}
-		if creationData.ParentNameAlg != AlgorithmNull {
-			t.Errorf("CreatePrimary should return a null creationData.parentNameAlg")
-		}
-		if !creationData.ParentName.IsHandle() {
-			t.Errorf("CreatePrimary returned a creationData.parentName that isn't a handle")
-		} else if creationData.ParentName.Handle() != hierarchy {
-			t.Errorf("CreatePrimary returned a creationData.parentName with the wrong handle 0x%08x",
-				creationData.ParentName.Handle())
-		}
-		if !creationData.ParentQualifiedName.IsHandle() {
-			t.Errorf("CreatePrimary returned a creationData.parentQualifiedName that isn't a handle")
-		} else if creationData.ParentQualifiedName.Handle() != hierarchy {
-			t.Errorf("CreatePrimary returned a creationData.parentQualifiedName with the wrong "+
-				"handle 0x%08x", creationData.ParentQualifiedName.Handle())
-		}
-		if !bytes.Equal(creationData.OutsideInfo, outsideInfo) {
-			t.Errorf("CreatePrimary returned a creationData.outsideInfo with the wrong contents")
-		}
-
-		if len(creationHash) != int(nameAlgSize) {
-			t.Errorf("CreatePrimary returned a creation hash of the wrong length %d",
-				len(creationHash))
-		}
-
-		if creationTicket.Tag != TagCreation {
-			t.Errorf("CreatePrimary returned an invalid creationTicket.tag value")
-		}
-		if creationTicket.Hierarchy != hierarchy {
-			t.Errorf("CreatePrimary returned an invalid creationTicket.hierarchy value")
-		}
-
 		if len(name) != int(nameAlgSize)+2 {
 			t.Errorf("CreatePrimary returned a name of the wrong length %d", len(name))
 		}
 
 		return objectHandle, outPublic
-	}
-
-	verifyRSA := func(t *testing.T, template, public *Public) {
-		if len(public.Unique.RSA) != int(template.Params.RSADetail.KeyBits)/8 {
-			t.Errorf("CreatePrimary returned object with wrong public key length %d",
-				len(public.Unique.RSA))
-		}
 	}
 
 	setHierarchyAuth := func(t *testing.T, handle Handle, auth []byte) {
@@ -109,7 +66,7 @@ func TestCreatePrimary(t *testing.T) {
 
 		objectHandle, pub := run(t, HandleOwner, nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectHandle)
-		verifyRSA(t, &template, pub)
+		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
 	t.Run("ECCSrk", func(t *testing.T) {
@@ -160,10 +117,10 @@ func TestCreatePrimary(t *testing.T) {
 
 		objectHandle, pub := run(t, HandleEndorsement, nil, &template, Data{}, PCRSelectionList{}, nil)
 		defer flushContext(t, tpm, objectHandle)
-		verifyRSA(t, &template, pub)
+		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
-	t.Run("RSASrkWithAuth", func(t *testing.T) {
+	t.Run("WithAuth", func(t *testing.T) {
 		auth := []byte("foo")
 
 		sensitive := SensitiveCreate{UserAuth: Auth(auth)}
@@ -187,7 +144,7 @@ func TestCreatePrimary(t *testing.T) {
 
 		objectHandle, pub := run(t, HandleOwner, &sensitive, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectHandle)
-		verifyRSA(t, &template, pub)
+		verifyRSAAgainstTemplate(t, pub, &template)
 
 		childTemplate := Public{
 			Type:    AlgorithmRSA,
@@ -207,7 +164,7 @@ func TestCreatePrimary(t *testing.T) {
 		}
 	})
 
-	t.Run("RSASrkWithOwnerAuthPW", func(t *testing.T) {
+	t.Run("RequireAuthPW", func(t *testing.T) {
 		auth := []byte("1234")
 
 		setHierarchyAuth(t, HandleOwner, auth)
@@ -230,10 +187,10 @@ func TestCreatePrimary(t *testing.T) {
 
 		objectHandle, pub := run(t, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, auth)
 		defer flushContext(t, tpm, objectHandle)
-		verifyRSA(t, &template, pub)
+		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
-	t.Run("RSASrkWithOwnerAuthSession", func(t *testing.T) {
+	t.Run("RequireAuthSession", func(t *testing.T) {
 		auth := []byte("1234")
 
 		setHierarchyAuth(t, HandleOwner, auth)
@@ -266,10 +223,10 @@ func TestCreatePrimary(t *testing.T) {
 
 		objectHandle, pub := run(t, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
 		defer flushContext(t, tpm, objectHandle)
-		verifyRSA(t, &template, pub)
+		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
-	t.Run("RSASrkWithOutsideInfo", func(t *testing.T) {
+	t.Run("WithOutsideInfo", func(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
@@ -291,7 +248,7 @@ func TestCreatePrimary(t *testing.T) {
 
 		objectHandle, pub := run(t, HandleOwner, nil, &template, data, creationPCR, nil)
 		defer flushContext(t, tpm, objectHandle)
-		verifyRSA(t, &template, pub)
+		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
 	t.Run("InvalidTemplate", func(t *testing.T) {

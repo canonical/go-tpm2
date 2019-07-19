@@ -9,7 +9,7 @@ import (
 
 var tpmPath = flag.String("tpm-path", "", "")
 
-func verifyPublicAgainstTemplate(t *testing.T, template, public *Public) {
+func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if public.Type != template.Type {
 		t.Errorf("public object has wrong type: %v", public.Type)
 	}
@@ -27,7 +27,64 @@ func verifyPublicAgainstTemplate(t *testing.T, template, public *Public) {
 	}
 }
 
-func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceContext, Name) {
+func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
+	if len(public.Unique.RSA) != int(template.Params.RSADetail.KeyBits)/8 {
+		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA))
+	}
+}
+
+func verifyCreationData(t *testing.T, tpm TPM, creationData *CreationData, template *Public, outsideInfo Data,
+	creationPCR PCRSelectionList, parent ResourceContext) {
+	nameAlgSize, _ := digestSizes[template.NameAlg]
+	var parentQualifiedName Name
+	if parent.Handle()&HandleTypePermanent == HandleTypePermanent {
+		parentQualifiedName = parent.Name()
+	} else {
+		var err error
+		_, _, parentQualifiedName, err = tpm.ReadPublic(parent)
+		if err != nil {
+			t.Fatalf("ReadPublic failed: %v", err)
+		}
+	}
+
+	if !reflect.DeepEqual(creationData.PCRSelect, creationPCR) {
+		t.Errorf("creation data has invalid pcrSelect")
+	}
+	if len(creationData.PCRDigest) != int(nameAlgSize) {
+		t.Errorf("creation data has a pcrDigest of the wrong length (got %d)",
+			len(creationData.PCRDigest))
+	}
+	if creationData.ParentNameAlg != nameAlgorithm(parent.Name()) {
+		t.Errorf("creation data has the wrong parentNameAlg (got %v)", creationData.ParentNameAlg)
+	}
+	if !bytes.Equal(creationData.ParentName, parent.Name()) {
+		t.Errorf("creation data has the wrong parentName")
+	}
+	if !bytes.Equal(creationData.ParentQualifiedName, parentQualifiedName) {
+		t.Errorf("creation data has the wrong parentQualifiedName")
+	}
+	if !bytes.Equal(creationData.OutsideInfo, outsideInfo) {
+		t.Errorf("creation data has the wrong outsideInfo (got %x)", creationData.OutsideInfo)
+	}
+}
+
+func verifyCreationHash(t *testing.T, creationHash Digest, template *Public) {
+	nameAlgSize, _ := digestSizes[template.NameAlg]
+	if len(creationHash) != int(nameAlgSize) {
+		t.Errorf("creation hash is the wrong length (%d bytes)", len(creationHash))
+	}
+}
+
+func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Handle) {
+	if creationTicket.Tag != TagCreation {
+		t.Errorf("creation ticket has the wrong tag")
+	}
+	if creationTicket.Hierarchy != hierarchy {
+		t.Errorf("creation ticket has the wrong hierarchy (got 0x%08x)", creationTicket.Hierarchy)
+	}
+}
+
+func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) ResourceContext {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
@@ -43,12 +100,12 @@ func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceConte
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
 		nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
-	return objectHandle, name
+	return objectHandle
 }
 
 func createECCSrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceContext, Name) {
@@ -99,6 +156,15 @@ func createRSAEkForTesting(t *testing.T, tpm TPM) ResourceContext {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
 	return objectHandle
+}
+
+func nameAlgorithm(n Name) AlgorithmId {
+	if len(n) == 4 {
+		return AlgorithmNull
+	}
+	var alg AlgorithmId
+	UnmarshalFromBytes([]byte(n), &alg)
+	return alg
 }
 
 func openTPMForTesting(t *testing.T) TPM {
