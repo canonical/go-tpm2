@@ -63,7 +63,7 @@ type TPM interface {
 
 	// Session Commands
 	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
-		authHash AlgorithmId, authValue interface{}) (ResourceContext, error)
+		authHash AlgorithmId, authValue []byte) (ResourceContext, error)
 
 	// Object Commands
 	Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,

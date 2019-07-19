@@ -2,11 +2,10 @@ package tpm2
 
 import (
 	"fmt"
-	"reflect"
 )
 
 func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
-	authHash AlgorithmId, authValue interface{}) (ResourceContext, error) {
+	authHash AlgorithmId, authValue []byte) (ResourceContext, error) {
 	if tpmKey != nil {
 		if err := t.checkResourceContextParam(tpmKey, "tpmKey"); err != nil {
 			return nil, err
@@ -45,19 +44,7 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 		tpmKey = &permanentContext{handle: HandleNull}
 	}
 
-	var authB []byte
-	if bind != nil {
-		switch a := authValue.(type) {
-		case string:
-			authB = []byte(a)
-		case []byte:
-			authB = a
-		case nil:
-		default:
-			return nil, makeInvalidParamError("authValue", fmt.Sprintf("unexpected type: %s",
-				reflect.TypeOf(authValue)))
-		}
-	} else {
+	if bind == nil {
 		bind, _ = t.WrapHandle(HandleNull)
 	}
 
@@ -82,9 +69,9 @@ func (t *tpmImpl) StartAuthSession(tpmKey, bind ResourceContext, sessionType Ses
 		nonceTPM:      nonceTPM}
 
 	if tpmKey.Handle() != HandleNull || bind.Handle() != HandleNull {
-		key := make([]byte, len(authB)+len(salt))
-		copy(key, authB)
-		copy(key[len(authB):], salt)
+		key := make([]byte, len(authValue)+len(salt))
+		copy(key, authValue)
+		copy(key[len(authValue):], salt)
 
 		sessionContext.sessionKey, _ =
 			cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8)

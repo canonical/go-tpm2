@@ -8,7 +8,7 @@ func TestHMACSessions(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	auth := "1234"
+	auth := []byte("1234")
 
 	owner, _ := tpm.WrapHandle(HandleOwner)
 
@@ -22,8 +22,8 @@ func TestHMACSessions(t *testing.T) {
 		desc         string
 		tpmKey       ResourceContext
 		bind         ResourceContext
-		bindAuth     string
-		sessionAuth  string
+		bindAuth     []byte
+		sessionAuth  []byte
 		sessionAttrs SessionAttributes
 	}{
 		{
@@ -93,7 +93,7 @@ func TestHMACSessions(t *testing.T) {
 						KeyBits:   2048,
 						Exponent:  0}}}
 
-			session := &Session{Handle: sessionHandle, AuthValue: []byte(data.sessionAuth),
+			session := &Session{Handle: sessionHandle, AuthValue: data.sessionAuth,
 				Attributes: data.sessionAttrs}
 			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
 			if err != nil {

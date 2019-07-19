@@ -28,7 +28,7 @@ func TestStartAuthSessionHMACBound(t *testing.T) {
 		t.Fatalf("WrapHandle failed: %v", err)
 	}
 
-	sessionHandle, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, "")
+	sessionHandle, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestStartAuthSessionHMACUnboundSaltedRSA(t *testing.T) {
 	}
 	defer flushContext(t, tpm, objectHandle)
 
-	sessionHandle, err := tpm.StartAuthSession(objectHandle, nil, SessionTypeHMAC, nil, AlgorithmSHA256, "")
+	sessionHandle, err := tpm.StartAuthSession(objectHandle, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestStartAuthSessionHMACUnboundSaltedECC(t *testing.T) {
 	}
 	defer flushContext(t, tpm, objectHandle)
 
-	sessionHandle, err := tpm.StartAuthSession(objectHandle, nil, SessionTypeHMAC, nil, AlgorithmSHA256, "")
+	sessionHandle, err := tpm.StartAuthSession(objectHandle, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
