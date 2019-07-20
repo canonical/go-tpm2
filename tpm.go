@@ -3,6 +3,7 @@ package tpm2
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -23,9 +24,9 @@ const (
 )
 
 type Session struct {
-	Handle     ResourceContext
-	AuthValue  []byte
-	Attrs SessionAttributes
+	Handle    ResourceContext
+	AuthValue []byte
+	Attrs     SessionAttributes
 }
 
 type HandleWithAuth struct {
@@ -144,12 +145,12 @@ type responseHeader struct {
 }
 
 type tpmImpl struct {
-	tpm       io.ReadWriteCloser
+	tcti      io.ReadWriteCloser
 	resources map[Handle]ResourceContext
 }
 
 func (t *tpmImpl) Close() error {
-	if err := t.tpm.Close(); err != nil {
+	if err := t.tcti.Close(); err != nil {
 		return err
 	}
 
@@ -170,12 +171,12 @@ func (t *tpmImpl) RunCommandBytes(tag StructTag, commandCode CommandCode, comman
 		return 0, 0, nil, wrapMarshallingError(commandCode, "command header", err)
 	}
 
-	if _, err := t.tpm.Write(concat(headerBytes, commandBytes)); err != nil {
+	if _, err := t.tcti.Write(concat(headerBytes, commandBytes)); err != nil {
 		return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
 	}
 
 	responseBytes := make([]byte, maxCommandSize)
-	responseLen, err := t.tpm.Read(responseBytes)
+	responseLen, err := t.tcti.Read(responseBytes)
 	if err != nil {
 		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
 	}
@@ -423,19 +424,48 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) err
 	return t.ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
 }
 
-func newTPMImpl(t io.ReadWriteCloser) *tpmImpl {
+func newTPMImpl(tcti io.ReadWriteCloser) *tpmImpl {
 	r := new(tpmImpl)
-	r.tpm = t
+	r.tcti = tcti
 	r.resources = make(map[Handle]ResourceContext)
 
 	return r
 }
 
-func OpenTPM(path string) (TPM, error) {
-	tpm, err := openLinuxTPMDevice(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot open TPM: %v", err)
+type TctiBackend int
+
+const (
+	TctiBackendDevice = iota
+)
+
+type TctiConfig struct {
+	Backend TctiBackend
+	Conf    string
+}
+
+func OpenTPM(config *TctiConfig) (TPM, error) {
+	var tcti io.ReadWriteCloser
+	if config == nil {
+		for _, path := range []string{"/dev/tpmrm0", "/dev/tpm0"} {
+			var err error
+			tcti, err = openDevice(path)
+			if err == nil {
+				break
+			}
+		}
+		if tcti == nil {
+			return nil, errors.New("cannot find TPM interface to auto-open")
+		}
+	} else {
+		switch config.Backend {
+		case TctiBackendDevice:
+			var err error
+			tcti, err = openDevice(config.Conf)
+			if err != nil {
+				return nil, fmt.Errorf("cannot open TPM device: %v", err)
+			}
+		}
 	}
 
-	return newTPMImpl(tpm), nil
+	return newTPMImpl(tcti), nil
 }

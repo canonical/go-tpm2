@@ -171,7 +171,7 @@ func openTPMForTesting(t *testing.T) TPM {
 	if *tpmPath == "" {
 		t.SkipNow()
 	}
-	tpm, err := OpenTPM(*tpmPath)
+	tpm, err := OpenTPM(&TctiConfig{Backend: TctiBackendDevice, Conf: *tpmPath})
 	if err != nil {
 		t.Fatalf("Failed to open the TPM device: %v", err)
 	}

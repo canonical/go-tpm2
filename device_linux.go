@@ -8,11 +8,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type tpmDeviceLinux struct {
+type tctiDeviceLinux struct {
 	f *os.File
 }
 
-func (d *tpmDeviceLinux) Read(data []byte) (int, error) {
+func (d *tctiDeviceLinux) Read(data []byte) (int, error) {
 	fds := []unix.PollFd{unix.PollFd{Fd: int32(d.f.Fd()), Events: unix.POLLIN}}
 	_, err := unix.Ppoll(fds, nil, nil)
 	if err != nil {
@@ -26,15 +26,15 @@ func (d *tpmDeviceLinux) Read(data []byte) (int, error) {
 	return d.f.Read(data)
 }
 
-func (d *tpmDeviceLinux) Write(data []byte) (int, error) {
+func (d *tctiDeviceLinux) Write(data []byte) (int, error) {
 	return d.f.Write(data)
 }
 
-func (d *tpmDeviceLinux) Close() error {
+func (d *tctiDeviceLinux) Close() error {
 	return d.f.Close()
 }
 
-func openLinuxTPMDevice(path string) (io.ReadWriteCloser, error) {
+func openDevice(path string) (io.ReadWriteCloser, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open linux TPM device: %v", err)
@@ -49,5 +49,5 @@ func openLinuxTPMDevice(path string) (io.ReadWriteCloser, error) {
 		return nil, fmt.Errorf("unsupported file mode %v", s.Mode())
 	}
 
-	return &tpmDeviceLinux{f: f}, nil
+	return &tctiDeviceLinux{f: f}, nil
 }
