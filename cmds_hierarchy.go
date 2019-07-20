@@ -1,6 +1,6 @@
 package tpm2
 
-func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
+func (t *tpmConnection) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
 	*CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
@@ -35,16 +35,16 @@ func (t *tpmImpl) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCrea
 	return objectHandleRc, &outPublic, &creationData, creationHash, &creationTicket, name, nil
 }
 
-func (t *tpmImpl) Clear(authHandle Handle, authHandleAuth interface{}) error {
+func (t *tpmConnection) Clear(authHandle Handle, authHandleAuth interface{}) error {
 	return t.RunCommand(CommandClear, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
 }
 
-func (t *tpmImpl) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
+func (t *tpmConnection) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
 	return t.RunCommand(CommandClearControl, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth},
 		Separator, disable)
 }
 
-func (t *tpmImpl) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error {
+func (t *tpmConnection) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error {
 	responseCode, responseTag, response, err :=
 		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth,
 			HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator, newAuth)

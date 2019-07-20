@@ -144,12 +144,12 @@ type responseHeader struct {
 	ResponseCode ResponseCode
 }
 
-type tpmImpl struct {
+type tpmConnection struct {
 	tcti      io.ReadWriteCloser
 	resources map[Handle]ResourceContext
 }
 
-func (t *tpmImpl) Close() error {
+func (t *tpmConnection) Close() error {
 	if err := t.tcti.Close(); err != nil {
 		return err
 	}
@@ -161,8 +161,8 @@ func (t *tpmImpl) Close() error {
 	return nil
 }
 
-func (t *tpmImpl) RunCommandBytes(tag StructTag, commandCode CommandCode, commandBytes []byte) (ResponseCode,
-	StructTag, []byte, error) {
+func (t *tpmConnection) RunCommandBytes(tag StructTag, commandCode CommandCode,
+	commandBytes []byte) (ResponseCode, StructTag, []byte, error) {
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
 
@@ -197,8 +197,8 @@ func (t *tpmImpl) RunCommandBytes(tag StructTag, commandCode CommandCode, comman
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params ...interface{}) (ResponseCode,
-	StructTag, []byte, error) {
+func (t *tpmConnection) RunCommandAndReturnRawResponse(commandCode CommandCode,
+	params ...interface{}) (ResponseCode, StructTag, []byte, error) {
 	commandHandles := make([]interface{}, 0, len(params))
 	commandHandleNames := make([]Name, 0, len(params))
 	commandParams := make([]interface{}, 0, len(params))
@@ -292,7 +292,7 @@ func (t *tpmImpl) RunCommandAndReturnRawResponse(commandCode CommandCode, params
 	return responseCode, responseTag, responseBytes, nil
 }
 
-func (t *tpmImpl) ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
+func (t *tpmConnection) ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
 	response []byte, params ...interface{}) error {
 	responseHandles := make([]interface{}, 0, len(params))
 	responseParams := make([]interface{}, 0, len(params))
@@ -366,7 +366,7 @@ func (t *tpmImpl) ProcessResponse(commandCode CommandCode, responseCode Response
 	return nil
 }
 
-func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) error {
+func (t *tpmConnection) RunCommand(commandCode CommandCode, params ...interface{}) error {
 	commandArgs := make([]interface{}, 0, len(params))
 	responseArgs := make([]interface{}, 0, len(params))
 	authSessions := make([]interface{}, 0, len(params))
@@ -424,8 +424,8 @@ func (t *tpmImpl) RunCommand(commandCode CommandCode, params ...interface{}) err
 	return t.ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
 }
 
-func newTPMImpl(tcti io.ReadWriteCloser) *tpmImpl {
-	r := new(tpmImpl)
+func newTPMConnection(tcti io.ReadWriteCloser) *tpmConnection {
+	r := new(tpmConnection)
 	r.tcti = tcti
 	r.resources = make(map[Handle]ResourceContext)
 
@@ -467,5 +467,5 @@ func OpenTPM(config *TctiConfig) (TPM, error) {
 		}
 	}
 
-	return newTPMImpl(tcti), nil
+	return newTPMConnection(tcti), nil
 }

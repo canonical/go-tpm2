@@ -1,10 +1,10 @@
 package tpm2
 
-func (t *tpmImpl) SelfTest(fullTest bool) error {
+func (t *tpmConnection) SelfTest(fullTest bool) error {
 	return t.RunCommand(CommandSelfTest, Separator, fullTest)
 }
 
-func (t *tpmImpl) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error) {
+func (t *tpmConnection) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error) {
 	var toDoList AlgorithmList
 	if err := t.RunCommand(CommandIncrementalSelfTest, Separator, toTest, Separator, Separator,
 		&toDoList); err != nil {
@@ -13,7 +13,7 @@ func (t *tpmImpl) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, erro
 	return toDoList, nil
 }
 
-func (t *tpmImpl) GetTestResult() (MaxBuffer, ResponseCode, error) {
+func (t *tpmConnection) GetTestResult() (MaxBuffer, ResponseCode, error) {
 	var outData MaxBuffer
 	var testResult ResponseCode
 	if err := t.RunCommand(CommandGetTestResult, Separator, Separator, Separator, &outData,

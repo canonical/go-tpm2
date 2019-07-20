@@ -2,7 +2,7 @@ package tpm2
 
 import ()
 
-func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+func (t *tpmConnection) Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public,
 	*CreationData, Digest, *TkCreation, error) {
 	if err := t.checkResourceContextParam(parentHandle, "parentHandle"); err != nil {
@@ -30,7 +30,7 @@ func (t *tpmImpl) Create(parentHandle ResourceContext, inSensitive *SensitiveCre
 	return outPrivate, &outPublic, &creationData, creationHash, &creationTicket, nil
 }
 
-func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
+func (t *tpmConnection) Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
 	parentHandleAuth interface{}) (ResourceContext, Name, error) {
 	if err := t.checkResourceContextParam(parentHandle, "parentHandle"); err != nil {
 		return nil, nil, err
@@ -57,8 +57,8 @@ func (t *tpmImpl) Load(parentHandle ResourceContext, inPrivate Private, inPublic
 	return objectHandleRc, name, nil
 }
 
-func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name,
-	error) {
+func (t *tpmConnection) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext,
+	Name, error) {
 	if inPublic == nil {
 		return nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
@@ -81,7 +81,7 @@ func (t *tpmImpl) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy
 	return objectHandleRc, name, nil
 }
 
-func (t *tpmImpl) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
+func (t *tpmConnection) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
 	var outPublic Public
 	var name Name
 	var qualifiedName Name
@@ -92,14 +92,14 @@ func (t *tpmImpl) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
 	return &outPublic, name, qualifiedName, nil
 }
 
-func (t *tpmImpl) ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error) {
+func (t *tpmConnection) ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error) {
 	if err := t.checkResourceContextParam(objectHandle, "objectHandle"); err != nil {
 		return nil, nil, nil, err
 	}
 	return t.readPublic(objectHandle.Handle())
 }
 
-func (t *tpmImpl) Unseal(itemHandle ResourceContext, itemHandleAuth interface{}) (SensitiveData, error) {
+func (t *tpmConnection) Unseal(itemHandle ResourceContext, itemHandleAuth interface{}) (SensitiveData, error) {
 	if err := t.checkResourceContextParam(itemHandle, "itemHandle"); err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (t *tpmImpl) Unseal(itemHandle ResourceContext, itemHandleAuth interface{})
 	return outData, nil
 }
 
-func (t *tpmImpl) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, newAuth Auth,
+func (t *tpmConnection) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, newAuth Auth,
 	objectHandleAuth interface{}) (Private, error) {
 	if err := t.checkResourceContextParam(objectHandle, "objectHandle"); err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func (t *tpmImpl) ObjectChangeAuth(objectHandle, parentHandle ResourceContext, n
 	return outPrivate, nil
 }
 
-func (t *tpmImpl) CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+func (t *tpmConnection) CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	parentHandleAuth interface{}) (ResourceContext, Private, *Public, Name, error) {
 	if err := t.checkResourceContextParam(parentHandle, "parentHandle"); err != nil {
 		return nil, nil, nil, nil, err
