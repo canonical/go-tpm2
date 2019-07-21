@@ -39,7 +39,7 @@ type ResourceWithAuth struct {
 	Auth   interface{}
 }
 
-type TPM interface {
+type TPMContext interface {
 	Close() error
 
 	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte,
@@ -144,12 +144,12 @@ type responseHeader struct {
 	ResponseCode ResponseCode
 }
 
-type tpmConnection struct {
+type tpmContext struct {
 	tcti      io.ReadWriteCloser
 	resources map[Handle]ResourceContext
 }
 
-func (t *tpmConnection) Close() error {
+func (t *tpmContext) Close() error {
 	if err := t.tcti.Close(); err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (t *tpmConnection) Close() error {
 	return nil
 }
 
-func (t *tpmConnection) RunCommandBytes(tag StructTag, commandCode CommandCode,
+func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,
 	commandBytes []byte) (ResponseCode, StructTag, []byte, error) {
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
@@ -197,7 +197,7 @@ func (t *tpmConnection) RunCommandBytes(tag StructTag, commandCode CommandCode,
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *tpmConnection) RunCommandAndReturnRawResponse(commandCode CommandCode,
+func (t *tpmContext) RunCommandAndReturnRawResponse(commandCode CommandCode,
 	params ...interface{}) (ResponseCode, StructTag, []byte, error) {
 	commandHandles := make([]interface{}, 0, len(params))
 	commandHandleNames := make([]Name, 0, len(params))
@@ -292,7 +292,7 @@ func (t *tpmConnection) RunCommandAndReturnRawResponse(commandCode CommandCode,
 	return responseCode, responseTag, responseBytes, nil
 }
 
-func (t *tpmConnection) ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
+func (t *tpmContext) ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
 	response []byte, params ...interface{}) error {
 	responseHandles := make([]interface{}, 0, len(params))
 	responseParams := make([]interface{}, 0, len(params))
@@ -366,7 +366,7 @@ func (t *tpmConnection) ProcessResponse(commandCode CommandCode, responseCode Re
 	return nil
 }
 
-func (t *tpmConnection) RunCommand(commandCode CommandCode, params ...interface{}) error {
+func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) error {
 	commandArgs := make([]interface{}, 0, len(params))
 	responseArgs := make([]interface{}, 0, len(params))
 	authSessions := make([]interface{}, 0, len(params))
@@ -424,48 +424,28 @@ func (t *tpmConnection) RunCommand(commandCode CommandCode, params ...interface{
 	return t.ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
 }
 
-func newTPMConnection(tcti io.ReadWriteCloser) *tpmConnection {
-	r := new(tpmConnection)
+func newTpmContext(tcti io.ReadWriteCloser) *tpmContext {
+	r := new(tpmContext)
 	r.tcti = tcti
 	r.resources = make(map[Handle]ResourceContext)
 
 	return r
 }
 
-type TctiBackend int
-
-const (
-	TctiBackendDevice = iota
-)
-
-type TctiConfig struct {
-	Backend TctiBackend
-	Conf    string
-}
-
-func OpenTPM(config *TctiConfig) (TPM, error) {
-	var tcti io.ReadWriteCloser
-	if config == nil {
+func NewTPMContext(tcti io.ReadWriteCloser) (TPMContext, error) {
+	if tcti == nil {
 		for _, path := range []string{"/dev/tpmrm0", "/dev/tpm0"} {
 			var err error
-			tcti, err = openDevice(path)
+			tcti, err = OpenTPMDevice(path)
 			if err == nil {
 				break
 			}
 		}
-		if tcti == nil {
-			return nil, errors.New("cannot find TPM interface to auto-open")
-		}
-	} else {
-		switch config.Backend {
-		case TctiBackendDevice:
-			var err error
-			tcti, err = openDevice(config.Conf)
-			if err != nil {
-				return nil, fmt.Errorf("cannot open TPM device: %v", err)
-			}
-		}
 	}
 
-	return newTPMConnection(tcti), nil
+	if tcti == nil {
+		return nil, errors.New("cannot find TPM interface to auto-open")
+	}
+
+	return newTpmContext(tcti), nil
 }

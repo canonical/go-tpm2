@@ -1,6 +1,6 @@
 package tpm2
 
-func (t *tpmConnection) ContextSave(saveHandle ResourceContext) (*Context, error) {
+func (t *tpmContext) ContextSave(saveHandle ResourceContext) (*Context, error) {
 	if err := t.checkResourceContextParam(saveHandle, "saveHandle"); err != nil {
 		return nil, err
 	}
@@ -20,7 +20,7 @@ func (t *tpmConnection) ContextSave(saveHandle ResourceContext) (*Context, error
 	return &context, nil
 }
 
-func (t *tpmConnection) ContextLoad(context *Context) (ResourceContext, error) {
+func (t *tpmContext) ContextLoad(context *Context) (ResourceContext, error) {
 	if context == nil {
 		return nil, makeInvalidParamError("context", "nil value")
 	}
@@ -34,7 +34,7 @@ func (t *tpmConnection) ContextLoad(context *Context) (ResourceContext, error) {
 	return t.WrapHandle(loadedHandle)
 }
 
-func (t *tpmConnection) FlushContext(flushHandle ResourceContext) error {
+func (t *tpmContext) FlushContext(flushHandle ResourceContext) error {
 	if err := t.checkResourceContextParam(flushHandle, "flushHandle"); err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func (t *tpmConnection) FlushContext(flushHandle ResourceContext) error {
 	return nil
 }
 
-func (t *tpmConnection) EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
+func (t *tpmContext) EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
 	authAuth interface{}) (ResourceContext, error) {
 	if err := t.checkResourceContextParam(objectHandle, "objectHandle"); err != nil {
 		return nil, err

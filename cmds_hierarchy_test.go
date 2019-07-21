@@ -291,7 +291,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	}
 
 	run2 := func(t *testing.T, hierarchy Handle, session interface{},
-		createPrimary func(*testing.T, TPM, interface{}) ResourceContext) {
+		createPrimary func(*testing.T, TPMContext, interface{}) ResourceContext) {
 		primary := createPrimary(t, tpm, session)
 		flushContext(t, tpm, primary)
 
@@ -304,7 +304,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		tpm.HierarchyChangeAuth(hierarchy, nil, auth)
 	}
 
-	createSrk := func(t *testing.T, tpm TPM, session interface{}) ResourceContext {
+	createSrk := func(t *testing.T, tpm TPMContext, session interface{}) ResourceContext {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
@@ -326,7 +326,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 		return objectHandle
 	}
-	createEk := func(t *testing.T, tpm TPM, session interface{}) ResourceContext {
+	createEk := func(t *testing.T, tpm TPMContext, session interface{}) ResourceContext {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,

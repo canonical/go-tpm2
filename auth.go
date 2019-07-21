@@ -67,7 +67,7 @@ func attrsFromSession(session *Session) sessionAttrs {
 	return attrs
 }
 
-func buildCommandSessionAuth(tpm *tpmConnection, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
+func buildCommandSessionAuth(tpm *tpmContext, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
 	session *Session, handle ResourceContext) (*authCommand, error) {
 	if err := tpm.checkResourceContextParam(session.Handle, "session"); err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func buildCommandPasswordAuth(authValue Auth) *authCommand {
 	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: authValue}
 }
 
-func buildCommandAuth(tpm *tpmConnection, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
+func buildCommandAuth(tpm *tpmContext, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
 	session interface{}, handle ResourceContext) (*authCommand, error) {
 	switch s := session.(type) {
 	case ResourceWithAuth:
@@ -125,7 +125,7 @@ func buildCommandAuth(tpm *tpmConnection, commandCode CommandCode, commandHandle
 	return nil, fmt.Errorf("unexpected type %s for session / auth parameter", reflect.TypeOf(session))
 }
 
-func buildCommandAuthArea(tpm *tpmConnection, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
+func buildCommandAuthArea(tpm *tpmContext, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
 	sessions ...interface{}) (commandAuthArea, error) {
 	var area commandAuthArea
 	for _, session := range sessions {
@@ -138,7 +138,7 @@ func buildCommandAuthArea(tpm *tpmConnection, commandCode CommandCode, commandHa
 	return area, nil
 }
 
-func processAuthSessionResponse(tpm *tpmConnection, responseCode ResponseCode, commandCode CommandCode,
+func processAuthSessionResponse(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode,
 	rpBytes []byte, resp authResponse, session *Session) error {
 	context := session.Handle.(*sessionContext)
 	context.nonceTPM = resp.Nonce
@@ -161,7 +161,7 @@ func processAuthSessionResponse(tpm *tpmConnection, responseCode ResponseCode, c
 	return nil
 }
 
-func processAuthResponse(tpm *tpmConnection, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
+func processAuthResponse(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
 	resp authResponse, session interface{}) error {
 	switch s := session.(type) {
 	case *Session:
@@ -170,7 +170,7 @@ func processAuthResponse(tpm *tpmConnection, responseCode ResponseCode, commandC
 	return nil
 }
 
-func processAuthResponseArea(tpm *tpmConnection, responseCode ResponseCode, commandCode CommandCode,
+func processAuthResponseArea(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode,
 	rpBytes []byte, authResponses []authResponse, sessions ...interface{}) error {
 	for i, resp := range authResponses {
 		if err := processAuthResponse(tpm, responseCode, commandCode, rpBytes, resp,

@@ -33,8 +33,8 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 	}
 }
 
-func verifyCreationData(t *testing.T, tpm TPM, creationData *CreationData, template *Public, outsideInfo Data,
-	creationPCR PCRSelectionList, parent ResourceContext) {
+func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData, template *Public,
+	outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
 	nameAlgSize, _ := digestSizes[template.NameAlg]
 	var parentQualifiedName Name
 	if parent.Handle()&HandleTypePermanent == HandleTypePermanent {
@@ -84,7 +84,7 @@ func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Ha
 	}
 }
 
-func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) ResourceContext {
+func createRSASrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) ResourceContext {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
@@ -108,7 +108,7 @@ func createRSASrkForTesting(t *testing.T, tpm TPM, userAuth Auth) ResourceContex
 	return objectHandle
 }
 
-func createECCSrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceContext, Name) {
+func createECCSrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) (ResourceContext, Name) {
 	template := Public{
 		Type:    AlgorithmECC,
 		NameAlg: AlgorithmSHA256,
@@ -133,7 +133,7 @@ func createECCSrkForTesting(t *testing.T, tpm TPM, userAuth Auth) (ResourceConte
 	return objectHandle, name
 }
 
-func createRSAEkForTesting(t *testing.T, tpm TPM) ResourceContext {
+func createRSAEkForTesting(t *testing.T, tpm TPMContext) ResourceContext {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
@@ -167,24 +167,25 @@ func nameAlgorithm(n Name) AlgorithmId {
 	return alg
 }
 
-func openTPMForTesting(t *testing.T) TPM {
+func openTPMForTesting(t *testing.T) TPMContext {
 	if *tpmPath == "" {
 		t.SkipNow()
 	}
-	tpm, err := OpenTPM(&TctiConfig{Backend: TctiBackendDevice, Conf: *tpmPath})
+	tcti, err := OpenTPMDevice(*tpmPath)
 	if err != nil {
 		t.Fatalf("Failed to open the TPM device: %v", err)
 	}
+	tpm, _ := NewTPMContext(tcti)
 	return tpm
 }
 
-func flushContext(t *testing.T, tpm TPM, handle ResourceContext) {
+func flushContext(t *testing.T, tpm TPMContext, handle ResourceContext) {
 	if err := tpm.FlushContext(handle); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 }
 
-func verifySessionFlushed(t *testing.T, tpm TPM, handle ResourceContext) {
+func verifySessionFlushed(t *testing.T, tpm TPMContext, handle ResourceContext) {
 	context, isSession := handle.(*sessionContext)
 	if !isSession {
 		t.Errorf("handle is not a session context")

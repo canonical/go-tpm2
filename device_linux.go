@@ -34,7 +34,7 @@ func (d *tctiDeviceLinux) Close() error {
 	return d.f.Close()
 }
 
-func openDevice(path string) (io.ReadWriteCloser, error) {
+func OpenTPMDevice(path string) (io.ReadWriteCloser, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open linux TPM device: %v", err)

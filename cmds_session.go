@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func (t *tpmConnection) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
+func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 	authHash AlgorithmId, authValue []byte) (ResourceContext, error) {
 	if tpmKey != nil {
 		if err := t.checkResourceContextParam(tpmKey, "tpmKey"); err != nil {

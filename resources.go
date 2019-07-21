@@ -11,12 +11,12 @@ type ResourceContext interface {
 }
 
 type resourceContextPrivate interface {
-	Tpm() *tpmConnection
-	SetTpm(t *tpmConnection)
+	Tpm() *tpmContext
+	SetTpm(t *tpmContext)
 }
 
 type permanentContext struct {
-	tpm    *tpmConnection
+	tpm    *tpmContext
 	handle Handle
 }
 
@@ -30,16 +30,16 @@ func (r *permanentContext) Name() Name {
 	return Name(name)
 }
 
-func (r *permanentContext) Tpm() *tpmConnection {
+func (r *permanentContext) Tpm() *tpmContext {
 	return r.tpm
 }
 
-func (r *permanentContext) SetTpm(t *tpmConnection) {
+func (r *permanentContext) SetTpm(t *tpmContext) {
 	r.tpm = t
 }
 
 type objectContext struct {
-	tpm    *tpmConnection
+	tpm    *tpmContext
 	handle Handle
 	public Public
 	name   Name
@@ -53,16 +53,16 @@ func (r *objectContext) Name() Name {
 	return r.name
 }
 
-func (r *objectContext) Tpm() *tpmConnection {
+func (r *objectContext) Tpm() *tpmContext {
 	return r.tpm
 }
 
-func (r *objectContext) SetTpm(t *tpmConnection) {
+func (r *objectContext) SetTpm(t *tpmContext) {
 	r.tpm = t
 }
 
 type nvIndexContext struct {
-	tpm    *tpmConnection
+	tpm    *tpmContext
 	handle Handle
 	name   Name
 }
@@ -75,16 +75,16 @@ func (r *nvIndexContext) Name() Name {
 	return r.name
 }
 
-func (r *nvIndexContext) Tpm() *tpmConnection {
+func (r *nvIndexContext) Tpm() *tpmContext {
 	return r.tpm
 }
 
-func (r *nvIndexContext) SetTpm(t *tpmConnection) {
+func (r *nvIndexContext) SetTpm(t *tpmContext) {
 	r.tpm = t
 }
 
 type sessionContext struct {
-	tpm           *tpmConnection
+	tpm           *tpmContext
 	handle        Handle
 	hashAlg       AlgorithmId
 	boundResource ResourceContext
@@ -101,15 +101,15 @@ func (r *sessionContext) Name() Name {
 	return nil
 }
 
-func (r *sessionContext) Tpm() *tpmConnection {
+func (r *sessionContext) Tpm() *tpmContext {
 	return r.tpm
 }
 
-func (r *sessionContext) SetTpm(t *tpmConnection) {
+func (r *sessionContext) SetTpm(t *tpmContext) {
 	r.tpm = t
 }
 
-func makeNVIndexContext(t *tpmConnection, handle Handle) (ResourceContext, error) {
+func makeNVIndexContext(t *tpmContext, handle Handle) (ResourceContext, error) {
 	_, name, err := t.nvReadPublic(handle)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func makeNVIndexContext(t *tpmConnection, handle Handle) (ResourceContext, error
 	return &nvIndexContext{handle: handle, name: name}, nil
 }
 
-func makeObjectContext(t *tpmConnection, handle Handle) (ResourceContext, error) {
+func makeObjectContext(t *tpmContext, handle Handle) (ResourceContext, error) {
 	pub, name, _, err := t.readPublic(handle)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func makeObjectContext(t *tpmConnection, handle Handle) (ResourceContext, error)
 	return &objectContext{handle: handle, public: *pub, name: name}, nil
 }
 
-func (t *tpmConnection) evictResourceContext(rc ResourceContext) {
+func (t *tpmContext) evictResourceContext(rc ResourceContext) {
 	rcp := rc.(resourceContextPrivate)
 	if rcp.Tpm() == nil {
 		return
@@ -137,7 +137,7 @@ func (t *tpmConnection) evictResourceContext(rc ResourceContext) {
 	delete(t.resources, rc.Handle())
 }
 
-func (t *tpmConnection) addResourceContext(rc ResourceContext) {
+func (t *tpmContext) addResourceContext(rc ResourceContext) {
 	rcp := rc.(resourceContextPrivate)
 	if rcp.Tpm() != nil {
 		panic("Attempting to add a resource to more than one TPM instance")
@@ -150,7 +150,7 @@ func (t *tpmConnection) addResourceContext(rc ResourceContext) {
 
 }
 
-func (t *tpmConnection) checkResourceContextParam(rc ResourceContext, name string) error {
+func (t *tpmContext) checkResourceContextParam(rc ResourceContext, name string) error {
 	if rc == nil {
 		return fmt.Errorf("invalid resource context for %s: nil", name)
 	}
@@ -165,7 +165,7 @@ func (t *tpmConnection) checkResourceContextParam(rc ResourceContext, name strin
 	return nil
 }
 
-func (t *tpmConnection) WrapHandle(handle Handle) (ResourceContext, error) {
+func (t *tpmContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	if rc, exists := t.resources[handle]; exists {
 		return rc, nil
 	}
