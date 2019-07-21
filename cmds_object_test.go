@@ -10,7 +10,7 @@ import (
 
 func TestCreate(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, parent ResourceContext, hierarchy Handle, sensitive *SensitiveCreate,
 		template *Public, outsideInfo Data, creationPCR PCRSelectionList,
@@ -190,7 +190,7 @@ func TestCreate(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, parent ResourceContext, session interface{}) {
 		template := Public{
@@ -261,7 +261,7 @@ func TestLoad(t *testing.T) {
 
 func TestReadPublic(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -305,7 +305,7 @@ func TestReadPublic(t *testing.T) {
 
 func TestLoadExternal(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, sensitive *Sensitive, template *Public, hierarchy Handle) {
 		objectHandle, name, err := tpm.LoadExternal(sensitive, template, hierarchy)
@@ -393,7 +393,7 @@ func TestLoadExternal(t *testing.T) {
 
 func TestUnseal(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -475,7 +475,7 @@ func TestUnseal(t *testing.T) {
 
 func TestObjectChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)

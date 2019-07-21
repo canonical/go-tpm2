@@ -146,15 +146,11 @@ type tpmContext struct {
 }
 
 func (t *tpmContext) Close() error {
-	if err := t.tcti.Close(); err != nil {
-		return err
-	}
-
 	for _, rc := range t.resources {
 		rc.(resourceContextPrivate).SetTpm(nil)
 	}
 
-	return nil
+	return t.tcti.Close()
 }
 
 func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,

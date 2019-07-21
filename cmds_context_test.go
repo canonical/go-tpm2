@@ -7,7 +7,7 @@ import (
 
 func TestContextSaveTransient(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	objectHandle := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, objectHandle)
@@ -26,7 +26,7 @@ func TestContextSaveTransient(t *testing.T) {
 
 func TestContextLoadTransient(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	objectHandle := createRSASrkForTesting(t, tpm, nil)
 	flushed := false
@@ -71,7 +71,7 @@ func TestContextLoadTransient(t *testing.T) {
 
 func TestEvictControl(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuth interface{}) {
 		handle, err := tpm.WrapHandle(persist)
@@ -154,7 +154,7 @@ func TestEvictControl(t *testing.T) {
 
 func TestFlushContext(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	objectHandle := createRSASrkForTesting(t, tpm, nil)
 	h := objectHandle.Handle()

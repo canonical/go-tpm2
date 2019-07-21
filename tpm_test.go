@@ -3,11 +3,18 @@ package tpm2
 import (
 	"bytes"
 	"flag"
+	"io"
 	"reflect"
 	"testing"
 )
 
-var tpmPath = flag.String("tpm-path", "", "")
+var useTpm = flag.Bool("use-tpm", false, "")
+var tpmPath = flag.String("tpm-path", "/dev/tpm0", "")
+
+var useMssim = flag.Bool("use-mssim", false, "")
+var mssimHost = flag.String("mssim-host", "localhost", "")
+var mssimTpmPort = flag.Uint("mssim-tpm-port", 2321, "")
+var mssimPlatformPort = flag.Uint("mssim-platform-port", 2322, "")
 
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if public.Type != template.Type {
@@ -167,18 +174,6 @@ func nameAlgorithm(n Name) AlgorithmId {
 	return alg
 }
 
-func openTPMForTesting(t *testing.T) TPMContext {
-	if *tpmPath == "" {
-		t.SkipNow()
-	}
-	tcti, err := OpenTPMDevice(*tpmPath)
-	if err != nil {
-		t.Fatalf("Failed to open the TPM device: %v", err)
-	}
-	tpm, _ := NewTPMContext(tcti)
-	return tpm
-}
-
 func flushContext(t *testing.T, tpm TPMContext, handle ResourceContext) {
 	if err := tpm.FlushContext(handle); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
@@ -195,4 +190,52 @@ func verifySessionFlushed(t *testing.T, tpm TPMContext, handle ResourceContext) 
 	}
 	t.Errorf("Session is still live")
 	flushContext(t, tpm, handle)
+}
+
+func openTPMForTesting(t *testing.T) TPMContext {
+	if !*useTpm && !*useMssim {
+		t.SkipNow()
+	}
+
+	if *useTpm && *useMssim {
+		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
+	}
+
+	var tcti io.ReadWriteCloser
+	switch {
+	case *useTpm:
+		var err error
+		tcti, err = OpenTPMDevice(*tpmPath)
+		if err != nil {
+			t.Fatalf("Failed to open the TPM device: %v", err)
+		}
+	case *useMssim:
+		var err error
+		tcti, err = OpenTPMMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+		if err != nil {
+			t.Fatalf("Failed to open mssim connection: %v", err)
+		}
+	}
+
+	tpm, _ := NewTPMContext(tcti)
+	if *useMssim {
+		if err := tpm.Startup(StartupClear); err != nil {
+			tpmError, isTpmError := err.(TPMError)
+			if !isTpmError || tpmError.Code != ErrorInitialize {
+				t.Fatalf("Startup failed: %v", err)
+			}
+		}
+	}
+	return tpm
+}
+
+func closeTPM(t *testing.T, tpm TPMContext) {
+	if *useMssim {
+		if err := tpm.Shutdown(StartupClear); err != nil {
+			t.Errorf("Shutdown failed: %v", err)
+		}
+	}
+	if err := tpm.Close(); err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
 }

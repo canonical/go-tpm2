@@ -6,7 +6,7 @@ import (
 
 func TestCreatePrimary(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, hierarchy Handle, sensitive *SensitiveCreate, template *Public,
 		outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public) {
@@ -282,7 +282,7 @@ func TestCreatePrimary(t *testing.T) {
 
 func TestHierarchyChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	run1 := func(t *testing.T, hierarchy Handle, newAuth []byte, session interface{}) {
 		if err := tpm.HierarchyChangeAuth(hierarchy, Auth(newAuth), session); err != nil {

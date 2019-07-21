@@ -6,7 +6,7 @@ import (
 
 func TestHMACSessions(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	auth := []byte("1234")
 

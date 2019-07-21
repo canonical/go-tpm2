@@ -6,7 +6,7 @@ import (
 
 func TestGetCapabilityAlgs(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	data, err := tpm.GetCapabilityAlgs(AlgorithmFirst, CapabilityMaxAlgs)
 	if err != nil {
@@ -72,7 +72,7 @@ func TestGetCapabilityAlgs(t *testing.T) {
 
 func TestGetCapabilityCommands(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	data, err := tpm.GetCapabilityCommands(CommandFirst, CapabilityMaxCommands)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestGetCapabilityCommands(t *testing.T) {
 
 func TestGetCapabilityHandles(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	data, err := tpm.GetCapabilityHandles(HandleTypePermanent, CapabilityMaxHandles)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestGetCapabilityHandles(t *testing.T) {
 
 func TestGetCapabilityPCRs(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	data, err := tpm.GetCapabilityPCRs()
 	if err != nil {
@@ -131,7 +131,7 @@ func TestGetCapabilityPCRs(t *testing.T) {
 
 func TestGetCapabilityTPMProperties(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	data, err := tpm.GetCapabilityTPMProperties(PropertyFixed, CapabilityMaxTPMProperties)
 	if err != nil {
@@ -189,7 +189,7 @@ func TestGetCapabilityTPMProperties(t *testing.T) {
 
 func TestGetCapabilityPCRProperties(t *testing.T) {
 	tpm := openTPMForTesting(t)
-	defer tpm.Close()
+	defer closeTPM(t, tpm)
 
 	data, err := tpm.GetCapabilityPCRProperties(PropertyPCRFirst, CapabilityMaxPCRProperties)
 	if err != nil {
