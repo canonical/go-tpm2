@@ -9,17 +9,17 @@ import (
 )
 
 const (
-	cmdPowerOn uint32 = 1
-	cmdPowerOff uint32 = 2
+	cmdPowerOn        uint32 = 1
 	cmdTPMSendCommand uint32 = 8
-	cmdNVOn uint32 = 11
-	cmdSessionEnd uint32 = 20
+	cmdNVOn           uint32 = 11
+	cmdReset          uint32 = 17
+	cmdSessionEnd     uint32 = 20
 )
 
 type TctiMssim struct {
 	Locality uint8
 
-	tpm net.Conn
+	tpm      net.Conn
 	platform net.Conn
 
 	buf *bytes.Reader
@@ -89,6 +89,10 @@ func (t *TctiMssim) platformCommand(cmd uint32) error {
 	}
 
 	return nil
+}
+
+func (t *TctiMssim) Reset() error {
+	return t.platformCommand(cmdReset)
 }
 
 func OpenTPMMssim(host string, tpmPort, platformPort uint) (*TctiMssim, error) {

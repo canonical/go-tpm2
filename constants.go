@@ -19,6 +19,7 @@ const (
 	CommandClearControl        CommandCode = 0x00000127
 	CommandHierarchyChangeAuth CommandCode = 0x00000129
 	CommandCreatePrimary       CommandCode = 0x00000131
+	CommandPCREvent            CommandCode = 0x0000013C
 	CommandIncrementalSelfTest CommandCode = 0x00000142
 	CommandSelfTest            CommandCode = 0x00000143
 	CommandStartup             CommandCode = 0x00000144
@@ -36,6 +37,8 @@ const (
 	CommandStartAuthSession    CommandCode = 0x00000176
 	CommandGetCapability       CommandCode = 0x0000017A
 	CommandGetTestResult       CommandCode = 0x0000017C
+	CommandPCRRead             CommandCode = 0x0000017E
+	CommandPCRExtend           CommandCode = 0x00000182
 	CommandCreateLoaded        CommandCode = 0x00000191
 )
 

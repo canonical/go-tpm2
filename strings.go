@@ -35,6 +35,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_HierarchyChangeAuth"
 	case CommandCreatePrimary:
 		return "TPM_CC_CreatePrimary"
+	case CommandPCREvent:
+		return "TPM_CC_PCR_Event"
 	case CommandIncrementalSelfTest:
 		return "TPM_CC_IncrementalSelfTest"
 	case CommandSelfTest:
@@ -69,6 +71,10 @@ func (c CommandCode) String() string {
 		return "TPM_CC_GetCapability"
 	case CommandGetTestResult:
 		return "TPM_CC_GetTestResult"
+	case CommandPCRRead:
+		return "TPM_CC_PCR_Read"
+	case CommandPCRExtend:
+		return "TPM_CC_PCR_Extend"
 	case CommandCreateLoaded:
 		return "TPM_CC_CreateLoaded"
 	default:

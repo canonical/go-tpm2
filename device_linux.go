@@ -14,7 +14,7 @@ const (
 )
 
 type tctiDeviceLinux struct {
-	f *os.File
+	f   *os.File
 	buf *bytes.Reader
 }
 

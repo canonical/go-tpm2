@@ -81,6 +81,11 @@ type TPMContext interface {
 	CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 		parentHandleAuth interface{}) (ResourceContext, Private, *Public, Name, error)
 
+	// Integrity Collection (PCR)
+	PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error
+	PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{}) (TaggedHashList, error)
+	PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRSelectionList, DigestList, error)
+
 	// Hierarchy Commands
 	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
 		creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
@@ -142,8 +147,8 @@ type responseHeader struct {
 }
 
 type tpmContext struct {
-	tcti      io.ReadWriteCloser
-	resources map[Handle]ResourceContext
+	tcti           io.ReadWriteCloser
+	resources      map[Handle]ResourceContext
 	maxSubmissions uint
 }
 
@@ -182,7 +187,7 @@ func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,
 			return 0, 0, nil, wrapUnmarshallingError(commandCode, "response header", err)
 		}
 
-		responseBytes = make([]byte, int(rHeader.ResponseSize) - len(rHeaderBytes))
+		responseBytes = make([]byte, int(rHeader.ResponseSize)-len(rHeaderBytes))
 		if _, err := io.ReadFull(t.tcti, responseBytes); err != nil {
 			return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
 		}
@@ -193,7 +198,7 @@ func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,
 		}
 
 		warning, isWarning := err.(TPMWarning)
-		if tries >= t.maxSubmissions ||	!isWarning || !(warning.Code == WarningYielded ||
+		if tries >= t.maxSubmissions || !isWarning || !(warning.Code == WarningYielded ||
 			warning.Code == WarningTesting || warning.Code == WarningRetry) {
 			return rHeader.ResponseCode, rHeader.Tag, nil, err
 		}

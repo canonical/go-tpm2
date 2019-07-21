@@ -3,7 +3,6 @@ package tpm2
 import (
 	"bytes"
 	"flag"
-	"io"
 	"reflect"
 	"testing"
 )
@@ -192,8 +191,8 @@ func verifySessionFlushed(t *testing.T, tpm TPMContext, handle ResourceContext) 
 	flushContext(t, tpm, handle)
 }
 
-func openTPMForTesting(t *testing.T) TPMContext {
-	if !*useTpm && !*useMssim {
+func openTPMSimulatorForTesting(t *testing.T) (TPMContext, *TctiMssim) {
+	if !*useMssim {
 		t.SkipNow()
 	}
 
@@ -201,31 +200,47 @@ func openTPMForTesting(t *testing.T) TPMContext {
 		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
 	}
 
-	var tcti io.ReadWriteCloser
-	switch {
-	case *useTpm:
-		var err error
-		tcti, err = OpenTPMDevice(*tpmPath)
-		if err != nil {
-			t.Fatalf("Failed to open the TPM device: %v", err)
-		}
-	case *useMssim:
-		var err error
-		tcti, err = OpenTPMMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
-		if err != nil {
-			t.Fatalf("Failed to open mssim connection: %v", err)
-		}
+	tcti, err := OpenTPMMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+	if err != nil {
+		t.Fatalf("Failed to open mssim connection: %v", err)
 	}
 
 	tpm, _ := NewTPMContext(tcti)
-	if *useMssim {
-		if err := tpm.Startup(StartupClear); err != nil {
-			tpmError, isTpmError := err.(TPMError)
-			if !isTpmError || tpmError.Code != ErrorInitialize {
-				t.Fatalf("Startup failed: %v", err)
-			}
+	if err := tpm.Startup(StartupClear); err != nil {
+		tpmError, isTpmError := err.(TPMError)
+		if !isTpmError || tpmError.Code != ErrorInitialize {
+			t.Fatalf("Startup failed: %v", err)
 		}
 	}
+
+	return tpm, tcti
+}
+
+func resetTPMSimulator(t *testing.T, tpm TPMContext, tcti *TctiMssim) {
+	if err := tcti.Reset(); err != nil {
+		t.Fatalf("Resetting the TPM simulator failed: %v", err)
+	}
+	if err := tpm.Startup(StartupClear); err != nil {
+		t.Fatalf("Startup failed: %v", err)
+	}
+}
+
+func openTPMForTesting(t *testing.T) TPMContext {
+	if !*useTpm {
+		tpm, _ := openTPMSimulatorForTesting(t)
+		return tpm
+	}
+
+	if *useTpm && *useMssim {
+		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
+	}
+
+	tcti, err := OpenTPMDevice(*tpmPath)
+	if err != nil {
+		t.Fatalf("Failed to open the TPM device: %v", err)
+	}
+
+	tpm, _ := NewTPMContext(tcti)
 	return tpm
 }
 

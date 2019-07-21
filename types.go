@@ -84,6 +84,12 @@ func (s EncryptedSecret) SliceType() SliceType {
 	return SliceTypeSizedBufferU16
 }
 
+type Event []byte
+
+func (e Event) SliceType() SliceType {
+	return SliceTypeSizedBufferU16
+}
+
 type Label []byte
 
 func (l Label) SliceType() SliceType {
@@ -791,6 +797,12 @@ func (l CommandCodeList) SliceType() SliceType {
 	return SliceTypeList
 }
 
+type DigestList []Digest
+
+func (l DigestList) SliceType() SliceType {
+	return SliceTypeList
+}
+
 type ECCCurveList []ECCCurve
 
 func (l ECCCurveList) SliceType() SliceType {
@@ -806,6 +818,12 @@ func (l HandleList) SliceType() SliceType {
 type PCRSelectionList []PCRSelection
 
 func (l PCRSelectionList) SliceType() SliceType {
+	return SliceTypeList
+}
+
+type TaggedHashList []TaggedHash
+
+func (l TaggedHashList) SliceType() SliceType {
 	return SliceTypeList
 }
 
