@@ -47,6 +47,7 @@ type TPMContext interface {
 
 	RunCommand(commandCode CommandCode, params ...interface{}) error
 
+	SetMaxSubmissions(max uint)
 	WrapHandle(handle Handle) (ResourceContext, error)
 
 	// Start-up
@@ -143,6 +144,7 @@ type responseHeader struct {
 type tpmContext struct {
 	tcti      io.ReadWriteCloser
 	resources map[Handle]ResourceContext
+	maxSubmissions uint
 }
 
 func (t *tpmContext) Close() error {
@@ -163,27 +165,38 @@ func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,
 		return 0, 0, nil, wrapMarshallingError(commandCode, "command header", err)
 	}
 
-	if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
-		return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
-	}
-
-	rHeaderBytes := make([]byte, binary.Size(responseHeader{}))
-	if _, err := io.ReadFull(t.tcti, rHeaderBytes); err != nil {
-		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
-	}
-
 	var rHeader responseHeader
-	if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
-		return 0, 0, nil, wrapUnmarshallingError(commandCode, "response header", err)
-	}
+	var responseBytes []byte
 
-	responseBytes := make([]byte, int(rHeader.ResponseSize) - len(rHeaderBytes))
-	if _, err := io.ReadFull(t.tcti, responseBytes); err != nil {
-		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
-	}
+	for tries := uint(1); ; tries++ {
+		if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
+			return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
+		}
 
-	if err := DecodeResponseCode(commandCode, rHeader.ResponseCode); err != nil {
-		return rHeader.ResponseCode, rHeader.Tag, nil, err
+		rHeaderBytes := make([]byte, binary.Size(rHeader))
+		if _, err := io.ReadFull(t.tcti, rHeaderBytes); err != nil {
+			return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
+		}
+
+		if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
+			return 0, 0, nil, wrapUnmarshallingError(commandCode, "response header", err)
+		}
+
+		responseBytes = make([]byte, int(rHeader.ResponseSize) - len(rHeaderBytes))
+		if _, err := io.ReadFull(t.tcti, responseBytes); err != nil {
+			return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
+		}
+
+		err := DecodeResponseCode(commandCode, rHeader.ResponseCode)
+		if err == nil {
+			break
+		}
+
+		warning, isWarning := err.(TPMWarning)
+		if tries >= t.maxSubmissions ||	!isWarning || !(warning.Code == WarningYielded ||
+			warning.Code == WarningTesting || warning.Code == WarningRetry) {
+			return rHeader.ResponseCode, rHeader.Tag, nil, err
+		}
 	}
 
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
@@ -416,10 +429,15 @@ func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) 
 	return t.ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
 }
 
+func (t *tpmContext) SetMaxSubmissions(max uint) {
+	t.maxSubmissions = max
+}
+
 func newTpmContext(tcti io.ReadWriteCloser) *tpmContext {
 	r := new(tpmContext)
 	r.tcti = tcti
 	r.resources = make(map[Handle]ResourceContext)
+	r.maxSubmissions = 5
 
 	return r
 }
