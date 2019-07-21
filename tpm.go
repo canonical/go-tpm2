@@ -9,10 +9,6 @@ import (
 	"reflect"
 )
 
-const (
-	maxCommandSize int = 4096
-)
-
 type separatorSentinel struct{}
 
 var Separator separatorSentinel
@@ -166,29 +162,29 @@ func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
 
-	headerBytes, err := MarshalToBytes(cHeader)
+	cHeaderBytes, err := MarshalToBytes(cHeader)
 	if err != nil {
 		return 0, 0, nil, wrapMarshallingError(commandCode, "command header", err)
 	}
 
-	if _, err := t.tcti.Write(concat(headerBytes, commandBytes)); err != nil {
+	if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
 		return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
 	}
 
-	responseBytes := make([]byte, maxCommandSize)
-	responseLen, err := t.tcti.Read(responseBytes)
-	if err != nil {
+	rHeaderBytes := make([]byte, binary.Size(responseHeader{}))
+	if _, err := io.ReadFull(t.tcti, rHeaderBytes); err != nil {
 		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
 	}
-	responseBytes = responseBytes[:responseLen]
 
 	var rHeader responseHeader
-	rHeaderLen, err := UnmarshalFromBytes(responseBytes, &rHeader)
-	if err != nil {
+	if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
 		return 0, 0, nil, wrapUnmarshallingError(commandCode, "response header", err)
 	}
 
-	responseBytes = responseBytes[rHeaderLen:]
+	responseBytes := make([]byte, int(rHeader.ResponseSize) - len(rHeaderBytes))
+	if _, err := io.ReadFull(t.tcti, responseBytes); err != nil {
+		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
+	}
 
 	if err := DecodeResponseCode(commandCode, rHeader.ResponseCode); err != nil {
 		return rHeader.ResponseCode, rHeader.Tag, nil, err

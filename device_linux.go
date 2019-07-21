@@ -1,6 +1,7 @@
 package tpm2
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -8,22 +9,44 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const (
+	maxCommandSize int = 4096
+)
+
 type tctiDeviceLinux struct {
 	f *os.File
+	buf *bytes.Reader
 }
 
-func (d *tctiDeviceLinux) Read(data []byte) (int, error) {
+func (d *tctiDeviceLinux) readMoreData() error {
 	fds := []unix.PollFd{unix.PollFd{Fd: int32(d.f.Fd()), Events: unix.POLLIN}}
 	_, err := unix.Ppoll(fds, nil, nil)
 	if err != nil {
-		return 0, fmt.Errorf("poll failed: %v", err)
+		return fmt.Errorf("polling device failed: %v", err)
 	}
 
 	if fds[0].Events != fds[0].Revents {
-		return 0, fmt.Errorf("invalid poll events returned: %d", fds[0].Revents)
+		return fmt.Errorf("invalid poll events returned: %d", fds[0].Revents)
 	}
 
-	return d.f.Read(data)
+	buf := make([]byte, maxCommandSize)
+	n, err := d.f.Read(buf)
+	if err != nil {
+		return fmt.Errorf("reading from device failed: %v", err)
+	}
+
+	d.buf = bytes.NewReader(buf[:n])
+	return nil
+}
+
+func (d *tctiDeviceLinux) Read(data []byte) (int, error) {
+	if d.buf == nil || d.buf.Len() == 0 {
+		if err := d.readMoreData(); err != nil {
+			return 0, err
+		}
+	}
+
+	return d.buf.Read(data)
 }
 
 func (d *tctiDeviceLinux) Write(data []byte) (int, error) {
