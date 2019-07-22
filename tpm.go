@@ -98,6 +98,33 @@ type TPMContext interface {
 	PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRSelectionList, DigestList, error)
 
 	// Section 23 - Enhanced Authorization (EA) Commands
+	// PolicySigned(authObject, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest,
+	//	policyRef Nonce, expiration int32, auth *Signature) (Timeout, *TkAuth, error)
+	// PolicySecret(authHandle, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
+	//	expiration int32) (Timeout, *TkAuth, error)
+	// PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce,
+	//	authName Name, ticket *TkAuth) error
+	// PolicyOR(policySession ResourceContext, pHashList DigestList) error
+	PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList) error
+	// PolicyLocality(policySession ResourceContext, loclity Locality) error
+	// PolicyNV(authHandle, nvIndex, policySession ResourceContext, operandB Operand, offset uint16,
+	//	operation ArithmeticOp) error
+	// PolicyCounterTimer(policySession ResourceContext, operandB Operand, offset uint16,
+	//	operation ArithmeticOp) error
+	// PolicyCommandCode(policySession ResourceContext, code CommandCode) error
+	// PolicyPhysicalPresence(policySession ResourceContext) error
+	// PolicyCpHash(policySession ResourceContext, cpHashA Digest) error
+	// PolicyNameHash(policySession ResourceContext, nameHash Digest) error
+	// PolicyDuplicationSelect(policySession ResourceContext, objectName, newParentName Name,
+	//	includeObject bool) error
+	// PolicyAuthorize(policySession ResourceContext, approvedPolicy Digest, policyRef Nonce, keySign Name,
+	//	checkTicket *TkVerified) error
+	// PolicyAuthValue(policySession ResourceContext) error
+	// PolicyPassword(policySession ResourceContext) error
+	PolicyGetDigest(policySession ResourceContext) (Digest, error)
+	// PolicyNvWritten(policySession ResourceContext, writtenSet bool) error
+	// PolicyTemplate(policySession ResourceContext, templateHash Digest) error
+	// PolicyAuthorizeNV(authHandle, nvIndex, policySession ResourceContext) error
 
 	// Section 24 - Hierarchy Commands
 	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,

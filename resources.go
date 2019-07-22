@@ -12,6 +12,10 @@ type ResourceContext interface {
 	Name() Name
 }
 
+type SessionContext interface {
+	NonceTPM() Nonce
+}
+
 type resourceContextPrivate interface {
 	tpmContext() *tpmContext
 	setTpmContext(t *tpmContext)
@@ -100,7 +104,9 @@ func (r *sessionContext) Handle() Handle {
 }
 
 func (r *sessionContext) Name() Name {
-	return nil
+	name := make([]byte, 4)
+	binary.BigEndian.PutUint32(name, uint32(r.handle))
+	return Name(name)
 }
 
 func (r *sessionContext) tpmContext() *tpmContext {
@@ -119,6 +125,10 @@ func (r *sessionContext) isBoundTo(handle ResourceContext) bool {
 		return false
 	}
 	return bytes.Equal(handle.Name(), r.boundResource.Name())
+}
+
+func (r *sessionContext) NonceTPM() Nonce {
+	return r.nonceTPM
 }
 
 func makeNVIndexContext(t *tpmContext, handle Handle) (ResourceContext, error) {

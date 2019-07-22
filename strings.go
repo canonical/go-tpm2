@@ -73,8 +73,12 @@ func (c CommandCode) String() string {
 		return "TPM_CC_GetTestResult"
 	case CommandPCRRead:
 		return "TPM_CC_PCR_Read"
+	case CommandPolicyPCR:
+		return "TPM_CC_PolicyPCR"
 	case CommandPCRExtend:
 		return "TPM_CC_PCR_Extend"
+	case CommandPolicyGetDigest:
+		return "TPM_CC_PolicyGetDigest"
 	case CommandCreateLoaded:
 		return "TPM_CC_CreateLoaded"
 	default:

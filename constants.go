@@ -38,7 +38,9 @@ const (
 	CommandGetCapability       CommandCode = 0x0000017A
 	CommandGetTestResult       CommandCode = 0x0000017C
 	CommandPCRRead             CommandCode = 0x0000017E
+	CommandPolicyPCR           CommandCode = 0x0000017F
 	CommandPCRExtend           CommandCode = 0x00000182
+	CommandPolicyGetDigest     CommandCode = 0x00000189
 	CommandCreateLoaded        CommandCode = 0x00000191
 )
 

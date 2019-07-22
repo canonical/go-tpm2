@@ -254,13 +254,6 @@ func TestPCRRead(t *testing.T) {
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 2, 3}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
 		},
-		{
-			desc: "MultiplePCRAcrossSelections",
-			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{2}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{3}}},
-		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			_, pcrSelection, digests, err := tpm.PCRRead(data.selection)
