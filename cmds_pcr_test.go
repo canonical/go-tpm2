@@ -222,62 +222,37 @@ func TestPCRRead(t *testing.T) {
 		}
 	}
 
-	type digestValue struct {
-		index int
-		alg   AlgorithmId
-	}
-
 	for _, data := range []struct {
 		desc      string
 		selection PCRSelectionList
-		digests   []digestValue
 	}{
 		{
 			desc: "SinglePCRSingleBank",
 			selection: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1}}},
-			digests: []digestValue{
-				{index: 1, alg: AlgorithmSHA256}},
 		},
 		{
 			desc: "MultiplePCRSingleBank",
 			selection: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{2, 3, 1}}},
-			digests: []digestValue{
-				{index: 1, alg: AlgorithmSHA1},
-				{index: 2, alg: AlgorithmSHA1},
-				{index: 3, alg: AlgorithmSHA1}},
 		},
 		{
 			desc: "SinglePCRMultipleBank",
 			selection: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{2}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{2}}},
-			digests: []digestValue{
-				{index: 2, alg: AlgorithmSHA1},
-				{index: 2, alg: AlgorithmSHA256}},
 		},
 		{
 			desc: "SinglePCRMultipleBank2",
 			selection: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{2}},
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{2}}},
-			digests: []digestValue{
-				{index: 2, alg: AlgorithmSHA256},
-				{index: 2, alg: AlgorithmSHA1}},
 		},
 		{
 			desc: "MultiplePCRMultipleBank",
 			selection: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 2, 3}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
-			digests: []digestValue{
-				{index: 1, alg: AlgorithmSHA1},
-				{index: 2, alg: AlgorithmSHA1},
-				{index: 3, alg: AlgorithmSHA1},
-				{index: 1, alg: AlgorithmSHA256},
-				{index: 2, alg: AlgorithmSHA256},
-				{index: 3, alg: AlgorithmSHA256}},
 		},
 		{
 			desc: "MultiplePCRAcrossSelections",
@@ -285,10 +260,6 @@ func TestPCRRead(t *testing.T) {
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{2}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{3}}},
-			digests: []digestValue{
-				{index: 2, alg: AlgorithmSHA256},
-				{index: 1, alg: AlgorithmSHA256},
-				{index: 3, alg: AlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -302,11 +273,14 @@ func TestPCRRead(t *testing.T) {
 			if !reflect.DeepEqual(pcrSelection, data.selection) {
 				t.Errorf("PCRRead returned an unexpected PCRSelectionList")
 			}
-			for i := 0; i < len(data.digests); i++ {
-				if !bytes.Equal(expectedDigests[data.digests[i].index][data.digests[i].alg],
-					digests[i]) {
-					t.Errorf("Unexpected digest (got %x, expected %x)", digests[i],
-						expectedDigests[data.digests[i].index][data.digests[i].alg])
+			j := 0
+			for _, selection := range pcrSelection {
+				for _, i := range selection.Select {
+					if !bytes.Equal(expectedDigests[i][selection.Hash], digests[j]) {
+						t.Errorf("Unexpected digest (got %x, expected %x)", digests[j],
+							expectedDigests[i][selection.Hash])
+					}
+					j++
 				}
 			}
 		})
