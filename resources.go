@@ -12,8 +12,8 @@ type ResourceContext interface {
 }
 
 type resourceContextPrivate interface {
-	Tpm() *tpmContext
-	SetTpm(t *tpmContext)
+	tpmContext() *tpmContext
+	setTpmContext(t *tpmContext)
 }
 
 type permanentContext struct {
@@ -31,11 +31,11 @@ func (r *permanentContext) Name() Name {
 	return Name(name)
 }
 
-func (r *permanentContext) Tpm() *tpmContext {
+func (r *permanentContext) tpmContext() *tpmContext {
 	return r.tpm
 }
 
-func (r *permanentContext) SetTpm(t *tpmContext) {
+func (r *permanentContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
 }
 
@@ -54,11 +54,11 @@ func (r *objectContext) Name() Name {
 	return r.name
 }
 
-func (r *objectContext) Tpm() *tpmContext {
+func (r *objectContext) tpmContext() *tpmContext {
 	return r.tpm
 }
 
-func (r *objectContext) SetTpm(t *tpmContext) {
+func (r *objectContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
 }
 
@@ -76,11 +76,11 @@ func (r *nvIndexContext) Name() Name {
 	return r.name
 }
 
-func (r *nvIndexContext) Tpm() *tpmContext {
+func (r *nvIndexContext) tpmContext() *tpmContext {
 	return r.tpm
 }
 
-func (r *nvIndexContext) SetTpm(t *tpmContext) {
+func (r *nvIndexContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
 }
 
@@ -102,11 +102,11 @@ func (r *sessionContext) Name() Name {
 	return nil
 }
 
-func (r *sessionContext) Tpm() *tpmContext {
+func (r *sessionContext) tpmContext() *tpmContext {
 	return r.tpm
 }
 
-func (r *sessionContext) SetTpm(t *tpmContext) {
+func (r *sessionContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
 }
 
@@ -138,25 +138,25 @@ func makeObjectContext(t *tpmContext, handle Handle) (ResourceContext, error) {
 
 func (t *tpmContext) evictResourceContext(rc ResourceContext) {
 	rcp := rc.(resourceContextPrivate)
-	if rcp.Tpm() == nil {
+	if rcp.tpmContext() == nil {
 		return
 	}
-	if rcp.Tpm() != t {
+	if rcp.tpmContext() != t {
 		panic("Attempting to evict a resource for another TPM instance")
 	}
-	rcp.SetTpm(nil)
+	rcp.setTpmContext(nil)
 	delete(t.resources, rc.Handle())
 }
 
 func (t *tpmContext) addResourceContext(rc ResourceContext) {
 	rcp := rc.(resourceContextPrivate)
-	if rcp.Tpm() != nil {
+	if rcp.tpmContext() != nil {
 		panic("Attempting to add a resource to more than one TPM instance")
 	}
 	if _, exists := t.resources[rc.Handle()]; exists {
 		panic("Resource object for handle already exists")
 	}
-	rcp.SetTpm(t)
+	rcp.setTpmContext(t)
 	t.resources[rc.Handle()] = rc
 
 }
@@ -166,10 +166,10 @@ func (t *tpmContext) checkResourceContextParam(rc ResourceContext, name string) 
 		return fmt.Errorf("invalid resource context for %s: nil", name)
 	}
 	rcp := rc.(resourceContextPrivate)
-	if rcp.Tpm() == nil {
+	if rcp.tpmContext() == nil {
 		return fmt.Errorf("invalid resource context for %s: resource has been closed", name)
 	}
-	if rcp.Tpm() != t {
+	if rcp.tpmContext() != t {
 		return fmt.Errorf("invalid resource context for %s: resource belongs to another tpm2.TPM "+
 			"instance", name)
 	}
