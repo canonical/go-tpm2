@@ -92,6 +92,10 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("outHandle has the wrong id (0x%08x)", outHandle.Handle())
 		}
 
+		if !bytes.Equal(transient.Name(), outHandle.Name()) {
+			t.Errorf("outHandle has the wrong name")
+		}
+
 		outHandle2, err := tpm.EvictControl(HandleOwner, outHandle, outHandle.Handle(), authAuth)
 		if err != nil {
 			t.Errorf("EvictControl failed: %v", err)
