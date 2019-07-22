@@ -1,6 +1,7 @@
 package tpm2
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 )
@@ -107,6 +108,16 @@ func (r *sessionContext) Tpm() *tpmContext {
 
 func (r *sessionContext) SetTpm(t *tpmContext) {
 	r.tpm = t
+}
+
+func (r *sessionContext) isBoundTo(handle ResourceContext) bool {
+	if handle == nil {
+		return false
+	}
+	if r.boundResource == nil {
+		return false
+	}
+	return bytes.Equal(handle.Name(), r.boundResource.Name())
 }
 
 func makeNVIndexContext(t *tpmContext, handle Handle) (ResourceContext, error) {

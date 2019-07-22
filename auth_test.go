@@ -8,11 +8,9 @@ func TestHMACSessions(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	auth := []byte("1234")
-
 	owner, _ := tpm.WrapHandle(HandleOwner)
 
-	primary := createRSASrkForTesting(t, tpm, Auth(auth))
+	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)
 
 	primaryECC, _ := createECCSrkForTesting(t, tpm, nil)
@@ -28,42 +26,42 @@ func TestHMACSessions(t *testing.T) {
 	}{
 		{
 			desc:         "UnboundUnsalted",
-			sessionAuth:  auth,
+			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsalted",
 			bind:         primary,
-			bindAuth:     auth,
+			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsaltedUsedOnNonBoundResource)",
 			bind:         owner,
-			sessionAuth:  auth,
+			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:        "UnboundUnsaltedUncontinued",
-			sessionAuth: auth,
+			sessionAuth: testAuth,
 		},
 		{
 			desc:         "UnboundSaltedRSA",
 			tpmKey:       primary,
-			sessionAuth:  auth,
+			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "UnboundSaltedECC",
 			tpmKey:       primaryECC,
-			sessionAuth:  auth,
+			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundSaltedRSA",
 			tpmKey:       primary,
 			bind:         primary,
-			bindAuth:     auth,
+			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 	} {

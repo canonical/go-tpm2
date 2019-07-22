@@ -121,9 +121,7 @@ func TestCreatePrimary(t *testing.T) {
 	})
 
 	t.Run("WithAuth", func(t *testing.T) {
-		auth := []byte("foo")
-
-		sensitive := SensitiveCreate{UserAuth: Auth(auth)}
+		sensitive := SensitiveCreate{UserAuth: Auth(testAuth)}
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
@@ -158,17 +156,15 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		_, _, _, _, _, err := tpm.Create(objectHandle, nil, &childTemplate, nil, nil, auth)
+		_, _, _, _, _, err := tpm.Create(objectHandle, nil, &childTemplate, nil, nil, testAuth)
 		if err != nil {
 			t.Errorf("Use of authorization on primary key failed: %v", err)
 		}
 	})
 
 	t.Run("RequireAuthPW", func(t *testing.T) {
-		auth := []byte("1234")
-
-		setHierarchyAuth(t, HandleOwner, auth)
-		defer clearHierarchyAuth(t, HandleOwner, auth)
+		setHierarchyAuth(t, HandleOwner, testAuth)
+		defer clearHierarchyAuth(t, HandleOwner, testAuth)
 
 		template := Public{
 			Type:    AlgorithmRSA,
@@ -185,26 +181,24 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectHandle, pub := run(t, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, auth)
+		objectHandle, pub := run(t, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, testAuth)
 		defer flushContext(t, tpm, objectHandle)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
 	t.Run("RequireAuthSession", func(t *testing.T) {
-		auth := []byte("1234")
-
-		setHierarchyAuth(t, HandleOwner, auth)
-		defer clearHierarchyAuth(t, HandleOwner, auth)
+		setHierarchyAuth(t, HandleOwner, testAuth)
+		defer clearHierarchyAuth(t, HandleOwner, testAuth)
 
 		owner, _ := tpm.WrapHandle(HandleOwner)
 		sessionHandle, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil,
-			AlgorithmSHA256, auth)
+			AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifySessionFlushed(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle}
+		session := Session{Handle: sessionHandle, AuthValue: dummyAuth}
 
 		template := Public{
 			Type:    AlgorithmRSA,
@@ -353,26 +347,20 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	}
 
 	t.Run("OwnerWithPW", func(t *testing.T) {
-		auth := []byte("1234")
+		run1(t, HandleOwner, testAuth, nil)
+		defer resetHierarchyAuth(t, HandleOwner, testAuth)
 
-		run1(t, HandleOwner, auth, nil)
-		defer resetHierarchyAuth(t, HandleOwner, auth)
-
-		run2(t, HandleOwner, auth, createSrk)
+		run2(t, HandleOwner, testAuth, createSrk)
 	})
 
 	t.Run("EndorsementWithPW", func(t *testing.T) {
-		auth := []byte("foo")
+		run1(t, HandleEndorsement, testAuth, nil)
+		defer resetHierarchyAuth(t, HandleEndorsement, testAuth)
 
-		run1(t, HandleEndorsement, auth, nil)
-		defer resetHierarchyAuth(t, HandleEndorsement, auth)
-
-		run2(t, HandleEndorsement, auth, createEk)
+		run2(t, HandleEndorsement, testAuth, createEk)
 	})
 
 	t.Run("OwnerWithBoundHMACSession", func(t *testing.T) {
-		auth := []byte("1234")
-
 		owner, _ := tpm.WrapHandle(HandleOwner)
 		sessionHandle, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 		if err != nil {
@@ -380,18 +368,16 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession}
+		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession, AuthValue: dummyAuth}
 
-		run1(t, HandleOwner, auth, &session)
-		defer resetHierarchyAuth(t, HandleOwner, auth)
+		run1(t, HandleOwner, testAuth, &session)
+		defer resetHierarchyAuth(t, HandleOwner, testAuth)
 
-		session.AuthValue = auth
+		session.AuthValue = testAuth
 		run2(t, HandleOwner, &session, createSrk)
 	})
 
 	t.Run("OwnerWithUnboundHMACSession", func(t *testing.T) {
-		auth := []byte("1234")
-
 		sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -400,10 +386,10 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession}
 
-		run1(t, HandleOwner, auth, &session)
-		defer resetHierarchyAuth(t, HandleOwner, auth)
+		run1(t, HandleOwner, testAuth, &session)
+		defer resetHierarchyAuth(t, HandleOwner, testAuth)
 
-		session.AuthValue = auth
+		session.AuthValue = testAuth
 		run2(t, HandleOwner, &session, createSrk)
 	})
 }

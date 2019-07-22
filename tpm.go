@@ -251,7 +251,7 @@ func (t *tpmContext) RunCommandAndReturnRawResponse(commandCode CommandCode,
 				rc := wrapHandle(p.Handle)
 				commandHandles = append(commandHandles, p.Handle)
 				commandHandleNames = append(commandHandleNames, rc.Name())
-				sessionParams = append(sessionParams, ResourceWithAuth{Handle: rc, Auth: p.Auth})
+				sessionParams = append(sessionParams, p)
 			case ResourceWithAuth:
 				commandHandles = append(commandHandles, p.Handle.Handle())
 				commandHandleNames = append(commandHandleNames, p.Handle.Name())
@@ -408,9 +408,9 @@ func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) 
 			if param == Separator {
 				sentinels++
 			} else if hwa, isHwa := param.(HandleWithAuth); isHwa {
-				authSessions = append(authSessions, hwa.Auth)
+				authSessions = append(authSessions, hwa)
 			} else if rwa, isRwa := param.(ResourceWithAuth); isRwa {
-				authSessions = append(authSessions, rwa.Auth)
+				authSessions = append(authSessions, rwa)
 			}
 		case 1:
 			commandArgs = append(commandArgs, param)

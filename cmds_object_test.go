@@ -83,9 +83,7 @@ func TestCreate(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		auth := []byte("1234")
-
-		sensitive := SensitiveCreate{UserAuth: Auth(auth)}
+		sensitive := SensitiveCreate{UserAuth: Auth(testAuth)}
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
@@ -110,7 +108,7 @@ func TestCreate(t *testing.T) {
 		}
 		defer flushContext(t, tpm, handle)
 
-		run(t, handle, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, auth)
+		run(t, handle, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, testAuth)
 	})
 
 	t.Run("WithOutsideInfo", func(t *testing.T) {
@@ -135,9 +133,7 @@ func TestCreate(t *testing.T) {
 	})
 
 	t.Run("RequireAuthPW", func(t *testing.T) {
-		auth := []byte("foo")
-
-		primary := createRSASrkForTesting(t, tpm, auth)
+		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
@@ -152,14 +148,12 @@ func TestCreate(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, auth)
+		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, testAuth)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
 	t.Run("RequireAuthSession", func(t *testing.T) {
-		auth := []byte("1234")
-
-		primary := createRSASrkForTesting(t, tpm, auth)
+		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
@@ -175,13 +169,13 @@ func TestCreate(t *testing.T) {
 					Exponent:  0}}}
 
 		sessionHandle, err :=
-			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, auth)
+			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifySessionFlushed(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle}
+		session := Session{Handle: sessionHandle, AuthValue: dummyAuth}
 
 		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
 		verifyRSAAgainstTemplate(t, pub, &template)
@@ -232,28 +226,24 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("RequireAuthPW", func(t *testing.T) {
-		auth := []byte("foo")
-
-		primary := createRSASrkForTesting(t, tpm, auth)
+		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
-		run(t, primary, auth)
+		run(t, primary, testAuth)
 	})
 
 	t.Run("RequireAuthSession", func(t *testing.T) {
-		auth := []byte("foo")
-
-		primary := createRSASrkForTesting(t, tpm, auth)
+		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
 		sessionHandle, err :=
-			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, auth)
+			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionHandle)
 
-		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession}
+		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession, AuthValue: dummyAuth}
 
 		run(t, primary, &session)
 	})
@@ -442,23 +432,21 @@ func TestUnseal(t *testing.T) {
 	})
 
 	t.Run("WithPWAuth", func(t *testing.T) {
-		auth := []byte("foo")
-		handle := create(t, nil, Auth(auth), AttrUserWithAuth)
+		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
-		run(t, handle, auth)
+		run(t, handle, testAuth)
 	})
 
 	t.Run("WithHMACAuth", func(t *testing.T) {
-		auth := []byte("foo")
-		handle := create(t, nil, Auth(auth), AttrUserWithAuth)
+		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
 		sessionHandle, err :=
-			tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256, auth)
+			tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifySessionFlushed(t, tpm, sessionHandle)
-		run(t, handle, &Session{Handle: sessionHandle})
+		run(t, handle, &Session{Handle: sessionHandle, AuthValue: dummyAuth})
 	})
 
 	t.Run("WithPolicyAuth", func(t *testing.T) {
@@ -528,35 +516,32 @@ func TestObjectChangeAuth(t *testing.T) {
 	})
 
 	t.Run("WithPWAuth", func(t *testing.T) {
-		auth := []byte("foo")
-		handle, pub := create(t, Auth(auth))
+		handle, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, handle)
-		run(t, handle, pub, Auth("1234"), auth)
+		run(t, handle, pub, Auth("1234"), testAuth)
 	})
 
 	t.Run("WithUnboundSession", func(t *testing.T) {
-		auth := []byte("foo")
-		handle, pub := create(t, Auth(auth))
+		handle, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, handle)
 		sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifySessionFlushed(t, tpm, sessionHandle)
-		session := Session{Handle: sessionHandle, AuthValue: auth}
-		run(t, handle, pub, Auth("1234"), &session)
+		session := Session{Handle: sessionHandle, AuthValue: testAuth}
+		run(t, handle, pub, Auth("foo"), &session)
 	})
 
 	t.Run("WithBoundSession", func(t *testing.T) {
-		auth := []byte("foo")
-		handle, pub := create(t, Auth(auth))
+		handle, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, handle)
 		sessionHandle, err := tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256,
-			auth)
+			testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifySessionFlushed(t, tpm, sessionHandle)
-		run(t, handle, pub, Auth("1234"), &Session{Handle: sessionHandle})
+		run(t, handle, pub, Auth("foo"), &Session{Handle: sessionHandle, AuthValue: dummyAuth})
 	})
 }

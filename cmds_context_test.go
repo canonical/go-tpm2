@@ -113,16 +113,14 @@ func TestEvictControl(t *testing.T) {
 		}
 	}
 
-	auth := []byte("1234")
-
 	setupOwnerAuth := func(t *testing.T) {
-		if err := tpm.HierarchyChangeAuth(HandleOwner, Auth(auth), nil); err != nil {
+		if err := tpm.HierarchyChangeAuth(HandleOwner, Auth(testAuth), nil); err != nil {
 			t.Fatalf("HierarchyChangeAuth failed: %v", err)
 		}
 	}
 
 	resetOwnerAuth := func(t *testing.T) {
-		if err := tpm.HierarchyChangeAuth(HandleOwner, nil, auth); err != nil {
+		if err := tpm.HierarchyChangeAuth(HandleOwner, nil, testAuth); err != nil {
 			t.Errorf("HierarchyChangeAuth failed to clear the auth value: %v", err)
 		}
 	}
@@ -137,7 +135,7 @@ func TestEvictControl(t *testing.T) {
 		defer flushContext(t, tpm, objectHandle)
 		setupOwnerAuth(t)
 		defer resetOwnerAuth(t)
-		run(t, objectHandle, Handle(0x81020001), auth)
+		run(t, objectHandle, Handle(0x81020001), testAuth)
 	})
 	t.Run("SessionAuth", func(t *testing.T) {
 		objectHandle := createRSASrkForTesting(t, tpm, nil)
@@ -146,13 +144,13 @@ func TestEvictControl(t *testing.T) {
 		defer resetOwnerAuth(t)
 		owner, _ := tpm.WrapHandle(HandleOwner)
 		sessionHandle, err :=
-			tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, auth)
+			tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionHandle)
 		run(t, objectHandle, Handle(0x81020001),
-			&Session{Handle: sessionHandle, Attrs: AttrContinueSession})
+			&Session{Handle: sessionHandle, Attrs: AttrContinueSession, AuthValue: dummyAuth})
 	})
 }
 

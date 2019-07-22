@@ -15,6 +15,11 @@ var mssimHost = flag.String("mssim-host", "localhost", "")
 var mssimTpmPort = flag.Uint("mssim-tpm-port", 2321, "")
 var mssimPlatformPort = flag.Uint("mssim-platform-port", 2322, "")
 
+var (
+	dummyAuth = []byte("dummy")
+	testAuth = []byte("1234")
+)
+
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if public.Type != template.Type {
 		t.Errorf("public object has wrong type: %v", public.Type)

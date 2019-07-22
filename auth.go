@@ -77,7 +77,7 @@ func buildCommandSessionAuth(tpm *tpmContext, commandCode CommandCode, commandHa
 		return nil, errors.New("invalid resource context for session: not a session handle")
 	}
 
-	useAuthValue := !bytes.Equal(handle.Name(), context.boundResource.Name())
+	useAuthValue := !context.isBoundTo(handle)
 
 	attrs := attrsFromSession(session)
 	var hmac []byte
@@ -109,6 +109,9 @@ func buildCommandPasswordAuth(authValue Auth) *authCommand {
 func buildCommandAuth(tpm *tpmContext, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
 	session interface{}, handle ResourceContext) (*authCommand, error) {
 	switch s := session.(type) {
+	case HandleWithAuth:
+		rc := &permanentContext{handle: s.Handle}
+		return buildCommandAuth(tpm, commandCode, commandHandles, cpBytes, s.Auth, rc)
 	case ResourceWithAuth:
 		return buildCommandAuth(tpm, commandCode, commandHandles, cpBytes, s.Auth, s.Handle)
 	case string:
@@ -139,7 +142,7 @@ func buildCommandAuthArea(tpm *tpmContext, commandCode CommandCode, commandHandl
 }
 
 func processAuthSessionResponse(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode,
-	rpBytes []byte, resp authResponse, session *Session) error {
+	rpBytes []byte, resp authResponse, session *Session, handle ResourceContext) error {
 	context := session.Handle.(*sessionContext)
 	context.nonceTPM = resp.Nonce
 
@@ -147,12 +150,19 @@ func processAuthSessionResponse(tpm *tpmContext, responseCode ResponseCode, comm
 		tpm.evictResourceContext(context)
 	}
 
-	if len(context.sessionKey) == 0 && len(session.AuthValue) == 0 {
+	useAuthValue := !context.isBoundTo(handle)
+
+	if len(context.sessionKey) == 0 && (len(session.AuthValue) == 0 || !useAuthValue) {
 		return nil
 	}
 
+	var authValue []byte
+	if useAuthValue {
+		authValue = session.AuthValue
+	}
+
 	rpHash := cryptComputeRpHash(context.hashAlg, responseCode, commandCode, rpBytes)
-	hmac := cryptComputeSessionResponseHMAC(context, session.AuthValue, rpHash, attrsFromSession(session))
+	hmac := cryptComputeSessionResponseHMAC(context, authValue, rpHash, attrsFromSession(session))
 
 	if !bytes.Equal(hmac, resp.HMAC) {
 		return InvalidAuthResponseError{Command: commandCode, msg: "incorrect HMAC"}
@@ -162,10 +172,15 @@ func processAuthSessionResponse(tpm *tpmContext, responseCode ResponseCode, comm
 }
 
 func processAuthResponse(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
-	resp authResponse, session interface{}) error {
+	resp authResponse, session interface{}, handle ResourceContext) error {
 	switch s := session.(type) {
+	case HandleWithAuth:
+		rc := &permanentContext{handle: s.Handle}
+		return processAuthResponse(tpm, responseCode, commandCode, rpBytes, resp, s.Auth, rc)
+	case ResourceWithAuth:
+		return processAuthResponse(tpm, responseCode, commandCode, rpBytes, resp, s.Auth, s.Handle)
 	case *Session:
-		return processAuthSessionResponse(tpm, responseCode, commandCode, rpBytes, resp, s)
+		return processAuthSessionResponse(tpm, responseCode, commandCode, rpBytes, resp, s, handle)
 	}
 	return nil
 }
@@ -174,7 +189,7 @@ func processAuthResponseArea(tpm *tpmContext, responseCode ResponseCode, command
 	rpBytes []byte, authResponses []authResponse, sessions ...interface{}) error {
 	for i, resp := range authResponses {
 		if err := processAuthResponse(tpm, responseCode, commandCode, rpBytes, resp,
-			sessions[i]); err != nil {
+			sessions[i], nil); err != nil {
 			return err
 		}
 	}
