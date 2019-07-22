@@ -17,7 +17,7 @@ var mssimPlatformPort = flag.Uint("mssim-platform-port", 2322, "")
 
 var (
 	dummyAuth = []byte("dummy")
-	testAuth = []byte("1234")
+	testAuth  = []byte("1234")
 )
 
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {

@@ -3,6 +3,7 @@ package tpm2
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 )
 
@@ -186,13 +187,11 @@ func (t *tpmContext) WrapHandle(handle Handle) (ResourceContext, error) {
 
 	switch (handle & 0xff000000) >> 24 {
 	case 0x00:
-		// PCR
+		err = errors.New("cannot wrap a PCR handle")
 	case 0x01:
 		rc, err = makeNVIndexContext(t, handle)
-	case 0x02:
-		// HMAC session
-	case 0x03:
-		// Policy session
+	case 0x02, 0x03:
+		err = errors.New("cannot wrap the handle of an existing session")
 	case 0x40:
 		rc = &permanentContext{handle: handle}
 	case 0x80, 0x81:
