@@ -6,9 +6,87 @@ package tpm2
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"testing"
 )
+
+func TestPolicyOR(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	trialSessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	trialSessionFlushed := false
+	defer func() {
+		if trialSessionFlushed {
+			return
+		}
+		flushContext(t, tpm, trialSessionHandle)
+	}()
+
+	pcrSelection := PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}}
+	if err := tpm.PolicyPCR(trialSessionHandle, nil, pcrSelection); err != nil {
+		t.Fatalf("PolicyPCR failed: %v", err)
+	}
+
+	trialPolicyDigest, err := tpm.PolicyGetDigest(trialSessionHandle)
+	if err != nil {
+		t.Fatalf("PolicyGetDigest failed: %v", err)
+	}
+
+	if err := tpm.FlushContext(trialSessionHandle); err != nil {
+		t.Errorf("FlushContext failed: %v", err)
+	}
+	trialSessionFlushed = true
+
+	digestList := []Digest{trialPolicyDigest}
+	for i := 0; i < 4; i++ {
+		digestSize, _ := cryptGetDigestSize(AlgorithmSHA256)
+		digest := make(Digest, digestSize)
+		if _, err := rand.Read(digest); err != nil {
+			t.Fatalf("Failed to get random data: %v", err)
+		}
+		digestList = append(digestList, digest)
+	}
+
+	sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer flushContext(t, tpm, sessionHandle)
+
+	if err := tpm.PolicyPCR(sessionHandle, nil, pcrSelection); err != nil {
+		t.Fatalf("PolicyPCR failed: %v", err)
+	}
+	if err := tpm.PolicyOR(sessionHandle, digestList); err != nil {
+		t.Fatalf("PolicyOR failed: %v", err)
+	}
+
+	policyDigest, err := tpm.PolicyGetDigest(sessionHandle)
+	if err != nil {
+		t.Fatalf("PolicyGetDigest failed: %v", err)
+	}
+
+	digests := new(bytes.Buffer)
+	for _, digest := range digestList {
+		digests.Write(digest)
+	}
+
+	digestSize, _ := cryptGetDigestSize(AlgorithmSHA256)
+	hasher := cryptHashAlgToGoConstructor(AlgorithmSHA256)()
+	hasher.Write(make([]byte, digestSize))
+	binary.Write(hasher, binary.BigEndian, CommandPolicyOR)
+	hasher.Write(digests.Bytes())
+
+	expectedPolicyDigest := hasher.Sum(nil)
+
+	if !bytes.Equal(policyDigest, expectedPolicyDigest) {
+		t.Errorf("Unexpected policy digest")
+	}
+}
 
 func TestPolicyPCR(t *testing.T) {
 	tpm, _ := openTPMSimulatorForTesting(t)

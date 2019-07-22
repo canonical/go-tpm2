@@ -108,7 +108,7 @@ type TPMContext interface {
 	//	expiration int32) (Timeout, *TkAuth, error)
 	// PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce,
 	//	authName Name, ticket *TkAuth) error
-	// PolicyOR(policySession ResourceContext, pHashList DigestList) error
+	PolicyOR(policySession ResourceContext, pHashList DigestList) error
 	PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList) error
 	// PolicyLocality(policySession ResourceContext, loclity Locality) error
 	// PolicyNV(authHandle, nvIndex, policySession ResourceContext, operandB Operand, offset uint16,

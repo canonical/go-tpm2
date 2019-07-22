@@ -67,6 +67,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_LoadExternal"
 	case CommandNVReadPublic:
 		return "TPM_CC_NV_ReadPublic"
+	case CommandPolicyOR:
+		return "TPM_CC_PolicyOR"
 	case CommandReadPublic:
 		return "TPM_CC_ReadPublic"
 	case CommandStartAuthSession:

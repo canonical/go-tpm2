@@ -4,6 +4,14 @@
 
 package tpm2
 
+func (t *tpmContext) PolicyOR(policySession ResourceContext, pHashList DigestList) error {
+	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
+		return err
+	}
+
+	return t.RunCommand(CommandPolicyOR, policySession, Separator, pHashList)
+}
+
 func (t *tpmContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList) error {
 	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
 		return err
