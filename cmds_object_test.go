@@ -317,7 +317,7 @@ func TestLoadExternal(t *testing.T) {
 		if objectHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
 			t.Errorf("LoadExternal returned an invalid handle 0x%08x", objectHandle.Handle())
 		}
-		nameAlgSize, _ := digestSizes[template.NameAlg]
+		nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
 		if len(name) != int(nameAlgSize)+2 {
 			t.Errorf("LoadExternal returned a name of the wrong length")
 		}

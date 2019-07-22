@@ -729,9 +729,9 @@ func (p *TaggedHash) Marshal(buf io.Writer) error {
 	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
 		return err
 	}
-	size, known := digestSizes[p.HashAlg]
-	if !known {
-		return fmt.Errorf("unknown digest size for algorithm %v", p.HashAlg)
+	size, err := cryptGetDigestSize(p.HashAlg)
+	if err != nil {
+		return fmt.Errorf("cannot determine digest size: %v", err)
 	}
 
 	if int(size) != len(p.Digest) {
@@ -752,9 +752,9 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
 		return err
 	}
-	size, known := digestSizes[p.HashAlg]
-	if !known {
-		return fmt.Errorf("unknown digest size for algorithm %d", p.HashAlg)
+	size, err := cryptGetDigestSize(p.HashAlg)
+	if err != nil {
+		return fmt.Errorf("cannot determine digest size: %v", err)
 	}
 
 	p.Digest = make(Digest, size)

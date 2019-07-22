@@ -41,7 +41,7 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 
 func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData, template *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
-	nameAlgSize, _ := digestSizes[template.NameAlg]
+	nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
 	var parentQualifiedName Name
 	if parent.Handle()&HandleTypePermanent == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -75,7 +75,7 @@ func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData
 }
 
 func verifyCreationHash(t *testing.T, creationHash Digest, template *Public) {
-	nameAlgSize, _ := digestSizes[template.NameAlg]
+	nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
 	if len(creationHash) != int(nameAlgSize) {
 		t.Errorf("creation hash is the wrong length (%d bytes)", len(creationHash))
 	}

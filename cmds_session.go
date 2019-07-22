@@ -20,8 +20,8 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		return nil,
 			makeInvalidParamError("symmetric", "no support for parameter / response encryption yet")
 	}
-	digestSize, knownDigest := digestSizes[authHash]
-	if !knownDigest {
+	digestSize, err := cryptGetDigestSize(authHash)
+	if err != nil {
 		return nil, makeInvalidParamError("authHash",
 			fmt.Sprintf("unsupported digest algorithm %v", authHash))
 	}

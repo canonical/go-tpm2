@@ -118,7 +118,7 @@ func TestStartAuthSession(t *testing.T) {
 				if context.boundResource != boundResource {
 					t.Errorf("The returned session context has the wrong bound resource")
 				}
-				digestSize, _ := digestSizes[data.alg]
+				digestSize, _ := cryptGetDigestSize(data.alg)
 				sessionKeySize := int(digestSize)
 				if data.bind == nil && data.tpmKey == nil {
 					sessionKeySize = 0

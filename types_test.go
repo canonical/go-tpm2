@@ -258,8 +258,8 @@ func TestTaggedHash(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshaToBytes should fail to marshal a TaggedHash with an unknown algorithm")
 	}
-	if err.Error() != "cannot marshal type *tpm2.TaggedHash with custom marshaller: unknown digest size "+
-		"for algorithm TPM_ALG_HMAC" {
+	if err.Error() != "cannot marshal type *tpm2.TaggedHash with custom marshaller: cannot determine "+
+		"digest size: unknown digest algorithm: TPM_ALG_HMAC" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 
@@ -291,8 +291,8 @@ func TestTaggedHash(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
 	}
-	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: unknown digest size "+
-		"for algorithm 5" {
+	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot determine "+
+		"digest size: unknown digest algorithm: TPM_ALG_HMAC" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
