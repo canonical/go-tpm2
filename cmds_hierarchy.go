@@ -1,3 +1,7 @@
+// Copyright 2019 Canonical Ltd.
+// Licensed under the LGPLv3 with static-linking exception.
+// See LICENCE file for details.
+
 package tpm2
 
 func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
