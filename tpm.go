@@ -50,20 +50,21 @@ type TPMContext interface {
 	SetMaxSubmissions(max uint)
 	WrapHandle(handle Handle) (ResourceContext, error)
 
-	// Start-up
+	// Section 9 - Start-up
 	Startup(startupType StartupType) error
 	Shutdown(shutdownType StartupType) error
 
-	// Testing
+	// Section 10 - Testing
 	SelfTest(fullTest bool) error
 	IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error)
 	GetTestResult() (MaxBuffer, ResponseCode, error)
 
-	// Session Commands
+	// Section 11 - Session Commands
 	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 		authHash AlgorithmId, authValue []byte) (ResourceContext, error)
+	// PolicyRestart(sessionHandle ResourceContext) error
 
-	// Object Commands
+	// Section 12 - Object Commands
 	Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
 		creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public, *CreationData,
 		Digest, *TkCreation, error)
@@ -81,12 +82,24 @@ type TPMContext interface {
 	CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 		parentHandleAuth interface{}) (ResourceContext, Private, *Public, Name, error)
 
-	// Integrity Collection (PCR)
+	// Section 13 - Duplication Commands
+	// Section 14 - Asymmetric Primitives
+	// Section 15 - Symmetrict Primitives
+	// Section 16 - Random Number Generator
+	// Section 17 - Hash/HMAC/Event Sequences
+	// Section 18 - Attestation Commands
+	// Section 19 - Ephemeral EC Keys
+	// Section 20 - Signing and Signature Verification
+	// Section 21 - Command Audit
+
+	// Section 22 - Integrity Collection (PCR)
 	PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error
 	PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{}) (TaggedHashList, error)
 	PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRSelectionList, DigestList, error)
 
-	// Hierarchy Commands
+	// Section 23 - Enhanced Authorization (EA) Commands
+
+	// Section 24 - Hierarchy Commands
 	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
 		creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
 		*CreationData, Digest, *TkCreation, Name, error)
@@ -94,14 +107,20 @@ type TPMContext interface {
 	ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error
 	HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error
 
-	// Context Management
+	// Section 25 - Dictionary Attack Functions
+	// Section 26 - Miscellaneous Management Functions
+	// Section 27 - Field Upgrade
+
+	// Section 28 - Context Management
 	ContextSave(saveHandle ResourceContext) (*Context, error)
 	ContextLoad(context *Context) (ResourceContext, error)
 	FlushContext(flushHandle ResourceContext) error
 	EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
 		authAuth interface{}) (ResourceContext, error)
 
-	// Capability Commands
+	// Section 29 - Clocks and Timers
+
+	// Section 30 - Capability Commands
 	GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData, error)
 	GetCapabilityAlgs(first AlgorithmId, propertyCount uint32) (AlgorithmPropertyList, error)
 	GetCapabilityCommands(first CommandCode, propertyCount uint32) (CommandAttributesList, error)
@@ -114,7 +133,7 @@ type TPMContext interface {
 	GetCapabilityECCCurves() (ECCCurveList, error)
 	GetCapabilityAuthPolicies(first Handle, propertyCount uint32) (TaggedPolicyList, error)
 
-	// Non-volatile Storage
+	// Section 31 - Non-volatile Storage
 	NVReadPublic(nvIndex ResourceContext) (*NVPublic, Name, error)
 }
 
