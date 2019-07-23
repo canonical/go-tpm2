@@ -55,6 +55,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_Shutdown"
 	case CommandObjectChangeAuth:
 		return "TPM_CC_ObjectChangeAuth"
+	case CommandPolicySecret:
+		return "TPM_CC_PolicySecret"
 	case CommandCreate:
 		return "TPM_CC_Create"
 	case CommandLoad:

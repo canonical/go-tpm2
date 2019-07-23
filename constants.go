@@ -13,6 +13,8 @@ const (
 	TagNoSessions StructTag = 0x8001
 	TagSessions   StructTag = 0x8002
 	TagCreation   StructTag = 0x8021
+	TagAuthSecret StructTag = 0x8023
+	TagAuthSigned StructTag = 0x8025
 )
 
 const (
@@ -31,6 +33,7 @@ const (
 	CommandStartup                    CommandCode = 0x00000144
 	CommandShutdown                   CommandCode = 0x00000145
 	CommandObjectChangeAuth           CommandCode = 0x00000150
+	CommandPolicySecret               CommandCode = 0x00000151
 	CommandCreate                     CommandCode = 0x00000153
 	CommandLoad                       CommandCode = 0x00000157
 	CommandUnseal                     CommandCode = 0x0000015E

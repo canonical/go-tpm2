@@ -104,8 +104,8 @@ type TPMContext interface {
 	// Section 23 - Enhanced Authorization (EA) Commands
 	// PolicySigned(authObject, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest,
 	//	policyRef Nonce, expiration int32, auth *Signature) (Timeout, *TkAuth, error)
-	// PolicySecret(authHandle, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
-	//	expiration int32) (Timeout, *TkAuth, error)
+	PolicySecret(authHandle, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
+		expiration int32, authHandleAuth interface{}) (Timeout, *TkAuth, error)
 	// PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce,
 	//	authName Name, ticket *TkAuth) error
 	PolicyOR(policySession ResourceContext, pHashList DigestList) error

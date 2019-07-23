@@ -148,6 +148,12 @@ func (s SymKey) SliceType() SliceType {
 	return SliceTypeSizedBufferU16
 }
 
+type Timeout []byte
+
+func (t Timeout) SliceType() SliceType {
+	return SliceTypeSizedBufferU16
+}
+
 type PublicIDU struct {
 	KeyedHash Digest
 	Sym       Digest
@@ -401,6 +407,12 @@ type Context struct {
 	SavedHandle Handle
 	Hierarchy   Handle
 	Blob        ContextData
+}
+
+type TkAuth struct {
+	Tag       StructTag
+	Hierarchy Handle
+	Digest    Digest
 }
 
 type TkCreation struct {
