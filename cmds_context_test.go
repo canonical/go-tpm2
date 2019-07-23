@@ -108,6 +108,10 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("EvictControl should return a nil handle when evicting a persistent object")
 		}
 
+		if outHandle.Handle() != HandleNull {
+			t.Errorf("EvictControl should set the persistent context's handle to NULL")
+		}
+
 		_, _, _, err = tpm.ReadPublic(outHandle)
 		if err == nil {
 			t.Fatalf("Calling ReadPublic on a dead resource context should fail")
@@ -183,6 +187,10 @@ func TestFlushContext(t *testing.T) {
 	}
 	if len(handles) != 0 {
 		t.Errorf("FlushContext didn't flush the transient handle")
+	}
+
+	if objectHandle.Handle() != HandleNull {
+		t.Errorf("FlushContext should set the context's handle to NULL")
 	}
 
 	_, _, _, err = tpm.ReadPublic(objectHandle)

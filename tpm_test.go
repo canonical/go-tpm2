@@ -188,15 +188,11 @@ func flushContext(t *testing.T, tpm TPMContext, handle ResourceContext) {
 	}
 }
 
-func verifySessionFlushed(t *testing.T, tpm TPMContext, handle ResourceContext) {
-	context, isSession := handle.(*sessionContext)
-	if !isSession {
-		t.Errorf("handle is not a session context")
-	}
-	if context.tpm == nil {
+func verifyContextFlushed(t *testing.T, tpm TPMContext, handle ResourceContext) {
+	if handle.Handle() == HandleNull {
 		return
 	}
-	t.Errorf("Session is still live")
+	t.Errorf("Context is still live")
 	flushContext(t, tpm, handle)
 }
 

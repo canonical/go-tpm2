@@ -177,7 +177,7 @@ func TestCreate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifySessionFlushed(t, tpm, sessionHandle)
+		defer verifyContextFlushed(t, tpm, sessionHandle)
 
 		session := Session{Handle: sessionHandle, AuthValue: dummyAuth}
 
@@ -449,7 +449,7 @@ func TestUnseal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifySessionFlushed(t, tpm, sessionHandle)
+		defer verifyContextFlushed(t, tpm, sessionHandle)
 		run(t, handle, &Session{Handle: sessionHandle, AuthValue: dummyAuth})
 	})
 
@@ -460,7 +460,7 @@ func TestUnseal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifySessionFlushed(t, tpm, sessionHandle)
+		defer verifyContextFlushed(t, tpm, sessionHandle)
 		run(t, handle, &Session{Handle: sessionHandle})
 	})
 }
@@ -532,7 +532,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifySessionFlushed(t, tpm, sessionHandle)
+		defer verifyContextFlushed(t, tpm, sessionHandle)
 		session := Session{Handle: sessionHandle, AuthValue: testAuth}
 		run(t, handle, pub, Auth("foo"), &session)
 	})
@@ -545,7 +545,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifySessionFlushed(t, tpm, sessionHandle)
+		defer verifyContextFlushed(t, tpm, sessionHandle)
 		run(t, handle, pub, Auth("foo"), &Session{Handle: sessionHandle, AuthValue: dummyAuth})
 	})
 }

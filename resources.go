@@ -23,6 +23,7 @@ type SessionContext interface {
 type resourceContextPrivate interface {
 	tpmContext() *tpmContext
 	setTpmContext(t *tpmContext)
+	invalidate()
 }
 
 type permanentContext struct {
@@ -48,6 +49,11 @@ func (r *permanentContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
 }
 
+func (r *permanentContext) invalidate() {
+	r.tpm = nil
+	r.handle = HandleNull
+}
+
 type objectContext struct {
 	tpm    *tpmContext
 	handle Handle
@@ -71,6 +77,11 @@ func (r *objectContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
 }
 
+func (r *objectContext) invalidate() {
+	r.tpm = nil
+	r.handle = HandleNull
+}
+
 type nvIndexContext struct {
 	tpm    *tpmContext
 	handle Handle
@@ -91,6 +102,11 @@ func (r *nvIndexContext) tpmContext() *tpmContext {
 
 func (r *nvIndexContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
+}
+
+func (r *nvIndexContext) invalidate() {
+	r.tpm = nil
+	r.handle = HandleNull
 }
 
 type sessionContext struct {
@@ -119,6 +135,11 @@ func (r *sessionContext) tpmContext() *tpmContext {
 
 func (r *sessionContext) setTpmContext(t *tpmContext) {
 	r.tpm = t
+}
+
+func (r *sessionContext) invalidate() {
+	r.tpm = nil
+	r.handle = HandleNull
 }
 
 func (r *sessionContext) isBoundTo(handle ResourceContext) bool {
@@ -159,8 +180,8 @@ func (t *tpmContext) evictResourceContext(rc ResourceContext) {
 	if rcp.tpmContext() != t {
 		panic("Attempting to evict a resource for another TPM instance")
 	}
-	rcp.setTpmContext(nil)
 	delete(t.resources, rc.Handle())
+	rcp.invalidate()
 }
 
 func (t *tpmContext) addResourceContext(rc ResourceContext) {

@@ -200,7 +200,7 @@ func TestCreatePrimary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifySessionFlushed(t, tpm, sessionHandle)
+		defer verifyContextFlushed(t, tpm, sessionHandle)
 
 		session := Session{Handle: sessionHandle, AuthValue: dummyAuth}
 
