@@ -114,7 +114,7 @@ type sessionContext struct {
 	tpm           *tpmContext
 	handle        Handle
 	hashAlg       AlgorithmId
-	boundResource ResourceContext
+	boundResource Name
 	sessionKey    []byte
 	nonceCaller   Nonce
 	nonceTPM      Nonce
@@ -147,10 +147,7 @@ func (r *sessionContext) isBoundTo(handle ResourceContext) bool {
 	if handle == nil {
 		return false
 	}
-	if r.boundResource == nil {
-		return false
-	}
-	return bytes.Equal(handle.Name(), r.boundResource.Name())
+	return bytes.Equal(handle.Name(), r.boundResource)
 }
 
 func (r *sessionContext) NonceTPM() Nonce {

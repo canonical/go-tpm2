@@ -19,7 +19,6 @@ func TestStartAuthSession(t *testing.T) {
 	defer flushContext(t, tpm, primaryECC)
 
 	owner, _ := tpm.WrapHandle(HandleOwner)
-	null, _ := tpm.WrapHandle(HandleNull)
 
 	for _, data := range []struct {
 		desc        string
@@ -115,11 +114,7 @@ func TestStartAuthSession(t *testing.T) {
 					t.Errorf("The returned session context has the wrong algorithm (got %v)",
 						context.hashAlg)
 				}
-				boundResource := data.bind
-				if data.bind == nil {
-					boundResource = null
-				}
-				if context.boundResource != boundResource {
+				if data.bind != nil && !context.isBoundTo(data.bind) {
 					t.Errorf("The returned session context has the wrong bound resource")
 				}
 				digestSize, _ := cryptGetDigestSize(data.alg)

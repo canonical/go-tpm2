@@ -49,7 +49,7 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	}
 
 	if bind == nil {
-		bind, _ = t.WrapHandle(HandleNull)
+		bind = &permanentContext{handle: HandleNull}
 	}
 
 	nonceCaller := make([]byte, digestSize)
@@ -68,7 +68,7 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 
 	sessionContext := &sessionContext{handle: sessionHandle,
 		hashAlg:       authHash,
-		boundResource: bind,
+		boundResource: bind.Name(),
 		nonceCaller:   Nonce(nonceCaller),
 		nonceTPM:      nonceTPM}
 

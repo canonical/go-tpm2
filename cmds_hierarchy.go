@@ -59,7 +59,7 @@ func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	switch s := authHandleAuth.(type) {
 	case *Session:
 		sc = s.Handle.(*sessionContext)
-		if sc.boundResource.Handle() != authHandle {
+		if !sc.isBoundTo(&permanentContext{handle: authHandle}) {
 			updatedAuthHandleAuth = &Session{Handle: s.Handle, Attrs: s.Attrs}
 		}
 	}
@@ -132,7 +132,7 @@ func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 	switch s := authHandleAuth.(type) {
 	case *Session:
 		sc = s.Handle.(*sessionContext)
-		if sc.boundResource.Handle() != authHandle {
+		if !sc.isBoundTo(&permanentContext{handle: authHandle}) {
 			updatedAuthHandleAuth =
 				&Session{Handle: s.Handle, Attrs: s.Attrs, AuthValue: newAuth}
 		}
@@ -144,9 +144,8 @@ func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 		// an authorization.
 		// This is deferred because the HMAC in the response is generated from a key that doesn't include
 		// the auth value
-		if sc != nil && sc.boundResource.Handle() == authHandle {
-			null, _ := t.WrapHandle(HandleNull)
-			sc.boundResource = null
+		if sc != nil && sc.isBoundTo(&permanentContext{handle: authHandle}) {
+			sc.boundResource = nil
 		}
 	}()
 

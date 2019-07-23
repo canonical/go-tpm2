@@ -270,7 +270,7 @@ func TestClear(t *testing.T) {
 	tpm, _ := openTPMSimulatorForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, auth interface{}) bool {
+	run := func(t *testing.T, auth interface{}) {
 		cleared := false
 
 		template := Public{
@@ -393,8 +393,6 @@ func TestClear(t *testing.T) {
 		if PermanentAttributes(props[0].Value)&AttrEndorsementAuthSet > 0 {
 			t.Errorf("Clear did not clear the EH auth")
 		}
-
-		return true
 	}
 
 	t.Run("NoAuth", func(t *testing.T) {
@@ -409,7 +407,8 @@ func TestClear(t *testing.T) {
 			}
 			resetHierarchyAuth(t, tpm, HandleLockout)
 		}()
-		cleared = run(t, testAuth)
+		run(t, testAuth)
+		cleared = true
 	})
 	t.Run("RequireBoundSession", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
@@ -427,7 +426,8 @@ func TestClear(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionHandle)
-		cleared = run(t, &Session{Handle: sessionHandle, AuthValue: dummyAuth})
+		run(t, &Session{Handle: sessionHandle, AuthValue: dummyAuth})
+		cleared = true
 	})
 	t.Run("RequireUnboundSession", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
@@ -443,7 +443,8 @@ func TestClear(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionHandle)
-		cleared = run(t, &Session{Handle: sessionHandle, AuthValue: testAuth})
+		run(t, &Session{Handle: sessionHandle, AuthValue: testAuth})
+		cleared = true
 	})
 }
 
