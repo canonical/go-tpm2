@@ -18,35 +18,37 @@ const (
 const (
 	CommandFirst CommandCode = 0x0000011A
 
-	CommandEvictControl        CommandCode = 0x00000120
-	CommandClear               CommandCode = 0x00000126
-	CommandClearControl        CommandCode = 0x00000127
-	CommandHierarchyChangeAuth CommandCode = 0x00000129
-	CommandCreatePrimary       CommandCode = 0x00000131
-	CommandPCREvent            CommandCode = 0x0000013C
-	CommandIncrementalSelfTest CommandCode = 0x00000142
-	CommandSelfTest            CommandCode = 0x00000143
-	CommandStartup             CommandCode = 0x00000144
-	CommandShutdown            CommandCode = 0x00000145
-	CommandObjectChangeAuth    CommandCode = 0x00000150
-	CommandCreate              CommandCode = 0x00000153
-	CommandLoad                CommandCode = 0x00000157
-	CommandUnseal              CommandCode = 0x0000015E
-	CommandContextLoad         CommandCode = 0x00000161
-	CommandContextSave         CommandCode = 0x00000162
-	CommandFlushContext        CommandCode = 0x00000165
-	CommandLoadExternal        CommandCode = 0x00000167
-	CommandNVReadPublic        CommandCode = 0x00000169
-	CommandPolicyOR            CommandCode = 0x00000171
-	CommandReadPublic          CommandCode = 0x00000173
-	CommandStartAuthSession    CommandCode = 0x00000176
-	CommandGetCapability       CommandCode = 0x0000017A
-	CommandGetTestResult       CommandCode = 0x0000017C
-	CommandPCRRead             CommandCode = 0x0000017E
-	CommandPolicyPCR           CommandCode = 0x0000017F
-	CommandPCRExtend           CommandCode = 0x00000182
-	CommandPolicyGetDigest     CommandCode = 0x00000189
-	CommandCreateLoaded        CommandCode = 0x00000191
+	CommandEvictControl               CommandCode = 0x00000120
+	CommandClear                      CommandCode = 0x00000126
+	CommandClearControl               CommandCode = 0x00000127
+	CommandHierarchyChangeAuth        CommandCode = 0x00000129
+	CommandCreatePrimary              CommandCode = 0x00000131
+	CommandDictionaryAttackLockReset  CommandCode = 0x00000139
+	CommandDictionaryAttackParameters CommandCode = 0x0000013A
+	CommandPCREvent                   CommandCode = 0x0000013C
+	CommandIncrementalSelfTest        CommandCode = 0x00000142
+	CommandSelfTest                   CommandCode = 0x00000143
+	CommandStartup                    CommandCode = 0x00000144
+	CommandShutdown                   CommandCode = 0x00000145
+	CommandObjectChangeAuth           CommandCode = 0x00000150
+	CommandCreate                     CommandCode = 0x00000153
+	CommandLoad                       CommandCode = 0x00000157
+	CommandUnseal                     CommandCode = 0x0000015E
+	CommandContextLoad                CommandCode = 0x00000161
+	CommandContextSave                CommandCode = 0x00000162
+	CommandFlushContext               CommandCode = 0x00000165
+	CommandLoadExternal               CommandCode = 0x00000167
+	CommandNVReadPublic               CommandCode = 0x00000169
+	CommandPolicyOR                   CommandCode = 0x00000171
+	CommandReadPublic                 CommandCode = 0x00000173
+	CommandStartAuthSession           CommandCode = 0x00000176
+	CommandGetCapability              CommandCode = 0x0000017A
+	CommandGetTestResult              CommandCode = 0x0000017C
+	CommandPCRRead                    CommandCode = 0x0000017E
+	CommandPolicyPCR                  CommandCode = 0x0000017F
+	CommandPCRExtend                  CommandCode = 0x00000182
+	CommandPolicyGetDigest            CommandCode = 0x00000189
+	CommandCreateLoaded               CommandCode = 0x00000191
 )
 
 const (

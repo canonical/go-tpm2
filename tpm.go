@@ -139,6 +139,10 @@ type TPMContext interface {
 	HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error
 
 	// Section 25 - Dictionary Attack Functions
+	DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth interface{}) error
+	DictionaryAttackParameters(lockHandle Handle, newMaxTries, newRecoveryTime, lockoutRecovery uint32,
+		lockHandleAuth interface{}) error
+
 	// Section 26 - Miscellaneous Management Functions
 	// Section 27 - Field Upgrade
 

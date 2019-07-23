@@ -39,6 +39,10 @@ func (c CommandCode) String() string {
 		return "TPM_CC_HierarchyChangeAuth"
 	case CommandCreatePrimary:
 		return "TPM_CC_CreatePrimary"
+	case CommandDictionaryAttackLockReset:
+		return "TPM_CC_DictionaryAttackLockReset"
+	case CommandDictionaryAttackParameters:
+		return "TPM_CC_DictionaryAttackParameters"
 	case CommandPCREvent:
 		return "TPM_CC_PCR_Event"
 	case CommandIncrementalSelfTest:

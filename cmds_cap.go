@@ -79,13 +79,8 @@ func (t *tpmContext) GetCapability(capability Capability, property, propertyCoun
 			remaining -= uint32(s)
 		}
 
-		if !moreData {
+		if !moreData || remaining <= 0 {
 			break
-		}
-
-		if remaining < 1 {
-			return nil, fmt.Errorf("expected number of responses to %s command received from the "+
-				"TPM, but it indicates that there are more to fetch", CommandGetCapability)
 		}
 	}
 
