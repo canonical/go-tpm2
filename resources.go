@@ -85,6 +85,7 @@ func (r *objectContext) invalidate() {
 type nvIndexContext struct {
 	tpm    *tpmContext
 	handle Handle
+	public NVPublic
 	name   Name
 }
 
@@ -157,11 +158,11 @@ func (r *sessionContext) NonceTPM() Nonce {
 }
 
 func makeNVIndexContext(t *tpmContext, handle Handle) (ResourceContext, error) {
-	_, name, err := t.nvReadPublic(handle)
+	pub, name, err := t.nvReadPublic(handle)
 	if err != nil {
 		return nil, err
 	}
-	return &nvIndexContext{handle: handle, name: name}, nil
+	return &nvIndexContext{handle: handle, public: *pub, name: name}, nil
 }
 
 func makeObjectContext(t *tpmContext, handle Handle) (ResourceContext, error) {

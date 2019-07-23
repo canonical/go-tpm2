@@ -21,10 +21,12 @@ type Handle uint32
 type Locality uint8
 type NVType uint32
 type ObjectAttributes uint32
+type PermanentAttributes uint32
 type Property uint32
 type PropertyPCR uint32
 type ResponseCode uint32
 type SessionType uint8
+type StartupClearAttributes uint32
 type StartupType uint16
 type StructTag uint16
 

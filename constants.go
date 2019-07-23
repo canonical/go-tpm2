@@ -434,3 +434,20 @@ const (
 	SessionTypePolicy
 	SessionTypeTrial = iota + 1
 )
+
+const (
+	AttrOwnerAuthSet PermanentAttributes = 1 << iota
+	AttrEndorsementAuthSet
+	AttrLockoutAuthSet
+	AttrDisableClear = 1 << (iota + 5)
+	AttrInLockout
+	AttrTPMGeneratedEPS
+)
+
+const (
+	AttrPhEnable StartupClearAttributes = 1 << iota
+	AttrShEnable
+	AttrEhEnable
+	AttrPhEnableNV
+	AttrOrderly = 1 << (iota + 27)
+)

@@ -208,7 +208,7 @@ type tpmContext struct {
 
 func (t *tpmContext) Close() error {
 	for _, rc := range t.resources {
-		rc.(resourceContextPrivate).setTpmContext(nil)
+		t.evictResourceContext(rc)
 	}
 
 	return t.tcti.Close()

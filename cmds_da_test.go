@@ -33,18 +33,6 @@ func getDictionaryAttackParams(t *testing.T, tpm TPMContext) (uint32, uint32, ui
 	return params[PropertyMaxAuthFail], params[PropertyLockoutInterval], params[PropertyLockoutRecovery]
 }
 
-func setLockoutAuth(t *testing.T, tpm TPMContext) {
-	if err := tpm.HierarchyChangeAuth(HandleLockout, Auth(testAuth), nil); err != nil {
-		t.Fatalf("HierarchyChangeAuth failed: %v", err)
-	}
-}
-
-func resetLockoutAuth(t *testing.T, tpm TPMContext) {
-	if err := tpm.HierarchyChangeAuth(HandleLockout, nil, testAuth); err != nil {
-		t.Fatalf("HierarchyChangeAuth failed: %v", err)
-	}
-}
-
 func TestDictionaryAttackParameters(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
@@ -96,13 +84,13 @@ func TestDictionaryAttackParameters(t *testing.T) {
 		run(t, nil)
 	})
 	t.Run("RequirePW", func(t *testing.T) {
-		setLockoutAuth(t, tpm)
-		defer resetLockoutAuth(t, tpm)
+		setHierarchyAuthForTest(t, tpm, HandleLockout)
+		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		run(t, testAuth)
 	})
 	t.Run("RequireSession", func(t *testing.T) {
-		setLockoutAuth(t, tpm)
-		defer resetLockoutAuth(t, tpm)
+		setHierarchyAuthForTest(t, tpm, HandleLockout)
+		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
 		sessionHandle, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
 			testAuth)
@@ -199,13 +187,13 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		run(t, nil)
 	})
 	t.Run("RequirePW", func(t *testing.T) {
-		setLockoutAuth(t, tpm)
-		defer resetLockoutAuth(t, tpm)
+		setHierarchyAuthForTest(t, tpm, HandleLockout)
+		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		run(t, testAuth)
 	})
 	t.Run("RequireSession", func(t *testing.T) {
-		setLockoutAuth(t, tpm)
-		defer resetLockoutAuth(t, tpm)
+		setHierarchyAuthForTest(t, tpm, HandleLockout)
+		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
 		sessionHandle, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
 			testAuth)

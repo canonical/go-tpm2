@@ -37,18 +37,6 @@ func TestCreatePrimary(t *testing.T) {
 		return objectHandle, outPublic
 	}
 
-	setHierarchyAuth := func(t *testing.T, handle Handle, auth []byte) {
-		if err := tpm.HierarchyChangeAuth(handle, Auth(auth), nil); err != nil {
-			t.Fatalf("HierarchyChangeAuth failed: %v", err)
-		}
-	}
-
-	clearHierarchyAuth := func(t *testing.T, handle Handle, auth []byte) {
-		if err := tpm.HierarchyChangeAuth(handle, nil, auth); err != nil {
-			t.Errorf("Failed to reset hierarchy auth: %v", err)
-		}
-	}
-
 	t.Run("RSASrk", func(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
@@ -167,8 +155,8 @@ func TestCreatePrimary(t *testing.T) {
 	})
 
 	t.Run("RequireAuthPW", func(t *testing.T) {
-		setHierarchyAuth(t, HandleOwner, testAuth)
-		defer clearHierarchyAuth(t, HandleOwner, testAuth)
+		setHierarchyAuthForTest(t, tpm, HandleOwner)
+		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		template := Public{
 			Type:    AlgorithmRSA,
@@ -191,8 +179,8 @@ func TestCreatePrimary(t *testing.T) {
 	})
 
 	t.Run("RequireAuthSession", func(t *testing.T) {
-		setHierarchyAuth(t, HandleOwner, testAuth)
-		defer clearHierarchyAuth(t, HandleOwner, testAuth)
+		setHierarchyAuthForTest(t, tpm, HandleOwner)
+		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		owner, _ := tpm.WrapHandle(HandleOwner)
 		sessionHandle, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil,
@@ -278,12 +266,193 @@ func TestCreatePrimary(t *testing.T) {
 	})
 }
 
+func TestClear(t *testing.T) {
+	tpm, _ := openTPMSimulatorForTesting(t)
+	defer closeTPM(t, tpm)
+
+	run := func(t *testing.T, auth interface{}) bool {
+		cleared := false
+
+		template := Public{
+			Type:    AlgorithmRSA,
+			NameAlg: AlgorithmSHA256,
+			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
+				AttrRestricted | AttrDecrypt,
+			Params: PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{
+						Algorithm: AlgorithmAES,
+						KeyBits:   SymKeyBitsU{Sym: 128},
+						Mode:      SymModeU{Sym: AlgorithmCFB}},
+					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+					KeyBits:  2048,
+					Exponent: 0}}}
+		platformPrimary, _, _, _, _, _, err :=
+			tpm.CreatePrimary(HandlePlatform, nil, &template, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("CreatePrimary failed: %v", err)
+		}
+		defer flushContext(t, tpm, platformPrimary)
+
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer func() {
+			if cleared {
+				return
+			}
+			flushContext(t, tpm, primary)
+		}()
+
+		platform := platformPrimary.Handle()
+		transient := primary.Handle()
+		persist := Handle(0x81020000)
+
+		if handle, err := tpm.WrapHandle(persist); err == nil {
+			_, err := tpm.EvictControl(HandleOwner, handle, persist, nil)
+			if err != nil {
+				t.Logf("EvictControl failed whilst trying to remove a handle at the start of "+
+					"the test: %v", err)
+			}
+		}
+		persistentPrimary, err := tpm.EvictControl(HandleOwner, primary, persist, nil)
+		if err != nil {
+			t.Fatalf("EvictControl failed: %v", err)
+		}
+		defer func() {
+			if cleared {
+				return
+			}
+			if _, err := tpm.EvictControl(HandleOwner, persistentPrimary, persist, nil); err != nil {
+				t.Errorf("EvictControl failed: %v", err)
+			}
+		}()
+
+		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
+		defer func() {
+			if cleared {
+				return
+			}
+			resetHierarchyAuth(t, tpm, HandleEndorsement)
+		}()
+
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionHandle)
+
+		if err := tpm.Clear(HandleLockout, auth); err != nil {
+			t.Fatalf("Clear failed: %v", err)
+		}
+
+		cleared = true
+
+		handles, err := tpm.GetCapabilityHandles(platform, 1)
+		if err != nil {
+			t.Errorf("GetCapability failed: %v", err)
+		}
+		if len(handles) != 1 {
+			t.Errorf("Platform transient handle was cleared")
+		}
+
+		handles, err = tpm.GetCapabilityHandles(persist, 1)
+		if err != nil {
+			t.Errorf("GetCapability failed: %v", err)
+		}
+		if len(handles) != 0 {
+			t.Errorf("Persistent handle was not cleared")
+		}
+
+		handles, err = tpm.GetCapabilityHandles(transient, 1)
+		if err != nil {
+			t.Errorf("GetCapability failed: %v", err)
+		}
+		if len(handles) != 0 {
+			t.Errorf("Transient handle was not cleared")
+		}
+
+		if platformPrimary.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+			t.Errorf("Platform transient handle should not have been invalidated")
+		}
+		if primary.Handle() != HandleNull {
+			t.Errorf("Transient handle should have been invalidated")
+		}
+		if persistentPrimary.Handle() != HandleNull {
+			t.Errorf("Persistent handle should have been invalidated")
+		}
+		if owner.Handle() != HandleOwner {
+			t.Errorf("Permanent handle should not have been invalidated")
+		}
+		if sessionHandle.Handle()&HandleTypePolicySession != HandleTypePolicySession {
+			t.Errorf("Session handle should not have been invalidated")
+		}
+		props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1)
+		if err != nil {
+			t.Fatalf("GetCapability failed: %v", err)
+		}
+		if PermanentAttributes(props[0].Value)&AttrEndorsementAuthSet > 0 {
+			t.Errorf("Clear did not clear the EH auth")
+		}
+
+		return true
+	}
+
+	t.Run("NoAuth", func(t *testing.T) {
+		run(t, nil)
+	})
+	t.Run("RequirePW", func(t *testing.T) {
+		setHierarchyAuthForTest(t, tpm, HandleLockout)
+		cleared := false
+		defer func() {
+			if cleared {
+				return
+			}
+			resetHierarchyAuth(t, tpm, HandleLockout)
+		}()
+		cleared = run(t, testAuth)
+	})
+	t.Run("RequireBoundSession", func(t *testing.T) {
+		setHierarchyAuthForTest(t, tpm, HandleLockout)
+		cleared := false
+		defer func() {
+			if cleared {
+				return
+			}
+			resetHierarchyAuth(t, tpm, HandleLockout)
+		}()
+		lockout, _ := tpm.WrapHandle(HandleLockout)
+		sessionHandle, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
+			testAuth)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionHandle)
+		cleared = run(t, &Session{Handle: sessionHandle, AuthValue: dummyAuth})
+	})
+	t.Run("RequireUnboundSession", func(t *testing.T) {
+		setHierarchyAuthForTest(t, tpm, HandleLockout)
+		cleared := false
+		defer func() {
+			if cleared {
+				return
+			}
+			resetHierarchyAuth(t, tpm, HandleLockout)
+		}()
+		sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionHandle)
+		cleared = run(t, &Session{Handle: sessionHandle, AuthValue: testAuth})
+	})
+}
+
 func TestHierarchyChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run1 := func(t *testing.T, hierarchy Handle, newAuth []byte, session interface{}) {
-		if err := tpm.HierarchyChangeAuth(hierarchy, Auth(newAuth), session); err != nil {
+	run1 := func(t *testing.T, hierarchy Handle, session interface{}) {
+		if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), session); err != nil {
 			t.Fatalf("HierarchyChangeAuth failed: %v", err)
 		}
 	}
@@ -298,8 +467,8 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 	}
 
-	resetHierarchyAuth := func(t *testing.T, hierarchy Handle, auth []byte) {
-		tpm.HierarchyChangeAuth(hierarchy, nil, auth)
+	resetHierarchyAuthIgnoringErrors := func(t *testing.T, hierarchy Handle) {
+		tpm.HierarchyChangeAuth(hierarchy, nil, testAuth)
 	}
 
 	createSrk := func(t *testing.T, tpm TPMContext, session interface{}) ResourceContext {
@@ -351,15 +520,15 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	}
 
 	t.Run("OwnerWithPW", func(t *testing.T) {
-		run1(t, HandleOwner, testAuth, nil)
-		defer resetHierarchyAuth(t, HandleOwner, testAuth)
+		run1(t, HandleOwner, nil)
+		defer resetHierarchyAuthIgnoringErrors(t, HandleOwner)
 
 		run2(t, HandleOwner, testAuth, createSrk)
 	})
 
 	t.Run("EndorsementWithPW", func(t *testing.T) {
-		run1(t, HandleEndorsement, testAuth, nil)
-		defer resetHierarchyAuth(t, HandleEndorsement, testAuth)
+		run1(t, HandleEndorsement, nil)
+		defer resetHierarchyAuthIgnoringErrors(t, HandleEndorsement)
 
 		run2(t, HandleEndorsement, testAuth, createEk)
 	})
@@ -374,8 +543,8 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession, AuthValue: dummyAuth}
 
-		run1(t, HandleOwner, testAuth, &session)
-		defer resetHierarchyAuth(t, HandleOwner, testAuth)
+		run1(t, HandleOwner, &session)
+		defer resetHierarchyAuthIgnoringErrors(t, HandleOwner)
 
 		session.AuthValue = testAuth
 		run2(t, HandleOwner, &session, createSrk)
@@ -390,8 +559,8 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		session := Session{Handle: sessionHandle, Attrs: AttrContinueSession}
 
-		run1(t, HandleOwner, testAuth, &session)
-		defer resetHierarchyAuth(t, HandleOwner, testAuth)
+		run1(t, HandleOwner, &session)
+		defer resetHierarchyAuthIgnoringErrors(t, HandleOwner)
 
 		session.AuthValue = testAuth
 		run2(t, HandleOwner, &session, createSrk)

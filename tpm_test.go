@@ -24,6 +24,18 @@ var (
 	testAuth  = []byte("1234")
 )
 
+func setHierarchyAuthForTest(t *testing.T, tpm TPMContext, hierarchy Handle) {
+	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
+		t.Fatalf("HierarchyChangeAuth failed: %v", err)
+	}
+}
+
+func resetHierarchyAuth(t *testing.T, tpm TPMContext, hierarchy Handle) {
+	if err := tpm.HierarchyChangeAuth(hierarchy, nil, testAuth); err != nil {
+		t.Errorf("HierarchyChangeAuth failed: %v", err)
+	}
+}
+
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if public.Type != template.Type {
 		t.Errorf("public object has wrong type: %v", public.Type)

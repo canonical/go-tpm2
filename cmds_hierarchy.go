@@ -4,6 +4,10 @@
 
 package tpm2
 
+import (
+	"fmt"
+)
+
 func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
 	*CreationData, Digest, *TkCreation, Name, error) {
@@ -40,7 +44,71 @@ func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 }
 
 func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
-	return t.RunCommand(CommandClear, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
+	responseCode, responseTag, response, err :=
+		t.RunCommandAndReturnRawResponse(CommandClear,
+			HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
+	if err != nil {
+		return err
+	}
+
+	updatedAuthHandleAuth := authHandleAuth
+	var sc *sessionContext
+
+	// If the session is not bound to authHandle, the TPM will respond with a HMAC generated with a key
+	// derived from the empty auth
+	switch s := authHandleAuth.(type) {
+	case *Session:
+		sc = s.Handle.(*sessionContext)
+		if sc.boundResource.Handle() != authHandle {
+			updatedAuthHandleAuth = &Session{Handle: s.Handle, Attrs: s.Attrs}
+		}
+	}
+
+	if err := t.ProcessResponse(CommandClear, responseCode, responseTag, response, Separator,
+		Separator, HandleWithAuth{Handle: authHandle, Auth: updatedAuthHandleAuth}); err != nil {
+		return err
+	}
+
+	getHandles := func(handleType Handle, out map[Handle]struct{}) error {
+		handles, err := t.GetCapabilityHandles(handleType, CapabilityMaxHandles)
+		if err != nil {
+			return fmt.Errorf("cannot fetch handles from TPM after clear: %v", err)
+		}
+		var empty struct{}
+		for _, handle := range handles {
+			out[handle] = empty
+		}
+		return nil
+	}
+
+	handles := make(map[Handle]struct{})
+	if err := getHandles(HandleTypeTransientObject, handles); err != nil {
+		return err
+	}
+	if err := getHandles(HandleTypePersistentObject, handles); err != nil {
+		return err
+	}
+
+	for _, rc := range t.resources {
+		switch c := rc.(type) {
+		case *permanentContext:
+			continue
+		case *objectContext:
+			if _, exists := handles[c.handle]; exists {
+				continue
+			}
+		case *nvIndexContext:
+			if c.public.Attrs&AttrNVPlatformCreate > 0 {
+				continue
+			}
+		case *sessionContext:
+			continue
+		}
+
+		t.evictResourceContext(rc)
+	}
+
+	return nil
 }
 
 func (t *tpmContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
@@ -74,7 +142,8 @@ func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 		// If the session was bound to authHandle, it becomes unbound now. Future commands must provide
 		// the value of newAuth with the session for commands operating on authHandle that require
 		// an authorization.
-		// This is deferred because the HMAC in the response is generated from the original session key
+		// This is deferred because the HMAC in the response is generated from a key that doesn't include
+		// the auth value
 		if sc != nil && sc.boundResource.Handle() == authHandle {
 			null, _ := t.WrapHandle(HandleNull)
 			sc.boundResource = null

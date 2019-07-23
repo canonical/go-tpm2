@@ -78,8 +78,7 @@ func TestEvictControl(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuth interface{}) {
-		handle, err := tpm.WrapHandle(persist)
-		if err == nil {
+		if handle, err := tpm.WrapHandle(persist); err == nil {
 			_, err := tpm.EvictControl(HandleOwner, handle, persist, authAuth)
 			if err != nil {
 				t.Logf("EvictControl failed whilst trying to remove a handle at the start of "+
