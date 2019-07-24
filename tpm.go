@@ -66,7 +66,7 @@ type TPMContext interface {
 	// Section 11 - Session Commands
 	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 		authHash AlgorithmId, authValue []byte) (ResourceContext, error)
-	// PolicyRestart(sessionHandle ResourceContext) error
+	PolicyRestart(sessionHandle ResourceContext) error
 
 	// Section 12 - Object Commands
 	Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,

@@ -5,6 +5,8 @@
 package tpm2
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"testing"
 )
 
@@ -143,5 +145,41 @@ func TestStartAuthSession(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPolicyRestart(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer tpm.Close()
+
+	sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+
+	if err := tpm.PolicyPCR(sessionHandle, nil,
+		PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}}); err != nil {
+		t.Fatalf("PolicyPCR failed: %v", err)
+	}
+
+	digest, err := tpm.PolicyGetDigest(sessionHandle)
+	if err != nil {
+		t.Fatalf("PolicyGetDigest failed: %v", err)
+	}
+
+	if err := tpm.PolicyRestart(sessionHandle); err != nil {
+		t.Fatalf("PolicyRestart failed: %v", err)
+	}
+
+	restartedDigest, err := tpm.PolicyGetDigest(sessionHandle)
+	if err != nil {
+		t.Fatalf("PolicyGetDigest failed: %v", err)
+	}
+
+	if bytes.Equal(digest, make(Digest, sha256.Size)) {
+		t.Errorf("Original digest should not be zero")
+	}
+	if !bytes.Equal(restartedDigest, make(Digest, sha256.Size)) {
+		t.Errorf("Digest wasn't reset to zero")
 	}
 }

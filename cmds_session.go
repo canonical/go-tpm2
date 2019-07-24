@@ -84,3 +84,10 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	t.addResourceContext(sessionContext)
 	return sessionContext, nil
 }
+
+func (t *tpmContext) PolicyRestart(sessionHandle ResourceContext) error {
+	if err := t.checkResourceContextParam(sessionHandle, "sessionHandle"); err != nil {
+		return err
+	}
+	return t.RunCommand(CommandPolicyRestart, sessionHandle)
+}
