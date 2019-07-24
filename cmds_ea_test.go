@@ -7,6 +7,7 @@ package tpm2
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"testing"
 	"time"
@@ -20,15 +21,14 @@ func TestPolicySecret(t *testing.T) {
 	defer flushContext(t, tpm, primary)
 
 	trialDigest := func(t *testing.T, policyRef Nonce) Digest {
-		digestSize, _ := cryptGetDigestSize(AlgorithmSHA256)
-		hasher := cryptHashAlgToGoConstructor(AlgorithmSHA256)()
-		hasher.Write(make([]byte, digestSize))
+		hasher := sha256.New()
+		hasher.Write(make([]byte, sha256.Size))
 		binary.Write(hasher, binary.BigEndian, CommandPolicySecret)
 		hasher.Write(primary.Name())
 
 		newDigest1 := hasher.Sum(nil)
 
-		hasher = cryptHashAlgToGoConstructor(AlgorithmSHA256)()
+		hasher = sha256.New()
 		hasher.Write(newDigest1)
 		hasher.Write(policyRef)
 
@@ -243,8 +243,7 @@ func TestPolicyOR(t *testing.T) {
 
 	digestList := []Digest{trialPolicyDigest}
 	for i := 0; i < 4; i++ {
-		digestSize, _ := cryptGetDigestSize(AlgorithmSHA256)
-		digest := make(Digest, digestSize)
+		digest := make(Digest, sha256.Size)
 		if _, err := rand.Read(digest); err != nil {
 			t.Fatalf("Failed to get random data: %v", err)
 		}
@@ -274,9 +273,8 @@ func TestPolicyOR(t *testing.T) {
 		digests.Write(digest)
 	}
 
-	digestSize, _ := cryptGetDigestSize(AlgorithmSHA256)
-	hasher := cryptHashAlgToGoConstructor(AlgorithmSHA256)()
-	hasher.Write(make([]byte, digestSize))
+	hasher := sha256.New()
+	hasher.Write(make([]byte, sha256.Size))
 	binary.Write(hasher, binary.BigEndian, CommandPolicyOR)
 	hasher.Write(digests.Bytes())
 
@@ -320,7 +318,7 @@ func TestPolicyPCR(t *testing.T) {
 			t.Fatalf("PCRRead failed: %v", err)
 		}
 
-		hasher := cryptHashAlgToGoConstructor(AlgorithmSHA256)()
+		hasher := sha256.New()
 		j := 0
 		for _, selection := range pcrs {
 			for _ = range selection.Select {
@@ -393,9 +391,8 @@ func TestPolicyPCR(t *testing.T) {
 
 			pcrDigest := calculatePCRDigest(data.pcrs)
 
-			digestSize, _ := cryptGetDigestSize(AlgorithmSHA256)
-			hasher := cryptHashAlgToGoConstructor(AlgorithmSHA256)()
-			hasher.Write(make([]byte, digestSize))
+			hasher := sha256.New()
+			hasher.Write(make([]byte, sha256.Size))
 			binary.Write(hasher, binary.BigEndian, CommandPolicyPCR)
 			MarshalToWriter(hasher, data.pcrs)
 			hasher.Write(pcrDigest)
