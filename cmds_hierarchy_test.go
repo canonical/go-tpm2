@@ -258,7 +258,7 @@ func TestCreatePrimary(t *testing.T) {
 			t.Fatalf("CreatePrimary should fail with an invalid template")
 		}
 		if err.Error() != "cannot marshal command parameters for command TPM_CC_CreatePrimary: cannot "+
-			"marshal pointer type *tpm2.Public: cannot marshal struct type tpm2.Public: cannot "+
+			"marshal pointer type *tpm2.Public2B: cannot marshal struct type tpm2.Public2B: cannot "+
 			"marshal field Params: cannot marshal struct type tpm2.PublicParamsU: error "+
 			"marshalling union struct: cannot marshal pointer type *tpm2.ECCParams: nil pointer" {
 			t.Errorf("CreatePrimary returned an unexpected error: %v", err)

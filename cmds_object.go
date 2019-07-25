@@ -20,18 +20,20 @@ func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	}
 
 	var outPrivate Private
-	var outPublic Public
-	var creationData CreationData
+	var outPublic Public2B
+	var creationData CreationData2B
 	var creationHash Digest
 	var creationTicket TkCreation
 
 	if err := t.RunCommand(CommandCreate, ResourceWithAuth{Context: parentContext, Auth: parentContextAuth},
-		Separator, inSensitive, inPublic, outsideInfo, creationPCR, Separator, Separator, &outPrivate,
-		&outPublic, &creationData, &creationHash, &creationTicket); err != nil {
+		Separator, (*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), outsideInfo, creationPCR,
+		Separator, Separator, &outPrivate, &outPublic, &creationData, &creationHash,
+		&creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
-	return outPrivate, &outPublic, &creationData, creationHash, &creationTicket, nil
+	return outPrivate, (*Public)(&outPublic), (*CreationData)(&creationData), creationHash, &creationTicket,
+		nil
 }
 
 func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
@@ -47,7 +49,8 @@ func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	var name Name
 
 	if err := t.RunCommand(CommandLoad, ResourceWithAuth{Context: parentContext, Auth: parentContextAuth},
-		Separator, inPrivate, inPublic, Separator, &objectHandle, Separator, &name); err != nil {
+		Separator, inPrivate, (*Public2B)(inPublic), Separator, &objectHandle, Separator,
+		&name); err != nil {
 		return nil, nil, err
 	}
 
@@ -70,8 +73,8 @@ func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoadExternal, Separator, inPrivate, inPublic, hierarchy, Separator,
-		&objectHandle, Separator, &name); err != nil {
+	if err := t.RunCommand(CommandLoadExternal, Separator, (*Sensitive2B)(inPrivate), (*Public2B)(inPublic),
+		hierarchy, Separator, &objectHandle, Separator, &name); err != nil {
 		return nil, nil, err
 	}
 
@@ -86,14 +89,14 @@ func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 }
 
 func (t *tpmContext) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
-	var outPublic Public
+	var outPublic Public2B
 	var name Name
 	var qualifiedName Name
 	if err := t.RunCommand(CommandReadPublic, objectHandle, Separator, Separator, Separator, &outPublic,
 		&name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
 	}
-	return &outPublic, name, qualifiedName, nil
+	return (*Public)(&outPublic), name, qualifiedName, nil
 }
 
 func (t *tpmContext) ReadPublic(objectContext ResourceContext) (*Public, Name, Name, error) {
@@ -152,21 +155,22 @@ func (t *tpmContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 
 	var objectHandle Handle
 	var outPrivate Private
-	var outPublic Public
+	var outPublic Public2B
 	var name Name
 
 	if err := t.RunCommand(CommandCreateLoaded,
-		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator, inSensitive,
-		inPublic, Separator, &objectHandle, Separator, &outPrivate, &outPublic, &name); err != nil {
+		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		(*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), Separator, &objectHandle, Separator,
+		&outPrivate, &outPublic, &name); err != nil {
 		return nil, nil, nil, nil, err
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
-	outPubCopy := outPublic.Copy()
+	outPubCopy := (*Public)(&outPublic).Copy()
 	if outPubCopy != nil {
 		objectContext.public = *outPubCopy
 	}
 	t.addResourceContext(objectContext)
 
-	return objectContext, outPrivate, &outPublic, name, nil
+	return objectContext, outPrivate, (*Public)(&outPublic), name, nil
 }

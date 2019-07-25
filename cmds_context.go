@@ -10,7 +10,7 @@ import (
 )
 
 type objectContextData struct {
-	Public *Public
+	Public *Public2B
 	Name
 }
 
@@ -66,7 +66,7 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData,
 	switch c := context.(type) {
 	case *objectContext:
 		d.ContextType = contextTypeObject
-		d.Data.Object = &objectContextData{Public: &c.public, Name: c.name}
+		d.Data.Object = &objectContextData{Public: (*Public2B)(&c.public), Name: c.name}
 	case *sessionContext:
 		d.ContextType = contextTypeSession
 		d.Data.Session = &sessionContextData{HashAlg: c.hashAlg, BoundResource: c.boundResource,
@@ -88,7 +88,8 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 
 	switch d.ContextType {
 	case contextTypeObject:
-		return d.TPMBlob, &objectContext{public: *d.Data.Object.Public, name: d.Data.Object.Name}, nil
+		return d.TPMBlob, &objectContext{public: Public(*d.Data.Object.Public),
+			name: d.Data.Object.Name}, nil
 	case contextTypeSession:
 		return d.TPMBlob, &sessionContext{hashAlg: d.Data.Session.HashAlg,
 			boundResource: d.Data.Session.BoundResource, sessionKey: d.Data.Session.SessionKey,

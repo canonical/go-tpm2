@@ -433,7 +433,9 @@ type CreationData struct {
 	OutsideInfo         Data
 }
 
-func (c CreationData) StructFlags() StructFlags {
+type CreationData2B CreationData
+
+func (c CreationData2B) StructFlags() StructFlags {
 	return StructFlagSized
 }
 
@@ -651,7 +653,7 @@ type Public struct {
 }
 
 func (p Public) StructFlags() StructFlags {
-	return StructFlagSized | StructFlagContainsUnion
+	return StructFlagContainsUnion
 }
 
 func (p Public) Selector(field reflect.StructField) interface{} {
@@ -675,6 +677,16 @@ func (p *Public) Copy() *Public {
 	return &c
 }
 
+type Public2B Public
+
+func (p Public2B) StructFlags() StructFlags {
+	return StructFlagSized | StructFlagContainsUnion
+}
+
+func (p Public2B) Selector(field reflect.StructField) interface{} {
+	return (Public)(p).Selector(field)
+}
+
 type NVPublic struct {
 	Index      Handle
 	NameAlg    AlgorithmId
@@ -683,7 +695,9 @@ type NVPublic struct {
 	Size       uint16
 }
 
-func (p NVPublic) StructFlags() StructFlags {
+type NVPublic2B NVPublic
+
+func (p NVPublic2B) StructFlags() StructFlags {
 	return StructFlagSized
 }
 
@@ -692,7 +706,9 @@ type SensitiveCreate struct {
 	Data     SensitiveData
 }
 
-func (s SensitiveCreate) StructFlags() StructFlags {
+type SensitiveCreate2B SensitiveCreate
+
+func (s SensitiveCreate2B) StructFlags() StructFlags {
 	return StructFlagSized
 }
 
@@ -704,11 +720,21 @@ type Sensitive struct {
 }
 
 func (s Sensitive) StructFlags() StructFlags {
-	return StructFlagSized | StructFlagContainsUnion
+	return StructFlagContainsUnion
 }
 
 func (s Sensitive) Selector(field reflect.StructField) interface{} {
 	return s.Type
+}
+
+type Sensitive2B Sensitive
+
+func (s Sensitive2B) StructFlags() StructFlags {
+	return StructFlagSized | StructFlagContainsUnion
+}
+
+func (s Sensitive2B) Selector(field reflect.StructField) interface{} {
+	return Sensitive(s).Selector(field)
 }
 
 type CapabilityData struct {
