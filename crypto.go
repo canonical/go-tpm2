@@ -271,13 +271,12 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		return nil, nil, fmt.Errorf("cannot determine size of nameAlg: %v", err)
 	}
 
-	salt := make([]byte, digestSize)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, nil, fmt.Errorf("cannot read random bytes for salt: %v", err)
-	}
-
 	switch public.Type {
 	case AlgorithmRSA:
+		salt := make([]byte, digestSize)
+		if _, err := rand.Read(salt); err != nil {
+			return nil, nil, fmt.Errorf("cannot read random bytes for salt: %v", err)
+		}
 		encryptedSalt, err := cryptEncryptRSA(public, AlgorithmOAEP, salt, []byte("SECRET"))
 		return encryptedSalt, salt, err
 	case AlgorithmECC:
