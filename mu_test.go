@@ -327,55 +327,50 @@ type TestStructWithPointerSizedStruct struct {
 }
 
 func TestMarshalSizedStructFromPointer(t *testing.T) {
-	a := TestStructWithPointerSizedStruct{
-		A: 5665443,
-		S: &TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}}
-	out, err := MarshalToBytes(a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
+	for _, data := range []struct {
+		desc string
+		in   TestStructWithPointerSizedStruct
+		out  []byte
+	}{
+		{
+			desc: "Normal",
+			in: TestStructWithPointerSizedStruct{
+				A: 5665443,
+				S: &TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}},
+			out: []byte{0x00, 0x56, 0x72, 0xa3, 0x00, 0x14, 0x00, 0x0b, 0x81, 0xca, 0x00, 0x00,
+				0x00, 0x03, 0x00, 0x00, 0x56, 0xad, 0x00, 0x0d, 0x0a, 0x0f, 0x1a, 0x93, 0xb8,
+				0x8e},
+		},
+		{
+			desc: "NilPointer",
+			in:   TestStructWithPointerSizedStruct{A: 67764232},
+			out:  []byte{0x04, 0x0a, 0x00, 0x08, 0x00, 0x00},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(data.in)
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
+			}
 
-	if !bytes.Equal(out, []byte{0x00, 0x56, 0x72, 0xa3, 0x00, 0x14, 0x00, 0x0b, 0x81, 0xca, 0x00, 0x00,
-		0x00, 0x03, 0x00, 0x00, 0x56, 0xad, 0x00, 0x0d, 0x0a, 0x0f, 0x1a, 0x93, 0xb8, 0x8e}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
+			if !bytes.Equal(out, data.out) {
+				t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+			}
 
-	var ao TestStructWithPointerSizedStruct
+			var a TestStructWithPointerSizedStruct
 
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	b := TestStructWithPointerSizedStruct{A: 67764232}
-	out, err = MarshalToBytes(b)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x04, 0x0a, 0x00, 0x08, 0x00, 0x00}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
-
-	var bo TestStructWithPointerSizedStruct
-
-	n, err = UnmarshalFromBytes(out, &bo)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if !reflect.DeepEqual(b, bo) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
 	}
 }
 
@@ -432,108 +427,63 @@ func (c TestUnionContainer) Selector(field reflect.StructField) interface{} {
 }
 
 func TestMarshalUnion(t *testing.T) {
-	a := TestUnionContainer{
-		Select: 1,
-		Union:  TestUnion{A: &TestStructSimple{56324, 657763432, true, TestListUint32{98767643, 5453423}}}}
-	out, err := MarshalToBytes(a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
+	for _, data := range []struct {
+		desc string
+		in   TestUnionContainer
+		out  []byte
+	}{
+		{
+			desc: "1",
+			in: TestUnionContainer{
+				Select: 1,
+				Union: TestUnion{A: &TestStructSimple{56324, 657763432, true,
+					TestListUint32{98767643, 5453423}}}},
+			out: []byte{0x00, 0x00, 0x00, 0x01, 0xdc, 0x04, 0x27, 0x34, 0xac, 0x68, 0x01, 0x00, 0x00,
+				0x00, 0x02, 0x05, 0xe3, 0x13, 0x1b, 0x00, 0x53, 0x36, 0x6f},
+		},
+		{
+			desc: "2",
+			in: TestUnionContainer{
+				Select: 2,
+				Union:  TestUnion{B: TestListUint32{3287743, 98731}}},
+			out: []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x32, 0x2a, 0xbf, 0x00,
+				0x01, 0x81, 0xab},
+		},
+		{
+			desc: "3",
+			in:   TestUnionContainer{Select: 3, Union: TestUnion{C: 4321}},
+			out:  []byte{0x00, 0x00, 0x00, 0x03, 0x10, 0xe1},
+		},
+		{
+			desc: "4",
+			in:   TestUnionContainer{Select: 4},
+			out:  []byte{0x00, 0x00, 0x00, 0x04},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(data.in)
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
+			}
 
-	if !bytes.Equal(out, []byte{0x00, 0x00, 0x00, 0x01, 0xdc, 0x04, 0x27, 0x34, 0xac, 0x68, 0x01, 0x00, 0x00,
-		0x00, 0x02, 0x05, 0xe3, 0x13, 0x1b, 0x00, 0x53, 0x36, 0x6f}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
+			if !bytes.Equal(out, data.out) {
+				t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+			}
 
-	var ao TestUnionContainer
+			var a TestUnionContainer
 
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	b := TestUnionContainer{
-		Select: 2,
-		Union:  TestUnion{B: TestListUint32{3287743, 98731}}}
-	out, err = MarshalToBytes(b)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x32, 0x2a, 0xbf, 0x00,
-		0x01, 0x81, 0xab}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
-
-	var bo TestUnionContainer
-
-	n, err = UnmarshalFromBytes(out, &bo)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if !reflect.DeepEqual(b, bo) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	c := TestUnionContainer{
-		Select: 3,
-		Union:  TestUnion{C: 4321}}
-	out, err = MarshalToBytes(c)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x00, 0x00, 0x00, 0x03, 0x10, 0xe1}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
-
-	var co TestUnionContainer
-
-	n, err = UnmarshalFromBytes(out, &co)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if !reflect.DeepEqual(c, co) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	d := TestUnionContainer{Select: 4}
-	out, err = MarshalToBytes(d)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x00, 0x00, 0x00, 0x04}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
-
-	var do TestUnionContainer
-
-	n, err = UnmarshalFromBytes(out, &do)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if !reflect.DeepEqual(d, do) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
 	}
 }
 
