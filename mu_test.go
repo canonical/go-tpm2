@@ -99,14 +99,14 @@ func TestMarshalRawSlice(t *testing.T) {
 	}
 }
 
-type TestSizedBufferU16 []byte
+type TestSizedBuffer []byte
 
-func (b TestSizedBufferU16) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+func (b TestSizedBuffer) SliceType() SliceType {
+	return SliceTypeSizedBuffer
 }
 
-func TestMarshalSizedBufferU16(t *testing.T) {
-	a := TestSizedBufferU16{0x2f, 0x74, 0x68, 0x3f, 0x15, 0x43, 0x1d, 0x01, 0xea, 0x28, 0xad, 0xe2, 0x6c,
+func TestMarshalSizedBuffer(t *testing.T) {
+	a := TestSizedBuffer{0x2f, 0x74, 0x68, 0x3f, 0x15, 0x43, 0x1d, 0x01, 0xea, 0x28, 0xad, 0xe2, 0x6c,
 		0x4d, 0x00, 0x9b}
 	out, err := MarshalToBytes(a)
 	if err != nil {
@@ -118,41 +118,7 @@ func TestMarshalSizedBufferU16(t *testing.T) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	var ao TestSizedBufferU16
-
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-}
-
-type TestSizedBufferU8 []byte
-
-func (b TestSizedBufferU8) SliceType() SliceType {
-	return SliceTypeSizedBufferU8
-}
-
-func TestMarshalSizedBufferU8(t *testing.T) {
-	a := TestSizedBufferU8{0x2f, 0x74, 0x68, 0x3f, 0x15, 0x43, 0x1d, 0x01, 0xea, 0x28, 0xad, 0xe2, 0x6c,
-		0x4d, 0x00, 0x9b}
-	out, err := MarshalToBytes(a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x10, 0x2f, 0x74, 0x68, 0x3f, 0x15, 0x43, 0x1d, 0x01, 0xea, 0x28,
-		0xad, 0xe2, 0x6c, 0x4d, 0x00, 0x9b}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
-
-	var ao TestSizedBufferU8
+	var ao TestSizedBuffer
 
 	n, err := UnmarshalFromBytes(out, &ao)
 	if err != nil {

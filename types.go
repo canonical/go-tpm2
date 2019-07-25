@@ -57,103 +57,103 @@ func (a NVAttributes) Type() NVType {
 type Auth Digest
 
 func (a Auth) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type ContextData []byte
 
 func (d ContextData) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Data []byte
 
 func (d Data) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Digest []byte
 
 func (d Digest) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type ECCParameter []byte
 
 func (e ECCParameter) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type EncryptedSecret []byte
 
 func (s EncryptedSecret) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Event []byte
 
 func (e Event) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Label []byte
 
 func (l Label) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type MaxBuffer []byte
 
 func (b MaxBuffer) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Name []byte
 
 func (n Name) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Nonce Digest
 
 func (n Nonce) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Private []byte
 
 func (p Private) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type PrivateKeyRSA []byte
 
 func (k PrivateKeyRSA) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type PublicKeyRSA []byte
 
 func (k PublicKeyRSA) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type SensitiveData []byte
 
 func (s SensitiveData) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type SymKey []byte
 
 func (s SymKey) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type Timeout []byte
 
 func (t Timeout) SliceType() SliceType {
-	return SliceTypeSizedBufferU16
+	return SliceTypeSizedBuffer
 }
 
 type PublicIDU struct {

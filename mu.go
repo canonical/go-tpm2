@@ -27,8 +27,7 @@ type SliceType int
 type StructFlags int
 
 const (
-	SliceTypeSizedBufferU16 SliceType = iota
-	SliceTypeSizedBufferU8
+	SliceTypeSizedBuffer SliceType = iota
 	SliceTypeList
 )
 
@@ -252,12 +251,8 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	if trait, hasTrait := slice.Interface().(SliceTrait); hasTrait {
 		switch trait.SliceType() {
-		case SliceTypeSizedBufferU16:
+		case SliceTypeSizedBuffer:
 			if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
-				return fmt.Errorf("cannot write size of sized buffer: %v", err)
-			}
-		case SliceTypeSizedBufferU8:
-			if err := binary.Write(buf, binary.BigEndian, uint8(slice.Len())); err != nil {
 				return fmt.Errorf("cannot write size of sized buffer: %v", err)
 			}
 		case SliceTypeList:
@@ -430,14 +425,8 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	var l int
 	if trait, hasTrait := slice.Interface().(SliceTrait); hasTrait {
 		switch trait.SliceType() {
-		case SliceTypeSizedBufferU16:
+		case SliceTypeSizedBuffer:
 			var tmp uint16
-			if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
-				return fmt.Errorf("cannot read size of sized buffer: %v", err)
-			}
-			l = int(tmp)
-		case SliceTypeSizedBufferU8:
-			var tmp uint8
 			if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
 				return fmt.Errorf("cannot read size of sized buffer: %v", err)
 			}
