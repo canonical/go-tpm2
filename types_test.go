@@ -7,6 +7,7 @@ package tpm2
 import (
 	"bytes"
 	"crypto/sha1"
+	"crypto/sha256"
 	"reflect"
 	"testing"
 )
@@ -25,63 +26,66 @@ func (c TestPublicIDUContainer) Selector(field reflect.StructField) interface{} 
 }
 
 func TestPublicIDUnion(t *testing.T) {
-	a := TestPublicIDUContainer{Alg: AlgorithmRSA, Unique: PublicIDU{RSA: PublicKeyRSA{0x01, 0x02, 0x03}}}
-	out, err := MarshalToBytes(a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
+	for _, data := range []struct {
+		desc string
+		in   TestPublicIDUContainer
+		out  []byte
+		err  string
+	}{
+		{
+			desc: "RSA",
+			in: TestPublicIDUContainer{Alg: AlgorithmRSA,
+				Unique: PublicIDU{RSA: PublicKeyRSA{0x01, 0x02, 0x03}}},
+			out: []byte{0x00, 0x01, 0x00, 0x03, 0x01, 0x02, 0x03},
+		},
+		{
+			desc: "KeyedHash",
+			in: TestPublicIDUContainer{Alg: AlgorithmKeyedHash,
+				Unique: PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}},
+			out: []byte{0x00, 0x08, 0x00, 0x04, 0x04, 0x05, 0x06, 0x07},
+		},
+		{
+			desc: "InvalidSelector",
+			in: TestPublicIDUContainer{Alg: AlgorithmNull,
+				Unique: PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}},
+			err: "cannot marshal struct type tpm2.TestPublicIDUContainer: cannot marshal field " +
+				"Unique: cannot marshal struct type tpm2.PublicIDU: error marshalling union " +
+				"struct: cannot select union member: invalid selector value: TPM_ALG_NULL",
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(data.in)
+			if data.err != "" {
+				if err == nil {
+					t.Fatalf("MarshaToBytes was expected to fail")
+				}
+				if err.Error() != data.err {
+					t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+				}
+				return
+			}
 
-	if !bytes.Equal(out, []byte{0x00, 0x01, 0x00, 0x03, 0x01, 0x02, 0x03}) {
-		t.Fatalf("MarshalToBytes returned an unexpected byte sequence: %x", out)
-	}
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
+			}
 
-	var ao TestPublicIDUContainer
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+			if !bytes.Equal(out, data.out) {
+				t.Fatalf("MarshalToBytes returned an unexpected byte sequence: %x", out)
+			}
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
+			var a TestPublicIDUContainer
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
 
-	b := TestPublicIDUContainer{Alg: AlgorithmKeyedHash,
-		Unique: PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}}
-	out, err = MarshalToBytes(b)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x00, 0x08, 0x00, 0x04, 0x04, 0x05, 0x06, 0x07}) {
-		t.Fatalf("MarshalToBytes returned an unexpected byte sequence: %x", out)
-	}
-
-	var bo TestPublicIDUContainer
-	n, err = UnmarshalFromBytes(out, &bo)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if !reflect.DeepEqual(b, bo) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	c := TestPublicIDUContainer{Alg: AlgorithmNull,
-		Unique: PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}}
-	_, err = MarshalToBytes(c)
-	if err == nil {
-		t.Fatalf("MarshaToBytes should fail to marshal a union with an invalid selector value")
-	}
-	if err.Error() != "cannot marshal struct type tpm2.TestPublicIDUContainer: cannot marshal field "+
-		"Unique: cannot marshal struct type tpm2.PublicIDU: error marshalling union struct: cannot "+
-		"select union member: invalid selector value: TPM_ALG_NULL" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
 	}
 }
 
@@ -99,204 +103,273 @@ func (c TestSchemeKeyedHashUContainer) Selector(field reflect.StructField) inter
 }
 
 func TestSchemeKeyedHashUnion(t *testing.T) {
-	a := TestSchemeKeyedHashUContainer{
-		Scheme:  AlgorithmHMAC,
-		Details: SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: AlgorithmSHA256}}}
-	out, err := MarshalToBytes(a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
+	for _, data := range []struct {
+		desc string
+		in   TestSchemeKeyedHashUContainer
+		out  []byte
+		err  string
+	}{
+		{
+			desc: "HMAC",
+			in: TestSchemeKeyedHashUContainer{
+				Scheme:  AlgorithmHMAC,
+				Details: SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: AlgorithmSHA256}}},
+			out: []byte{0x00, 0x05, 0x00, 0x0b},
+		},
+		{
+			desc: "Null",
+			in:   TestSchemeKeyedHashUContainer{Scheme: AlgorithmNull},
+			out:  []byte{0x00, 0x10},
+		},
+		{
+			desc: "InvalidSelector",
+			in:   TestSchemeKeyedHashUContainer{Scheme: AlgorithmSHA256},
+			err: "cannot marshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot marshal " +
+				"field Details: cannot marshal struct type tpm2.SchemeKeyedHashU: error " +
+				"marshalling union struct: cannot select union member: invalid selector value: " +
+				"TPM_ALG_SHA256",
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(data.in)
+			if data.err != "" {
+				if err == nil {
+					t.Fatalf("MarshaToBytes was expected to fail")
+				}
+				if err.Error() != data.err {
+					t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+				}
+				return
+			}
 
-	if !bytes.Equal(out, []byte{0x00, 0x05, 0x00, 0x0b}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
+			}
 
-	var ao TestSchemeKeyedHashUContainer
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+			if !bytes.Equal(out, data.out) {
+				t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+			}
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
+			var a TestSchemeKeyedHashUContainer
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
 
-	b := TestSchemeKeyedHashUContainer{Scheme: AlgorithmNull}
-	out, err = MarshalToBytes(b)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x00, 0x10}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
-
-	var bo TestSchemeKeyedHashUContainer
-	n, err = UnmarshalFromBytes(out, &bo)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if !reflect.DeepEqual(b, bo) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	c := TestSchemeKeyedHashUContainer{Scheme: AlgorithmSHA256}
-	out, err = MarshalToBytes(c)
-	if err == nil {
-		t.Fatalf("MarshaToBytes should fail to marshal a union with an invalid selector value")
-	}
-	if err.Error() != "cannot marshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot marshal "+
-		"field Details: cannot marshal struct type tpm2.SchemeKeyedHashU: error marshalling union "+
-		"struct: cannot select union member: invalid selector value: TPM_ALG_SHA256" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
 	}
 }
 
 func TestPCRSelectionData(t *testing.T) {
-	a := PCRSelectionData{4, 8, 9}
-	out, err := MarshalToBytes(&a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
+	for _, data := range []struct {
+		desc string
+		in   PCRSelectionData
+		out  []byte
+	}{
+		{
+			desc: "1",
+			in:   PCRSelectionData{4, 8, 9},
+			out:  []byte{0x03, 0x10, 0x03, 0x00},
+		},
+		{
+			desc: "2",
+			in:   PCRSelectionData{4, 8, 9, 26},
+			out:  []byte{0x04, 0x10, 0x03, 0x00, 0x04},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(&data.in)
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
+			}
 
-	if !bytes.Equal(out, []byte{0x03, 0x10, 0x03, 0x00}) {
-		t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
-	}
+			if !bytes.Equal(out, data.out) {
+				t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
+			}
 
-	var ao PCRSelectionData
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+			var a PCRSelectionData
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	b := PCRSelectionData{4, 8, 9, 26}
-	out, err = MarshalToBytes(&b)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
-
-	if !bytes.Equal(out, []byte{0x04, 0x10, 0x03, 0x00, 0x04}) {
-		t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
 	}
 }
 
 func TestPCRSelectionList(t *testing.T) {
-	a := PCRSelectionList{PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{3, 6, 24}}}
-	out, err := MarshalToBytes(&a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
-	}
+	for _, data := range []struct {
+		desc string
+		in   PCRSelectionList
+		out  []byte
+	}{
+		{
+			desc: "1",
+			in: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{3, 6, 24}}},
+			out: []byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x04, 0x04, 0x48, 0x00, 0x00, 0x01},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(&data.in)
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
+			}
 
-	if !bytes.Equal(out, []byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x04, 0x04, 0x48, 0x00, 0x00, 0x01}) {
-		t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
-	}
+			if !bytes.Equal(out, data.out) {
+				t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
+			}
 
-	var ao PCRSelectionList
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+			var a PCRSelectionList
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
 	}
 }
 
 func TestTaggedHash(t *testing.T) {
-	digest := sha1.Sum([]byte("foo"))
-	a := TaggedHash{HashAlg: AlgorithmSHA1, Digest: digest[:]}
-	out, err := MarshalToBytes(&a)
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
+	sha1Hash := sha1.Sum([]byte("foo"))
+	sha256Hash := sha256.Sum256([]byte("foo"))
+
+	for _, data := range []struct {
+		desc string
+		in   TaggedHash
+		out  []byte
+		err  string
+	}{
+		{
+			desc: "SHA1",
+			in:   TaggedHash{HashAlg: AlgorithmSHA1, Digest: sha1Hash[:]},
+			out:  append([]byte{0x00, 0x04}, sha1Hash[:]...),
+		},
+		{
+			desc: "SHA256",
+			in:   TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]},
+			out:  append([]byte{0x00, 0x0b}, sha256Hash[:]...),
+		},
+		{
+			desc: "WrongDigestSize",
+			in:   TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha1Hash[:]},
+			err:  "cannot marshal type *tpm2.TaggedHash with custom marshaller: invalid digest size 20",
+		},
+		{
+			desc: "UnknownAlg",
+			in:   TaggedHash{HashAlg: AlgorithmHMAC, Digest: sha1Hash[:]},
+			err: "cannot marshal type *tpm2.TaggedHash with custom marshaller: cannot determine " +
+				"digest size: unknown digest algorithm: TPM_ALG_HMAC",
+		},
+	} {
+		out, err := MarshalToBytes(&data.in)
+		if data.err != "" {
+			if err == nil {
+				t.Fatalf("Expected MarshalToBytes to fail")
+			}
+			if err.Error() != data.err {
+				t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+			}
+			return
+		}
+
+		if err != nil {
+			t.Fatalf("MarshalToBytes failed: %v", err)
+		}
+
+		if !bytes.Equal(out, data.out) {
+			t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
+		}
+
+		var a TaggedHash
+		n, err := UnmarshalFromBytes(out, &a)
+		if err != nil {
+			t.Fatalf("UnmarshalFromBytes failed: %v", err)
+		}
+		if n != len(out) {
+			t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+		}
+
+		if !reflect.DeepEqual(data.in, a) {
+			t.Errorf("UnmarshalFromBytes didn't return the original data")
+		}
 	}
 
-	if len(out) != 22 {
-		t.Errorf("MarshalToBytes returnd the wrong number of bytes (%d)", len(out))
-	}
-	if !bytes.Equal(out, []byte{0x00, 0x04, 0x0b, 0xee, 0xc7, 0xb5, 0xea, 0x3f, 0x0f, 0xdb, 0xc9, 0x5d, 0x0d,
-		0xd4, 0x7f, 0x3c, 0x5b, 0xc2, 0x75, 0xda, 0x8a, 0x33}) {
-		t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
-	}
+	t.Run("UnmarshalTruncated", func(t *testing.T) {
+		in := TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]}
+		out, err := MarshalToBytes(&in)
+		if err != nil {
+			t.Fatalf("MarshalToBytes failed: %v", err)
+		}
 
-	var ao TaggedHash
-	n, err := UnmarshalFromBytes(out, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+		out = out[0:32]
+		_, err = UnmarshalFromBytes(out, &in)
+		if err == nil {
+			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
+		}
+		if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot read "+
+			"digest: EOF" {
+			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+		}
+	})
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
+	t.Run("UnmarshalFromLongerBuffer", func(t *testing.T) {
+		in := TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]}
+		out, err := MarshalToBytes(&in)
+		if err != nil {
+			t.Fatalf("MarshalToBytes failed: %v", err)
+		}
 
-	b := TaggedHash{HashAlg: AlgorithmSHA256, Digest: digest[:]}
-	_, err = MarshalToBytes(&b)
-	if err == nil {
-		t.Fatalf("MarshaToBytes should fail to marshal a TaggedHash with the wrong digest size")
-	}
-	if err.Error() != "cannot marshal type *tpm2.TaggedHash with custom marshaller: invalid digest size 20" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
-	}
+		out = append(out, []byte{0, 0, 0, 0}...)
 
-	c := TaggedHash{HashAlg: AlgorithmHMAC, Digest: digest[:]}
-	_, err = MarshalToBytes(&c)
-	if err == nil {
-		t.Fatalf("MarshaToBytes should fail to marshal a TaggedHash with an unknown algorithm")
-	}
-	if err.Error() != "cannot marshal type *tpm2.TaggedHash with custom marshaller: cannot determine "+
-		"digest size: unknown digest algorithm: TPM_ALG_HMAC" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
-	}
+		var a TaggedHash
+		n, err := UnmarshalFromBytes(out, &a)
+		if err != nil {
+			t.Fatalf("UnmarshalFromBytes failed: %v", err)
+		}
+		if n != len(out) {
+			t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+		}
 
-	out2 := out[0:20]
-	_, err = UnmarshalFromBytes(out2, &ao)
-	if err == nil {
-		t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
-	}
-	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot read digest: "+
-		"EOF" {
-		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
-	}
+		if !reflect.DeepEqual(in, a) {
+			t.Errorf("UnmarshalFromBytes didn't return the original data")
+		}
+	})
 
-	out3 := append(out, []byte{0, 0, 0, 0}...)
-	n, err = UnmarshalFromBytes(out3, &ao)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
+	t.Run("UnmarshalUnknownAlg", func(t *testing.T) {
+		in := TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]}
+		out, err := MarshalToBytes(&in)
+		if err != nil {
+			t.Fatalf("MarshalToBytes failed: %v", err)
+		}
 
-	if !reflect.DeepEqual(a, ao) {
-		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	out[1] = 0x05
-	_, err = UnmarshalFromBytes(out, &ao)
-	if err == nil {
-		t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
-	}
-	if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot determine "+
-		"digest size: unknown digest algorithm: TPM_ALG_HMAC" {
-		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
-	}
+		out[1] = 0x05
+		_, err = UnmarshalFromBytes(out, &in)
+		if err == nil {
+			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown " +
+				"algorithm")
+		}
+		if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot "+
+			"determine digest size: unknown digest algorithm: TPM_ALG_HMAC" {
+			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+		}
+	})
 }
