@@ -664,6 +664,22 @@ func (p Public) Selector(field reflect.StructField) interface{} {
 	return nil
 }
 
+func (p *Public) Name() (Name, error) {
+	c := cryptHashAlgToGoConstructor(p.NameAlg)
+	if c == nil {
+		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
+	}
+	hasher := c()
+	if err := MarshalToWriter(hasher, p); err != nil {
+		return nil, fmt.Errorf("cannot marshal public object: %v", err)
+	}
+	name, err := MarshalToBytes(p.NameAlg, RawSlice(hasher.Sum(nil)))
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
+	}
+	return name, nil
+}
+
 func (p *Public) Copy() *Public {
 	b, err := MarshalToBytes(p)
 	if err != nil {

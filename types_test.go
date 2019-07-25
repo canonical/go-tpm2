@@ -373,3 +373,25 @@ func TestTaggedHash(t *testing.T) {
 		}
 	})
 }
+
+func TestPublicName(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primary)
+
+	pub, _, _, err := tpm.ReadPublic(primary)
+	if err != nil {
+		t.Fatalf("ReadPublic failed: %v", err)
+	}
+
+	name, err := pub.Name()
+	if err != nil {
+		t.Fatalf("Public.Name() failed: %v", err)
+	}
+
+	if !bytes.Equal(primary.Name(), name) {
+		t.Errorf("Public.Name() returned an unexpected name")
+	}
+}
