@@ -33,14 +33,14 @@ func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
-	objectHandleRc := &objectContext{handle: objectHandle, name: name}
+	objectContext := &objectContext{handle: objectHandle, name: name}
 	outPubCopy := outPublic.Copy()
 	if outPubCopy != nil {
-		objectHandleRc.public = *outPubCopy
+		objectContext.public = *outPubCopy
 	}
-	t.addResourceContext(objectHandleRc)
+	t.addResourceContext(objectContext)
 
-	return objectHandleRc, &outPublic, &creationData, creationHash, &creationTicket, name, nil
+	return objectContext, &outPublic, &creationData, creationHash, &creationTicket, name, nil
 }
 
 func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
@@ -58,9 +58,9 @@ func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	// derived from the empty auth
 	switch s := authHandleAuth.(type) {
 	case *Session:
-		sc = s.Handle.(*sessionContext)
+		sc = s.Context.(*sessionContext)
 		if !sc.isBoundTo(&permanentContext{handle: authHandle}) {
-			updatedAuthHandleAuth = &Session{Handle: s.Handle, Attrs: s.Attrs}
+			updatedAuthHandleAuth = &Session{Context: s.Context, Attrs: s.Attrs}
 		}
 	}
 
@@ -131,10 +131,10 @@ func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 	// derived from newAuth
 	switch s := authHandleAuth.(type) {
 	case *Session:
-		sc = s.Handle.(*sessionContext)
+		sc = s.Context.(*sessionContext)
 		if !sc.isBoundTo(&permanentContext{handle: authHandle}) {
 			updatedAuthHandleAuth =
-				&Session{Handle: s.Handle, Attrs: s.Attrs, AuthValue: newAuth}
+				&Session{Context: s.Context, Attrs: s.Attrs, AuthValue: newAuth}
 		}
 	}
 

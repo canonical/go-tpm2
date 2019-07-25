@@ -24,7 +24,7 @@ const (
 )
 
 type Session struct {
-	Handle    ResourceContext
+	Context   ResourceContext
 	AuthValue []byte
 	Attrs     SessionAttributes
 }
@@ -35,8 +35,8 @@ type HandleWithAuth struct {
 }
 
 type ResourceWithAuth struct {
-	Handle ResourceContext
-	Auth   interface{}
+	Context ResourceContext
+	Auth    interface{}
 }
 
 type TPMContext interface {
@@ -66,25 +66,25 @@ type TPMContext interface {
 	// Section 11 - Session Commands
 	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 		authHash AlgorithmId, authValue []byte) (ResourceContext, error)
-	PolicyRestart(sessionHandle ResourceContext) error
+	PolicyRestart(sessionContext ResourceContext) error
 
 	// Section 12 - Object Commands
-	Create(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
+	Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
 		creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public, *CreationData,
 		Digest, *TkCreation, error)
-	Load(parentHandle ResourceContext, inPrivate Private, inPublic *Public,
-		parentHandleAuth interface{}) (ResourceContext, Name, error)
+	Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
+		parentContextAuth interface{}) (ResourceContext, Name, error)
 	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name, error)
-	ReadPublic(objectHandle ResourceContext) (*Public, Name, Name, error)
+	ReadPublic(objectContext ResourceContext) (*Public, Name, Name, error)
 	//ActivateCredential(activateHandle, keyHandle ResourceContext, credentialBlob IDObject,
 	//	secret EncryptedSecret, activateHandleAuth, keyHandleAuth interface{}) (Digest, error)
 	//MakeCredential(handle ResourceContext, credential Digest, objectName Name) (IDObject,
 	//	EncryptedSecret, error)
-	Unseal(itemHandle ResourceContext, itemHandleAuth interface{}) (SensitiveData, error)
-	ObjectChangeAuth(objectHandle, parentHandle ResourceContext, newAuth Auth,
-		objectHandleAuth interface{}) (Private, error)
-	CreateLoaded(parentHandle ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
-		parentHandleAuth interface{}) (ResourceContext, Private, *Public, Name, error)
+	Unseal(itemContext ResourceContext, itemContextAuth interface{}) (SensitiveData, error)
+	ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
+		objectContextAuth interface{}) (Private, error)
+	CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+		parentContextAuth interface{}) (ResourceContext, Private, *Public, Name, error)
 
 	// Section 13 - Duplication Commands
 	// Section 14 - Asymmetric Primitives
@@ -104,8 +104,8 @@ type TPMContext interface {
 	// Section 23 - Enhanced Authorization (EA) Commands
 	// PolicySigned(authObject, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest,
 	//	policyRef Nonce, expiration int32, auth *Signature) (Timeout, *TkAuth, error)
-	PolicySecret(authHandle, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
-		expiration int32, authHandleAuth interface{}) (Timeout, *TkAuth, error)
+	PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
+		expiration int32, authContextAuth interface{}) (Timeout, *TkAuth, error)
 	// PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce,
 	//	authName Name, ticket *TkAuth) error
 	PolicyOR(policySession ResourceContext, pHashList DigestList) error
@@ -147,10 +147,10 @@ type TPMContext interface {
 	// Section 27 - Field Upgrade
 
 	// Section 28 - Context Management
-	ContextSave(saveHandle ResourceContext) (*Context, error)
+	ContextSave(saveContext ResourceContext) (*Context, error)
 	ContextLoad(context *Context) (ResourceContext, error)
-	FlushContext(flushHandle ResourceContext) error
-	EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
+	FlushContext(flushContext ResourceContext) error
+	EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle,
 		authAuth interface{}) (ResourceContext, error)
 
 	// Section 29 - Clocks and Timers
@@ -288,8 +288,8 @@ func (t *tpmContext) RunCommandAndReturnRawResponse(commandCode CommandCode,
 				commandHandleNames = append(commandHandleNames, rc.Name())
 				sessionParams = append(sessionParams, p)
 			case ResourceWithAuth:
-				commandHandles = append(commandHandles, p.Handle.Handle())
-				commandHandleNames = append(commandHandleNames, p.Handle.Name())
+				commandHandles = append(commandHandles, p.Context.Handle())
+				commandHandleNames = append(commandHandleNames, p.Context.Name())
 				sessionParams = append(sessionParams, p)
 			default:
 				rc, isRc := param.(ResourceContext)

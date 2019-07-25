@@ -8,9 +8,9 @@ import (
 	"errors"
 )
 
-func (t *tpmContext) PolicySecret(authHandle, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
-	expiration int32, authHandleAuth interface{}) (Timeout, *TkAuth, error) {
-	if err := t.checkResourceContextParam(authHandle, "authHandle"); err != nil {
+func (t *tpmContext) PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
+	expiration int32, authContextAuth interface{}) (Timeout, *TkAuth, error) {
+	if err := t.checkResourceContextParam(authContext, "authContext"); err != nil {
 		return nil, nil, err
 	}
 	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
@@ -25,7 +25,7 @@ func (t *tpmContext) PolicySecret(authHandle, policySession ResourceContext, cpH
 	var timeout Timeout
 	var policyTicket TkAuth
 
-	if err := t.RunCommand(CommandPolicySecret, ResourceWithAuth{Handle: authHandle, Auth: authHandleAuth},
+	if err := t.RunCommand(CommandPolicySecret, ResourceWithAuth{Context: authContext, Auth: authContextAuth},
 		policySession, Separator, sessionContext.NonceTPM(), cpHashA, policyRef, expiration, Separator,
 		Separator, &timeout, &policyTicket); err != nil {
 		return nil, nil, err

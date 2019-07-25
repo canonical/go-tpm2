@@ -96,19 +96,19 @@ func TestStartAuthSession(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionHandle, err := tpm.StartAuthSession(data.tpmKey, data.bind, data.sessionType, nil,
+			sc, err := tpm.StartAuthSession(data.tpmKey, data.bind, data.sessionType, nil,
 				data.alg, data.bindAuth)
 			if data.errMsg == "" {
 				if err != nil {
 					t.Fatalf("StartAuthSession returned an error: %v", err)
 				}
-				defer flushContext(t, tpm, sessionHandle)
+				defer flushContext(t, tpm, sc)
 
-				if sessionHandle.Handle()&data.handleType != data.handleType {
+				if sc.Handle()&data.handleType != data.handleType {
 					t.Errorf("StartAuthSession returned a handle of the wrong type")
 				}
 
-				context, isSessionContext := sessionHandle.(*sessionContext)
+				context, isSessionContext := sc.(*sessionContext)
 				if !isSessionContext {
 					t.Fatalf("StartAuthSession didn't return a session context")
 				}
@@ -152,26 +152,26 @@ func TestPolicyRestart(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	sc, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
 
-	if err := tpm.PolicyPCR(sessionHandle, nil,
+	if err := tpm.PolicyPCR(sc, nil,
 		PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}}); err != nil {
 		t.Fatalf("PolicyPCR failed: %v", err)
 	}
 
-	digest, err := tpm.PolicyGetDigest(sessionHandle)
+	digest, err := tpm.PolicyGetDigest(sc)
 	if err != nil {
 		t.Fatalf("PolicyGetDigest failed: %v", err)
 	}
 
-	if err := tpm.PolicyRestart(sessionHandle); err != nil {
+	if err := tpm.PolicyRestart(sc); err != nil {
 		t.Fatalf("PolicyRestart failed: %v", err)
 	}
 
-	restartedDigest, err := tpm.PolicyGetDigest(sessionHandle)
+	restartedDigest, err := tpm.PolicyGetDigest(sc)
 	if err != nil {
 		t.Fatalf("PolicyGetDigest failed: %v", err)
 	}

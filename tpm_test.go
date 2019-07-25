@@ -194,18 +194,18 @@ func nameAlgorithm(n Name) AlgorithmId {
 	return alg
 }
 
-func flushContext(t *testing.T, tpm TPMContext, handle ResourceContext) {
-	if err := tpm.FlushContext(handle); err != nil {
+func flushContext(t *testing.T, tpm TPMContext, context ResourceContext) {
+	if err := tpm.FlushContext(context); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 }
 
-func verifyContextFlushed(t *testing.T, tpm TPMContext, handle ResourceContext) {
-	if handle.Handle() == HandleNull {
+func verifyContextFlushed(t *testing.T, tpm TPMContext, context ResourceContext) {
+	if context.Handle() == HandleNull {
 		return
 	}
 	t.Errorf("Context is still live")
-	flushContext(t, tpm, handle)
+	flushContext(t, tpm, context)
 }
 
 func openTPMSimulatorForTesting(t *testing.T) (TPMContext, *TctiMssim) {

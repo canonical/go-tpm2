@@ -60,10 +60,10 @@ func (d resourceContextData) Selector(field reflect.StructField) interface{} {
 	return d.ContextType
 }
 
-func wrapContextBlob(tpmBlob ContextData, handle ResourceContext) (ContextData, error) {
+func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData, error) {
 	d := resourceContextData{TPMBlob: tpmBlob}
 
-	switch c := handle.(type) {
+	switch c := context.(type) {
 	case *objectContext:
 		d.ContextType = contextTypeObject
 		d.Data.Object = &objectContextData{Public: &c.public, Name: c.name}
@@ -98,27 +98,27 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 	return nil, nil, fmt.Errorf("invalid saved context type (%d)", d.ContextType)
 }
 
-func (t *tpmContext) ContextSave(saveHandle ResourceContext) (*Context, error) {
-	if err := t.checkResourceContextParam(saveHandle, "saveHandle"); err != nil {
+func (t *tpmContext) ContextSave(saveContext ResourceContext) (*Context, error) {
+	if err := t.checkResourceContextParam(saveContext, "saveContext"); err != nil {
 		return nil, err
 	}
 
 	var context Context
 
-	if err := t.RunCommand(CommandContextSave, saveHandle, Separator, Separator, Separator,
+	if err := t.RunCommand(CommandContextSave, saveContext, Separator, Separator, Separator,
 		&context); err != nil {
 		return nil, err
 	}
 
-	blob, err := wrapContextBlob(context.Blob, saveHandle)
+	blob, err := wrapContextBlob(context.Blob, saveContext)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create context data: %v", err)
 	}
 	context.Blob = blob
 
-	if saveHandle.Handle()&HandleTypeHMACSession == HandleTypeHMACSession ||
-		saveHandle.Handle()&HandleTypePolicySession == HandleTypePolicySession {
-		t.evictResourceContext(saveHandle)
+	if saveContext.Handle()&HandleTypeHMACSession == HandleTypeHMACSession ||
+		saveContext.Handle()&HandleTypePolicySession == HandleTypePolicySession {
+		t.evictResourceContext(saveContext)
 	}
 
 	return &context, nil
@@ -155,32 +155,32 @@ func (t *tpmContext) ContextLoad(context *Context) (ResourceContext, error) {
 	return rc, nil
 }
 
-func (t *tpmContext) FlushContext(flushHandle ResourceContext) error {
-	if err := t.checkResourceContextParam(flushHandle, "flushHandle"); err != nil {
+func (t *tpmContext) FlushContext(flushContext ResourceContext) error {
+	if err := t.checkResourceContextParam(flushContext, "flushContext"); err != nil {
 		return err
 	}
 
-	if err := t.RunCommand(CommandFlushContext, Separator, flushHandle.Handle()); err != nil {
+	if err := t.RunCommand(CommandFlushContext, Separator, flushContext.Handle()); err != nil {
 		return err
 	}
 
-	t.evictResourceContext(flushHandle)
+	t.evictResourceContext(flushContext)
 	return nil
 }
 
-func (t *tpmContext) EvictControl(auth Handle, objectHandle ResourceContext, persistentHandle Handle,
+func (t *tpmContext) EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle,
 	authAuth interface{}) (ResourceContext, error) {
-	if err := t.checkResourceContextParam(objectHandle, "objectHandle"); err != nil {
+	if err := t.checkResourceContextParam(objectContext, "objectContext"); err != nil {
 		return nil, err
 	}
 
 	if err := t.RunCommand(CommandEvictControl, HandleWithAuth{Handle: auth, Auth: authAuth},
-		objectHandle, Separator, persistentHandle); err != nil {
+		objectContext, Separator, persistentHandle); err != nil {
 		return nil, err
 	}
 
-	if objectHandle.Handle() == persistentHandle {
-		t.evictResourceContext(objectHandle)
+	if objectContext.Handle() == persistentHandle {
+		t.evictResourceContext(objectContext)
 		return nil, nil
 	}
 	return t.WrapHandle(persistentHandle)

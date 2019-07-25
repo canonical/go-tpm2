@@ -70,7 +70,7 @@ func TestHMACSessions(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionHandle, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC,
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC,
 				nil, AlgorithmSHA256, data.bindAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
@@ -80,7 +80,7 @@ func TestHMACSessions(t *testing.T) {
 				if !sessionLoaded {
 					return
 				}
-				flushContext(t, tpm, sessionHandle)
+				flushContext(t, tpm, sessionContext)
 			}()
 
 			template := Public{
@@ -95,7 +95,7 @@ func TestHMACSessions(t *testing.T) {
 						KeyBits:   2048,
 						Exponent:  0}}}
 
-			session := &Session{Handle: sessionHandle, AuthValue: data.sessionAuth,
+			session := &Session{Context: sessionContext, AuthValue: data.sessionAuth,
 				Attrs: data.sessionAttrs}
 			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
 			if err != nil {

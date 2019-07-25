@@ -14,8 +14,8 @@ func TestContextSave(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, handle ResourceContext, savedHandle, hierarchy Handle) {
-		context, err := tpm.ContextSave(handle)
+	run := func(t *testing.T, rc ResourceContext, savedHandle, hierarchy Handle) {
+		context, err := tpm.ContextSave(rc)
 		if err != nil {
 			t.Fatalf("ContextSave failed: %v", err)
 		}
@@ -28,12 +28,12 @@ func TestContextSave(t *testing.T) {
 	}
 
 	t.Run("TransientObject", func(t *testing.T) {
-		handle := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, handle)
-		run(t, handle, Handle(0x80000000), HandleOwner)
+		rc := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, rc)
+		run(t, rc, Handle(0x80000000), HandleOwner)
 	})
 	t.Run("Session", func(t *testing.T) {
-		handle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -42,9 +42,9 @@ func TestContextSave(t *testing.T) {
 			if flushed {
 				return
 			}
-			flushContext(t, tpm, handle)
+			flushContext(t, tpm, sessionContext)
 		}()
-		run(t, handle, handle.Handle(), HandleNull)
+		run(t, sessionContext, sessionContext.Handle(), HandleNull)
 		flushed = true
 	})
 }
@@ -53,23 +53,23 @@ func TestContextSaveAndLoad(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, handle ResourceContext) ResourceContext {
-		context, err := tpm.ContextSave(handle)
+	run := func(t *testing.T, rc ResourceContext) ResourceContext {
+		context, err := tpm.ContextSave(rc)
 		if err != nil {
 			t.Fatalf("ContextSave failed: %v", err)
 		}
 
-		restoredHandle, err := tpm.ContextLoad(context)
+		restoredContext, err := tpm.ContextLoad(context)
 		if err != nil {
 			t.Fatalf("ContextLoad failed: %v", err)
 		}
 
-		return restoredHandle
+		return restoredContext
 	}
 
 	runSessionTest := func(t *testing.T, tpmKey, bind ResourceContext, sessionType SessionType,
 		hashAlg AlgorithmId) {
-		handle, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
+		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -78,58 +78,58 @@ func TestContextSaveAndLoad(t *testing.T) {
 			if flushed {
 				return
 			}
-			flushContext(t, tpm, handle)
+			flushContext(t, tpm, sc)
 		}()
-		restoredHandle := run(t, handle)
+		restoredSc := run(t, sc)
 		flushed = true
-		defer flushContext(t, tpm, restoredHandle)
+		defer flushContext(t, tpm, restoredSc)
 
 		handleType := HandleTypePolicySession
 		if sessionType == SessionTypeHMAC {
 			handleType = HandleTypeHMACSession
 		}
 
-		if restoredHandle.Handle()&handleType != handleType {
-			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredHandle.Handle())
+		if restoredSc.Handle()&handleType != handleType {
+			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredSc.Handle())
 		}
 
-		rc := handle.(*sessionContext)
-		restoredRc := restoredHandle.(*sessionContext)
+		scImpl := sc.(*sessionContext)
+		restoredScImpl := restoredSc.(*sessionContext)
 
-		if rc.hashAlg != restoredRc.hashAlg {
+		if scImpl.hashAlg != restoredScImpl.hashAlg {
 			t.Errorf("Restored context has the wrong hash algorithm")
 		}
-		if !bytes.Equal(rc.boundResource, restoredRc.boundResource) {
+		if !bytes.Equal(scImpl.boundResource, restoredScImpl.boundResource) {
 			t.Errorf("Restored context has the wrong bound resource name")
 		}
-		if !bytes.Equal(rc.sessionKey, restoredRc.sessionKey) {
+		if !bytes.Equal(scImpl.sessionKey, restoredScImpl.sessionKey) {
 			t.Errorf("Restored context has the wrong session key")
 		}
-		if !bytes.Equal(rc.nonceCaller, restoredRc.nonceCaller) {
+		if !bytes.Equal(scImpl.nonceCaller, restoredScImpl.nonceCaller) {
 			t.Errorf("Restored context has the wrong nonceCaller")
 		}
-		if !bytes.Equal(rc.nonceTPM, restoredRc.nonceTPM) {
+		if !bytes.Equal(scImpl.nonceTPM, restoredScImpl.nonceTPM) {
 			t.Errorf("Restored context has the wrong nonceTPM")
 		}
 	}
 
 	t.Run("TransientObject", func(t *testing.T) {
-		handle := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, handle)
-		restoredHandle := run(t, handle)
-		defer flushContext(t, tpm, restoredHandle)
+		rc := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, rc)
+		restoredRc := run(t, rc)
+		defer flushContext(t, tpm, restoredRc)
 
-		if restoredHandle.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
-			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredHandle.Handle())
+		if restoredRc.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredRc.Handle())
 		}
 
-		rc := handle.(*objectContext)
-		restoredRc := restoredHandle.(*objectContext)
+		rcImpl := rc.(*objectContext)
+		restoredRcImpl := restoredRc.(*objectContext)
 
-		if !reflect.DeepEqual(rc.public, restoredRc.public) {
+		if !reflect.DeepEqual(rcImpl.public, restoredRcImpl.public) {
 			t.Errorf("Restored context has the wrong public data")
 		}
-		if !bytes.Equal(rc.name, restoredRc.name) {
+		if !bytes.Equal(rcImpl.name, restoredRcImpl.name) {
 			t.Errorf("Restored context has the wrong name")
 		}
 	})
@@ -165,36 +165,36 @@ func TestEvictControl(t *testing.T) {
 			}
 		}
 
-		outHandle, err := tpm.EvictControl(HandleOwner, transient, persist, authAuth)
+		outContext, err := tpm.EvictControl(HandleOwner, transient, persist, authAuth)
 		if err != nil {
 			t.Fatalf("EvictControl failed: %v", err)
 		}
 
-		if outHandle.Handle() != persist {
-			t.Errorf("outHandle has the wrong id (0x%08x)", outHandle.Handle())
+		if outContext.Handle() != persist {
+			t.Errorf("outContext has the wrong id (0x%08x)", outContext.Handle())
 		}
 
-		if !bytes.Equal(transient.Name(), outHandle.Name()) {
-			t.Errorf("outHandle has the wrong name")
+		if !bytes.Equal(transient.Name(), outContext.Name()) {
+			t.Errorf("outContext has the wrong name")
 		}
 
-		outHandle2, err := tpm.EvictControl(HandleOwner, outHandle, outHandle.Handle(), authAuth)
+		outContext2, err := tpm.EvictControl(HandleOwner, outContext, outContext.Handle(), authAuth)
 		if err != nil {
 			t.Errorf("EvictControl failed: %v", err)
 		}
-		if outHandle2 != nil {
+		if outContext2 != nil {
 			t.Errorf("EvictControl should return a nil handle when evicting a persistent object")
 		}
 
-		if outHandle.Handle() != HandleNull {
+		if outContext.Handle() != HandleNull {
 			t.Errorf("EvictControl should set the persistent context's handle to NULL")
 		}
 
-		_, _, _, err = tpm.ReadPublic(outHandle)
+		_, _, _, err = tpm.ReadPublic(outContext)
 		if err == nil {
 			t.Fatalf("Calling ReadPublic on a dead resource context should fail")
 		}
-		if err.Error() != "invalid resource context for objectHandle: resource has been closed" {
+		if err.Error() != "invalid resource context for objectContext: resource has been closed" {
 			t.Errorf("ReadPublic returned an unexpected error: %v", err)
 		}
 	}
@@ -212,31 +212,31 @@ func TestEvictControl(t *testing.T) {
 	}
 
 	t.Run("NoAuth", func(t *testing.T) {
-		objectHandle := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, objectHandle)
-		run(t, objectHandle, Handle(0x81020000), nil)
+		context := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, context)
+		run(t, context, Handle(0x81020000), nil)
 	})
 	t.Run("PasswordAuth", func(t *testing.T) {
-		objectHandle := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, objectHandle)
+		context := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, context)
 		setupOwnerAuth(t)
 		defer resetOwnerAuth(t)
-		run(t, objectHandle, Handle(0x81020001), testAuth)
+		run(t, context, Handle(0x81020001), testAuth)
 	})
 	t.Run("SessionAuth", func(t *testing.T) {
-		objectHandle := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, objectHandle)
+		context := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, context)
 		setupOwnerAuth(t)
 		defer resetOwnerAuth(t)
 		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionHandle, err :=
+		sessionContext, err :=
 			tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
-		run(t, objectHandle, Handle(0x81020001),
-			&Session{Handle: sessionHandle, Attrs: AttrContinueSession, AuthValue: dummyAuth})
+		defer flushContext(t, tpm, sessionContext)
+		run(t, context, Handle(0x81020001),
+			&Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth})
 	})
 }
 
@@ -244,8 +244,8 @@ func TestFlushContext(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	objectHandle := createRSASrkForTesting(t, tpm, nil)
-	h := objectHandle.Handle()
+	context := createRSASrkForTesting(t, tpm, nil)
+	h := context.Handle()
 
 	handles, err := tpm.GetCapabilityHandles(h, 1)
 	if err != nil {
@@ -255,7 +255,7 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("GetCapability should have returned the primary key handle")
 	}
 
-	if err := tpm.FlushContext(objectHandle); err != nil {
+	if err := tpm.FlushContext(context); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 
@@ -267,15 +267,15 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("FlushContext didn't flush the transient handle")
 	}
 
-	if objectHandle.Handle() != HandleNull {
+	if context.Handle() != HandleNull {
 		t.Errorf("FlushContext should set the context's handle to NULL")
 	}
 
-	_, _, _, err = tpm.ReadPublic(objectHandle)
+	_, _, _, err = tpm.ReadPublic(context)
 	if err == nil {
 		t.Errorf("Calling ReadPublic on a dead resource context should fail")
 	}
-	if err.Error() != "invalid resource context for objectHandle: resource has been closed" {
+	if err.Error() != "invalid resource context for objectContext: resource has been closed" {
 		t.Errorf("ReadPublic returned an unexpected error: %v", err)
 	}
 }

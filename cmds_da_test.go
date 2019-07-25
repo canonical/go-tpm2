@@ -92,13 +92,13 @@ func TestDictionaryAttackParameters(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionHandle, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
+		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
 			testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
-		run(t, &Session{Handle: sessionHandle, Attrs: AttrContinueSession, AuthValue: dummyAuth})
+		defer flushContext(t, tpm, sessionContext)
+		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth})
 	})
 }
 
@@ -195,12 +195,12 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionHandle, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
+		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
 			testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
-		run(t, &Session{Handle: sessionHandle, Attrs: AttrContinueSession, AuthValue: dummyAuth})
+		defer flushContext(t, tpm, sessionContext)
+		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth})
 	})
 }

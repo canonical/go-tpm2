@@ -37,13 +37,13 @@ func TestPolicySecret(t *testing.T) {
 
 	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32,
 		useSession func(ResourceContext), auth interface{}) {
-		sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionHandle)
+		defer flushContext(t, tpm, sessionContext)
 
-		timeout, policyTicket, err := tpm.PolicySecret(primary, sessionHandle, cpHashA, policyRef,
+		timeout, policyTicket, err := tpm.PolicySecret(primary, sessionContext, cpHashA, policyRef,
 			expiration, auth)
 		if err != nil {
 			t.Fatalf("PolicySecret failed: %v", err)
@@ -72,7 +72,7 @@ func TestPolicySecret(t *testing.T) {
 			}
 		}
 
-		policyDigest, err := tpm.PolicyGetDigest(sessionHandle)
+		policyDigest, err := tpm.PolicyGetDigest(sessionContext)
 		if err != nil {
 			t.Fatalf("PolicyGetDigest failed: %v", err)
 		}
@@ -84,7 +84,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 
 		if useSession != nil {
-			useSession(sessionHandle)
+			useSession(sessionContext)
 		}
 	}
 
@@ -92,13 +92,13 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, 0, nil, testAuth)
 	})
 	t.Run("SessionAuth", func(t *testing.T) {
-		sessionHandle, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256,
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256,
 			testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifyContextFlushed(t, tpm, sessionHandle)
-		run(t, nil, nil, 0, nil, &Session{Handle: sessionHandle, AuthValue: dummyAuth})
+		defer verifyContextFlushed(t, tpm, sessionContext)
+		run(t, nil, nil, 0, nil, &Session{Context: sessionContext, AuthValue: dummyAuth})
 	})
 	t.Run("WithPolicyRef", func(t *testing.T) {
 		run(t, nil, []byte("foo"), 0, nil, testAuth)
@@ -126,16 +126,16 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectHandle, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
-		defer flushContext(t, tpm, objectHandle)
+		defer flushContext(t, tpm, objectContext)
 
-		useSession := func(sessionHandle ResourceContext) {
+		useSession := func(sessionContext ResourceContext) {
 			time.Sleep(2 * time.Second)
-			_, err := tpm.Unseal(objectHandle,
-				&Session{Handle: sessionHandle, Attrs: AttrContinueSession})
+			_, err := tpm.Unseal(objectContext,
+				&Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
 			}
@@ -169,11 +169,11 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectHandle1, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+		objectContext1, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
-		defer flushContext(t, tpm, objectHandle1)
+		defer flushContext(t, tpm, objectContext1)
 
 		outPrivate, outPublic, _, _, _, err = tpm.Create(primary, &sensitive2, &template, nil, nil,
 			testAuth)
@@ -181,17 +181,17 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectHandle2, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+		objectContext2, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
-		defer flushContext(t, tpm, objectHandle2)
+		defer flushContext(t, tpm, objectContext2)
 
-		cpHash := cryptComputeCpHash(AlgorithmSHA256, CommandUnseal, []Name{objectHandle2.Name()}, nil)
+		cpHash := cryptComputeCpHash(AlgorithmSHA256, CommandUnseal, []Name{objectContext2.Name()}, nil)
 
-		useSession := func(sessionHandle ResourceContext) {
-			_, err := tpm.Unseal(objectHandle1,
-				&Session{Handle: sessionHandle, Attrs: AttrContinueSession})
+		useSession := func(sessionContext ResourceContext) {
+			_, err := tpm.Unseal(objectContext1,
+				&Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
 			}
@@ -199,8 +199,8 @@ func TestPolicySecret(t *testing.T) {
 			if !isSessionErr || se.Code != ErrorPolicyFail {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			_, err = tpm.Unseal(objectHandle2,
-				&Session{Handle: sessionHandle, Attrs: AttrContinueSession})
+			_, err = tpm.Unseal(objectContext2,
+				&Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err != nil {
 				t.Errorf("Unseal failed: %v", err)
 			}
@@ -214,7 +214,7 @@ func TestPolicyOR(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	trialSessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, AlgorithmSHA256, nil)
+	trialSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -223,20 +223,20 @@ func TestPolicyOR(t *testing.T) {
 		if trialSessionFlushed {
 			return
 		}
-		flushContext(t, tpm, trialSessionHandle)
+		flushContext(t, tpm, trialSessionContext)
 	}()
 
 	pcrSelection := PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}}
-	if err := tpm.PolicyPCR(trialSessionHandle, nil, pcrSelection); err != nil {
+	if err := tpm.PolicyPCR(trialSessionContext, nil, pcrSelection); err != nil {
 		t.Fatalf("PolicyPCR failed: %v", err)
 	}
 
-	trialPolicyDigest, err := tpm.PolicyGetDigest(trialSessionHandle)
+	trialPolicyDigest, err := tpm.PolicyGetDigest(trialSessionContext)
 	if err != nil {
 		t.Fatalf("PolicyGetDigest failed: %v", err)
 	}
 
-	if err := tpm.FlushContext(trialSessionHandle); err != nil {
+	if err := tpm.FlushContext(trialSessionContext); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 	trialSessionFlushed = true
@@ -250,20 +250,20 @@ func TestPolicyOR(t *testing.T) {
 		digestList = append(digestList, digest)
 	}
 
-	sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
-	defer flushContext(t, tpm, sessionHandle)
+	defer flushContext(t, tpm, sessionContext)
 
-	if err := tpm.PolicyPCR(sessionHandle, nil, pcrSelection); err != nil {
+	if err := tpm.PolicyPCR(sessionContext, nil, pcrSelection); err != nil {
 		t.Fatalf("PolicyPCR failed: %v", err)
 	}
-	if err := tpm.PolicyOR(sessionHandle, digestList); err != nil {
+	if err := tpm.PolicyOR(sessionContext, digestList); err != nil {
 		t.Fatalf("PolicyOR failed: %v", err)
 	}
 
-	policyDigest, err := tpm.PolicyGetDigest(sessionHandle)
+	policyDigest, err := tpm.PolicyGetDigest(sessionContext)
 	if err != nil {
 		t.Fatalf("PolicyGetDigest failed: %v", err)
 	}
@@ -373,18 +373,18 @@ func TestPolicyPCR(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionHandle, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
 				AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
-			defer flushContext(t, tpm, sessionHandle)
+			defer flushContext(t, tpm, sessionContext)
 
-			if err := tpm.PolicyPCR(sessionHandle, data.digest, data.pcrs); err != nil {
+			if err := tpm.PolicyPCR(sessionContext, data.digest, data.pcrs); err != nil {
 				t.Fatalf("PolicyPCR failed: %v", err)
 			}
 
-			policyDigest, err := tpm.PolicyGetDigest(sessionHandle)
+			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
 				t.Fatalf("PolicyGetDigest failed: %v", err)
 			}

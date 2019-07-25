@@ -143,11 +143,11 @@ func (r *sessionContext) invalidate() {
 	r.handle = HandleNull
 }
 
-func (r *sessionContext) isBoundTo(handle ResourceContext) bool {
-	if handle == nil {
+func (r *sessionContext) isBoundTo(context ResourceContext) bool {
+	if context == nil {
 		return false
 	}
-	return bytes.Equal(handle.Name(), r.boundResource)
+	return bytes.Equal(context.Name(), r.boundResource)
 }
 
 func (r *sessionContext) NonceTPM() Nonce {
