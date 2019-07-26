@@ -10,11 +10,22 @@ const (
 )
 
 const (
-	TagNoSessions StructTag = 0x8001
-	TagSessions   StructTag = 0x8002
-	TagCreation   StructTag = 0x8021
-	TagAuthSecret StructTag = 0x8023
-	TagAuthSigned StructTag = 0x8025
+	TagNoSessions         StructTag = 0x8001
+	TagSessions           StructTag = 0x8002
+	TagAttestNV           StructTag = 0x8014
+	TagAttestCommandAudit StructTag = 0x8015
+	TagAttestSessionAudit StructTag = 0x8016
+	TagAttestCertify      StructTag = 0x8017
+	TagAttestQuote        StructTag = 0x8018
+	TagAttestTime         StructTag = 0x8019
+	TagAttestCreation     StructTag = 0x801a
+	TagCreation           StructTag = 0x8021
+	TagAuthSecret         StructTag = 0x8023
+	TagAuthSigned         StructTag = 0x8025
+)
+
+const (
+	TPMGeneratedValue TPMGenerated = 0xff544347
 )
 
 const (
@@ -32,6 +43,7 @@ const (
 	CommandSelfTest                   CommandCode = 0x00000143
 	CommandStartup                    CommandCode = 0x00000144
 	CommandShutdown                   CommandCode = 0x00000145
+	CommandCertifyCreation            CommandCode = 0x0000014A
 	CommandObjectChangeAuth           CommandCode = 0x00000150
 	CommandPolicySecret               CommandCode = 0x00000151
 	CommandCreate                     CommandCode = 0x00000153

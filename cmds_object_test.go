@@ -30,8 +30,7 @@ func TestCreate(t *testing.T) {
 		}
 
 		verifyPublicAgainstTemplate(t, outPublic, template)
-		verifyCreationData(t, tpm, creationData, template, outsideInfo, creationPCR, parent)
-		verifyCreationHash(t, creationHash, template)
+		verifyCreationData(t, tpm, creationData, creationHash, template, outsideInfo, creationPCR, parent)
 		verifyCreationTicket(t, creationTicket, hierarchy)
 
 		return outPublic, outPrivate

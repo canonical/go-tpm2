@@ -60,8 +60,8 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 	}
 }
 
-func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData, template *Public,
-	outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
+func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData, creationHash Digest,
+	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
 	nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
 	var parentQualifiedName Name
 	if parent.Handle()&HandleTypePermanent == HandleTypePermanent {
@@ -92,6 +92,15 @@ func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData
 	}
 	if !bytes.Equal(creationData.OutsideInfo, outsideInfo) {
 		t.Errorf("creation data has the wrong outsideInfo (got %x)", creationData.OutsideInfo)
+	}
+
+	hasher := cryptHashAlgToGoConstructor(template.NameAlg)()
+	if err := MarshalToWriter(hasher, creationData); err != nil {
+		t.Fatalf("Failed to marshal creation data: %v", err)
+	}
+
+	if !bytes.Equal(hasher.Sum(nil), creationHash) {
+		t.Errorf("Invalid creation hash")
 	}
 }
 

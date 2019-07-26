@@ -25,8 +25,7 @@ func TestCreatePrimary(t *testing.T) {
 		}
 		verifyPublicAgainstTemplate(t, outPublic, template)
 		h, _ := tpm.WrapHandle(hierarchy)
-		verifyCreationData(t, tpm, creationData, template, outsideInfo, creationPCR, h)
-		verifyCreationHash(t, creationHash, template)
+		verifyCreationData(t, tpm, creationData, creationHash, template, outsideInfo, creationPCR, h)
 		verifyCreationTicket(t, creationTicket, hierarchy)
 
 		nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)

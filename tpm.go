@@ -91,7 +91,22 @@ type TPMContext interface {
 	// Section 15 - Symmetrict Primitives
 	// Section 16 - Random Number Generator
 	// Section 17 - Hash/HMAC/Event Sequences
+
 	// Section 18 - Attestation Commands
+	// Certify(objectContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme) (*Attest,
+	//	*Signature, error)
+	CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,
+		inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}) (*Attest,
+		*Signature, error)
+	// Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme,
+	//	pcrSelection PCRSelectionList) (*Attest, *Signature, error)
+	// GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext ResourceContext,
+	//	qualifyingData Data, inScheme *SigScheme) (*Attest, *Signature, error)
+	// GetCommandAuditDigest(privacyHandle Handle, signContext ResourceContext, qualifyingData Data,
+	//	inScheme *SigScheme) (*Attest, *Signature, error)
+	// GetTime(privacyAdminHandle Handle, signContext ResourceContext, qualifyingData Data,
+	//	inScheme *SigScheme) (*Attest, *Signature, error)
+
 	// Section 19 - Ephemeral EC Keys
 	// Section 20 - Signing and Signature Verification
 	// Section 21 - Command Audit

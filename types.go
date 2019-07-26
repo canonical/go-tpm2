@@ -29,6 +29,7 @@ type SessionType uint8
 type StartupClearAttributes uint32
 type StartupType uint16
 type StructTag uint16
+type TPMGenerated uint32
 
 type WarningCode ResponseCode
 type ErrorCode0 ResponseCode
@@ -63,6 +64,7 @@ type EncryptedSecret []byte
 type Event []byte
 type Label []byte
 type MaxBuffer []byte
+type MaxNVBuffer []byte
 type Name []byte
 type Nonce Digest
 type Private []byte
@@ -284,6 +286,100 @@ func (c CapabilitiesU) Select(selector interface{}) (string, error) {
 	return "", invalidSelectorError{selector}
 }
 
+type SigSchemeU struct {
+	RSASSA    *SigSchemeRSASSA
+	RSAPSS    *SigSchemeRSAPSS
+	ECDSA     *SigSchemeECDSA
+	ECDAA     *SigSchemeECDAA
+	SM2       *SigSchemeSM2
+	ECSCHNORR *SigSchemeECSCHNORR
+	HMAC      *SchemeHMAC
+}
+
+func (s SigSchemeU) Select(selector interface{}) (string, error) {
+	switch selector.(AlgorithmId) {
+	case AlgorithmRSASSA:
+		return "RSASSA", nil
+	case AlgorithmRSAPSS:
+		return "RSAPSS", nil
+	case AlgorithmECDSA:
+		return "ECDSA", nil
+	case AlgorithmECDAA:
+		return "ECDAA", nil
+	case AlgorithmSM2:
+		return "SM2", nil
+	case AlgorithmECSCHNORR:
+		return "ECSCHNORR", nil
+	case AlgorithmHMAC:
+		return "HMAC", nil
+	case AlgorithmNull:
+		return "", nil
+	}
+	return "", invalidSelectorError{selector}
+}
+
+type SignatureU struct {
+	RSASSA    *SignatureRSASSA
+	RSAPSS    *SignatureRSAPSS
+	ECDSA     *SignatureECDSA
+	ECDAA     *SignatureECDAA
+	SM2       *SignatureSM2
+	ECSCHNORR *SignatureECSCHNORR
+	HMAC      *TaggedHash
+}
+
+func (s SignatureU) Select(selector interface{}) (string, error) {
+	switch selector.(AlgorithmId) {
+	case AlgorithmRSASSA:
+		return "RSASSA", nil
+	case AlgorithmRSAPSS:
+		return "RSAPSS", nil
+	case AlgorithmECDSA:
+		return "ECDSA", nil
+	case AlgorithmECDAA:
+		return "ECDAA", nil
+	case AlgorithmSM2:
+		return "SM2", nil
+	case AlgorithmECSCHNORR:
+		return "ECSCHNORR", nil
+	case AlgorithmHMAC:
+		return "HMAC", nil
+	case AlgorithmNull:
+		return "", nil
+	}
+	return "", invalidSelectorError{selector}
+}
+
+type AttestU struct {
+	Certify      *CertifyInfo
+	Creation     *CreationInfo
+	Quote        *QuoteInfo
+	CommandAudit *CommandAuditInfo
+	SessionAudit *SessionAuditInfo
+	Time         *TimeAttestInfo
+	NV           *NVCertifyInfo
+}
+
+func (a AttestU) Select(selector interface{}) (string, error) {
+	switch selector.(StructTag) {
+	case TagAttestNV:
+		return "NV", nil
+	case TagAttestCommandAudit:
+		return "CommandAudit", nil
+	case TagAttestSessionAudit:
+		return "SessionAudit", nil
+	case TagAttestCertify:
+		return "Certify", nil
+	case TagAttestQuote:
+		return "Quote", nil
+	case TagAttestTime:
+		return "Time", nil
+	case TagAttestCreation:
+		return "Creation", nil
+	}
+	return "", invalidSelectorError{selector}
+}
+
 type Context struct {
 	Sequence    uint64
 	SavedHandle Handle
@@ -303,6 +399,24 @@ type TkCreation struct {
 	Digest    Digest
 }
 
+type SigScheme struct {
+	Scheme  AlgorithmId
+	Details SigSchemeU
+}
+
+func (s SigScheme) Selector(field reflect.StructField) interface{} {
+	return s.Scheme
+}
+
+type Signature struct {
+	SigAlg    AlgorithmId
+	Signature SignatureU
+}
+
+func (s Signature) Selector(field reflect.StructField) interface{} {
+	return s.SigAlg
+}
+
 type CreationData struct {
 	PCRSelect           PCRSelectionList
 	PCRDigest           Digest
@@ -317,6 +431,76 @@ type CreationData2B CreationData
 
 func (c CreationData2B) UnsizedStructType() reflect.Type {
 	return reflect.TypeOf(CreationData(c))
+}
+
+type ClockInfo struct {
+	Clock        uint64
+	ResetCount   uint32
+	RestartCount uint32
+	Safe         bool
+}
+
+type TimeInfo struct {
+	Time uint64
+	ClockInfo
+}
+
+type Attest struct {
+	Magic           TPMGenerated
+	Type            StructTag
+	QualifiedSigner Name
+	ExtraData       Data
+	ClockInfo
+	FirmwareVersion uint64
+	Attest          AttestU
+}
+
+func (a Attest) Selector(field reflect.StructField) interface{} {
+	return a.Type
+}
+
+type Attest2B Attest
+
+func (a Attest2B) UnsizedStructType() reflect.Type {
+	return reflect.TypeOf(Attest(a))
+}
+
+type CertifyInfo struct {
+	Name,
+	QualifiedName Name
+}
+
+type CreationInfo struct {
+	ObjectName   Name
+	CreationHash Digest
+}
+
+type QuoteInfo struct {
+	PCRSelect PCRSelectionList
+	PCRDigest Digest
+}
+
+type CommandAuditInfo struct {
+	AuditCounter  uint64
+	DigestAlg     AlgorithmId
+	AuditDigest   Digest
+	CommandDigest Digest
+}
+
+type SessionAuditInfo struct {
+	ExclusiveSession bool
+	SessionDigest    Digest
+}
+
+type TimeAttestInfo struct {
+	Time            TimeInfo
+	FirmwareVersion uint64
+}
+
+type NVCertifyInfo struct {
+	IndexName  Name
+	Offset     uint16
+	NVContents MaxNVBuffer
 }
 
 type PCRSelectionData []int
@@ -411,6 +595,23 @@ type SigSchemeECDAA SchemeECDAA
 
 type Empty struct{}
 type EncSchemeRSAES Empty
+
+type SignatureRSA struct {
+	Hash AlgorithmId
+	Sig  PublicKeyRSA
+}
+type SignatureRSASSA SignatureRSA
+type SignatureRSAPSS SignatureRSA
+
+type SignatureECC struct {
+	Hash       AlgorithmId
+	SignatureR ECCParameter
+	SignatureS ECCParameter
+}
+type SignatureECDSA SignatureECC
+type SignatureECDAA SignatureECC
+type SignatureSM2 SignatureECC
+type SignatureECSCHNORR SignatureECC
 
 type ECCPoint struct {
 	X, Y ECCParameter
