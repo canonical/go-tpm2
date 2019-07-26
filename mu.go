@@ -33,7 +33,7 @@ func RawSlice(i interface{}) *RawSliceType {
 }
 
 type Union interface {
-	Select(selector interface{}, u reflect.Value) (reflect.Value, error)
+	Select(selector interface{}) (string, error)
 }
 
 type UnionContainer interface {
@@ -159,12 +159,17 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 
 	// Select the union member to marshal based on the selector value from the parent container
 	selector := ctx.container.Interface().(UnionContainer).Selector(ctx.fieldInParent)
-	val, err := u.Interface().(Union).Select(selector, u)
+	field, err := u.Interface().(Union).Select(selector)
 	if err != nil {
 		return fmt.Errorf("cannot select union member: %v", err)
 	}
-	if !val.IsValid() {
+	if field == "" {
 		return nil
+	}
+
+	val := u.FieldByName(field)
+	if !val.IsValid() {
+		return fmt.Errorf("invalid union field name %s", field)
 	}
 
 	return marshalValue(buf, val, beginUnionCtx(ctx, u))
@@ -338,12 +343,17 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 
 	// Select the union member to marshal based on the selector value from the parent container
 	selector := ctx.container.Interface().(UnionContainer).Selector(ctx.fieldInParent)
-	val, err := u.Interface().(Union).Select(selector, u)
+	field, err := u.Interface().(Union).Select(selector)
 	if err != nil {
 		return fmt.Errorf("cannot select union member: %v", err)
 	}
-	if !val.IsValid() {
+	if field == "" {
 		return nil
+	}
+
+	val := u.FieldByName(field)
+	if !val.IsValid() {
+		return fmt.Errorf("invalid union field name %s", field)
 	}
 
 	return unmarshalValue(buf, val, beginUnionCtx(ctx, u))

@@ -79,18 +79,18 @@ type PublicIDU struct {
 	ECC       *ECCPoint
 }
 
-func (p PublicIDU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (p PublicIDU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmRSA:
-		return u.FieldByName("RSA"), nil
+		return "RSA", nil
 	case AlgorithmKeyedHash:
-		return u.FieldByName("KeyedHash"), nil
+		return "KeyedHash", nil
 	case AlgorithmECC:
-		return u.FieldByName("ECC"), nil
+		return "ECC", nil
 	case AlgorithmSymCipher:
-		return u.FieldByName("Sym"), nil
+		return "Sym", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type SchemeKeyedHashU struct {
@@ -98,16 +98,16 @@ type SchemeKeyedHashU struct {
 	XOR  *SchemeXOR
 }
 
-func (d SchemeKeyedHashU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (d SchemeKeyedHashU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmHMAC:
-		return u.FieldByName("HMAC"), nil
+		return "HMAC", nil
 	case AlgorithmXOR:
-		return u.FieldByName("XOR"), nil
+		return "XOR", nil
 	case AlgorithmNull:
-		return reflect.Value{}, nil
+		return "", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type AsymSchemeU struct {
@@ -123,32 +123,32 @@ type AsymSchemeU struct {
 	OAEP      *EncSchemeOAEP
 }
 
-func (s AsymSchemeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (s AsymSchemeU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmRSASSA:
-		return u.FieldByName("RSASSA"), nil
+		return "RSASSA", nil
 	case AlgorithmRSAES:
-		return u.FieldByName("RSAES"), nil
+		return "RSAES", nil
 	case AlgorithmRSAPSS:
-		return u.FieldByName("RSAPSS"), nil
+		return "RSAPSS", nil
 	case AlgorithmOAEP:
-		return u.FieldByName("OAEP"), nil
+		return "OAEP", nil
 	case AlgorithmECDSA:
-		return u.FieldByName("ECDSA"), nil
+		return "ECDSA", nil
 	case AlgorithmECDH:
-		return u.FieldByName("ECDH"), nil
+		return "ECDH", nil
 	case AlgorithmECDAA:
-		return u.FieldByName("ECDAA"), nil
+		return "ECDAA", nil
 	case AlgorithmSM2:
-		return u.FieldByName("SM2"), nil
+		return "SM2", nil
 	case AlgorithmECSCHNORR:
-		return u.FieldByName("ECSCHNORR"), nil
+		return "ECSCHNORR", nil
 	case AlgorithmECMQV:
-		return u.FieldByName("ECMQV"), nil
+		return "ECMQV", nil
 	case AlgorithmNull:
-		return reflect.Value{}, nil
+		return "", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type KDFSchemeU struct {
@@ -158,20 +158,20 @@ type KDFSchemeU struct {
 	KDF1_SP800_108 *SchemeKDF1_SP800_108
 }
 
-func (s KDFSchemeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (s KDFSchemeU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmMGF1:
-		return u.FieldByName("MGF1"), nil
+		return "MGF1", nil
 	case AlgorithmKDF1_SP800_56A:
-		return u.FieldByName("KDF1_SP800_56A"), nil
+		return "KDF1_SP800_56A", nil
 	case AlgorithmKDF2:
-		return u.FieldByName("KDF2"), nil
+		return "KDF2", nil
 	case AlgorithmKDF1_SP800_108:
-		return u.FieldByName("KDF1_SP800_108"), nil
+		return "KDF1_SP800_108", nil
 	case AlgorithmNull:
-		return reflect.Value{}, nil
+		return "", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type PublicParamsU struct {
@@ -181,18 +181,18 @@ type PublicParamsU struct {
 	ECCDetail       *ECCParams
 }
 
-func (p PublicParamsU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (p PublicParamsU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmRSA:
-		return u.FieldByName("RSADetail"), nil
+		return "RSADetail", nil
 	case AlgorithmKeyedHash:
-		return u.FieldByName("KeyedHashDetail"), nil
+		return "KeyedHashDetail", nil
 	case AlgorithmECC:
-		return u.FieldByName("ECCDetail"), nil
+		return "ECCDetail", nil
 	case AlgorithmSymCipher:
-		return u.FieldByName("SymDetail"), nil
+		return "SymDetail", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type SymKeyBitsU struct {
@@ -200,28 +200,28 @@ type SymKeyBitsU struct {
 	XOR AlgorithmId
 }
 
-func (b SymKeyBitsU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (b SymKeyBitsU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmXOR:
-		return u.FieldByName("XOR"), nil
+		return "XOR", nil
 	case AlgorithmNull:
-		return reflect.Value{}, nil
+		return "", nil
 	}
-	return u.FieldByName("Sym"), nil
+	return "Sym", nil
 }
 
 type SymModeU struct {
 	Sym AlgorithmId
 }
 
-func (m SymModeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (m SymModeU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmXOR:
 		fallthrough
 	case AlgorithmNull:
-		return reflect.Value{}, nil
+		return "", nil
 	}
-	return u.FieldByName("Sym"), nil
+	return "Sym", nil
 }
 
 type SensitiveCompositeU struct {
@@ -231,18 +231,18 @@ type SensitiveCompositeU struct {
 	Sym  SymKey
 }
 
-func (s SensitiveCompositeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (s SensitiveCompositeU) Select(selector interface{}) (string, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmRSA:
-		return u.FieldByName("RSA"), nil
+		return "RSA", nil
 	case AlgorithmECC:
-		return u.FieldByName("ECC"), nil
+		return "ECC", nil
 	case AlgorithmKeyedHash:
-		return u.FieldByName("Bits"), nil
+		return "Bits", nil
 	case AlgorithmSymCipher:
-		return u.FieldByName("Sym"), nil
+		return "Sym", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type CapabilitiesU struct {
@@ -258,30 +258,30 @@ type CapabilitiesU struct {
 	AuthPolicies  TaggedPolicyList
 }
 
-func (c CapabilitiesU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (c CapabilitiesU) Select(selector interface{}) (string, error) {
 	switch selector.(Capability) {
 	case CapabilityAlgs:
-		return u.FieldByName("Algorithms"), nil
+		return "Algorithms", nil
 	case CapabilityHandles:
-		return u.FieldByName("Handles"), nil
+		return "Handles", nil
 	case CapabilityCommands:
-		return u.FieldByName("Command"), nil
+		return "Command", nil
 	case CapabilityPPCommands:
-		return u.FieldByName("PPCommands"), nil
+		return "PPCommands", nil
 	case CapabilityAuditCommands:
-		return u.FieldByName("AuditCommands"), nil
+		return "AuditCommands", nil
 	case CapabilityPCRs:
-		return u.FieldByName("AssignedPCR"), nil
+		return "AssignedPCR", nil
 	case CapabilityTPMProperties:
-		return u.FieldByName("TPMProperties"), nil
+		return "TPMProperties", nil
 	case CapabilityPCRProperties:
-		return u.FieldByName("PCRProperties"), nil
+		return "PCRProperties", nil
 	case CapabilityECCCurves:
-		return u.FieldByName("ECCCurves"), nil
+		return "ECCCurves", nil
 	case CapabilityAuthPolicies:
-		return u.FieldByName("AuthPolicies"), nil
+		return "AuthPolicies", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type Context struct {

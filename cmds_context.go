@@ -27,14 +27,14 @@ type resourceContextDataU struct {
 	Session *sessionContextData
 }
 
-func (d resourceContextDataU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (d resourceContextDataU) Select(selector interface{}) (string, error) {
 	switch selector.(uint8) {
 	case contextTypeObject:
-		return u.FieldByName("Object"), nil
+		return "Object", nil
 	case contextTypeSession:
-		return u.FieldByName("Session"), nil
+		return "Session", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 const (

@@ -368,18 +368,18 @@ type TestUnion struct {
 	C uint16
 }
 
-func (t TestUnion) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
+func (t TestUnion) Select(selector interface{}) (string, error) {
 	switch selector.(uint32) {
 	case 1:
-		return u.FieldByName("A"), nil
+		return "A", nil
 	case 2:
-		return u.FieldByName("B"), nil
+		return "B", nil
 	case 3:
-		return u.FieldByName("C"), nil
+		return "C", nil
 	case 4:
-		return reflect.Value{}, nil
+		return "", nil
 	}
-	return reflect.Value{}, invalidSelectorError{selector}
+	return "", invalidSelectorError{selector}
 }
 
 type TestUnionContainer struct {
