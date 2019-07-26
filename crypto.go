@@ -199,7 +199,7 @@ func cryptComputeNonce(nonce []byte) error {
 	return err
 }
 
-func cryptEncryptRSA(public *Public, padding AlgorithmId, data, label []byte) ([]byte, error) {
+func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []byte) ([]byte, error) {
 	if public.Type != AlgorithmRSA {
 		return nil, fmt.Errorf("unsupported key type %v", public.Type)
 	}
@@ -210,14 +210,15 @@ func cryptEncryptRSA(public *Public, padding AlgorithmId, data, label []byte) ([
 	}
 	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA), E: exp}
 
-	if padding == AlgorithmNull {
-		padding = public.Params.RSADetail.Scheme.Scheme
+	padding := public.Params.RSADetail.Scheme.Scheme
+	if paddingOverride != AlgorithmNull {
+		padding = paddingOverride
 	}
 
 	switch padding {
 	case AlgorithmOAEP:
 		schemeHashAlg := public.NameAlg
-		if padding == AlgorithmNull {
+		if paddingOverride == AlgorithmNull {
 			schemeHashAlg = public.Params.RSADetail.Scheme.Details.OAEP.HashAlg
 		}
 		if schemeHashAlg == AlgorithmNull {
