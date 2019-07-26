@@ -16,6 +16,7 @@ import (
 var (
 	byteType             reflect.Type = reflect.TypeOf(byte(0))
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
+	rawSliceType         reflect.Type = reflect.TypeOf(RawSliceType{})
 )
 
 type CustomMarshaller interface {
@@ -23,51 +24,50 @@ type CustomMarshaller interface {
 	Unmarshal(buf io.Reader) error
 }
 
-type SliceType int
-type StructFlags int
-
-const (
-	SliceTypeSizedBuffer SliceType = iota
-	SliceTypeList
-)
-
-const (
-	StructFlagSized StructFlags = 1 << iota
-	StructFlagContainsUnion
-	StructFlagUnion
-)
-
-func isStructTypeWithUnion(s reflect.Value) bool {
-	if s.Kind() != reflect.Struct {
-		return false
-	}
-	trait, hasTrait := s.Interface().(StructTrait)
-	if !hasTrait {
-		return false
-	}
-	return trait.StructFlags()&StructFlagContainsUnion > 0
+type RawSliceType struct {
+	Impl interface{}
 }
 
-func isSizedStruct(s reflect.Value) bool {
-	if s.Kind() != reflect.Struct {
-		return false
-	}
-	trait, hasTrait := s.Interface().(StructTrait)
-	if !hasTrait {
-		return false
-	}
-	return trait.StructFlags()&StructFlagSized > 0
+func RawSlice(i interface{}) *RawSliceType {
+	return &RawSliceType{i}
+}
+
+type Union interface {
+	Select(selector interface{}, u reflect.Value) (reflect.Value, error)
+}
+
+type UnionContainer interface {
+	Selector(field reflect.StructField) interface{}
+}
+
+type SizedStruct interface {
+	UnsizedStructType() reflect.Type
+}
+
+func isUnionContainer(s reflect.Value) bool {
+	_, hasInterface := s.Interface().(UnionContainer)
+	return hasInterface
 }
 
 func isUnion(s reflect.Value) bool {
-	if s.Kind() != reflect.Struct {
+	_, hasInterface := s.Interface().(Union)
+	return hasInterface
+}
+
+func isSizedStruct(s reflect.Value) bool {
+	_, hasInterface := s.Interface().(SizedStruct)
+	return hasInterface
+}
+
+func isSizedBuffer(s reflect.Value) bool {
+	if s.Kind() != reflect.Slice {
 		return false
 	}
-	trait, hasTrait := s.Interface().(StructTrait)
-	if !hasTrait {
-		return false
-	}
-	return trait.StructFlags()&StructFlagUnion > 0
+	return s.Type().Elem().Kind() == reflect.Uint8
+}
+
+func isRawSlice(s reflect.Value) bool {
+	return s.Type() == rawSliceType
 }
 
 func hasCustomMarshallerImpl(val reflect.Value) bool {
@@ -81,6 +81,7 @@ func hasCustomMarshallerImpl(val reflect.Value) bool {
 
 func makeSizedStructReader(buf io.Reader) (io.Reader, error) {
 	var size uint16
+	// Sized structures have a 16-bit size field
 	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
 		return nil, fmt.Errorf("cannot read size of sized struct: %v", err)
 	}
@@ -88,30 +89,10 @@ func makeSizedStructReader(buf io.Reader) (io.Reader, error) {
 		return nil, nil
 	}
 	b := make([]byte, size)
-	n, err := buf.Read(b)
-	if err != nil {
+	if _, err := io.ReadFull(buf, b); err != nil {
 		return nil, fmt.Errorf("cannot read contents of sized struct: %v", err)
 	}
-	if n < int(size) {
-		return nil, fmt.Errorf("cannot read contents of sized struct: %v", io.EOF)
-	}
 	return bytes.NewReader(b), nil
-}
-
-type RawSliceType struct {
-	Impl interface{}
-}
-
-func RawSlice(i interface{}) *RawSliceType {
-	return &RawSliceType{i}
-}
-
-type SliceTrait interface {
-	SliceType() SliceType
-}
-
-type StructTrait interface {
-	StructFlags() StructFlags
 }
 
 type invalidSelectorError struct {
@@ -120,14 +101,6 @@ type invalidSelectorError struct {
 
 func (e invalidSelectorError) Error() string {
 	return fmt.Sprintf("invalid selector value: %v", e.selector)
-}
-
-type Union interface {
-	Select(selector interface{}, u reflect.Value) (reflect.Value, error)
-}
-
-type UnionContainer interface {
-	Selector(field reflect.StructField) interface{}
 }
 
 type muContext struct {
@@ -163,6 +136,8 @@ func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 	if ptr.IsNil() {
 		tmp := reflect.New(ptr.Type().Elem())
 		if isSizedStruct(tmp.Elem()) {
+			// Nil pointers for sized structures are allowed - in this case, marshal a size
+			// field of zero
 			return binary.Write(buf, binary.BigEndian, uint16(0))
 		}
 		return errors.New("nil pointer")
@@ -175,10 +150,11 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 	if !ctx.parent.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isStructTypeWithUnion(ctx.parent) {
+	if !isUnionContainer(ctx.parent) {
 		return errors.New("inside invalid container type")
 	}
 
+	// Select the union member to marshal based on the selector value from the parent container
 	selector := ctx.parent.Interface().(UnionContainer).Selector(ctx.fieldInParent)
 	val, err := u.Interface().(Union).Select(selector, u)
 	if err != nil {
@@ -192,7 +168,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 }
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
-	if s.Type() == reflect.TypeOf(RawSliceType{}) {
+	if isRawSlice(s) {
 		if ctx.parent.IsValid() {
 			return errors.New("RawSlice is inside another container")
 		}
@@ -205,9 +181,6 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 		return marshalValue(buf, f, beginRawSliceCtx(ctx))
 	}
 
-	dstBuf := buf
-	var tmpBuf *bytes.Buffer
-
 	switch {
 	case isSizedStruct(s) && isUnion(s):
 		return errors.New("cannot be both sized and a union")
@@ -215,8 +188,20 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.parent.Type())
 	case isSizedStruct(s):
-		tmpBuf = new(bytes.Buffer)
-		dstBuf = tmpBuf
+		// Convert the sized struct to the non-sized type, marshal that to a temporary buffer and then
+		// write it along with the 16-bit size field to the output buffer
+		tmpBuf := new(bytes.Buffer)
+		us := s.Convert(s.Interface().(SizedStruct).UnsizedStructType())
+		if err := marshalStruct(tmpBuf, us, ctx); err != nil {
+			return fmt.Errorf("cannot marshal sized struct: %v", err)
+		}
+		if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
+			return fmt.Errorf("cannot write size of sized struct to output buffer: %v", err)
+		}
+		if _, err := tmpBuf.WriteTo(buf); err != nil {
+			return fmt.Errorf("cannot write marshalled sized struct to output buffer: %v", err)
+		}
+		return nil
 	case isUnion(s):
 		if err := marshalUnion(buf, s, ctx); err != nil {
 			return fmt.Errorf("error marshalling union struct: %v", err)
@@ -225,52 +210,36 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	}
 
 	for i := 0; i < s.NumField(); i++ {
-		if err := marshalValue(dstBuf, s.Field(i), beginStructCtx(ctx, s, i)); err != nil {
+		if err := marshalValue(buf, s.Field(i), beginStructCtx(ctx, s, i)); err != nil {
 			return fmt.Errorf("cannot marshal field %s: %v", s.Type().Field(i).Name, err)
 		}
 	}
 
-	if tmpBuf == nil {
-		return nil
-	}
-
-	if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
-		return fmt.Errorf("cannot write size of sized struct to output buffer: %v", err)
-	}
-
-	n, err := buf.Write(tmpBuf.Bytes())
-	if err != nil {
-		return fmt.Errorf("cannot write marshalled sized struct to output buffer: %v", err)
-	}
-	if n != tmpBuf.Len() {
-		return errors.New("cannot write entire marshalled sized struct to output buffer")
-	}
 	return nil
 }
 
 func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
-	if trait, hasTrait := slice.Interface().(SliceTrait); hasTrait {
-		switch trait.SliceType() {
-		case SliceTypeSizedBuffer:
-			if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
-				return fmt.Errorf("cannot write size of sized buffer: %v", err)
-			}
-		case SliceTypeList:
-			if err := binary.Write(buf, binary.BigEndian, uint32(slice.Len())); err != nil {
-				return fmt.Errorf("cannot write size of list: %v", err)
-			}
-		default:
-			return fmt.Errorf("invalid SliceType %v", trait.SliceType())
+	// Marshal size field
+	switch {
+	case ctx.parentIsRawSlice:
+		// No size field - we've been instructed to marshal the slice as it is
+	case isSizedBuffer(slice):
+		// Sized byte-buffers have a 16-bit size field
+		if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
+			return fmt.Errorf("cannot write size of sized buffer: %v", err)
 		}
-	} else if !ctx.parentIsRawSlice {
-		return errors.New("missing SliceTrait implementation")
-	} else if slice.Type().Elem() == byteType {
-		n, err := buf.Write(slice.Bytes())
+	default:
+		// Treat all other slices as a list, which have a 32-bit size field
+		if err := binary.Write(buf, binary.BigEndian, uint32(slice.Len())); err != nil {
+			return fmt.Errorf("cannot write size of list: %v", err)
+		}
+	}
+
+	if ctx.parentIsRawSlice && slice.Type().Elem().Kind() == reflect.Uint8 {
+		// Shortcut for raw byte-slice
+		_, err := buf.Write(slice.Bytes())
 		if err != nil {
 			return fmt.Errorf("cannot write byte slice directly to output buffer: %v", err)
-		}
-		if n < slice.Len() {
-			return errors.New("cannot write entire byte slice directly to output buffer")
 		}
 		return nil
 	}
@@ -340,6 +309,7 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 
 	if isSizedStruct(ptr.Elem()) {
 		b, err := makeSizedStructReader(buf)
+		// If the size of the sized struct is zero, clear the pointer
 		if b == nil || err != nil {
 			ptr.Set(reflect.Zero(ptr.Type()))
 		}
@@ -359,10 +329,11 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 	if !ctx.parent.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isStructTypeWithUnion(ctx.parent) {
+	if !isUnionContainer(ctx.parent) {
 		return errors.New("inside invalid container type")
 	}
 
+	// Select the union member to marshal based on the selector value from the parent container
 	selector := ctx.parent.Interface().(UnionContainer).Selector(ctx.fieldInParent)
 	val, err := u.Interface().(Union).Select(selector, u)
 	if err != nil {
@@ -376,7 +347,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
-	if s.Type() == reflect.TypeOf(RawSliceType{}) {
+	if isRawSlice(s) {
 		if ctx.parent.IsValid() {
 			return errors.New("RawSlice is inside another container")
 		}
@@ -389,23 +360,31 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 		return unmarshalValue(buf, f, beginRawSliceCtx(ctx))
 	}
 
-	srcBuf := buf
-
 	switch {
 	case isSizedStruct(s) && isUnion(s):
 		return errors.New("cannot be both sized and a union")
 	case isSizedStruct(s) && !ctx.fromPointer && ctx.parent.IsValid():
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.parent.Type())
-	case isSizedStruct(s) && !ctx.fromPointer:
-		b, err := makeSizedStructReader(buf)
-		if err != nil {
-			return err
+	case isSizedStruct(s):
+		srcBuf := buf
+		if !ctx.fromPointer {
+			// The pointer unmarshalling creates the sized buffer reader for us
+			b, err := makeSizedStructReader(buf)
+			if err != nil {
+				return err
+			}
+			if b == nil {
+				return errors.New("sized struct cannot have zero size in this context")
+			}
+			srcBuf = b
 		}
-		if b == nil {
-			return errors.New("sized struct cannot have zero size in this context")
+		t := reflect.PtrTo(s.Interface().(SizedStruct).UnsizedStructType())
+		us := s.Addr().Convert(t).Elem()
+		if err := unmarshalStruct(srcBuf, us, ctx); err != nil {
+			return fmt.Errorf("cannot unmarshal sized struct: %v", err)
 		}
-		srcBuf = b
+		return nil
 	case isUnion(s):
 		if err := unmarshalUnion(buf, s, ctx); err != nil {
 			return fmt.Errorf("error unmarshalling union struct: %v", err)
@@ -414,7 +393,7 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	}
 
 	for i := 0; i < s.NumField(); i++ {
-		if err := unmarshalValue(srcBuf, s.Field(i), beginStructCtx(ctx, s, i)); err != nil {
+		if err := unmarshalValue(buf, s.Field(i), beginStructCtx(ctx, s, i)); err != nil {
 			return fmt.Errorf("cannot unmarshal field %s: %v", s.Type().Field(i).Name, err)
 		}
 	}
@@ -423,43 +402,42 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 
 func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	var l int
-	if trait, hasTrait := slice.Interface().(SliceTrait); hasTrait {
-		switch trait.SliceType() {
-		case SliceTypeSizedBuffer:
-			var tmp uint16
-			if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
-				return fmt.Errorf("cannot read size of sized buffer: %v", err)
-			}
-			l = int(tmp)
-		case SliceTypeList:
-			var tmp uint32
-			if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
-				return fmt.Errorf("cannot read size of list: %v", err)
-			}
-			l = int(tmp)
-		default:
-			return fmt.Errorf("invalid SliceType %v", trait.SliceType())
+	switch {
+	case ctx.parentIsRawSlice:
+		// No size field - unmarshalling requires a pre-allocated slice
+		if slice.IsNil() {
+			return errors.New("nil raw slice")
 		}
-	} else if !ctx.parentIsRawSlice {
-		return errors.New("missing SliceTrait implementation")
-	} else if slice.IsNil() {
-		return errors.New("nil raw slice")
-	} else if slice.Type().Elem() == byteType {
-		n, err := buf.Read(slice.Bytes())
-		if err != nil {
-			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", err)
+	case isSizedBuffer(slice):
+		// Sized byte-buffers have a 16-bit size field
+		var tmp uint16
+		if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
+			return fmt.Errorf("cannot read size of sized buffer: %v", err)
 		}
-		if n < slice.Len() {
-			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", io.EOF)
+		l = int(tmp)
+	default:
+		// Treat all other slices as a list, which have a 32-bit size field
+		var tmp uint32
+		if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
+			return fmt.Errorf("cannot read size of list: %v", err)
 		}
-		return nil
+		l = int(tmp)
 	}
 
+	// Allocate the slice
 	if slice.IsNil() {
 		if !slice.CanSet() {
 			return errors.New("unexported field")
 		}
 		slice.Set(reflect.MakeSlice(slice.Type(), l, l))
+	}
+
+	if ctx.parentIsRawSlice && slice.Type().Elem().Kind() == reflect.Uint8 {
+		// Shortcut for raw byte-slice
+		if _, err := io.ReadFull(buf, slice.Bytes()); err != nil {
+			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", err)
+		}
+		return nil
 	}
 
 	for i := 0; i < slice.Len(); i++ {

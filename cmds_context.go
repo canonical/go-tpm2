@@ -27,10 +27,6 @@ type resourceContextDataU struct {
 	Session *sessionContextData
 }
 
-func (d resourceContextDataU) StructFlags() StructFlags {
-	return StructFlagUnion
-}
-
 func (d resourceContextDataU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
 	switch selector.(uint8) {
 	case contextTypeObject:
@@ -50,10 +46,6 @@ type resourceContextData struct {
 	ContextType uint8
 	Data        resourceContextDataU
 	TPMBlob     ContextData
-}
-
-func (d resourceContextData) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (d resourceContextData) Selector(field reflect.StructField) interface{} {

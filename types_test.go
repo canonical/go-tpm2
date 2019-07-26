@@ -17,10 +17,6 @@ type TestPublicIDUContainer struct {
 	Unique PublicIDU
 }
 
-func (c TestPublicIDUContainer) StructFlags() StructFlags {
-	return StructFlagContainsUnion
-}
-
 func (c TestPublicIDUContainer) Selector(field reflect.StructField) interface{} {
 	return c.Alg
 }
@@ -92,10 +88,6 @@ func TestPublicIDUnion(t *testing.T) {
 type TestSchemeKeyedHashUContainer struct {
 	Scheme  AlgorithmId
 	Details SchemeKeyedHashU
-}
-
-func (c TestSchemeKeyedHashUContainer) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (c TestSchemeKeyedHashUContainer) Selector(field reflect.StructField) interface{} {

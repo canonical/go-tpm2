@@ -55,116 +55,28 @@ func (a NVAttributes) Type() NVType {
 }
 
 type Auth Digest
-
-func (a Auth) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type ContextData []byte
-
-func (d ContextData) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Data []byte
-
-func (d Data) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Digest []byte
-
-func (d Digest) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type ECCParameter []byte
-
-func (e ECCParameter) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type EncryptedSecret []byte
-
-func (s EncryptedSecret) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Event []byte
-
-func (e Event) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Label []byte
-
-func (l Label) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type MaxBuffer []byte
-
-func (b MaxBuffer) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Name []byte
-
-func (n Name) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Nonce Digest
-
-func (n Nonce) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Private []byte
-
-func (p Private) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type PrivateKeyRSA []byte
-
-func (k PrivateKeyRSA) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type PublicKeyRSA []byte
-
-func (k PublicKeyRSA) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type SensitiveData []byte
-
-func (s SensitiveData) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type SymKey []byte
-
-func (s SymKey) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 type Timeout []byte
-
-func (t Timeout) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
 
 type PublicIDU struct {
 	KeyedHash Digest
 	Sym       Digest
 	RSA       PublicKeyRSA
 	ECC       *ECCPoint
-}
-
-func (p PublicIDU) StructFlags() StructFlags {
-	return StructFlagUnion
 }
 
 func (p PublicIDU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
@@ -184,10 +96,6 @@ func (p PublicIDU) Select(selector interface{}, u reflect.Value) (reflect.Value,
 type SchemeKeyedHashU struct {
 	HMAC *SchemeHMAC
 	XOR  *SchemeXOR
-}
-
-func (d SchemeKeyedHashU) StructFlags() StructFlags {
-	return StructFlagUnion
 }
 
 func (d SchemeKeyedHashU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
@@ -213,10 +121,6 @@ type AsymSchemeU struct {
 	ECSCHNORR *SigSchemeECSCHNORR
 	RSAES     *EncSchemeRSAES
 	OAEP      *EncSchemeOAEP
-}
-
-func (s AsymSchemeU) StructFlags() StructFlags {
-	return StructFlagUnion
 }
 
 func (s AsymSchemeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
@@ -254,10 +158,6 @@ type KDFSchemeU struct {
 	KDF1_SP800_108 *SchemeKDF1_SP800_108
 }
 
-func (s KDFSchemeU) StructFlags() StructFlags {
-	return StructFlagUnion
-}
-
 func (s KDFSchemeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmMGF1:
@@ -281,10 +181,6 @@ type PublicParamsU struct {
 	ECCDetail       *ECCParams
 }
 
-func (p PublicParamsU) StructFlags() StructFlags {
-	return StructFlagUnion
-}
-
 func (p PublicParamsU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmRSA:
@@ -304,10 +200,6 @@ type SymKeyBitsU struct {
 	XOR AlgorithmId
 }
 
-func (b SymKeyBitsU) StructFlags() StructFlags {
-	return StructFlagUnion
-}
-
 func (b SymKeyBitsU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
 	switch selector.(AlgorithmId) {
 	case AlgorithmXOR:
@@ -320,10 +212,6 @@ func (b SymKeyBitsU) Select(selector interface{}, u reflect.Value) (reflect.Valu
 
 type SymModeU struct {
 	Sym AlgorithmId
-}
-
-func (m SymModeU) StructFlags() StructFlags {
-	return StructFlagUnion
 }
 
 func (m SymModeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
@@ -341,10 +229,6 @@ type SensitiveCompositeU struct {
 	ECC  ECCParameter
 	Bits SensitiveData
 	Sym  SymKey
-}
-
-func (s SensitiveCompositeU) StructFlags() StructFlags {
-	return StructFlagUnion
 }
 
 func (s SensitiveCompositeU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
@@ -372,10 +256,6 @@ type CapabilitiesU struct {
 	PCRProperties TaggedPCRPropertyList
 	ECCCurves     ECCCurveList
 	AuthPolicies  TaggedPolicyList
-}
-
-func (c CapabilitiesU) StructFlags() StructFlags {
-	return StructFlagUnion
 }
 
 func (c CapabilitiesU) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
@@ -435,8 +315,8 @@ type CreationData struct {
 
 type CreationData2B CreationData
 
-func (c CreationData2B) StructFlags() StructFlags {
-	return StructFlagSized
+func (c CreationData2B) UnsizedStructType() reflect.Type {
+	return reflect.TypeOf(CreationData(c))
 }
 
 type PCRSelectionData []int
@@ -546,10 +426,6 @@ type KeyedHashScheme struct {
 	Details SchemeKeyedHashU
 }
 
-func (s KeyedHashScheme) StructFlags() StructFlags {
-	return StructFlagContainsUnion
-}
-
 func (s KeyedHashScheme) Selector(field reflect.StructField) interface{} {
 	return s.Scheme
 }
@@ -564,10 +440,6 @@ type SymDef struct {
 	Mode      SymModeU
 }
 
-func (d SymDef) StructFlags() StructFlags {
-	return StructFlagContainsUnion
-}
-
 func (d SymDef) Selector(field reflect.StructField) interface{} {
 	return d.Algorithm
 }
@@ -576,10 +448,6 @@ type SymDefObject struct {
 	Algorithm AlgorithmId
 	KeyBits   SymKeyBitsU
 	Mode      SymModeU
-}
-
-func (o SymDefObject) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (o SymDefObject) Selector(field reflect.StructField) interface{} {
@@ -593,10 +461,6 @@ type SymCipherParams struct {
 type RSAScheme struct {
 	Scheme  AlgorithmId
 	Details AsymSchemeU
-}
-
-func (s RSAScheme) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (s RSAScheme) Selector(field reflect.StructField) interface{} {
@@ -615,10 +479,6 @@ type KDFScheme struct {
 	Details KDFSchemeU
 }
 
-func (s KDFScheme) StructFlags() StructFlags {
-	return StructFlagContainsUnion
-}
-
 func (s KDFScheme) Selector(field reflect.StructField) interface{} {
 	return s.Scheme
 }
@@ -626,10 +486,6 @@ func (s KDFScheme) Selector(field reflect.StructField) interface{} {
 type ECCScheme struct {
 	Scheme  AlgorithmId
 	Details AsymSchemeU
-}
-
-func (s ECCScheme) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (s ECCScheme) Selector(field reflect.StructField) interface{} {
@@ -650,10 +506,6 @@ type Public struct {
 	AuthPolicy Digest
 	Params     PublicParamsU
 	Unique     PublicIDU
-}
-
-func (p Public) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (p Public) Selector(field reflect.StructField) interface{} {
@@ -695,12 +547,8 @@ func (p *Public) Copy() *Public {
 
 type Public2B Public
 
-func (p Public2B) StructFlags() StructFlags {
-	return StructFlagSized | StructFlagContainsUnion
-}
-
-func (p Public2B) Selector(field reflect.StructField) interface{} {
-	return (Public)(p).Selector(field)
+func (p Public2B) UnsizedStructType() reflect.Type {
+	return reflect.TypeOf(Public(p))
 }
 
 type NVPublic struct {
@@ -713,8 +561,8 @@ type NVPublic struct {
 
 type NVPublic2B NVPublic
 
-func (p NVPublic2B) StructFlags() StructFlags {
-	return StructFlagSized
+func (p NVPublic2B) UnsizedStructType() reflect.Type {
+	return reflect.TypeOf(NVPublic(p))
 }
 
 type SensitiveCreate struct {
@@ -724,8 +572,8 @@ type SensitiveCreate struct {
 
 type SensitiveCreate2B SensitiveCreate
 
-func (s SensitiveCreate2B) StructFlags() StructFlags {
-	return StructFlagSized
+func (s SensitiveCreate2B) UnsizedStructType() reflect.Type {
+	return reflect.TypeOf(SensitiveCreate(s))
 }
 
 type Sensitive struct {
@@ -735,31 +583,19 @@ type Sensitive struct {
 	Sensitive SensitiveCompositeU
 }
 
-func (s Sensitive) StructFlags() StructFlags {
-	return StructFlagContainsUnion
-}
-
 func (s Sensitive) Selector(field reflect.StructField) interface{} {
 	return s.Type
 }
 
 type Sensitive2B Sensitive
 
-func (s Sensitive2B) StructFlags() StructFlags {
-	return StructFlagSized | StructFlagContainsUnion
-}
-
-func (s Sensitive2B) Selector(field reflect.StructField) interface{} {
-	return Sensitive(s).Selector(field)
+func (s Sensitive2B) UnsizedStructType() reflect.Type {
+	return reflect.TypeOf(Sensitive(s))
 }
 
 type CapabilityData struct {
 	Capability Capability
 	Data       CapabilitiesU
-}
-
-func (d CapabilityData) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (d CapabilityData) Selector(field reflect.StructField) interface{} {
@@ -834,73 +670,14 @@ type TaggedPolicy struct {
 }
 
 type AlgorithmList []AlgorithmId
-
-func (l AlgorithmList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type AlgorithmPropertyList []AlgorithmProperty
-
-func (l AlgorithmPropertyList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type CommandAttributesList []CommandAttributes
-
-func (l CommandAttributesList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type CommandCodeList []CommandCode
-
-func (l CommandCodeList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type DigestList []Digest
-
-func (l DigestList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type ECCCurveList []ECCCurve
-
-func (l ECCCurveList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type HandleList []Handle
-
-func (l HandleList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type PCRSelectionList []PCRSelection
-
-func (l PCRSelectionList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type TaggedHashList []TaggedHash
-
-func (l TaggedHashList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type TaggedPolicyList []TaggedPolicy
-
-func (l TaggedPolicyList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type TaggedTPMPropertyList []TaggedProperty
-
-func (l TaggedTPMPropertyList) SliceType() SliceType {
-	return SliceTypeList
-}
-
 type TaggedPCRPropertyList []TaggedPCRSelect
-
-func (l TaggedPCRPropertyList) SliceType() SliceType {
-	return SliceTypeList
-}

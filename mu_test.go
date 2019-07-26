@@ -46,23 +46,6 @@ func TestMarshalBasic(t *testing.T) {
 	}
 }
 
-func TestMarshalNormalSlice(t *testing.T) {
-	if _, err := MarshalToBytes([]uint16{56, 453, 3233}); err == nil {
-		t.Errorf("MarshalToBytes shouldn't be able to marshal a normal slice")
-	}
-}
-
-func TestUnmarshalNormalSlice(t *testing.T) {
-	var out []uint16
-	_, err := UnmarshalFromBytes([]byte{0xff, 0xff, 0xff, 0xff}, &out)
-	if err == nil {
-		t.Fatalf("UnmarshalFromBytes shouldn't be able to unmarshal a normal slice")
-	}
-	if err.Error() != "cannot unmarshal slice type []uint16: missing SliceTrait implementation" {
-		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
-	}
-}
-
 func TestUnmarshalValue(t *testing.T) {
 	var a uint32
 	_, err := UnmarshalFromBytes([]byte{0xff, 0xff, 0xff, 0xff}, a)
@@ -101,10 +84,6 @@ func TestMarshalRawSlice(t *testing.T) {
 
 type TestSizedBuffer []byte
 
-func (b TestSizedBuffer) SliceType() SliceType {
-	return SliceTypeSizedBuffer
-}
-
 func TestMarshalSizedBuffer(t *testing.T) {
 	a := TestSizedBuffer{0x2f, 0x74, 0x68, 0x3f, 0x15, 0x43, 0x1d, 0x01, 0xea, 0x28, 0xad, 0xe2, 0x6c,
 		0x4d, 0x00, 0x9b}
@@ -134,10 +113,6 @@ func TestMarshalSizedBuffer(t *testing.T) {
 }
 
 type TestListUint32 []uint32
-
-func (l TestListUint32) SliceType() SliceType {
-	return SliceTypeList
-}
 
 func TestMarshalList(t *testing.T) {
 	a := TestListUint32{46, 4563421, 678, 12390}
@@ -251,13 +226,14 @@ type TestSizedStruct struct {
 	A uint32
 	B TestListUint32
 }
+type TestSizedStruct2B TestSizedStruct
 
-func (s TestSizedStruct) StructFlags() StructFlags {
-	return StructFlagSized
+func (s TestSizedStruct2B) UnsizedStructType() reflect.Type {
+	return reflect.TypeOf(TestSizedStruct(s))
 }
 
 func TestMarshalSizedStruct(t *testing.T) {
-	a := TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}
+	a := TestSizedStruct2B{A: 754122, B: TestListUint32{22189, 854543, 445888654}}
 	out, err := MarshalToBytes(a)
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
@@ -268,7 +244,7 @@ func TestMarshalSizedStruct(t *testing.T) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	var ao TestSizedStruct
+	var ao TestSizedStruct2B
 
 	n, err := UnmarshalFromBytes(out, &ao)
 	if err != nil {
@@ -284,7 +260,7 @@ func TestMarshalSizedStruct(t *testing.T) {
 }
 
 func TestMarshalNilSizedStruct(t *testing.T) {
-	out, err := MarshalToBytes((*TestSizedStruct)(nil))
+	out, err := MarshalToBytes((*TestSizedStruct2B)(nil))
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
@@ -293,19 +269,19 @@ func TestMarshalNilSizedStruct(t *testing.T) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	var o TestSizedStruct
+	var o TestSizedStruct2B
 	_, err = UnmarshalFromBytes(out, &o)
 	if err == nil {
 		t.Fatalf("UnmarshalToBytes should fail unmarsalling a zero sized structure directly")
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2.TestSizedStruct: sized struct cannot have zero "+
+	if err.Error() != "cannot unmarshal struct type tpm2.TestSizedStruct2B: sized struct cannot have zero "+
 		"size in this context" {
 		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
 	}
 }
 
 type TestStructWithNonPointerSizedStruct struct {
-	S TestSizedStruct
+	S TestSizedStruct2B
 }
 
 func TestMarshalSizedStructAsValue(t *testing.T) {
@@ -315,7 +291,7 @@ func TestMarshalSizedStructAsValue(t *testing.T) {
 		t.Fatalf("MarshalToBytes should fail to marshal a non-pointer sized struct")
 	}
 	if err.Error() != "cannot marshal struct type tpm2.TestStructWithNonPointerSizedStruct: cannot "+
-		"marshal field S: cannot marshal struct type tpm2.TestSizedStruct: sized struct inside "+
+		"marshal field S: cannot marshal struct type tpm2.TestSizedStruct2B: sized struct inside "+
 		"container type tpm2.TestStructWithNonPointerSizedStruct is not referenced via a pointer" {
 		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
 	}
@@ -323,7 +299,7 @@ func TestMarshalSizedStructAsValue(t *testing.T) {
 
 type TestStructWithPointerSizedStruct struct {
 	A uint32
-	S *TestSizedStruct
+	S *TestSizedStruct2B
 }
 
 func TestMarshalSizedStructFromPointer(t *testing.T) {
@@ -336,7 +312,7 @@ func TestMarshalSizedStructFromPointer(t *testing.T) {
 			desc: "Normal",
 			in: TestStructWithPointerSizedStruct{
 				A: 5665443,
-				S: &TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}},
+				S: &TestSizedStruct2B{A: 754122, B: TestListUint32{22189, 854543, 445888654}}},
 			out: []byte{0x00, 0x56, 0x72, 0xa3, 0x00, 0x14, 0x00, 0x0b, 0x81, 0xca, 0x00, 0x00,
 				0x00, 0x03, 0x00, 0x00, 0x56, 0xad, 0x00, 0x0d, 0x0a, 0x0f, 0x1a, 0x93, 0xb8,
 				0x8e},
@@ -392,10 +368,6 @@ type TestUnion struct {
 	C uint16
 }
 
-func (u TestUnion) StructFlags() StructFlags {
-	return StructFlagUnion
-}
-
 func (t TestUnion) Select(selector interface{}, u reflect.Value) (reflect.Value, error) {
 	switch selector.(uint32) {
 	case 1:
@@ -413,10 +385,6 @@ func (t TestUnion) Select(selector interface{}, u reflect.Value) (reflect.Value,
 type TestUnionContainer struct {
 	Select uint32
 	Union  TestUnion
-}
-
-func (c TestUnionContainer) StructFlags() StructFlags {
-	return StructFlagContainsUnion
 }
 
 func (c TestUnionContainer) Selector(field reflect.StructField) interface{} {
