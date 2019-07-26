@@ -104,32 +104,35 @@ func (e invalidSelectorError) Error() string {
 }
 
 type muContext struct {
-	depth            int
-	parent           reflect.Value
-	fieldInParent    reflect.StructField
-	parentIsRawSlice bool
-	fromPointer      bool
+	depth         int
+	container     reflect.Value
+	fieldInParent reflect.StructField
+	parentType    reflect.Type
 }
 
 func beginRawSliceCtx(ctx *muContext) *muContext {
-	return &muContext{depth: ctx.depth, parentIsRawSlice: true}
+	return &muContext{depth: ctx.depth, parentType: rawSliceType}
 }
 
 func beginStructCtx(ctx *muContext, s reflect.Value, i int) *muContext {
-	return &muContext{depth: ctx.depth, parent: s, fieldInParent: s.Type().Field(i)}
+	return &muContext{depth: ctx.depth, container: s, fieldInParent: s.Type().Field(i), parentType: s.Type()}
 }
 
 func beginUnionCtx(ctx *muContext, u reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, parent: u}
+	return &muContext{depth: ctx.depth, container: u, parentType: u.Type()}
 }
 
 func beginSliceCtx(ctx *muContext, s reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, parent: s}
+	return &muContext{depth: ctx.depth, container: s, parentType: s.Type()}
 }
 
-func beginPtrCtx(ctx *muContext) *muContext {
-	return &muContext{depth: ctx.depth, parent: ctx.parent, fieldInParent: ctx.fieldInParent,
-		fromPointer: true}
+func beginPtrCtx(ctx *muContext, p reflect.Value) *muContext {
+	return &muContext{depth: ctx.depth, container: ctx.container, fieldInParent: ctx.fieldInParent,
+		parentType: p.Type()}
+}
+
+func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
+	return ctx.parentType == reflect.PtrTo(v.Type())
 }
 
 func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
@@ -143,19 +146,19 @@ func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 		return errors.New("nil pointer")
 	}
 
-	return marshalValue(buf, ptr.Elem(), beginPtrCtx(ctx))
+	return marshalValue(buf, ptr.Elem(), beginPtrCtx(ctx, ptr))
 }
 
 func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
-	if !ctx.parent.IsValid() {
+	if !ctx.container.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isUnionContainer(ctx.parent) {
+	if !isUnionContainer(ctx.container) {
 		return errors.New("inside invalid container type")
 	}
 
 	// Select the union member to marshal based on the selector value from the parent container
-	selector := ctx.parent.Interface().(UnionContainer).Selector(ctx.fieldInParent)
+	selector := ctx.container.Interface().(UnionContainer).Selector(ctx.fieldInParent)
 	val, err := u.Interface().(Union).Select(selector, u)
 	if err != nil {
 		return fmt.Errorf("cannot select union member: %v", err)
@@ -169,7 +172,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	if isRawSlice(s) {
-		if ctx.parent.IsValid() {
+		if ctx.container.IsValid() {
 			return errors.New("RawSlice is inside another container")
 		}
 
@@ -184,9 +187,9 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	switch {
 	case isSizedStruct(s) && isUnion(s):
 		return errors.New("cannot be both sized and a union")
-	case isSizedStruct(s) && !ctx.fromPointer && ctx.parent.IsValid():
+	case isSizedStruct(s) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
-			ctx.parent.Type())
+			ctx.container.Type())
 	case isSizedStruct(s):
 		// Convert the sized struct to the non-sized type, marshal that to a temporary buffer and then
 		// write it along with the 16-bit size field to the output buffer
@@ -221,7 +224,7 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	// Marshal size field
 	switch {
-	case ctx.parentIsRawSlice:
+	case ctx.parentType == rawSliceType:
 		// No size field - we've been instructed to marshal the slice as it is
 	case isSizedBuffer(slice):
 		// Sized byte-buffers have a 16-bit size field
@@ -235,7 +238,7 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 		}
 	}
 
-	if ctx.parentIsRawSlice && slice.Type().Elem().Kind() == reflect.Uint8 {
+	if ctx.parentType == rawSliceType && slice.Type().Elem().Kind() == reflect.Uint8 {
 		// Shortcut for raw byte-slice
 		_, err := buf.Write(slice.Bytes())
 		if err != nil {
@@ -322,19 +325,19 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 		srcBuf = b
 	}
 
-	return unmarshalValue(srcBuf, ptr.Elem(), beginPtrCtx(ctx))
+	return unmarshalValue(srcBuf, ptr.Elem(), beginPtrCtx(ctx, ptr))
 }
 
 func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
-	if !ctx.parent.IsValid() {
+	if !ctx.container.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isUnionContainer(ctx.parent) {
+	if !isUnionContainer(ctx.container) {
 		return errors.New("inside invalid container type")
 	}
 
 	// Select the union member to marshal based on the selector value from the parent container
-	selector := ctx.parent.Interface().(UnionContainer).Selector(ctx.fieldInParent)
+	selector := ctx.container.Interface().(UnionContainer).Selector(ctx.fieldInParent)
 	val, err := u.Interface().(Union).Select(selector, u)
 	if err != nil {
 		return fmt.Errorf("cannot select union member: %v", err)
@@ -348,7 +351,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	if isRawSlice(s) {
-		if ctx.parent.IsValid() {
+		if ctx.container.IsValid() {
 			return errors.New("RawSlice is inside another container")
 		}
 
@@ -363,12 +366,12 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	switch {
 	case isSizedStruct(s) && isUnion(s):
 		return errors.New("cannot be both sized and a union")
-	case isSizedStruct(s) && !ctx.fromPointer && ctx.parent.IsValid():
+	case isSizedStruct(s) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
-			ctx.parent.Type())
+			ctx.container.Type())
 	case isSizedStruct(s):
 		srcBuf := buf
-		if !ctx.fromPointer {
+		if !arrivedFromPointer(ctx, s) {
 			// The pointer unmarshalling creates the sized buffer reader for us
 			b, err := makeSizedStructReader(buf)
 			if err != nil {
@@ -403,7 +406,7 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	var l int
 	switch {
-	case ctx.parentIsRawSlice:
+	case ctx.parentType == rawSliceType:
 		// No size field - unmarshalling requires a pre-allocated slice
 		if slice.IsNil() {
 			return errors.New("nil raw slice")
@@ -432,7 +435,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 		slice.Set(reflect.MakeSlice(slice.Type(), l, l))
 	}
 
-	if ctx.parentIsRawSlice && slice.Type().Elem().Kind() == reflect.Uint8 {
+	if ctx.parentType == rawSliceType && slice.Type().Elem().Kind() == reflect.Uint8 {
 		// Shortcut for raw byte-slice
 		if _, err := io.ReadFull(buf, slice.Bytes()); err != nil {
 			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", err)
