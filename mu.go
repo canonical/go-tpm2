@@ -17,6 +17,9 @@ var (
 	byteType             reflect.Type = reflect.TypeOf(byte(0))
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
 	rawSliceType         reflect.Type = reflect.TypeOf(RawSliceType{})
+	sizedStructType	     reflect.Type = reflect.TypeOf((*SizedStruct)(nil)).Elem()
+	unionContainerType   reflect.Type = reflect.TypeOf((*UnionContainer)(nil)).Elem()
+	unionType	     reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
 type CustomMarshaller interface {
@@ -44,35 +47,40 @@ type SizedStruct interface {
 	UnsizedStructType() reflect.Type
 }
 
-func isUnionContainer(s reflect.Value) bool {
-	_, hasInterface := s.Interface().(UnionContainer)
-	return hasInterface
-}
-
-func isUnion(s reflect.Value) bool {
-	_, hasInterface := s.Interface().(Union)
-	return hasInterface
-}
-
-func isSizedStruct(s reflect.Value) bool {
-	_, hasInterface := s.Interface().(SizedStruct)
-	return hasInterface
-}
-
-func isSizedBuffer(s reflect.Value) bool {
-	if s.Kind() != reflect.Slice {
+func isUnionContainer(t reflect.Type) bool {
+	if t.Kind() != reflect.Struct {
 		return false
 	}
-	return s.Type().Elem().Kind() == reflect.Uint8
+	return t.Implements(unionContainerType)
 }
 
-func isRawSlice(s reflect.Value) bool {
-	return s.Type() == rawSliceType
+func isUnion(t reflect.Type) bool {
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	return t.Implements(unionType)
 }
 
-func hasCustomMarshallerImpl(val reflect.Value) bool {
-	t := val.Type()
-	if val.Kind() != reflect.Ptr {
+func isSizedStruct(t reflect.Type) bool {
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	return t.Implements(sizedStructType)
+}
+
+func isSizedBuffer(t reflect.Type) bool {
+	if t.Kind() != reflect.Slice {
+		return false
+	}
+	return t.Elem().Kind() == reflect.Uint8
+}
+
+func isRawSlice(t reflect.Type) bool {
+	return t == rawSliceType
+}
+
+func hasCustomMarshallerImpl(t reflect.Type) bool {
+	if t.Kind() != reflect.Ptr {
 		t = reflect.PtrTo(t)
 	}
 	return t.Implements(customMarshallerType)
@@ -137,8 +145,7 @@ func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
 
 func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 	if ptr.IsNil() {
-		tmp := reflect.New(ptr.Type().Elem())
-		if isSizedStruct(tmp.Elem()) {
+		if isSizedStruct(ptr.Type().Elem()) {
 			// Nil pointers for sized structures are allowed - in this case, marshal a size
 			// field of zero
 			return binary.Write(buf, binary.BigEndian, uint16(0))
@@ -153,7 +160,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 	if !ctx.container.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isUnionContainer(ctx.container) {
+	if !isUnionContainer(ctx.container.Type()) {
 		return errors.New("inside invalid container type")
 	}
 
@@ -176,7 +183,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 }
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
-	if isRawSlice(s) {
+	if isRawSlice(s.Type()) {
 		if ctx.container.IsValid() {
 			return errors.New("RawSlice is inside another container")
 		}
@@ -190,12 +197,12 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	}
 
 	switch {
-	case isSizedStruct(s) && isUnion(s):
+	case isSizedStruct(s.Type()) && isUnion(s.Type()):
 		return errors.New("cannot be both sized and a union")
-	case isSizedStruct(s) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
+	case isSizedStruct(s.Type()) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.container.Type())
-	case isSizedStruct(s):
+	case isSizedStruct(s.Type()):
 		// Convert the sized struct to the non-sized type, marshal that to a temporary buffer and then
 		// write it along with the 16-bit size field to the output buffer
 		tmpBuf := new(bytes.Buffer)
@@ -210,7 +217,7 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 			return fmt.Errorf("cannot write marshalled sized struct to output buffer: %v", err)
 		}
 		return nil
-	case isUnion(s):
+	case isUnion(s.Type()):
 		if err := marshalUnion(buf, s, ctx); err != nil {
 			return fmt.Errorf("error marshalling union struct: %v", err)
 		}
@@ -231,7 +238,7 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	switch {
 	case ctx.parentType == rawSliceType:
 		// No size field - we've been instructed to marshal the slice as it is
-	case isSizedBuffer(slice):
+	case isSizedBuffer(slice.Type()):
 		// Sized byte-buffers have a 16-bit size field
 		if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
 			return fmt.Errorf("cannot write size of sized buffer: %v", err)
@@ -261,7 +268,7 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 }
 
 func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
-	if hasCustomMarshallerImpl(val) {
+	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
 		switch {
 		case val.Kind() != reflect.Ptr && !val.CanAddr():
@@ -312,15 +319,10 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 		return errors.New("unexported field")
 	}
 
-	ptr.Set(reflect.New(ptr.Type().Elem()))
 	srcBuf := buf
 
-	if isSizedStruct(ptr.Elem()) {
+	if isSizedStruct(ptr.Type().Elem()) {
 		b, err := makeSizedStructReader(buf)
-		// If the size of the sized struct is zero, clear the pointer
-		if b == nil || err != nil {
-			ptr.Set(reflect.Zero(ptr.Type()))
-		}
 		if err != nil {
 			return err
 		}
@@ -330,6 +332,7 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 		srcBuf = b
 	}
 
+	ptr.Set(reflect.New(ptr.Type().Elem()))
 	return unmarshalValue(srcBuf, ptr.Elem(), beginPtrCtx(ctx, ptr))
 }
 
@@ -337,7 +340,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 	if !ctx.container.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isUnionContainer(ctx.container) {
+	if !isUnionContainer(ctx.container.Type()) {
 		return errors.New("inside invalid container type")
 	}
 
@@ -360,7 +363,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
-	if isRawSlice(s) {
+	if isRawSlice(s.Type()) {
 		if ctx.container.IsValid() {
 			return errors.New("RawSlice is inside another container")
 		}
@@ -374,12 +377,12 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	}
 
 	switch {
-	case isSizedStruct(s) && isUnion(s):
+	case isSizedStruct(s.Type()) && isUnion(s.Type()):
 		return errors.New("cannot be both sized and a union")
-	case isSizedStruct(s) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
+	case isSizedStruct(s.Type()) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.container.Type())
-	case isSizedStruct(s):
+	case isSizedStruct(s.Type()):
 		srcBuf := buf
 		if !arrivedFromPointer(ctx, s) {
 			// The pointer unmarshalling creates the sized buffer reader for us
@@ -398,7 +401,7 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 			return fmt.Errorf("cannot unmarshal sized struct: %v", err)
 		}
 		return nil
-	case isUnion(s):
+	case isUnion(s.Type()):
 		if err := unmarshalUnion(buf, s, ctx); err != nil {
 			return fmt.Errorf("error unmarshalling union struct: %v", err)
 		}
@@ -421,7 +424,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 		if slice.IsNil() {
 			return errors.New("nil raw slice")
 		}
-	case isSizedBuffer(slice):
+	case isSizedBuffer(slice.Type()):
 		// Sized byte-buffers have a 16-bit size field
 		var tmp uint16
 		if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
@@ -462,7 +465,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
-	if hasCustomMarshallerImpl(val) {
+	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
 		switch {
 		case val.Kind() != reflect.Ptr && !val.CanAddr():
