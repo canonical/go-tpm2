@@ -50,6 +50,42 @@ func (t *tpmContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, 
 	return t.RunCommand(CommandPolicyPCR, policySession, Separator, pcrDigest, pcrs)
 }
 
+func (t *tpmContext) PolicyAuthValue(policySession ResourceContext) error {
+	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
+		return err
+	}
+
+	sc, isSessionContext := policySession.(*sessionContext)
+	if !isSessionContext {
+		return makeInvalidParamError("policySession", "not a session context")
+	}
+
+	if err := t.RunCommand(CommandPolicyAuthValue, policySession); err != nil {
+		return err
+	}
+
+	sc.policyHMACType = policyHMACTypeAuth
+	return nil
+}
+
+func (t *tpmContext) PolicyPassword(policySession ResourceContext) error {
+	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
+		return err
+	}
+
+	sc, isSessionContext := policySession.(*sessionContext)
+	if !isSessionContext {
+		return makeInvalidParamError("policySession", "not a session context")
+	}
+
+	if err := t.RunCommand(CommandPolicyPassword, policySession); err != nil {
+		return err
+	}
+
+	sc.policyHMACType = policyHMACTypePassword
+	return nil
+}
+
 func (t *tpmContext) PolicyGetDigest(policySession ResourceContext) (Digest, error) {
 	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
 		return nil, err

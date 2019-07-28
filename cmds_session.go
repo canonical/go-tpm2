@@ -67,10 +67,12 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	}
 
 	sessionContext := &sessionContext{handle: sessionHandle,
-		hashAlg:       authHash,
-		boundResource: bind.Name(),
-		nonceCaller:   Nonce(nonceCaller),
-		nonceTPM:      nonceTPM}
+		hashAlg:        authHash,
+		sessionType:    sessionType,
+		policyHMACType: policyHMACTypeNoAuth,
+		boundResource:  bind.Name(),
+		nonceCaller:    Nonce(nonceCaller),
+		nonceTPM:       nonceTPM}
 
 	if tpmKey.Handle() != HandleNull || bind.Handle() != HandleNull {
 		key := make([]byte, len(authValue)+len(salt))

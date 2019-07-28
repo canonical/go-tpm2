@@ -99,6 +99,12 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if scImpl.hashAlg != restoredScImpl.hashAlg {
 			t.Errorf("Restored context has the wrong hash algorithm")
 		}
+		if scImpl.sessionType != restoredScImpl.sessionType {
+			t.Errorf("Restored context has the wrong session type")
+		}
+		if scImpl.policyHMACType != restoredScImpl.policyHMACType {
+			t.Errorf("Restored context has the wrong policy HMAC type")
+		}
 		if !bytes.Equal(scImpl.boundResource, restoredScImpl.boundResource) {
 			t.Errorf("Restored context has the wrong bound resource name")
 		}

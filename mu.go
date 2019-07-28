@@ -17,9 +17,9 @@ var (
 	byteType             reflect.Type = reflect.TypeOf(byte(0))
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
 	rawSliceType         reflect.Type = reflect.TypeOf(RawSliceType{})
-	sizedStructType	     reflect.Type = reflect.TypeOf((*SizedStruct)(nil)).Elem()
+	sizedStructType      reflect.Type = reflect.TypeOf((*SizedStruct)(nil)).Elem()
 	unionContainerType   reflect.Type = reflect.TypeOf((*UnionContainer)(nil)).Elem()
-	unionType	     reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
+	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
 type CustomMarshaller interface {

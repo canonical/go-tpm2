@@ -111,9 +111,11 @@ func (r *nvIndexContext) invalidate() {
 }
 
 type sessionContext struct {
-	tpm           *tpmContext
-	handle        Handle
-	hashAlg       AlgorithmId
+	tpm         *tpmContext
+	handle      Handle
+	hashAlg     AlgorithmId
+	sessionType SessionType
+	policyHMACType
 	boundResource Name
 	sessionKey    []byte
 	nonceCaller   Nonce

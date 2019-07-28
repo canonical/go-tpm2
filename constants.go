@@ -54,6 +54,7 @@ const (
 	CommandFlushContext               CommandCode = 0x00000165
 	CommandLoadExternal               CommandCode = 0x00000167
 	CommandNVReadPublic               CommandCode = 0x00000169
+	CommandPolicyAuthValue            CommandCode = 0x0000016B
 	CommandPolicyOR                   CommandCode = 0x00000171
 	CommandReadPublic                 CommandCode = 0x00000173
 	CommandStartAuthSession           CommandCode = 0x00000176
@@ -64,6 +65,7 @@ const (
 	CommandPolicyRestart              CommandCode = 0x00000180
 	CommandPCRExtend                  CommandCode = 0x00000182
 	CommandPolicyGetDigest            CommandCode = 0x00000189
+	CommandPolicyPassword             CommandCode = 0x0000018C
 	CommandCreateLoaded               CommandCode = 0x00000191
 )
 

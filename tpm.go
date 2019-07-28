@@ -138,8 +138,8 @@ type TPMContext interface {
 	//	includeObject bool) error
 	// PolicyAuthorize(policySession ResourceContext, approvedPolicy Digest, policyRef Nonce, keySign Name,
 	//	checkTicket *TkVerified) error
-	// PolicyAuthValue(policySession ResourceContext) error
-	// PolicyPassword(policySession ResourceContext) error
+	PolicyAuthValue(policySession ResourceContext) error
+	PolicyPassword(policySession ResourceContext) error
 	PolicyGetDigest(policySession ResourceContext) (Digest, error)
 	// PolicyNvWritten(policySession ResourceContext, writtenSet bool) error
 	// PolicyTemplate(policySession ResourceContext, templateHash Digest) error

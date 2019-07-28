@@ -75,6 +75,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_LoadExternal"
 	case CommandNVReadPublic:
 		return "TPM_CC_NV_ReadPublic"
+	case CommandPolicyAuthValue:
+		return "TPM_CC_PolicyAuthValue"
 	case CommandPolicyOR:
 		return "TPM_CC_PolicyOR"
 	case CommandReadPublic:
@@ -95,6 +97,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PCR_Extend"
 	case CommandPolicyGetDigest:
 		return "TPM_CC_PolicyGetDigest"
+	case CommandPolicyPassword:
+		return "TPM_CC_PolicyPassword"
 	case CommandCreateLoaded:
 		return "TPM_CC_CreateLoaded"
 	default:

@@ -13,7 +13,14 @@ import (
 	"reflect"
 )
 
+type policyHMACType uint8
 type sessionAttrs uint8
+
+const (
+	policyHMACTypeNoAuth policyHMACType = iota
+	policyHMACTypeAuth
+	policyHMACTypePassword
+)
 
 const (
 	attrContinueSession sessionAttrs = 1 << iota
@@ -81,23 +88,33 @@ func buildCommandSessionAuth(tpm *tpmContext, commandCode CommandCode, commandHa
 		return nil, errors.New("invalid resource context for session: not a session handle")
 	}
 
-	useAuthValue := !sessionContext.isBoundTo(associatedContext)
+	if err := cryptComputeNonce(sessionContext.nonceCaller); err != nil {
+		return nil, fmt.Errorf("cannot compute new nonceCaller: %v", err)
+	}
 
 	attrs := attrsFromSession(session)
 	var hmac []byte
 
-	if len(sessionContext.sessionKey) > 0 || (len(session.AuthValue) > 0 && useAuthValue) {
-		if err := cryptComputeNonce(sessionContext.nonceCaller); err != nil {
-			return nil, fmt.Errorf("cannot compute new nonceCaller: %v", err)
+	if sessionContext.sessionType == SessionTypePolicy &&
+		sessionContext.policyHMACType == policyHMACTypePassword {
+		hmac = session.AuthValue
+	} else {
+		var includeAuthValue bool
+		if sessionContext.sessionType == SessionTypeHMAC {
+			includeAuthValue = !sessionContext.isBoundTo(associatedContext)
+		} else {
+			includeAuthValue = sessionContext.policyHMACType == policyHMACTypeAuth
+		}
+		if len(sessionContext.sessionKey) > 0 || (len(session.AuthValue) > 0 && includeAuthValue) {
+			var authValue []byte
+			if includeAuthValue {
+				authValue = session.AuthValue
+			}
+
+			cpHash := cryptComputeCpHash(sessionContext.hashAlg, commandCode, commandHandles, cpBytes)
+			hmac = cryptComputeSessionCommandHMAC(sessionContext, authValue, cpHash, attrs)
 		}
 
-		var authValue []byte
-		if useAuthValue {
-			authValue = session.AuthValue
-		}
-
-		cpHash := cryptComputeCpHash(sessionContext.hashAlg, commandCode, commandHandles, cpBytes)
-		hmac = cryptComputeSessionCommandHMAC(sessionContext, authValue, cpHash, attrs)
 	}
 
 	return &authCommand{SessionHandle: session.Context.Handle(),
@@ -154,14 +171,24 @@ func processAuthSessionResponse(tpm *tpmContext, responseCode ResponseCode, comm
 		tpm.evictResourceContext(sessionContext)
 	}
 
-	useAuthValue := !sessionContext.isBoundTo(associatedContext)
+	if sessionContext.sessionType == SessionTypePolicy &&
+		sessionContext.policyHMACType == policyHMACTypePassword {
+		return nil
+	}
 
-	if len(sessionContext.sessionKey) == 0 && (len(session.AuthValue) == 0 || !useAuthValue) {
+	var includeAuthValue bool
+	if sessionContext.sessionType == SessionTypeHMAC {
+		includeAuthValue = !sessionContext.isBoundTo(associatedContext)
+	} else {
+		includeAuthValue = sessionContext.policyHMACType == policyHMACTypeAuth
+	}
+
+	if len(sessionContext.sessionKey) == 0 && (len(session.AuthValue) == 0 || !includeAuthValue) {
 		return nil
 	}
 
 	var authValue []byte
-	if useAuthValue {
+	if includeAuthValue {
 		authValue = session.AuthValue
 	}
 

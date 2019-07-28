@@ -405,3 +405,148 @@ func TestPolicyPCR(t *testing.T) {
 		})
 	}
 }
+
+func TestPolicyAuthValue(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	hasher := sha256.New()
+	hasher.Write(make([]byte, 32))
+	binary.Write(hasher, binary.BigEndian, CommandPolicyAuthValue)
+
+	authPolicy := hasher.Sum(nil)
+
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primary)
+
+	template := Public{
+		Type:       AlgorithmKeyedHash,
+		NameAlg:    AlgorithmSHA256,
+		Attrs:      AttrFixedTPM | AttrFixedParent,
+		AuthPolicy: authPolicy,
+		Params: PublicParamsU{
+			KeyedHashDetail: &KeyedHashParams{
+				Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer flushContext(t, tpm, objectContext)
+
+	for _, data := range []struct {
+		desc     string
+		tpmKey   ResourceContext
+		bind     ResourceContext
+		bindAuth []byte
+	}{
+		{
+			desc: "UnboundUnsalted",
+		},
+		{
+			desc:     "BoundUnsalted",
+			bind:     objectContext,
+			bindAuth: testAuth,
+		},
+		{
+			desc:   "UnboundSalted",
+			tpmKey: primary,
+		},
+		{
+			desc:     "BoundSalted",
+			tpmKey:   primary,
+			bind:     objectContext,
+			bindAuth: testAuth,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy,
+				nil, AlgorithmSHA256, data.bindAuth)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer verifyContextFlushed(t, tpm, sessionContext)
+
+			if err := tpm.PolicyAuthValue(sessionContext); err != nil {
+				t.Fatalf("PolicyAuthValue failed: %v", err)
+			}
+
+			digest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest, authPolicy) {
+				t.Errorf("Unexpected session digest")
+			}
+
+			if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext,
+				AuthValue: testAuth}); err != nil {
+				t.Errorf("Unseal failed: %v", err)
+			}
+		})
+	}
+}
+
+func TestPolicyPassword(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	hasher := sha256.New()
+	hasher.Write(make([]byte, 32))
+	binary.Write(hasher, binary.BigEndian, CommandPolicyAuthValue)
+
+	authPolicy := hasher.Sum(nil)
+
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primary)
+
+	template := Public{
+		Type:       AlgorithmKeyedHash,
+		NameAlg:    AlgorithmSHA256,
+		Attrs:      AttrFixedTPM | AttrFixedParent,
+		AuthPolicy: authPolicy,
+		Params: PublicParamsU{
+			KeyedHashDetail: &KeyedHashParams{
+				Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer flushContext(t, tpm, objectContext)
+
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer verifyContextFlushed(t, tpm, sessionContext)
+
+	if err := tpm.PolicyPassword(sessionContext); err != nil {
+		t.Fatalf("PolicyPassword failed: %v", err)
+	}
+
+	digest, err := tpm.PolicyGetDigest(sessionContext)
+	if err != nil {
+		t.Fatalf("PolicyGetDigest failed: %v", err)
+	}
+
+	if !bytes.Equal(digest, authPolicy) {
+		t.Errorf("Unexpected session digest")
+	}
+
+	if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext,
+		AuthValue: testAuth}); err != nil {
+		t.Errorf("Unseal failed: %v", err)
+	}
+}
