@@ -94,7 +94,7 @@ func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData
 		t.Errorf("creation data has the wrong outsideInfo (got %x)", creationData.OutsideInfo)
 	}
 
-	hasher := cryptHashAlgToGoConstructor(template.NameAlg)()
+	hasher := cryptConstructHash(template.NameAlg)
 	if err := MarshalToWriter(hasher, creationData); err != nil {
 		t.Fatalf("Failed to marshal creation data: %v", err)
 	}

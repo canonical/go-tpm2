@@ -32,12 +32,16 @@ var (
 		AlgorithmSHA512: {constructor: sha512.New, size: sha512.Size}}
 )
 
-func cryptHashAlgToGoConstructor(hashAlg AlgorithmId) func() hash.Hash {
+func hashAlgToGoConstructor(hashAlg AlgorithmId) func() hash.Hash {
 	knownDigest, isKnown := knownDigests[hashAlg]
 	if !isKnown {
-		return nil
+		panic(fmt.Sprintf("Unknown hash algorithm %v", hashAlg))
 	}
 	return knownDigest.constructor
+}
+
+func cryptConstructHash(hashAlg AlgorithmId) hash.Hash {
+	return hashAlgToGoConstructor(hashAlg)()
 }
 
 func cryptIsKnownDigest(alg AlgorithmId) bool {
@@ -45,12 +49,12 @@ func cryptIsKnownDigest(alg AlgorithmId) bool {
 	return isKnown
 }
 
-func cryptGetDigestSize(alg AlgorithmId) (uint, error) {
+func cryptGetDigestSize(alg AlgorithmId) (uint, bool) {
 	known, isKnown := knownDigests[alg]
 	if !isKnown {
-		return 0, fmt.Errorf("unknown digest algorithm: %v", alg)
+		return 0, false
 	}
-	return uint(known.size), nil
+	return uint(known.size), true
 }
 
 func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
@@ -69,7 +73,7 @@ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 
 func cryptComputeCpHash(hashAlg AlgorithmId, commandCode CommandCode, commandHandles []Name,
 	cpBytes []byte) []byte {
-	hash := cryptHashAlgToGoConstructor(hashAlg)()
+	hash := cryptConstructHash(hashAlg)
 
 	b, _ := MarshalToBytes(commandCode)
 	hash.Write(b)
@@ -83,7 +87,7 @@ func cryptComputeCpHash(hashAlg AlgorithmId, commandCode CommandCode, commandHan
 
 func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandCode CommandCode,
 	rpBytes []byte) []byte {
-	hash := cryptHashAlgToGoConstructor(hashAlg)()
+	hash := cryptConstructHash(hashAlg)
 
 	b, _ := MarshalToBytes(responseCode)
 	hash.Write(b)
@@ -100,7 +104,7 @@ func cryptComputeSessionHMAC(context *sessionContext, authValue, pHash []byte, a
 	copy(key, context.sessionKey)
 	copy(key[len(context.sessionKey):], authValue)
 
-	hmac := hmac.New(cryptHashAlgToGoConstructor(context.hashAlg), key)
+	hmac := hmac.New(hashAlgToGoConstructor(context.hashAlg), key)
 	hmac.Write(pHash)
 	if command {
 		hmac.Write(context.nonceCaller)
@@ -124,10 +128,10 @@ func cryptComputeSessionResponseHMAC(context *sessionContext, authValue, rpHash 
 	return cryptComputeSessionHMAC(context, authValue, rpHash, attrs, false)
 }
 
-func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint) ([]byte, error) {
-	digestSize, err := cryptGetDigestSize(hashAlg)
-	if err != nil {
-		return nil, fmt.Errorf("cannot determine digest size: %v", err)
+func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint) []byte {
+	digestSize, known := cryptGetDigestSize(hashAlg)
+	if !known {
+		panic(fmt.Sprintf("Unknown digest algorithm %v", hashAlg))
 	}
 
 	var counter uint32 = 0
@@ -139,7 +143,7 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 			digestSize = bytes
 		}
 
-		h := hmac.New(cryptHashAlgToGoConstructor(hashAlg), key)
+		h := hmac.New(hashAlgToGoConstructor(hashAlg), key)
 
 		binary.Write(h, binary.BigEndian, counter)
 		h.Write(label)
@@ -156,13 +160,13 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 	if sizeInBits%8 != 0 {
 		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
 	}
-	return outKey, nil
+	return outKey
 }
 
-func cryptKDFe(hashAlg AlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits uint) ([]byte, error) {
-	digestSize, err := cryptGetDigestSize(hashAlg)
-	if err != nil {
-		return nil, fmt.Errorf("cannot determine digest size: %v", err)
+func cryptKDFe(hashAlg AlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits uint) []byte {
+	digestSize, known := cryptGetDigestSize(hashAlg)
+	if !known {
+		panic(fmt.Sprintf("Unknown digest algorithm %v", hashAlg))
 	}
 
 	var counter uint32 = 0
@@ -174,7 +178,7 @@ func cryptKDFe(hashAlg AlgorithmId, z, label, partyUInfo, partyVInfo []byte, siz
 		}
 		counter++
 
-		h := cryptHashAlgToGoConstructor(hashAlg)()
+		h := cryptConstructHash(hashAlg)
 
 		binary.Write(h, binary.BigEndian, counter)
 		h.Write(z)
@@ -191,7 +195,7 @@ func cryptKDFe(hashAlg AlgorithmId, z, label, partyUInfo, partyVInfo []byte, siz
 	if sizeInBits%8 != 0 {
 		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
 	}
-	return outKey, nil
+	return outKey
 }
 
 func cryptComputeNonce(nonce []byte) error {
@@ -201,7 +205,7 @@ func cryptComputeNonce(nonce []byte) error {
 
 func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []byte) ([]byte, error) {
 	if public.Type != AlgorithmRSA {
-		return nil, fmt.Errorf("unsupported key type %v", public.Type)
+		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
 	exp := int(public.Params.RSADetail.Exponent)
@@ -227,7 +231,7 @@ func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []
 		if !cryptIsKnownDigest(schemeHashAlg) {
 			return nil, fmt.Errorf("unknown scheme hash algorithm: %v", schemeHashAlg)
 		}
-		hash := cryptHashAlgToGoConstructor(schemeHashAlg)()
+		hash := cryptConstructHash(schemeHashAlg)
 		labelCopy := make([]byte, len(label)+1)
 		copy(labelCopy, label)
 		return rsa.EncryptOAEP(hash, rand.Reader, pubKey, data, labelCopy)
@@ -239,7 +243,7 @@ func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []
 
 func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 	if public.Type != AlgorithmECC {
-		return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
+		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
 	curve := eccCurveToGoCurve(public.Params.ECCDetail.CurveID)
@@ -267,9 +271,9 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 }
 
 func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
-	digestSize, err := cryptGetDigestSize(public.NameAlg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot determine size of nameAlg: %v", err)
+	digestSize, known := cryptGetDigestSize(public.NameAlg)
+	if !known {
+		return nil, nil, fmt.Errorf("cannot determine size of unknown nameAlg %v", public.NameAlg)
 	}
 
 	switch public.Type {
@@ -289,15 +293,12 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}
-		salt, err := cryptKDFe(public.NameAlg,
+		salt := cryptKDFe(public.NameAlg,
 			[]byte(z),
 			[]byte("SECRET"),
 			[]byte(q.X),
 			[]byte(public.Unique.ECC.X),
 			digestSize*8)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed KDFe: %v", err)
-		}
 		return EncryptedSecret(encryptedSalt), salt, nil
 	}
 

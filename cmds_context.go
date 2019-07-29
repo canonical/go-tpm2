@@ -86,6 +86,9 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 		return d.TPMBlob, &objectContext{public: Public(*d.Data.Object.Public),
 			name: d.Data.Object.Name}, nil
 	case contextTypeSession:
+		if !cryptIsKnownDigest(d.Data.Session.HashAlg) {
+			return nil, nil, fmt.Errorf("invalid session hash algorithm %v", d.Data.Session.HashAlg)
+		}
 		return d.TPMBlob, &sessionContext{hashAlg: d.Data.Session.HashAlg,
 			sessionType: d.Data.Session.SessionType, policyHMACType: d.Data.Session.PolicyHMACType,
 			boundResource: d.Data.Session.BoundResource, sessionKey: d.Data.Session.SessionKey,

@@ -718,11 +718,10 @@ func (p Public) Selector(field reflect.StructField) interface{} {
 }
 
 func (p *Public) Name() (Name, error) {
-	c := cryptHashAlgToGoConstructor(p.NameAlg)
-	if c == nil {
+	if !cryptIsKnownDigest(p.NameAlg) {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
-	hasher := c()
+	hasher := cryptConstructHash(p.NameAlg)
 	if err := MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
@@ -826,9 +825,9 @@ func (p *TaggedHash) Marshal(buf io.Writer) error {
 	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
 		return err
 	}
-	size, err := cryptGetDigestSize(p.HashAlg)
-	if err != nil {
-		return fmt.Errorf("cannot determine digest size: %v", err)
+	size, known := cryptGetDigestSize(p.HashAlg)
+	if !known {
+		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
 	if int(size) != len(p.Digest) {
@@ -849,9 +848,9 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
 		return err
 	}
-	size, err := cryptGetDigestSize(p.HashAlg)
-	if err != nil {
-		return fmt.Errorf("cannot determine digest size: %v", err)
+	size, known := cryptGetDigestSize(p.HashAlg)
+	if !known {
+		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
 	p.Digest = make(Digest, size)

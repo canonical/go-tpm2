@@ -55,7 +55,7 @@ func TestPCRExtend(t *testing.T) {
 			hashList := TaggedHashList{}
 
 			for _, alg := range data.algorithms {
-				hasher := cryptHashAlgToGoConstructor(alg)()
+				hasher := cryptConstructHash(alg)
 				hasher.Write(data.data)
 				hashList = append(hashList, TaggedHash{HashAlg: alg, Digest: hasher.Sum(nil)})
 			}
@@ -76,7 +76,7 @@ func TestPCRExtend(t *testing.T) {
 			}
 
 			for i, alg := range data.algorithms {
-				hasher := cryptHashAlgToGoConstructor(alg)()
+				hasher := cryptConstructHash(alg)
 				hasher.Write(origValues[i])
 				hasher.Write(hashList[i].Digest)
 
@@ -132,7 +132,7 @@ func TestPCREvent(t *testing.T) {
 			}
 
 			for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
-				hasher := cryptHashAlgToGoConstructor(alg)()
+				hasher := cryptConstructHash(alg)
 				hasher.Write(data.data)
 				expectedDigest := hasher.Sum(nil)
 				digest := []byte{}
@@ -160,7 +160,7 @@ func TestPCREvent(t *testing.T) {
 			}
 
 			for i, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
-				hasher := cryptHashAlgToGoConstructor(alg)()
+				hasher := cryptConstructHash(alg)
 				hasher.Write(origValues[i])
 				for _, d := range digests {
 					if d.HashAlg == alg {
@@ -215,11 +215,11 @@ func TestPCRRead(t *testing.T) {
 		for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
 			digestSize, _ := cryptGetDigestSize(alg)
 
-			hasher := cryptHashAlgToGoConstructor(alg)()
+			hasher := cryptConstructHash(alg)
 			hasher.Write(data.data)
 			dataDigest := hasher.Sum(nil)
 
-			hasher = cryptHashAlgToGoConstructor(alg)()
+			hasher = cryptConstructHash(alg)
 			hasher.Write(make([]byte, digestSize))
 			hasher.Write(dataDigest)
 			expectedDigests[data.index][alg] = hasher.Sum(nil)
