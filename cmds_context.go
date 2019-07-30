@@ -22,6 +22,7 @@ type sessionContextData struct {
 	SessionKey     Digest
 	NonceCaller    Nonce
 	NonceTPM       Nonce
+	Symmetric      *SymDef
 }
 
 type resourceContextDataU struct {
@@ -65,7 +66,7 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData,
 		d.ContextType = contextTypeSession
 		d.Data.Session = &sessionContextData{HashAlg: c.hashAlg, SessionType: c.sessionType,
 			PolicyHMACType: c.policyHMACType, BoundResource: c.boundResource, SessionKey: c.sessionKey,
-			NonceCaller: c.nonceCaller, NonceTPM: c.nonceTPM}
+			NonceCaller: c.nonceCaller, NonceTPM: c.nonceTPM, Symmetric: c.symmetric}
 	}
 
 	data, err := MarshalToBytes(d)
@@ -92,7 +93,8 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 		return d.TPMBlob, &sessionContext{hashAlg: d.Data.Session.HashAlg,
 			sessionType: d.Data.Session.SessionType, policyHMACType: d.Data.Session.PolicyHMACType,
 			boundResource: d.Data.Session.BoundResource, sessionKey: d.Data.Session.SessionKey,
-			nonceCaller: d.Data.Session.NonceCaller, nonceTPM: d.Data.Session.NonceTPM}, nil
+			nonceCaller: d.Data.Session.NonceCaller, nonceTPM: d.Data.Session.NonceTPM,
+			symmetric: d.Data.Session.Symmetric}, nil
 	}
 
 	return nil, nil, fmt.Errorf("invalid saved context type (%d)", d.ContextType)

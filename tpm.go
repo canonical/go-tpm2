@@ -21,6 +21,8 @@ type SessionAttributes int
 
 const (
 	AttrContinueSession SessionAttributes = 1 << iota
+	AttrCommandEncrypt
+	AttrResponseEncrypt
 )
 
 type Session struct {
@@ -65,26 +67,29 @@ type TPMContext interface {
 
 	// Section 11 - Session Commands
 	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
-		authHash AlgorithmId, authValue []byte) (ResourceContext, error)
+		authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error)
 	PolicyRestart(sessionContext ResourceContext) error
 
 	// Section 12 - Object Commands
 	Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, parentHandleAuth interface{}) (Private, *Public, *CreationData,
-		Digest, *TkCreation, error)
+		creationPCR PCRSelectionList, parentHandleAuth interface{}, sessions ...*Session) (Private,
+		*Public, *CreationData, Digest, *TkCreation, error)
 	Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
-		parentContextAuth interface{}) (ResourceContext, Name, error)
-	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext, Name, error)
-	ReadPublic(objectContext ResourceContext) (*Public, Name, Name, error)
+		parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error)
+	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
+		sessions ...*Session) (ResourceContext, Name, error)
+	ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error)
 	//ActivateCredential(activateHandle, keyHandle ResourceContext, credentialBlob IDObject,
 	//	secret EncryptedSecret, activateHandleAuth, keyHandleAuth interface{}) (Digest, error)
 	//MakeCredential(handle ResourceContext, credential Digest, objectName Name) (IDObject,
 	//	EncryptedSecret, error)
-	Unseal(itemContext ResourceContext, itemContextAuth interface{}) (SensitiveData, error)
+	Unseal(itemContext ResourceContext, itemContextAuth interface{}, sessions ...*Session) (SensitiveData,
+		error)
 	ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
-		objectContextAuth interface{}) (Private, error)
+		objectContextAuth interface{}, sessions ...*Session) (Private, error)
 	CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
-		parentContextAuth interface{}) (ResourceContext, Private, *Public, Name, error)
+		parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name,
+		error)
 
 	// Section 13 - Duplication Commands
 	// Section 14 - Asymmetric Primitives
@@ -96,8 +101,8 @@ type TPMContext interface {
 	// Certify(objectContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme) (*Attest,
 	//	*Signature, error)
 	CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,
-		inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}) (*Attest,
-		*Signature, error)
+		inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{},
+		sessions ...*Session) (*Attest, *Signature, error)
 	// Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme,
 	//	pcrSelection PCRSelectionList) (*Attest, *Signature, error)
 	// GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext ResourceContext,
@@ -113,18 +118,20 @@ type TPMContext interface {
 
 	// Section 22 - Integrity Collection (PCR)
 	PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error
-	PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{}) (TaggedHashList, error)
+	PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{},
+		sessions ...*Session) (TaggedHashList, error)
 	PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRSelectionList, DigestList, error)
 
 	// Section 23 - Enhanced Authorization (EA) Commands
 	// PolicySigned(authObject, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest,
 	//	policyRef Nonce, expiration int32, auth *Signature) (Timeout, *TkAuth, error)
 	PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
-		expiration int32, authContextAuth interface{}) (Timeout, *TkAuth, error)
+		expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error)
 	// PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce,
 	//	authName Name, ticket *TkAuth) error
 	PolicyOR(policySession ResourceContext, pHashList DigestList) error
-	PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList) error
+	PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList,
+		sessions ...*Session) error
 	// PolicyLocality(policySession ResourceContext, loclity Locality) error
 	// PolicyNV(authHandle, nvIndex, policySession ResourceContext, operandB Operand, offset uint16,
 	//	operation ArithmeticOp) error
@@ -147,11 +154,12 @@ type TPMContext interface {
 
 	// Section 24 - Hierarchy Commands
 	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
-		*CreationData, Digest, *TkCreation, Name, error)
+		creationPCR PCRSelectionList, primaryObjectAuth interface{},
+		sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error)
 	Clear(authHandle Handle, authHandleAuth interface{}) error
 	ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error
-	HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error
+	HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{},
+		sessions ...*Session) error
 
 	// Section 25 - Dictionary Attack Functions
 	DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth interface{}) error
@@ -184,7 +192,7 @@ type TPMContext interface {
 	GetCapabilityAuthPolicies(first Handle, propertyCount uint32) (TaggedPolicyList, error)
 
 	// Section 31 - Non-volatile Storage
-	NVReadPublic(nvIndex ResourceContext) (*NVPublic, Name, error)
+	NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error)
 }
 
 func concat(chunks ...[]byte) []byte {
@@ -324,8 +332,29 @@ func (t *tpmContext) RunCommandAndReturnRawResponse(commandCode CommandCode,
 		case 1:
 			commandParams = append(commandParams, param)
 		case 2:
-			sessionParams = append(sessionParams, param)
+			switch p := param.(type) {
+			case []*Session:
+				for _, s := range p {
+					if s == nil {
+						continue
+					}
+					sessionParams = append(sessionParams, s)
+				}
+			case *Session:
+				if p == nil {
+					continue
+				}
+				sessionParams = append(sessionParams, p)
+			default:
+				return 0, 0, nil, fmt.Errorf("unexpected type %s for non-auth session parameter",
+					reflect.TypeOf(param))
+			}
 		}
+	}
+
+	if hasDecryptSession(sessionParams) && len(commandParams) > 0 && !isParamEncryptable(commandParams[0]) {
+		return 0, 0, nil, fmt.Errorf("command %v does not support command parameter encryption",
+			commandCode)
 	}
 
 	var chBytes []byte
@@ -396,7 +425,27 @@ func (t *tpmContext) ProcessResponse(commandCode CommandCode, responseCode Respo
 		case 1:
 			responseParams = append(responseParams, param)
 		case 2:
-			sessionParams = append(sessionParams, param)
+			switch p := param.(type) {
+			case []*Session:
+				for _, s := range p {
+					if s == nil {
+						continue
+					}
+					sessionParams = append(sessionParams, s)
+				}
+			case *Session:
+				if p == nil {
+					continue
+				}
+				sessionParams = append(sessionParams, p)
+			case ResourceWithAuth:
+				sessionParams = append(sessionParams, param)
+			case HandleWithAuth:
+				sessionParams = append(sessionParams, param)
+			default:
+				return fmt.Errorf("unexpected type %s for session parameter",
+					reflect.TypeOf(param))
+			}
 		}
 	}
 
@@ -422,23 +471,22 @@ func (t *tpmContext) ProcessResponse(commandCode CommandCode, responseCode Respo
 			return wrapUnmarshallingError(commandCode, "response parameters",
 				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
 		}
+
+		authArea := make([]authResponse, len(sessionParams))
+		if err := UnmarshalFromReader(buf, RawSlice(authArea)); err != nil {
+			return wrapUnmarshallingError(commandCode, "response auth area", err)
+		}
+		if err := processResponseAuthArea(t, responseCode, commandCode, rpBytes, authArea,
+			sessionParams...); err != nil {
+			return err
+		}
+
 		rpBuf = bytes.NewReader(rpBytes)
 	}
 
 	if len(responseParams) > 0 {
 		if err := UnmarshalFromReader(rpBuf, responseParams...); err != nil {
 			return wrapUnmarshallingError(commandCode, "response parameters", err)
-		}
-	}
-
-	if responseTag == TagSessions {
-		authArea := make([]authResponse, len(sessionParams))
-		if err := UnmarshalFromReader(buf, RawSlice(authArea)); err != nil {
-			return wrapUnmarshallingError(commandCode, "response auth area", err)
-		}
-		if err := processAuthResponseArea(t, responseCode, commandCode, rpBytes, authArea,
-			sessionParams...); err != nil {
-			return err
 		}
 	}
 

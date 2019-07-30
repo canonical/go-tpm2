@@ -9,11 +9,11 @@ func (t *tpmContext) PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHand
 		Separator, digests)
 }
 
-func (t *tpmContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{}) (TaggedHashList,
-	error) {
+func (t *tpmContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{},
+	sessions ...*Session) (TaggedHashList, error) {
 	var digests TaggedHashList
 	if err := t.RunCommand(CommandPCREvent, HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth},
-		Separator, eventData, Separator, Separator, &digests); err != nil {
+		Separator, eventData, Separator, Separator, &digests, Separator, sessions); err != nil {
 		return nil, err
 	}
 	return digests, nil

@@ -120,6 +120,7 @@ type sessionContext struct {
 	sessionKey    []byte
 	nonceCaller   Nonce
 	nonceTPM      Nonce
+	symmetric     *SymDef
 }
 
 func (r *sessionContext) Handle() Handle {

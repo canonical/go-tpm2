@@ -9,8 +9,8 @@ import (
 )
 
 func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
-	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}) (ResourceContext, *Public,
-	*CreationData, Digest, *TkCreation, Name, error) {
+	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{},
+	sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -30,7 +30,7 @@ func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 		HandleWithAuth{Handle: primaryObject, Auth: primaryObjectAuth}, Separator,
 		(*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), outsideInfo, creationPCR, Separator,
 		&objectHandle, Separator, &outPublic, &creationData, &creationHash, &creationTicket,
-		&name); err != nil {
+		&name, Separator, sessions); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
@@ -118,10 +118,12 @@ func (t *tpmContext) ClearControl(authHandle Handle, disable bool, authHandleAut
 		Separator, disable)
 }
 
-func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}) error {
+func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{},
+	sessions ...*Session) error {
 	responseCode, responseTag, response, err :=
 		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth,
-			HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator, newAuth)
+			HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator, newAuth, Separator,
+			sessions)
 	if err != nil {
 		return err
 	}
@@ -152,5 +154,5 @@ func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 	}()
 
 	return t.ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
-		Separator, HandleWithAuth{Handle: authHandle, Auth: updatedAuthHandleAuth})
+		Separator, HandleWithAuth{Handle: authHandle, Auth: updatedAuthHandleAuth}, sessions)
 }

@@ -7,8 +7,8 @@ package tpm2
 import ()
 
 func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
-	outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{}) (Private, *Public,
-	*CreationData, Digest, *TkCreation, error) {
+	outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{},
+	sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
 	if err := t.checkResourceContextParam(parentContext, "parentContext"); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -28,7 +28,7 @@ func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	if err := t.RunCommand(CommandCreate, ResourceWithAuth{Context: parentContext, Auth: parentContextAuth},
 		Separator, (*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), outsideInfo, creationPCR,
 		Separator, Separator, &outPrivate, &outPublic, &creationData, &creationHash,
-		&creationTicket); err != nil {
+		&creationTicket, Separator, sessions); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -37,7 +37,7 @@ func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 }
 
 func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
-	parentContextAuth interface{}) (ResourceContext, Name, error) {
+	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error) {
 	if err := t.checkResourceContextParam(parentContext, "parentContext"); err != nil {
 		return nil, nil, err
 	}
@@ -50,7 +50,7 @@ func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 
 	if err := t.RunCommand(CommandLoad, ResourceWithAuth{Context: parentContext, Auth: parentContextAuth},
 		Separator, inPrivate, (*Public2B)(inPublic), Separator, &objectHandle, Separator,
-		&name); err != nil {
+		&name, Separator, sessions); err != nil {
 		return nil, nil, err
 	}
 
@@ -64,8 +64,8 @@ func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	return objectContext, name, nil
 }
 
-func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle) (ResourceContext,
-	Name, error) {
+func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
+	sessions ...*Session) (ResourceContext, Name, error) {
 	if inPublic == nil {
 		return nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
@@ -74,7 +74,7 @@ func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	var name Name
 
 	if err := t.RunCommand(CommandLoadExternal, Separator, (*Sensitive2B)(inPrivate), (*Public2B)(inPublic),
-		hierarchy, Separator, &objectHandle, Separator, &name); err != nil {
+		hierarchy, Separator, &objectHandle, Separator, &name, Separator, sessions); err != nil {
 		return nil, nil, err
 	}
 
@@ -88,25 +88,26 @@ func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	return objectContext, name, nil
 }
 
-func (t *tpmContext) readPublic(objectHandle Handle) (*Public, Name, Name, error) {
+func (t *tpmContext) readPublic(objectHandle Handle, sessions ...*Session) (*Public, Name, Name, error) {
 	var outPublic Public2B
 	var name Name
 	var qualifiedName Name
 	if err := t.RunCommand(CommandReadPublic, objectHandle, Separator, Separator, Separator, &outPublic,
-		&name, &qualifiedName); err != nil {
+		&name, &qualifiedName, Separator, sessions); err != nil {
 		return nil, nil, nil, err
 	}
 	return (*Public)(&outPublic), name, qualifiedName, nil
 }
 
-func (t *tpmContext) ReadPublic(objectContext ResourceContext) (*Public, Name, Name, error) {
+func (t *tpmContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
 	if err := t.checkResourceContextParam(objectContext, "objectContext"); err != nil {
 		return nil, nil, nil, err
 	}
-	return t.readPublic(objectContext.Handle())
+	return t.readPublic(objectContext.Handle(), sessions...)
 }
 
-func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interface{}) (SensitiveData, error) {
+func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interface{},
+	sessions ...*Session) (SensitiveData, error) {
 	if err := t.checkResourceContextParam(itemContext, "itemContext"); err != nil {
 		return nil, err
 	}
@@ -114,7 +115,7 @@ func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interfa
 	var outData SensitiveData
 
 	if err := t.RunCommand(CommandUnseal, ResourceWithAuth{Context: itemContext, Auth: itemContextAuth},
-		Separator, Separator, Separator, &outData); err != nil {
+		Separator, Separator, Separator, &outData, Separator, sessions); err != nil {
 		return nil, err
 	}
 
@@ -122,7 +123,7 @@ func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interfa
 }
 
 func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
-	objectContextAuth interface{}) (Private, error) {
+	objectContextAuth interface{}, sessions ...*Session) (Private, error) {
 	if err := t.checkResourceContextParam(objectContext, "objectContext"); err != nil {
 		return nil, err
 	}
@@ -134,7 +135,7 @@ func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 
 	if err := t.RunCommand(CommandObjectChangeAuth,
 		ResourceWithAuth{Context: objectContext, Auth: objectContextAuth}, parentContext, Separator,
-		newAuth, Separator, Separator, &outPrivate, Separator); err != nil {
+		newAuth, Separator, Separator, &outPrivate, Separator, sessions); err != nil {
 		return nil, err
 	}
 
@@ -142,7 +143,7 @@ func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 }
 
 func (t *tpmContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
-	parentContextAuth interface{}) (ResourceContext, Private, *Public, Name, error) {
+	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
 	if err := t.checkResourceContextParam(parentContext, "parentContext"); err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -161,7 +162,7 @@ func (t *tpmContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	if err := t.RunCommand(CommandCreateLoaded,
 		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
 		(*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), Separator, &objectHandle, Separator,
-		&outPrivate, &outPublic, &name); err != nil {
+		&outPrivate, &outPublic, &name, Separator, sessions); err != nil {
 		return nil, nil, nil, nil, err
 	}
 

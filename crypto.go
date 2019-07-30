@@ -6,6 +6,8 @@ package tpm2
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/rand"
@@ -98,49 +100,62 @@ func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandC
 	return hash.Sum(nil)[:]
 }
 
-func cryptComputeSessionHMAC(context *sessionContext, authValue, pHash []byte, attrs sessionAttrs,
-	command bool) []byte {
-	key := make([]byte, len(context.sessionKey)+len(authValue))
-	copy(key, context.sessionKey)
-	copy(key[len(context.sessionKey):], authValue)
+func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt,
+	nonceEncrypt Nonce, attrs sessionAttrs) []byte {
+	hmac := hmac.New(hashAlgToGoConstructor(alg), key)
 
-	hmac := hmac.New(hashAlgToGoConstructor(context.hashAlg), key)
 	hmac.Write(pHash)
-	if command {
-		hmac.Write(context.nonceCaller)
-		hmac.Write(context.nonceTPM)
-	} else {
-		hmac.Write(context.nonceTPM)
-		hmac.Write(context.nonceCaller)
+	hmac.Write(nonceNewer)
+	hmac.Write(nonceOlder)
+	if nonceDecrypt != nil {
+		hmac.Write(nonceDecrypt)
+	}
+	if nonceEncrypt != nil {
+		hmac.Write(nonceEncrypt)
 	}
 	hmac.Write([]byte{uint8(attrs)})
 
-	return hmac.Sum(nil)[:]
+	return hmac.Sum(nil)
 }
 
-func cryptComputeSessionCommandHMAC(context *sessionContext, authValue, cpHash []byte,
-	attrs sessionAttrs) []byte {
-	return cryptComputeSessionHMAC(context, authValue, cpHash, attrs, true)
+func cryptComputeSessionCommandHMAC(context *sessionContext, key, cpHash []byte, nonceDecrypt,
+	nonceEncrypt Nonce, attrs sessionAttrs) []byte {
+	return computeSessionHMAC(context.hashAlg, key, cpHash, context.nonceCaller, context.nonceTPM,
+		nonceDecrypt, nonceEncrypt, attrs)
 }
 
-func cryptComputeSessionResponseHMAC(context *sessionContext, authValue, rpHash []byte,
-	attrs sessionAttrs) []byte {
-	return cryptComputeSessionHMAC(context, authValue, rpHash, attrs, false)
+func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte, attrs sessionAttrs) []byte {
+	return computeSessionHMAC(context.hashAlg, key, rpHash, context.nonceTPM, context.nonceCaller, nil, nil,
+		attrs)
 }
 
-func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint) []byte {
+func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint, counterInOut *uint32,
+	once bool) []byte {
 	digestSize, known := cryptGetDigestSize(hashAlg)
 	if !known {
 		panic(fmt.Sprintf("Unknown digest algorithm %v", hashAlg))
 	}
+	if once && sizeInBits&7 > 0 {
+		panic("sizeInBits must be a multiple of 8 when called with once == true")
+	}
 
 	var counter uint32 = 0
+	if counterInOut != nil {
+		counter = *counterInOut
+	}
+	var nbytes uint
+	if once {
+		nbytes = digestSize
+	} else {
+		nbytes = (sizeInBits + 7) / 8
+	}
+
 	buf := new(bytes.Buffer)
 
-	for bytes := (sizeInBits + 7) / 8; bytes > 0; bytes -= digestSize {
+	for ; nbytes > 0; nbytes -= digestSize {
 		counter++
-		if bytes < digestSize {
-			digestSize = bytes
+		if nbytes < digestSize {
+			digestSize = nbytes
 		}
 
 		h := hmac.New(hashAlgToGoConstructor(hashAlg), key)
@@ -159,6 +174,9 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 
 	if sizeInBits%8 != 0 {
 		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
+	}
+	if counterInOut != nil {
+		*counterInOut = counter
 	}
 	return outKey
 }
@@ -303,4 +321,58 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 	}
 
 	return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
+}
+
+func cryptXORObfuscation(hashAlg AlgorithmId, key []byte, contextU, contextV Nonce, data []byte) error {
+	digestSize, known := cryptGetDigestSize(hashAlg)
+	if !known {
+		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", hashAlg)
+	}
+
+	var counter uint32 = 0
+	datasize := uint(len(data))
+	remaining := int(datasize)
+
+	for ; remaining > 0; remaining -= int(digestSize) {
+		mask := cryptKDFa(hashAlg, key, []byte("XOR"), contextU, contextV, datasize*8, &counter, true)
+		lim := remaining
+		if int(digestSize) < remaining {
+			lim = int(digestSize)
+		}
+		for i := 0; i < lim; i++ {
+			data[int(datasize)-remaining+i] ^= mask[i]
+		}
+	}
+
+	return nil
+}
+
+func cryptEncryptSymmetricAES(key []byte, mode AlgorithmId, data, iv []byte) error {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return fmt.Errorf("cannot construct new block cipher: %v", err)
+	}
+
+	if mode != AlgorithmCFB {
+		return fmt.Errorf("unsupported block cipher mode %v", mode)
+	}
+
+	stream := cipher.NewCFBEncrypter(block, iv)
+	stream.XORKeyStream(data, data)
+	return nil
+}
+
+func cryptDecryptSymmetricAES(key []byte, mode AlgorithmId, data, iv []byte) error {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return fmt.Errorf("cannot construct new block cipher: %v", err)
+	}
+
+	if mode != AlgorithmCFB {
+		return fmt.Errorf("unsupported block cipher mode %v", mode)
+	}
+
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(data, data)
+	return nil
 }

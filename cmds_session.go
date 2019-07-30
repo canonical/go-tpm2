@@ -9,7 +9,7 @@ import (
 )
 
 func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
-	authHash AlgorithmId, authValue []byte) (ResourceContext, error) {
+	authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
 	if tpmKey != nil {
 		if err := t.checkResourceContextParam(tpmKey, "tpmKey"); err != nil {
 			return nil, err
@@ -20,9 +20,9 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 			return nil, err
 		}
 	}
-	if symmetric != nil {
-		return nil,
-			makeInvalidParamError("symmetric", "no support for parameter / response encryption yet")
+
+	if symmetric == nil {
+		symmetric = &SymDef{Algorithm: AlgorithmNull}
 	}
 	digestSize, known := cryptGetDigestSize(authHash)
 	if !known {
@@ -61,8 +61,8 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var nonceTPM Nonce
 
 	if err := t.RunCommand(CommandStartAuthSession, tpmKey, bind, Separator, Nonce(nonceCaller),
-		encryptedSalt, sessionType, &SymDef{Algorithm: AlgorithmNull}, authHash, Separator,
-		&sessionHandle, Separator, &nonceTPM); err != nil {
+		encryptedSalt, sessionType, symmetric, authHash, Separator, &sessionHandle, Separator,
+		&nonceTPM, Separator, sessions); err != nil {
 		return nil, err
 	}
 
@@ -72,7 +72,8 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		policyHMACType: policyHMACTypeNoAuth,
 		boundResource:  bind.Name(),
 		nonceCaller:    Nonce(nonceCaller),
-		nonceTPM:       nonceTPM}
+		nonceTPM:       nonceTPM,
+		symmetric:      symmetric}
 
 	if tpmKey.Handle() != HandleNull || bind.Handle() != HandleNull {
 		key := make([]byte, len(authValue)+len(salt))
@@ -80,7 +81,8 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		copy(key[len(authValue):], salt)
 
 		sessionContext.sessionKey =
-			cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8)
+			cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8,
+				nil, false)
 	}
 
 	t.addResourceContext(sessionContext)

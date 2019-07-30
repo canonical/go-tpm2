@@ -6,7 +6,7 @@ package tpm2
 
 func (t *tpmContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data,
 	creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation,
-	signContextAuth interface{}) (*Attest, *Signature, error) {
+	signContextAuth interface{}, sessions ...*Session) (*Attest, *Signature, error) {
 	if signContext != nil {
 		if err := t.checkResourceContextParam(signContext, "signContext"); err != nil {
 			return nil, nil, err
@@ -32,7 +32,7 @@ func (t *tpmContext) CertifyCreation(signContext, objectContext ResourceContext,
 	if err := t.RunCommand(CommandCertifyCreation,
 		ResourceWithAuth{Context: signContext, Auth: signContextAuth}, objectContext, Separator,
 		qualifyingData, creationHash, inScheme, creationTicket, Separator, Separator, &certifyInfo,
-		&signature); err != nil {
+		&signature, Separator, sessions); err != nil {
 		return nil, nil, err
 	}
 

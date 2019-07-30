@@ -9,7 +9,7 @@ import (
 )
 
 func (t *tpmContext) PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
-	expiration int32, authContextAuth interface{}) (Timeout, *TkAuth, error) {
+	expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error) {
 	if err := t.checkResourceContextParam(authContext, "authContext"); err != nil {
 		return nil, nil, err
 	}
@@ -27,7 +27,7 @@ func (t *tpmContext) PolicySecret(authContext, policySession ResourceContext, cp
 
 	if err := t.RunCommand(CommandPolicySecret, ResourceWithAuth{Context: authContext, Auth: authContextAuth},
 		policySession, Separator, sessionContext.NonceTPM(), cpHashA, policyRef, expiration, Separator,
-		Separator, &timeout, &policyTicket); err != nil {
+		Separator, &timeout, &policyTicket, Separator, sessions); err != nil {
 		return nil, nil, err
 	}
 
@@ -42,12 +42,14 @@ func (t *tpmContext) PolicyOR(policySession ResourceContext, pHashList DigestLis
 	return t.RunCommand(CommandPolicyOR, policySession, Separator, pHashList)
 }
 
-func (t *tpmContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList) error {
+func (t *tpmContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList,
+	sessions ...*Session) error {
 	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
 		return err
 	}
 
-	return t.RunCommand(CommandPolicyPCR, policySession, Separator, pcrDigest, pcrs)
+	return t.RunCommand(CommandPolicyPCR, policySession, Separator, pcrDigest, pcrs, Separator, Separator,
+		Separator, sessions)
 }
 
 func (t *tpmContext) PolicyAuthValue(policySession ResourceContext) error {
