@@ -112,9 +112,8 @@ func TestHMACSessions(t *testing.T) {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
 				sessionLoaded = false
-				if err.Error() != "error whilst validating session parameters: invalid session "+
-					"parameter at index 0: invalid resource context for session: resource "+
-					"has been closed" {
+				if err.Error() != "cannot process command handle with auth session parameter: "+
+					"invalid resource context for session: resource has been closed" {
 					t.Errorf("Subsequent use of the session failed with an unexpected "+
 						"error: %v", err)
 				}

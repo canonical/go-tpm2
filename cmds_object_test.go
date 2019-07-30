@@ -506,7 +506,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		}
 		defer flushContext(t, tpm, newContext)
 
-		_, err = tpm.Unseal(newContext, authValue)
+		_, err = tpm.Unseal(newContext, []byte(authValue))
 		if err != nil {
 			t.Errorf("Unseal failed: %v", err)
 		}

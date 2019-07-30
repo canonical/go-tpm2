@@ -207,8 +207,8 @@ func (t *tpmContext) checkResourceContextParam(rc ResourceContext, name string) 
 		return fmt.Errorf("invalid resource context for %s: resource has been closed", name)
 	}
 	if rcp.tpmContext() != t {
-		return fmt.Errorf("invalid resource context for %s: resource belongs to another tpm2.TPM "+
-			"instance", name)
+		return fmt.Errorf("invalid resource context for %s: resource belongs to another TPM context",
+			name)
 	}
 	return nil
 }

@@ -46,28 +46,26 @@ func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 }
 
 func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
-	responseCode, responseTag, response, err :=
-		t.RunCommandAndReturnRawResponse(CommandClear,
-			HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
+	var s []*sessionParam
+	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
+	if err != nil {
+		return fmt.Errorf("cannot prepare session params: %v", err)
+	}
+
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, authHandle)
 	if err != nil {
 		return err
 	}
 
-	updatedAuthHandleAuth := authHandleAuth
-	var sc *sessionContext
-
 	// If the session is not bound to authHandle, the TPM will respond with a HMAC generated with a key
 	// derived from the empty auth
-	switch s := authHandleAuth.(type) {
-	case *Session:
-		sc = s.Context.(*sessionContext)
-		if !sc.isBoundTo(&permanentContext{handle: authHandle}) {
-			updatedAuthHandleAuth = &Session{Context: s.Context, Attrs: s.Attrs}
-		}
+	authSession := ctx.sessionParams[0].session
+	if authSession != nil &&
+		!authSession.Context.(*sessionContext).isBoundTo(&permanentContext{handle: authHandle}) {
+		ctx.sessionParams[0].session = &Session{Context: authSession.Context, Attrs: authSession.Attrs}
 	}
 
-	if err := t.ProcessResponse(CommandClear, responseCode, responseTag, response, Separator,
-		Separator, HandleWithAuth{Handle: authHandle, Auth: updatedAuthHandleAuth}); err != nil {
+	if err := t.processResponse(ctx); err != nil {
 		return err
 	}
 
@@ -120,25 +118,32 @@ func (t *tpmContext) ClearControl(authHandle Handle, disable bool, authHandleAut
 
 func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{},
 	sessions ...*Session) error {
-	responseCode, responseTag, response, err :=
-		t.RunCommandAndReturnRawResponse(CommandHierarchyChangeAuth,
-			HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator, newAuth, Separator,
-			sessions)
+	var s []*sessionParam
+	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
+	if err != nil {
+		return fmt.Errorf("cannot prepare session params: %v", err)
+	}
+	s, err = t.validateAndAppendSessionParam(s, sessions)
+	if err != nil {
+		return fmt.Errorf("cannot prepare session params: %v", err)
+	}
+
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s, authHandle, Separator,
+		newAuth)
 	if err != nil {
 		return err
 	}
 
-	updatedAuthHandleAuth := authHandleAuth
 	var sc *sessionContext
 
 	// If the session is not bound to authHandle, the TPM will respond with a HMAC generated with a key
 	// derived from newAuth
-	switch s := authHandleAuth.(type) {
-	case *Session:
-		sc = s.Context.(*sessionContext)
+	authSession := ctx.sessionParams[0].session
+	if authSession != nil {
+		sc = authSession.Context.(*sessionContext)
 		if !sc.isBoundTo(&permanentContext{handle: authHandle}) {
-			updatedAuthHandleAuth =
-				&Session{Context: s.Context, Attrs: s.Attrs, AuthValue: newAuth}
+			ctx.sessionParams[0].session =
+				&Session{Context: authSession.Context, Attrs: authSession.Attrs}
 		}
 	}
 
@@ -153,6 +158,5 @@ func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 		}
 	}()
 
-	return t.ProcessResponse(CommandHierarchyChangeAuth, responseCode, responseTag, response, Separator,
-		Separator, HandleWithAuth{Handle: authHandle, Auth: updatedAuthHandleAuth}, sessions)
+	return t.processResponse(ctx)
 }

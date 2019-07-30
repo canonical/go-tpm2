@@ -44,13 +44,7 @@ type ResourceWithAuth struct {
 type TPMContext interface {
 	Close() error
 
-	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte,
-		error)
-	RunCommandAndReturnRawResponse(commandCode CommandCode, params ...interface{}) (ResponseCode, StructTag,
-		[]byte, error)
-	ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
-		response []byte, params ...interface{}) error
-
+	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte, error)
 	RunCommand(commandCode CommandCode, params ...interface{}) error
 
 	SetMaxSubmissions(max uint)
@@ -223,6 +217,14 @@ type responseHeader struct {
 	ResponseCode ResponseCode
 }
 
+type cmdContext struct {
+	commandCode CommandCode
+	sessionParams []*sessionParam
+	responseCode ResponseCode
+	responseTag StructTag
+	responseBytes []byte
+}
+
 type tpmContext struct {
 	tcti           io.ReadWriteCloser
 	resources      map[Handle]ResourceContext
@@ -237,8 +239,8 @@ func (t *tpmContext) Close() error {
 	return t.tcti.Close()
 }
 
-func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,
-	commandBytes []byte) (ResponseCode, StructTag, []byte, error) {
+func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode, commandBytes []byte) (ResponseCode,
+	StructTag, []byte, error) {
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
 
@@ -247,49 +249,33 @@ func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode,
 		return 0, 0, nil, wrapMarshallingError(commandCode, "command header", err)
 	}
 
+	if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
+		return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
+	}
+
 	var rHeader responseHeader
-	var responseBytes []byte
+	rHeaderBytes := make([]byte, binary.Size(rHeader))
+	if _, err := io.ReadFull(t.tcti, rHeaderBytes); err != nil {
+		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
+	}
 
-	for tries := uint(1); ; tries++ {
-		if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
-			return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
-		}
+	if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
+		return 0, 0, nil, wrapUnmarshallingError(commandCode, "response header", err)
+	}
 
-		rHeaderBytes := make([]byte, binary.Size(rHeader))
-		if _, err := io.ReadFull(t.tcti, rHeaderBytes); err != nil {
-			return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
-		}
-
-		if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
-			return 0, 0, nil, wrapUnmarshallingError(commandCode, "response header", err)
-		}
-
-		responseBytes = make([]byte, int(rHeader.ResponseSize)-len(rHeaderBytes))
-		if _, err := io.ReadFull(t.tcti, responseBytes); err != nil {
-			return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
-		}
-
-		err := DecodeResponseCode(commandCode, rHeader.ResponseCode)
-		if err == nil {
-			break
-		}
-
-		warning, isWarning := err.(TPMWarning)
-		if tries >= t.maxSubmissions || !isWarning || !(warning.Code == WarningYielded ||
-			warning.Code == WarningTesting || warning.Code == WarningRetry) {
-			return rHeader.ResponseCode, rHeader.Tag, nil, err
-		}
+	responseBytes := make([]byte, int(rHeader.ResponseSize)-len(rHeaderBytes))
+	if _, err := io.ReadFull(t.tcti, responseBytes); err != nil {
+		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
 	}
 
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *tpmContext) RunCommandAndReturnRawResponse(commandCode CommandCode,
-	params ...interface{}) (ResponseCode, StructTag, []byte, error) {
+func (t *tpmContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams []*sessionParam,
+	params ...interface{}) (*cmdContext, error) {
 	commandHandles := make([]interface{}, 0, len(params))
 	commandHandleNames := make([]Name, 0, len(params))
 	commandParams := make([]interface{}, 0, len(params))
-	sessionParams := make([]interface{}, 0, len(params))
 
 	sentinels := 0
 	for _, param := range params {
@@ -300,61 +286,29 @@ func (t *tpmContext) RunCommandAndReturnRawResponse(commandCode CommandCode,
 
 		switch sentinels {
 		case 0:
-			wrapHandle := func(handle Handle) ResourceContext {
-				return &permanentContext{handle: handle}
-			}
-
 			switch p := param.(type) {
-			case HandleWithAuth:
-				rc := wrapHandle(p.Handle)
-				commandHandles = append(commandHandles, p.Handle)
-				commandHandleNames = append(commandHandleNames, rc.Name())
-				sessionParams = append(sessionParams, p)
-			case ResourceWithAuth:
-				commandHandles = append(commandHandles, p.Context.Handle())
-				commandHandleNames = append(commandHandleNames, p.Context.Name())
-				sessionParams = append(sessionParams, p)
-			default:
-				rc, isRc := param.(ResourceContext)
-				if !isRc {
-					handle, isHandle := param.(Handle)
-					if !isHandle {
-						return 0, 0, nil, wrapMarshallingError(
-							commandCode, "command handles",
-							fmt.Errorf("invalid handle parameter type (%s)",
-								reflect.TypeOf(param)))
-					}
-					rc = wrapHandle(handle)
+			case ResourceContext:
+				if p.(resourceContextPrivate).tpmContext() != t {
+					return nil, wrapMarshallingError(commandCode, "command handles",
+						errors.New("resource context does not belong to this TPM context"))
 				}
-				commandHandles = append(commandHandles, rc.Handle())
-				commandHandleNames = append(commandHandleNames, rc.Name())
+				commandHandles = append(commandHandles, p.Handle())
+				commandHandleNames = append(commandHandleNames, p.Name())
+			case Handle:
+				commandHandles = append(commandHandles, p)
+				commandHandleNames =
+					append(commandHandleNames, (&permanentContext{handle: p}).Name())
+			default:
+				return nil, wrapMarshallingError(commandCode, "command handles",
+					fmt.Errorf("invalid parameter type (%s)", reflect.TypeOf(param)))
 			}
 		case 1:
 			commandParams = append(commandParams, param)
-		case 2:
-			switch p := param.(type) {
-			case []*Session:
-				for _, s := range p {
-					if s == nil {
-						continue
-					}
-					sessionParams = append(sessionParams, s)
-				}
-			case *Session:
-				if p == nil {
-					continue
-				}
-				sessionParams = append(sessionParams, p)
-			default:
-				return 0, 0, nil, fmt.Errorf("unexpected type %s for non-auth session parameter",
-					reflect.TypeOf(param))
-			}
 		}
 	}
 
 	if hasDecryptSession(sessionParams) && len(commandParams) > 0 && !isParamEncryptable(commandParams[0]) {
-		return 0, 0, nil, fmt.Errorf("command %v does not support command parameter encryption",
-			commandCode)
+		return nil, fmt.Errorf("command %v does not support command parameter encryption", commandCode)
 	}
 
 	var chBytes []byte
@@ -366,45 +320,65 @@ func (t *tpmContext) RunCommandAndReturnRawResponse(commandCode CommandCode,
 	if len(commandHandles) > 0 {
 		chBytes, err = MarshalToBytes(commandHandles...)
 		if err != nil {
-			return 0, 0, nil, wrapMarshallingError(commandCode, "command handles", err)
+			return nil, wrapMarshallingError(commandCode, "command handles", err)
 		}
 	}
 
 	if len(commandParams) > 0 {
 		cpBytes, err = MarshalToBytes(commandParams...)
 		if err != nil {
-			return 0, 0, nil, wrapMarshallingError(commandCode, "command parameters", err)
+			return nil, wrapMarshallingError(commandCode, "command parameters", err)
 		}
 	}
 
 	tag := TagNoSessions
 	if len(sessionParams) > 0 {
 		tag = TagSessions
-		authArea, err := buildCommandAuthArea(t, commandCode, commandHandleNames, cpBytes,
-			sessionParams...)
+		authArea, err := buildCommandAuthArea(t, sessionParams, commandCode, commandHandleNames, cpBytes)
 		if err != nil {
-			return 0, 0, nil, err
+			return nil, wrapMarshallingError(commandCode, "command auth area",
+				fmt.Errorf("error whilst building auth area: %v", err))
 		}
 		caBytes, err = MarshalToBytes(&authArea)
 		if err != nil {
-			return 0, 0, nil, wrapMarshallingError(commandCode, "command auth area", err)
+			return nil, wrapMarshallingError(commandCode, "command auth area", err)
 		}
 	}
 
-	responseCode, responseTag, responseBytes, err :=
-		t.RunCommandBytes(tag, commandCode, concat(chBytes, caBytes, cpBytes))
-	if err != nil {
-		return 0, 0, nil, err
+	var responseCode ResponseCode
+	var responseTag StructTag
+	var responseBytes []byte
+
+	for tries := uint(1); ; tries++ {
+		var err error
+		responseCode, responseTag, responseBytes, err =
+			t.RunCommandBytes(tag, commandCode, concat(chBytes, caBytes, cpBytes))
+		if err != nil {
+			return nil, err
+		}
+
+		err = DecodeResponseCode(commandCode, responseCode)
+		if err == nil {
+			break
+		}
+
+		warning, isWarning := err.(TPMWarning)
+		if tries >= t.maxSubmissions || !isWarning || !(warning.Code == WarningYielded ||
+			warning.Code == WarningTesting || warning.Code == WarningRetry) {
+			return nil, err
+		}
 	}
 
-	return responseCode, responseTag, responseBytes, nil
+	return &cmdContext{commandCode: commandCode,
+		sessionParams: sessionParams,
+		responseCode: responseCode,
+		responseTag: responseTag,
+		responseBytes: responseBytes}, nil
 }
 
-func (t *tpmContext) ProcessResponse(commandCode CommandCode, responseCode ResponseCode, responseTag StructTag,
-	response []byte, params ...interface{}) error {
+func (t *tpmContext) processResponse(context *cmdContext, params ...interface{}) error {
 	responseHandles := make([]interface{}, 0, len(params))
 	responseParams := make([]interface{}, 0, len(params))
-	sessionParams := make([]interface{}, 0, len(params))
 
 	sentinels := 0
 	for _, param := range params {
@@ -417,67 +391,45 @@ func (t *tpmContext) ProcessResponse(commandCode CommandCode, responseCode Respo
 		case 0:
 			_, isHandle := param.(*Handle)
 			if !isHandle {
-				return wrapUnmarshallingError(commandCode, "response handles",
+				return wrapUnmarshallingError(context.commandCode, "response handles",
 					fmt.Errorf("invalid response handle parameter type (%s)",
 						reflect.TypeOf(param)))
 			}
 			responseHandles = append(responseHandles, param)
 		case 1:
 			responseParams = append(responseParams, param)
-		case 2:
-			switch p := param.(type) {
-			case []*Session:
-				for _, s := range p {
-					if s == nil {
-						continue
-					}
-					sessionParams = append(sessionParams, s)
-				}
-			case *Session:
-				if p == nil {
-					continue
-				}
-				sessionParams = append(sessionParams, p)
-			case ResourceWithAuth:
-				sessionParams = append(sessionParams, param)
-			case HandleWithAuth:
-				sessionParams = append(sessionParams, param)
-			default:
-				return fmt.Errorf("unexpected type %s for session parameter",
-					reflect.TypeOf(param))
-			}
 		}
 	}
 
-	buf := bytes.NewReader(response)
+	buf := bytes.NewReader(context.responseBytes)
 
 	if len(responseHandles) > 0 {
 		if err := UnmarshalFromReader(buf, responseHandles...); err != nil {
-			return wrapUnmarshallingError(commandCode, "response handles", err)
+			return wrapUnmarshallingError(context.commandCode, "response handles", err)
 		}
 	}
 
 	rpBuf := buf
 	var rpBytes []byte
 
-	if responseTag == TagSessions {
+	if context.responseTag == TagSessions {
 		var parameterSize uint32
 		if err := UnmarshalFromReader(buf, &parameterSize); err != nil {
-			return wrapUnmarshallingError(commandCode, "parameter size", err)
+			return wrapUnmarshallingError(context.commandCode, "parameter size", err)
 		}
 		rpBytes = make([]byte, parameterSize)
 		_, err := io.ReadFull(buf, rpBytes)
 		if err != nil {
-			return wrapUnmarshallingError(commandCode, "response parameters",
+			return wrapUnmarshallingError(context.commandCode, "response parameters",
 				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
 		}
 
-		authArea := make([]authResponse, len(sessionParams))
+		authArea := make([]authResponse, len(context.sessionParams))
 		if err := UnmarshalFromReader(buf, RawSlice(authArea)); err != nil {
-			return wrapUnmarshallingError(commandCode, "response auth area", err)
+			return wrapUnmarshallingError(context.commandCode, "response auth area", err)
 		}
-		if err := processResponseAuthArea(t, responseCode, commandCode, rpBytes, authArea,
-			sessionParams...); err != nil {
+		if err := processResponseAuthArea(t, authArea, context.sessionParams, context.commandCode,
+			context.responseCode, rpBytes); err != nil {
 			return err
 		}
 
@@ -486,7 +438,7 @@ func (t *tpmContext) ProcessResponse(commandCode CommandCode, responseCode Respo
 
 	if len(responseParams) > 0 {
 		if err := UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-			return wrapUnmarshallingError(commandCode, "response parameters", err)
+			return wrapUnmarshallingError(context.commandCode, "response parameters", err)
 		}
 	}
 
@@ -496,24 +448,34 @@ func (t *tpmContext) ProcessResponse(commandCode CommandCode, responseCode Respo
 func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) error {
 	commandArgs := make([]interface{}, 0, len(params))
 	responseArgs := make([]interface{}, 0, len(params))
-	authSessions := make([]interface{}, 0, len(params))
+	sessionParams := make([]*sessionParam, 0, len(params))
 
 	sentinels := 0
 	for _, param := range params {
 		switch sentinels {
 		case 0:
-			commandArgs = append(commandArgs, param)
+			var err error
+			if hwa, isHwa := param.(HandleWithAuth); isHwa {
+				commandArgs = append(commandArgs, hwa.Handle)
+				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, hwa)
+			} else if rwa, isRwa := param.(ResourceWithAuth); isRwa {
+				commandArgs = append(commandArgs, rwa.Context)
+				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, rwa)
+			} else {
+				commandArgs = append(commandArgs, param)
+			}
+			if err != nil {
+				return fmt.Errorf("cannot process command handle with auth session parameter: %v",
+					err)
+			}
 			if param == Separator {
 				sentinels++
-			} else if hwa, isHwa := param.(HandleWithAuth); isHwa {
-				authSessions = append(authSessions, hwa)
-			} else if rwa, isRwa := param.(ResourceWithAuth); isRwa {
-				authSessions = append(authSessions, rwa)
 			}
 		case 1:
-			commandArgs = append(commandArgs, param)
 			if param == Separator {
 				sentinels++
+			} else {
+				commandArgs = append(commandArgs, param)
 			}
 		case 2:
 			responseArgs = append(responseArgs, param)
@@ -521,34 +483,26 @@ func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) 
 				sentinels++
 			}
 		case 3:
-			responseArgs = append(responseArgs, param)
 			if param == Separator {
 				sentinels++
-				responseArgs = append(responseArgs, authSessions...)
+			} else {
+				responseArgs = append(responseArgs, param)
 			}
 		case 4:
-			commandArgs = append(commandArgs, param)
-			responseArgs = append(responseArgs, param)
-			if param == Separator {
-				sentinels++
+			var err error
+			sessionParams, err = t.validateAndAppendSessionParam(sessionParams, param)
+			if err != nil {
+				return fmt.Errorf("cannot process non-auth session parameter: %v", err)
 			}
 		}
 	}
 
-	if sentinels < 4 {
-		for i := 4; i > sentinels && i > 2; i-- {
-			responseArgs = append(responseArgs, Separator)
-		}
-		responseArgs = append(responseArgs, authSessions...)
-	}
-
-	responseCode, responseTag, responseBytes, err :=
-		t.RunCommandAndReturnRawResponse(commandCode, commandArgs...)
+	ctx, err := t.runCommandWithoutProcessingResponse(commandCode, sessionParams, commandArgs...)
 	if err != nil {
 		return err
 	}
 
-	return t.ProcessResponse(commandCode, responseCode, responseTag, responseBytes, responseArgs...)
+	return t.processResponse(ctx, responseArgs...)
 }
 
 func (t *tpmContext) SetMaxSubmissions(max uint) {

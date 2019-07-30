@@ -20,7 +20,7 @@ func (t *tpmContext) CertifyCreation(signContext, objectContext ResourceContext,
 	}
 
 	if signContext == nil {
-		signContext = &permanentContext{handle: HandleNull}
+		signContext, _ = t.WrapHandle(HandleNull)
 	}
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: AlgorithmNull}

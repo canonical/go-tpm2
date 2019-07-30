@@ -11,51 +11,29 @@ import (
 	"reflect"
 )
 
-func findSessionWithAttr(attr SessionAttributes, sessions ...interface{}) (*Session, bool, int) {
-	match := func(session interface{}) bool {
-		s, isSession := session.(*Session)
-		if !isSession {
-			return false
-		}
-		return s.Attrs&attr > 0
-	}
-
+func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*Session, bool, int) {
 	for i, session := range sessions {
-		var found *Session
-		var isAuth bool = false
-		switch s := session.(type) {
-		case HandleWithAuth:
-			if match(s.Auth) {
-				found = s.Auth.(*Session)
-				isAuth = true
-			}
-		case ResourceWithAuth:
-			if match(s.Auth) {
-				found = s.Auth.(*Session)
-				isAuth = true
-			}
-		case *Session:
-			if match(s) {
-				found = s
-			}
+		if session.session == nil {
+			continue
 		}
-		if found != nil {
-			return found, isAuth, i
+		if session.session.Attrs&attr > 0 {
+			isAuth := session.associatedContext != nil
+			return session.session, isAuth, i
 		}
 	}
 
 	return nil, false, 0
 }
 
-func findDecryptSession(sessions ...interface{}) (*Session, bool, int) {
-	return findSessionWithAttr(AttrCommandEncrypt, sessions...)
+func findDecryptSession(sessions []*sessionParam) (*Session, bool, int) {
+	return findSessionWithAttr(AttrCommandEncrypt, sessions)
 }
 
-func findEncryptSession(sessions ...interface{}) (*Session, bool, int) {
-	return findSessionWithAttr(AttrResponseEncrypt, sessions...)
+func findEncryptSession(sessions []*sessionParam) (*Session, bool, int) {
+	return findSessionWithAttr(AttrResponseEncrypt, sessions)
 }
 
-func hasDecryptSession(sessions ...interface{}) bool {
+func hasDecryptSession(sessions []*sessionParam) bool {
 	s, _, _ := findDecryptSession(sessions)
 	return s != nil
 }
@@ -77,8 +55,8 @@ func computeSessionValue(context *sessionContext, authValue []byte, isAuth bool)
 	return key
 }
 
-func computeEncryptNonce(sessions ...interface{}) Nonce {
-	session, _, i := findEncryptSession(sessions...)
+func computeEncryptNonce(sessions []*sessionParam) Nonce {
+	session, _, i := findEncryptSession(sessions)
 	if session == nil || i == 0 {
 		return nil
 	}
@@ -86,8 +64,8 @@ func computeEncryptNonce(sessions ...interface{}) Nonce {
 	return session.Context.(*sessionContext).nonceTPM
 }
 
-func encryptCommandParameter(cpBytes []byte, sessions ...interface{}) (Nonce, error) {
-	session, isAuth, index := findDecryptSession(sessions...)
+func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, error) {
+	session, isAuth, index := findDecryptSession(sessions)
 	if session == nil {
 		return nil, nil
 	}
@@ -132,8 +110,8 @@ func encryptCommandParameter(cpBytes []byte, sessions ...interface{}) (Nonce, er
 	return context.nonceTPM, nil
 }
 
-func decryptResponseParameter(rpBytes []byte, sessions ...interface{}) error {
-	session, isAuth, _ := findEncryptSession(sessions...)
+func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
+	session, isAuth, _ := findEncryptSession(sessions)
 	if session == nil {
 		return nil
 	}

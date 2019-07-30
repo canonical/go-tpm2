@@ -45,11 +45,11 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
 	} else {
-		tpmKey = &permanentContext{handle: HandleNull}
+		tpmKey, _ = t.WrapHandle(HandleNull)
 	}
 
 	if bind == nil {
-		bind = &permanentContext{handle: HandleNull}
+		bind, _ = t.WrapHandle(HandleNull)
 	}
 
 	nonceCaller := make([]byte, digestSize)

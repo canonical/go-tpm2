@@ -31,6 +31,12 @@ const (
 	attrAudit
 )
 
+type sessionParam struct {
+	associatedContext ResourceContext
+	session *Session
+	authValue []byte
+}
+
 type authCommand struct {
 	SessionHandle Handle
 	Nonce         Nonce
@@ -84,66 +90,13 @@ func attrsFromSession(session *Session) sessionAttrs {
 	return attrs
 }
 
-func sessionContextFromParam(param interface{}) *sessionContext {
-	switch p := param.(type) {
-	case HandleWithAuth:
-		return sessionContextFromParam(p.Auth)
-	case ResourceWithAuth:
-		return sessionContextFromParam(p.Auth)
-	case *Session:
-		return p.Context.(*sessionContext)
-	}
-	return nil
-}
-
-func validateSessionParam(tpm *tpmContext, param interface{}) error {
-	switch p := param.(type) {
-	case HandleWithAuth:
-		return validateSessionParam(tpm, p.Auth)
-	case ResourceWithAuth:
-		return validateSessionParam(tpm, p.Auth)
-	case string:
-		return nil
-	case []byte:
-		return nil
-	case Auth:
-		return nil
-	case nil:
-		return nil
-	case *Session:
-		if err := tpm.checkResourceContextParam(p.Context, "session"); err != nil {
-			return err
-		}
-		_, isSessionContext := p.Context.(*sessionContext)
-		if !isSessionContext {
-			return errors.New("invalid resource context: not a session context")
-		}
-		return nil
-	default:
-		return fmt.Errorf("unexpected type (%s)", reflect.TypeOf(param))
-	}
-}
-
-func validateSessionParams(tpm *tpmContext, params ...interface{}) error {
-	if len(params) > 3 {
-		return errors.New("too many session parameters provided")
-	}
-
-	for i, param := range params {
-		if err := validateSessionParam(tpm, param); err != nil {
-			return fmt.Errorf("invalid session parameter at index %d: %v", i, err)
-		}
-	}
-
-	return nil
-}
-
-func computeCallerNonces(params ...interface{}) error {
+func computeCallerNonces(params []*sessionParam) error {
 	for _, param := range params {
-		context := sessionContextFromParam(param)
-		if context == nil {
+		if param.session == nil {
 			continue
 		}
+
+		context := param.session.Context.(*sessionContext)
 
 		if err := cryptComputeNonce(context.nonceCaller); err != nil {
 			return fmt.Errorf("cannot compute new caller nonce: %v", err)
@@ -171,9 +124,9 @@ func computeSessionHMACKey(sessionContext *sessionContext, authValue []byte,
 	return key
 }
 
-func buildCommandSessionAuth(tpm *tpmContext, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	session *Session, associatedContext ResourceContext, decryptNonce, encryptNonce Nonce) (*authCommand,
-	error) {
+func buildCommandSessionAuth(tpm *tpmContext, session *Session, associatedContext ResourceContext,
+	commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce,
+	encryptNonce Nonce) (*authCommand, error) {
 	sessionContext := session.Context.(*sessionContext)
 
 	attrs := attrsFromSession(session)
@@ -202,33 +155,19 @@ func buildCommandPasswordAuth(authValue Auth) *authCommand {
 	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: authValue}
 }
 
-func buildCommandAuth(tpm *tpmContext, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	param interface{}, context ResourceContext, decryptNonce, encryptNonce Nonce) (*authCommand, error) {
-	switch p := param.(type) {
-	case HandleWithAuth:
-		rc := &permanentContext{handle: p.Handle}
-		return buildCommandAuth(tpm, commandCode, commandHandles, cpBytes, p.Auth, rc, decryptNonce,
-			encryptNonce)
-	case ResourceWithAuth:
-		return buildCommandAuth(tpm, commandCode, commandHandles, cpBytes, p.Auth, p.Context, decryptNonce,
-			encryptNonce)
-	case string:
-		return buildCommandPasswordAuth(Auth(p)), nil
-	case []byte:
-		return buildCommandPasswordAuth(Auth(p)), nil
-	case Auth:
-		return buildCommandPasswordAuth(p), nil
-	case nil:
-		return buildCommandPasswordAuth(nil), nil
-	case *Session:
-		return buildCommandSessionAuth(tpm, commandCode, commandHandles, cpBytes, p, context, decryptNonce,
-			encryptNonce)
+func buildCommandAuth(tpm *tpmContext, param *sessionParam, commandCode CommandCode, commandHandles []Name,
+	cpBytes []byte, decryptNonce, encryptNonce Nonce) (*authCommand, error) {
+	if param.session == nil {
+		return buildCommandPasswordAuth(Auth(param.authValue)), nil
+	} else {
+		return buildCommandSessionAuth(tpm, param.session, param.associatedContext, commandCode,
+			commandHandles, cpBytes, decryptNonce, encryptNonce)
 	}
-	panic("Unrecognized session parameter type")
 }
 
-func processResponseSessionAuth(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode,
-	rpBytes []byte, resp authResponse, session *Session, associatedContext ResourceContext) error {
+func processResponseSessionAuth(tpm *tpmContext, resp authResponse, session *Session,
+	associatedContext ResourceContext, commandCode CommandCode, responseCode ResponseCode,
+	rpBytes []byte) error {
 	sessionContext := session.Context.(*sessionContext)
 	sessionContext.nonceTPM = resp.Nonce
 
@@ -260,36 +199,32 @@ func processResponseSessionAuth(tpm *tpmContext, responseCode ResponseCode, comm
 	return nil
 }
 
-func processResponseAuth(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte,
-	resp authResponse, param interface{}, context ResourceContext) error {
-	switch p := param.(type) {
-	case HandleWithAuth:
-		rc := &permanentContext{handle: p.Handle}
-		return processResponseAuth(tpm, responseCode, commandCode, rpBytes, resp, p.Auth, rc)
-	case ResourceWithAuth:
-		return processResponseAuth(tpm, responseCode, commandCode, rpBytes, resp, p.Auth, p.Context)
-	case *Session:
-		return processResponseSessionAuth(tpm, responseCode, commandCode, rpBytes, resp, p, context)
+func processResponseAuth(tpm *tpmContext, resp authResponse, param *sessionParam, commandCode CommandCode,
+	responseCode ResponseCode, rpBytes []byte) error {
+	if param.session == nil {
+		return nil
 	}
-	return nil
+
+	return processResponseSessionAuth(tpm, resp, param.session, param.associatedContext, commandCode,
+		responseCode, rpBytes)
 }
 
-func buildCommandAuthArea(tpm *tpmContext, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	sessionParams ...interface{}) (commandAuthArea, error) {
-	if err := validateSessionParams(tpm, sessionParams...); err != nil {
-		return nil, fmt.Errorf("error whilst validating session parameters: %v", err)
+func buildCommandAuthArea(tpm *tpmContext, sessionParams []*sessionParam, commandCode CommandCode,
+	commandHandles []Name, cpBytes []byte) (commandAuthArea, error) {
+	if len(sessionParams) > 3 {
+		return nil, errors.New("too many session parameters provided")
 	}
 
-	if err := computeCallerNonces(sessionParams...); err != nil {
+	if err := computeCallerNonces(sessionParams); err != nil {
 		return nil, fmt.Errorf("cannot compute caller nonces: %v", err)
 	}
 
-	decryptNonce, err := encryptCommandParameter(cpBytes, sessionParams...)
+	decryptNonce, err := encryptCommandParameter(sessionParams, cpBytes)
 	if err != nil {
 		return nil, fmt.Errorf("cannot encrypt first command parameter: %v", err)
 	}
 
-	encryptNonce := computeEncryptNonce(sessionParams...)
+	encryptNonce := computeEncryptNonce(sessionParams)
 
 	var area commandAuthArea
 	for i, param := range sessionParams {
@@ -298,10 +233,9 @@ func buildCommandAuthArea(tpm *tpmContext, commandCode CommandCode, commandHandl
 			dn = decryptNonce
 			en = encryptNonce
 		}
-		a, err := buildCommandAuth(tpm, commandCode, commandHandles, cpBytes, param, nil, dn, en)
+		a, err := buildCommandAuth(tpm, param, commandCode, commandHandles, cpBytes, dn, en)
 		if err != nil {
-			return nil, fmt.Errorf("cannot build auth area for command %s at index %d: %v",
-				commandCode, i, err)
+			return nil, fmt.Errorf("cannot build auth at index %d: %v", i, err)
 		}
 		area = append(area, *a)
 	}
@@ -309,18 +243,81 @@ func buildCommandAuthArea(tpm *tpmContext, commandCode CommandCode, commandHandl
 	return area, nil
 }
 
-func processResponseAuthArea(tpm *tpmContext, responseCode ResponseCode, commandCode CommandCode,
-	rpBytes []byte, authResponses []authResponse, sessionParams ...interface{}) error {
+func processResponseAuthArea(tpm *tpmContext, authResponses []authResponse, sessionParams []*sessionParam,
+	commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
 	for i, resp := range authResponses {
-		if err := processResponseAuth(tpm, responseCode, commandCode, rpBytes, resp,
-			sessionParams[i], nil); err != nil {
+		if err := processResponseAuth(tpm, resp, sessionParams[i], commandCode, responseCode,
+			rpBytes); err != nil {
 			return err
 		}
 	}
 
-	if err := decryptResponseParameter(rpBytes, sessionParams...); err != nil {
-		return fmt.Errorf("cannot decrypt first response parameter: %v", err)
+	if err := decryptResponseParameter(sessionParams, rpBytes); err != nil {
+		return wrapUnmarshallingError(commandCode, "response parameters",
+			fmt.Errorf("cannot decrypt first response parameter: %v", err))
 	}
 
 	return nil
+}
+
+func (t *tpmContext) validateAndAppendSessionParam(params []*sessionParam, in interface{}) ([]*sessionParam,
+	error) {
+	makeSessionParamFromAuth := func(auth interface{}) *sessionParam {
+		switch a := auth.(type) {
+		case string:
+			return &sessionParam{authValue: []byte(a)}
+		case []byte:
+			return &sessionParam{authValue: a}
+		case nil:
+			return &sessionParam{}
+		case *Session:
+			return &sessionParam{session: a}
+		}
+		return nil
+	}
+
+	var s *sessionParam
+
+	switch i := in.(type) {
+	case ResourceWithAuth:
+		s = makeSessionParamFromAuth(i.Auth)
+		if s == nil {
+			return nil, fmt.Errorf("invalid auth parameter type (%s)", reflect.TypeOf(i.Auth))
+		}
+		s.associatedContext = i.Context
+	case HandleWithAuth:
+		s = makeSessionParamFromAuth(i.Auth)
+		if s == nil {
+			return nil, fmt.Errorf("invalid auth parameter type (%s)", reflect.TypeOf(i.Auth))
+		}
+		s.associatedContext = &permanentContext{handle: i.Handle}
+	case []*Session:
+		for _, s := range i {
+			if s == nil {
+				return nil, errors.New("nil session parameter")
+			}
+			var err error
+			params, err = t.validateAndAppendSessionParam(params, s)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return params, nil
+	case *Session:
+		s = &sessionParam{session: i}
+	default:
+		return nil, fmt.Errorf("invalid session parameter type (%s)", reflect.TypeOf(in))
+	}
+
+	if s.session != nil {
+		if err := t.checkResourceContextParam(s.session.Context, "session"); err != nil {
+			return nil, err
+		}
+		_, isSessionContext := s.session.Context.(*sessionContext)
+		if !isSessionContext {
+			return nil, errors.New("invalid resource context for session: not a session context")
+		}
+	}
+
+	return append(params, s), nil
 }
