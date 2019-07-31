@@ -25,10 +25,10 @@ func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	var creationHash Digest
 	var creationTicket TkCreation
 
-	if err := t.RunCommand(CommandCreate, ResourceWithAuth{Context: parentContext, Auth: parentContextAuth},
-		Separator, (*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), outsideInfo, creationPCR,
-		Separator, Separator, &outPrivate, &outPublic, &creationData, &creationHash,
-		&creationTicket, Separator, sessions); err != nil {
+	if err := t.RunCommand(CommandCreate, sessions,
+		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		(*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), outsideInfo, creationPCR, Separator,
+		Separator, &outPrivate, &outPublic, &creationData, &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -45,9 +45,9 @@ func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoad, ResourceWithAuth{Context: parentContext, Auth: parentContextAuth},
-		Separator, inPrivate, (*Public2B)(inPublic), Separator, &objectHandle, Separator,
-		&name, Separator, sessions); err != nil {
+	if err := t.RunCommand(CommandLoad, sessions,
+		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator, inPrivate,
+		(*Public2B)(inPublic), Separator, &objectHandle, Separator, &name); err != nil {
 		return nil, nil, err
 	}
 
@@ -70,8 +70,8 @@ func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoadExternal, Separator, (*Sensitive2B)(inPrivate), (*Public2B)(inPublic),
-		hierarchy, Separator, &objectHandle, Separator, &name, Separator, sessions); err != nil {
+	if err := t.RunCommand(CommandLoadExternal, sessions, Separator, (*Sensitive2B)(inPrivate),
+		(*Public2B)(inPublic), hierarchy, Separator, &objectHandle, Separator, &name); err != nil {
 		return nil, nil, err
 	}
 
@@ -89,8 +89,8 @@ func (t *tpmContext) readPublic(objectHandle Handle, sessions ...*Session) (*Pub
 	var outPublic Public2B
 	var name Name
 	var qualifiedName Name
-	if err := t.RunCommand(CommandReadPublic, objectHandle, Separator, Separator, Separator, &outPublic,
-		&name, &qualifiedName, Separator, sessions); err != nil {
+	if err := t.RunCommand(CommandReadPublic, sessions, objectHandle, Separator, Separator, Separator,
+		&outPublic, &name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
 	}
 	return (*Public)(&outPublic), name, qualifiedName, nil
@@ -108,8 +108,9 @@ func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interfa
 	sessions ...*Session) (SensitiveData, error) {
 	var outData SensitiveData
 
-	if err := t.RunCommand(CommandUnseal, ResourceWithAuth{Context: itemContext, Auth: itemContextAuth},
-		Separator, Separator, Separator, &outData, Separator, sessions); err != nil {
+	if err := t.RunCommand(CommandUnseal, sessions,
+		ResourceWithAuth{Context: itemContext, Auth: itemContextAuth}, Separator, Separator, Separator,
+		&outData); err != nil {
 		return nil, err
 	}
 
@@ -120,9 +121,9 @@ func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 	objectContextAuth interface{}, sessions ...*Session) (Private, error) {
 	var outPrivate Private
 
-	if err := t.RunCommand(CommandObjectChangeAuth,
+	if err := t.RunCommand(CommandObjectChangeAuth, sessions,
 		ResourceWithAuth{Context: objectContext, Auth: objectContextAuth}, parentContext, Separator,
-		newAuth, Separator, Separator, &outPrivate, Separator, sessions); err != nil {
+		newAuth, Separator, Separator, &outPrivate); err != nil {
 		return nil, err
 	}
 
@@ -144,10 +145,10 @@ func (t *tpmContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	var outPublic Public2B
 	var name Name
 
-	if err := t.RunCommand(CommandCreateLoaded,
+	if err := t.RunCommand(CommandCreateLoaded, sessions,
 		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
 		(*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), Separator, &objectHandle, Separator,
-		&outPrivate, &outPublic, &name, Separator, sessions); err != nil {
+		&outPrivate, &outPublic, &name); err != nil {
 		return nil, nil, nil, nil, err
 	}
 

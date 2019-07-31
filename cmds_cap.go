@@ -19,7 +19,7 @@ func (t *tpmContext) GetCapability(capability Capability, property, propertyCoun
 		var moreData bool
 		var data CapabilityData
 
-		if err := t.RunCommand(CommandGetCapability, Separator, capability, nextProperty, remaining,
+		if err := t.RunCommand(CommandGetCapability, nil, Separator, capability, nextProperty, remaining,
 			Separator, Separator, &moreData, &data); err != nil {
 			return nil, err
 		}

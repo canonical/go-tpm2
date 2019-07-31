@@ -50,9 +50,9 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var sessionHandle Handle
 	var nonceTPM Nonce
 
-	if err := t.RunCommand(CommandStartAuthSession, tpmKey, bind, Separator, Nonce(nonceCaller),
+	if err := t.RunCommand(CommandStartAuthSession, sessions, tpmKey, bind, Separator, Nonce(nonceCaller),
 		encryptedSalt, sessionType, symmetric, authHash, Separator, &sessionHandle, Separator,
-		&nonceTPM, Separator, sessions); err != nil {
+		&nonceTPM); err != nil {
 		return nil, err
 	}
 
@@ -80,5 +80,5 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 }
 
 func (t *tpmContext) PolicyRestart(sessionHandle ResourceContext) error {
-	return t.RunCommand(CommandPolicyRestart, sessionHandle)
+	return t.RunCommand(CommandPolicyRestart, nil, sessionHandle)
 }

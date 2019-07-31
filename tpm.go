@@ -45,7 +45,7 @@ type TPMContext interface {
 	Close() error
 
 	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte, error)
-	RunCommand(commandCode CommandCode, params ...interface{}) error
+	RunCommand(commandCode CommandCode, sessions []*Session, params ...interface{}) error
 
 	SetMaxSubmissions(max uint)
 	WrapHandle(handle Handle) (ResourceContext, error)
@@ -446,7 +446,7 @@ func (t *tpmContext) processResponse(context *cmdContext, params ...interface{})
 	return nil
 }
 
-func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) error {
+func (t *tpmContext) RunCommand(commandCode CommandCode, sessions []*Session, params ...interface{}) error {
 	commandArgs := make([]interface{}, 0, len(params))
 	responseArgs := make([]interface{}, 0, len(params))
 	sessionParams := make([]*sessionParam, 0, len(params))
@@ -490,14 +490,13 @@ func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) 
 			} else {
 				responseArgs = append(responseArgs, param)
 			}
-		case 4:
-			var err error
-			sessionParams, err = t.validateAndAppendSessionParam(sessionParams, param)
-			if err != nil {
-				return wrapMarshallingError(commandCode, "command auth area",
-					fmt.Errorf("error whilst processing non-auth session parameter: %v", err))
-			}
 		}
+	}
+
+	sessionParams, err := t.validateAndAppendSessionParam(sessionParams, sessions)
+	if err != nil {
+		return wrapMarshallingError(commandCode, "command auth area",
+			fmt.Errorf("error whilst processing non-auth session parameter: %v", err))
 	}
 
 	ctx, err := t.runCommandWithoutProcessingResponse(commandCode, sessionParams, commandArgs...)

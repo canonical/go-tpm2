@@ -5,13 +5,13 @@
 package tpm2
 
 func (t *tpmContext) DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth interface{}) error {
-	return t.RunCommand(CommandDictionaryAttackLockReset,
+	return t.RunCommand(CommandDictionaryAttackLockReset, nil,
 		HandleWithAuth{Handle: lockHandle, Auth: lockHandleAuth})
 }
 
 func (t *tpmContext) DictionaryAttackParameters(lockHandle Handle, newMaxTries, newRecoveryTime,
 	lockoutRecovery uint32, lockHandleAuth interface{}) error {
-	return t.RunCommand(CommandDictionaryAttackParameters,
+	return t.RunCommand(CommandDictionaryAttackParameters, nil,
 		HandleWithAuth{Handle: lockHandle, Auth: lockHandleAuth}, Separator, newMaxTries, newRecoveryTime,
 		lockoutRecovery)
 }

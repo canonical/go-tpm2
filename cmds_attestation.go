@@ -21,10 +21,10 @@ func (t *tpmContext) CertifyCreation(signContext, objectContext ResourceContext,
 	var certifyInfo Attest2B
 	var signature Signature
 
-	if err := t.RunCommand(CommandCertifyCreation,
+	if err := t.RunCommand(CommandCertifyCreation, sessions,
 		ResourceWithAuth{Context: signContext, Auth: signContextAuth}, objectContext, Separator,
 		qualifyingData, creationHash, inScheme, creationTicket, Separator, Separator, &certifyInfo,
-		&signature, Separator, sessions); err != nil {
+		&signature); err != nil {
 		return nil, nil, err
 	}
 

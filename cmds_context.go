@@ -103,7 +103,7 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 func (t *tpmContext) ContextSave(saveContext ResourceContext) (*Context, error) {
 	var context Context
 
-	if err := t.RunCommand(CommandContextSave, saveContext, Separator, Separator, Separator,
+	if err := t.RunCommand(CommandContextSave, nil, saveContext, Separator, Separator, Separator,
 		&context); err != nil {
 		return nil, err
 	}
@@ -137,7 +137,8 @@ func (t *tpmContext) ContextLoad(context *Context) (ResourceContext, error) {
 
 	var loadedHandle Handle
 
-	if err := t.RunCommand(CommandContextLoad, Separator, tmpContext, Separator, &loadedHandle); err != nil {
+	if err := t.RunCommand(CommandContextLoad, nil, Separator, tmpContext, Separator,
+		&loadedHandle); err != nil {
 		return nil, err
 	}
 
@@ -158,7 +159,7 @@ func (t *tpmContext) FlushContext(flushContext ResourceContext) error {
 		return fmt.Errorf("invalid resource context for flushContext: %v", err)
 	}
 
-	if err := t.RunCommand(CommandFlushContext, Separator, flushContext.Handle()); err != nil {
+	if err := t.RunCommand(CommandFlushContext, nil, Separator, flushContext.Handle()); err != nil {
 		return err
 	}
 
@@ -168,7 +169,7 @@ func (t *tpmContext) FlushContext(flushContext ResourceContext) error {
 
 func (t *tpmContext) EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle,
 	authAuth interface{}) (ResourceContext, error) {
-	if err := t.RunCommand(CommandEvictControl, HandleWithAuth{Handle: auth, Auth: authAuth},
+	if err := t.RunCommand(CommandEvictControl, nil, HandleWithAuth{Handle: auth, Auth: authAuth},
 		objectContext, Separator, persistentHandle); err != nil {
 		return nil, err
 	}

@@ -27,11 +27,11 @@ func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 	var creationTicket TkCreation
 	var name Name
 
-	if err := t.RunCommand(CommandCreatePrimary,
+	if err := t.RunCommand(CommandCreatePrimary, sessions,
 		HandleWithAuth{Handle: primaryObject, Auth: primaryObjectAuth}, Separator,
 		(*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), outsideInfo, creationPCR, Separator,
 		&objectHandle, Separator, &outPublic, &creationData, &creationHash, &creationTicket,
-		&name, Separator, sessions); err != nil {
+		&name); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
@@ -113,7 +113,7 @@ func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 }
 
 func (t *tpmContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
-	return t.RunCommand(CommandClearControl, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth},
+	return t.RunCommand(CommandClearControl, nil, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth},
 		Separator, disable)
 }
 
