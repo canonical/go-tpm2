@@ -77,27 +77,24 @@ func cryptComputeCpHash(hashAlg AlgorithmId, commandCode CommandCode, commandHan
 	cpBytes []byte) []byte {
 	hash := cryptConstructHash(hashAlg)
 
-	b, _ := MarshalToBytes(commandCode)
-	hash.Write(b)
+	binary.Write(hash, binary.BigEndian, commandCode)
 	for _, name := range commandHandles {
 		hash.Write([]byte(name))
 	}
 	hash.Write(cpBytes)
 
-	return hash.Sum(nil)[:]
+	return hash.Sum(nil)
 }
 
 func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandCode CommandCode,
 	rpBytes []byte) []byte {
 	hash := cryptConstructHash(hashAlg)
 
-	b, _ := MarshalToBytes(responseCode)
-	hash.Write(b)
-	b, _ = MarshalToBytes(commandCode)
-	hash.Write(b)
+	binary.Write(hash, binary.BigEndian, responseCode)
+	binary.Write(hash, binary.BigEndian, commandCode)
 	hash.Write(rpBytes)
 
-	return hash.Sum(nil)[:]
+	return hash.Sum(nil)
 }
 
 func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt,
