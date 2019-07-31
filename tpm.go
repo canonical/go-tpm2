@@ -88,7 +88,11 @@ type TPMContext interface {
 	// Section 13 - Duplication Commands
 	// Section 14 - Asymmetric Primitives
 	// Section 15 - Symmetrict Primitives
+
 	// Section 16 - Random Number Generator
+	GetRandom(bytesRequested uint16, sessions ...*Session) (Digest, error)
+	StirRandom(inData SensitiveData, sessions ...*Session) error
+
 	// Section 17 - Hash/HMAC/Event Sequences
 
 	// Section 18 - Attestation Commands

@@ -43,6 +43,7 @@ const (
 	CommandSelfTest                   CommandCode = 0x00000143
 	CommandStartup                    CommandCode = 0x00000144
 	CommandShutdown                   CommandCode = 0x00000145
+	CommandStirRandom                 CommandCode = 0x00000146
 	CommandCertifyCreation            CommandCode = 0x0000014A
 	CommandObjectChangeAuth           CommandCode = 0x00000150
 	CommandPolicySecret               CommandCode = 0x00000151
@@ -59,6 +60,7 @@ const (
 	CommandReadPublic                 CommandCode = 0x00000173
 	CommandStartAuthSession           CommandCode = 0x00000176
 	CommandGetCapability              CommandCode = 0x0000017A
+	CommandGetRandom                  CommandCode = 0x0000017B
 	CommandGetTestResult              CommandCode = 0x0000017C
 	CommandPCRRead                    CommandCode = 0x0000017E
 	CommandPolicyPCR                  CommandCode = 0x0000017F

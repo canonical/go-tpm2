@@ -53,6 +53,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_Startup"
 	case CommandShutdown:
 		return "TPM_CC_Shutdown"
+	case CommandStirRandom:
+		return "TPM_CC_StirRandom"
 	case CommandCertifyCreation:
 		return "TPM_CC_CertifyCreation"
 	case CommandObjectChangeAuth:
@@ -85,6 +87,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_StartAuthSession"
 	case CommandGetCapability:
 		return "TPM_CC_GetCapability"
+	case CommandGetRandom:
+		return "TPM_CC_GetRandom"
 	case CommandGetTestResult:
 		return "TPM_CC_GetTestResult"
 	case CommandPCRRead:
