@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 )
 
 type ResourceContext interface {
@@ -198,17 +197,16 @@ func (t *tpmContext) addResourceContext(rc ResourceContext) {
 
 }
 
-func (t *tpmContext) checkResourceContextParam(rc ResourceContext, name string) error {
+func (t *tpmContext) checkResourceContextParam(rc ResourceContext) error {
 	if rc == nil {
-		return fmt.Errorf("invalid resource context for %s: nil", name)
+		return errors.New("nil value")
 	}
 	rcp := rc.(resourceContextPrivate)
 	if rcp.tpmContext() == nil {
-		return fmt.Errorf("invalid resource context for %s: resource has been closed", name)
+		return errors.New("resource has been closed")
 	}
 	if rcp.tpmContext() != t {
-		return fmt.Errorf("invalid resource context for %s: resource belongs to another TPM context",
-			name)
+		return errors.New("resource belongs to another TPM context")
 	}
 	return nil
 }

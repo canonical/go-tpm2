@@ -33,8 +33,8 @@ const (
 
 type sessionParam struct {
 	associatedContext ResourceContext
-	session *Session
-	authValue []byte
+	session           *Session
+	authValue         []byte
 }
 
 type authCommand struct {
@@ -310,8 +310,8 @@ func (t *tpmContext) validateAndAppendSessionParam(params []*sessionParam, in in
 	}
 
 	if s.session != nil {
-		if err := t.checkResourceContextParam(s.session.Context, "session"); err != nil {
-			return nil, err
+		if err := t.checkResourceContextParam(s.session.Context); err != nil {
+			return nil, fmt.Errorf("invalid resource context for session: %v", err)
 		}
 		_, isSessionContext := s.session.Context.(*sessionContext)
 		if !isSessionContext {

@@ -4,19 +4,19 @@
 
 package tpm2
 
-import ()
+import (
+	"fmt"
+)
 
 func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{},
 	sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
-	if err := t.checkResourceContextParam(parentContext, "parentContext"); err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-	if inSensitive == nil {
-		inSensitive = &SensitiveCreate{}
-	}
 	if inPublic == nil {
 		return nil, nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
+	}
+
+	if inSensitive == nil {
+		inSensitive = &SensitiveCreate{}
 	}
 
 	var outPrivate Private
@@ -38,9 +38,6 @@ func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 
 func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
 	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error) {
-	if err := t.checkResourceContextParam(parentContext, "parentContext"); err != nil {
-		return nil, nil, err
-	}
 	if inPublic == nil {
 		return nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
@@ -100,18 +97,15 @@ func (t *tpmContext) readPublic(objectHandle Handle, sessions ...*Session) (*Pub
 }
 
 func (t *tpmContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
-	if err := t.checkResourceContextParam(objectContext, "objectContext"); err != nil {
-		return nil, nil, nil, err
+	if err := t.checkResourceContextParam(objectContext); err != nil {
+		return nil, nil, nil, fmt.Errorf("invalid resource context for objectContext: %v", err)
 	}
+
 	return t.readPublic(objectContext.Handle(), sessions...)
 }
 
 func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interface{},
 	sessions ...*Session) (SensitiveData, error) {
-	if err := t.checkResourceContextParam(itemContext, "itemContext"); err != nil {
-		return nil, err
-	}
-
 	var outData SensitiveData
 
 	if err := t.RunCommand(CommandUnseal, ResourceWithAuth{Context: itemContext, Auth: itemContextAuth},
@@ -124,13 +118,6 @@ func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interfa
 
 func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
 	objectContextAuth interface{}, sessions ...*Session) (Private, error) {
-	if err := t.checkResourceContextParam(objectContext, "objectContext"); err != nil {
-		return nil, err
-	}
-	if err := t.checkResourceContextParam(parentContext, "parentContext"); err != nil {
-		return nil, err
-	}
-
 	var outPrivate Private
 
 	if err := t.RunCommand(CommandObjectChangeAuth,
@@ -144,14 +131,12 @@ func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 
 func (t *tpmContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
-	if err := t.checkResourceContextParam(parentContext, "parentContext"); err != nil {
-		return nil, nil, nil, nil, err
-	}
-	if inSensitive == nil {
-		inSensitive = &SensitiveCreate{}
-	}
 	if inPublic == nil {
 		return nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
+	}
+
+	if inSensitive == nil {
+		inSensitive = &SensitiveCreate{}
 	}
 
 	var objectHandle Handle

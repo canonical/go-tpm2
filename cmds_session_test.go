@@ -92,7 +92,7 @@ func TestStartAuthSession(t *testing.T) {
 			tpmKey:      owner,
 			sessionType: SessionTypeHMAC,
 			alg:         AlgorithmSHA256,
-			errMsg:      "invalid tpmKey parameter: not an object",
+			errMsg:      "invalid resource context for tpmKey: not an object",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

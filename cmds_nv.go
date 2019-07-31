@@ -4,6 +4,10 @@
 
 package tpm2
 
+import (
+	"fmt"
+)
+
 func (t *tpmContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPublic, Name, error) {
 	var nvPublic NVPublic2B
 	var nvName Name
@@ -15,8 +19,9 @@ func (t *tpmContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPubl
 }
 
 func (t *tpmContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error) {
-	if err := t.checkResourceContextParam(nvIndex, "nvIndex"); err != nil {
-		return nil, nil, err
+	if err := t.checkResourceContextParam(nvIndex); err != nil {
+		return nil, nil, fmt.Errorf("invalid resource context for nvIndex: %v", err)
 	}
+
 	return t.nvReadPublic(nvIndex.Handle(), sessions...)
 }

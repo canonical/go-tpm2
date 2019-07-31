@@ -6,15 +6,13 @@ package tpm2
 
 import (
 	"errors"
+	"fmt"
 )
 
 func (t *tpmContext) PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
 	expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error) {
-	if err := t.checkResourceContextParam(authContext, "authContext"); err != nil {
-		return nil, nil, err
-	}
-	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
-		return nil, nil, err
+	if err := t.checkResourceContextParam(policySession); err != nil {
+		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
 	}
 
 	sessionContext, isSession := policySession.(SessionContext)
@@ -35,31 +33,23 @@ func (t *tpmContext) PolicySecret(authContext, policySession ResourceContext, cp
 }
 
 func (t *tpmContext) PolicyOR(policySession ResourceContext, pHashList DigestList) error {
-	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
-		return err
-	}
-
 	return t.RunCommand(CommandPolicyOR, policySession, Separator, pHashList)
 }
 
 func (t *tpmContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList,
 	sessions ...*Session) error {
-	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
-		return err
-	}
-
 	return t.RunCommand(CommandPolicyPCR, policySession, Separator, pcrDigest, pcrs, Separator, Separator,
 		Separator, sessions)
 }
 
 func (t *tpmContext) PolicyAuthValue(policySession ResourceContext) error {
-	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
-		return err
+	if err := t.checkResourceContextParam(policySession); err != nil {
+		return fmt.Errorf("invalid resource context for policySession: %v", err)
 	}
 
 	sc, isSessionContext := policySession.(*sessionContext)
 	if !isSessionContext {
-		return makeInvalidParamError("policySession", "not a session context")
+		return errors.New("invalid resource context for policySession: not a session context")
 	}
 
 	if err := t.RunCommand(CommandPolicyAuthValue, policySession); err != nil {
@@ -71,13 +61,13 @@ func (t *tpmContext) PolicyAuthValue(policySession ResourceContext) error {
 }
 
 func (t *tpmContext) PolicyPassword(policySession ResourceContext) error {
-	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
-		return err
+	if err := t.checkResourceContextParam(policySession); err != nil {
+		return fmt.Errorf("invalid resource context for policySession: %v", err)
 	}
 
 	sc, isSessionContext := policySession.(*sessionContext)
 	if !isSessionContext {
-		return makeInvalidParamError("policySession", "not a session context")
+		return errors.New("invalid resource context for policySession: not a session context")
 	}
 
 	if err := t.RunCommand(CommandPolicyPassword, policySession); err != nil {
@@ -89,10 +79,6 @@ func (t *tpmContext) PolicyPassword(policySession ResourceContext) error {
 }
 
 func (t *tpmContext) PolicyGetDigest(policySession ResourceContext) (Digest, error) {
-	if err := t.checkResourceContextParam(policySession, "policySession"); err != nil {
-		return nil, err
-	}
-
 	var policyDigest Digest
 
 	if err := t.RunCommand(CommandPolicyGetDigest, policySession, Separator, Separator, Separator,

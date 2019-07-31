@@ -218,10 +218,10 @@ type responseHeader struct {
 }
 
 type cmdContext struct {
-	commandCode CommandCode
+	commandCode   CommandCode
 	sessionParams []*sessionParam
-	responseCode ResponseCode
-	responseTag StructTag
+	responseCode  ResponseCode
+	responseTag   StructTag
 	responseBytes []byte
 }
 
@@ -288,9 +288,10 @@ func (t *tpmContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		case 0:
 			switch p := param.(type) {
 			case ResourceContext:
-				if p.(resourceContextPrivate).tpmContext() != t {
+				if err := t.checkResourceContextParam(p); err != nil {
 					return nil, wrapMarshallingError(commandCode, "command handles",
-						errors.New("resource context does not belong to this TPM context"))
+						fmt.Errorf("invalid resource context at index %d: %v",
+							len(commandHandles), err))
 				}
 				commandHandles = append(commandHandles, p.Handle())
 				commandHandleNames = append(commandHandleNames, p.Name())
@@ -371,8 +372,8 @@ func (t *tpmContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 
 	return &cmdContext{commandCode: commandCode,
 		sessionParams: sessionParams,
-		responseCode: responseCode,
-		responseTag: responseTag,
+		responseCode:  responseCode,
+		responseTag:   responseTag,
 		responseBytes: responseBytes}, nil
 }
 
@@ -465,8 +466,9 @@ func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) 
 				commandArgs = append(commandArgs, param)
 			}
 			if err != nil {
-				return fmt.Errorf("cannot process command handle with auth session parameter: %v",
-					err)
+				return wrapMarshallingError(commandCode, "command handles and auth area",
+					fmt.Errorf("error whilst processing resource context or handle with "+
+						"authorization at index %d: %v", len(commandArgs), err))
 			}
 			if param == Separator {
 				sentinels++
@@ -492,7 +494,8 @@ func (t *tpmContext) RunCommand(commandCode CommandCode, params ...interface{}) 
 			var err error
 			sessionParams, err = t.validateAndAppendSessionParam(sessionParams, param)
 			if err != nil {
-				return fmt.Errorf("cannot process non-auth session parameter: %v", err)
+				return wrapMarshallingError(commandCode, "command auth area",
+					fmt.Errorf("error whilst processing non-auth session parameter: %v", err))
 			}
 		}
 	}

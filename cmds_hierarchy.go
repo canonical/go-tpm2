@@ -11,11 +11,12 @@ import (
 func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{},
 	sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
-	if inSensitive == nil {
-		inSensitive = &SensitiveCreate{}
-	}
 	if inPublic == nil {
 		return nil, nil, nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
+	}
+
+	if inSensitive == nil {
+		inSensitive = &SensitiveCreate{}
 	}
 
 	var objectHandle Handle
@@ -49,7 +50,7 @@ func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
 	if err != nil {
-		return fmt.Errorf("cannot prepare session params: %v", err)
+		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
 	}
 
 	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, authHandle)
@@ -121,11 +122,11 @@ func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
 	if err != nil {
-		return fmt.Errorf("cannot prepare session params: %v", err)
+		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
 	}
 	s, err = t.validateAndAppendSessionParam(s, sessions)
 	if err != nil {
-		return fmt.Errorf("cannot prepare session params: %v", err)
+		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
 	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s, authHandle, Separator,

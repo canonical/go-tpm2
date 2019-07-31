@@ -101,10 +101,6 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 }
 
 func (t *tpmContext) ContextSave(saveContext ResourceContext) (*Context, error) {
-	if err := t.checkResourceContextParam(saveContext, "saveContext"); err != nil {
-		return nil, err
-	}
-
 	var context Context
 
 	if err := t.RunCommand(CommandContextSave, saveContext, Separator, Separator, Separator,
@@ -158,8 +154,8 @@ func (t *tpmContext) ContextLoad(context *Context) (ResourceContext, error) {
 }
 
 func (t *tpmContext) FlushContext(flushContext ResourceContext) error {
-	if err := t.checkResourceContextParam(flushContext, "flushContext"); err != nil {
-		return err
+	if err := t.checkResourceContextParam(flushContext); err != nil {
+		return fmt.Errorf("invalid resource context for flushContext: %v", err)
 	}
 
 	if err := t.RunCommand(CommandFlushContext, Separator, flushContext.Handle()); err != nil {
@@ -172,10 +168,6 @@ func (t *tpmContext) FlushContext(flushContext ResourceContext) error {
 
 func (t *tpmContext) EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle,
 	authAuth interface{}) (ResourceContext, error) {
-	if err := t.checkResourceContextParam(objectContext, "objectContext"); err != nil {
-		return nil, err
-	}
-
 	if err := t.RunCommand(CommandEvictControl, HandleWithAuth{Handle: auth, Auth: authAuth},
 		objectContext, Separator, persistentHandle); err != nil {
 		return nil, err

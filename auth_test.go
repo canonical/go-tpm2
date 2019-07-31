@@ -112,8 +112,10 @@ func TestHMACSessions(t *testing.T) {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
 				sessionLoaded = false
-				if err.Error() != "cannot process command handle with auth session parameter: "+
-					"invalid resource context for session: resource has been closed" {
+				if err.Error() != "cannot marshal command handles and auth area for command "+
+					"TPM_CC_Create: error whilst processing resource context or handle with "+
+					"authorization at index 1: invalid resource context for session: "+
+					"resource has been closed" {
 					t.Errorf("Subsequent use of the session failed with an unexpected "+
 						"error: %v", err)
 				}

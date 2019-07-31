@@ -7,14 +7,6 @@ package tpm2
 func (t *tpmContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data,
 	creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation,
 	signContextAuth interface{}, sessions ...*Session) (*Attest, *Signature, error) {
-	if signContext != nil {
-		if err := t.checkResourceContextParam(signContext, "signContext"); err != nil {
-			return nil, nil, err
-		}
-	}
-	if err := t.checkResourceContextParam(objectContext, "objectContext"); err != nil {
-		return nil, nil, err
-	}
 	if creationTicket == nil {
 		return nil, nil, makeInvalidParamError("creationTicket", "nil value")
 	}

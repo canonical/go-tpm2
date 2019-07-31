@@ -5,22 +5,12 @@
 package tpm2
 
 import (
+	"errors"
 	"fmt"
 )
 
 func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 	authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
-	if tpmKey != nil {
-		if err := t.checkResourceContextParam(tpmKey, "tpmKey"); err != nil {
-			return nil, err
-		}
-	}
-	if bind != nil {
-		if err := t.checkResourceContextParam(bind, "bind"); err != nil {
-			return nil, err
-		}
-	}
-
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: AlgorithmNull}
 	}
@@ -36,7 +26,7 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	if tpmKey != nil {
 		object, isObject := tpmKey.(*objectContext)
 		if !isObject {
-			return nil, makeInvalidParamError("tpmKey", "not an object")
+			return nil, errors.New("invalid resource context for tpmKey: not an object")
 		}
 
 		var err error
@@ -90,8 +80,5 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 }
 
 func (t *tpmContext) PolicyRestart(sessionHandle ResourceContext) error {
-	if err := t.checkResourceContextParam(sessionHandle, "sessionHandle"); err != nil {
-		return err
-	}
 	return t.RunCommand(CommandPolicyRestart, sessionHandle)
 }
