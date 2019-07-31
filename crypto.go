@@ -107,12 +107,8 @@ func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOld
 	hmac.Write(pHash)
 	hmac.Write(nonceNewer)
 	hmac.Write(nonceOlder)
-	if nonceDecrypt != nil {
-		hmac.Write(nonceDecrypt)
-	}
-	if nonceEncrypt != nil {
-		hmac.Write(nonceEncrypt)
-	}
+	hmac.Write(nonceDecrypt)
+	hmac.Write(nonceEncrypt)
 	hmac.Write([]byte{uint8(attrs)})
 
 	return hmac.Sum(nil)
