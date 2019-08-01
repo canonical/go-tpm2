@@ -383,7 +383,37 @@ func TestPublicName(t *testing.T) {
 		t.Fatalf("Public.Name() failed: %v", err)
 	}
 
+	// primary.Name() is what the TPM returned at object creation
 	if !bytes.Equal(primary.Name(), name) {
 		t.Errorf("Public.Name() returned an unexpected name")
+	}
+}
+
+func TestNVPublicName(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	pub := NVPublic{
+		Index:   Handle(0x0181ffff),
+		NameAlg: AlgorithmSHA256,
+		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+		Size:    64}
+	if err := tpm.NVDefineSpace(HandleOwner, nil, &pub, nil); err != nil {
+		t.Fatalf("NVDefineSpace failed: %v", err)
+	}
+	rc, err := tpm.WrapHandle(pub.Index)
+	if err != nil {
+		t.Fatalf("WrapHandle failed: %v", err)
+	}
+	defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+
+	name, err := pub.Name()
+	if err != nil {
+		t.Fatalf("NVPublic.Name() failed: %v", err)
+	}
+
+	// rc.Name() is what the TPM returned from NVReadPublic
+	if !bytes.Equal(rc.Name(), name) {
+		t.Errorf("NVPublic.Name() returned an unexpected name")
 	}
 }

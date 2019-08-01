@@ -31,13 +31,23 @@ const (
 const (
 	CommandFirst CommandCode = 0x0000011A
 
+	CommandNVUndefineSpaceSpecial     CommandCode = 0x0000011F
 	CommandEvictControl               CommandCode = 0x00000120
+	CommandNVUndefineSpace            CommandCode = 0x00000122
 	CommandClear                      CommandCode = 0x00000126
 	CommandClearControl               CommandCode = 0x00000127
 	CommandHierarchyChangeAuth        CommandCode = 0x00000129
+	CommandNVDefineSpace              CommandCode = 0x0000012A
 	CommandCreatePrimary              CommandCode = 0x00000131
+	CommandNVGlobalWriteLock          CommandCode = 0x00000132
+	CommandNVIncrement                CommandCode = 0x00000134
+	CommandNVSetBits                  CommandCode = 0x00000135
+	CommandNVExtend                   CommandCode = 0x00000136
+	CommandNVWrite                    CommandCode = 0x00000137
+	CommandNVWriteLock                CommandCode = 0x00000138
 	CommandDictionaryAttackLockReset  CommandCode = 0x00000139
 	CommandDictionaryAttackParameters CommandCode = 0x0000013A
+	CommandNVChangeAuth               CommandCode = 0x0000013B
 	CommandPCREvent                   CommandCode = 0x0000013C
 	CommandIncrementalSelfTest        CommandCode = 0x00000142
 	CommandSelfTest                   CommandCode = 0x00000143
@@ -45,6 +55,8 @@ const (
 	CommandShutdown                   CommandCode = 0x00000145
 	CommandStirRandom                 CommandCode = 0x00000146
 	CommandCertifyCreation            CommandCode = 0x0000014A
+	CommandNVRead                     CommandCode = 0x0000014E
+	CommandNVReadLock                 CommandCode = 0x0000014F
 	CommandObjectChangeAuth           CommandCode = 0x00000150
 	CommandPolicySecret               CommandCode = 0x00000151
 	CommandCreate                     CommandCode = 0x00000153

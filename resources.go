@@ -109,6 +109,18 @@ func (r *nvIndexContext) invalidate() {
 	r.handle = HandleNull
 }
 
+func (r *nvIndexContext) setAttr(a NVAttributes) {
+	r.public.Attrs |= a
+	name, _ := r.public.Name()
+	r.name = name
+}
+
+func (r *nvIndexContext) clearAttr(a NVAttributes) {
+	r.public.Attrs &= ^a
+	name, _ := r.public.Name()
+	r.name = name
+}
+
 type sessionContext struct {
 	tpm         *tpmContext
 	handle      Handle

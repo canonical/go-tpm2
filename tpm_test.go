@@ -36,6 +36,12 @@ func resetHierarchyAuth(t *testing.T, tpm TPMContext, hierarchy Handle) {
 	}
 }
 
+func undefineNVSpace(t *testing.T, tpm TPMContext, context ResourceContext, authHandle Handle, auth interface{}) {
+	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
+		t.Errorf("NVUndefineSpace failed: %v", err)
+	}
+}
+
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if public.Type != template.Type {
 		t.Errorf("public object has wrong type: %v", public.Type)

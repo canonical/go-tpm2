@@ -190,7 +190,27 @@ type TPMContext interface {
 	GetCapabilityAuthPolicies(first Handle, propertyCount uint32) (TaggedPolicyList, error)
 
 	// Section 31 - Non-volatile Storage
+	NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVPublic, authHandleAuth interface{},
+		sessions ...*Session) error
+	NVUndefineSpace(authHandle Handle, nvIndex ResourceContext, authHandleAuth interface{}) error
+	NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth,
+		platformAuth interface{}) error
 	NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error)
+	NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16,
+		authContextAuth interface{}, sessions ...*Session) error
+	NVIncrement(authContext, nvIndex ResourceContext, authContextAuth interface{}) error
+	NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuth interface{},
+		sessions ...*Session) error
+	NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuth interface{}) error
+	NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error
+	NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}) error
+	NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{},
+		sessions ...*Session) (MaxNVBuffer, error)
+	NVReadLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error
+	NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth interface{}, sessions ...*Session) error
+	// NVCertify(signContext, authContext, nvIndex ResourceContext, qualifyingData Data, inScheme *SigScheme,
+	//	size, offset uint16, signContextAuth, authContextAuth interface{}, sessions ...*Session) (*Attest,
+	//	*Signature, error)
 }
 
 func concat(chunks ...[]byte) []byte {

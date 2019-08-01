@@ -29,20 +29,40 @@ func makeDefaultFormatter(s fmt.State, f rune) string {
 
 func (c CommandCode) String() string {
 	switch c {
+	case CommandNVUndefineSpaceSpecial:
+		return "TPM_CC_NV_UndefineSpaceSpecial"
 	case CommandEvictControl:
 		return "TPM_CC_EvictControl"
+	case CommandNVUndefineSpace:
+		return "TPM_CC_NV_UndefineSpace"
 	case CommandClear:
 		return "TPM_CC_Clear"
 	case CommandClearControl:
 		return "TPM_CC_ClearControl"
 	case CommandHierarchyChangeAuth:
 		return "TPM_CC_HierarchyChangeAuth"
+	case CommandNVDefineSpace:
+		return "TPM_CC_NV_DefineSpace"
 	case CommandCreatePrimary:
 		return "TPM_CC_CreatePrimary"
+	case CommandNVGlobalWriteLock:
+		return "TPM_CC_NV_GlobalWriteLock"
+	case CommandNVIncrement:
+		return "TPM_CC_NV_Increment"
+	case CommandNVSetBits:
+		return "TPM_CC_NV_SetBits"
+	case CommandNVExtend:
+		return "TPM_CC_NV_Extend"
+	case CommandNVWrite:
+		return "TPM_CC_NV_Write"
+	case CommandNVWriteLock:
+		return "TPM_CC_NV_WriteLock"
 	case CommandDictionaryAttackLockReset:
 		return "TPM_CC_DictionaryAttackLockReset"
 	case CommandDictionaryAttackParameters:
 		return "TPM_CC_DictionaryAttackParameters"
+	case CommandNVChangeAuth:
+		return "TPM_CC_NV_ChangeAuth"
 	case CommandPCREvent:
 		return "TPM_CC_PCR_Event"
 	case CommandIncrementalSelfTest:
@@ -57,6 +77,10 @@ func (c CommandCode) String() string {
 		return "TPM_CC_StirRandom"
 	case CommandCertifyCreation:
 		return "TPM_CC_CertifyCreation"
+	case CommandNVRead:
+		return "TPM_CC_NV_Read"
+	case CommandNVReadLock:
+		return "TPM_CC_NV_ReadLock"
 	case CommandObjectChangeAuth:
 		return "TPM_CC_ObjectChangeAuth"
 	case CommandPolicySecret:

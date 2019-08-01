@@ -55,6 +55,10 @@ func (a NVAttributes) Type() NVType {
 	return NVType((a & 0xf0) >> 4)
 }
 
+func MakeNVAttributes(a NVAttributes, t NVType) NVAttributes {
+	return a | NVAttributes(t<<4)
+}
+
 type Auth Digest
 type ContextData []byte
 type Data []byte
@@ -757,6 +761,21 @@ type NVPublic struct {
 	Attrs      NVAttributes
 	AuthPolicy Digest
 	Size       uint16
+}
+
+func (p *NVPublic) Name() (Name, error) {
+	if !cryptIsKnownDigest(p.NameAlg) {
+		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
+	}
+	hasher := cryptConstructHash(p.NameAlg)
+	if err := MarshalToWriter(hasher, p); err != nil {
+		return nil, fmt.Errorf("cannot marshal public object: %v", err)
+	}
+	name, err := MarshalToBytes(p.NameAlg, RawSlice(hasher.Sum(nil)))
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
+	}
+	return name, nil
 }
 
 type NVPublic2B NVPublic
