@@ -177,6 +177,9 @@ type TPMContext interface {
 		authAuth interface{}) (ResourceContext, error)
 
 	// Section 29 - Clocks and Timers
+	ReadClock(sessions ...*Session) (*TimeInfo, error)
+	// ClockSet(auth Handle, newTime uint64, authAuth interface{}) error
+	// ClockRateAdjust(auth Handle, rateAdjust ClockAdjust, authAuth interface{}) error
 
 	// Section 30 - Capability Commands
 	GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData, error)

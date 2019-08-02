@@ -78,6 +78,7 @@ const (
 	CommandPCRRead                    CommandCode = 0x0000017E
 	CommandPolicyPCR                  CommandCode = 0x0000017F
 	CommandPolicyRestart              CommandCode = 0x00000180
+	CommandReadClock                  CommandCode = 0x00000181
 	CommandPCRExtend                  CommandCode = 0x00000182
 	CommandPolicyGetDigest            CommandCode = 0x00000189
 	CommandPolicyPassword             CommandCode = 0x0000018C

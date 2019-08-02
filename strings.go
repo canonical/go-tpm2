@@ -123,6 +123,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicyPCR"
 	case CommandPolicyRestart:
 		return "TPM_CC_PolicyRestart"
+	case CommandReadClock:
+		return "TPM_CC_ReadClock"
 	case CommandPCRExtend:
 		return "TPM_CC_PCR_Extend"
 	case CommandPolicyGetDigest:

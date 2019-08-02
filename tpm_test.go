@@ -249,6 +249,9 @@ func openTPMSimulatorForTesting(t *testing.T) (TPMContext, *TctiMssim) {
 }
 
 func resetTPMSimulator(t *testing.T, tpm TPMContext, tcti *TctiMssim) {
+	if err := tpm.Shutdown(StartupClear); err != nil {
+		t.Fatalf("Shutdown failed: %v", err)
+	}
 	if err := tcti.Reset(); err != nil {
 		t.Fatalf("Resetting the TPM simulator failed: %v", err)
 	}
