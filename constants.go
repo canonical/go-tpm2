@@ -68,6 +68,7 @@ const (
 	CommandLoadExternal               CommandCode = 0x00000167
 	CommandNVReadPublic               CommandCode = 0x00000169
 	CommandPolicyAuthValue            CommandCode = 0x0000016B
+	CommandPolicyCommandCode          CommandCode = 0x0000016C
 	CommandPolicyOR                   CommandCode = 0x00000171
 	CommandReadPublic                 CommandCode = 0x00000173
 	CommandStartAuthSession           CommandCode = 0x00000176

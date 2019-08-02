@@ -42,6 +42,10 @@ func (t *tpmContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, 
 	return t.RunCommand(CommandPolicyPCR, sessions, policySession, Separator, pcrDigest, pcrs)
 }
 
+func (t *tpmContext) PolicyCommandCode(policySession ResourceContext, code CommandCode) error {
+	return t.RunCommand(CommandPolicyCommandCode, nil, policySession, Separator, code)
+}
+
 func (t *tpmContext) PolicyAuthValue(policySession ResourceContext) error {
 	if err := t.checkResourceContextParam(policySession); err != nil {
 		return fmt.Errorf("invalid resource context for policySession: %v", err)

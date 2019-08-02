@@ -137,7 +137,7 @@ type TPMContext interface {
 	//	operation ArithmeticOp) error
 	// PolicyCounterTimer(policySession ResourceContext, operandB Operand, offset uint16,
 	//	operation ArithmeticOp) error
-	// PolicyCommandCode(policySession ResourceContext, code CommandCode) error
+	PolicyCommandCode(policySession ResourceContext, code CommandCode) error
 	// PolicyPhysicalPresence(policySession ResourceContext) error
 	// PolicyCpHash(policySession ResourceContext, cpHashA Digest) error
 	// PolicyNameHash(policySession ResourceContext, nameHash Digest) error

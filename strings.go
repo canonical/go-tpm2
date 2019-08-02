@@ -103,6 +103,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_NV_ReadPublic"
 	case CommandPolicyAuthValue:
 		return "TPM_CC_PolicyAuthValue"
+	case CommandPolicyCommandCode:
+		return "TPM_CC_PolicyCommandCode"
 	case CommandPolicyOR:
 		return "TPM_CC_PolicyOR"
 	case CommandReadPublic:

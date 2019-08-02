@@ -159,6 +159,30 @@ func (t *tpmContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 
 func (t *tpmContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth interface{},
 	sessions ...*Session) error {
-	return t.RunCommand(CommandNVChangeAuth, sessions, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth},
-		Separator, newAuth)
+	var s []*sessionParam
+	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
+	if err != nil {
+		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v",
+			err)
+	}
+	s, err = t.validateAndAppendSessionParam(s, sessions)
+	if err != nil {
+		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
+	}
+
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVChangeAuth, s, nvIndex, Separator, newAuth)
+	if err != nil {
+		return err
+	}
+
+	// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key
+	// derived from newAuth. If the session is bound, the TPM will respond with a HMAC generated from the
+	// original key
+	authSession := ctx.sessionParams[0].session
+	if authSession != nil {
+		ctx.sessionParams[0].session =
+			&Session{Context: authSession.Context, Attrs: authSession.Attrs, AuthValue: newAuth}
+	}
+
+	return t.processResponse(ctx)
 }

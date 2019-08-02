@@ -688,3 +688,68 @@ func TestNVGlobalLock(t *testing.T) {
 		run(t, &session)
 	})
 }
+
+func TestNVChangeAuth(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	executePolicy := func(context ResourceContext) {
+		if err := tpm.PolicyCommandCode(context, CommandNVChangeAuth); err != nil {
+			t.Fatalf("PolicyCommandCode failed: %v", err)
+		}
+		if err := tpm.PolicyAuthValue(context); err != nil {
+			t.Fatalf("PolicyAuthValue failed: %v", err)
+		}
+	}
+
+	trialSession, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer flushContext(t, tpm, trialSession)
+
+	executePolicy(trialSession)
+	authPolicy, err := tpm.PolicyGetDigest(trialSession)
+	if err != nil {
+		t.Fatalf("PolicyGetDigest failed: %v", err)
+	}
+
+	pub := NVPublic{
+		Index:      Handle(0x0181ffff),
+		NameAlg:    AlgorithmSHA256,
+		Attrs:      MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+		AuthPolicy: authPolicy,
+		Size:       8}
+	if err := tpm.NVDefineSpace(HandleOwner, nil, &pub, nil); err != nil {
+		t.Fatalf("NVDefineSpace failed: %v", err)
+	}
+	rc, err := tpm.WrapHandle(pub.Index)
+	if err != nil {
+		t.Fatalf("WrapHandle failed: %v", err)
+	}
+	defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer flushContext(t, tpm, sessionContext)
+
+	executePolicy(sessionContext)
+
+	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
+	if err := tpm.NVChangeAuth(rc, testAuth, &session); err != nil {
+		t.Fatalf("NVChangeAuth failed: %v", err)
+	}
+
+	if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, testAuth); err != nil {
+		t.Errorf("NVWrite failed: %v", err)
+	}
+
+	executePolicy(sessionContext)
+
+	session.AuthValue = testAuth
+	if err := tpm.NVChangeAuth(rc, nil, &session); err != nil {
+		t.Errorf("NVChangeAuth failed: %v", err)
+	}
+}
