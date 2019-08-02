@@ -178,7 +178,7 @@ func TestCreate(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, AuthValue: testAuth}
 
 		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
 		verifyRSAAgainstTemplate(t, pub, &template)
@@ -246,7 +246,7 @@ func TestLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth}
 
 		run(t, primary, &session)
 	})
@@ -449,7 +449,7 @@ func TestUnseal(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, handle, &Session{Context: sessionContext, AuthValue: dummyAuth})
+		run(t, handle, &Session{Context: sessionContext, AuthValue: testAuth})
 	})
 
 	t.Run("WithPolicyAuth", func(t *testing.T) {
@@ -545,6 +545,6 @@ func TestObjectChangeAuth(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, context, pub, Auth("foo"), &Session{Context: sessionContext, AuthValue: dummyAuth})
+		run(t, context, pub, Auth("foo"), &Session{Context: sessionContext, AuthValue: testAuth})
 	})
 }

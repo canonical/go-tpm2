@@ -18,7 +18,8 @@ type sessionContextData struct {
 	HashAlg        AlgorithmId
 	SessionType    SessionType
 	PolicyHMACType policyHMACType
-	BoundResource  Name
+	IsBound        bool
+	BoundEntity    Name
 	SessionKey     Digest
 	NonceCaller    Nonce
 	NonceTPM       Nonce
@@ -65,8 +66,9 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData,
 	case *sessionContext:
 		d.ContextType = contextTypeSession
 		d.Data.Session = &sessionContextData{HashAlg: c.hashAlg, SessionType: c.sessionType,
-			PolicyHMACType: c.policyHMACType, BoundResource: c.boundResource, SessionKey: c.sessionKey,
-			NonceCaller: c.nonceCaller, NonceTPM: c.nonceTPM, Symmetric: c.symmetric}
+			PolicyHMACType: c.policyHMACType, IsBound: c.isBound, BoundEntity: c.boundEntity,
+			SessionKey: c.sessionKey, NonceCaller: c.nonceCaller, NonceTPM: c.nonceTPM,
+			Symmetric: c.symmetric}
 	}
 
 	data, err := MarshalToBytes(d)
@@ -92,9 +94,9 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 		}
 		return d.TPMBlob, &sessionContext{hashAlg: d.Data.Session.HashAlg,
 			sessionType: d.Data.Session.SessionType, policyHMACType: d.Data.Session.PolicyHMACType,
-			boundResource: d.Data.Session.BoundResource, sessionKey: d.Data.Session.SessionKey,
-			nonceCaller: d.Data.Session.NonceCaller, nonceTPM: d.Data.Session.NonceTPM,
-			symmetric: d.Data.Session.Symmetric}, nil
+			isBound: d.Data.Session.IsBound, boundEntity: d.Data.Session.BoundEntity,
+			sessionKey: d.Data.Session.SessionKey, nonceCaller: d.Data.Session.NonceCaller,
+			nonceTPM: d.Data.Session.NonceTPM, symmetric: d.Data.Session.Symmetric}, nil
 	}
 
 	return nil, nil, fmt.Errorf("invalid saved context type (%d)", d.ContextType)

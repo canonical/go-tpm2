@@ -42,6 +42,13 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		bind, _ = t.WrapHandle(HandleNull)
 	}
 
+	var isBound bool = false
+	var boundEntity Name
+	if bind.Handle() != HandleNull && sessionType == SessionTypeHMAC {
+		boundEntity = computeBindName(bind.Name(), authValue)
+		isBound = true
+	}
+
 	nonceCaller := make([]byte, digestSize)
 	if err := cryptComputeNonce(nonceCaller); err != nil {
 		return nil, fmt.Errorf("cannot compute initial nonceCaller: %v", err)
@@ -60,7 +67,8 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		hashAlg:        authHash,
 		sessionType:    sessionType,
 		policyHMACType: policyHMACTypeNoAuth,
-		boundResource:  bind.Name(),
+		isBound:        isBound,
+		boundEntity:    boundEntity,
 		nonceCaller:    Nonce(nonceCaller),
 		nonceTPM:       nonceTPM,
 		symmetric:      symmetric}

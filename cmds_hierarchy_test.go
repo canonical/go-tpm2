@@ -189,7 +189,7 @@ func TestCreatePrimary(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, AuthValue: testAuth}
 
 		template := Public{
 			Type:    AlgorithmRSA,
@@ -410,7 +410,7 @@ func TestClear(t *testing.T) {
 		run(t, testAuth)
 		cleared = true
 	})
-	t.Run("RequireBoundSession", func(t *testing.T) {
+	t.Run("RequireSession", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		cleared := false
 		defer func() {
@@ -426,7 +426,7 @@ func TestClear(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, AuthValue: dummyAuth})
+		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
 		cleared = true
 	})
 	t.Run("RequireUnboundSession", func(t *testing.T) {
@@ -542,7 +542,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
 		run1(t, HandleOwner, &session)
 		defer resetHierarchyAuthIgnoringErrors(t, HandleOwner)

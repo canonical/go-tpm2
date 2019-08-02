@@ -29,6 +29,8 @@ type Session struct {
 	Context   ResourceContext
 	AuthValue []byte
 	Attrs     SessionAttributes
+
+	includeAuthValue bool
 }
 
 type HandleWithAuth struct {

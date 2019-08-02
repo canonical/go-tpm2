@@ -105,23 +105,45 @@ func computeCallerNonces(params []*sessionParam) error {
 	return nil
 }
 
-func computeSessionHMACKey(sessionContext *sessionContext, authValue []byte,
-	associatedContext ResourceContext) []byte {
+func computeBindName(name Name, auth Auth) Name {
+	if len(auth) > len(name) {
+		auth = auth[0:len(name)]
+	}
+	r := make(Name, len(name))
+	copy(r, name)
+	j := 0
+	for i := len(name) - len(auth); i < len(name); i++ {
+		r[i] ^= auth[j]
+		j++
+	}
+	return r
+}
+
+func (s *Session) computeSessionHMACKey() []byte {
 	var key []byte
-	key = append(key, sessionContext.sessionKey...)
-
-	var includeAuthValue bool
-	if sessionContext.sessionType == SessionTypeHMAC {
-		includeAuthValue = !sessionContext.isBoundTo(associatedContext)
-	} else {
-		includeAuthValue = sessionContext.policyHMACType == policyHMACTypeAuth
+	key = append(key, s.Context.(*sessionContext).sessionKey...)
+	if s.includeAuthValue {
+		key = append(key, s.AuthValue...)
 	}
-
-	if includeAuthValue {
-		key = append(key, authValue...)
-	}
-
 	return key
+}
+
+func (s *Session) updateIncludeAuthValueInHMACKey(associatedContext ResourceContext) {
+	sc := s.Context.(*sessionContext)
+	switch sc.sessionType {
+	case SessionTypeHMAC:
+		switch {
+		case associatedContext == nil:
+			s.includeAuthValue = false
+		case !sc.isBound:
+			s.includeAuthValue = true
+		default:
+			bindName := computeBindName(associatedContext.Name(), s.AuthValue)
+			s.includeAuthValue = !bytes.Equal(bindName, sc.boundEntity)
+		}
+	case SessionTypePolicy:
+		s.includeAuthValue = sc.policyHMACType == policyHMACTypeAuth
+	}
 }
 
 func buildCommandSessionAuth(tpm *tpmContext, session *Session, associatedContext ResourceContext,
@@ -136,7 +158,8 @@ func buildCommandSessionAuth(tpm *tpmContext, session *Session, associatedContex
 		sessionContext.policyHMACType == policyHMACTypePassword {
 		hmac = session.AuthValue
 	} else {
-		key := computeSessionHMACKey(sessionContext, session.AuthValue, associatedContext)
+		session.updateIncludeAuthValueInHMACKey(associatedContext)
+		key := session.computeSessionHMACKey()
 		if len(key) > 0 {
 			cpHash := cryptComputeCpHash(sessionContext.hashAlg, commandCode, commandHandles, cpBytes)
 			hmac = cryptComputeSessionCommandHMAC(sessionContext, key, cpHash, decryptNonce,
@@ -184,7 +207,7 @@ func processResponseSessionAuth(tpm *tpmContext, resp authResponse, session *Ses
 		return nil
 	}
 
-	key := computeSessionHMACKey(sessionContext, session.AuthValue, associatedContext)
+	key := session.computeSessionHMACKey()
 	if len(key) == 0 {
 		return nil
 	}

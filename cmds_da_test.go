@@ -98,7 +98,7 @@ func TestDictionaryAttackParameters(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth})
+		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
 	})
 }
 
@@ -201,6 +201,6 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth})
+		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
 	})
 }

@@ -86,7 +86,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth}
 
 		pub := NVPublic{
 			Index:   Handle(0x0181fff0),
@@ -215,14 +215,13 @@ func TestNVReadAndWrite(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth}
 		d := make([]byte, pub.Size)
 		rand.Read(d)
 		runWrite(t, rc, d, 0, &session)
 
 		// Writing updates the NV index's attributes which also changes the name. This means that the
 		// session is no longer bound to it
-		session.AuthValue = testAuth
 		runRead(t, rc, d, 0, &session)
 	})
 	t.Run("WithSessionAuthBound2", func(t *testing.T) {
@@ -234,7 +233,7 @@ func TestNVReadAndWrite(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext1)
-		session := Session{Context: sessionContext1, Attrs: AttrContinueSession, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext1, Attrs: AttrContinueSession, AuthValue: testAuth}
 		d := make([]byte, pub.Size)
 		rand.Read(d)
 		runWrite(t, rc, d, 0, &session)
@@ -247,7 +246,7 @@ func TestNVReadAndWrite(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext2)
-		session = Session{Context: sessionContext2, Attrs: AttrContinueSession, AuthValue: dummyAuth}
+		session = Session{Context: sessionContext2, Attrs: AttrContinueSession, AuthValue: testAuth}
 		runRead(t, rc, d, 0, &session)
 	})
 }
@@ -312,7 +311,7 @@ func TestNVIncrement(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, AuthValue: testAuth}
 		run(t, rc, &session)
 	})
 }
@@ -536,7 +535,7 @@ func TestNVWriteLock(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, AuthValue: testAuth}
 		run(t, rc, &session)
 	})
 }
@@ -602,7 +601,7 @@ func TestNVReadLock(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, AuthValue: testAuth}
 		run(t, rc, &session)
 	})
 }
@@ -685,7 +684,7 @@ func TestNVGlobalLock(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth}
+		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth}
 		run(t, &session)
 	})
 }

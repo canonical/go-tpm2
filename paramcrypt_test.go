@@ -207,9 +207,7 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 				t.Fatalf("Create failed: %v", err)
 			}
 
-			session2 := Session{Context: sessionContext, Attrs: AttrContinueSession}
-
-			objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, &session2)
+			objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, &session)
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
 			}

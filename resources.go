@@ -5,7 +5,6 @@
 package tpm2
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 )
@@ -127,11 +126,12 @@ type sessionContext struct {
 	hashAlg     AlgorithmId
 	sessionType SessionType
 	policyHMACType
-	boundResource Name
-	sessionKey    []byte
-	nonceCaller   Nonce
-	nonceTPM      Nonce
-	symmetric     *SymDef
+	isBound     bool
+	boundEntity Name
+	sessionKey  []byte
+	nonceCaller Nonce
+	nonceTPM    Nonce
+	symmetric   *SymDef
 }
 
 func (r *sessionContext) Handle() Handle {
@@ -155,13 +155,6 @@ func (r *sessionContext) setTpmContext(t *tpmContext) {
 func (r *sessionContext) invalidate() {
 	r.tpm = nil
 	r.handle = HandleNull
-}
-
-func (r *sessionContext) isBoundTo(context ResourceContext) bool {
-	if context == nil {
-		return false
-	}
-	return bytes.Equal(context.Name(), r.boundResource)
 }
 
 func (r *sessionContext) NonceTPM() Nonce {

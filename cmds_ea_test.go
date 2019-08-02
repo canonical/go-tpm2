@@ -98,7 +98,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, nil, nil, 0, nil, &Session{Context: sessionContext, AuthValue: dummyAuth})
+		run(t, nil, nil, 0, nil, &Session{Context: sessionContext, AuthValue: testAuth})
 	})
 	t.Run("WithPolicyRef", func(t *testing.T) {
 		run(t, nil, []byte("foo"), 0, nil, testAuth)

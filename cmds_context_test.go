@@ -105,8 +105,11 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if scImpl.policyHMACType != restoredScImpl.policyHMACType {
 			t.Errorf("Restored context has the wrong policy HMAC type")
 		}
-		if !bytes.Equal(scImpl.boundResource, restoredScImpl.boundResource) {
-			t.Errorf("Restored context has the wrong bound resource name")
+		if scImpl.isBound != restoredScImpl.isBound {
+			t.Errorf("Restored context has the wrong bind status")
+		}
+		if !bytes.Equal(scImpl.boundEntity, restoredScImpl.boundEntity) {
+			t.Errorf("Restored context has the wrong bound resource entity")
 		}
 		if !bytes.Equal(scImpl.sessionKey, restoredScImpl.sessionKey) {
 			t.Errorf("Restored context has the wrong session key")
@@ -230,7 +233,7 @@ func TestEvictControl(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionContext)
 		run(t, context, Handle(0x81020001),
-			&Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: dummyAuth})
+			&Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
 	})
 }
 

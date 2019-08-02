@@ -76,9 +76,33 @@ func TestStartAuthSession(t *testing.T) {
 			handleType:  HandleTypePolicySession,
 		},
 		{
-			desc:        "PolicySessionSHA256",
+			desc:        "PolicySessionUnboundUnsaltedSHA256",
 			sessionType: SessionTypePolicy,
 			alg:         AlgorithmSHA256,
+			handleType:  HandleTypePolicySession,
+		},
+		{
+			desc:        "PolicySessionUnboundSaltedSHA256",
+			tpmKey:      primary,
+			sessionType: SessionTypePolicy,
+			alg:         AlgorithmSHA256,
+			handleType:  HandleTypePolicySession,
+		},
+		{
+			desc:        "PolicySessionBoundUnsaltedSHA256",
+			bind:        primary,
+			sessionType: SessionTypePolicy,
+			alg:         AlgorithmSHA256,
+			bindAuth:    auth,
+			handleType:  HandleTypePolicySession,
+		},
+		{
+			desc:        "PolicySessionBoundSaltedSHA256",
+			tpmKey:      primary,
+			bind:        primary,
+			sessionType: SessionTypePolicy,
+			alg:         AlgorithmSHA256,
+			bindAuth:    auth,
 			handleType:  HandleTypePolicySession,
 		},
 		{
@@ -116,8 +140,19 @@ func TestStartAuthSession(t *testing.T) {
 					t.Errorf("The returned session context has the wrong algorithm (got %v)",
 						context.hashAlg)
 				}
-				if data.bind != nil && !context.isBoundTo(data.bind) {
-					t.Errorf("The returned session context has the wrong bound resource")
+				if data.bind == nil || data.sessionType != SessionTypeHMAC {
+					if context.isBound {
+						t.Errorf("The returned session context should not be bound")
+					}
+				} else {
+					if !context.isBound {
+						t.Errorf("The returned session context should be bound")
+					}
+					boundEntity := computeBindName(data.bind.Name(), data.bindAuth)
+					if !bytes.Equal(boundEntity, context.boundEntity) {
+						t.Errorf("The returned session context has the wrong bound " +
+							"resource")
+					}
 				}
 				digestSize, _ := cryptGetDigestSize(data.alg)
 				sessionKeySize := int(digestSize)
