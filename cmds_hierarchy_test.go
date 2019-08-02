@@ -273,6 +273,10 @@ func TestClear(t *testing.T) {
 	run := func(t *testing.T, auth interface{}) {
 		cleared := false
 
+		var persistentObjects []ResourceContext
+		var transientObjects []ResourceContext
+
+		// Create platform primary key (should persist across Clear)
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
@@ -287,25 +291,26 @@ func TestClear(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		platformPrimary, _, _, _, _, _, err :=
-			tpm.CreatePrimary(HandlePlatform, nil, &template, nil, nil, nil)
+		platformPrimary, _, _, _, _, _, err := tpm.CreatePrimary(HandlePlatform, nil, &template, nil, nil,
+			nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
 		defer flushContext(t, tpm, platformPrimary)
+		persistentObjects = append(persistentObjects, platformPrimary)
 
-		primary := createRSASrkForTesting(t, tpm, nil)
+		// Create storage primary key (should be evicted by Clear)
+		ownerPrimary := createRSASrkForTesting(t, tpm, nil)
 		defer func() {
 			if cleared {
 				return
 			}
-			flushContext(t, tpm, primary)
+			flushContext(t, tpm, ownerPrimary)
 		}()
+		transientObjects = append(transientObjects, ownerPrimary)
 
-		platform := platformPrimary.Handle()
-		transient := primary.Handle()
-		persist := Handle(0x81020000)
-
+		// Persist storage primary key (should be evicted by Clear)
+		persist := Handle(0x8100ffff)
 		if context, err := tpm.WrapHandle(persist); err == nil {
 			_, err := tpm.EvictControl(HandleOwner, context, persist, nil)
 			if err != nil {
@@ -313,7 +318,7 @@ func TestClear(t *testing.T) {
 					"the test: %v", err)
 			}
 		}
-		persistentPrimary, err := tpm.EvictControl(HandleOwner, primary, persist, nil)
+		ownerPrimaryPersist, err := tpm.EvictControl(HandleOwner, ownerPrimary, persist, nil)
 		if err != nil {
 			t.Fatalf("EvictControl failed: %v", err)
 		}
@@ -321,11 +326,37 @@ func TestClear(t *testing.T) {
 			if cleared {
 				return
 			}
-			if _, err := tpm.EvictControl(HandleOwner, persistentPrimary, persist, nil); err != nil {
+			if _, err := tpm.EvictControl(HandleOwner, ownerPrimaryPersist, persist, nil); err != nil {
 				t.Errorf("EvictControl failed: %v", err)
 			}
 		}()
+		transientObjects = append(transientObjects, ownerPrimaryPersist)
 
+		// Persist platform primary key (should persist across Clear)
+		persist2 := Handle(0x8180ffff)
+		if context, err := tpm.WrapHandle(persist2); err == nil {
+			_, err := tpm.EvictControl(HandlePlatform, context, persist2, nil)
+			if err != nil {
+				t.Logf("EvictControl failed whilst trying to remove a handle at the start of "+
+					"the test: %v", err)
+			}
+		}
+		platformPrimaryPersist, err := tpm.EvictControl(HandlePlatform, platformPrimary, persist2, nil)
+		if err != nil {
+			t.Fatalf("EvictControl failed: %v", err)
+		}
+		defer func() {
+			if cleared {
+				return
+			}
+			if _, err := tpm.EvictControl(HandlePlatform, platformPrimaryPersist, persist2,
+				nil); err != nil {
+				t.Errorf("EvictControl failed: %v", err)
+			}
+		}()
+		persistentObjects = append(persistentObjects, platformPrimaryPersist)
+
+		// Set endorsement hierarchy auth value (should be reset by Clear)
 		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
 		defer func() {
 			if cleared {
@@ -334,58 +365,99 @@ func TestClear(t *testing.T) {
 			resetHierarchyAuth(t, tpm, HandleEndorsement)
 		}()
 
+		// Create a context for a permanent resource (should persist across Clear)
 		owner, _ := tpm.WrapHandle(HandleOwner)
+		persistentObjects = append(persistentObjects, owner)
+
+		// Create a session (should persist across Clear)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
+		persistentObjects = append(persistentObjects, sessionContext)
 
+		// Define an NV index in the owner hierarchy (should be undefined by Clear)
+		nvPub1 := NVPublic{
+			Index:   0x0181ffff,
+			NameAlg: AlgorithmSHA256,
+			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+			Size:    8}
+		if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub1, nil); err != nil {
+			t.Fatalf("NVDefineSpace failed: %v", err)
+		}
+		nv1, _ := tpm.WrapHandle(nvPub1.Index)
+		defer func() {
+			if cleared {
+				return
+			}
+			undefineNVSpace(t, tpm, nv1, HandleOwner, nil)
+		}()
+		transientObjects = append(transientObjects, nv1)
+
+		// Define an NV index in the platform hierarchy (should persist across Clear)
+		nvPub2 := NVPublic{
+			Index:   0x0141ffff,
+			NameAlg: AlgorithmSHA256,
+			Attrs: MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead|AttrNVPlatformCreate,
+				NVTypeOrdinary),
+			Size: 8}
+		if err := tpm.NVDefineSpace(HandlePlatform, nil, &nvPub2, nil); err != nil {
+			t.Fatalf("NVDefineSpace failed: %v", err)
+		}
+		nv2, _ := tpm.WrapHandle(nvPub2.Index)
+		defer undefineNVSpace(t, tpm, nv2, HandlePlatform, nil)
+		persistentObjects = append(persistentObjects, nv2)
+
+		var transientHandles []Handle
+		for _, rc := range transientObjects {
+			transientHandles = append(transientHandles, rc.Handle())
+		}
+
+		// Perform the clear
 		if err := tpm.Clear(HandleLockout, auth); err != nil {
 			t.Fatalf("Clear failed: %v", err)
 		}
-
 		cleared = true
 
-		handles, err := tpm.GetCapabilityHandles(platform, 1)
-		if err != nil {
-			t.Errorf("GetCapability failed: %v", err)
-		}
-		if len(handles) != 1 {
-			t.Errorf("Platform transient handle was cleared")
-		}
-
-		handles, err = tpm.GetCapabilityHandles(persist, 1)
-		if err != nil {
-			t.Errorf("GetCapability failed: %v", err)
-		}
-		if len(handles) != 0 {
-			t.Errorf("Persistent handle was not cleared")
+		// Verify that handles that should have been flushed have been
+		for _, h := range transientHandles {
+			handles, err := tpm.GetCapabilityHandles(h, 1)
+			if err != nil {
+				t.Fatalf("GetCapability failed: %v", err)
+			}
+			if len(handles) > 0 && handles[0] == h {
+				t.Errorf("Handle 0x%08x should have been flushed", h)
+			}
 		}
 
-		handles, err = tpm.GetCapabilityHandles(transient, 1)
-		if err != nil {
-			t.Errorf("GetCapability failed: %v", err)
-		}
-		if len(handles) != 0 {
-			t.Errorf("Transient handle was not cleared")
+		// Verify that contexts for flushed objects have been invalidated
+		for _, rc := range transientObjects {
+			if rc.Handle() != HandleNull {
+				t.Errorf("Expected handle 0x%08x to be evicted", rc.Handle())
+			}
 		}
 
-		if platformPrimary.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
-			t.Errorf("Platform transient handle should not have been invalidated")
+		// Verify that contexts for objects that should have persisted haven't been invalidated,
+		// and check that they weren't flushed from the TPM against our expectation
+		for _, rc := range persistentObjects {
+			if rc.Handle() == HandleNull {
+				t.Fatalf("Object was evicted when it shouldn't have been")
+			}
+			handle := rc.Handle()
+			if rc.Handle()&HandleTypePolicySession == HandleTypePolicySession {
+				handle = handle&Handle(0xffffff) | HandleTypeLoadedSession
+			}
+			handles, err := tpm.GetCapabilityHandles(handle, 1)
+			if err != nil {
+				t.Fatalf("GetCapability failed: %v", err)
+			}
+			if len(handles) < 1 || handles[0] != rc.Handle() {
+				t.Errorf("Handle 0x%08x was flushed unexpectedly", rc.Handle())
+			}
 		}
-		if primary.Handle() != HandleNull {
-			t.Errorf("Transient handle should have been invalidated")
-		}
-		if persistentPrimary.Handle() != HandleNull {
-			t.Errorf("Persistent handle should have been invalidated")
-		}
-		if owner.Handle() != HandleOwner {
-			t.Errorf("Permanent handle should not have been invalidated")
-		}
-		if sessionContext.Handle()&HandleTypePolicySession != HandleTypePolicySession {
-			t.Errorf("Session handle should not have been invalidated")
-		}
+
+		// Check that the endorsement hierarchy auth has been reset
 		props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1)
 		if err != nil {
 			t.Fatalf("GetCapability failed: %v", err)

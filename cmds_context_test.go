@@ -211,14 +211,14 @@ func TestEvictControl(t *testing.T) {
 	t.Run("NoAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
-		run(t, context, Handle(0x81020000), nil)
+		run(t, context, Handle(0x8100ffff), nil)
 	})
 	t.Run("PasswordAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
-		run(t, context, Handle(0x81020001), testAuth)
+		run(t, context, Handle(0x8100fff0), testAuth)
 	})
 	t.Run("SessionAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
@@ -232,7 +232,7 @@ func TestEvictControl(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, context, Handle(0x81020001),
+		run(t, context, Handle(0x8100ff00),
 			&Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
 	})
 }
