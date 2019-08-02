@@ -313,7 +313,11 @@ func (t *tpmContext) validateAndAppendSessionParam(params []*sessionParam, in in
 		if s == nil {
 			return nil, fmt.Errorf("invalid auth parameter type (%s)", reflect.TypeOf(i.Auth))
 		}
-		s.associatedContext = &permanentContext{handle: i.Handle}
+		// Wrap the handle in permanentContext here. Handles that only represent permanent resources are
+		// the only use case for supporting passing Handles to RunCommand. Consider it a bug to pass a
+		// Handle that represents anything other than a permanent resource (ResourceContext should be
+		// used instead).
+		s.associatedContext = permanentContext(i.Handle)
 	case []*Session:
 		for _, s := range i {
 			if s == nil {

@@ -35,11 +35,11 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
 	} else {
-		tpmKey, _ = t.WrapHandle(HandleNull)
+		tpmKey = permanentContext(HandleNull)
 	}
 
 	if bind == nil {
-		bind, _ = t.WrapHandle(HandleNull)
+		bind = permanentContext(HandleNull)
 	}
 
 	var isBound bool = false

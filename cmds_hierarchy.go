@@ -93,8 +93,6 @@ func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 
 	for _, rc := range t.resources {
 		switch c := rc.(type) {
-		case *permanentContext:
-			continue
 		case *objectContext:
 			if _, exists := handles[c.handle]; exists {
 				continue

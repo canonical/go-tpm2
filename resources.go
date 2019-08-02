@@ -7,6 +7,7 @@ package tpm2
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 type ResourceContext interface {
@@ -19,41 +20,25 @@ type SessionContext interface {
 }
 
 type resourceContextPrivate interface {
-	tpmContext() *tpmContext
-	setTpmContext(t *tpmContext)
 	invalidate()
 }
 
-type permanentContext struct {
-	tpm    *tpmContext
-	handle Handle
+type permanentContext Handle
+
+func (r permanentContext) Handle() Handle {
+	return Handle(r)
 }
 
-func (r *permanentContext) Handle() Handle {
-	return r.handle
-}
-
-func (r *permanentContext) Name() Name {
+func (r permanentContext) Name() Name {
 	name := make([]byte, 4)
-	binary.BigEndian.PutUint32(name, uint32(r.handle))
+	binary.BigEndian.PutUint32(name, uint32(r))
 	return Name(name)
 }
 
-func (r *permanentContext) tpmContext() *tpmContext {
-	return r.tpm
-}
-
-func (r *permanentContext) setTpmContext(t *tpmContext) {
-	r.tpm = t
-}
-
-func (r *permanentContext) invalidate() {
-	r.tpm = nil
-	r.handle = HandleNull
+func (r permanentContext) invalidate() {
 }
 
 type objectContext struct {
-	tpm    *tpmContext
 	handle Handle
 	public Public
 	name   Name
@@ -67,21 +52,13 @@ func (r *objectContext) Name() Name {
 	return r.name
 }
 
-func (r *objectContext) tpmContext() *tpmContext {
-	return r.tpm
-}
-
-func (r *objectContext) setTpmContext(t *tpmContext) {
-	r.tpm = t
-}
-
 func (r *objectContext) invalidate() {
-	r.tpm = nil
 	r.handle = HandleNull
+	r.public = Public{}
+	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
 }
 
 type nvIndexContext struct {
-	tpm    *tpmContext
 	handle Handle
 	public NVPublic
 	name   Name
@@ -95,17 +72,10 @@ func (r *nvIndexContext) Name() Name {
 	return r.name
 }
 
-func (r *nvIndexContext) tpmContext() *tpmContext {
-	return r.tpm
-}
-
-func (r *nvIndexContext) setTpmContext(t *tpmContext) {
-	r.tpm = t
-}
-
 func (r *nvIndexContext) invalidate() {
-	r.tpm = nil
 	r.handle = HandleNull
+	r.public = NVPublic{}
+	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
 }
 
 func (r *nvIndexContext) setAttr(a NVAttributes) {
@@ -121,7 +91,6 @@ func (r *nvIndexContext) clearAttr(a NVAttributes) {
 }
 
 type sessionContext struct {
-	tpm         *tpmContext
 	handle      Handle
 	hashAlg     AlgorithmId
 	sessionType SessionType
@@ -144,16 +113,7 @@ func (r *sessionContext) Name() Name {
 	return Name(name)
 }
 
-func (r *sessionContext) tpmContext() *tpmContext {
-	return r.tpm
-}
-
-func (r *sessionContext) setTpmContext(t *tpmContext) {
-	r.tpm = t
-}
-
 func (r *sessionContext) invalidate() {
-	r.tpm = nil
 	r.handle = HandleNull
 }
 
@@ -178,39 +138,41 @@ func makeObjectContext(t *tpmContext, handle Handle) (ResourceContext, error) {
 }
 
 func (t *tpmContext) evictResourceContext(rc ResourceContext) {
-	rcp := rc.(resourceContextPrivate)
-	if rcp.tpmContext() == nil {
-		return
+	if _, isPermanent := rc.(permanentContext); isPermanent {
+		panic("Attempting to evict a permanent resource context")
 	}
-	if rcp.tpmContext() != t {
-		panic("Attempting to evict a resource for another TPM instance")
+	if err := t.checkResourceContextParam(rc); err != nil {
+		panic(fmt.Sprintf("Attempting to evict an invalid resource context: %v", err))
 	}
 	delete(t.resources, rc.Handle())
-	rcp.invalidate()
+	rc.(resourceContextPrivate).invalidate()
 }
 
 func (t *tpmContext) addResourceContext(rc ResourceContext) {
-	rcp := rc.(resourceContextPrivate)
-	if rcp.tpmContext() != nil {
-		panic("Attempting to add a resource to more than one TPM instance")
+	if _, isPermanent := rc.(permanentContext); isPermanent {
+		return
+	}
+	if rc.Handle() == HandleNull {
+		panic("Attempting to add a closed resource context")
 	}
 	if _, exists := t.resources[rc.Handle()]; exists {
-		panic("Resource object for handle already exists")
+		panic(fmt.Sprintf("Resource object for handle 0x%08x already exists", rc.Handle()))
 	}
-	rcp.setTpmContext(t)
 	t.resources[rc.Handle()] = rc
-
 }
 
 func (t *tpmContext) checkResourceContextParam(rc ResourceContext) error {
 	if rc == nil {
 		return errors.New("nil value")
 	}
-	rcp := rc.(resourceContextPrivate)
-	if rcp.tpmContext() == nil {
+	if _, isPermanent := rc.(permanentContext); isPermanent {
+		return nil
+	}
+	if rc.Handle() == HandleNull {
 		return errors.New("resource has been closed")
 	}
-	if rcp.tpmContext() != t {
+	erc, exists := t.resources[rc.Handle()]
+	if !exists || erc != rc {
 		return errors.New("resource belongs to another TPM context")
 	}
 	return nil
@@ -232,7 +194,7 @@ func (t *tpmContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	case 0x02, 0x03:
 		err = errors.New("cannot wrap the handle of an existing session")
 	case 0x40:
-		rc = &permanentContext{handle: handle}
+		rc = permanentContext(handle)
 	case 0x80, 0x81:
 		rc, err = makeObjectContext(t, handle)
 	}

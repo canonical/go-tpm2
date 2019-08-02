@@ -324,7 +324,7 @@ func (t *tpmContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			case Handle:
 				commandHandles = append(commandHandles, p)
 				commandHandleNames =
-					append(commandHandleNames, (&permanentContext{handle: p}).Name())
+					append(commandHandleNames, permanentContext(p).Name())
 			default:
 				return nil, wrapMarshallingError(commandCode, "command handles",
 					fmt.Errorf("invalid parameter type (%s)", reflect.TypeOf(param)))
