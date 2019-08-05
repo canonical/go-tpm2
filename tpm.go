@@ -559,6 +559,9 @@ func NewTPMContext(tcti io.ReadWriteCloser) (TPMContext, error) {
 			}
 		}
 	}
+	if tcti == nil {
+		tcti, _ = OpenTPMMssim("localhost", 2321, 2322)
+	}
 
 	if tcti == nil {
 		return nil, errors.New("cannot find TPM interface to auto-open")
