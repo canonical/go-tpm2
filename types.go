@@ -46,11 +46,6 @@ func (a CommandAttributes) NumberOfCommandHandles() int {
 	return int((a & 0x0e000000) >> 25)
 }
 
-func (a CommandAttributes) Attrs() CommandAttributes {
-	return a &^ 0x0e00ffff
-}
-
-
 // 10) Structure Definitions
 type Empty struct{}
 
