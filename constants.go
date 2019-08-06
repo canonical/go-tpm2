@@ -54,6 +54,7 @@ const (
 	CommandStartup                    CommandCode = 0x00000144
 	CommandShutdown                   CommandCode = 0x00000145
 	CommandStirRandom                 CommandCode = 0x00000146
+	CommandActivateCredential	  CommandCode = 0x00000147
 	CommandCertifyCreation            CommandCode = 0x0000014A
 	CommandNVRead                     CommandCode = 0x0000014E
 	CommandNVReadLock                 CommandCode = 0x0000014F
@@ -66,6 +67,7 @@ const (
 	CommandContextSave                CommandCode = 0x00000162
 	CommandFlushContext               CommandCode = 0x00000165
 	CommandLoadExternal               CommandCode = 0x00000167
+	CommandMakeCredential		  CommandCode = 0x00000168
 	CommandNVReadPublic               CommandCode = 0x00000169
 	CommandPolicyAuthValue            CommandCode = 0x0000016B
 	CommandPolicyCommandCode          CommandCode = 0x0000016C

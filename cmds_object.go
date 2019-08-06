@@ -104,6 +104,34 @@ func (t *tpmContext) ReadPublic(objectContext ResourceContext, sessions ...*Sess
 	return t.readPublic(objectContext.Handle(), sessions...)
 }
 
+func (t *tpmContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObject2B,
+	secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest,
+	error) {
+	if credentialBlob == nil {
+		return nil, makeInvalidParamError("credentialBlob", "nil value")
+	}
+
+	var certInfo Digest
+	if err := t.RunCommand(CommandActivateCredential, sessions,
+		ResourceWithAuth{Context: activateContext, Auth: activateContextAuth},
+		ResourceWithAuth{Context: keyContext, Auth: keyContextAuth}, Separator, credentialBlob, secret,
+		Separator, Separator, &certInfo); err != nil {
+		return nil, err
+	}
+	return certInfo, nil
+}
+
+func (t *tpmContext) MakeCredential(context ResourceContext, credential Digest, objectName Name,
+	sessions ...*Session) (IDObject2B, EncryptedSecret, error) {
+	var credentialBlob IDObject2B
+	var secret EncryptedSecret
+	if err := t.RunCommand(CommandMakeCredential, sessions, context, Separator, credential, objectName,
+		Separator, Separator, &credentialBlob, &secret); err != nil {
+		return nil, nil, err
+	}
+	return credentialBlob, secret, nil
+}
+
 func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interface{},
 	sessions ...*Session) (SensitiveData, error) {
 	var outData SensitiveData

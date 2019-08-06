@@ -139,6 +139,11 @@ func beginPtrCtx(ctx *muContext, p reflect.Value) *muContext {
 		parentType: p.Type()}
 }
 
+func beginSizedStructCtx(ctx *muContext, p reflect.Value) *muContext {
+	return &muContext{depth: ctx.depth, container: ctx.container, fieldInParent: ctx.fieldInParent,
+		parentType: p.Type()}
+}
+
 func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
 	return ctx.parentType == reflect.PtrTo(v.Type())
 }
@@ -207,7 +212,7 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 		// write it along with the 16-bit size field to the output buffer
 		tmpBuf := new(bytes.Buffer)
 		us := s.Convert(s.Interface().(SizedStruct).UnsizedStructType())
-		if err := marshalStruct(tmpBuf, us, ctx); err != nil {
+		if err := marshalValue(tmpBuf, us, beginSizedStructCtx(ctx, s)); err != nil {
 			return fmt.Errorf("cannot marshal sized struct: %v", err)
 		}
 		if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
@@ -397,7 +402,7 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 		}
 		t := reflect.PtrTo(s.Interface().(SizedStruct).UnsizedStructType())
 		us := s.Addr().Convert(t).Elem()
-		if err := unmarshalStruct(srcBuf, us, ctx); err != nil {
+		if err := unmarshalValue(srcBuf, us, beginSizedStructCtx(ctx, s)); err != nil {
 			return fmt.Errorf("cannot unmarshal sized struct: %v", err)
 		}
 		return nil

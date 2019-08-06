@@ -548,3 +548,109 @@ func TestObjectChangeAuth(t *testing.T) {
 		run(t, context, pub, Auth("foo"), &Session{Context: sessionContext, AuthValue: testAuth})
 	})
 }
+
+func TestMakeCredential(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	ek := createRSAEkForTesting(t, tpm)
+	defer flushContext(t, tpm, ek)
+	ak := createAndLoadRSAAkForTesting(t, tpm, ek, nil)
+	defer flushContext(t, tpm, ak)
+
+	// Perform test with an object contianing only the public part of the EK
+	ekPub, _, _, err := tpm.ReadPublic(ek)
+	if err != nil {
+		t.Fatalf("ReadPublic failed: %v", err)
+	}
+
+	ekPubCtx, _, err := tpm.LoadExternal(nil, ekPub, HandleEndorsement)
+	if err != nil {
+		t.Fatalf("LoadExternal failed: %v", err)
+	}
+	defer flushContext(t, tpm, ekPubCtx)
+
+	credentialBlob, secret, err := tpm.MakeCredential(ekPubCtx, []byte("secret credential"), ak.Name())
+	if err != nil {
+		t.Fatalf("MakeCredential failed: %v", err)
+	}
+
+	if credentialBlob == nil {
+		t.Fatalf("Returned credential blob is nil")
+	}
+
+	cred, err := credentialBlob.ToStruct()
+	if err != nil {
+		t.Fatalf("Failed to marshal credential blob to structure: %v", err)
+	}
+
+	if len(cred.IntegrityHMAC) != 32 {
+		t.Errorf("Invalid integrityHMAC")
+	}
+	if len(cred.EncIdentity) == 0 {
+		t.Errorf("Invalid encIdentity")
+	}
+
+	if secret == nil {
+		t.Errorf("Returned secret is nil")
+	}
+}
+
+func TestActivateCredential(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	ek := createRSAEkForTesting(t, tpm)
+	defer flushContext(t, tpm, ek)
+
+	credentialIn := []byte("secret credential")
+
+	run := func(t *testing.T, ak ResourceContext, auth interface{}) {
+		credentialBlob, secret, err := tpm.MakeCredential(ek, credentialIn, ak.Name())
+		if err != nil {
+			t.Fatalf("MakeCredential failed: %v", err)
+		}
+
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionContext)
+		endorsement, _ := tpm.WrapHandle(HandleEndorsement)
+		if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
+			t.Fatalf("PolicySecret failed: %v", err)
+		}
+
+		credentialOut, err := tpm.ActivateCredential(ak, ek, credentialBlob, secret, auth,
+			&Session{Context: sessionContext})
+		if err != nil {
+			t.Fatalf("ActivateCredential failed: %v", err)
+		}
+
+		if !bytes.Equal(credentialOut, credentialIn) {
+			t.Errorf("ActivateCredential returned the wrong credential")
+		}
+	}
+
+	t.Run("NoAuth", func(t *testing.T) {
+		ak := createAndLoadRSAAkForTesting(t, tpm, ek, nil)
+		defer flushContext(t, tpm, ak)
+		run(t, ak, nil)
+	})
+	t.Run("WithPWAuth", func(t *testing.T) {
+		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)
+		defer flushContext(t, tpm, ak)
+		run(t, ak, testAuth)
+	})
+	t.Run("WithSessionAuth", func(t *testing.T) {
+		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)
+		defer flushContext(t, tpm, ak)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256,
+			testAuth)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionContext)
+		run(t, ak, &Session{Context: sessionContext})
+	})
+}

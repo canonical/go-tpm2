@@ -75,10 +75,11 @@ type TPMContext interface {
 	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
 		sessions ...*Session) (ResourceContext, Name, error)
 	ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error)
-	//ActivateCredential(activateHandle, keyHandle ResourceContext, credentialBlob IDObject,
-	//	secret EncryptedSecret, activateHandleAuth, keyHandleAuth interface{}) (Digest, error)
-	//MakeCredential(handle ResourceContext, credential Digest, objectName Name) (IDObject,
-	//	EncryptedSecret, error)
+	ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObject2B,
+		secret EncryptedSecret, activateContextAuth, keyContextAuth interface{},
+		sessions ...*Session) (Digest, error)
+	MakeCredential(context ResourceContext, credential Digest, objectName Name,
+		sessions ...*Session) (IDObject2B, EncryptedSecret, error)
 	Unseal(itemContext ResourceContext, itemContextAuth interface{}, sessions ...*Session) (SensitiveData,
 		error)
 	ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"reflect"
 )
 
@@ -879,6 +880,48 @@ func (s Sensitive2B) UnsizedStructType() reflect.Type {
 }
 
 type Private []byte
+
+// 12.4) Identity Object
+type IDObject struct {
+	IntegrityHMAC Digest
+	EncIdentity Digest
+}
+
+// TPMS_ID_OBJECT.encIdentity is fully encrypted, including the 2-byte size field. The marshalling code does
+// not know how to handle this struct on its own
+func (i *IDObject) Marshal(buf io.Writer) error {
+	return errors.New("IDObject cannot be marshalled")
+}
+
+func (i *IDObject) Unmarshal(buf io.Reader) error {
+	var integSize uint16
+	if err := binary.Read(buf, binary.BigEndian, &integSize); err != nil {
+		return fmt.Errorf("cannot read size of integrityHMAC: %v", err)
+	}
+
+	i.IntegrityHMAC = make(Digest, integSize)
+	if _, err := io.ReadFull(buf, i.IntegrityHMAC); err != nil {
+		return fmt.Errorf("cannot read integrityHMAC: %v", err)
+	}
+
+	// This structure should only be unmarshalled from IDObject2B.ToStruct(). Consume the rest of the bytes.
+	encIdentity, err := ioutil.ReadAll(buf)
+	if err != nil {
+		return fmt.Errorf("cannot read encIdentity: %v", err)
+	}
+	i.EncIdentity = encIdentity
+	return nil
+}
+
+type IDObject2B []byte
+
+func (i IDObject2B) ToStruct() (*IDObject, error) {
+	var out IDObject
+	if _, err := UnmarshalFromBytes(i, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
 
 // 13) Storage Structures
 type NVType uint32
