@@ -82,6 +82,8 @@ func (e TPMVendorError) Error() string {
 		e.Code)
 }
 
+type WarningCode ResponseCode
+
 type TPMWarning struct {
 	Command CommandCode
 	Code    WarningCode
@@ -96,6 +98,8 @@ func (e TPMWarning) Error() string {
 	return builder.String()
 }
 
+type ErrorCode0 ResponseCode
+
 type TPMError struct {
 	Command CommandCode
 	Code    ErrorCode0
@@ -109,6 +113,8 @@ func (e TPMError) Error() string {
 	}
 	return builder.String()
 }
+
+type ErrorCode1 ResponseCode
 
 type TPMParameterError struct {
 	Command CommandCode
