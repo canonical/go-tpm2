@@ -102,7 +102,7 @@ type TPMContext interface {
 	//	*Signature, error)
 	CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,
 		inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{},
-		sessions ...*Session) (*Attest, *Signature, error)
+		sessions ...*Session) (Attest2B, *Signature, error)
 	// Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme,
 	//	pcrSelection PCRSelectionList) (*Attest, *Signature, error)
 	// GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext ResourceContext,

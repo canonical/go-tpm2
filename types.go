@@ -374,10 +374,14 @@ func (a Attest) Selector(field reflect.StructField) interface{} {
 	return a.Type
 }
 
-type Attest2B Attest
+type Attest2B []byte
 
-func (a Attest2B) UnsizedStructType() reflect.Type {
-	return reflect.TypeOf(Attest(a))
+func (a Attest2B) ToStruct() (*Attest, error) {
+	var out Attest
+	if _, err := UnmarshalFromBytes(a, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // 11) Algorithm Parameters and Structures

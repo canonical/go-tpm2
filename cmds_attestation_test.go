@@ -42,16 +42,22 @@ func TestCertifyCreation(t *testing.T) {
 	if certifyInfo == nil {
 		t.Fatalf("CertifyCreation returned a nil certifyInfo")
 	}
-	if certifyInfo.Magic != TPMGeneratedValue {
+
+	attest, err := certifyInfo.ToStruct()
+	if err != nil {
+		t.Fatalf("certifyInfo failed to unmarshal: %v", err)
+	}
+
+	if attest.Magic != TPMGeneratedValue {
 		t.Errorf("certifyInfo has the wrong magic value")
 	}
-	if certifyInfo.Type != TagAttestCreation {
+	if attest.Type != TagAttestCreation {
 		t.Errorf("certifyInfo has the wrong type")
 	}
-	if !bytes.Equal(certifyInfo.Attest.Creation.ObjectName, name) {
+	if !bytes.Equal(attest.Attest.Creation.ObjectName, name) {
 		t.Errorf("certifyInfo has the wrong objectName")
 	}
-	if !bytes.Equal(certifyInfo.Attest.Creation.CreationHash, creationHash) {
+	if !bytes.Equal(attest.Attest.Creation.CreationHash, creationHash) {
 		t.Errorf("certifyInfo has the wrong creationHash")
 	}
 	if signature == nil {
