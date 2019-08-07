@@ -14,11 +14,7 @@ import (
 
 type TestPublicIDUContainer struct {
 	Alg    AlgorithmId
-	Unique PublicIDU
-}
-
-func (c TestPublicIDUContainer) Selector(field reflect.StructField) interface{} {
-	return c.Alg
+	Unique PublicIDU `selector:"Alg"`
 }
 
 func TestPublicIDUnion(t *testing.T) {
@@ -87,11 +83,7 @@ func TestPublicIDUnion(t *testing.T) {
 
 type TestSchemeKeyedHashUContainer struct {
 	Scheme  AlgorithmId
-	Details SchemeKeyedHashU
-}
-
-func (c TestSchemeKeyedHashUContainer) Selector(field reflect.StructField) interface{} {
-	return c.Scheme
+	Details SchemeKeyedHashU `selector:"Scheme"`
 }
 
 func TestSchemeKeyedHashUnion(t *testing.T) {

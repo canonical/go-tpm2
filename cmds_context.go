@@ -6,7 +6,6 @@ package tpm2
 
 import (
 	"fmt"
-	"reflect"
 )
 
 type objectContextData struct {
@@ -48,12 +47,8 @@ const (
 
 type resourceContextData struct {
 	ContextType uint8
-	Data        resourceContextDataU
+	Data        resourceContextDataU `selector:"ContextType"`
 	TPMBlob     ContextData
-}
-
-func (d resourceContextData) Selector(field reflect.StructField) interface{} {
-	return d.ContextType
 }
 
 func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData, error) {

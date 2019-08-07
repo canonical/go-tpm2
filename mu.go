@@ -18,7 +18,6 @@ var (
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
 	rawSliceType         reflect.Type = reflect.TypeOf(RawSliceType{})
 	sizedStructType      reflect.Type = reflect.TypeOf((*SizedStruct)(nil)).Elem()
-	unionContainerType   reflect.Type = reflect.TypeOf((*UnionContainer)(nil)).Elem()
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
@@ -39,19 +38,15 @@ type Union interface {
 	Select(selector interface{}) (string, error)
 }
 
-type UnionContainer interface {
-	Selector(field reflect.StructField) interface{}
-}
-
 type SizedStruct interface {
 	UnsizedStructType() reflect.Type
 }
 
-func isUnionContainer(t reflect.Type) bool {
+func isValidUnionContainer(t reflect.Type) bool {
 	if t.Kind() != reflect.Struct {
 		return false
 	}
-	return t.Implements(unionContainerType)
+	return true
 }
 
 func isUnion(t reflect.Type) bool {
@@ -165,13 +160,23 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 	if !ctx.container.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isUnionContainer(ctx.container.Type()) {
-		return errors.New("inside invalid container type")
+
+	if !isValidUnionContainer(ctx.container.Type()) {
+		return errors.New("not inside a valid union container")
+	}
+
+	selectorName, hasSelector := ctx.fieldInParent.Tag.Lookup("selector")
+	if !hasSelector {
+		return errors.New("no selector member in container")
+	}
+
+	selectorVal := ctx.container.FieldByName(selectorName)
+	if !selectorVal.IsValid() {
+		return fmt.Errorf("invalid selector field name %s", selectorName)
 	}
 
 	// Select the union member to marshal based on the selector value from the parent container
-	selector := ctx.container.Interface().(UnionContainer).Selector(ctx.fieldInParent)
-	field, err := u.Interface().(Union).Select(selector)
+	field, err := u.Interface().(Union).Select(selectorVal.Interface())
 	if err != nil {
 		return fmt.Errorf("cannot select union member: %v", err)
 	}
@@ -345,13 +350,23 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 	if !ctx.container.IsValid() {
 		return errors.New("not inside a container")
 	}
-	if !isUnionContainer(ctx.container.Type()) {
-		return errors.New("inside invalid container type")
+
+	if !isValidUnionContainer(ctx.container.Type()) {
+		return errors.New("not inside a valid union container")
+	}
+
+	selectorName, hasSelector := ctx.fieldInParent.Tag.Lookup("selector")
+	if !hasSelector {
+		return errors.New("no selector member in container")
+	}
+
+	selectorVal := ctx.container.FieldByName(selectorName)
+	if !selectorVal.IsValid() {
+		return fmt.Errorf("invalid selector field name %s", selectorName)
 	}
 
 	// Select the union member to marshal based on the selector value from the parent container
-	selector := ctx.container.Interface().(UnionContainer).Selector(ctx.fieldInParent)
-	field, err := u.Interface().(Union).Select(selector)
+	field, err := u.Interface().(Union).Select(selectorVal.Interface())
 	if err != nil {
 		return fmt.Errorf("cannot select union member: %v", err)
 	}

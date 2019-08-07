@@ -267,11 +267,7 @@ func (c CapabilitiesU) Select(selector interface{}) (string, error) {
 
 type CapabilityData struct {
 	Capability Capability
-	Data       CapabilitiesU
-}
-
-func (d CapabilityData) Selector(field reflect.StructField) interface{} {
-	return d.Capability
+	Data       CapabilitiesU `selector:"Capability"`
 }
 
 // 10.11 Clock/Counter Structures
@@ -363,11 +359,7 @@ type Attest struct {
 	ExtraData       Data
 	ClockInfo
 	FirmwareVersion uint64
-	Attest          AttestU
-}
-
-func (a Attest) Selector(field reflect.StructField) interface{} {
-	return a.Type
+	Attest          AttestU `selector:"Type"`
 }
 
 type Attest2B []byte
@@ -414,22 +406,14 @@ func (m SymModeU) Select(selector interface{}) (string, error) {
 
 type SymDef struct {
 	Algorithm AlgorithmId
-	KeyBits   SymKeyBitsU
-	Mode      SymModeU
-}
-
-func (d SymDef) Selector(field reflect.StructField) interface{} {
-	return d.Algorithm
+	KeyBits   SymKeyBitsU `selector:"Algorithm"`
+	Mode      SymModeU `selector:"Algorithm"`
 }
 
 type SymDefObject struct {
 	Algorithm AlgorithmId
-	KeyBits   SymKeyBitsU
-	Mode      SymModeU
-}
-
-func (o SymDefObject) Selector(field reflect.StructField) interface{} {
-	return o.Algorithm
+	KeyBits   SymKeyBitsU `selector:"Algorithm"`
+	Mode      SymModeU `selector:"Algorithm"`
 }
 
 type SymKey []byte
@@ -487,11 +471,7 @@ func (d SchemeKeyedHashU) Select(selector interface{}) (string, error) {
 
 type KeyedHashScheme struct {
 	Scheme  AlgorithmId
-	Details SchemeKeyedHashU
-}
-
-func (s KeyedHashScheme) Selector(field reflect.StructField) interface{} {
-	return s.Scheme
+	Details SchemeKeyedHashU `selector:"Scheme"`
 }
 
 // 11.2 Assymetric
@@ -538,11 +518,7 @@ func (s SigSchemeU) Select(selector interface{}) (string, error) {
 
 type SigScheme struct {
 	Scheme  AlgorithmId
-	Details SigSchemeU
-}
-
-func (s SigScheme) Selector(field reflect.StructField) interface{} {
-	return s.Scheme
+	Details SigSchemeU `selector:"Scheme"`
 }
 
 // 11.2.3 Key Derivation Schemes
@@ -576,11 +552,7 @@ func (s KDFSchemeU) Select(selector interface{}) (string, error) {
 
 type KDFScheme struct {
 	Scheme  AlgorithmId
-	Details KDFSchemeU
-}
-
-func (s KDFScheme) Selector(field reflect.StructField) interface{} {
-	return s.Scheme
+	Details KDFSchemeU `selector:"Scheme"`
 }
 
 type KeySchemeECDH SchemeHash
@@ -632,11 +604,7 @@ func (s AsymSchemeU) Select(selector interface{}) (string, error) {
 // 11.2.4 RSA
 type RSAScheme struct {
 	Scheme  AlgorithmId
-	Details AsymSchemeU
-}
-
-func (s RSAScheme) Selector(field reflect.StructField) interface{} {
-	return s.Scheme
+	Details AsymSchemeU `selector:"Scheme"`
 }
 
 type PublicKeyRSA []byte
@@ -651,11 +619,7 @@ type ECCPoint struct {
 
 type ECCScheme struct {
 	Scheme  AlgorithmId
-	Details AsymSchemeU
-}
-
-func (s ECCScheme) Selector(field reflect.StructField) interface{} {
-	return s.Scheme
+	Details AsymSchemeU `selector:"Scheme"`
 }
 
 // 11.3 Signatures
@@ -711,11 +675,7 @@ func (s SignatureU) Select(selector interface{}) (string, error) {
 
 type Signature struct {
 	SigAlg    AlgorithmId
-	Signature SignatureU
-}
-
-func (s Signature) Selector(field reflect.StructField) interface{} {
-	return s.SigAlg
+	Signature SignatureU `selector:"SigAlg"`
 }
 
 // 11.4) Key/Secret Exchange
@@ -789,16 +749,8 @@ type Public struct {
 	NameAlg    AlgorithmId
 	Attrs      ObjectAttributes
 	AuthPolicy Digest
-	Params     PublicParamsU
-	Unique     PublicIDU
-}
-
-func (p Public) Selector(field reflect.StructField) interface{} {
-	switch field.Name {
-	case "Params", "Unique":
-		return p.Type
-	}
-	return nil
+	Params     PublicParamsU `selector:"Type"`
+	Unique     PublicIDU `selector:"Type"`
 }
 
 func (p *Public) Name() (Name, error) {
@@ -861,11 +813,7 @@ type Sensitive struct {
 	Type      AlgorithmId
 	AuthValue Auth
 	SeedValue Digest
-	Sensitive SensitiveCompositeU
-}
-
-func (s Sensitive) Selector(field reflect.StructField) interface{} {
-	return s.Type
+	Sensitive SensitiveCompositeU `selector:"Type"`
 }
 
 type Sensitive2B Sensitive
