@@ -279,8 +279,8 @@ type ClockInfo struct {
 }
 
 type TimeInfo struct {
-	Time uint64
-	ClockInfo
+	Time      uint64
+	ClockInfo ClockInfo
 }
 
 // 10.12 Attestation Structures
@@ -290,7 +290,7 @@ type TimeAttestInfo struct {
 }
 
 type CertifyInfo struct {
-	Name,
+	Name          Name
 	QualifiedName Name
 }
 
@@ -357,7 +357,7 @@ type Attest struct {
 	Type            StructTag
 	QualifiedSigner Name
 	ExtraData       Data
-	ClockInfo
+	ClockInfo       ClockInfo
 	FirmwareVersion uint64
 	Attest          AttestU `selector:"Type"`
 }
@@ -407,13 +407,13 @@ func (m SymModeU) Select(selector interface{}) (string, error) {
 type SymDef struct {
 	Algorithm AlgorithmId
 	KeyBits   SymKeyBitsU `selector:"Algorithm"`
-	Mode      SymModeU `selector:"Algorithm"`
+	Mode      SymModeU    `selector:"Algorithm"`
 }
 
 type SymDefObject struct {
 	Algorithm AlgorithmId
 	KeyBits   SymKeyBitsU `selector:"Algorithm"`
-	Mode      SymModeU `selector:"Algorithm"`
+	Mode      SymModeU    `selector:"Algorithm"`
 }
 
 type SymKey []byte
@@ -750,7 +750,7 @@ type Public struct {
 	Attrs      ObjectAttributes
 	AuthPolicy Digest
 	Params     PublicParamsU `selector:"Type"`
-	Unique     PublicIDU `selector:"Type"`
+	Unique     PublicIDU     `selector:"Type"`
 }
 
 func (p *Public) Name() (Name, error) {
@@ -827,7 +827,7 @@ type Private []byte
 // 12.4) Identity Object
 type IDObject struct {
 	IntegrityHMAC Digest
-	EncIdentity Digest
+	EncIdentity   Digest
 }
 
 // TPMS_ID_OBJECT.encIdentity is fully encrypted, including the 2-byte size field. The marshalling code does

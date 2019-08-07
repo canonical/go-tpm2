@@ -10,7 +10,7 @@ import (
 
 type objectContextData struct {
 	Public *Public2B
-	Name
+	Name   Name
 }
 
 type sessionContextData struct {

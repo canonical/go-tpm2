@@ -216,7 +216,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm TPMContext, ek ResourceConte
 	}
 
 	template := Public{
-		Type: AlgorithmRSA,
+		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
 		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 			AttrRestricted | AttrSign,
@@ -224,9 +224,9 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm TPMContext, ek ResourceConte
 			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
 				Scheme: RSAScheme{
-					Scheme: AlgorithmRSASSA,
+					Scheme:  AlgorithmRSASSA,
 					Details: AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
-				KeyBits: 2048,
+				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
 	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, &session)

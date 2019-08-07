@@ -91,16 +91,16 @@ func (r *nvIndexContext) clearAttr(a NVAttributes) {
 }
 
 type sessionContext struct {
-	handle      Handle
-	hashAlg     AlgorithmId
-	sessionType SessionType
-	policyHMACType
-	isBound     bool
-	boundEntity Name
-	sessionKey  []byte
-	nonceCaller Nonce
-	nonceTPM    Nonce
-	symmetric   *SymDef
+	handle         Handle
+	hashAlg        AlgorithmId
+	sessionType    SessionType
+	policyHMACType policyHMACType
+	isBound        bool
+	boundEntity    Name
+	sessionKey     []byte
+	nonceCaller    Nonce
+	nonceTPM       Nonce
+	symmetric      *SymDef
 }
 
 func (r *sessionContext) Handle() Handle {
