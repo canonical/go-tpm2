@@ -7,7 +7,8 @@ This repository contains a go library for interacting with TPM 2.0 devices. Curr
  - Session-based command and response parameter encryption.
  - Backends for Linux TPM character devices and the IBM simulator.
  - All startup, testing and session commands.
- - Most object commands, including Unseal.
+ - All object commands, including Unseal.
+ - Most NV storage commands.
  - Some PCR commands (Extend, Event and Read).
  - Some extended authorization commands.
  - Most hierarchy commands.
