@@ -313,7 +313,7 @@ func TestPolicyPCR(t *testing.T) {
 	}
 
 	calculatePCRDigest := func(pcrs PCRSelectionList) []byte {
-		_, _, pcrValues, err := tpm.PCRRead(pcrs)
+		_, pcrValues, err := tpm.PCRRead(pcrs)
 		if err != nil {
 			t.Fatalf("PCRRead failed: %v", err)
 		}

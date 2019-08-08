@@ -409,3 +409,77 @@ func TestNVPublicName(t *testing.T) {
 		t.Errorf("NVPublic.Name() returned an unexpected name")
 	}
 }
+
+func TestPCRSelectionListSubtract(t *testing.T) {
+	for _, data := range []struct {
+		desc           string
+		x, y, expected PCRSelectionList
+	}{
+		{
+			desc: "1",
+			x: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 2, 3, 4}}},
+			expected: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 5}}},
+		},
+		{
+			desc: "2",
+			x: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 3, 4}}},
+			expected: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+		},
+		{
+			desc: "3",
+			x: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{},
+		},
+		{
+			desc: "4",
+			x: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 4, 5}}},
+			expected: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
+		},
+		{
+			desc: "5",
+			x: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}}},
+		},
+		{
+			desc: "6",
+			x: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			data.x.subtract(data.y)
+			if !reflect.DeepEqual(data.x, data.expected) {
+				t.Errorf("Unexpected result %v", data.x)
+			}
+		})
+	}
+}

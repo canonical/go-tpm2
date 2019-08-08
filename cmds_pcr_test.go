@@ -6,8 +6,6 @@ package tpm2
 
 import (
 	"bytes"
-	"reflect"
-	"sort"
 	"testing"
 )
 
@@ -47,7 +45,7 @@ func TestPCRExtend(t *testing.T) {
 					PCRSelection{Hash: alg, Select: PCRSelectionData{data.index}})
 			}
 
-			origUpdateCounter, _, origValues, err := tpm.PCRRead(pcrSelection)
+			origUpdateCounter, origValues, err := tpm.PCRRead(pcrSelection)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
@@ -64,7 +62,7 @@ func TestPCRExtend(t *testing.T) {
 				t.Fatalf("PCRExtend failed: %v", err)
 			}
 
-			newUpdateCounter, _, newValues, err := tpm.PCRRead(pcrSelection)
+			newUpdateCounter, newValues, err := tpm.PCRRead(pcrSelection)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
@@ -121,7 +119,7 @@ func TestPCREvent(t *testing.T) {
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{data.index}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{data.index}}}
 
-			origUpdateCounter, _, origValues, err := tpm.PCRRead(pcrSelection)
+			origUpdateCounter, origValues, err := tpm.PCRRead(pcrSelection)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
@@ -148,7 +146,7 @@ func TestPCREvent(t *testing.T) {
 				}
 			}
 
-			newUpdateCounter, _, newValues, err := tpm.PCRRead(pcrSelection)
+			newUpdateCounter, newValues, err := tpm.PCRRead(pcrSelection)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
@@ -204,6 +202,14 @@ func TestPCRRead(t *testing.T) {
 			index: 3,
 			data:  []byte("xyz"),
 		},
+		{
+			index: 4,
+			data:  []byte("1234"),
+		},
+		{
+			index: 5,
+			data:  []byte("5678"),
+		},
 	} {
 		_, err := tpm.PCREvent(Handle(data.index), data.data, nil)
 		if err != nil {
@@ -255,23 +261,23 @@ func TestPCRRead(t *testing.T) {
 		{
 			desc: "MultiplePCRMultipleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 2, 3}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 2, 5}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 5, 2}}},
+		},
+		{
+			desc: "MultipleRequest",
+			selection: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 2, 3, 4, 5}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 5, 2, 3, 4}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			_, pcrSelection, digests, err := tpm.PCRRead(data.selection)
+			_, digests, err := tpm.PCRRead(data.selection)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
-			for _, s := range data.selection {
-				sort.Ints(s.Select)
-			}
-			if !reflect.DeepEqual(pcrSelection, data.selection) {
-				t.Errorf("PCRRead returned an unexpected PCRSelectionList")
-			}
 			j := 0
-			for _, selection := range pcrSelection {
+			for _, selection := range data.selection {
 				for _, i := range selection.Select {
 					if !bytes.Equal(expectedDigests[i][selection.Hash], digests[j]) {
 						t.Errorf("Unexpected digest (got %x, expected %x)", digests[j],

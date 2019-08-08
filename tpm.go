@@ -121,7 +121,7 @@ type TPMContext interface {
 	PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error
 	PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{},
 		sessions ...*Session) (TaggedHashList, error)
-	PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRSelectionList, DigestList, error)
+	PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestList, error)
 
 	// Section 23 - Enhanced Authorization (EA) Commands
 	// PolicySigned(authObject, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest,
