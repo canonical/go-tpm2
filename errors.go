@@ -7,7 +7,6 @@ package tpm2
 import (
 	"bytes"
 	"fmt"
-	"unsafe"
 )
 
 type UnmarshallingError struct {
@@ -96,8 +95,7 @@ func (e TPMWarning) Error() string {
 	if desc, hasDesc := warningCodeDescriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	buf := builder.Bytes()
-	return *(*string)(unsafe.Pointer(&buf))
+	return builder.String()
 }
 
 type ErrorCode0 ResponseCode
@@ -113,8 +111,7 @@ func (e TPMError) Error() string {
 	if desc, hasDesc := errorCode0Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	buf := builder.Bytes()
-	return *(*string)(unsafe.Pointer(&buf))
+	return builder.String()
 }
 
 type ErrorCode1 ResponseCode
@@ -132,8 +129,7 @@ func (e TPMParameterError) Error() string {
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	buf := builder.Bytes()
-	return *(*string)(unsafe.Pointer(&buf))
+	return builder.String()
 }
 
 type TPMSessionError struct {
@@ -149,8 +145,7 @@ func (e TPMSessionError) Error() string {
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	buf := builder.Bytes()
-	return *(*string)(unsafe.Pointer(&buf))
+	return builder.String()
 }
 
 type TPMHandleError struct {
@@ -166,8 +161,7 @@ func (e TPMHandleError) Error() string {
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	buf := builder.Bytes()
-	return *(*string)(unsafe.Pointer(&buf))
+	return builder.String()
 }
 
 func DecodeResponseCode(command CommandCode, resp ResponseCode) error {

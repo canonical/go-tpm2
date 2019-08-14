@@ -7,12 +7,11 @@ package tpm2
 import (
 	"bytes"
 	"fmt"
-	"unsafe"
 )
 
 func makeDefaultFormatter(s fmt.State, f rune) string {
 	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "%%")
+	builder.WriteString("%%")
 	for _, flag := range [...]int{'+', '-', '#', ' ', '0'} {
 		if s.Flag(flag) {
 			fmt.Fprintf(&builder, "%c", flag)
@@ -25,8 +24,7 @@ func makeDefaultFormatter(s fmt.State, f rune) string {
 		fmt.Fprintf(&builder, ".%d", prec)
 	}
 	fmt.Fprintf(&builder, "%c", f)
-	buf := builder.Bytes()
-	return *(*string)(unsafe.Pointer(&buf))
+	return builder.String()
 }
 
 func (c CommandCode) String() string {
