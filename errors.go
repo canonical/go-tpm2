@@ -5,8 +5,9 @@
 package tpm2
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
+	"unsafe"
 )
 
 type UnmarshallingError struct {
@@ -90,12 +91,13 @@ type TPMWarning struct {
 }
 
 func (e TPMWarning) Error() string {
-	var builder strings.Builder
+	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned a warning whilst executing command %s: %s", e.Command, e.Code)
 	if desc, hasDesc := warningCodeDescriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	return builder.String()
+	buf := builder.Bytes()
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 type ErrorCode0 ResponseCode
@@ -106,12 +108,13 @@ type TPMError struct {
 }
 
 func (e TPMError) Error() string {
-	var builder strings.Builder
+	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error whilst executing command %s: %s", e.Command, e.Code)
 	if desc, hasDesc := errorCode0Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	return builder.String()
+	buf := builder.Bytes()
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 type ErrorCode1 ResponseCode
@@ -123,13 +126,14 @@ type TPMParameterError struct {
 }
 
 func (e TPMParameterError) Error() string {
-	var builder strings.Builder
+	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for parameter %d whilst executing command %s: %s",
 		e.Index, e.Command, e.Code)
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	return builder.String()
+	buf := builder.Bytes()
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 type TPMSessionError struct {
@@ -139,13 +143,14 @@ type TPMSessionError struct {
 }
 
 func (e TPMSessionError) Error() string {
-	var builder strings.Builder
+	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for session %d whilst executing command %s: %s",
 		e.Index, e.Command, e.Code)
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	return builder.String()
+	buf := builder.Bytes()
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 type TPMHandleError struct {
@@ -155,13 +160,14 @@ type TPMHandleError struct {
 }
 
 func (e TPMHandleError) Error() string {
-	var builder strings.Builder
+	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for handle %d whilst executing command %s: %s",
 		e.Index, e.Command, e.Code)
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
-	return builder.String()
+	buf := builder.Bytes()
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
