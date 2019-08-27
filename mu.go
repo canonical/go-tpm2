@@ -91,11 +91,7 @@ func makeSizedStructReader(buf io.Reader) (io.Reader, error) {
 	if size == 0 {
 		return nil, nil
 	}
-	b := make([]byte, size)
-	if _, err := io.ReadFull(buf, b); err != nil {
-		return nil, fmt.Errorf("cannot read contents of sized struct: %v", err)
-	}
-	return bytes.NewReader(b), nil
+	return io.LimitReader(buf, int64(size)), nil
 }
 
 type invalidSelectorError struct {
