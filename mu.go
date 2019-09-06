@@ -129,20 +129,20 @@ func beginRawSliceCtx(ctx *muContext) *muContext {
 	return &muContext{depth: ctx.depth, parentType: rawSliceType}
 }
 
-func beginStructCtx(ctx *muContext, s reflect.Value, i int) *muContext {
+func beginStructFieldCtx(ctx *muContext, s reflect.Value, i int) *muContext {
 	opts := parseFieldOptions(s.Type().Field(i).Tag.Get("tpm2"))
 	return &muContext{depth: ctx.depth, container: s, parentType: s.Type(), options: opts}
 }
 
-func beginUnionCtx(ctx *muContext, u reflect.Value) *muContext {
+func beginUnionFieldCtx(ctx *muContext, u reflect.Value) *muContext {
 	return &muContext{depth: ctx.depth, container: u, parentType: u.Type()}
 }
 
-func beginSliceCtx(ctx *muContext, s reflect.Value) *muContext {
+func beginSliceElemCtx(ctx *muContext, s reflect.Value) *muContext {
 	return &muContext{depth: ctx.depth, container: s, parentType: s.Type()}
 }
 
-func beginPtrCtx(ctx *muContext, p reflect.Value) *muContext {
+func beginPtrElemCtx(ctx *muContext, p reflect.Value) *muContext {
 	return &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
 }
 
@@ -164,7 +164,7 @@ func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 		return errors.New("nil pointer")
 	}
 
-	return marshalValue(buf, ptr.Elem(), beginPtrCtx(ctx, ptr))
+	return marshalValue(buf, ptr.Elem(), beginPtrElemCtx(ctx, ptr))
 }
 
 func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
@@ -199,7 +199,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 		return fmt.Errorf("invalid union field name %s", field)
 	}
 
-	return marshalValue(buf, val, beginUnionCtx(ctx, u))
+	return marshalValue(buf, val, beginUnionFieldCtx(ctx, u))
 }
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
@@ -245,7 +245,7 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	}
 
 	for i := 0; i < s.NumField(); i++ {
-		if err := marshalValue(buf, s.Field(i), beginStructCtx(ctx, s, i)); err != nil {
+		if err := marshalValue(buf, s.Field(i), beginStructFieldCtx(ctx, s, i)); err != nil {
 			return fmt.Errorf("cannot marshal field %s: %v", s.Type().Field(i).Name, err)
 		}
 	}
@@ -280,7 +280,7 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	}
 
 	for i := 0; i < slice.Len(); i++ {
-		if err := marshalValue(buf, slice.Index(i), beginSliceCtx(ctx, slice)); err != nil {
+		if err := marshalValue(buf, slice.Index(i), beginSliceElemCtx(ctx, slice)); err != nil {
 			return fmt.Errorf("cannot marshal value at index %d: %v", i, err)
 		}
 	}
@@ -353,7 +353,7 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 	}
 
 	ptr.Set(reflect.New(ptr.Type().Elem()))
-	return unmarshalValue(srcBuf, ptr.Elem(), beginPtrCtx(ctx, ptr))
+	return unmarshalValue(srcBuf, ptr.Elem(), beginPtrElemCtx(ctx, ptr))
 }
 
 func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
@@ -388,7 +388,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 		return fmt.Errorf("invalid union field name %s", field)
 	}
 
-	return unmarshalValue(buf, val, beginUnionCtx(ctx, u))
+	return unmarshalValue(buf, val, beginUnionFieldCtx(ctx, u))
 }
 
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
@@ -438,7 +438,7 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	}
 
 	for i := 0; i < s.NumField(); i++ {
-		if err := unmarshalValue(buf, s.Field(i), beginStructCtx(ctx, s, i)); err != nil {
+		if err := unmarshalValue(buf, s.Field(i), beginStructFieldCtx(ctx, s, i)); err != nil {
 			return fmt.Errorf("cannot unmarshal field %s: %v", s.Type().Field(i).Name, err)
 		}
 	}
@@ -486,7 +486,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	}
 
 	for i := 0; i < slice.Len(); i++ {
-		if err := unmarshalValue(buf, slice.Index(i), beginSliceCtx(ctx, slice)); err != nil {
+		if err := unmarshalValue(buf, slice.Index(i), beginSliceElemCtx(ctx, slice)); err != nil {
 			return fmt.Errorf("cannot unmarshal value at index %d: %v", i, err)
 		}
 	}
