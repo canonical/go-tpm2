@@ -14,7 +14,7 @@ import (
 
 type TestPublicIDUContainer struct {
 	Alg    AlgorithmId
-	Unique PublicIDU `selector:"Alg"`
+	Unique PublicIDU `tpm2:"selector:Alg"`
 }
 
 func TestPublicIDUnion(t *testing.T) {
@@ -83,7 +83,7 @@ func TestPublicIDUnion(t *testing.T) {
 
 type TestSchemeKeyedHashUContainer struct {
 	Scheme  AlgorithmId
-	Details SchemeKeyedHashU `selector:"Scheme"`
+	Details SchemeKeyedHashU `tpm2:"selector:Scheme"`
 }
 
 func TestSchemeKeyedHashUnion(t *testing.T) {

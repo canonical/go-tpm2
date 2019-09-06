@@ -267,7 +267,7 @@ func (c CapabilitiesU) Select(selector interface{}) (string, error) {
 
 type CapabilityData struct {
 	Capability Capability
-	Data       CapabilitiesU `selector:"Capability"`
+	Data       CapabilitiesU `tpm2:"selector:Capability"`
 }
 
 // 10.11 Clock/Counter Structures
@@ -359,7 +359,7 @@ type Attest struct {
 	ExtraData       Data
 	ClockInfo       ClockInfo
 	FirmwareVersion uint64
-	Attest          AttestU `selector:"Type"`
+	Attest          AttestU `tpm2:"selector:Type"`
 }
 
 type Attest2B []byte
@@ -406,14 +406,14 @@ func (m SymModeU) Select(selector interface{}) (string, error) {
 
 type SymDef struct {
 	Algorithm AlgorithmId
-	KeyBits   SymKeyBitsU `selector:"Algorithm"`
-	Mode      SymModeU    `selector:"Algorithm"`
+	KeyBits   SymKeyBitsU `tpm2:"selector:Algorithm"`
+	Mode      SymModeU    `tpm2:"selector:Algorithm"`
 }
 
 type SymDefObject struct {
 	Algorithm AlgorithmId
-	KeyBits   SymKeyBitsU `selector:"Algorithm"`
-	Mode      SymModeU    `selector:"Algorithm"`
+	KeyBits   SymKeyBitsU `tpm2:"selector:Algorithm"`
+	Mode      SymModeU    `tpm2:"selector:Algorithm"`
 }
 
 type SymKey []byte
@@ -471,7 +471,7 @@ func (d SchemeKeyedHashU) Select(selector interface{}) (string, error) {
 
 type KeyedHashScheme struct {
 	Scheme  AlgorithmId
-	Details SchemeKeyedHashU `selector:"Scheme"`
+	Details SchemeKeyedHashU `tpm2:"selector:Scheme"`
 }
 
 // 11.2 Assymetric
@@ -518,7 +518,7 @@ func (s SigSchemeU) Select(selector interface{}) (string, error) {
 
 type SigScheme struct {
 	Scheme  AlgorithmId
-	Details SigSchemeU `selector:"Scheme"`
+	Details SigSchemeU `tpm2:"selector:Scheme"`
 }
 
 // 11.2.3 Key Derivation Schemes
@@ -552,7 +552,7 @@ func (s KDFSchemeU) Select(selector interface{}) (string, error) {
 
 type KDFScheme struct {
 	Scheme  AlgorithmId
-	Details KDFSchemeU `selector:"Scheme"`
+	Details KDFSchemeU `tpm2:"selector:Scheme"`
 }
 
 type KeySchemeECDH SchemeHash
@@ -604,7 +604,7 @@ func (s AsymSchemeU) Select(selector interface{}) (string, error) {
 // 11.2.4 RSA
 type RSAScheme struct {
 	Scheme  AlgorithmId
-	Details AsymSchemeU `selector:"Scheme"`
+	Details AsymSchemeU `tpm2:"selector:Scheme"`
 }
 
 type PublicKeyRSA []byte
@@ -619,7 +619,7 @@ type ECCPoint struct {
 
 type ECCScheme struct {
 	Scheme  AlgorithmId
-	Details AsymSchemeU `selector:"Scheme"`
+	Details AsymSchemeU `tpm2:"selector:Scheme"`
 }
 
 // 11.3 Signatures
@@ -675,7 +675,7 @@ func (s SignatureU) Select(selector interface{}) (string, error) {
 
 type Signature struct {
 	SigAlg    AlgorithmId
-	Signature SignatureU `selector:"SigAlg"`
+	Signature SignatureU `tpm2:"selector:SigAlg"`
 }
 
 // 11.4) Key/Secret Exchange
@@ -749,8 +749,8 @@ type Public struct {
 	NameAlg    AlgorithmId
 	Attrs      ObjectAttributes
 	AuthPolicy Digest
-	Params     PublicParamsU `selector:"Type"`
-	Unique     PublicIDU     `selector:"Type"`
+	Params     PublicParamsU `tpm2:"selector:Type"`
+	Unique     PublicIDU     `tpm2:"selector:Type"`
 }
 
 func (p *Public) Name() (Name, error) {
@@ -813,7 +813,7 @@ type Sensitive struct {
 	Type      AlgorithmId
 	AuthValue Auth
 	SeedValue Digest
-	Sensitive SensitiveCompositeU `selector:"Type"`
+	Sensitive SensitiveCompositeU `tpm2:"selector:Type"`
 }
 
 type Sensitive2B Sensitive

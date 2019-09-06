@@ -47,7 +47,7 @@ const (
 
 type resourceContextData struct {
 	ContextType uint8
-	Data        resourceContextDataU `selector:"ContextType"`
+	Data        resourceContextDataU `tpm2:"selector:ContextType"`
 	TPMBlob     ContextData
 }
 

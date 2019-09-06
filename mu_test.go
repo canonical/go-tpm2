@@ -384,7 +384,7 @@ func (t TestUnion) Select(selector interface{}) (string, error) {
 
 type TestUnionContainer struct {
 	Select uint32
-	Union  TestUnion `selector:"Select"`
+	Union  TestUnion `tpm2:"selector:Select"`
 }
 
 func TestMarshalUnion(t *testing.T) {
@@ -487,7 +487,7 @@ func TestMarshalUnionInInvalidContainer(t *testing.T) {
 	}
 	if err.Error() != "cannot marshal struct type tpm2.TestInvalidUnionContainer: cannot marshal field "+
 		"Union: cannot marshal struct type tpm2.TestUnion: error marshalling union struct: no selector "+
-		"member in container" {
+		"member defined in container" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 
@@ -499,7 +499,7 @@ func TestMarshalUnionInInvalidContainer(t *testing.T) {
 	}
 	if err.Error() != "cannot unmarshal struct type tpm2.TestInvalidUnionContainer: cannot unmarshal "+
 		"field Union: cannot unmarshal struct type tpm2.TestUnion: error unmarshalling union struct: "+
-		"no selector member in container" {
+		"no selector member defined in container" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 

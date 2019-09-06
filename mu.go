@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 )
 
 var (
@@ -102,11 +103,26 @@ func (e invalidSelectorError) Error() string {
 	return fmt.Sprintf("invalid selector value: %v", e.selector)
 }
 
+type muOptions struct {
+	selector string
+}
+
+func parseFieldOptions(s string) *muOptions {
+	var opts muOptions
+	for _, part := range strings.Split(s, ",") {
+		switch {
+		case strings.HasPrefix(part, "selector:"):
+			opts.selector = part[9:]
+		}
+	}
+	return &opts
+}
+
 type muContext struct {
-	depth         int
-	container     reflect.Value
-	fieldInParent reflect.StructField
-	parentType    reflect.Type
+	depth      int
+	container  reflect.Value
+	parentType reflect.Type
+	options    *muOptions
 }
 
 func beginRawSliceCtx(ctx *muContext) *muContext {
@@ -114,7 +130,8 @@ func beginRawSliceCtx(ctx *muContext) *muContext {
 }
 
 func beginStructCtx(ctx *muContext, s reflect.Value, i int) *muContext {
-	return &muContext{depth: ctx.depth, container: s, fieldInParent: s.Type().Field(i), parentType: s.Type()}
+	opts := parseFieldOptions(s.Type().Field(i).Tag.Get("tpm2"))
+	return &muContext{depth: ctx.depth, container: s, parentType: s.Type(), options: opts}
 }
 
 func beginUnionCtx(ctx *muContext, u reflect.Value) *muContext {
@@ -126,13 +143,11 @@ func beginSliceCtx(ctx *muContext, s reflect.Value) *muContext {
 }
 
 func beginPtrCtx(ctx *muContext, p reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, container: ctx.container, fieldInParent: ctx.fieldInParent,
-		parentType: p.Type()}
+	return &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
 }
 
 func beginSizedStructCtx(ctx *muContext, p reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, container: ctx.container, fieldInParent: ctx.fieldInParent,
-		parentType: p.Type()}
+	return &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
 }
 
 func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
@@ -161,14 +176,13 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 		return errors.New("not inside a valid union container")
 	}
 
-	selectorName, hasSelector := ctx.fieldInParent.Tag.Lookup("selector")
-	if !hasSelector {
-		return errors.New("no selector member in container")
+	if ctx.options.selector == "" {
+		return errors.New("no selector member defined in container")
 	}
 
-	selectorVal := ctx.container.FieldByName(selectorName)
+	selectorVal := ctx.container.FieldByName(ctx.options.selector)
 	if !selectorVal.IsValid() {
-		return fmt.Errorf("invalid selector field name %s", selectorName)
+		return fmt.Errorf("invalid selector field name %s", ctx.options.selector)
 	}
 
 	// Select the union member to marshal based on the selector value from the parent container
@@ -351,14 +365,13 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 		return errors.New("not inside a valid union container")
 	}
 
-	selectorName, hasSelector := ctx.fieldInParent.Tag.Lookup("selector")
-	if !hasSelector {
-		return errors.New("no selector member in container")
+	if ctx.options.selector == "" {
+		return errors.New("no selector member defined in container")
 	}
 
-	selectorVal := ctx.container.FieldByName(selectorName)
+	selectorVal := ctx.container.FieldByName(ctx.options.selector)
 	if !selectorVal.IsValid() {
-		return fmt.Errorf("invalid selector field name %s", selectorName)
+		return fmt.Errorf("invalid selector field name %s", ctx.options.selector)
 	}
 
 	// Select the union member to marshal based on the selector value from the parent container
