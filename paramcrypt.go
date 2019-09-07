@@ -11,6 +11,10 @@ import (
 	"reflect"
 )
 
+var (
+	sizedParamType reflect.Type = reflect.TypeOf(SizedParamType{})
+)
+
 func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*Session, bool, int) {
 	for i, session := range sessions {
 		if session.session == nil {
@@ -43,7 +47,7 @@ func isParamEncryptable(param interface{}) bool {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-	return isSizedStruct(t) || isSizedBuffer(t)
+	return t == sizedParamType || isSizedBuffer(t)
 }
 
 func computeSessionValue(context *sessionContext, authValue []byte, isAuth bool) []byte {

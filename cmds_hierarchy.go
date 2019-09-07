@@ -21,28 +21,28 @@ func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 
 	var objectHandle Handle
 
-	var outPublic Public2B
-	var creationData CreationData2B
+	outPublic := SizedParam((*Public)(nil))
+	creationData := SizedParam((*CreationData)(nil))
 	var creationHash Digest
 	var creationTicket TkCreation
 	var name Name
 
 	if err := t.RunCommand(CommandCreatePrimary, sessions,
 		HandleWithAuth{Handle: primaryObject, Auth: primaryObjectAuth}, Separator,
-		(*SensitiveCreate2B)(inSensitive), (*Public2B)(inPublic), outsideInfo, creationPCR, Separator,
-		&objectHandle, Separator, &outPublic, &creationData, &creationHash, &creationTicket,
+		SizedParam(inSensitive), SizedParam(inPublic), outsideInfo, creationPCR, Separator,
+		&objectHandle, Separator, outPublic, creationData, &creationHash, &creationTicket,
 		&name); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
-	outPubCopy := (*Public)(&outPublic).Copy()
+	outPubCopy := outPublic.Val.(*Public).Copy()
 	if outPubCopy != nil {
 		objectContext.public = *outPubCopy
 	}
 	t.addResourceContext(objectContext)
 
-	return objectContext, (*Public)(&outPublic), (*CreationData)(&creationData), creationHash,
+	return objectContext, outPublic.Val.(*Public), creationData.Val.(*CreationData), creationHash,
 		&creationTicket, name, nil
 }
 

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"reflect"
 )
 
 // 6) Constants
@@ -430,12 +429,6 @@ type SensitiveCreate struct {
 	Data     SensitiveData
 }
 
-type SensitiveCreate2B SensitiveCreate
-
-func (s SensitiveCreate2B) UnsizedStructType() reflect.Type {
-	return reflect.TypeOf(SensitiveCreate(s))
-}
-
 type SchemeHash struct {
 	HashAlg AlgorithmId
 }
@@ -781,12 +774,6 @@ func (p *Public) Copy() *Public {
 	return &c
 }
 
-type Public2B Public
-
-func (p Public2B) UnsizedStructType() reflect.Type {
-	return reflect.TypeOf(Public(p))
-}
-
 // 12.3) Private Area Structures
 type SensitiveCompositeU struct {
 	RSA  PrivateKeyRSA
@@ -814,12 +801,6 @@ type Sensitive struct {
 	AuthValue Auth
 	SeedValue Digest
 	Sensitive SensitiveCompositeU `tpm2:"selector:Type"`
-}
-
-type Sensitive2B Sensitive
-
-func (s Sensitive2B) UnsizedStructType() reflect.Type {
-	return reflect.TypeOf(Sensitive(s))
 }
 
 type Private []byte
@@ -902,12 +883,6 @@ func (p *NVPublic) Name() (Name, error) {
 	return name, nil
 }
 
-type NVPublic2B NVPublic
-
-func (p NVPublic2B) UnsizedStructType() reflect.Type {
-	return reflect.TypeOf(NVPublic(p))
-}
-
 // 14) Context Data
 type ContextData []byte
 
@@ -927,10 +902,4 @@ type CreationData struct {
 	ParentName          Name
 	ParentQualifiedName Name
 	OutsideInfo         Data
-}
-
-type CreationData2B CreationData
-
-func (c CreationData2B) UnsizedStructType() reflect.Type {
-	return reflect.TypeOf(CreationData(c))
 }

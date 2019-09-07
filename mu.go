@@ -18,7 +18,6 @@ var (
 	byteType             reflect.Type = reflect.TypeOf(byte(0))
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
 	rawSliceType         reflect.Type = reflect.TypeOf(RawSliceType{})
-	sizedStructType      reflect.Type = reflect.TypeOf((*SizedStruct)(nil)).Elem()
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
@@ -35,12 +34,16 @@ func RawSlice(i interface{}) *RawSliceType {
 	return &RawSliceType{i}
 }
 
-type Union interface {
-	Select(selector interface{}) (string, error)
+type SizedParamType struct {
+	Val interface{} `tpm2:"sized"`
 }
 
-type SizedStruct interface {
-	UnsizedStructType() reflect.Type
+func SizedParam(i interface{}) *SizedParamType {
+	return &SizedParamType{i}
+}
+
+type Union interface {
+	Select(selector interface{}) (string, error)
 }
 
 func isValidUnionContainer(t reflect.Type) bool {
@@ -55,13 +58,6 @@ func isUnion(t reflect.Type) bool {
 		return false
 	}
 	return t.Implements(unionType)
-}
-
-func isSizedStruct(t reflect.Type) bool {
-	if t.Kind() != reflect.Struct {
-		return false
-	}
-	return t.Implements(sizedStructType)
 }
 
 func isSizedBuffer(t reflect.Type) bool {
@@ -105,24 +101,27 @@ func (e invalidSelectorError) Error() string {
 
 type muOptions struct {
 	selector string
+	sized    bool
 }
 
-func parseFieldOptions(s string) *muOptions {
+func parseFieldOptions(s string) muOptions {
 	var opts muOptions
 	for _, part := range strings.Split(s, ",") {
 		switch {
 		case strings.HasPrefix(part, "selector:"):
 			opts.selector = part[9:]
+		case part == "sized":
+			opts.sized = true
 		}
 	}
-	return &opts
+	return opts
 }
 
 type muContext struct {
 	depth      int
 	container  reflect.Value
 	parentType reflect.Type
-	options    *muOptions
+	options    muOptions
 }
 
 func beginRawSliceCtx(ctx *muContext) *muContext {
@@ -147,7 +146,13 @@ func beginPtrElemCtx(ctx *muContext, p reflect.Value) *muContext {
 }
 
 func beginSizedStructCtx(ctx *muContext, p reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
+	out := &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
+	out.options.sized = false
+	return out
+}
+
+func beginInterfaceElemCtx(ctx *muContext, i reflect.Value) *muContext {
+	return &muContext{depth: ctx.depth, container: ctx.container, parentType: i.Type(), options: ctx.options}
 }
 
 func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
@@ -156,7 +161,7 @@ func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
 
 func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 	if ptr.IsNil() {
-		if isSizedStruct(ptr.Type().Elem()) {
+		if ctx.options.sized {
 			// Nil pointers for sized structures are allowed - in this case, marshal a size
 			// field of zero
 			return binary.Write(buf, binary.BigEndian, uint16(0))
@@ -217,17 +222,16 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	}
 
 	switch {
-	case isSizedStruct(s.Type()) && isUnion(s.Type()):
+	case ctx.options.sized && isUnion(s.Type()):
 		return errors.New("cannot be both sized and a union")
-	case isSizedStruct(s.Type()) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
+	case ctx.options.sized && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.container.Type())
-	case isSizedStruct(s.Type()):
+	case ctx.options.sized:
 		// Convert the sized struct to the non-sized type, marshal that to a temporary buffer and then
 		// write it along with the 16-bit size field to the output buffer
 		tmpBuf := new(bytes.Buffer)
-		us := s.Convert(s.Interface().(SizedStruct).UnsizedStructType())
-		if err := marshalValue(tmpBuf, us, beginSizedStructCtx(ctx, s)); err != nil {
+		if err := marshalValue(tmpBuf, s, beginSizedStructCtx(ctx, s)); err != nil {
 			return fmt.Errorf("cannot marshal sized struct: %v", err)
 		}
 		if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
@@ -287,6 +291,18 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	return nil
 }
 
+func marshalInterface(buf io.Writer, i reflect.Value, ctx *muContext) error {
+	if i.Type().NumMethod() > 0 {
+		return errors.New("interface contains a non-zero number of methods")
+	}
+
+	if err := marshalValue(buf, i.Elem(), beginInterfaceElemCtx(ctx, i)); err != nil {
+		return fmt.Errorf("cannot marshal interface value: %v", err)
+	}
+
+	return nil
+}
+
 func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
@@ -324,7 +340,11 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 		if err := marshalSlice(buf, val, ctx); err != nil {
 			return fmt.Errorf("cannot marshal slice type %s: %v", val.Type(), err)
 		}
-	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
+	case reflect.Interface:
+		if err := marshalInterface(buf, val, ctx); err != nil {
+			return fmt.Errorf("cannot marshal interface type %s: %v", val.Type(), err)
+		}
+	case reflect.Array, reflect.Chan, reflect.Func, reflect.Map, reflect.UnsafePointer:
 		return fmt.Errorf("cannot marshal type %s: unsupported kind %s", val.Type(), val.Kind())
 	default:
 		if err := binary.Write(buf, binary.BigEndian, val.Interface()); err != nil {
@@ -341,7 +361,7 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 
 	srcBuf := buf
 
-	if isSizedStruct(ptr.Type().Elem()) {
+	if ctx.options.sized {
 		b, err := makeSizedStructReader(buf)
 		if err != nil {
 			return err
@@ -406,27 +426,13 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	}
 
 	switch {
-	case isSizedStruct(s.Type()) && isUnion(s.Type()):
+	case ctx.options.sized && isUnion(s.Type()):
 		return errors.New("cannot be both sized and a union")
-	case isSizedStruct(s.Type()) && ctx.container.IsValid() && !arrivedFromPointer(ctx, s):
+	case ctx.options.sized && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.container.Type())
-	case isSizedStruct(s.Type()):
-		srcBuf := buf
-		if !arrivedFromPointer(ctx, s) {
-			// The pointer unmarshalling creates the sized buffer reader for us
-			b, err := makeSizedStructReader(buf)
-			if err != nil {
-				return err
-			}
-			if b == nil {
-				return errors.New("sized struct cannot have zero size in this context")
-			}
-			srcBuf = b
-		}
-		t := reflect.PtrTo(s.Interface().(SizedStruct).UnsizedStructType())
-		us := s.Addr().Convert(t).Elem()
-		if err := unmarshalValue(srcBuf, us, beginSizedStructCtx(ctx, s)); err != nil {
+	case ctx.options.sized:
+		if err := unmarshalValue(buf, s, beginSizedStructCtx(ctx, s)); err != nil {
 			return fmt.Errorf("cannot unmarshal sized struct: %v", err)
 		}
 		return nil
@@ -493,6 +499,24 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	return nil
 }
 
+func unmarshalInterface(buf io.Reader, i reflect.Value, ctx *muContext) error {
+	if !i.CanSet() {
+		return errors.New("unexported field")
+	}
+
+	if i.Type().NumMethod() > 0 {
+		return errors.New("interface contains a non-zero number of methods")
+	}
+
+	val := reflect.New(i.Elem().Type())
+	if err := unmarshalValue(buf, val.Elem(), beginInterfaceElemCtx(ctx, i)); err != nil {
+		return fmt.Errorf("cannot unmarshal interface value: %v", err)
+	}
+	i.Set(val.Elem())
+
+	return nil
+}
+
 func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
@@ -531,7 +555,11 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 		if err := unmarshalSlice(buf, val, ctx); err != nil {
 			return fmt.Errorf("cannot unmarshal slice type %s: %v", val.Type(), err)
 		}
-	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
+	case reflect.Interface:
+		if err := unmarshalInterface(buf, val, ctx); err != nil {
+			return fmt.Errorf("cannot unmarshal interface type %s: %v", val.Type(), err)
+		}
+	case reflect.Array, reflect.Chan, reflect.Func, reflect.Map, reflect.UnsafePointer:
 		return fmt.Errorf("cannot unmarshal type %s: unsupported kind %s", val.Type(), val.Kind())
 	default:
 		if !val.CanAddr() {

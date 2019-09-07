@@ -226,15 +226,10 @@ type TestSizedStruct struct {
 	A uint32
 	B TestListUint32
 }
-type TestSizedStruct2B TestSizedStruct
-
-func (s TestSizedStruct2B) UnsizedStructType() reflect.Type {
-	return reflect.TypeOf(TestSizedStruct(s))
-}
 
 func TestMarshalSizedStruct(t *testing.T) {
-	a := TestSizedStruct2B{A: 754122, B: TestListUint32{22189, 854543, 445888654}}
-	out, err := MarshalToBytes(a)
+	a := TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}
+	out, err := MarshalToBytes(SizedParam(&a))
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
@@ -244,9 +239,9 @@ func TestMarshalSizedStruct(t *testing.T) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	var ao TestSizedStruct2B
+	ao := SizedParam((*TestSizedStruct)(nil))
 
-	n, err := UnmarshalFromBytes(out, &ao)
+	n, err := UnmarshalFromBytes(out, ao)
 	if err != nil {
 		t.Fatalf("UnmarshalFromBytes failed: %v", err)
 	}
@@ -254,13 +249,13 @@ func TestMarshalSizedStruct(t *testing.T) {
 		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
 	}
 
-	if !reflect.DeepEqual(a, ao) {
+	if !reflect.DeepEqual(a, *(ao.Val.(*TestSizedStruct))) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
 }
 
 func TestMarshalNilSizedStruct(t *testing.T) {
-	out, err := MarshalToBytes((*TestSizedStruct2B)(nil))
+	out, err := MarshalToBytes(SizedParam((*TestSizedStruct)(nil)))
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
@@ -269,19 +264,22 @@ func TestMarshalNilSizedStruct(t *testing.T) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	var o TestSizedStruct2B
-	_, err = UnmarshalFromBytes(out, &o)
-	if err == nil {
-		t.Fatalf("UnmarshalToBytes should fail unmarsalling a zero sized structure directly")
+	o := SizedParam((*TestSizedStruct)(nil))
+	n, err := UnmarshalFromBytes(out, o)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2.TestSizedStruct2B: sized struct cannot have zero "+
-		"size in this context" {
-		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if o.Val.(*TestSizedStruct) != nil {
+		t.Errorf("UnmarsalFromBytes should have returned a nil pointer")
 	}
 }
 
 type TestStructWithNonPointerSizedStruct struct {
-	S TestSizedStruct2B
+	S TestSizedStruct `tpm2:"sized"`
 }
 
 func TestMarshalSizedStructAsValue(t *testing.T) {
@@ -290,16 +288,16 @@ func TestMarshalSizedStructAsValue(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshalToBytes should fail to marshal a non-pointer sized struct")
 	}
-	if err.Error() != "cannot marshal struct type tpm2.TestStructWithNonPointerSizedStruct: cannot "+
-		"marshal field S: cannot marshal struct type tpm2.TestSizedStruct2B: sized struct inside "+
-		"container type tpm2.TestStructWithNonPointerSizedStruct is not referenced via a pointer" {
+	if err.Error() != "cannot marshal struct type tpm2.TestStructWithNonPointerSizedStruct: cannot marshal "+
+		"field S: cannot marshal struct type tpm2.TestSizedStruct: sized struct inside container type "+
+		"tpm2.TestStructWithNonPointerSizedStruct is not referenced via a pointer" {
 		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
 	}
 }
 
 type TestStructWithPointerSizedStruct struct {
 	A uint32
-	S *TestSizedStruct2B
+	S *TestSizedStruct `tpm2:"sized"`
 }
 
 func TestMarshalSizedStructFromPointer(t *testing.T) {
@@ -312,7 +310,7 @@ func TestMarshalSizedStructFromPointer(t *testing.T) {
 			desc: "Normal",
 			in: TestStructWithPointerSizedStruct{
 				A: 5665443,
-				S: &TestSizedStruct2B{A: 754122, B: TestListUint32{22189, 854543, 445888654}}},
+				S: &TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}},
 			out: []byte{0x00, 0x56, 0x72, 0xa3, 0x00, 0x14, 0x00, 0x0b, 0x81, 0xca, 0x00, 0x00,
 				0x00, 0x03, 0x00, 0x00, 0x56, 0xad, 0x00, 0x0d, 0x0a, 0x0f, 0x1a, 0x93, 0xb8,
 				0x8e},
