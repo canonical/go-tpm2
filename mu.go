@@ -161,7 +161,7 @@ func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
 
 func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 	if ptr.IsNil() {
-		if ctx.options.sized {
+		if ctx.options.sized && ptr.Type().Elem().Kind() == reflect.Struct {
 			// Nil pointers for sized structures are allowed - in this case, marshal a size
 			// field of zero
 			return binary.Write(buf, binary.BigEndian, uint16(0))
@@ -361,7 +361,7 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 
 	srcBuf := buf
 
-	if ctx.options.sized {
+	if ctx.options.sized && ptr.Type().Elem().Kind() == reflect.Struct {
 		b, err := makeSizedStructReader(buf)
 		if err != nil {
 			return err
