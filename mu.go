@@ -34,14 +34,6 @@ func RawSlice(i interface{}) *RawSliceType {
 	return &RawSliceType{i}
 }
 
-type SizedParamType struct {
-	Val interface{} `tpm2:"sized"`
-}
-
-func SizedParam(i interface{}) *SizedParamType {
-	return &SizedParamType{i}
-}
-
 type Union interface {
 	Select(selector interface{}) (string, error)
 }

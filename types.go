@@ -429,6 +429,10 @@ type SensitiveCreate struct {
 	Data     SensitiveData
 }
 
+type sensitiveCreateSized struct {
+	Ptr *SensitiveCreate `tpm2:"sized"` 
+}
+
 type SchemeHash struct {
 	HashAlg AlgorithmId
 }
@@ -774,6 +778,10 @@ func (p *Public) Copy() *Public {
 	return &c
 }
 
+type publicSized struct {
+	Ptr *Public `tpm2:"sized"`
+}
+
 // 12.3) Private Area Structures
 type SensitiveCompositeU struct {
 	RSA  PrivateKeyRSA
@@ -801,6 +809,10 @@ type Sensitive struct {
 	AuthValue Auth
 	SeedValue Digest
 	Sensitive SensitiveCompositeU `tpm2:"selector:Type"`
+}
+
+type sensitiveSized struct {
+	Ptr *Sensitive `tpm2:"sized"`
 }
 
 type Private []byte
@@ -883,6 +895,10 @@ func (p *NVPublic) Name() (Name, error) {
 	return name, nil
 }
 
+type nvPublicSized struct {
+	Ptr *NVPublic `tpm2:"sized"`
+}
+
 // 14) Context Data
 type ContextData []byte
 
@@ -902,4 +918,8 @@ type CreationData struct {
 	ParentName          Name
 	ParentQualifiedName Name
 	OutsideInfo         Data
+}
+
+type creationDataSized struct {
+	Ptr *CreationData `tpm2:"sized"`
 }

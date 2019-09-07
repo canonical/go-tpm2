@@ -227,9 +227,13 @@ type TestSizedStruct struct {
 	B TestListUint32
 }
 
-func TestMarshalSizedStruct(t *testing.T) {
+type testSizedStructSized struct {
+	Ptr *TestSizedStruct `tpm2:"sized"`
+}
+
+func TestMarshalSizedStructParam(t *testing.T) {
 	a := TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}
-	out, err := MarshalToBytes(SizedParam(&a))
+	out, err := MarshalToBytes(testSizedStructSized{&a})
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
@@ -239,9 +243,9 @@ func TestMarshalSizedStruct(t *testing.T) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	ao := SizedParam((*TestSizedStruct)(nil))
+	var ao testSizedStructSized
 
-	n, err := UnmarshalFromBytes(out, ao)
+	n, err := UnmarshalFromBytes(out, &ao)
 	if err != nil {
 		t.Fatalf("UnmarshalFromBytes failed: %v", err)
 	}
@@ -249,13 +253,13 @@ func TestMarshalSizedStruct(t *testing.T) {
 		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
 	}
 
-	if !reflect.DeepEqual(a, *(ao.Val.(*TestSizedStruct))) {
+	if !reflect.DeepEqual(a, *(ao.Ptr)) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
 }
 
-func TestMarshalNilSizedStruct(t *testing.T) {
-	out, err := MarshalToBytes(SizedParam((*TestSizedStruct)(nil)))
+func TestMarshalNilSizedStructParam(t *testing.T) {
+	out, err := MarshalToBytes(testSizedStructSized{})
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
@@ -264,8 +268,8 @@ func TestMarshalNilSizedStruct(t *testing.T) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	o := SizedParam((*TestSizedStruct)(nil))
-	n, err := UnmarshalFromBytes(out, o)
+	var o testSizedStructSized
+	n, err := UnmarshalFromBytes(out, &o)
 	if err != nil {
 		t.Fatalf("UnmarshalFromBytes failed: %v", err)
 	}
@@ -273,7 +277,7 @@ func TestMarshalNilSizedStruct(t *testing.T) {
 		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
 	}
 
-	if o.Val.(*TestSizedStruct) != nil {
+	if o.Ptr != nil {
 		t.Errorf("UnmarsalFromBytes should have returned a nil pointer")
 	}
 }

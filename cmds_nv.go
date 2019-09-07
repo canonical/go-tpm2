@@ -16,7 +16,7 @@ func (t *tpmContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVP
 
 	return t.RunCommand(CommandNVDefineSpace, sessions,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator, auth,
-		SizedParam(publicInfo))
+		nvPublicSized{publicInfo})
 }
 
 func (t *tpmContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext,
@@ -43,13 +43,13 @@ func (t *tpmContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 }
 
 func (t *tpmContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPublic, Name, error) {
-	nvPublic := SizedParam((*NVPublic)(nil))
+	var nvPublic nvPublicSized
 	var nvName Name
-	if err := t.RunCommand(CommandNVReadPublic, sessions, nvIndex, Separator, Separator, Separator, nvPublic,
+	if err := t.RunCommand(CommandNVReadPublic, sessions, nvIndex, Separator, Separator, Separator, &nvPublic,
 		&nvName); err != nil {
 		return nil, nil, err
 	}
-	return nvPublic.Val.(*NVPublic), nvName, nil
+	return nvPublic.Ptr, nvName, nil
 }
 
 func (t *tpmContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error) {
