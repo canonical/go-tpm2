@@ -11,10 +11,6 @@ import (
 	"reflect"
 )
 
-var (
-	sizedParamType reflect.Type = reflect.TypeOf(SizedParamType{})
-)
-
 func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*Session, bool, int) {
 	for i, session := range sessions {
 		if session.session == nil {
@@ -42,12 +38,36 @@ func hasDecryptSession(sessions []*sessionParam) bool {
 	return s != nil
 }
 
-func isParamEncryptable(param interface{}) bool {
-	t := reflect.TypeOf(param)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
+func isSizedStructParam(v reflect.Value) bool {
+	if v.Kind() != reflect.Struct {
+		return false
 	}
-	return t == sizedParamType || isSizedBuffer(t)
+	if v.Type().NumField() != 1 {
+		return false
+	}
+	f := v.Type().Field(0)
+	if !parseFieldOptions(f.Tag.Get("tpm2")).sized {
+		return false
+	}
+	if f.Type.Kind() == reflect.Struct {
+		return true
+	}
+	if f.Type.Kind() == reflect.Ptr && f.Type.Elem().Kind() == reflect.Struct {
+		return true
+	}
+	if f.Type.Kind() == reflect.Interface && v.Field(0).Elem().Kind() == reflect.Ptr &&
+		v.Field(0).Elem().Elem().Kind() == reflect.Struct {
+		return true
+	}
+	return false
+}
+
+func isParamEncryptable(param interface{}) bool {
+	v := reflect.ValueOf(param)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	return isSizedStructParam(v) || isSizedBuffer(v.Type())
 }
 
 func computeSessionValue(context *sessionContext, authValue []byte, isAuth bool) []byte {
