@@ -258,18 +258,6 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	return nil
 }
 
-func marshalInterface(buf io.Writer, i reflect.Value, ctx *muContext) error {
-	if i.Type().NumMethod() > 0 {
-		return errors.New("interface contains a non-zero number of methods")
-	}
-
-	if err := marshalValue(buf, i.Elem(), beginInterfaceElemCtx(ctx, i)); err != nil {
-		return fmt.Errorf("cannot marshal interface value: %v", err)
-	}
-
-	return nil
-}
-
 func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
@@ -307,11 +295,7 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 		if err := marshalSlice(buf, val, ctx); err != nil {
 			return fmt.Errorf("cannot marshal slice type %s: %v", val.Type(), err)
 		}
-	case reflect.Interface:
-		if err := marshalInterface(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot marshal interface type %s: %v", val.Type(), err)
-		}
-	case reflect.Array, reflect.Chan, reflect.Func, reflect.Map, reflect.UnsafePointer:
+	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
 		return fmt.Errorf("cannot marshal type %s: unsupported kind %s", val.Type(), val.Kind())
 	default:
 		if err := binary.Write(buf, binary.BigEndian, val.Interface()); err != nil {
@@ -456,24 +440,6 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	return nil
 }
 
-func unmarshalInterface(buf io.Reader, i reflect.Value, ctx *muContext) error {
-	if !i.CanSet() {
-		return errors.New("unexported field")
-	}
-
-	if i.Type().NumMethod() > 0 {
-		return errors.New("interface contains a non-zero number of methods")
-	}
-
-	val := reflect.New(i.Elem().Type())
-	if err := unmarshalValue(buf, val.Elem(), beginInterfaceElemCtx(ctx, i)); err != nil {
-		return fmt.Errorf("cannot unmarshal interface value: %v", err)
-	}
-	i.Set(val.Elem())
-
-	return nil
-}
-
 func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
@@ -514,11 +480,7 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 		if err := unmarshalSlice(buf, val, ctx); err != nil {
 			return fmt.Errorf("cannot unmarshal slice type %s: %v", val.Type(), err)
 		}
-	case reflect.Interface:
-		if err := unmarshalInterface(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot unmarshal interface type %s: %v", val.Type(), err)
-		}
-	case reflect.Array, reflect.Chan, reflect.Func, reflect.Map, reflect.UnsafePointer:
+	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
 		return fmt.Errorf("cannot unmarshal type %s: unsupported kind %s", val.Type(), val.Kind())
 	default:
 		if !val.CanAddr() {
