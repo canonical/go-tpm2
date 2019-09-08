@@ -235,6 +235,10 @@ func wrapUnmarshallingError(commandCode CommandCode, context string, err error) 
 	return UnmarshallingError{Command: commandCode, context: context, err: err}
 }
 
+type responseAuthAreaRawSlice struct {
+	Data []authResponse `tpm2:"raw"`
+}
+
 type commandHeader struct {
 	Tag         StructTag
 	CommandSize uint32
@@ -455,11 +459,11 @@ func (t *tpmContext) processResponse(context *cmdContext, params ...interface{})
 				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
 		}
 
-		authArea := make([]authResponse, len(context.sessionParams))
-		if err := UnmarshalFromReader(buf, RawSlice(authArea)); err != nil {
+		authArea := responseAuthAreaRawSlice{make([]authResponse, len(context.sessionParams))}
+		if err := UnmarshalFromReader(buf, &authArea); err != nil {
 			return wrapUnmarshallingError(context.commandCode, "response auth area", err)
 		}
-		if err := processResponseAuthArea(t, authArea, context.sessionParams, context.commandCode,
+		if err := processResponseAuthArea(t, authArea.Data, context.sessionParams, context.commandCode,
 			context.responseCode, rpBytes); err != nil {
 			return err
 		}

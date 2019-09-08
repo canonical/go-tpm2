@@ -57,19 +57,20 @@ func TestUnmarshalValue(t *testing.T) {
 	}
 }
 
-func TestMarshalRawSlice(t *testing.T) {
-	a := []uint16{56, 453, 3233}
-	out, err := MarshalToBytes(RawSlice(a))
+func TestMarshalRawBytes(t *testing.T) {
+	a := RawBytes{0x7a, 0x78, 0x8f, 0x56, 0xfa, 0x49, 0xae, 0x0b, 0xa5, 0xeb, 0xde, 0x78, 0x0e, 0xfe, 0x4d,
+		0x6a, 0x89, 0xb5, 0xdb, 0x47}
+	out, err := MarshalToBytes(a)
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
-	if !bytes.Equal(out, []byte{0x00, 0x38, 0x01, 0xc5, 0x0c, 0xa1}) {
+	if !bytes.Equal(a, out) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	ao := make([]uint16, 3)
+	ao := make(RawBytes, len(a))
 
-	n, err := UnmarshalFromBytes(out, RawSlice(ao))
+	n, err := UnmarshalFromBytes(out, &ao)
 	if err != nil {
 		t.Fatalf("UnmarshalFromBytes failed: %v", err)
 	}
@@ -77,7 +78,61 @@ func TestMarshalRawSlice(t *testing.T) {
 		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
 	}
 
-	if !reflect.DeepEqual(a, ao) {
+	if !bytes.Equal(a, ao) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+
+	bo := make(RawBytes, len(a)-1)
+
+	n, err = UnmarshalFromBytes(out, &bo)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(a)-1 {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !bytes.Equal(a[:len(a)-1], bo) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+
+	co := make(RawBytes, len(a)+1)
+
+	n, err = UnmarshalFromBytes(out, &co)
+	if err == nil {
+		t.Fatalf("UnmarshalFromBytes should have failed")
+	}
+	if err.Error() != "cannot unmarshal slice type tpm2.RawBytes: cannot read byte slice directly from "+
+		"input buffer: unexpected EOF" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+type testUint16RawSlice struct {
+	Data []uint16 `tpm2:"raw"`
+}
+
+func TestMarshalRawSlice(t *testing.T) {
+	a := []uint16{56, 453, 3233}
+	out, err := MarshalToBytes(testUint16RawSlice{a})
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
+	}
+	if !bytes.Equal(out, []byte{0x00, 0x38, 0x01, 0xc5, 0x0c, 0xa1}) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+	}
+
+	ao := testUint16RawSlice{make([]uint16, 3)}
+
+	n, err := UnmarshalFromBytes(out, &ao)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(a, ao.Data) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
 }
@@ -222,28 +277,25 @@ func TestMarshalStructWithEmbeddedStructs(t *testing.T) {
 	}
 }
 
-type TestSizedStruct struct {
+type TestStructWithRawBytes struct {
 	A uint32
-	B TestListUint32
+	B RawBytes
 }
 
-type testSizedStructSized struct {
-	Ptr *TestSizedStruct `tpm2:"sized"`
-}
-
-func TestMarshalSizedStructParam(t *testing.T) {
-	a := TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}
-	out, err := MarshalToBytes(testSizedStructSized{&a})
+func TestMarshalRawBytesInStruct(t *testing.T) {
+	a := TestStructWithRawBytes{2643267, RawBytes{0xd3, 0xb0, 0x73, 0x84, 0xd1, 0x13, 0xed, 0xec, 0x49, 0xea,
+		0xa6, 0x23, 0x8a, 0xd5, 0xff, 0x00}}
+	out, err := MarshalToBytes(a)
 	if err != nil {
 		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
 
-	if !bytes.Equal(out, []byte{0x00, 0x14, 0x00, 0x0b, 0x81, 0xca, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x56,
-		0xad, 0x00, 0x0d, 0x0a, 0x0f, 0x1a, 0x93, 0xb8, 0x8e}) {
+	if !bytes.Equal(out, []byte{0x00, 0x28, 0x55, 0x43, 0xd3, 0xb0, 0x73, 0x84, 0xd1, 0x13, 0xed, 0xec, 0x49,
+		0xea, 0xa6, 0x23, 0x8a, 0xd5, 0xff, 0x00}) {
 		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
-	var ao testSizedStructSized
+	ao := TestStructWithRawBytes{B: make(RawBytes, 16)}
 
 	n, err := UnmarshalFromBytes(out, &ao)
 	if err != nil {
@@ -253,33 +305,28 @@ func TestMarshalSizedStructParam(t *testing.T) {
 		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
 	}
 
-	if !reflect.DeepEqual(a, *(ao.Ptr)) {
+	if !reflect.DeepEqual(a, ao) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
 }
 
-func TestMarshalNilSizedStructParam(t *testing.T) {
-	out, err := MarshalToBytes(testSizedStructSized{})
-	if err != nil {
-		t.Fatalf("MarshalToBytes failed: %v", err)
+func TestUnmarshalNilRawBytes(t *testing.T) {
+	b := []byte{0x00, 0x28, 0x55, 0x43, 0xd3, 0xb0, 0x73, 0x84, 0xd1, 0x13, 0xed, 0xec, 0x49, 0xea, 0xa6,
+		0x23, 0x8a, 0xd5, 0xff, 0x00}
+	var o TestStructWithRawBytes
+	_, err := UnmarshalFromBytes(b, &o)
+	if err == nil {
+		t.Fatalf("Expected UnmarshalFromBytes to fail")
 	}
+	if err.Error() != "cannot unmarshal struct type tpm2.TestStructWithRawBytes: cannot unmarshal field B: "+
+		"cannot unmarshal slice type tpm2.RawBytes: nil raw byte slice" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
 
-	if !bytes.Equal(out, []byte{0x00, 0x00}) {
-		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
-	}
-
-	var o testSizedStructSized
-	n, err := UnmarshalFromBytes(out, &o)
-	if err != nil {
-		t.Fatalf("UnmarshalFromBytes failed: %v", err)
-	}
-	if n != len(out) {
-		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-	}
-
-	if o.Ptr != nil {
-		t.Errorf("UnmarsalFromBytes should have returned a nil pointer")
-	}
+type TestSizedStruct struct {
+	A uint32
+	B TestListUint32
 }
 
 type TestStructWithNonPointerSizedStruct struct {

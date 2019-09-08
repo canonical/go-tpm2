@@ -17,7 +17,7 @@ import (
 var (
 	byteType             reflect.Type = reflect.TypeOf(byte(0))
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
-	rawSliceType         reflect.Type = reflect.TypeOf(RawSliceType{})
+	rawBytesType         reflect.Type = reflect.TypeOf(RawBytes{})
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
@@ -26,13 +26,7 @@ type CustomMarshaller interface {
 	Unmarshal(buf io.Reader) error
 }
 
-type RawSliceType struct {
-	Impl interface{}
-}
-
-func RawSlice(i interface{}) *RawSliceType {
-	return &RawSliceType{i}
-}
+type RawBytes []byte
 
 type Union interface {
 	Select(selector interface{}) (string, error)
@@ -57,10 +51,6 @@ func isSizedBuffer(t reflect.Type) bool {
 		return false
 	}
 	return t.Elem().Kind() == reflect.Uint8
-}
-
-func isRawSlice(t reflect.Type) bool {
-	return t == rawSliceType
 }
 
 func hasCustomMarshallerImpl(t reflect.Type) bool {
@@ -94,6 +84,7 @@ func (e invalidSelectorError) Error() string {
 type muOptions struct {
 	selector string
 	sized    bool
+	raw      bool
 }
 
 func parseFieldOptions(s string) muOptions {
@@ -104,6 +95,8 @@ func parseFieldOptions(s string) muOptions {
 			opts.selector = part[9:]
 		case part == "sized":
 			opts.sized = true
+		case part == "raw":
+			opts.raw = true
 		}
 	}
 	return opts
@@ -114,10 +107,6 @@ type muContext struct {
 	container  reflect.Value
 	parentType reflect.Type
 	options    muOptions
-}
-
-func beginRawSliceCtx(ctx *muContext) *muContext {
-	return &muContext{depth: ctx.depth, parentType: rawSliceType}
 }
 
 func beginStructFieldCtx(ctx *muContext, s reflect.Value, i int) *muContext {
@@ -200,19 +189,6 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 }
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
-	if isRawSlice(s.Type()) {
-		if ctx.container.IsValid() {
-			return errors.New("RawSlice is inside another container")
-		}
-
-		f := s.Field(0).Elem()
-		if f.Kind() != reflect.Slice {
-			return fmt.Errorf("RawSlice contains invalid type %s (expected slice)", f.Type())
-		}
-
-		return marshalValue(buf, f, beginRawSliceCtx(ctx))
-	}
-
 	switch {
 	case ctx.options.sized && isUnion(s.Type()):
 		return errors.New("cannot be both sized and a union")
@@ -250,9 +226,18 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 }
 
 func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
+	if slice.Type() == rawBytesType {
+		// Shortcut for raw byte-slice
+		_, err := buf.Write(slice.Bytes())
+		if err != nil {
+			return fmt.Errorf("cannot write byte slice directly to output buffer: %v", err)
+		}
+		return nil
+	}
+
 	// Marshal size field
 	switch {
-	case ctx.parentType == rawSliceType:
+	case ctx.options.raw:
 		// No size field - we've been instructed to marshal the slice as it is
 	case isSizedBuffer(slice.Type()):
 		// Sized byte-buffers have a 16-bit size field
@@ -264,15 +249,6 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 		if err := binary.Write(buf, binary.BigEndian, uint32(slice.Len())); err != nil {
 			return fmt.Errorf("cannot write size of list: %v", err)
 		}
-	}
-
-	if ctx.parentType == rawSliceType && slice.Type().Elem().Kind() == reflect.Uint8 {
-		// Shortcut for raw byte-slice
-		_, err := buf.Write(slice.Bytes())
-		if err != nil {
-			return fmt.Errorf("cannot write byte slice directly to output buffer: %v", err)
-		}
-		return nil
 	}
 
 	for i := 0; i < slice.Len(); i++ {
@@ -404,19 +380,6 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
-	if isRawSlice(s.Type()) {
-		if ctx.container.IsValid() {
-			return errors.New("RawSlice is inside another container")
-		}
-
-		f := s.Field(0).Elem()
-		if f.Kind() != reflect.Slice {
-			return fmt.Errorf("RawSlice contains invalid type %s (expected slice)", f.Type())
-		}
-
-		return unmarshalValue(buf, f, beginRawSliceCtx(ctx))
-	}
-
 	switch {
 	case ctx.options.sized && isUnion(s.Type()):
 		return errors.New("cannot be both sized and a union")
@@ -444,10 +407,20 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
+	if slice.Type() == rawBytesType {
+		if slice.IsNil() {
+			return errors.New("nil raw byte slice")
+		}
+		// Shortcut for raw byte-slice
+		if _, err := io.ReadFull(buf, slice.Bytes()); err != nil {
+			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", err)
+		}
+		return nil
+	}
+
 	var l int
 	switch {
-	case ctx.parentType == rawSliceType:
-		// No size field - unmarshalling requires a pre-allocated slice
+	case ctx.options.raw:
 		if slice.IsNil() {
 			return errors.New("nil raw slice")
 		}
@@ -473,14 +446,6 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 			return errors.New("unexported field")
 		}
 		slice.Set(reflect.MakeSlice(slice.Type(), l, l))
-	}
-
-	if ctx.parentType == rawSliceType && slice.Type().Elem().Kind() == reflect.Uint8 {
-		// Shortcut for raw byte-slice
-		if _, err := io.ReadFull(buf, slice.Bytes()); err != nil {
-			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", err)
-		}
-		return nil
 	}
 
 	for i := 0; i < slice.Len(); i++ {

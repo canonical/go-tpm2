@@ -52,9 +52,13 @@ type authResponse struct {
 
 type commandAuthArea []authCommand
 
+type commandAuthAreaRawSlice struct {
+	Data []authCommand `tpm2:"raw"`
+}
+
 func (a *commandAuthArea) Marshal(buf io.Writer) error {
 	tmpBuf := new(bytes.Buffer)
-	if err := MarshalToWriter(tmpBuf, RawSlice([]authCommand(*a))); err != nil {
+	if err := MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(*a)}); err != nil {
 		return nil
 	}
 

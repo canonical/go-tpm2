@@ -59,7 +59,7 @@ func (t *TctiMssim) Read(data []byte) (int, error) {
 }
 
 func (t *TctiMssim) Write(data []byte) (int, error) {
-	buf, err := MarshalToBytes(cmdTPMSendCommand, t.Locality, uint32(len(data)), RawSlice(data))
+	buf, err := MarshalToBytes(cmdTPMSendCommand, t.Locality, uint32(len(data)), RawBytes(data))
 	if err != nil {
 		return 0, fmt.Errorf("cannot marshal command: %v", err)
 	}

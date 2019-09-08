@@ -430,7 +430,7 @@ type SensitiveCreate struct {
 }
 
 type sensitiveCreateSized struct {
-	Ptr *SensitiveCreate `tpm2:"sized"` 
+	Ptr *SensitiveCreate `tpm2:"sized"`
 }
 
 type SchemeHash struct {
@@ -758,7 +758,7 @@ func (p *Public) Name() (Name, error) {
 	if err := MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := MarshalToBytes(p.NameAlg, RawSlice(hasher.Sum(nil)))
+	name, err := MarshalToBytes(p.NameAlg, RawBytes(hasher.Sum(nil)))
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
 	}
@@ -888,7 +888,7 @@ func (p *NVPublic) Name() (Name, error) {
 	if err := MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := MarshalToBytes(p.NameAlg, RawSlice(hasher.Sum(nil)))
+	name, err := MarshalToBytes(p.NameAlg, RawBytes(hasher.Sum(nil)))
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
 	}
