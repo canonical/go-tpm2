@@ -323,10 +323,6 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
-	if !ptr.CanSet() {
-		return errors.New("unexported field")
-	}
-
 	srcBuf := buf
 
 	if ctx.options.sized && ptr.Type().Elem().Kind() == reflect.Struct {
@@ -340,7 +336,12 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 		srcBuf = b
 	}
 
-	ptr.Set(reflect.New(ptr.Type().Elem()))
+	if ptr.IsNil() {
+		if !ptr.CanSet() {
+			return errors.New("cannot set pointer")
+		}
+		ptr.Set(reflect.New(ptr.Type().Elem()))
+	}
 	return unmarshalValue(srcBuf, ptr.Elem(), beginPtrElemCtx(ctx, ptr))
 }
 
@@ -443,7 +444,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	// Allocate the slice
 	if slice.IsNil() {
 		if !slice.CanSet() {
-			return errors.New("unexported field")
+			return errors.New("cannot set slice")
 		}
 		slice.Set(reflect.MakeSlice(slice.Type(), l, l))
 	}
@@ -484,7 +485,9 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 		case val.Kind() != reflect.Ptr:
 			val = val.Addr()
 		default:
-			val.Set(reflect.New(val.Type().Elem()))
+			if val.IsNil() {
+				val.Set(reflect.New(val.Type().Elem()))
+			}
 		}
 		if err := val.Interface().(CustomMarshaller).Unmarshal(buf); err != nil {
 			return fmt.Errorf("cannot unmarshal type %s with custom marshaller: %v",
