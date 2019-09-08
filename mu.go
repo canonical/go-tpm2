@@ -370,11 +370,6 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	case ctx.options.sized && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.container.Type())
-	case ctx.options.sized:
-		if err := unmarshalValue(buf, s, beginSizedStructCtx(ctx, s)); err != nil {
-			return fmt.Errorf("cannot unmarshal sized struct: %v", err)
-		}
-		return nil
 	case isUnion(s.Type()):
 		if err := unmarshalUnion(buf, s, ctx); err != nil {
 			return fmt.Errorf("error unmarshalling union struct: %v", err)
