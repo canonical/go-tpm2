@@ -15,9 +15,8 @@ import (
 )
 
 var (
-	byteType             reflect.Type = reflect.TypeOf(byte(0))
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
-	rawBytesType         reflect.Type = reflect.TypeOf(RawBytes{})
+	rawBytesType         reflect.Type = reflect.TypeOf(RawBytes(nil))
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
