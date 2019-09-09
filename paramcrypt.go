@@ -104,8 +104,8 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 
 	switch symmetric.Algorithm {
 	case AlgorithmAES:
-		if symmetric.Mode.Sym() != AlgorithmCFB {
-			return nil, fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
+		if symmetric.Mode.Sym != AlgorithmCFB {
+			return nil, fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym)
 		}
 		if !cryptIsKnownDigest(context.hashAlg) {
 			return nil, fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
@@ -115,7 +115,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := cryptEncryptSymmetricAES(symKey, symmetric.Mode.Sym(), data, iv); err != nil {
+		if err := cryptEncryptSymmetricAES(symKey, symmetric.Mode.Sym, data, iv); err != nil {
 			return nil, fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case AlgorithmXOR:
@@ -150,8 +150,8 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 
 	switch symmetric.Algorithm {
 	case AlgorithmAES:
-		if symmetric.Mode.Sym() != AlgorithmCFB {
-			return fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
+		if symmetric.Mode.Sym != AlgorithmCFB {
+			return fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym)
 		}
 		if !cryptIsKnownDigest(context.hashAlg) {
 			return fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
@@ -161,7 +161,7 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := cryptDecryptSymmetricAES(symKey, symmetric.Mode.Sym(), data, iv); err != nil {
+		if err := cryptDecryptSymmetricAES(symKey, symmetric.Mode.Sym, data, iv); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case AlgorithmXOR:

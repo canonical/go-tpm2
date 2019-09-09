@@ -719,6 +719,69 @@ func TestMarshalUnionInInvalidContainer(t *testing.T) {
 	}
 }
 
+type TestStaticTypedUnion struct {
+	A uint16
+}
+
+func (u TestStaticTypedUnion) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(uint32) {
+	case 1:
+		return reflect.TypeOf(uint16(0)), nil
+	case 2:
+		return nil, nil
+	}
+	return nil, invalidSelectorError{selector}
+}
+
+type TestStaticTypedUnionContainer struct {
+	Select uint32
+	Union TestStaticTypedUnion `tpm2:"selector:Select"`
+}
+
+func TestMarshalUnionWithStaticDataType(t *testing.T) {
+	for _, data := range []struct {
+		desc string
+		in   TestStaticTypedUnionContainer
+		out  []byte
+	}{
+		{
+			desc: "1",
+			in: TestStaticTypedUnionContainer{Select: 1, Union: TestStaticTypedUnion{54432}},
+			out: []byte{0x00, 0x00, 0x00, 0x01, 0xd4, 0xa0},
+		},
+		{
+			desc: "2",
+			in:   TestStaticTypedUnionContainer{Select: 2},
+			out:  []byte{0x00, 0x00, 0x00, 0x02},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(data.in)
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
+			}
+
+			if !bytes.Equal(out, data.out) {
+				t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+			}
+
+			var a TestStaticTypedUnionContainer
+
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
+
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
+	}
+}
+
 type TestStructWithCustomMarshaller struct {
 	A uint16
 	B TestListUint32

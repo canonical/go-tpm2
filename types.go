@@ -16,7 +16,6 @@ import (
 
 // 5.3) Miscellaneous Types
 type AlgorithmId uint16
-type KeyBits uint16
 
 // 6) Constants
 type TPMGenerated uint32
@@ -432,10 +431,6 @@ func (a AttestRaw) ToStruct() (*Attest, error) {
 // 11) Algorithm Parameters and Structures
 
 // 11.1) Symmetric
-type AESKeyBits KeyBits
-type SM4KeyBits KeyBits
-type CamelliaKeyBits KeyBits
-
 type SymKeyBitsU struct {
 	Data interface{}
 }
@@ -443,33 +438,21 @@ type SymKeyBitsU struct {
 func (b SymKeyBitsU) Select(selector reflect.Value) (reflect.Type, error) {
 	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmAES:
-		return reflect.TypeOf(AESKeyBits(0)), nil
+		fallthrough
+	case AlgorithmSM4:
+		fallthrough
+	case AlgorithmCamellia:
+		return reflect.TypeOf(uint16(0)), nil
 	case AlgorithmXOR:
 		return reflect.TypeOf(AlgorithmId(0)), nil
 	case AlgorithmNull:
 		return nil, nil
-	case AlgorithmSM4:
-		return reflect.TypeOf(SM4KeyBits(0)), nil
-	case AlgorithmCamellia:
-		return reflect.TypeOf(CamelliaKeyBits(0)), nil
 	}
-	return reflect.TypeOf(KeyBits(0)), nil
+	return nil, invalidSelectorError{selector}
 }
 
-func (b SymKeyBitsU) AES() AESKeyBits {
-	return b.Data.(AESKeyBits)
-}
-
-func (b SymKeyBitsU) SM4() SM4KeyBits {
-	return b.Data.(SM4KeyBits)
-}
-
-func (b SymKeyBitsU) Camellia() CamelliaKeyBits {
-	return b.Data.(CamelliaKeyBits)
-}
-
-func (b SymKeyBitsU) Sym() KeyBits {
-	return reflect.ValueOf(b.Data).Convert(reflect.TypeOf(KeyBits(0))).Interface().(KeyBits)
+func (b SymKeyBitsU) Sym() uint16 {
+	return b.Data.(uint16)
 }
 
 func (b SymKeyBitsU) XOR() AlgorithmId {
@@ -477,33 +460,23 @@ func (b SymKeyBitsU) XOR() AlgorithmId {
 }
 
 type SymModeU struct {
-	Data interface{}
+	Sym AlgorithmId
 }
 
 func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
 	switch selector.Interface().(AlgorithmId) {
+	case AlgorithmAES:
+		fallthrough
+	case AlgorithmSM4:
+		fallthrough
+	case AlgorithmCamellia:
+		return reflect.TypeOf(AlgorithmId(0)), nil
 	case AlgorithmXOR:
 		fallthrough
 	case AlgorithmNull:
 		return nil, nil
 	}
-	return reflect.TypeOf(AlgorithmId(0)), nil
-}
-
-func (m SymModeU) AES() AlgorithmId {
-	return m.Data.(AlgorithmId)
-}
-
-func (m SymModeU) SM4() AlgorithmId {
-	return m.Data.(AlgorithmId)
-}
-
-func (m SymModeU) Camellia() AlgorithmId {
-	return m.Data.(AlgorithmId)
-}
-
-func (m SymModeU) Sym() AlgorithmId {
-	return m.Data.(AlgorithmId)
+	return nil, invalidSelectorError{selector}
 }
 
 type SymDef struct {
@@ -941,7 +914,7 @@ type AsymParams struct {
 type RSAParams struct {
 	Symmetric SymDefObject
 	Scheme    RSAScheme
-	KeyBits   KeyBits
+	KeyBits   uint16
 	Exponent  uint32
 }
 

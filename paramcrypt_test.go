@@ -24,7 +24,7 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				KeyBits:   SymKeyBitsU{uint16(128)},
 				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{
@@ -94,7 +94,7 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				KeyBits:   SymKeyBitsU{uint16(128)},
 				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{
@@ -165,7 +165,7 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				KeyBits:   SymKeyBitsU{uint16(128)},
 				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{
@@ -236,7 +236,7 @@ func TestResponseParameterEncryptionShared(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				KeyBits:   SymKeyBitsU{uint16(128)},
 				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{

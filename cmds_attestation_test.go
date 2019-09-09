@@ -22,7 +22,7 @@ func TestCertifyCreation(t *testing.T) {
 			&RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+					KeyBits:   SymKeyBitsU{uint16(128)},
 					Mode:      SymModeU{AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
