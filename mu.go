@@ -49,7 +49,7 @@ func isUnion(t reflect.Type) bool {
 		return false
 	}
 	if t.Field(0).Type.Kind() != reflect.Interface {
-		return true
+		return false
 	}
 	return t.Field(0).Type.NumMethod() == 0
 }
