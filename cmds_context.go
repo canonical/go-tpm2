@@ -6,6 +6,7 @@ package tpm2
 
 import (
 	"fmt"
+	"reflect"
 )
 
 type objectContextData struct {
@@ -26,18 +27,17 @@ type sessionContextData struct {
 }
 
 type resourceContextDataU struct {
-	Object  *objectContextData
-	Session *sessionContextData
+	Data interface{}
 }
 
-func (d resourceContextDataU) Select(selector interface{}) (string, error) {
-	switch selector.(uint8) {
+func (d resourceContextDataU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(uint8) {
 	case contextTypeObject:
-		return "Object", nil
+		return reflect.TypeOf((*objectContextData)(nil)), nil
 	case contextTypeSession:
-		return "Session", nil
+		return reflect.TypeOf((*sessionContextData)(nil)), nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
 }
 
 const (
@@ -57,10 +57,10 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData,
 	switch c := context.(type) {
 	case *objectContext:
 		d.ContextType = contextTypeObject
-		d.Data.Object = &objectContextData{Public: &c.public, Name: c.name}
+		d.Data.Data = &objectContextData{Public: &c.public, Name: c.name}
 	case *sessionContext:
 		d.ContextType = contextTypeSession
-		d.Data.Session = &sessionContextData{HashAlg: c.hashAlg, SessionType: c.sessionType,
+		d.Data.Data = &sessionContextData{HashAlg: c.hashAlg, SessionType: c.sessionType,
 			PolicyHMACType: c.policyHMACType, IsBound: c.isBound, BoundEntity: c.boundEntity,
 			SessionKey: c.sessionKey, NonceCaller: c.nonceCaller, NonceTPM: c.nonceTPM,
 			Symmetric: c.symmetric}
@@ -81,17 +81,17 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 
 	switch d.ContextType {
 	case contextTypeObject:
-		return d.TPMBlob, &objectContext{public: Public(*d.Data.Object.Public),
-			name: d.Data.Object.Name}, nil
+		dd := d.Data.Data.(*objectContextData)
+		return d.TPMBlob, &objectContext{public: Public(*dd.Public), name: dd.Name}, nil
 	case contextTypeSession:
-		if !cryptIsKnownDigest(d.Data.Session.HashAlg) {
-			return nil, nil, fmt.Errorf("invalid session hash algorithm %v", d.Data.Session.HashAlg)
+		dd := d.Data.Data.(*sessionContextData)
+		if !cryptIsKnownDigest(dd.HashAlg) {
+			return nil, nil, fmt.Errorf("invalid session hash algorithm %v", dd.HashAlg)
 		}
-		return d.TPMBlob, &sessionContext{hashAlg: d.Data.Session.HashAlg,
-			sessionType: d.Data.Session.SessionType, policyHMACType: d.Data.Session.PolicyHMACType,
-			isBound: d.Data.Session.IsBound, boundEntity: d.Data.Session.BoundEntity,
-			sessionKey: d.Data.Session.SessionKey, nonceCaller: d.Data.Session.NonceCaller,
-			nonceTPM: d.Data.Session.NonceTPM, symmetric: d.Data.Session.Symmetric}, nil
+		return d.TPMBlob, &sessionContext{hashAlg: dd.HashAlg, sessionType: dd.SessionType,
+			policyHMACType: dd.PolicyHMACType, isBound: dd.IsBound, boundEntity: dd.BoundEntity,
+			sessionKey: dd.SessionKey, nonceCaller: dd.NonceCaller, nonceTPM: dd.NonceTPM,
+			symmetric: dd.Symmetric}, nil
 	}
 
 	return nil, nil, fmt.Errorf("invalid saved context type (%d)", d.ContextType)

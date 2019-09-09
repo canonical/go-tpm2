@@ -115,9 +115,7 @@ func TestPolicySecret(t *testing.T) {
 			NameAlg:    AlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: policyDigest,
-			Params: PublicParamsU{
-				KeyedHashDetail: &KeyedHashParams{
-					Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil,
@@ -157,9 +155,7 @@ func TestPolicySecret(t *testing.T) {
 			NameAlg:    AlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: policyDigest,
-			Params: PublicParamsU{
-				KeyedHashDetail: &KeyedHashParams{
-					Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 		sensitive1 := SensitiveCreate{Data: secret1}
 		sensitive2 := SensitiveCreate{Data: secret2}
 
@@ -425,9 +421,7 @@ func TestPolicyCommandCode(t *testing.T) {
 		NameAlg:    AlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params: PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret")}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
@@ -482,9 +476,7 @@ func TestPolicyAuthValue(t *testing.T) {
 		NameAlg:    AlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params: PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
@@ -569,9 +561,7 @@ func TestPolicyPassword(t *testing.T) {
 		NameAlg:    AlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params: PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {

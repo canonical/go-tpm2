@@ -35,45 +35,45 @@ func (t *tpmContext) GetCapability(capability Capability, property, propertyCoun
 			var s int
 			switch data.Capability {
 			case CapabilityAlgs:
-				capabilityData.Data.Algorithms =
-					append(capabilityData.Data.Algorithms, data.Data.Algorithms...)
-				s = len(data.Data.Algorithms)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.Algorithms(), data.Data.Algorithms()...)
+				s = len(data.Data.Algorithms())
 			case CapabilityHandles:
-				capabilityData.Data.Handles =
-					append(capabilityData.Data.Handles, data.Data.Handles...)
-				s = len(data.Data.Handles)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.Handles(), data.Data.Handles()...)
+				s = len(data.Data.Handles())
 			case CapabilityCommands:
-				capabilityData.Data.Command =
-					append(capabilityData.Data.Command, data.Data.Command...)
-				s = len(data.Data.Command)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.Command(), data.Data.Command()...)
+				s = len(data.Data.Command())
 			case CapabilityPPCommands:
-				capabilityData.Data.PPCommands =
-					append(capabilityData.Data.PPCommands, data.Data.PPCommands...)
-				s = len(data.Data.PPCommands)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.PPCommands(), data.Data.PPCommands()...)
+				s = len(data.Data.PPCommands())
 			case CapabilityAuditCommands:
-				capabilityData.Data.AuditCommands =
-					append(capabilityData.Data.AuditCommands, data.Data.AuditCommands...)
-				s = len(data.Data.AuditCommands)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.AuditCommands(), data.Data.AuditCommands()...)
+				s = len(data.Data.AuditCommands())
 			case CapabilityPCRs:
-				capabilityData.Data.AssignedPCR =
-					append(capabilityData.Data.AssignedPCR, data.Data.AssignedPCR...)
-				s = len(data.Data.AssignedPCR)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.AssignedPCR(), data.Data.AssignedPCR()...)
+				s = len(data.Data.AssignedPCR())
 			case CapabilityTPMProperties:
-				capabilityData.Data.TPMProperties =
-					append(capabilityData.Data.TPMProperties, data.Data.TPMProperties...)
-				s = len(data.Data.TPMProperties)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.TPMProperties(), data.Data.TPMProperties()...)
+				s = len(data.Data.TPMProperties())
 			case CapabilityPCRProperties:
-				capabilityData.Data.PCRProperties =
-					append(capabilityData.Data.PCRProperties, data.Data.PCRProperties...)
-				s = len(data.Data.PCRProperties)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.PCRProperties(), data.Data.PCRProperties()...)
+				s = len(data.Data.PCRProperties())
 			case CapabilityECCCurves:
-				capabilityData.Data.ECCCurves =
-					append(capabilityData.Data.ECCCurves, data.Data.ECCCurves...)
-				s = len(data.Data.ECCCurves)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.ECCCurves(), data.Data.ECCCurves()...)
+				s = len(data.Data.ECCCurves())
 			case CapabilityAuthPolicies:
-				capabilityData.Data.AuthPolicies =
-					append(capabilityData.Data.AuthPolicies, data.Data.AuthPolicies...)
-				s = len(data.Data.AuthPolicies)
+				capabilityData.Data.Data =
+					append(capabilityData.Data.AuthPolicies(), data.Data.AuthPolicies()...)
+				s = len(data.Data.AuthPolicies())
 			}
 			nextProperty += uint32(s)
 			remaining -= uint32(s)
@@ -92,7 +92,7 @@ func (t *tpmContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32) 
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Algorithms, nil
+	return data.Data.Algorithms(), nil
 }
 
 func (t *tpmContext) GetCapabilityCommands(first CommandCode, propertyCount uint32) (CommandAttributesList,
@@ -101,7 +101,7 @@ func (t *tpmContext) GetCapabilityCommands(first CommandCode, propertyCount uint
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Command, nil
+	return data.Data.Command(), nil
 }
 
 func (t *tpmContext) GetCapabilityPPCommands(first CommandCode, propertyCount uint32) (CommandCodeList, error) {
@@ -109,7 +109,7 @@ func (t *tpmContext) GetCapabilityPPCommands(first CommandCode, propertyCount ui
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.PPCommands, nil
+	return data.Data.PPCommands(), nil
 }
 
 func (t *tpmContext) GetCapabilityAuditCommands(first CommandCode, propertyCount uint32) (CommandCodeList,
@@ -118,7 +118,7 @@ func (t *tpmContext) GetCapabilityAuditCommands(first CommandCode, propertyCount
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AuditCommands, nil
+	return data.Data.AuditCommands(), nil
 }
 
 func (t *tpmContext) GetCapabilityHandles(handleType Handle, propertyCount uint32) (HandleList, error) {
@@ -126,7 +126,7 @@ func (t *tpmContext) GetCapabilityHandles(handleType Handle, propertyCount uint3
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Handles, nil
+	return data.Data.Handles(), nil
 }
 
 func (t *tpmContext) GetCapabilityPCRs() (PCRSelectionList, error) {
@@ -134,7 +134,7 @@ func (t *tpmContext) GetCapabilityPCRs() (PCRSelectionList, error) {
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AssignedPCR, nil
+	return data.Data.AssignedPCR(), nil
 }
 
 func (t *tpmContext) GetCapabilityTPMProperties(first Property, propertyCount uint32) (TaggedTPMPropertyList,
@@ -143,7 +143,7 @@ func (t *tpmContext) GetCapabilityTPMProperties(first Property, propertyCount ui
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.TPMProperties, nil
+	return data.Data.TPMProperties(), nil
 }
 
 func (t *tpmContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount uint32) (TaggedPCRPropertyList,
@@ -152,7 +152,7 @@ func (t *tpmContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.PCRProperties, nil
+	return data.Data.PCRProperties(), nil
 }
 
 func (t *tpmContext) GetCapabilityECCCurves() (ECCCurveList, error) {
@@ -160,7 +160,7 @@ func (t *tpmContext) GetCapabilityECCCurves() (ECCCurveList, error) {
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.ECCCurves, nil
+	return data.Data.ECCCurves(), nil
 }
 
 func (t *tpmContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint32) (TaggedPolicyList, error) {
@@ -168,5 +168,5 @@ func (t *tpmContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AuthPolicies, nil
+	return data.Data.AuthPolicies(), nil
 }

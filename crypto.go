@@ -219,13 +219,13 @@ func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []
 		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
-	exp := int(public.Params.RSADetail.Exponent)
+	exp := int(public.Params.RSADetail().Exponent)
 	if exp == 0 {
 		exp = defaultRSAExponent
 	}
-	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA), E: exp}
+	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA()), E: exp}
 
-	padding := public.Params.RSADetail.Scheme.Scheme
+	padding := public.Params.RSADetail().Scheme.Scheme
 	if paddingOverride != AlgorithmNull {
 		padding = paddingOverride
 	}
@@ -234,7 +234,7 @@ func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []
 	case AlgorithmOAEP:
 		schemeHashAlg := public.NameAlg
 		if paddingOverride == AlgorithmNull {
-			schemeHashAlg = public.Params.RSADetail.Scheme.Details.OAEP.HashAlg
+			schemeHashAlg = public.Params.RSADetail().Scheme.Details.OAEP().HashAlg
 		}
 		if schemeHashAlg == AlgorithmNull {
 			schemeHashAlg = public.NameAlg
@@ -257,9 +257,9 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
-	curve := eccCurveToGoCurve(public.Params.ECCDetail.CurveID)
+	curve := eccCurveToGoCurve(public.Params.ECCDetail().CurveID)
 	if curve == nil {
-		return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail.CurveID)
+		return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail().CurveID)
 	}
 
 	ephPriv, ephX, ephY, err := elliptic.GenerateKey(curve, rand.Reader)
@@ -271,8 +271,8 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 		return nil, nil, fmt.Errorf("ephemeral public key is not on curve")
 	}
 
-	tpmX := new(big.Int).SetBytes(public.Unique.ECC.X)
-	tpmY := new(big.Int).SetBytes(public.Unique.ECC.Y)
+	tpmX := new(big.Int).SetBytes(public.Unique.ECC().X)
+	tpmY := new(big.Int).SetBytes(public.Unique.ECC().Y)
 
 	mulX, _ := curve.ScalarMult(tpmX, tpmY, ephPriv)
 
@@ -308,7 +308,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 			[]byte(z),
 			[]byte("SECRET"),
 			[]byte(q.X),
-			[]byte(public.Unique.ECC.X),
+			[]byte(public.Unique.ECC().X),
 			digestSize*8)
 		return EncryptedSecret(encryptedSalt), salt, nil
 	}

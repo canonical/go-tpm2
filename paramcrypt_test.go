@@ -24,14 +24,14 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{Sym: 128},
-				Mode:      SymModeU{Sym: AlgorithmCFB}},
+				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{XOR: AlgorithmSHA256}},
+				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -50,8 +50,7 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 				NameAlg: AlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					KeyedHashDetail: &KeyedHashParams{
-						Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
 			session := Session{Context: sessionContext,
 				Attrs: AttrContinueSession | AttrCommandEncrypt}
@@ -95,14 +94,14 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{Sym: 128},
-				Mode:      SymModeU{Sym: AlgorithmCFB}},
+				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{XOR: AlgorithmSHA256}},
+				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -121,8 +120,7 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 				NameAlg: AlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					KeyedHashDetail: &KeyedHashParams{
-						Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
 
 			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,
@@ -167,14 +165,14 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{Sym: 128},
-				Mode:      SymModeU{Sym: AlgorithmCFB}},
+				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{XOR: AlgorithmSHA256}},
+				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -193,8 +191,7 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 				NameAlg: AlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					KeyedHashDetail: &KeyedHashParams{
-						Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
 
 			session := Session{Context: sessionContext,
@@ -239,14 +236,14 @@ func TestResponseParameterEncryptionShared(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: AlgorithmAES,
-				KeyBits:   SymKeyBitsU{Sym: 128},
-				Mode:      SymModeU{Sym: AlgorithmCFB}},
+				KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+				Mode:      SymModeU{AlgorithmCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{XOR: AlgorithmSHA256}},
+				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -257,8 +254,7 @@ func TestResponseParameterEncryptionShared(t *testing.T) {
 				NameAlg: AlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					KeyedHashDetail: &KeyedHashParams{
-						Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,

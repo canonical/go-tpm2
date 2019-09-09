@@ -61,8 +61,8 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 }
 
 func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
-	if len(public.Unique.RSA) != int(template.Params.RSADetail.KeyBits)/8 {
-		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA))
+	if len(public.Unique.RSA()) != int(template.Params.RSADetail().KeyBits)/8 {
+		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA()))
 	}
 }
 
@@ -133,11 +133,11 @@ func createRSASrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) Resourc
 		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 			AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
-			RSADetail: &RSAParams{
+			&RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Sym: AlgorithmCFB}},
+					KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+					Mode:      SymModeU{AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
@@ -157,15 +157,15 @@ func createECCSrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) (Resour
 		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 			AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
-			ECCDetail: &ECCParams{
+			&ECCParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Sym: AlgorithmCFB}},
+					KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+					Mode:      SymModeU{AlgorithmCFB}},
 				Scheme:  ECCScheme{Scheme: AlgorithmNull},
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: AlgorithmNull}}},
-		Unique: PublicIDU{ECC: &ECCPoint{}}}
+		Unique: PublicIDU{&ECCPoint{}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
 	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
 		nil, nil)
@@ -185,11 +185,11 @@ func createRSAEkForTesting(t *testing.T, tpm TPMContext) ResourceContext {
 			0xa5, 0xd7, 0x24, 0xfd, 0x52, 0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b,
 			0x33, 0x14, 0x69, 0xaa},
 		Params: PublicParamsU{
-			RSADetail: &RSAParams{
+			&RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Sym: AlgorithmCFB}},
+					KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+					Mode:      SymModeU{AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
@@ -221,11 +221,11 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm TPMContext, ek ResourceConte
 		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 			AttrRestricted | AttrSign,
 		Params: PublicParamsU{
-			RSADetail: &RSAParams{
+			&RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
 				Scheme: RSAScheme{
 					Scheme:  AlgorithmRSASSA,
-					Details: AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
+					Details: AsymSchemeU{&SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}

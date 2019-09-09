@@ -10,11 +10,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"reflect"
+	"unsafe"
 )
+
+// 5.3) Miscellaneous Types
+type AlgorithmId uint16
+type KeyBits uint16
 
 // 6) Constants
 type TPMGenerated uint32
-type AlgorithmId uint16
 type ECCCurve uint16
 type CommandCode uint32
 type ResponseCode uint32
@@ -226,42 +231,73 @@ type TaggedPolicyList []TaggedPolicy
 
 // 10.10) Capabilities Structures
 type CapabilitiesU struct {
-	Algorithms    AlgorithmPropertyList
-	Handles       HandleList
-	Command       CommandAttributesList
-	PPCommands    CommandCodeList
-	AuditCommands CommandCodeList
-	AssignedPCR   PCRSelectionList
-	TPMProperties TaggedTPMPropertyList
-	PCRProperties TaggedPCRPropertyList
-	ECCCurves     ECCCurveList
-	AuthPolicies  TaggedPolicyList
+	Data interface{}
 }
 
-func (c CapabilitiesU) Select(selector interface{}) (string, error) {
-	switch selector.(Capability) {
+func (c CapabilitiesU) Algorithms() AlgorithmPropertyList {
+	return c.Data.(AlgorithmPropertyList)
+}
+
+func (c CapabilitiesU) Handles() HandleList {
+	return c.Data.(HandleList)
+}
+
+func (c CapabilitiesU) Command() CommandAttributesList {
+	return c.Data.(CommandAttributesList)
+}
+
+func (c CapabilitiesU) PPCommands() CommandCodeList {
+	return c.Data.(CommandCodeList)
+}
+
+func (c CapabilitiesU) AuditCommands() CommandCodeList {
+	return c.Data.(CommandCodeList)
+}
+
+func (c CapabilitiesU) AssignedPCR() PCRSelectionList {
+	return c.Data.(PCRSelectionList)
+}
+
+func (c CapabilitiesU) TPMProperties() TaggedTPMPropertyList {
+	return c.Data.(TaggedTPMPropertyList)
+}
+
+func (c CapabilitiesU) PCRProperties() TaggedPCRPropertyList {
+	return c.Data.(TaggedPCRPropertyList)
+}
+
+func (c CapabilitiesU) ECCCurves() ECCCurveList {
+	return c.Data.(ECCCurveList)
+}
+
+func (c CapabilitiesU) AuthPolicies() TaggedPolicyList {
+	return c.Data.(TaggedPolicyList)
+}
+
+func (c CapabilitiesU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(Capability) {
 	case CapabilityAlgs:
-		return "Algorithms", nil
+		return reflect.TypeOf(AlgorithmPropertyList(nil)), nil
 	case CapabilityHandles:
-		return "Handles", nil
+		return reflect.TypeOf(HandleList(nil)), nil
 	case CapabilityCommands:
-		return "Command", nil
+		return reflect.TypeOf(CommandAttributesList(nil)), nil
 	case CapabilityPPCommands:
-		return "PPCommands", nil
+		return reflect.TypeOf(CommandCodeList(nil)), nil
 	case CapabilityAuditCommands:
-		return "AuditCommands", nil
+		return reflect.TypeOf(CommandCodeList(nil)), nil
 	case CapabilityPCRs:
-		return "AssignedPCR", nil
+		return reflect.TypeOf(PCRSelectionList(nil)), nil
 	case CapabilityTPMProperties:
-		return "TPMProperties", nil
+		return reflect.TypeOf(TaggedTPMPropertyList(nil)), nil
 	case CapabilityPCRProperties:
-		return "PCRProperties", nil
+		return reflect.TypeOf(TaggedPCRPropertyList(nil)), nil
 	case CapabilityECCCurves:
-		return "ECCCurves", nil
+		return reflect.TypeOf(ECCCurveList(nil)), nil
 	case CapabilityAuthPolicies:
-		return "AuthPolicies", nil
+		return reflect.TypeOf(TaggedPolicyList(nil)), nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
 }
 
 type CapabilityData struct {
@@ -322,33 +358,55 @@ type NVCertifyInfo struct {
 }
 
 type AttestU struct {
-	Certify      *CertifyInfo
-	Creation     *CreationInfo
-	Quote        *QuoteInfo
-	CommandAudit *CommandAuditInfo
-	SessionAudit *SessionAuditInfo
-	Time         *TimeAttestInfo
-	NV           *NVCertifyInfo
+	Data interface{}
 }
 
-func (a AttestU) Select(selector interface{}) (string, error) {
-	switch selector.(StructTag) {
+func (a AttestU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(StructTag) {
 	case TagAttestNV:
-		return "NV", nil
+		return reflect.TypeOf((*NVCertifyInfo)(nil)), nil
 	case TagAttestCommandAudit:
-		return "CommandAudit", nil
+		return reflect.TypeOf((*CommandAuditInfo)(nil)), nil
 	case TagAttestSessionAudit:
-		return "SessionAudit", nil
+		return reflect.TypeOf((*SessionAuditInfo)(nil)), nil
 	case TagAttestCertify:
-		return "Certify", nil
+		return reflect.TypeOf((*CertifyInfo)(nil)), nil
 	case TagAttestQuote:
-		return "Quote", nil
+		return reflect.TypeOf((*QuoteInfo)(nil)), nil
 	case TagAttestTime:
-		return "Time", nil
+		return reflect.TypeOf((*TimeAttestInfo)(nil)), nil
 	case TagAttestCreation:
-		return "Creation", nil
+		return reflect.TypeOf((*CreationInfo)(nil)), nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (a AttestU) Certify() *CertifyInfo {
+	return a.Data.(*CertifyInfo)
+}
+
+func (a AttestU) Creation() *CreationInfo {
+	return a.Data.(*CreationInfo)
+}
+
+func (a AttestU) Quote() *QuoteInfo {
+	return a.Data.(*QuoteInfo)
+}
+
+func (a AttestU) CommandAudit() *CommandAuditInfo {
+	return a.Data.(*CommandAuditInfo)
+}
+
+func (a AttestU) SessionAudit() *SessionAuditInfo {
+	return a.Data.(*SessionAuditInfo)
+}
+
+func (a AttestU) Time() *TimeAttestInfo {
+	return a.Data.(*TimeAttestInfo)
+}
+
+func (a AttestU) NV() *NVCertifyInfo {
+	return a.Data.(*NVCertifyInfo)
 }
 
 type Attest struct {
@@ -374,33 +432,78 @@ func (a Attest2B) ToStruct() (*Attest, error) {
 // 11) Algorithm Parameters and Structures
 
 // 11.1) Symmetric
+type AESKeyBits KeyBits
+type SM4KeyBits KeyBits
+type CamelliaKeyBits KeyBits
+
 type SymKeyBitsU struct {
-	Sym uint16
-	XOR AlgorithmId
+	Data interface{}
 }
 
-func (b SymKeyBitsU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (b SymKeyBitsU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
+	case AlgorithmAES:
+		return reflect.TypeOf(AESKeyBits(0)), nil
 	case AlgorithmXOR:
-		return "XOR", nil
+		return reflect.TypeOf(AlgorithmId(0)), nil
 	case AlgorithmNull:
-		return "", nil
+		return nil, nil
+	case AlgorithmSM4:
+		return reflect.TypeOf(SM4KeyBits(0)), nil
+	case AlgorithmCamellia:
+		return reflect.TypeOf(CamelliaKeyBits(0)), nil
 	}
-	return "Sym", nil
+	return reflect.TypeOf(KeyBits(0)), nil
+}
+
+func (b SymKeyBitsU) AES() AESKeyBits {
+	return b.Data.(AESKeyBits)
+}
+
+func (b SymKeyBitsU) SM4() SM4KeyBits {
+	return b.Data.(SM4KeyBits)
+}
+
+func (b SymKeyBitsU) Camellia() CamelliaKeyBits {
+	return b.Data.(CamelliaKeyBits)
+}
+
+func (b SymKeyBitsU) Sym() KeyBits {
+	return reflect.ValueOf(b.Data).Convert(reflect.TypeOf(KeyBits(0))).Interface().(KeyBits)
+}
+
+func (b SymKeyBitsU) XOR() AlgorithmId {
+	return b.Data.(AlgorithmId)
 }
 
 type SymModeU struct {
-	Sym AlgorithmId
+	Data interface{}
 }
 
-func (m SymModeU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmXOR:
 		fallthrough
 	case AlgorithmNull:
-		return "", nil
+		return nil, nil
 	}
-	return "Sym", nil
+	return reflect.TypeOf(AlgorithmId(0)), nil
+}
+
+func (m SymModeU) AES() AlgorithmId {
+	return m.Data.(AlgorithmId)
+}
+
+func (m SymModeU) SM4() AlgorithmId {
+	return m.Data.(AlgorithmId)
+}
+
+func (m SymModeU) Camellia() AlgorithmId {
+	return m.Data.(AlgorithmId)
+}
+
+func (m SymModeU) Sym() AlgorithmId {
+	return m.Data.(AlgorithmId)
 }
 
 type SymDef struct {
@@ -450,20 +553,27 @@ type SchemeXOR struct {
 type SchemeHMAC SchemeHash
 
 type SchemeKeyedHashU struct {
-	HMAC *SchemeHMAC
-	XOR  *SchemeXOR
+	Data interface{}
 }
 
-func (d SchemeKeyedHashU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (d SchemeKeyedHashU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmHMAC:
-		return "HMAC", nil
+		return reflect.TypeOf((*SchemeHMAC)(nil)), nil
 	case AlgorithmXOR:
-		return "XOR", nil
+		return reflect.TypeOf((*SchemeXOR)(nil)), nil
 	case AlgorithmNull:
-		return "", nil
+		return nil, nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (d SchemeKeyedHashU) HMAC() *SchemeHMAC {
+	return d.Data.(*SchemeHMAC)
+}
+
+func (d SchemeKeyedHashU) XOR() *SchemeXOR {
+	return d.Data.(*SchemeXOR)
 }
 
 type KeyedHashScheme struct {
@@ -482,40 +592,65 @@ type SigSchemeSM2 SchemeHash
 type SigSchemeECSCHNORR SchemeHash
 
 type SigSchemeU struct {
-	RSASSA    *SigSchemeRSASSA
-	RSAPSS    *SigSchemeRSAPSS
-	ECDSA     *SigSchemeECDSA
-	ECDAA     *SigSchemeECDAA
-	SM2       *SigSchemeSM2
-	ECSCHNORR *SigSchemeECSCHNORR
-	HMAC      *SchemeHMAC
+	Data interface{}
 }
 
-func (s SigSchemeU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (s SigSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmRSASSA:
-		return "RSASSA", nil
+		return reflect.TypeOf((*SigSchemeRSASSA)(nil)), nil
 	case AlgorithmRSAPSS:
-		return "RSAPSS", nil
+		return reflect.TypeOf((*SigSchemeRSAPSS)(nil)), nil
 	case AlgorithmECDSA:
-		return "ECDSA", nil
+		return reflect.TypeOf((*SigSchemeECDSA)(nil)), nil
 	case AlgorithmECDAA:
-		return "ECDAA", nil
+		return reflect.TypeOf((*SigSchemeECDAA)(nil)), nil
 	case AlgorithmSM2:
-		return "SM2", nil
+		return reflect.TypeOf((*SigSchemeSM2)(nil)), nil
 	case AlgorithmECSCHNORR:
-		return "ECSCHNORR", nil
+		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil)), nil
 	case AlgorithmHMAC:
-		return "HMAC", nil
+		return reflect.TypeOf((*SchemeHMAC)(nil)), nil
 	case AlgorithmNull:
-		return "", nil
+		return nil, nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (s SigSchemeU) RSASSA() *SigSchemeRSASSA {
+	return s.Data.(*SigSchemeRSASSA)
+}
+
+func (s SigSchemeU) RSAPSS() *SigSchemeRSAPSS {
+	return s.Data.(*SigSchemeRSAPSS)
+}
+
+func (s SigSchemeU) ECDSA() *SigSchemeECDSA {
+	return s.Data.(*SigSchemeECDSA)
+}
+
+func (s SigSchemeU) ECDAA() *SigSchemeECDAA {
+	return s.Data.(*SigSchemeECDAA)
+}
+
+func (s SigSchemeU) SM2() *SigSchemeSM2 {
+	return s.Data.(*SigSchemeSM2)
+}
+
+func (s SigSchemeU) ECSCHNORR() *SigSchemeECSCHNORR {
+	return s.Data.(*SigSchemeECSCHNORR)
+}
+
+func (s SigSchemeU) HMAC() *SchemeHMAC {
+	return s.Data.(*SchemeHMAC)
+}
+
+func (s SigSchemeU) Any() *SchemeHash {
+	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
 }
 
 type SigScheme struct {
-	Scheme  AlgorithmId
-	Details SigSchemeU `tpm2:"selector:Scheme"`
+	Scheme AlgorithmId
 }
 
 // 11.2.3 Key Derivation Schemes
@@ -525,26 +660,39 @@ type SchemeKDF2 SchemeHash
 type SchemeKDF1_SP800_108 SchemeHash
 
 type KDFSchemeU struct {
-	MGF1           *SchemeMGF1
-	KDF1_SP800_56A *SchemeKDF1_SP800_56A
-	KDF2           *SchemeKDF2
-	KDF1_SP800_108 *SchemeKDF1_SP800_108
+	Data interface{}
 }
 
-func (s KDFSchemeU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (s KDFSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmMGF1:
-		return "MGF1", nil
+		return reflect.TypeOf((*SchemeMGF1)(nil)), nil
 	case AlgorithmKDF1_SP800_56A:
-		return "KDF1_SP800_56A", nil
+		return reflect.TypeOf((*SchemeKDF1_SP800_56A)(nil)), nil
 	case AlgorithmKDF2:
-		return "KDF2", nil
+		return reflect.TypeOf((*SchemeKDF2)(nil)), nil
 	case AlgorithmKDF1_SP800_108:
-		return "KDF1_SP800_108", nil
+		return reflect.TypeOf((*SchemeKDF1_SP800_108)(nil)), nil
 	case AlgorithmNull:
-		return "", nil
+		return nil, nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (s KDFSchemeU) MGF1() *SchemeMGF1 {
+	return s.Data.(*SchemeMGF1)
+}
+
+func (s KDFSchemeU) KDF1_SP800_56A() *SchemeKDF1_SP800_56A {
+	return s.Data.(*SchemeKDF1_SP800_56A)
+}
+
+func (s KDFSchemeU) KDF2() *SchemeKDF2 {
+	return s.Data.(*SchemeKDF2)
+}
+
+func (s KDFSchemeU) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
+	return s.Data.(*SchemeKDF1_SP800_108)
 }
 
 type KDFScheme struct {
@@ -558,44 +706,84 @@ type EncSchemeRSAES Empty
 type EncSchemeOAEP SchemeHash
 
 type AsymSchemeU struct {
-	ECDH      *KeySchemeECDH
-	ECMQV     *KeySchemeECMQV
-	RSASSA    *SigSchemeRSASSA
-	RSAPSS    *SigSchemeRSAPSS
-	ECDSA     *SigSchemeECDSA
-	ECDAA     *SigSchemeECDAA
-	SM2       *SigSchemeSM2
-	ECSCHNORR *SigSchemeECSCHNORR
-	RSAES     *EncSchemeRSAES
-	OAEP      *EncSchemeOAEP
+	Data interface{}
 }
 
-func (s AsymSchemeU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (s AsymSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmRSASSA:
-		return "RSASSA", nil
+		return reflect.TypeOf((*SigSchemeRSASSA)(nil)), nil
 	case AlgorithmRSAES:
-		return "RSAES", nil
+		return reflect.TypeOf((*EncSchemeRSAES)(nil)), nil
 	case AlgorithmRSAPSS:
-		return "RSAPSS", nil
+		return reflect.TypeOf((*SigSchemeRSAPSS)(nil)), nil
 	case AlgorithmOAEP:
-		return "OAEP", nil
+		return reflect.TypeOf((*EncSchemeOAEP)(nil)), nil
 	case AlgorithmECDSA:
-		return "ECDSA", nil
+		return reflect.TypeOf((*SigSchemeECDSA)(nil)), nil
 	case AlgorithmECDH:
-		return "ECDH", nil
+		return reflect.TypeOf((*KeySchemeECDH)(nil)), nil
 	case AlgorithmECDAA:
-		return "ECDAA", nil
+		return reflect.TypeOf((*SigSchemeECDAA)(nil)), nil
 	case AlgorithmSM2:
-		return "SM2", nil
+		return reflect.TypeOf((*SigSchemeSM2)(nil)), nil
 	case AlgorithmECSCHNORR:
-		return "ECSCHNORR", nil
+		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil)), nil
 	case AlgorithmECMQV:
-		return "ECMQV", nil
+		return reflect.TypeOf((*KeySchemeECMQV)(nil)), nil
 	case AlgorithmNull:
-		return "", nil
+		return nil, nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (s AsymSchemeU) ECDH() *KeySchemeECDH {
+	return s.Data.(*KeySchemeECDH)
+}
+
+func (s AsymSchemeU) ECMQV() *KeySchemeECMQV {
+	return s.Data.(*KeySchemeECMQV)
+}
+
+func (s AsymSchemeU) RSASSA() *SigSchemeRSASSA {
+	return s.Data.(*SigSchemeRSASSA)
+}
+
+func (s AsymSchemeU) RSAPSS() *SigSchemeRSAPSS {
+	return s.Data.(*SigSchemeRSAPSS)
+}
+
+func (s AsymSchemeU) ECDSA() *SigSchemeECDSA {
+	return s.Data.(*SigSchemeECDSA)
+}
+
+func (s AsymSchemeU) ECDAA() *SigSchemeECDAA {
+	return s.Data.(*SigSchemeECDAA)
+}
+
+func (s AsymSchemeU) SM2() *SigSchemeSM2 {
+	return s.Data.(*SigSchemeSM2)
+}
+
+func (s AsymSchemeU) ECSCHNORR() *SigSchemeECSCHNORR {
+	return s.Data.(*SigSchemeECSCHNORR)
+}
+
+func (s AsymSchemeU) RSAES() *EncSchemeRSAES {
+	return s.Data.(*EncSchemeRSAES)
+}
+
+func (s AsymSchemeU) OAEP() *EncSchemeOAEP {
+	return s.Data.(*EncSchemeOAEP)
+}
+
+func (s AsymSchemeU) Any() *SchemeHash {
+	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
+}
+
+type AsymScheme struct {
+	Scheme  AlgorithmId
+	Details AsymSchemeU `tpm2:"selector:Scheme"`
 }
 
 // 11.2.4 RSA
@@ -639,35 +827,61 @@ type SignatureSM2 SignatureECC
 type SignatureECSCHNORR SignatureECC
 
 type SignatureU struct {
-	RSASSA    *SignatureRSASSA
-	RSAPSS    *SignatureRSAPSS
-	ECDSA     *SignatureECDSA
-	ECDAA     *SignatureECDAA
-	SM2       *SignatureSM2
-	ECSCHNORR *SignatureECSCHNORR
-	HMAC      *TaggedHash
+	Data interface{}
 }
 
-func (s SignatureU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (s SignatureU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmRSASSA:
-		return "RSASSA", nil
+		return reflect.TypeOf((*SignatureRSASSA)(nil)), nil
 	case AlgorithmRSAPSS:
-		return "RSAPSS", nil
+		return reflect.TypeOf((*SignatureRSAPSS)(nil)), nil
 	case AlgorithmECDSA:
-		return "ECDSA", nil
+		return reflect.TypeOf((*SignatureECDSA)(nil)), nil
 	case AlgorithmECDAA:
-		return "ECDAA", nil
+		return reflect.TypeOf((*SignatureECDAA)(nil)), nil
 	case AlgorithmSM2:
-		return "SM2", nil
+		return reflect.TypeOf((*SignatureSM2)(nil)), nil
 	case AlgorithmECSCHNORR:
-		return "ECSCHNORR", nil
+		return reflect.TypeOf((*SignatureECSCHNORR)(nil)), nil
 	case AlgorithmHMAC:
-		return "HMAC", nil
+		return reflect.TypeOf((*TaggedHash)(nil)), nil
 	case AlgorithmNull:
-		return "", nil
+		return nil, nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (s SignatureU) RSASSA() *SignatureRSASSA {
+	return s.Data.(*SignatureRSASSA)
+}
+
+func (s SignatureU) RSAPSS() *SignatureRSAPSS {
+	return s.Data.(*SignatureRSAPSS)
+}
+
+func (s SignatureU) ECDSA() *SignatureECDSA {
+	return s.Data.(*SignatureECDSA)
+}
+
+func (s SignatureU) ECDAA() *SignatureECDAA {
+	return s.Data.(*SignatureECDAA)
+}
+
+func (s SignatureU) SM2() *SignatureSM2 {
+	return s.Data.(*SignatureSM2)
+}
+
+func (s SignatureU) ECSCHNORR() *SignatureECSCHNORR {
+	return s.Data.(*SignatureECSCHNORR)
+}
+
+func (s SignatureU) HMAC() *TaggedHash {
+	return s.Data.(*TaggedHash)
+}
+
+func (s SignatureU) Any() *SchemeHash {
+	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
 }
 
 type Signature struct {
@@ -682,34 +896,52 @@ type EncryptedSecret []byte
 
 // 12.2) Public Area Structures
 type PublicIDU struct {
-	KeyedHash Digest
-	Sym       Digest
-	RSA       PublicKeyRSA
-	ECC       *ECCPoint
+	Data interface{}
 }
 
-func (p PublicIDU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (p PublicIDU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmRSA:
-		return "RSA", nil
+		return reflect.TypeOf(PublicKeyRSA(nil)), nil
 	case AlgorithmKeyedHash:
-		return "KeyedHash", nil
+		return reflect.TypeOf(Digest(nil)), nil
 	case AlgorithmECC:
-		return "ECC", nil
+		return reflect.TypeOf((*ECCPoint)(nil)), nil
 	case AlgorithmSymCipher:
-		return "Sym", nil
+		return reflect.TypeOf(Digest(nil)), nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (p PublicIDU) KeyedHash() Digest {
+	return p.Data.(Digest)
+}
+
+func (p PublicIDU) Sym() Digest {
+	return p.Data.(Digest)
+}
+
+func (p PublicIDU) RSA() PublicKeyRSA {
+	return p.Data.(PublicKeyRSA)
+}
+
+func (p PublicIDU) ECC() *ECCPoint {
+	return p.Data.(*ECCPoint)
 }
 
 type KeyedHashParams struct {
 	Scheme KeyedHashScheme
 }
 
+type AsymParams struct {
+	Symmetric SymDefObject
+	Scheme    AsymScheme
+}
+
 type RSAParams struct {
 	Symmetric SymDefObject
 	Scheme    RSAScheme
-	KeyBits   uint16
+	KeyBits   KeyBits
 	Exponent  uint32
 }
 
@@ -721,24 +953,42 @@ type ECCParams struct {
 }
 
 type PublicParamsU struct {
-	KeyedHashDetail *KeyedHashParams
-	SymDetail       *SymCipherParams
-	RSADetail       *RSAParams
-	ECCDetail       *ECCParams
+	Data interface{}
 }
 
-func (p PublicParamsU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (p PublicParamsU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmRSA:
-		return "RSADetail", nil
+		return reflect.TypeOf((*RSAParams)(nil)), nil
 	case AlgorithmKeyedHash:
-		return "KeyedHashDetail", nil
+		return reflect.TypeOf((*KeyedHashParams)(nil)), nil
 	case AlgorithmECC:
-		return "ECCDetail", nil
+		return reflect.TypeOf((*ECCParams)(nil)), nil
 	case AlgorithmSymCipher:
-		return "SymDetail", nil
+		return reflect.TypeOf((*SymCipherParams)(nil)), nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (p PublicParamsU) KeyedHashDetail() *KeyedHashParams {
+	return p.Data.(*KeyedHashParams)
+}
+
+func (p PublicParamsU) SymDetail() *SymCipherParams {
+	return p.Data.(*SymCipherParams)
+}
+
+func (p PublicParamsU) RSADetail() *RSAParams {
+	return p.Data.(*RSAParams)
+}
+
+func (p PublicParamsU) ECCDetail() *ECCParams {
+	return p.Data.(*ECCParams)
+}
+
+func (p PublicParamsU) AsymDetail() *AsymParams {
+	panic("not implemented")
+	return nil
 }
 
 type Public struct {
@@ -783,25 +1033,44 @@ type publicSized struct {
 }
 
 // 12.3) Private Area Structures
+type PrivateVendorSpecific []byte
+
 type SensitiveCompositeU struct {
-	RSA  PrivateKeyRSA
-	ECC  ECCParameter
-	Bits SensitiveData
-	Sym  SymKey
+	Data interface{}
 }
 
-func (s SensitiveCompositeU) Select(selector interface{}) (string, error) {
-	switch selector.(AlgorithmId) {
+func (s SensitiveCompositeU) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(AlgorithmId) {
 	case AlgorithmRSA:
-		return "RSA", nil
+		return reflect.TypeOf(PrivateKeyRSA(nil)), nil
 	case AlgorithmECC:
-		return "ECC", nil
+		return reflect.TypeOf(ECCParameter(nil)), nil
 	case AlgorithmKeyedHash:
-		return "Bits", nil
+		return reflect.TypeOf(SensitiveData(nil)), nil
 	case AlgorithmSymCipher:
-		return "Sym", nil
+		return reflect.TypeOf(SymKey(nil)), nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
+}
+
+func (s SensitiveCompositeU) RSA() PrivateKeyRSA {
+	return s.Data.(PrivateKeyRSA)
+}
+
+func (s SensitiveCompositeU) ECC() ECCParameter {
+	return s.Data.(ECCParameter)
+}
+
+func (s SensitiveCompositeU) Bits() SensitiveData {
+	return s.Data.(SensitiveData)
+}
+
+func (s SensitiveCompositeU) Sym() SymKey {
+	return s.Data.(SymKey)
+}
+
+func (s SensitiveCompositeU) Any() PrivateVendorSpecific {
+	return reflect.ValueOf(s.Data).Convert(reflect.TypeOf((PrivateVendorSpecific)(nil))).Interface().(PrivateVendorSpecific)
 }
 
 type Sensitive struct {

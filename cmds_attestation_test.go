@@ -19,11 +19,11 @@ func TestCertifyCreation(t *testing.T) {
 		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 			AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
-			RSADetail: &RSAParams{
+			&RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: AlgorithmAES,
-					KeyBits:   SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Sym: AlgorithmCFB}},
+					KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+					Mode:      SymModeU{AlgorithmCFB}},
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
@@ -54,10 +54,10 @@ func TestCertifyCreation(t *testing.T) {
 	if attest.Type != TagAttestCreation {
 		t.Errorf("certifyInfo has the wrong type")
 	}
-	if !bytes.Equal(attest.Attest.Creation.ObjectName, name) {
+	if !bytes.Equal(attest.Attest.Creation().ObjectName, name) {
 		t.Errorf("certifyInfo has the wrong objectName")
 	}
-	if !bytes.Equal(attest.Attest.Creation.CreationHash, creationHash) {
+	if !bytes.Equal(attest.Attest.Creation().CreationHash, creationHash) {
 		t.Errorf("certifyInfo has the wrong creationHash")
 	}
 	if signature == nil {

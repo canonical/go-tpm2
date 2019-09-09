@@ -96,7 +96,7 @@ func TestHMACSessions(t *testing.T) {
 				Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin |
 					AttrUserWithAuth | AttrDecrypt | AttrSign,
 				Params: PublicParamsU{
-					RSADetail: &RSAParams{
+					&RSAParams{
 						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
 						Scheme:    RSAScheme{Scheme: AlgorithmNull},
 						KeyBits:   2048,
@@ -145,9 +145,7 @@ func TestPolicySessions(t *testing.T) {
 		NameAlg:    AlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: make([]byte, 32),
-		Params: PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 	sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, testAuth)

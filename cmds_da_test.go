@@ -128,7 +128,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
 					Scheme:    RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:   2048,

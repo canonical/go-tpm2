@@ -459,23 +459,21 @@ func TestMarshalNilPointer(t *testing.T) {
 }
 
 type TestUnion struct {
-	A *TestStructSimple
-	B TestListUint32
-	C uint16
+	Data interface{}
 }
 
-func (t TestUnion) Select(selector interface{}) (string, error) {
-	switch selector.(uint32) {
+func (t TestUnion) Select(selector reflect.Value) (reflect.Type, error) {
+	switch selector.Interface().(uint32) {
 	case 1:
-		return "A", nil
+		return reflect.TypeOf((*TestStructSimple)(nil)), nil
 	case 2:
-		return "B", nil
+		return reflect.TypeOf(TestListUint32(nil)), nil
 	case 3:
-		return "C", nil
+		return reflect.TypeOf(uint16(0)), nil
 	case 4:
-		return "", nil
+		return nil, nil
 	}
-	return "", invalidSelectorError{selector}
+	return nil, invalidSelectorError{selector}
 }
 
 type TestUnionContainer struct {
@@ -493,7 +491,7 @@ func TestMarshalUnion(t *testing.T) {
 			desc: "1",
 			in: TestUnionContainer{
 				Select: 1,
-				Union: TestUnion{A: &TestStructSimple{56324, 657763432, true,
+				Union: TestUnion{&TestStructSimple{56324, 657763432, true,
 					TestListUint32{98767643, 5453423}}}},
 			out: []byte{0x00, 0x00, 0x00, 0x01, 0xdc, 0x04, 0x27, 0x34, 0xac, 0x68, 0x01, 0x00, 0x00,
 				0x00, 0x02, 0x05, 0xe3, 0x13, 0x1b, 0x00, 0x53, 0x36, 0x6f},
@@ -502,13 +500,13 @@ func TestMarshalUnion(t *testing.T) {
 			desc: "2",
 			in: TestUnionContainer{
 				Select: 2,
-				Union:  TestUnion{B: TestListUint32{3287743, 98731}}},
+				Union:  TestUnion{TestListUint32{3287743, 98731}}},
 			out: []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x32, 0x2a, 0xbf, 0x00,
 				0x01, 0x81, 0xab},
 		},
 		{
 			desc: "3",
-			in:   TestUnionContainer{Select: 3, Union: TestUnion{C: 4321}},
+			in:   TestUnionContainer{Select: 3, Union: TestUnion{uint16(4321)}},
 			out:  []byte{0x00, 0x00, 0x00, 0x03, 0x10, 0xe1},
 		},
 		{
@@ -544,7 +542,33 @@ func TestMarshalUnion(t *testing.T) {
 	}
 }
 
-func TestMarshalUnionInvalidSelector(t *testing.T) {
+func TestMarshalUnionWithNilValue(t *testing.T) {
+	a := TestUnionContainer{Select: 2}
+	out, err := MarshalToBytes(a)
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
+	}
+
+	if !bytes.Equal(out, []byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00}) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+	}
+
+	var ao TestUnionContainer
+
+	n, err := UnmarshalFromBytes(out, &ao)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(TestUnionContainer{Select: 2, Union: TestUnion{TestListUint32{}}}, ao) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+}
+
+func TestMarshalUnionWithInvalidSelector(t *testing.T) {
 	a := TestUnionContainer{Select: 5}
 	_, err := MarshalToBytes(a)
 	if err == nil {
@@ -552,7 +576,7 @@ func TestMarshalUnionInvalidSelector(t *testing.T) {
 	}
 	if err.Error() != "cannot marshal struct type tpm2.TestUnionContainer: cannot marshal field Union: "+
 		"cannot marshal struct type tpm2.TestUnion: error marshalling union struct: cannot select "+
-		"union member: invalid selector value: 5" {
+		"union data type: invalid selector value: 5" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 
@@ -563,8 +587,62 @@ func TestMarshalUnionInvalidSelector(t *testing.T) {
 	}
 	if err.Error() != "cannot unmarshal struct type tpm2.TestUnionContainer: cannot unmarshal field "+
 		"Union: cannot unmarshal struct type tpm2.TestUnion: error unmarshalling union struct: cannot "+
-		"select union member: invalid selector value: 259" {
+		"select union data type: invalid selector value: 259" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+	}
+}
+
+func TestMarshalUnionWithIncorrectType(t *testing.T) {
+	a := TestUnionContainer{Select: 2, Union: TestUnion{uint16(56)}}
+	_, err := MarshalToBytes(a)
+	if err == nil {
+		t.Fatalf("MarshalToBytes should fail to marshal a union with the wrong data type")
+	}
+	if err.Error() != "cannot marshal struct type tpm2.TestUnionContainer: cannot marshal field Union: "+
+		"cannot marshal struct type tpm2.TestUnion: error marshalling union struct: data has incorrect "+
+		"type uint16 (expected tpm2.TestListUint32)" {
+		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+	}
+}
+
+func TestMarshalUnionWithNilPointerValue(t *testing.T) {
+	a := TestUnionContainer{Select: 1}
+	_, err := MarshalToBytes(a)
+	if err == nil {
+		t.Fatalf("MarshalToBytes should fail to marshal a union with the wrong data type")
+	}
+	if err.Error() != "cannot marshal struct type tpm2.TestUnionContainer: cannot marshal field Union: "+
+		"cannot marshal struct type tpm2.TestUnion: error marshalling union struct: nil data" {
+		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+	}
+}
+
+func TestMarshalUnionDataImplicitTypeConversion(t *testing.T) {
+	a := TestUnionContainer{Select: 3, Union: TestUnion{AlgorithmSHA256}}
+	if reflect.TypeOf(a.Union.Data) == reflect.TypeOf(uint16(0)) {
+		t.Fatalf("Test requires these to be different types")
+	}
+	out, err := MarshalToBytes(a)
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
+	}
+
+	if !bytes.Equal(out, []byte{0x00, 0x00, 0x00, 0x03, 0x00, 0x0b}) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+	}
+
+	var ao TestUnionContainer
+
+	n, err := UnmarshalFromBytes(out, &ao)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(TestUnionContainer{Select: 3, Union: TestUnion{uint16(11)}}, ao) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
 }
 
@@ -576,7 +654,7 @@ type TestInvalidUnionContainer struct {
 func TestMarshalUnionInInvalidContainer(t *testing.T) {
 	a := TestInvalidUnionContainer{
 		Select: 2,
-		Union:  TestUnion{B: TestListUint32{3287743, 98731}}}
+		Union:  TestUnion{TestListUint32{3287743, 98731}}}
 	_, err := MarshalToBytes(a)
 	if err == nil {
 		t.Fatalf("MarshalToBytes should fail to marshal a union inside an invalid container")
@@ -599,7 +677,7 @@ func TestMarshalUnionInInvalidContainer(t *testing.T) {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 
-	b := TestUnion{C: 5432}
+	b := TestUnion{uint16(5432)}
 	_, err = MarshalToBytes(b)
 	if err == nil {
 		t.Fatalf("MarshalToBytes should fail to unmarshal to a union inside an invalid container")

@@ -27,22 +27,22 @@ func TestPublicIDUnion(t *testing.T) {
 		{
 			desc: "RSA",
 			in: TestPublicIDUContainer{Alg: AlgorithmRSA,
-				Unique: PublicIDU{RSA: PublicKeyRSA{0x01, 0x02, 0x03}}},
+				Unique: PublicIDU{PublicKeyRSA{0x01, 0x02, 0x03}}},
 			out: []byte{0x00, 0x01, 0x00, 0x03, 0x01, 0x02, 0x03},
 		},
 		{
 			desc: "KeyedHash",
 			in: TestPublicIDUContainer{Alg: AlgorithmKeyedHash,
-				Unique: PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}},
+				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x08, 0x00, 0x04, 0x04, 0x05, 0x06, 0x07},
 		},
 		{
 			desc: "InvalidSelector",
 			in: TestPublicIDUContainer{Alg: AlgorithmNull,
-				Unique: PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}},
+				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
 			err: "cannot marshal struct type tpm2.TestPublicIDUContainer: cannot marshal field " +
 				"Unique: cannot marshal struct type tpm2.PublicIDU: error marshalling union " +
-				"struct: cannot select union member: invalid selector value: TPM_ALG_NULL",
+				"struct: cannot select union data type: invalid selector value: TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -97,7 +97,7 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			desc: "HMAC",
 			in: TestSchemeKeyedHashUContainer{
 				Scheme:  AlgorithmHMAC,
-				Details: SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: AlgorithmSHA256}}},
+				Details: SchemeKeyedHashU{&SchemeHMAC{HashAlg: AlgorithmSHA256}}},
 			out: []byte{0x00, 0x05, 0x00, 0x0b},
 		},
 		{
@@ -110,8 +110,8 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			in:   TestSchemeKeyedHashUContainer{Scheme: AlgorithmSHA256},
 			err: "cannot marshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot marshal " +
 				"field Details: cannot marshal struct type tpm2.SchemeKeyedHashU: error " +
-				"marshalling union struct: cannot select union member: invalid selector value: " +
-				"TPM_ALG_SHA256",
+				"marshalling union struct: cannot select union data type: invalid selector " +
+				"value: TPM_ALG_SHA256",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

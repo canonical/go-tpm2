@@ -43,11 +43,11 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -67,22 +67,22 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				ECCDetail: &ECCParams{
+				&ECCParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:  ECCScheme{Scheme: AlgorithmNull},
 					CurveID: ECCCurveNIST_P256,
 					KDF:     KDFScheme{Scheme: AlgorithmNull}}},
-			Unique: PublicIDU{ECC: &ECCPoint{}}}
+			Unique: PublicIDU{&ECCPoint{}}}
 		creationPCR := PCRSelectionList{
 			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
 			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 		objectContext, pub := run(t, HandleOwner, nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
-		if len(pub.Unique.ECC.X) != 32 || len(pub.Unique.ECC.Y) != 32 {
+		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
 			t.Errorf("CreatePrimary returned object with invalid ECC coords")
 		}
 	})
@@ -97,11 +97,11 @@ func TestCreatePrimary(t *testing.T) {
 				0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52, 0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64,
 				0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -119,11 +119,11 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -141,7 +141,7 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
 					Scheme:    RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:   2048,
@@ -163,11 +163,11 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -197,11 +197,11 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -218,11 +218,11 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -243,11 +243,11 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -260,8 +260,8 @@ func TestCreatePrimary(t *testing.T) {
 			"marshal struct type tpm2.publicSized: cannot marshal field Ptr: cannot marshal pointer "+
 			"type *tpm2.Public: cannot marshal struct type tpm2.Public: cannot marshal sized struct: "+
 			"cannot marshal struct type tpm2.Public: cannot marshal field Params: cannot marshal "+
-			"struct type tpm2.PublicParamsU: error marshalling union struct: cannot marshal pointer "+
-			"type *tpm2.ECCParams: nil pointer" {
+			"struct type tpm2.PublicParamsU: error marshalling union struct: data has incorrect "+
+			"type *tpm2.RSAParams (expected *tpm2.ECCParams)" {
 			t.Errorf("CreatePrimary returned an unexpected error: %v", err)
 		}
 	})
@@ -284,11 +284,11 @@ func TestClear(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -552,11 +552,11 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
 				AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -577,11 +577,11 @@ func TestHierarchyChangeAuth(t *testing.T) {
 				0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52, 0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64,
 				0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
-				RSADetail: &RSAParams{
+				&RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: AlgorithmAES,
-						KeyBits:   SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Sym: AlgorithmCFB}},
+						KeyBits:   SymKeyBitsU{AESKeyBits(128)},
+						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}

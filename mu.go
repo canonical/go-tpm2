@@ -28,7 +28,7 @@ type CustomMarshaller interface {
 type RawBytes []byte
 
 type Union interface {
-	Select(selector interface{}) (string, error)
+	Select(selector reflect.Value) (reflect.Type, error)
 }
 
 func isValidUnionContainer(t reflect.Type) bool {
@@ -42,7 +42,16 @@ func isUnion(t reflect.Type) bool {
 	if t.Kind() != reflect.Struct {
 		return false
 	}
-	return t.Implements(unionType)
+	if !t.Implements(unionType) {
+		return false
+	}
+	if t.NumField() != 1 {
+		return false
+	}
+	if t.Field(0).Type.Kind() != reflect.Interface {
+		return true
+	}
+	return t.Field(0).Type.NumMethod() == 0
 }
 
 func isSizedBuffer(t reflect.Type) bool {
@@ -113,7 +122,7 @@ func beginStructFieldCtx(ctx *muContext, s reflect.Value, i int) *muContext {
 	return &muContext{depth: ctx.depth, container: s, parentType: s.Type(), options: opts}
 }
 
-func beginUnionFieldCtx(ctx *muContext, u reflect.Value) *muContext {
+func beginUnionDataCtx(ctx *muContext, u reflect.Value) *muContext {
 	return &muContext{depth: ctx.depth, container: u, parentType: u.Type()}
 }
 
@@ -167,24 +176,36 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 
 	selectorVal := ctx.container.FieldByName(ctx.options.selector)
 	if !selectorVal.IsValid() {
-		return fmt.Errorf("invalid selector field name %s", ctx.options.selector)
+		return fmt.Errorf("invalid selector member name %s", ctx.options.selector)
 	}
 
-	// Select the union member to marshal based on the selector value from the parent container
-	field, err := u.Interface().(Union).Select(selectorVal.Interface())
+	selectedType, err := u.Interface().(Union).Select(selectorVal)
 	if err != nil {
-		return fmt.Errorf("cannot select union member: %v", err)
+		return fmt.Errorf("cannot select union data type: %v", err)
 	}
-	if field == "" {
+	if selectedType == nil {
 		return nil
 	}
 
-	val := u.FieldByName(field)
-	if !val.IsValid() {
-		return fmt.Errorf("invalid union field name %s", field)
+	var d reflect.Value
+
+	if u.Field(0).IsNil() {
+		if selectedType.Kind() == reflect.Ptr {
+			return errors.New("nil data")
+		}
+		d = reflect.New(selectedType).Elem()
+	} else {
+		d = u.Field(0).Elem()
+		if d.Type() != selectedType {
+			if !d.Type().ConvertibleTo(selectedType) {
+				return fmt.Errorf("data has incorrect type %s (expected %s)", d.Type(),
+					selectedType)
+			}
+			d = d.Convert(selectedType)
+		}
 	}
 
-	return marshalValue(buf, val, beginUnionFieldCtx(ctx, u))
+	return marshalValue(buf, d, beginUnionDataCtx(ctx, u))
 }
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
@@ -343,30 +364,49 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 
 	selectorVal := ctx.container.FieldByName(ctx.options.selector)
 	if !selectorVal.IsValid() {
-		return fmt.Errorf("invalid selector field name %s", ctx.options.selector)
+		return fmt.Errorf("invalid selector member name %s", ctx.options.selector)
 	}
 
-	// Select the union member to marshal based on the selector value from the parent container
-	field, err := u.Interface().(Union).Select(selectorVal.Interface())
+	selectedType, err := u.Interface().(Union).Select(selectorVal)
 	if err != nil {
-		return fmt.Errorf("cannot select union member: %v", err)
+		return fmt.Errorf("cannot select union data type: %v", err)
 	}
-	if field == "" {
+	if selectedType == nil {
 		return nil
 	}
 
-	val := u.FieldByName(field)
-	if !val.IsValid() {
-		return fmt.Errorf("invalid union field name %s", field)
+	f := u.Field(0)
+	var d reflect.Value
+
+	if f.IsNil() {
+		if !f.CanSet() {
+			return errors.New("cannot set data")
+		}
+		d = reflect.New(selectedType).Elem()
+	} else {
+		d = f.Elem()
+		if d.Type() != selectedType {
+			if !d.Type().ConvertibleTo(selectedType) {
+				return fmt.Errorf("data has incorrect type %s (expected %s)", d.Type(),
+					selectedType)
+			}
+			d = d.Convert(selectedType)
+		}
 	}
 
-	return unmarshalValue(buf, val, beginUnionFieldCtx(ctx, u))
+	if err := unmarshalValue(buf, d, beginUnionDataCtx(ctx, u)); err != nil {
+		return fmt.Errorf("cannot unmarshal data value: %v", err)
+	}
+
+	if f.IsNil() {
+		f.Set(d)
+	}
+
+	return nil
 }
 
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	switch {
-	case ctx.options.sized && isUnion(s.Type()):
-		return errors.New("cannot be both sized and a union")
 	case ctx.options.sized && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.container.Type())
