@@ -75,11 +75,11 @@ type TPMContext interface {
 	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
 		sessions ...*Session) (ResourceContext, Name, error)
 	ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error)
-	ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObject2B,
+	ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw,
 		secret EncryptedSecret, activateContextAuth, keyContextAuth interface{},
 		sessions ...*Session) (Digest, error)
 	MakeCredential(context ResourceContext, credential Digest, objectName Name,
-		sessions ...*Session) (IDObject2B, EncryptedSecret, error)
+		sessions ...*Session) (IDObjectRaw, EncryptedSecret, error)
 	Unseal(itemContext ResourceContext, itemContextAuth interface{}, sessions ...*Session) (SensitiveData,
 		error)
 	ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
@@ -103,7 +103,7 @@ type TPMContext interface {
 	//	*Signature, error)
 	CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,
 		inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{},
-		sessions ...*Session) (Attest2B, *Signature, error)
+		sessions ...*Session) (AttestRaw, *Signature, error)
 	// Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme,
 	//	pcrSelection PCRSelectionList) (*Attest, *Signature, error)
 	// GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext ResourceContext,

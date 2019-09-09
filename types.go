@@ -419,9 +419,9 @@ type Attest struct {
 	Attest          AttestU `tpm2:"selector:Type"`
 }
 
-type Attest2B []byte
+type AttestRaw []byte
 
-func (a Attest2B) ToStruct() (*Attest, error) {
+func (a AttestRaw) ToStruct() (*Attest, error) {
 	var out Attest
 	if _, err := UnmarshalFromBytes(a, &out); err != nil {
 		return nil, err
@@ -1109,7 +1109,7 @@ func (i *IDObject) Unmarshal(buf io.Reader) error {
 		return fmt.Errorf("cannot read integrityHMAC: %v", err)
 	}
 
-	// This structure should only be unmarshalled from IDObject2B.ToStruct(). Consume the rest of the bytes.
+	// This structure should only be unmarshalled from IDObjectRaw.ToStruct(). Consume the rest of the bytes.
 	encIdentity, err := ioutil.ReadAll(buf)
 	if err != nil {
 		return fmt.Errorf("cannot read encIdentity: %v", err)
@@ -1118,9 +1118,9 @@ func (i *IDObject) Unmarshal(buf io.Reader) error {
 	return nil
 }
 
-type IDObject2B []byte
+type IDObjectRaw []byte
 
-func (i IDObject2B) ToStruct() (*IDObject, error) {
+func (i IDObjectRaw) ToStruct() (*IDObject, error) {
 	var out IDObject
 	if _, err := UnmarshalFromBytes(i, &out); err != nil {
 		return nil, err

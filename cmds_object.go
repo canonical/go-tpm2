@@ -104,7 +104,7 @@ func (t *tpmContext) ReadPublic(objectContext ResourceContext, sessions ...*Sess
 	return t.readPublic(objectContext.Handle(), sessions...)
 }
 
-func (t *tpmContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObject2B,
+func (t *tpmContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw,
 	secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest,
 	error) {
 	if credentialBlob == nil {
@@ -122,8 +122,8 @@ func (t *tpmContext) ActivateCredential(activateContext, keyContext ResourceCont
 }
 
 func (t *tpmContext) MakeCredential(context ResourceContext, credential Digest, objectName Name,
-	sessions ...*Session) (IDObject2B, EncryptedSecret, error) {
-	var credentialBlob IDObject2B
+	sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
+	var credentialBlob IDObjectRaw
 	var secret EncryptedSecret
 	if err := t.RunCommand(CommandMakeCredential, sessions, context, Separator, credential, objectName,
 		Separator, Separator, &credentialBlob, &secret); err != nil {
