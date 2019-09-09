@@ -164,8 +164,7 @@ func createECCSrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) (Resour
 					Mode:      SymModeU{AlgorithmCFB}},
 				Scheme:  ECCScheme{Scheme: AlgorithmNull},
 				CurveID: ECCCurveNIST_P256,
-				KDF:     KDFScheme{Scheme: AlgorithmNull}}},
-		Unique: PublicIDU{&ECCPoint{}}}
+				KDF:     KDFScheme{Scheme: AlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
 	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
 		nil, nil)

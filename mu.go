@@ -149,16 +149,24 @@ func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
 }
 
 func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
+	var d reflect.Value
+
 	if ptr.IsNil() {
 		if ctx.options.sized && ptr.Type().Elem().Kind() == reflect.Struct {
 			// Nil pointers for sized structures are allowed - in this case, marshal a size
 			// field of zero
-			return binary.Write(buf, binary.BigEndian, uint16(0))
+			if err := binary.Write(buf, binary.BigEndian, uint16(0)); err != nil {
+				fmt.Errorf("cannot write size of nil sized struct: %v", err)
+			}
+			return nil
 		}
-		return errors.New("nil pointer")
+
+		d = reflect.Zero(ptr.Type().Elem())
+	} else {
+		d = ptr.Elem()
 	}
 
-	return marshalValue(buf, ptr.Elem(), beginPtrElemCtx(ctx, ptr))
+	return marshalValue(buf, d, beginPtrElemCtx(ctx, ptr))
 }
 
 func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
@@ -190,10 +198,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 	var d reflect.Value
 
 	if u.Field(0).IsNil() {
-		if selectedType.Kind() == reflect.Ptr {
-			return errors.New("nil data")
-		}
-		d = reflect.New(selectedType).Elem()
+		d = reflect.Zero(selectedType)
 	} else {
 		d = u.Field(0).Elem()
 		if d.Type() != selectedType {

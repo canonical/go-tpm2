@@ -74,8 +74,7 @@ func TestCreatePrimary(t *testing.T) {
 						Mode:      SymModeU{AlgorithmCFB}},
 					Scheme:  ECCScheme{Scheme: AlgorithmNull},
 					CurveID: ECCCurveNIST_P256,
-					KDF:     KDFScheme{Scheme: AlgorithmNull}}},
-			Unique: PublicIDU{&ECCPoint{}}}
+					KDF:     KDFScheme{Scheme: AlgorithmNull}}}}
 		creationPCR := PCRSelectionList{
 			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
 			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}

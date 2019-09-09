@@ -73,8 +73,7 @@ func TestCreate(t *testing.T) {
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
 					Scheme:    ECCScheme{Scheme: AlgorithmNull},
 					CurveID:   ECCCurveNIST_P256,
-					KDF:       KDFScheme{Scheme: AlgorithmNull}}},
-			Unique: PublicIDU{&ECCPoint{}}}
+					KDF:       KDFScheme{Scheme: AlgorithmNull}}}}
 
 		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, nil)
 		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
