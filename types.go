@@ -623,7 +623,8 @@ func (s SigSchemeU) Any() *SchemeHash {
 }
 
 type SigScheme struct {
-	Scheme AlgorithmId
+	Scheme  AlgorithmId
+	Details SigSchemeU `tpm2:"selector:Scheme"`
 }
 
 // 11.2.3 Key Derivation Schemes

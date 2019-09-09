@@ -735,7 +735,7 @@ func (u TestStaticTypedUnion) Select(selector reflect.Value) (reflect.Type, erro
 
 type TestStaticTypedUnionContainer struct {
 	Select uint32
-	Union TestStaticTypedUnion `tpm2:"selector:Select"`
+	Union  TestStaticTypedUnion `tpm2:"selector:Select"`
 }
 
 func TestMarshalUnionWithStaticDataType(t *testing.T) {
@@ -746,8 +746,8 @@ func TestMarshalUnionWithStaticDataType(t *testing.T) {
 	}{
 		{
 			desc: "1",
-			in: TestStaticTypedUnionContainer{Select: 1, Union: TestStaticTypedUnion{54432}},
-			out: []byte{0x00, 0x00, 0x00, 0x01, 0xd4, 0xa0},
+			in:   TestStaticTypedUnionContainer{Select: 1, Union: TestStaticTypedUnion{54432}},
+			out:  []byte{0x00, 0x00, 0x00, 0x01, 0xd4, 0xa0},
 		},
 		{
 			desc: "2",
