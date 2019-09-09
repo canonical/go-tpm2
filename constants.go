@@ -335,7 +335,7 @@ const (
 )
 
 const (
-	PropertyFamilyIndicator = iota + 0x100
+	PropertyFamilyIndicator Property = iota + 0x100
 	PropertyLevel
 	PropertyRevision
 	PropertyDayOfYear
@@ -386,7 +386,7 @@ const (
 )
 
 const (
-	PropertyPermanent = iota + 0x200
+	PropertyPermanent Property = iota + 0x200
 	PropertyStartupClear
 	PropertyHRNVIndex
 	PropertyHRLoaded
