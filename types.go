@@ -960,8 +960,14 @@ func (p PublicParamsU) ECCDetail() *ECCParams {
 }
 
 func (p PublicParamsU) AsymDetail() *AsymParams {
-	panic("not implemented")
-	return nil
+	switch d := p.Data.(type) {
+	case *RSAParams:
+		return (*AsymParams)(unsafe.Pointer(d))
+	case *ECCParams:
+		return (*AsymParams)(unsafe.Pointer(d))
+	default:
+		panic(fmt.Sprintf("data type is %s, expected *RSAParams or *ECCParams", reflect.TypeOf(p.Data)))
+	}
 }
 
 type Public struct {
