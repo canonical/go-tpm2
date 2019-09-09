@@ -966,7 +966,8 @@ func (p PublicParamsU) AsymDetail() *AsymParams {
 	case *ECCParams:
 		return (*AsymParams)(unsafe.Pointer(d))
 	default:
-		panic(fmt.Sprintf("data type is %s, expected *RSAParams or *ECCParams", reflect.TypeOf(p.Data)))
+		panic(fmt.Sprintf("data type is %s, expected %s or %s", reflect.TypeOf(p.Data),
+			reflect.TypeOf((*RSAParams)(nil)), reflect.TypeOf((*ECCParams)(nil))))
 	}
 }
 
