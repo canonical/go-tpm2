@@ -99,7 +99,7 @@ func (t *TctiMssim) Reset() error {
 	return t.platformCommand(cmdReset)
 }
 
-func OpenTPMMssim(host string, tpmPort, platformPort uint) (*TctiMssim, error) {
+func OpenMssim(host string, tpmPort, platformPort uint) (*TctiMssim, error) {
 	if host == "" {
 		host = "localhost"
 	}

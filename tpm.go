@@ -400,7 +400,7 @@ func NewTPMContext(tcti io.ReadWriteCloser) (*TPMContext, error) {
 		}
 	}
 	if tcti == nil {
-		tcti, _ = OpenTPMMssim("localhost", 2321, 2322)
+		tcti, _ = OpenMssim("localhost", 2321, 2322)
 	}
 
 	if tcti == nil {

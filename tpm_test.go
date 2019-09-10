@@ -276,7 +276,7 @@ func openTPMSimulatorForTesting(t *testing.T) (*TPMContext, *TctiMssim) {
 		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
 	}
 
-	tcti, err := OpenTPMMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+	tcti, err := OpenMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
 	if err != nil {
 		t.Fatalf("Failed to open mssim connection: %v", err)
 	}
