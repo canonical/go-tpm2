@@ -7,7 +7,6 @@ package tpm2
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -17,12 +16,12 @@ const (
 	maxCommandSize int = 4096
 )
 
-type tctiDeviceLinux struct {
+type TctiDeviceLinux struct {
 	f   *os.File
 	buf *bytes.Reader
 }
 
-func (d *tctiDeviceLinux) readMoreData() error {
+func (d *TctiDeviceLinux) readMoreData() error {
 	fds := []unix.PollFd{unix.PollFd{Fd: int32(d.f.Fd()), Events: unix.POLLIN}}
 	_, err := unix.Ppoll(fds, nil, nil)
 	if err != nil {
@@ -43,7 +42,7 @@ func (d *tctiDeviceLinux) readMoreData() error {
 	return nil
 }
 
-func (d *tctiDeviceLinux) Read(data []byte) (int, error) {
+func (d *TctiDeviceLinux) Read(data []byte) (int, error) {
 	if d.buf == nil || d.buf.Len() == 0 {
 		if err := d.readMoreData(); err != nil {
 			return 0, err
@@ -53,15 +52,15 @@ func (d *tctiDeviceLinux) Read(data []byte) (int, error) {
 	return d.buf.Read(data)
 }
 
-func (d *tctiDeviceLinux) Write(data []byte) (int, error) {
+func (d *TctiDeviceLinux) Write(data []byte) (int, error) {
 	return d.f.Write(data)
 }
 
-func (d *tctiDeviceLinux) Close() error {
+func (d *TctiDeviceLinux) Close() error {
 	return d.f.Close()
 }
 
-func OpenTPMDevice(path string) (io.ReadWriteCloser, error) {
+func OpenTPMDevice(path string) (*TctiDeviceLinux, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open linux TPM device: %v", err)
@@ -76,5 +75,5 @@ func OpenTPMDevice(path string) (io.ReadWriteCloser, error) {
 		return nil, fmt.Errorf("unsupported file mode %v", s.Mode())
 	}
 
-	return &tctiDeviceLinux{f: f}, nil
+	return &TctiDeviceLinux{f: f}, nil
 }
