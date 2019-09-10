@@ -9,8 +9,11 @@ import (
 	"fmt"
 )
 
+// UnmarshallingError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods
+// that wrap around this function) for most errors that occur after successfully reading a command response from
+// the transmission interface.
 type UnmarshallingError struct {
-	Command CommandCode
+	Command CommandCode // Command code associated with this error
 	context string
 	err     error
 }
@@ -19,6 +22,8 @@ func (e UnmarshallingError) Error() string {
 	return fmt.Sprintf("cannot unmarshal %s for command %s: %v", e.context, e.Command, e.err)
 }
 
+// InvalidAuthResponseError is returned from TPMContext.RunCommand (and any other methods that wrap around this
+// function) if a response HMAC check failed.
 type InvalidAuthResponseError struct {
 	Command CommandCode
 	msg     string
@@ -28,18 +33,22 @@ func (e InvalidAuthResponseError) Error() string {
 	return fmt.Sprintf("TPM returned an invalid auth response for command %s: %s", e.Command, e.msg)
 }
 
+// TPMReadError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that
+// wrap around this function) if the transmission interface returns an error during reading.
 type TPMReadError struct {
-	Command CommandCode
-	Err     error
+	Command CommandCode // Command code associated with this error
+	Err     error       // Error returned from the transmission interface
 }
 
 func (e TPMReadError) Error() string {
 	return fmt.Sprintf("cannot read response to command %s from TPM: %v", e.Command, e.Err)
 }
 
+// TPMWriteError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that
+// wrap around this function) if the transmission interface returns an error during writing.
 type TPMWriteError struct {
-	Command CommandCode
-	Err     error
+	Command CommandCode // Command code associated with this error
+	Err     error       // Error returned from the transmission interface
 }
 
 func (e TPMWriteError) Error() string {
@@ -63,18 +72,22 @@ const (
 	fmt1IndexShift uint = 8
 )
 
+// TPM1Error is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that wrap around
+// this function) if the TPM response code indicates an error from a TPM 1.2 device.
 type TPM1Error struct {
-	Command CommandCode
-	Code    ResponseCode
+	Command CommandCode  // Command code associated with this error
+	Code    ResponseCode // Response code
 }
 
 func (e TPM1Error) Error() string {
 	return fmt.Sprintf("TPM returned a 1.2 error whilst executing command %s: 0x%08x", e.Command, e.Code)
 }
 
+// TPMVendorError is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that wrap
+// around this function) if the TPM response code indicates a vendor-specific error.
 type TPMVendorError struct {
-	Command CommandCode
-	Code    ResponseCode
+	Command CommandCode  // Command code associated with this error
+	Code    ResponseCode // Response code
 }
 
 func (e TPMVendorError) Error() string {
@@ -82,11 +95,14 @@ func (e TPMVendorError) Error() string {
 		e.Code)
 }
 
+// WarningCode represents a response from the TPM that is not necessarily an error.
 type WarningCode ResponseCode
 
+// TPMWarning is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that wrap around
+// this function) if the TPM response code indicates a condition that is not necessarily an error.
 type TPMWarning struct {
-	Command CommandCode
-	Code    WarningCode
+	Command CommandCode // Command code associated with this error
+	Code    WarningCode // Warning code
 }
 
 func (e TPMWarning) Error() string {
@@ -98,11 +114,16 @@ func (e TPMWarning) Error() string {
 	return builder.String()
 }
 
+// ErrorCode0 represents a format-zero error code from the TPM. These error codes are not associated with a
+// handle, parameter or session.
 type ErrorCode0 ResponseCode
 
+// TPMError is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that wrap around
+// this function) if the TPM response code indicates an error that is not associated with a handle, parameter or
+// session.
 type TPMError struct {
-	Command CommandCode
-	Code    ErrorCode0
+	Command CommandCode // Command code associated with this error
+	Code    ErrorCode0  // Error code
 }
 
 func (e TPMError) Error() string {
@@ -114,12 +135,17 @@ func (e TPMError) Error() string {
 	return builder.String()
 }
 
+// ErrorCode1 represents a format-one error code from the TPM. These error codes are associated with a handle,
+// parameter or session.
 type ErrorCode1 ResponseCode
 
+// TPMParameterError is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that
+// wrap around this function) if the TPM response code indicates an error that is associated with a command
+// parameter.
 type TPMParameterError struct {
-	Command CommandCode
-	Code    ErrorCode1
-	Index   int
+	Command CommandCode // Command code associated with this error
+	Code    ErrorCode1  // Error code
+	Index   int         // Index of the command parameter associated with this error, starting from 1
 }
 
 func (e TPMParameterError) Error() string {
@@ -132,10 +158,12 @@ func (e TPMParameterError) Error() string {
 	return builder.String()
 }
 
+// TPMSessionError is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that wrap
+// around this function) if the TPM response code indicates an error that is associated with a session.
 type TPMSessionError struct {
-	Command CommandCode
-	Code    ErrorCode1
-	Index   int
+	Command CommandCode // Command code associated with this error
+	Code    ErrorCode1  // Error code
+	Index   int         // Index of the session associated with this error in the authorization area, starting from 1
 }
 
 func (e TPMSessionError) Error() string {
@@ -148,10 +176,12 @@ func (e TPMSessionError) Error() string {
 	return builder.String()
 }
 
+// TPMHandleError is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that wrap
+// around this function) if the TPM response code indicates an error that is associated with a command handle.
 type TPMHandleError struct {
-	Command CommandCode
-	Code    ErrorCode1
-	Index   int
+	Command CommandCode // Command code associated with this error
+	Code    ErrorCode1  // Error code
+	Index   int         // Index of the command handle associated with this error, starting from 1
 }
 
 func (e TPMHandleError) Error() string {
@@ -164,6 +194,9 @@ func (e TPMHandleError) Error() string {
 	return builder.String()
 }
 
+// DecodeResponseCode decodes the ResponseCode provided via resp. If the specified response code is Success, it
+// returns no error, else it returns an error that is appropriate for the response code. The command code is used
+// for adding context to the returned error.
 func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 	if resp == ResponseCode(Success) {
 		return nil

@@ -10,9 +10,13 @@ import (
 	"fmt"
 )
 
+// ResourceContext references a resource that resides on the TPM. Implementations of ResourceContext maintain
+// some host-side state in order to be able to participate in HMAC sessions and session-based parameter encryption.
 type ResourceContext interface {
+	// Handle returns the handle of the resource on the TPM. If the resource has been flushed from the TPM,
+	// this will return HandleNull
 	Handle() Handle
-	Name() Name
+	Name() Name // The name of the resource
 }
 
 type SessionContext interface {
@@ -178,6 +182,18 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 	return nil
 }
 
+// WrapHandle creates and returns a ResourceContext for the specified handle. TPMContext will maintain a reference
+// to the returned ResourceContext until it is flushed from the TPM. If the TPMContext is already tracking a
+// ResourceContext for the specified handle, it returns the existing ResourceContext.
+//
+// If the handle references a NV index or an object, it will execute some TPM commands to initialize state that is
+// maintained on the host side. An error will be returned if this fails. It will return an error if the specified
+// handle references a NV index or object that does not currently reside on the TPM.
+//
+// It will return an error if handle references a PCR index or a session. It is not possible to create a
+// ResourceContext for a session that is not started by TPMContext.StartAuthSession.
+//
+// It always succeeds if the specified handle references a permanent resource.
 func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	if rc, exists := t.resources[handle]; exists {
 		return rc, nil
