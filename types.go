@@ -53,15 +53,15 @@ type PropertyPCR uint32
 
 // 7) Handles
 
-// Handle implements the TPM_HANDLE type.
+// Handle implements the TPM_HANDLE type, and is a numeric identifier that references a resource on the TPM.
 type Handle uint32
 
 // 8) Attributes
 
-// AlgorithmAttributes implements the TPMA_ALGORITHM type.
+// AlgorithmAttributes implements the TPMA_ALGORITHM type and represents the attributes for an algorithm.
 type AlgorithmAttributes uint32
 
-// ObjectAttributes implements the TPMA_OBJECT type.
+// ObjectAttributes implements the TPMA_OBJECT type, and represents the attributes for an object.
 type ObjectAttributes uint32
 
 // Locality implements the TPMA_LOCALITY type.
@@ -73,16 +73,17 @@ type PermanentAttributes uint32
 // StatupClearAttributes implements the TPMA_STARTUP_CLEAR type.
 type StartupClearAttributes uint32
 
-// CommandAttributes implements the TPMA_CC type.
+// CommandAttributes implements the TPMA_CC type and represents the attributes of a command. It also encodes
+// the command code to which these attributes belong, and the number of command handles for the command.
 type CommandAttributes uint32
 
-// CommandCode returns the command code that a set of attributes reference.
+// CommandCode returns the command code that a set of attributes belongs to.
 func (a CommandAttributes) CommandCode() CommandCode {
 	return CommandCode(a & 0xffff)
 }
 
 // NumberOfCommandHandles returns the number of command handles for the command that a set of attributes
-// reference.
+// belong to.
 func (a CommandAttributes) NumberOfCommandHandles() int {
 	return int((a & 0x0e000000) >> 25)
 }
@@ -1500,7 +1501,8 @@ func (i IDObjectRaw) ToStruct() (*IDObject, error) {
 // NVType implements the TPM_NT type.
 type NVType uint32
 
-// NVAttributes implements the TPMA_NV type.
+// NVAttributes implements the TPMA_NV type, and represents the attributes of a NV index. When exchanged with
+// the TPM, some bits are reserved to encode the type of the NV index (NVType).
 type NVAttributes uint32
 
 // Type returns the NVType from a composite NVAttributes value.
@@ -1508,7 +1510,8 @@ func (a NVAttributes) Type() NVType {
 	return NVType((a & 0xf0) >> 4)
 }
 
-// MakeNVAttributes converts a NVAttributes value and NVType value in to a composite NVAttributes value.
+// MakeNVAttributes converts a NVAttributes value and NVType value in to a composite NVAttributes value suitable
+// for marshalling to the TPM wire format.
 func MakeNVAttributes(a NVAttributes, t NVType) NVAttributes {
 	return a | NVAttributes(t<<4)
 }
