@@ -231,8 +231,6 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	switch {
-	case ctx.options.sized && isUnion(s.Type()):
-		return errors.New("cannot be both sized and a union")
 	case ctx.options.sized && !arrivedFromPointer(ctx, s):
 		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
 			ctx.container.Type())
