@@ -350,10 +350,12 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 
 	if ctx.options.sized && ptr.Type().Elem().Kind() == reflect.Struct {
 		b, err := makeSizedStructReader(buf)
-		if err != nil {
+		switch {
+		case err != nil:
 			return err
-		}
-		if b == nil {
+		case b == nil && !ptr.IsNil():
+			return errors.New("non-nil pointer for zero-sized sized structure")
+		case b == nil:
 			return nil
 		}
 		srcBuf = b

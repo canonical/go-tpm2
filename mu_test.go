@@ -446,6 +446,20 @@ func TestMarshalSizedStructFromPointer(t *testing.T) {
 	}
 }
 
+func TestUnmarshalZeroSizedStructToNonNilPointer(t *testing.T) {
+	a := TestStructWithPointerSizedStruct{S: &TestSizedStruct{}}
+
+	_, err := UnmarshalFromBytes([]byte{0x04, 0x0a, 0x00, 0x08, 0x00, 0x00}, &a)
+	if err == nil {
+		t.Fatalf("UnmarshalFromBytes should have failed")
+	}
+	if err.Error() != "cannot unmarshal struct type tpm2.TestStructWithPointerSizedStruct: cannot unmarshal "+
+		"field S: cannot unmarshal pointer type *tpm2.TestSizedStruct: non-nil pointer for zero-sized "+
+		"sized structure" {
+		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+	}
+}
+
 func TestMarshalNilPointer(t *testing.T) {
 	a := TestStructWithEmbeddedStructs{A: true, B: 55422}
 	out, err := MarshalToBytes(a)
