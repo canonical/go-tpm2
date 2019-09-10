@@ -133,8 +133,8 @@ type TPMContext struct {
 	maxSubmissions uint
 }
 
-// Close evicts all non-permanent ResourceContext instances created by this TPMContext, and then calls Close on
-// the transmission interface.
+// Close invalidates all non-permanent ResourceContext instances created by this TPMContext (so that
+// ResourceContext.Handle will return HandleNull), and then calls Close on the transmission interface.
 func (t *TPMContext) Close() error {
 	for _, rc := range t.resources {
 		t.evictResourceContext(rc)
