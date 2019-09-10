@@ -150,7 +150,7 @@ func (s *Session) updateIncludeAuthValueInHMACKey(associatedContext ResourceCont
 	}
 }
 
-func buildCommandSessionAuth(tpm *tpmContext, session *Session, associatedContext ResourceContext,
+func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContext ResourceContext,
 	commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce,
 	encryptNonce Nonce) (*authCommand, error) {
 	sessionContext := session.Context.(*sessionContext)
@@ -182,7 +182,7 @@ func buildCommandPasswordAuth(authValue Auth) *authCommand {
 	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: authValue}
 }
 
-func buildCommandAuth(tpm *tpmContext, param *sessionParam, commandCode CommandCode, commandHandles []Name,
+func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name,
 	cpBytes []byte, decryptNonce, encryptNonce Nonce) (*authCommand, error) {
 	if param.session == nil {
 		return buildCommandPasswordAuth(Auth(param.authValue)), nil
@@ -192,7 +192,7 @@ func buildCommandAuth(tpm *tpmContext, param *sessionParam, commandCode CommandC
 	}
 }
 
-func processResponseSessionAuth(tpm *tpmContext, resp authResponse, session *Session,
+func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Session,
 	associatedContext ResourceContext, commandCode CommandCode, responseCode ResponseCode,
 	rpBytes []byte) error {
 	sessionContext := session.Context.(*sessionContext)
@@ -226,7 +226,7 @@ func processResponseSessionAuth(tpm *tpmContext, resp authResponse, session *Ses
 	return nil
 }
 
-func processResponseAuth(tpm *tpmContext, resp authResponse, param *sessionParam, commandCode CommandCode,
+func processResponseAuth(tpm *TPMContext, resp authResponse, param *sessionParam, commandCode CommandCode,
 	responseCode ResponseCode, rpBytes []byte) error {
 	if param.session == nil {
 		return nil
@@ -236,7 +236,7 @@ func processResponseAuth(tpm *tpmContext, resp authResponse, param *sessionParam
 		responseCode, rpBytes)
 }
 
-func buildCommandAuthArea(tpm *tpmContext, sessionParams []*sessionParam, commandCode CommandCode,
+func buildCommandAuthArea(tpm *TPMContext, sessionParams []*sessionParam, commandCode CommandCode,
 	commandHandles []Name, cpBytes []byte) (commandAuthArea, error) {
 	if len(sessionParams) > 3 {
 		return nil, errors.New("too many session parameters provided")
@@ -270,7 +270,7 @@ func buildCommandAuthArea(tpm *tpmContext, sessionParams []*sessionParam, comman
 	return area, nil
 }
 
-func processResponseAuthArea(tpm *tpmContext, authResponses []authResponse, sessionParams []*sessionParam,
+func processResponseAuthArea(tpm *TPMContext, authResponses []authResponse, sessionParams []*sessionParam,
 	commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
 	for i, resp := range authResponses {
 		if err := processResponseAuth(tpm, resp, sessionParams[i], commandCode, responseCode,
@@ -287,7 +287,7 @@ func processResponseAuthArea(tpm *tpmContext, authResponses []authResponse, sess
 	return nil
 }
 
-func (t *tpmContext) validateAndAppendSessionParam(params []*sessionParam, in interface{}) ([]*sessionParam,
+func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in interface{}) ([]*sessionParam,
 	error) {
 	makeSessionParamFromAuth := func(auth interface{}) *sessionParam {
 		switch a := auth.(type) {

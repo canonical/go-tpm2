@@ -4,12 +4,14 @@
 
 package tpm2
 
+// Section 11 - Session Commands
+
 import (
 	"errors"
 	"fmt"
 )
 
-func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
+func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 	authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: AlgorithmNull}
@@ -87,6 +89,6 @@ func (t *tpmContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	return sessionContext, nil
 }
 
-func (t *tpmContext) PolicyRestart(sessionHandle ResourceContext) error {
+func (t *TPMContext) PolicyRestart(sessionHandle ResourceContext) error {
 	return t.RunCommand(CommandPolicyRestart, nil, sessionHandle)
 }

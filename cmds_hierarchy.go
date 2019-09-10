@@ -4,11 +4,13 @@
 
 package tpm2
 
+// Section 24 - Hierarchy Commands
+
 import (
 	"fmt"
 )
 
-func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
+func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{},
 	sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
 	if inPublic == nil {
@@ -46,7 +48,7 @@ func (t *tpmContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 		&creationTicket, name, nil
 }
 
-func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
+func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
 	if err != nil {
@@ -111,12 +113,12 @@ func (t *tpmContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	return nil
 }
 
-func (t *tpmContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
+func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
 	return t.RunCommand(CommandClearControl, nil, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth},
 		Separator, disable)
 }
 
-func (t *tpmContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{},
+func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{},
 	sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})

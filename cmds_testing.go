@@ -4,11 +4,13 @@
 
 package tpm2
 
-func (t *tpmContext) SelfTest(fullTest bool) error {
+// Section 9 - Start-up
+
+func (t *TPMContext) SelfTest(fullTest bool) error {
 	return t.RunCommand(CommandSelfTest, nil, Separator, fullTest)
 }
 
-func (t *tpmContext) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error) {
+func (t *TPMContext) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error) {
 	var toDoList AlgorithmList
 	if err := t.RunCommand(CommandIncrementalSelfTest, nil, Separator, toTest, Separator, Separator,
 		&toDoList); err != nil {
@@ -17,7 +19,7 @@ func (t *tpmContext) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, e
 	return toDoList, nil
 }
 
-func (t *tpmContext) GetTestResult() (MaxBuffer, ResponseCode, error) {
+func (t *TPMContext) GetTestResult() (MaxBuffer, ResponseCode, error) {
 	var outData MaxBuffer
 	var testResult ResponseCode
 	if err := t.RunCommand(CommandGetTestResult, nil, Separator, Separator, Separator, &outData,

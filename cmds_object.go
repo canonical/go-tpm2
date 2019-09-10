@@ -4,11 +4,13 @@
 
 package tpm2
 
+// Section 12 - Object Commands
+
 import (
 	"fmt"
 )
 
-func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{},
 	sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
 	if inPublic == nil {
@@ -36,7 +38,7 @@ func (t *tpmContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	return outPrivate, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
 }
 
-func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
+func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
 	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error) {
 	if inPublic == nil {
 		return nil, nil, makeInvalidParamError("inPublic", "nil value")
@@ -61,7 +63,7 @@ func (t *tpmContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	return objectContext, name, nil
 }
 
-func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
+func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
 	sessions ...*Session) (ResourceContext, Name, error) {
 	if inPublic == nil {
 		return nil, nil, makeInvalidParamError("inPublic", "nil value")
@@ -85,7 +87,7 @@ func (t *tpmContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	return objectContext, name, nil
 }
 
-func (t *tpmContext) readPublic(objectHandle Handle, sessions ...*Session) (*Public, Name, Name, error) {
+func (t *TPMContext) readPublic(objectHandle Handle, sessions ...*Session) (*Public, Name, Name, error) {
 	var outPublic publicSized
 	var name Name
 	var qualifiedName Name
@@ -96,7 +98,7 @@ func (t *tpmContext) readPublic(objectHandle Handle, sessions ...*Session) (*Pub
 	return outPublic.Ptr, name, qualifiedName, nil
 }
 
-func (t *tpmContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
+func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
 	if err := t.checkResourceContextParam(objectContext); err != nil {
 		return nil, nil, nil, fmt.Errorf("invalid resource context for objectContext: %v", err)
 	}
@@ -104,7 +106,7 @@ func (t *tpmContext) ReadPublic(objectContext ResourceContext, sessions ...*Sess
 	return t.readPublic(objectContext.Handle(), sessions...)
 }
 
-func (t *tpmContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw,
+func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw,
 	secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest,
 	error) {
 	if credentialBlob == nil {
@@ -121,7 +123,7 @@ func (t *tpmContext) ActivateCredential(activateContext, keyContext ResourceCont
 	return certInfo, nil
 }
 
-func (t *tpmContext) MakeCredential(context ResourceContext, credential Digest, objectName Name,
+func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name,
 	sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
 	var credentialBlob IDObjectRaw
 	var secret EncryptedSecret
@@ -132,7 +134,7 @@ func (t *tpmContext) MakeCredential(context ResourceContext, credential Digest, 
 	return credentialBlob, secret, nil
 }
 
-func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interface{},
+func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuth interface{},
 	sessions ...*Session) (SensitiveData, error) {
 	var outData SensitiveData
 
@@ -145,7 +147,7 @@ func (t *tpmContext) Unseal(itemContext ResourceContext, itemContextAuth interfa
 	return outData, nil
 }
 
-func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
+func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
 	objectContextAuth interface{}, sessions ...*Session) (Private, error) {
 	var outPrivate Private
 
@@ -158,7 +160,7 @@ func (t *tpmContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 	return outPrivate, nil
 }
 
-func (t *tpmContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
+func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
 	if inPublic == nil {
 		return nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")

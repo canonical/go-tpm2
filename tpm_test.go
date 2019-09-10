@@ -24,19 +24,19 @@ var (
 	testAuth  = []byte("1234")
 )
 
-func setHierarchyAuthForTest(t *testing.T, tpm TPMContext, hierarchy Handle) {
+func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
 		t.Fatalf("HierarchyChangeAuth failed: %v", err)
 	}
 }
 
-func resetHierarchyAuth(t *testing.T, tpm TPMContext, hierarchy Handle) {
+func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 	if err := tpm.HierarchyChangeAuth(hierarchy, nil, testAuth); err != nil {
 		t.Errorf("HierarchyChangeAuth failed: %v", err)
 	}
 }
 
-func undefineNVSpace(t *testing.T, tpm TPMContext, context ResourceContext, authHandle Handle, auth interface{}) {
+func undefineNVSpace(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle, auth interface{}) {
 	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
@@ -66,7 +66,7 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 	}
 }
 
-func verifyCreationData(t *testing.T, tpm TPMContext, creationData *CreationData, creationHash Digest,
+func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest,
 	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
 	nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
 	var parentQualifiedName Name
@@ -126,7 +126,7 @@ func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Ha
 	}
 }
 
-func createRSASrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) ResourceContext {
+func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
@@ -150,7 +150,7 @@ func createRSASrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) Resourc
 	return objectHandle
 }
 
-func createECCSrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) (ResourceContext, Name) {
+func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) (ResourceContext, Name) {
 	template := Public{
 		Type:    AlgorithmECC,
 		NameAlg: AlgorithmSHA256,
@@ -174,7 +174,7 @@ func createECCSrkForTesting(t *testing.T, tpm TPMContext, userAuth Auth) (Resour
 	return objectHandle, name
 }
 
-func createRSAEkForTesting(t *testing.T, tpm TPMContext) ResourceContext {
+func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
@@ -199,7 +199,7 @@ func createRSAEkForTesting(t *testing.T, tpm TPMContext) ResourceContext {
 	return objectHandle
 }
 
-func createAndLoadRSAAkForTesting(t *testing.T, tpm TPMContext, ek ResourceContext,
+func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext,
 	userAuth Auth) ResourceContext {
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 	if err != nil {
@@ -253,13 +253,13 @@ func nameAlgorithm(n Name) AlgorithmId {
 	return alg
 }
 
-func flushContext(t *testing.T, tpm TPMContext, context ResourceContext) {
+func flushContext(t *testing.T, tpm *TPMContext, context ResourceContext) {
 	if err := tpm.FlushContext(context); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 }
 
-func verifyContextFlushed(t *testing.T, tpm TPMContext, context ResourceContext) {
+func verifyContextFlushed(t *testing.T, tpm *TPMContext, context ResourceContext) {
 	if context.Handle() == HandleNull {
 		return
 	}
@@ -267,7 +267,7 @@ func verifyContextFlushed(t *testing.T, tpm TPMContext, context ResourceContext)
 	flushContext(t, tpm, context)
 }
 
-func openTPMSimulatorForTesting(t *testing.T) (TPMContext, *TctiMssim) {
+func openTPMSimulatorForTesting(t *testing.T) (*TPMContext, *TctiMssim) {
 	if !*useMssim {
 		t.SkipNow()
 	}
@@ -292,7 +292,7 @@ func openTPMSimulatorForTesting(t *testing.T) (TPMContext, *TctiMssim) {
 	return tpm, tcti
 }
 
-func resetTPMSimulator(t *testing.T, tpm TPMContext, tcti *TctiMssim) {
+func resetTPMSimulator(t *testing.T, tpm *TPMContext, tcti *TctiMssim) {
 	if err := tpm.Shutdown(StartupClear); err != nil {
 		t.Fatalf("Shutdown failed: %v", err)
 	}
@@ -304,7 +304,7 @@ func resetTPMSimulator(t *testing.T, tpm TPMContext, tcti *TctiMssim) {
 	}
 }
 
-func openTPMForTesting(t *testing.T) TPMContext {
+func openTPMForTesting(t *testing.T) *TPMContext {
 	if !*useTpm {
 		tpm, _ := openTPMSimulatorForTesting(t)
 		return tpm
@@ -323,7 +323,7 @@ func openTPMForTesting(t *testing.T) TPMContext {
 	return tpm
 }
 
-func closeTPM(t *testing.T, tpm TPMContext) {
+func closeTPM(t *testing.T, tpm *TPMContext) {
 	if *useMssim {
 		if err := tpm.Shutdown(StartupClear); err != nil {
 			t.Errorf("Shutdown failed: %v", err)

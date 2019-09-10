@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func getDictionaryAttackParams(t *testing.T, tpm TPMContext) (uint32, uint32, uint32) {
+func getDictionaryAttackParams(t *testing.T, tpm *TPMContext) (uint32, uint32, uint32) {
 	props, err := tpm.GetCapabilityTPMProperties(PropertyMaxAuthFail, 3)
 	if err != nil {
 		t.Fatalf("GetCapability failed: %v", err)

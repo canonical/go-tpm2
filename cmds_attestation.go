@@ -4,7 +4,13 @@
 
 package tpm2
 
-func (t *tpmContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data,
+// Section 18 - Attestation Commands
+
+// func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualifyingData Data,
+//	inScheme *SigScheme, sessions ...*Session) (AttestRaw, *Signature, error) {
+// }
+
+func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data,
 	creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation,
 	signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if creationTicket == nil {
@@ -30,3 +36,20 @@ func (t *tpmContext) CertifyCreation(signContext, objectContext ResourceContext,
 
 	return certifyInfo, &signature, nil
 }
+
+// func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme,
+//	pcrSelection PCRSelectionList, session ...*Session) (AttestRaw, *Signature, error) {
+// }
+
+// func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContext,
+//	sessionContext ResourceContext, qualifyingData Data, inScheme *SigScheme, sessions ...*Session) (AttestRaw,
+//	*Signature, error) {
+// }
+
+// func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext ResourceContext,
+//	qualifyingData Data, inScheme *SigScheme, sessions ...*Session) (AttestRaw, *Signature, error) {
+// }
+
+// func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext ResourceContext, qualifyingData Data,
+//	inScheme *SigScheme, sessions ...*Session) (AttestRaw, *Signature, error) {
+// }

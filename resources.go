@@ -121,7 +121,7 @@ func (r *sessionContext) NonceTPM() Nonce {
 	return r.nonceTPM
 }
 
-func makeNVIndexContext(t *tpmContext, handle Handle) (ResourceContext, error) {
+func makeNVIndexContext(t *TPMContext, handle Handle) (ResourceContext, error) {
 	pub, name, err := t.nvReadPublic(handle)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func makeNVIndexContext(t *tpmContext, handle Handle) (ResourceContext, error) {
 	return &nvIndexContext{handle: handle, public: *pub, name: name}, nil
 }
 
-func makeObjectContext(t *tpmContext, handle Handle) (ResourceContext, error) {
+func makeObjectContext(t *TPMContext, handle Handle) (ResourceContext, error) {
 	pub, name, _, err := t.readPublic(handle)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func makeObjectContext(t *tpmContext, handle Handle) (ResourceContext, error) {
 	return &objectContext{handle: handle, public: *pub, name: name}, nil
 }
 
-func (t *tpmContext) evictResourceContext(rc ResourceContext) {
+func (t *TPMContext) evictResourceContext(rc ResourceContext) {
 	if _, isPermanent := rc.(permanentContext); isPermanent {
 		panic("Attempting to evict a permanent resource context")
 	}
@@ -148,7 +148,7 @@ func (t *tpmContext) evictResourceContext(rc ResourceContext) {
 	rc.(resourceContextPrivate).invalidate()
 }
 
-func (t *tpmContext) addResourceContext(rc ResourceContext) {
+func (t *TPMContext) addResourceContext(rc ResourceContext) {
 	if _, isPermanent := rc.(permanentContext); isPermanent {
 		return
 	}
@@ -161,7 +161,7 @@ func (t *tpmContext) addResourceContext(rc ResourceContext) {
 	t.resources[rc.Handle()] = rc
 }
 
-func (t *tpmContext) checkResourceContextParam(rc ResourceContext) error {
+func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 	if rc == nil {
 		return errors.New("nil value")
 	}
@@ -178,7 +178,7 @@ func (t *tpmContext) checkResourceContextParam(rc ResourceContext) error {
 	return nil
 }
 
-func (t *tpmContext) WrapHandle(handle Handle) (ResourceContext, error) {
+func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	if rc, exists := t.resources[handle]; exists {
 		return rc, nil
 	}

@@ -4,6 +4,8 @@
 
 package tpm2
 
+// Section 10 - Testing
+
 import (
 	"fmt"
 )
@@ -26,7 +28,7 @@ func computeStartupType(startupType StartupType, origTime, newTime *TimeInfo) su
 	return suTypeRestart
 }
 
-func (t *tpmContext) Startup(startupType StartupType) error {
+func (t *TPMContext) Startup(startupType StartupType) error {
 	origTime, err := t.ReadClock()
 	if err != nil {
 		tpmErr, isTPMErr := err.(TPMError)
@@ -82,6 +84,6 @@ func (t *tpmContext) Startup(startupType StartupType) error {
 	return nil
 }
 
-func (t *tpmContext) Shutdown(shutdownType StartupType) error {
+func (t *TPMContext) Shutdown(shutdownType StartupType) error {
 	return t.RunCommand(CommandShutdown, nil, Separator, shutdownType)
 }

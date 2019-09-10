@@ -4,6 +4,8 @@
 
 package tpm2
 
+// Section 28 - Context Management
+
 import (
 	"fmt"
 	"reflect"
@@ -97,7 +99,7 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 	return nil, nil, fmt.Errorf("invalid saved context type (%d)", d.ContextType)
 }
 
-func (t *tpmContext) ContextSave(saveContext ResourceContext) (*Context, error) {
+func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) {
 	var context Context
 
 	if err := t.RunCommand(CommandContextSave, nil, saveContext, Separator, Separator, Separator,
@@ -119,7 +121,7 @@ func (t *tpmContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 	return &context, nil
 }
 
-func (t *tpmContext) ContextLoad(context *Context) (ResourceContext, error) {
+func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 	if context == nil {
 		return nil, makeInvalidParamError("context", "nil value")
 	}
@@ -151,7 +153,7 @@ func (t *tpmContext) ContextLoad(context *Context) (ResourceContext, error) {
 	return rc, nil
 }
 
-func (t *tpmContext) FlushContext(flushContext ResourceContext) error {
+func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 	if err := t.checkResourceContextParam(flushContext); err != nil {
 		return fmt.Errorf("invalid resource context for flushContext: %v", err)
 	}
@@ -164,7 +166,7 @@ func (t *tpmContext) FlushContext(flushContext ResourceContext) error {
 	return nil
 }
 
-func (t *tpmContext) EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle,
+func (t *TPMContext) EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle,
 	authAuth interface{}) (ResourceContext, error) {
 	if err := t.RunCommand(CommandEvictControl, nil, HandleWithAuth{Handle: auth, Auth: authAuth},
 		objectContext, Separator, persistentHandle); err != nil {

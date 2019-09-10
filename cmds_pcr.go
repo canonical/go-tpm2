@@ -4,6 +4,8 @@
 
 package tpm2
 
+// Section 22 - Integrity Collection (PCR)
+
 import (
 	"fmt"
 	"sort"
@@ -39,12 +41,12 @@ func (l *PCRSelectionList) subtract(x PCRSelectionList) {
 	*l = (*l)[:n]
 }
 
-func (t *tpmContext) PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error {
+func (t *TPMContext) PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error {
 	return t.RunCommand(CommandPCRExtend, nil, HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth},
 		Separator, digests)
 }
 
-func (t *tpmContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{},
+func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{},
 	sessions ...*Session) (TaggedHashList, error) {
 	var digests TaggedHashList
 	if err := t.RunCommand(CommandPCREvent, sessions, HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth},
@@ -54,7 +56,7 @@ func (t *tpmContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth i
 	return digests, nil
 }
 
-func (t *tpmContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestList, error) {
+func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestList, error) {
 	var remaining PCRSelectionList
 	for _, s := range pcrSelectionIn {
 		c := PCRSelection{Hash: s.Hash}

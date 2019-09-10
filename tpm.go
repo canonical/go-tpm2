@@ -13,212 +13,6 @@ import (
 	"reflect"
 )
 
-type separatorSentinel struct{}
-
-var Separator separatorSentinel
-
-type SessionAttributes int
-
-const (
-	AttrContinueSession SessionAttributes = 1 << iota
-	AttrCommandEncrypt
-	AttrResponseEncrypt
-)
-
-type Session struct {
-	Context   ResourceContext
-	AuthValue []byte
-	Attrs     SessionAttributes
-
-	includeAuthValue bool
-}
-
-type HandleWithAuth struct {
-	Handle Handle
-	Auth   interface{}
-}
-
-type ResourceWithAuth struct {
-	Context ResourceContext
-	Auth    interface{}
-}
-
-type TPMContext interface {
-	Close() error
-
-	RunCommandBytes(tag StructTag, commandCode CommandCode, in []byte) (ResponseCode, StructTag, []byte, error)
-	RunCommand(commandCode CommandCode, sessions []*Session, params ...interface{}) error
-
-	SetMaxSubmissions(max uint)
-	WrapHandle(handle Handle) (ResourceContext, error)
-
-	// Section 9 - Start-up
-	Startup(startupType StartupType) error
-	Shutdown(shutdownType StartupType) error
-
-	// Section 10 - Testing
-	SelfTest(fullTest bool) error
-	IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error)
-	GetTestResult() (MaxBuffer, ResponseCode, error)
-
-	// Section 11 - Session Commands
-	StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
-		authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error)
-	PolicyRestart(sessionContext ResourceContext) error
-
-	// Section 12 - Object Commands
-	Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, parentHandleAuth interface{}, sessions ...*Session) (Private,
-		*Public, *CreationData, Digest, *TkCreation, error)
-	Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
-		parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error)
-	LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
-		sessions ...*Session) (ResourceContext, Name, error)
-	ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error)
-	ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw,
-		secret EncryptedSecret, activateContextAuth, keyContextAuth interface{},
-		sessions ...*Session) (Digest, error)
-	MakeCredential(context ResourceContext, credential Digest, objectName Name,
-		sessions ...*Session) (IDObjectRaw, EncryptedSecret, error)
-	Unseal(itemContext ResourceContext, itemContextAuth interface{}, sessions ...*Session) (SensitiveData,
-		error)
-	ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth,
-		objectContextAuth interface{}, sessions ...*Session) (Private, error)
-	CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
-		parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name,
-		error)
-
-	// Section 13 - Duplication Commands
-	// Section 14 - Asymmetric Primitives
-	// Section 15 - Symmetrict Primitives
-
-	// Section 16 - Random Number Generator
-	GetRandom(bytesRequested uint16, sessions ...*Session) (Digest, error)
-	StirRandom(inData SensitiveData, sessions ...*Session) error
-
-	// Section 17 - Hash/HMAC/Event Sequences
-
-	// Section 18 - Attestation Commands
-	// Certify(objectContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme) (*Attest,
-	//	*Signature, error)
-	CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,
-		inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{},
-		sessions ...*Session) (AttestRaw, *Signature, error)
-	// Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme,
-	//	pcrSelection PCRSelectionList) (*Attest, *Signature, error)
-	// GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext ResourceContext,
-	//	qualifyingData Data, inScheme *SigScheme) (*Attest, *Signature, error)
-	// GetCommandAuditDigest(privacyHandle Handle, signContext ResourceContext, qualifyingData Data,
-	//	inScheme *SigScheme) (*Attest, *Signature, error)
-	// GetTime(privacyAdminHandle Handle, signContext ResourceContext, qualifyingData Data,
-	//	inScheme *SigScheme) (*Attest, *Signature, error)
-
-	// Section 19 - Ephemeral EC Keys
-	// Section 20 - Signing and Signature Verification
-	// Section 21 - Command Audit
-
-	// Section 22 - Integrity Collection (PCR)
-	PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error
-	PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{},
-		sessions ...*Session) (TaggedHashList, error)
-	PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestList, error)
-
-	// Section 23 - Enhanced Authorization (EA) Commands
-	// PolicySigned(authObject, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest,
-	//	policyRef Nonce, expiration int32, auth *Signature) (Timeout, *TkAuth, error)
-	PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce,
-		expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error)
-	// PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce,
-	//	authName Name, ticket *TkAuth) error
-	PolicyOR(policySession ResourceContext, pHashList DigestList) error
-	PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList,
-		sessions ...*Session) error
-	// PolicyLocality(policySession ResourceContext, loclity Locality) error
-	// PolicyNV(authHandle, nvIndex, policySession ResourceContext, operandB Operand, offset uint16,
-	//	operation ArithmeticOp) error
-	// PolicyCounterTimer(policySession ResourceContext, operandB Operand, offset uint16,
-	//	operation ArithmeticOp) error
-	PolicyCommandCode(policySession ResourceContext, code CommandCode) error
-	// PolicyPhysicalPresence(policySession ResourceContext) error
-	// PolicyCpHash(policySession ResourceContext, cpHashA Digest) error
-	// PolicyNameHash(policySession ResourceContext, nameHash Digest) error
-	// PolicyDuplicationSelect(policySession ResourceContext, objectName, newParentName Name,
-	//	includeObject bool) error
-	// PolicyAuthorize(policySession ResourceContext, approvedPolicy Digest, policyRef Nonce, keySign Name,
-	//	checkTicket *TkVerified) error
-	PolicyAuthValue(policySession ResourceContext) error
-	PolicyPassword(policySession ResourceContext) error
-	PolicyGetDigest(policySession ResourceContext) (Digest, error)
-	// PolicyNvWritten(policySession ResourceContext, writtenSet bool) error
-	// PolicyTemplate(policySession ResourceContext, templateHash Digest) error
-	// PolicyAuthorizeNV(authHandle, nvIndex, policySession ResourceContext) error
-
-	// Section 24 - Hierarchy Commands
-	CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, primaryObjectAuth interface{},
-		sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error)
-	Clear(authHandle Handle, authHandleAuth interface{}) error
-	ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error
-	HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{},
-		sessions ...*Session) error
-
-	// Section 25 - Dictionary Attack Functions
-	DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth interface{}) error
-	DictionaryAttackParameters(lockHandle Handle, newMaxTries, newRecoveryTime, lockoutRecovery uint32,
-		lockHandleAuth interface{}) error
-
-	// Section 26 - Miscellaneous Management Functions
-	// Section 27 - Field Upgrade
-
-	// Section 28 - Context Management
-	ContextSave(saveContext ResourceContext) (*Context, error)
-	ContextLoad(context *Context) (ResourceContext, error)
-	FlushContext(flushContext ResourceContext) error
-	EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle,
-		authAuth interface{}) (ResourceContext, error)
-
-	// Section 29 - Clocks and Timers
-	ReadClock(sessions ...*Session) (*TimeInfo, error)
-	// ClockSet(auth Handle, newTime uint64, authAuth interface{}) error
-	// ClockRateAdjust(auth Handle, rateAdjust ClockAdjust, authAuth interface{}) error
-
-	// Section 30 - Capability Commands
-	GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData, error)
-	GetCapabilityAlgs(first AlgorithmId, propertyCount uint32) (AlgorithmPropertyList, error)
-	GetCapabilityCommands(first CommandCode, propertyCount uint32) (CommandAttributesList, error)
-	GetCapabilityPPCommands(first CommandCode, propertyCount uint32) (CommandCodeList, error)
-	GetCapabilityAuditCommands(first CommandCode, propertyCount uint32) (CommandCodeList, error)
-	GetCapabilityHandles(handleType Handle, propertyCount uint32) (HandleList, error)
-	GetCapabilityPCRs() (PCRSelectionList, error)
-	GetCapabilityTPMProperties(first Property, propertyCount uint32) (TaggedTPMPropertyList, error)
-	GetCapabilityPCRProperties(first PropertyPCR, propertyCount uint32) (TaggedPCRPropertyList, error)
-	GetCapabilityECCCurves() (ECCCurveList, error)
-	GetCapabilityAuthPolicies(first Handle, propertyCount uint32) (TaggedPolicyList, error)
-
-	// Section 31 - Non-volatile Storage
-	NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVPublic, authHandleAuth interface{},
-		sessions ...*Session) error
-	NVUndefineSpace(authHandle Handle, nvIndex ResourceContext, authHandleAuth interface{}) error
-	NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth,
-		platformAuth interface{}) error
-	NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error)
-	NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16,
-		authContextAuth interface{}, sessions ...*Session) error
-	NVIncrement(authContext, nvIndex ResourceContext, authContextAuth interface{}) error
-	NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuth interface{},
-		sessions ...*Session) error
-	NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuth interface{}) error
-	NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error
-	NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}) error
-	NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{},
-		sessions ...*Session) (MaxNVBuffer, error)
-	NVReadLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error
-	NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth interface{}, sessions ...*Session) error
-	// NVCertify(signContext, authContext, nvIndex ResourceContext, qualifyingData Data, inScheme *SigScheme,
-	//	size, offset uint16, signContextAuth, authContextAuth interface{}, sessions ...*Session) (*Attest,
-	//	*Signature, error)
-}
-
 func concat(chunks ...[]byte) []byte {
 	return bytes.Join(chunks, nil)
 }
@@ -259,13 +53,54 @@ type cmdContext struct {
 	responseBytes []byte
 }
 
-type tpmContext struct {
+type separatorSentinel struct{}
+
+var Separator separatorSentinel
+
+type SessionAttributes int
+
+const (
+	AttrContinueSession SessionAttributes = 1 << iota
+	AttrCommandEncrypt
+	AttrResponseEncrypt
+)
+
+type Session struct {
+	Context   ResourceContext
+	AuthValue []byte
+	Attrs     SessionAttributes
+
+	includeAuthValue bool
+}
+
+type HandleWithAuth struct {
+	Handle Handle
+	Auth   interface{}
+}
+
+type ResourceWithAuth struct {
+	Context ResourceContext
+	Auth    interface{}
+}
+
+// TODO: Implement commands from the following sections of part 3 of the TPM library spec:
+// Section 13 - Duplication Commands
+// Section 14 - Asymmetric Primitives
+// Section 15 - Symmetrict Primitives
+// Section 17 - Hash/HMAC/Event Sequences
+// Section 19 - Ephemeral EC Keys
+// Section 20 - Signing and Signature Verification
+// Section 21 - Command Audit
+// Section 26 - Miscellaneous Management Functions
+// Section 27 - Field Upgrade
+
+type TPMContext struct {
 	tcti           io.ReadWriteCloser
 	resources      map[Handle]ResourceContext
 	maxSubmissions uint
 }
 
-func (t *tpmContext) Close() error {
+func (t *TPMContext) Close() error {
 	for _, rc := range t.resources {
 		t.evictResourceContext(rc)
 	}
@@ -273,7 +108,7 @@ func (t *tpmContext) Close() error {
 	return t.tcti.Close()
 }
 
-func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode, commandBytes []byte) (ResponseCode,
+func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, commandBytes []byte) (ResponseCode,
 	StructTag, []byte, error) {
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
@@ -305,7 +140,7 @@ func (t *tpmContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *tpmContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams []*sessionParam,
+func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams []*sessionParam,
 	params ...interface{}) (*cmdContext, error) {
 	commandHandles := make([]interface{}, 0, len(params))
 	commandHandleNames := make([]Name, 0, len(params))
@@ -411,7 +246,7 @@ func (t *tpmContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		responseBytes: responseBytes}, nil
 }
 
-func (t *tpmContext) processResponse(context *cmdContext, params ...interface{}) error {
+func (t *TPMContext) processResponse(context *cmdContext, params ...interface{}) error {
 	responseHandles := make([]interface{}, 0, len(params))
 	responseParams := make([]interface{}, 0, len(params))
 
@@ -480,7 +315,7 @@ func (t *tpmContext) processResponse(context *cmdContext, params ...interface{})
 	return nil
 }
 
-func (t *tpmContext) RunCommand(commandCode CommandCode, sessions []*Session, params ...interface{}) error {
+func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, params ...interface{}) error {
 	commandArgs := make([]interface{}, 0, len(params))
 	responseArgs := make([]interface{}, 0, len(params))
 	sessionParams := make([]*sessionParam, 0, len(params))
@@ -541,12 +376,12 @@ func (t *tpmContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 	return t.processResponse(ctx, responseArgs...)
 }
 
-func (t *tpmContext) SetMaxSubmissions(max uint) {
+func (t *TPMContext) SetMaxSubmissions(max uint) {
 	t.maxSubmissions = max
 }
 
-func newTpmContext(tcti io.ReadWriteCloser) *tpmContext {
-	r := new(tpmContext)
+func newTpmContext(tcti io.ReadWriteCloser) *TPMContext {
+	r := new(TPMContext)
 	r.tcti = tcti
 	r.resources = make(map[Handle]ResourceContext)
 	r.maxSubmissions = 5
@@ -554,7 +389,7 @@ func newTpmContext(tcti io.ReadWriteCloser) *tpmContext {
 	return r
 }
 
-func NewTPMContext(tcti io.ReadWriteCloser) (TPMContext, error) {
+func NewTPMContext(tcti io.ReadWriteCloser) (*TPMContext, error) {
 	if tcti == nil {
 		for _, path := range []string{"/dev/tpmrm0", "/dev/tpm0"} {
 			var err error

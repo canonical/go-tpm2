@@ -4,11 +4,13 @@
 
 package tpm2
 
+// Section 31 - Non-volatile Storage
+
 import (
 	"fmt"
 )
 
-func (t *tpmContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVPublic, authHandleAuth interface{},
+func (t *TPMContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVPublic, authHandleAuth interface{},
 	sessions ...*Session) error {
 	if publicInfo == nil {
 		return makeInvalidParamError("publicInfo", "nil value")
@@ -19,7 +21,7 @@ func (t *tpmContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVP
 		nvPublicSized{publicInfo})
 }
 
-func (t *tpmContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext,
+func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext,
 	authHandleAuth interface{}) error {
 	if err := t.RunCommand(CommandNVUndefineSpace, nil,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, nvIndex); err != nil {
@@ -30,7 +32,7 @@ func (t *tpmContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext,
 	return nil
 }
 
-func (t *tpmContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth,
+func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth,
 	platformAuth interface{}) error {
 	if err := t.RunCommand(CommandNVUndefineSpaceSpecial, nil,
 		ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth},
@@ -42,7 +44,7 @@ func (t *tpmContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 	return nil
 }
 
-func (t *tpmContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPublic, Name, error) {
+func (t *TPMContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPublic, Name, error) {
 	var nvPublic nvPublicSized
 	var nvName Name
 	if err := t.RunCommand(CommandNVReadPublic, sessions, nvIndex, Separator, Separator, Separator, &nvPublic,
@@ -52,7 +54,7 @@ func (t *tpmContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPubl
 	return nvPublic.Ptr, nvName, nil
 }
 
-func (t *tpmContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error) {
+func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error) {
 	if err := t.checkResourceContextParam(nvIndex); err != nil {
 		return nil, nil, fmt.Errorf("invalid resource context for nvIndex: %v", err)
 	}
@@ -60,7 +62,7 @@ func (t *tpmContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 	return t.nvReadPublic(nvIndex.Handle(), sessions...)
 }
 
-func (t *tpmContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16,
+func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16,
 	authContextAuth interface{}, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVWrite, sessions,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator, data,
@@ -72,7 +74,7 @@ func (t *tpmContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 	return nil
 }
 
-func (t *tpmContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
+func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
 	if err := t.RunCommand(CommandNVIncrement, nil,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
 		return err
@@ -82,7 +84,7 @@ func (t *tpmContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 	return nil
 }
 
-func (t *tpmContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuth interface{},
+func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuth interface{},
 	sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVExtend, sessions,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
@@ -94,7 +96,7 @@ func (t *tpmContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 	return nil
 }
 
-func (t *tpmContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64,
+func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64,
 	authContextAuth interface{}) error {
 	if err := t.RunCommand(CommandNVSetBits, nil,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
@@ -106,7 +108,7 @@ func (t *tpmContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 	return nil
 }
 
-func (t *tpmContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
+func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
 	if err := t.RunCommand(CommandNVWriteLock, nil,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
 		return err
@@ -116,7 +118,7 @@ func (t *tpmContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 	return nil
 }
 
-func (t *tpmContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}) error {
+func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}) error {
 	if err := t.RunCommand(CommandNVGlobalWriteLock, nil,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}); err != nil {
 		return err
@@ -135,7 +137,7 @@ func (t *tpmContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 	return nil
 }
 
-func (t *tpmContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{},
+func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{},
 	sessions ...*Session) (MaxNVBuffer, error) {
 	var data MaxNVBuffer
 	if err := t.RunCommand(CommandNVRead, sessions,
@@ -147,7 +149,7 @@ func (t *tpmContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 	return data, nil
 }
 
-func (t *tpmContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
+func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
 	if err := t.RunCommand(CommandNVReadLock, nil,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
 		return err
@@ -157,7 +159,7 @@ func (t *tpmContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 	return nil
 }
 
-func (t *tpmContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth interface{},
+func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth interface{},
 	sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
@@ -186,3 +188,8 @@ func (t *tpmContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 
 	return t.processResponse(ctx)
 }
+
+// func (t *TPMContext) NVCertify(signContext, authContext, nvIndex ResourceContext, qualifyingData Data,
+//	inScheme *SigScheme, size, offset uint16, signContextAuth, authContextAuth interface{},
+//	sessions ...*Session) (AttestRaw, *Signature, error) {
+// }
