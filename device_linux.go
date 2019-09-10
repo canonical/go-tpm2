@@ -16,6 +16,7 @@ const (
 	maxCommandSize int = 4096
 )
 
+// TctiDeviceLinux represents a connection to a Linux TPM character device.
 type TctiDeviceLinux struct {
 	f   *os.File
 	buf *bytes.Reader
@@ -60,6 +61,8 @@ func (d *TctiDeviceLinux) Close() error {
 	return d.f.Close()
 }
 
+// OpenTPMDevice attempts to open a connection to the Linux TPM character device at the specified path. If
+// successful, it returns a new TctiDeviceLinux instance which can be passed to NewTPMContext.
 func OpenTPMDevice(path string) (*TctiDeviceLinux, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
