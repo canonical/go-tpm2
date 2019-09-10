@@ -1,7 +1,7 @@
 /*
 Package tpm2 implements an API for communicating with TPM 2.0 devices.
 
-This documentation refers to TPM commands and types that are described in more detail im the TPM 2.0 Library
+This documentation refers to TPM commands and types that are described in more detail in the TPM 2.0 Library
 Specification, which can be found at https://trustedcomputinggroup.org/resource/tpm-library-specification/.
 Knowledge of this specification is assumed in this documentation.
 
@@ -49,8 +49,6 @@ This package marshals go types to and from the TPM wire format, according to the
 TPMI prefixed types (interface types) are not explicitly supported. These are just used for type checking during
 unmarshalling.
 
-The marshalling code automatically dereferences pointer types. Nil pointers encountered during marshalling causes
-the zero value for the type to be marshalled. The unmarshalling code will allocated memory when it encounters
-nil pointers during unmarshalling.
+The marshalling code automatically dereferences pointer types.
 */
 package tpm2
