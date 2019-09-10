@@ -10,8 +10,11 @@ import (
 	"fmt"
 )
 
-// ResourceContext references a resource that resides on the TPM. Implementations of ResourceContext maintain
+// ResourceContext corresponds to a resource that resides on the TPM. Implementations of ResourceContext maintain
 // some host-side state in order to be able to participate in HMAC sessions and session-based parameter encryption.
+// ResourceContext instances are tracked by the TPMContext that created them (when the corresponding TPM resouce
+// is created or loaded), and are invalidated when the resource is flushed from the TPM. Once invalidated, they
+// can no longer be used.
 type ResourceContext interface {
 	// Handle returns the handle of the resource on the TPM. If the resource has been flushed from the TPM,
 	// this will return HandleNull

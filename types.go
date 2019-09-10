@@ -1555,7 +1555,7 @@ type Context struct {
 	Sequence    uint64      // Sequence number of the context
 	SavedHandle Handle      // Handle indicating if this is a session or object
 	Hierarchy   Handle      // Hierarchy of the context
-	Blob        ContextData // Context data and integrity HMAC
+	Blob        ContextData // Encrypted context data and integrity HMAC
 }
 
 // 15) Creation Data

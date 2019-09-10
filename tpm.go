@@ -64,7 +64,8 @@ type SessionAttributes int
 
 const (
 	// AttrContinueSession specifies that the session should not be flushed from the TPM after it is used. If
-	// a session is used without this flag, it will be flushed from the TPM after the command completes.
+	// a session is used without this flag, it will be flushed from the TPM after the command completes. In
+	// this case, the ResourceContext associated with the session will be invalidated.
 	AttrContinueSession SessionAttributes = 1 << iota
 
 	// AttrCommandEncrypt specifies that the session should be used for encryption of the first command
@@ -125,16 +126,21 @@ type ResourceWithAuth struct {
 // communicates with the underlying device via a transmission interface, which is an implementation of
 // io.ReadWriteCloser provided to NewTPMContext.
 //
-// TPMContext keeps a record of ResourceContext instances that it creates until the resources that they reference
-// are flushed from the TPM.
+// TPMContext maintains some host-side state of TPM resources that are loaded and created by this API.
+//
+// Many methods require Handle or ResourceContext arguments that correspond to resources on the TPM. Where those
+// require authorization, the method also requires a corresponding authorization argument, the type of which is
+// the empty interface. Valid types for these authorization arguments are:
+//  * string, []byte, or nil for plaintext password authorization.
+//  * *Session for session based authorization.
 type TPMContext struct {
 	tcti           io.ReadWriteCloser
 	resources      map[Handle]ResourceContext
 	maxSubmissions uint
 }
 
-// Close invalidates all non-permanent ResourceContext instances created by this TPMContext (so that
-// ResourceContext.Handle will return HandleNull), and then calls Close on the transmission interface.
+// Close invalidates all non-permanent ResourceContext instances tracked by this TPMContext and then calls Close
+// on the transmission interface.
 func (t *TPMContext) Close() error {
 	for _, rc := range t.resources {
 		t.evictResourceContext(rc)
@@ -374,7 +380,10 @@ func (t *TPMContext) processResponse(context *cmdContext, params ...interface{})
 // Command handles are provided as Handle or ResourceContext types if they do not require an authorization. For
 // command handles that require an authorization, they are provided using the HandleWithAuth type (for a Handle)
 // or the ResourceWithAuth type (for a ResourceContext). Both HandleWithAuth and ResourceWithAuth reference the
-// corresponding authorization.
+// corresponding authorization. If a ResourceContext references a non-permanent handle and is not tracked by this
+// TPMContext, then this function will return an error. The Handle type must only be used for permanent resources -
+// if the Handle type is used to reference non-permanent resources, then computation of the resource name will be
+// incorrect and the correct name is required for the correct computation of session HMACs.
 //
 // Command parameters are provided as the go equivalent types for the types defined in the TPM Library
 // Specification.
