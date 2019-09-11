@@ -5,7 +5,7 @@ This repository contains a go library for interacting with TPM 2.0 devices. Curr
  - All authorization modes - password, HMAC session based and policy session based.
    - Salted / unsalted + bound / unbound sessions are supported.
  - Session-based command and response parameter encryption.
- - Backends for Linux TPM character devices and the IBM simulator.
+ - Backends for Linux TPM character devices and TPM simulators implementing the Microsoft TPM 2.0 simulator interface.
  - All startup, testing and session commands.
  - All object commands, including Unseal.
  - Most NV storage commands.
@@ -14,6 +14,8 @@ This repository contains a go library for interacting with TPM 2.0 devices. Curr
  - Most hierarchy commands.
  - Dictionary attack functions.
  - Context management commands.
+ 
+ [![GoDoc](https://godoc.org/github.com/chrisccoulson/go-tpm2?status.svg)](https://godoc.org/github.com/chrisccoulson/go-tpm2)
  
  ## Relevant links
   - [TPM 2.0 Library Specification](https://trustedcomputinggroup.org/resource/tpm-library-specification/)
