@@ -333,19 +333,18 @@ type TaggedPolicyList []TaggedPolicy
 // 10.10) Capabilities Structures
 
 // Capabilities is a fake union type that corresponds to the TPMU_CAPABILITIES type. The selector type is
-// Capability.
+// Capability. Valid types for Data for each selector value are:
+//  - CapabilityAlgs: AlgorithmPropertyList
+//  - CapabilityHandles: HandleList
+//  - CapabilityCommands: CommandAttributesList
+//  - CapabilityPPCommands: CommandCodeList
+//  - CapabilityAuditCommands: CommandCodeList
+//  - CapabilityPCRs: PCRSelectionList
+//  - CapabilityTPMProperties: TaggedTPMPropertyList
+//  - CapabilityPCRProperties: TaggedPCRPropertyList
+//  - CapabilityECCCurves: ECCCurveList
+//  - CapabilityAuthPolicies: TaggedPolicyList
 type CapabilitiesU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - CapabilityAlgs: AlgorithmPropertyList
-	// - CapabilityHandles: HandleList
-	// - CapabilityCommands: CommandAttributesList
-	// - CapabilityPPCommands: CommandCodeList
-	// - CapabilityAuditCommands: CommandCodeList
-	// - CapabilityPCRs: PCRSelectionList
-	// - CapabilityTPMProperties: TaggedTPMPropertyList
-	// - CapabilityPCRProperties: TaggedPCRPropertyList
-	// - CapabilityECCCurves: ECCCurveList
-	// - CapabilityAuthPolicies: TaggedPolicyList
 	Data interface{}
 }
 
@@ -510,16 +509,16 @@ type NVCertifyInfo struct {
 	NVContents MaxNVBuffer // Contents of the NV index
 }
 
-// AttestU is a fake union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag.
+// AttestU is a fake union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag. Valid
+// types for Data for each selector value are:
+//  - TagAttestNV: *NVCertifyInfo
+//  - TagAttestCommandAudit: *CommandAuditInfo
+//  - TagAttestSessionAudir: *SessionAuditInfo
+//  - TagAttestCertify: *CertifyInfo
+//  - TagAttestQuote: *QuoteInfo
+//  - TagAttestTime: *TimeAttestInfo
+//  - TagAttestCreation: *CreationInfo
 type AttestU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - TagAttestNV: *NVCertifyInfo
-	// - TagAttestCommandAudit: *CommandAuditInfo
-	// - TagAttestSessionAudir: *SessionAuditInfo
-	// - TagAttestCertify: *CertifyInfo
-	// - TagAttestQuote: *QuoteInfo
-	// - TagAttestTime: *TimeAttestInfo
-	// - TagAttestCreation: *CreationInfo
 	Data interface{}
 }
 
@@ -610,14 +609,14 @@ func (a AttestRaw) ToStruct() (*Attest, error) {
 // 11.1) Symmetric
 
 // SymKeyBitsU is a fake union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to specify
-// symmetric encryption key sizes. The selector type is AlgorithmId.
+// symmetric encryption key sizes. The selector type is AlgorithmId. Valid types for Data for each selector
+// value are:
+//  - AlgorithmAES: uint16
+//  - AlgorithmSM4: uint16
+//  - AlgorithmCamellia: uint16
+//  - AlgorithmXOR: AlgorithmId
+//  - AlgorithmNull: <nil>
 type SymKeyBitsU struct {
-	// Value of this union. Valid types for each selector value are:
-	// - AlgorithmAES: uint16
-	// - AlgorithmSM4: uint16
-	// - AlgorithmCamellia: uint16
-	// - AlgorithmXOR: AlgorithmId
-	// - AlgorithmNull: <empty>
 	Data interface{}
 }
 
@@ -648,13 +647,13 @@ func (b SymKeyBitsU) XOR() AlgorithmId {
 }
 
 // SymModeU is a fake union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId.
+// Valid types for Data for each selector value are:
+//  - AlgorithmAES: AlgorithmId
+//  - AlgorithmSM4: AlgorithmId
+//  - AlgorithmCamellia: AlgorithmId
+//  - AlgorithmXOR: <nil>
+//  - AlgorithmNull: <nil>
 type SymModeU struct {
-	// Sym is the value of this union. Valid types for each selector value are:
-	// - AlgorithmAES: AlgorithmId
-	// - AlgorithmSM4: AlgorithmId
-	// - AlgorithmCamellia: AlgorithmId
-	// - AlgorithmXOR: <empty>
-	// - AlgorithmNull: <empty>
 	Sym AlgorithmId
 }
 
@@ -737,11 +736,11 @@ type SchemeXOR struct {
 type SchemeHMAC SchemeHash
 
 // SchemeKeyedHashU is a fake union type that corresponds to the TPMU_SCHEME_KEYED_HASH type. The selector type is
-// AlgorithmId.
+// AlgorithmId. Valid types for Data for each selector value are:
+//  - AlgorithmHMAC: *SchemeHMAC
+//  - AlgorithmXOR: *SchemeXOR
+//  - AlgorithmNull: <nil>
 type SchemeKeyedHashU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmHMAC: *SchemeHMAC
-	// - AlgorithmXOR: *SchemeXOR
 	Data interface{}
 }
 
@@ -785,16 +784,16 @@ type SigSchemeSM2 SchemeHash
 type SigSchemeECSCHNORR SchemeHash
 
 // SigSchemeU is a fake union type that corresponds to the TPMU_SIG_SCHEME type. The selector type is AlgorithmId.
+// Valid types for Data for each selector value are:
+//  - AlgorithmRSASSA: *SigSchemeRSASSA
+//  - AlgorithmRSAPSS: *SigSchemeRSAPSS
+//  - AlgorithmECDSA: *SigSchemeECDSA
+//  - AlgorithmECDAA: *SigSchemeECDAA
+//  - AlgorithmSM2: *SigSchemeSM2
+//  - AlgorithmECSCHNORR: *SigSchemeECSCHNORR
+//  - AlgorithmHMAC: *SigSchemeHMAC
+//  - AlgorithmNull: <nil>
 type SigSchemeU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmRSASSA: *SigSchemeRSASSA
-	// - AlgorithmRSAPSS: *SigSchemeRSAPSS
-	// - AlgorithmECDSA: *SigSchemeECDSA
-	// - AlgorithmECDAA: *SigSchemeECDAA
-	// - AlgorithmSM2: *SigSchemeSM2
-	// - AlgorithmECSCHNORR: *SigSchemeECSCHNORR
-	// - AlgorithmHMAC: *SigSchemeHMAC
-	// - AlgorithmNull: <empty>
 	Data interface{}
 }
 
@@ -878,13 +877,13 @@ type SchemeKDF2 SchemeHash
 type SchemeKDF1_SP800_108 SchemeHash
 
 // KDFSchemeU is a fake union type that corresponds to the TPMU_KDF_SCHEME type. The selector type is AlgorithmId.
+// Valid types for Data for each selector value are:
+//  - AlgorithmMGF1: *SchemeMGF1
+//  - AlgorithmKDF1_SP800_56A: *SchemeKDF1_SP800_56A
+//  - AlgorithmKDF2: *SchemeKF2
+//  - AlgorithmKDF1_SP800_108: *SchemeKDF1_SP800_108
+//  - AlgorithmNull: <nil>
 type KDFSchemeU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmMGF1: *SchemeMGF1
-	// - AlgorithmKDF1_SP800_56A: *SchemeKDF1_SP800_56A
-	// - AlgorithmKDF2: *SchemeKF2
-	// - AlgorithmKDF1_SP800_108: *SchemeKDF1_SP800_108
-	// - AlgorithmNull: <empty>
 	Data interface{}
 }
 
@@ -938,20 +937,19 @@ type EncSchemeRSAES Empty
 type EncSchemeOAEP SchemeHash
 
 // AsymSchemeU is a fake union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is
-// AlgorithmId.
+// AlgorithmId. Valid types for Data for each selector value are:
+//  - AlgorithmRSASSA: *SigSchemeRSASSA
+//  - AlgorithmRSAES: *EncSchemeRSAES
+//  - AlgorithmRSAPSS: *SigSchemeRSAPSS
+//  - AlgorithmOAEP: *EncSchemeOAEP
+//  - AlgorithmECDSA: *SigSchemeECDSA
+//  - AlgorithmECDH: *KeySchemeECDH
+//  - AlgorithmECDAA: *SigSchemeECDAA
+//  - AlgorithmSM2: *SigSchemeSM2
+//  - AlgorithmECSCHNORR: *SigSchemeECSCHNORR
+//  - AlgorithmECMQV: *KeySchemeECMQV
+//  - AlgorithmNull: <nil>
 type AsymSchemeU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmRSASSA: *SigSchemeRSASSA
-	// - AlgorithmRSAES: *EncSchemeRSAES
-	// - AlgorithmRSAPSS: *SigSchemeRSAPSS
-	// - AlgorithmOAEP: *EncSchemeOAEP
-	// - AlgorithmECDSA: *SigSchemeECDSA
-	// - AlgorithmECDH: *KeySchemeECDH
-	// - AlgorithmECDAA: *SigSchemeECDAA
-	// - AlgorithmSM2: *SigSchemeSM2
-	// - AlgorithmECSCHNORR: *SigSchemeECSCHNORR
-	// - AlgorithmECMQV: *KeySchemeECMQV
-	// - AlgorithmNull: <empty>
 	Data interface{}
 }
 
@@ -1101,17 +1099,17 @@ type SignatureECDAA SignatureECC
 type SignatureSM2 SignatureECC
 type SignatureECSCHNORR SignatureECC
 
-// SignatureU is a fake union type that corresponds to TPMU_SIGNATURE. The selector type is AlgorithmId.
+// SignatureU is a fake union type that corresponds to TPMU_SIGNATURE. The selector type is AlgorithmId. Valid
+// types for Data for each selector value are:
+//  - AlgorithmRSASSA: *SignatureRSASSA
+//  - AlgorithmRSAPSS: *SignatureRSAPSS
+//  - AlgorithmECDSA: *SignatureECDSA
+//  - AlgorithmECDAA: *SignatureECDAA
+//  - AlgorithmSM2: *SignatureSM2
+//  - AlgorithmECSCHNORR: *SignatureECSCHNORR
+//  - AlgorithmHMAC: *TaggedHash
+//  - AlgorithmNull: <nil>
 type SignatureU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmRSASSA: *SignatureRSASSA
-	// - AlgorithmRSAPSS: *SignatureRSAPSS
-	// - AlgorithmECDSA: *SignatureECDSA
-	// - AlgorithmECDAA: *SignatureECDAA
-	// - AlgorithmSM2: *SignatureSM2
-	// - AlgorithmECSCHNORR: *SignatureECSCHNORR
-	// - AlgorithmHMAC: *TaggedHash
-	// - AlgorithmNull: <empty>
 	Data interface{}
 }
 
@@ -1198,12 +1196,12 @@ type EncryptedSecret []byte
 // 12.2) Public Area Structures
 
 // PublicIDU is a fake union type that corresponds to the TPMU_PUBLIC_ID type. The selector type is AlgorithmId.
+// Valid types for Data for each selector value are:
+//  - AlgorithmRSA: PublicKeyRSA
+//  - AlgorithmKeyedHash: Digest
+//  - AlgorithmECC: *ECCPoint
+//  - AlgorithmSymCipher: Digest
 type PublicIDU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmRSA: PublicKeyRSA
-	// - AlgorithmKeyedHash: Digest
-	// - AlgorithmECC: *ECCPoint
-	// - AlgorithmSymCipher: Digest
 	Data interface{}
 }
 
@@ -1281,13 +1279,12 @@ type ECCParams struct {
 }
 
 // PublicParamsU is a fake union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is
-// AlgorithmId.
+// AlgorithmId. Valid types for Data for each selector value are:
+//  - AlgorithmRSA: *RSAParams
+//  - AlgorithmKeyedHash: *KeyedHashParams
+//  - AlgorithmECC: *ECCParams
+//  - AlgorithmSymCipher: *SymCipherParams
 type PublicParamsU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmRSA: *RSAParams
-	// - AlgorithmKeyedHash: *KeyedHashParams
-	// - AlgorithmECC: *ECCParams
-	// - AlgorithmSymCipher: *SymCipherParams
 	Data interface{}
 }
 
@@ -1390,14 +1387,13 @@ type publicSized struct {
 // PrivateVendorSpecific corresponds to the TPM2B_PRIVATE_VENDOR_SPECIFIC type.
 type PrivateVendorSpecific []byte
 
-// SensitiveCompositeU is a fake union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector type
-// is AlgorithmId.
+// SensitiveCompositeU is a fake union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector
+// type is AlgorithmId. Valid types for Data for each selector value are:
+//  - AlgorithmRSA: PrivateKeyRSA
+//  - AlgorithmECC: ECCParameter
+//  - AlgorithmKeyedHash: SensitiveData
+//  - AlgorithmSymCipher: SymKey
 type SensitiveCompositeU struct {
-	// Data is the value of this union. Valid types for each selector value are:
-	// - AlgorithmRSA: PrivateKeyRSA
-	// - AlgorithmECC: ECCParameter
-	// - AlgorithmKeyedHash: SensitiveData
-	// - AlgorithmSymCipher: SymKey
 	Data interface{}
 }
 
