@@ -186,10 +186,9 @@ func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandC
 	cpBytes []byte, decryptNonce, encryptNonce Nonce) (*authCommand, error) {
 	if param.session == nil {
 		return buildCommandPasswordAuth(Auth(param.authValue)), nil
-	} else {
-		return buildCommandSessionAuth(tpm, param.session, param.associatedContext, commandCode,
-			commandHandles, cpBytes, decryptNonce, encryptNonce)
 	}
+	return buildCommandSessionAuth(tpm, param.session, param.associatedContext, commandCode,
+		commandHandles, cpBytes, decryptNonce, encryptNonce)
 }
 
 func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Session,
