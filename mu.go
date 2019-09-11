@@ -80,18 +80,6 @@ func hasCustomMarshallerImpl(t reflect.Type) bool {
 
 }
 
-func makeSizedStructReader(buf io.Reader) (io.Reader, error) {
-	var size uint16
-	// Sized structures have a 16-bit size field
-	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
-		return nil, fmt.Errorf("cannot read size of sized struct: %v", err)
-	}
-	if size == 0 {
-		return nil, nil
-	}
-	return io.LimitReader(buf, int64(size)), nil
-}
-
 type invalidSelectorError struct {
 	selector interface{}
 }
@@ -145,8 +133,9 @@ func beginPtrElemCtx(ctx *muContext, p reflect.Value) *muContext {
 	return &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
 }
 
-func beginSizedStructCtx(ctx *muContext, p reflect.Value) *muContext {
-	out := &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
+func beginSizedStructCtx(ctx *muContext) *muContext {
+	out := &muContext{depth: ctx.depth, container: ctx.container, parentType: ctx.parentType,
+		options: ctx.options}
 	out.options.sized = false
 	return out
 }
@@ -159,19 +148,36 @@ func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
 	return ctx.parentType == reflect.PtrTo(v.Type())
 }
 
+func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
+	switch {
+	case s.Kind() != reflect.Ptr:
+		return errors.New("not a pointer")
+	case s.Type().Elem().Kind() != reflect.Struct:
+		return errors.New("not a pointer to a struct")
+	case s.IsNil():
+		if err := binary.Write(buf, binary.BigEndian, uint16(0)); err != nil {
+			return fmt.Errorf("cannot write size of zero sized struct: %v", err)
+		}
+		return nil
+	}
+
+	tmpBuf := new(bytes.Buffer)
+	if err := marshalValue(tmpBuf, s, beginSizedStructCtx(ctx)); err != nil {
+		return fmt.Errorf("cannot marshal pointer to struct to temporary buffer: %v", err)
+	}
+	if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
+		return fmt.Errorf("cannot write size of struct: %v", err)
+	}
+	if _, err := tmpBuf.WriteTo(buf); err != nil {
+		return fmt.Errorf("cannot write marshalled struct: %v", err)
+	}
+	return nil
+}
+
 func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 	var d reflect.Value
 
 	if ptr.IsNil() {
-		if ctx.options.sized && ptr.Type().Elem().Kind() == reflect.Struct {
-			// Nil pointers for sized structures are allowed - in this case, marshal a size
-			// field of zero
-			if err := binary.Write(buf, binary.BigEndian, uint16(0)); err != nil {
-				fmt.Errorf("cannot write size of nil sized struct: %v", err)
-			}
-			return nil
-		}
-
 		d = reflect.Zero(ptr.Type().Elem())
 	} else {
 		d = ptr.Elem()
@@ -230,25 +236,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 }
 
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
-	switch {
-	case ctx.options.sized && !arrivedFromPointer(ctx, s):
-		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
-			ctx.container.Type())
-	case ctx.options.sized:
-		// Convert the sized struct to the non-sized type, marshal that to a temporary buffer and then
-		// write it along with the 16-bit size field to the output buffer
-		tmpBuf := new(bytes.Buffer)
-		if err := marshalValue(tmpBuf, s, beginSizedStructCtx(ctx, s)); err != nil {
-			return fmt.Errorf("cannot marshal sized struct: %v", err)
-		}
-		if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
-			return fmt.Errorf("cannot write size of sized struct to output buffer: %v", err)
-		}
-		if _, err := tmpBuf.WriteTo(buf); err != nil {
-			return fmt.Errorf("cannot write marshalled sized struct to output buffer: %v", err)
-		}
-		return nil
-	case isUnion(s.Type()):
+	if isUnion(s.Type()) {
 		if err := marshalUnion(buf, s, ctx); err != nil {
 			return fmt.Errorf("error marshalling union struct: %v", err)
 		}
@@ -322,6 +310,13 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 		ctx.depth++
 	}
 
+	if ctx.options.sized {
+		if err := marshalSized(buf, val, ctx); err != nil {
+			return fmt.Errorf("cannot marshal sized type %s: %v", val.Type(), err)
+		}
+		return nil
+	}
+
 	switch val.Kind() {
 	case reflect.Ptr:
 		if err := marshalPtr(buf, val, ctx); err != nil {
@@ -345,29 +340,44 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 	return nil
 }
 
-func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
-	srcBuf := buf
-
-	if ctx.options.sized && ptr.Type().Elem().Kind() == reflect.Struct {
-		b, err := makeSizedStructReader(buf)
-		switch {
-		case err != nil:
-			return err
-		case b == nil && !ptr.IsNil():
-			return errors.New("non-nil pointer for zero-sized sized structure")
-		case b == nil:
-			return nil
-		}
-		srcBuf = b
+func unmarshalSized(buf io.Reader, s reflect.Value, ctx *muContext) error {
+	switch {
+	case s.Kind() != reflect.Ptr:
+		return errors.New("not a pointer")
+	case s.Type().Elem().Kind() != reflect.Struct:
+		return errors.New("not a pointer to a struct")
 	}
 
+	var size uint16
+	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
+		return fmt.Errorf("cannot read size of struct: %v", err)
+	}
+	switch {
+	case size == 0 && !s.IsNil():
+		return errors.New("struct is zero sized, but destination struct has been pre-allocated")
+	case size == 0:
+		return nil
+	case s.IsNil() && !s.CanSet():
+		return errors.New("cannot set pointer")
+	case s.IsNil():
+		s.Set(reflect.New(s.Type().Elem()))
+	}
+
+	lr := io.LimitReader(buf, int64(size))
+	if err := unmarshalValue(lr, s, beginSizedStructCtx(ctx)); err != nil {
+		return fmt.Errorf("cannot unmarshal pointer to struct: %v", err)
+	}
+	return nil
+}
+
+func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 	if ptr.IsNil() {
 		if !ptr.CanSet() {
 			return errors.New("cannot set pointer")
 		}
 		ptr.Set(reflect.New(ptr.Type().Elem()))
 	}
-	return unmarshalValue(srcBuf, ptr.Elem(), beginPtrElemCtx(ctx, ptr))
+	return unmarshalValue(buf, ptr.Elem(), beginPtrElemCtx(ctx, ptr))
 }
 
 func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
@@ -425,11 +435,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
-	switch {
-	case ctx.options.sized && !arrivedFromPointer(ctx, s):
-		return fmt.Errorf("sized struct inside container type %s is not referenced via a pointer",
-			ctx.container.Type())
-	case isUnion(s.Type()):
+	if isUnion(s.Type()) {
 		if err := unmarshalUnion(buf, s, ctx); err != nil {
 			return fmt.Errorf("error unmarshalling union struct: %v", err)
 		}
@@ -519,6 +525,13 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 		ctx = new(muContext)
 	} else {
 		ctx.depth++
+	}
+
+	if ctx.options.sized {
+		if err := unmarshalSized(buf, val, ctx); err != nil {
+			return fmt.Errorf("cannot unmarshal sized type %s: %v", val.Type(), err)
+		}
+		return nil
 	}
 
 	switch val.Kind() {

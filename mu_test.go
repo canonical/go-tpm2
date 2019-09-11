@@ -387,8 +387,7 @@ func TestMarshalSizedStructAsValue(t *testing.T) {
 		t.Fatalf("MarshalToBytes should fail to marshal a non-pointer sized struct")
 	}
 	if err.Error() != "cannot marshal struct type tpm2.TestStructWithNonPointerSizedStruct: cannot marshal "+
-		"field S: cannot marshal struct type tpm2.TestSizedStruct: sized struct inside container type "+
-		"tpm2.TestStructWithNonPointerSizedStruct is not referenced via a pointer" {
+		"field S: cannot marshal sized type tpm2.TestSizedStruct: not a pointer" {
 		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
 	}
 }
@@ -454,8 +453,8 @@ func TestUnmarshalZeroSizedStructToNonNilPointer(t *testing.T) {
 		t.Fatalf("UnmarshalFromBytes should have failed")
 	}
 	if err.Error() != "cannot unmarshal struct type tpm2.TestStructWithPointerSizedStruct: cannot unmarshal "+
-		"field S: cannot unmarshal pointer type *tpm2.TestSizedStruct: non-nil pointer for zero-sized "+
-		"sized structure" {
+		"field S: cannot unmarshal sized type *tpm2.TestSizedStruct: struct is zero sized, but "+
+		"destination struct has been pre-allocated" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
