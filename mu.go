@@ -246,7 +246,7 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	if isByteSlice(slice.Type()) {
 		// Shortcut for byte slices
-		if slice.Type() != rawBytesType {
+		if slice.Type() != rawBytesType && !ctx.options.raw {
 			// Sized buffer
 			if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
 				return fmt.Errorf("cannot write size of sized buffer: %v", err)
@@ -442,9 +442,9 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	if isByteSlice(slice.Type()) {
 		// Shortcut for byte slice
 		switch {
-		case slice.Type() == rawBytesType && slice.IsNil():
+		case (slice.Type() == rawBytesType || ctx.options.raw) && slice.IsNil():
 			return errors.New("nil raw byte slice")
-		case slice.Type() == rawBytesType:
+		case slice.Type() == rawBytesType || ctx.options.raw:
 			// No size
 		default:
 			// Sized buffer

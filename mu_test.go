@@ -356,6 +356,36 @@ func TestMarshalRawSlice(t *testing.T) {
 	}
 }
 
+type testFakeRawBytes struct {
+	Data []byte `tpm2:"raw"`
+}
+
+func TestMarshalFakeRawBytes(t *testing.T) {
+	a := []byte{0xfa, 0xf5, 0x56, 0x44, 0x2b, 0xec, 0x56, 0xfe, 0x94, 0xf5, 0x1e, 0x13, 0x81, 0xd1, 0xb2,
+		0x6a}
+	out, err := MarshalToBytes(testFakeRawBytes{a})
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
+	}
+	if !bytes.Equal(out, a) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+	}
+
+	ao := testFakeRawBytes{make([]byte, len(a))}
+
+	n, err := UnmarshalFromBytes(out, &ao)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(a, ao.Data) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+}
+
 type TestStructWithRawBytes struct {
 	A uint32
 	B RawBytes
