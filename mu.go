@@ -152,7 +152,7 @@ func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	}
 
 	tmpBuf := new(bytes.Buffer)
-	if err := marshalValue(tmpBuf, s, beginSizedStructCtx(ctx)); err != nil {
+	if err := marshalPtr(tmpBuf, s, beginSizedStructCtx(ctx)); err != nil {
 		return fmt.Errorf("cannot marshal pointer to struct to temporary buffer: %v", err)
 	}
 	if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
@@ -173,7 +173,10 @@ func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 		d = ptr.Elem()
 	}
 
-	return marshalValue(buf, d, beginPtrElemCtx(ctx, ptr))
+	if err := marshalValue(buf, d, beginPtrElemCtx(ctx, ptr)); err != nil {
+		return fmt.Errorf("cannot marshal element: %v", err)
+	}
+	return nil
 }
 
 func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
@@ -347,27 +350,27 @@ func unmarshalSized(buf io.Reader, s reflect.Value, ctx *muContext) error {
 		return errors.New("struct is zero sized, but destination struct has been pre-allocated")
 	case size == 0:
 		return nil
-	case s.IsNil() && !s.CanSet():
-		return errors.New("cannot set pointer")
-	case s.IsNil():
-		s.Set(reflect.New(s.Type().Elem()))
 	}
 
 	lr := io.LimitReader(buf, int64(size))
-	if err := unmarshalValue(lr, s, beginSizedStructCtx(ctx)); err != nil {
+	if err := unmarshalPtr(lr, s, beginSizedStructCtx(ctx)); err != nil {
 		return fmt.Errorf("cannot unmarshal pointer to struct: %v", err)
 	}
 	return nil
 }
 
 func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
-	if ptr.IsNil() {
-		if !ptr.CanSet() {
-			return errors.New("cannot set pointer")
-		}
+	switch {
+	case ptr.IsNil() && !ptr.CanSet():
+		return errors.New("cannot set pointer")
+	case ptr.IsNil():
 		ptr.Set(reflect.New(ptr.Type().Elem()))
 	}
-	return unmarshalValue(buf, ptr.Elem(), beginPtrElemCtx(ctx, ptr))
+
+	if err := unmarshalValue(buf, ptr.Elem(), beginPtrElemCtx(ctx, ptr)); err != nil {
+		return fmt.Errorf("cannot unmarshal element: %v", err)
+	}
+	return nil
 }
 
 func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
