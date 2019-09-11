@@ -112,40 +112,30 @@ func parseFieldOptions(s string) muOptions {
 type muContext struct {
 	depth      int
 	container  reflect.Value
-	parentType reflect.Type
 	options    muOptions
 }
 
 func beginStructFieldCtx(ctx *muContext, s reflect.Value, i int) *muContext {
 	opts := parseFieldOptions(s.Type().Field(i).Tag.Get("tpm2"))
-	return &muContext{depth: ctx.depth, container: s, parentType: s.Type(), options: opts}
+	return &muContext{depth: ctx.depth, container: s, options: opts}
 }
 
 func beginUnionDataCtx(ctx *muContext, u reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, container: u, parentType: u.Type()}
+	return &muContext{depth: ctx.depth, container: u}
 }
 
 func beginSliceElemCtx(ctx *muContext, s reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, container: s, parentType: s.Type()}
+	return &muContext{depth: ctx.depth, container: s}
 }
 
 func beginPtrElemCtx(ctx *muContext, p reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, container: ctx.container, parentType: p.Type(), options: ctx.options}
+	return &muContext{depth: ctx.depth, container: ctx.container, options: ctx.options}
 }
 
 func beginSizedStructCtx(ctx *muContext) *muContext {
-	out := &muContext{depth: ctx.depth, container: ctx.container, parentType: ctx.parentType,
-		options: ctx.options}
+	out := &muContext{depth: ctx.depth, container: ctx.container, options: ctx.options}
 	out.options.sized = false
 	return out
-}
-
-func beginInterfaceElemCtx(ctx *muContext, i reflect.Value) *muContext {
-	return &muContext{depth: ctx.depth, container: ctx.container, parentType: i.Type(), options: ctx.options}
-}
-
-func arrivedFromPointer(ctx *muContext, v reflect.Value) bool {
-	return ctx.parentType == reflect.PtrTo(v.Type())
 }
 
 func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
