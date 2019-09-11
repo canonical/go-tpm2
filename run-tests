@@ -1,0 +1,43 @@
+#!/bin/sh -e
+
+WITH_MSSIM=0
+TPM_SIMULATOR=
+MSSIM_ARGS=
+
+while [ $# -gt 0 ]; do
+        case "$1" in
+                --with-mssim)
+                        WITH_MSSIM=1
+                        shift
+                        ;;
+                --)
+                        shift
+                        break
+                        ;;
+                *)
+                        echo "Unrecognized flag $1"
+                        exit 1
+        esac
+done
+
+if [ $WITH_MSSIM -eq 1 ]; then
+        for s in tpm2-simulator tpm2-simulator-chrisccoulson.tpm2-simulator; do
+                if TPM_SIMULATOR=$(which ${s}); then
+                        break
+                fi
+        done
+
+        if [ -z $TPM_SIMULATOR ]; then
+                echo "Cannot find a TPM simulator"
+                exit 1
+        fi
+
+        $TPM_SIMULATOR -m >/dev/null &
+        TPM_PID=$!
+        MSSIM_ARGS=-use-mssim
+
+        trap "kill $TPM_PID" EXIT
+fi
+
+
+go test -v -race ./... -args $MSSIM_ARGS $@
