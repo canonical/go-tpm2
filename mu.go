@@ -58,7 +58,7 @@ func isUnion(t reflect.Type) bool {
 		return false
 	}
 	if t.Field(0).Type.Kind() != reflect.Interface {
-		return true
+		return false
 	}
 	return t.Field(0).Type.NumMethod() == 0
 }
@@ -205,16 +205,12 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 
 	var d reflect.Value
 	f := u.Field(0)
-
-	if u.Type().Field(0).Type.Kind() == reflect.Interface {
-		if f.IsNil() {
-			d = reflect.Zero(selectedType)
-		} else {
-			d = f.Elem()
-		}
+	if f.IsNil() {
+		d = reflect.Zero(selectedType)
 	} else {
-		d = f
+		d = f.Elem()
 	}
+
 	if d.Type() != selectedType {
 		if !d.Type().ConvertibleTo(selectedType) {
 			return fmt.Errorf("data has incorrect type %s (expected %s)", d.Type(),
@@ -396,26 +392,20 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 
 	var d reflect.Value
 	f := u.Field(0)
-	fieldIsInterface := u.Type().Field(0).Type.Kind() == reflect.Interface
-
-	if fieldIsInterface {
-		if f.IsNil() {
-			if !f.CanSet() {
-				return errors.New("cannot set data")
-			}
-			d = reflect.New(selectedType).Elem()
-		} else {
-			d = f.Elem()
+	if f.IsNil() {
+		if !f.CanSet() {
+			return errors.New("cannot set data")
 		}
+		d = reflect.New(selectedType).Elem()
 	} else {
-		d = f
+		d = f.Elem()
 	}
 
 	if err := unmarshalValue(buf, d, beginUnionDataCtx(ctx, u)); err != nil {
 		return fmt.Errorf("cannot unmarshal data value: %v", err)
 	}
 
-	if fieldIsInterface && f.IsNil() {
+	if f.IsNil() {
 		f.Set(d)
 	}
 
