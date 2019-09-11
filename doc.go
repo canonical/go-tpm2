@@ -30,11 +30,10 @@ This package marshals go types to and from the TPM wire format, according to the
     * INT32 <-> int32
     * UINT64 <-> uint64
     * INT64 <-> int64
-    * TPM2B prefixed types (sized buffers with a 2-byte size field) <-> []byte, or any type with an identical
-    underlying type.
-    * TPM2B prefixed types (sized structures with a 2-byte size field) <-> struct referenced via a pointer from a
-    parent struct, where the field in the enclosing struct has the `tpm2:"sized"` tag. A zero sized struct is
-    represented as a nil pointer.
+    * TPM2B prefixed types (sized buffers with a 2-byte size field) fall in to 2 categories:
+	* Byte buffer <-> []byte, or any type with an identical underlying type.
+	* Sized structure <-> struct referenced via a pointer field in an enclosing struct, where the field has the
+	`tpm2:"sized"` tag. A zero sized struct is represented as a nil pointer.
     * TPMA prefixed types (attributes) <-> whichever go type corresponds to the underlying TPM type (UINT8, UINT16,
     or UINT32).
     * TPM_ALG_ID (algorithm enum) <-> AlgorithmId
@@ -43,12 +42,23 @@ This package marshals go types to and from the TPM wire format, according to the
     * TPMS prefixed types (structures) <-> struct
     * TPMT prefixed types (structures with a tag field used as a union selector) <-> struct
     * TPMU prefixed types (unions) <-> struct with a single field and which implements the Union interface. These
-    must be contained within a TPMT prefixed struct type, with the `tpm2:"selector:<field_name>"` tag on the
-    struct field.
+    must be referenced from a field in an encosing struct, where the field has the `tpm2:"selector:<field_name>"`
+    tag referencing a valid selector field name in the enclosing struct.
 
 TPMI prefixed types (interface types) are not explicitly supported. These are just used for type checking during
 unmarshalling.
 
-The marshalling code automatically dereferences pointer types.
+Pointer types are automatically dereferenced.
+
+The marshalling code parses the "tpm2" tag on struct fields, the value of which is a comma separated list of
+options. These options are:
+    * selector:<field_name> - used when the field is a struct that implements the Union interface. <field_name>
+    references the name of another field in the struct, the value of which is used as the selector for the union
+    type.
+    * sized - used when the field is a struct, to indicate that it should be marshalled and unmarshalled as a
+    sized struct. The field must be a pointer to a struct, and a nil pointer indicates a zero-sized struct.
+    * raw - used when the field is a slice, to indicate that it should be marshalled and unmarshalled without
+    a length (if it represents a list) or size (if it represents a sized buffer) field. The slice must be
+    pre-allocated to the correct length by the caller during unmarshalling.
 */
 package tpm2

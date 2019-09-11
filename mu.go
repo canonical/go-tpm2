@@ -27,16 +27,14 @@ type CustomMarshaller interface {
 	Unmarshal(buf io.Reader) error
 }
 
-// RawBytes is a special type which is marshalled and unmarshalled by the marshalling code in unmodified form,
-// and without a size field. When used during unmarshalling, the slice must be pre-allocated to the correct length
-// by the caller.
+// RawBytes is a special byte slice type which is marshalled and unmarshalled without a size field. The slice must
+// be pre-allocated to the correct length by the caller during unmarshalling.
 type RawBytes []byte
 
 // Union is implemented by types that implement the TPMU prefixed TPM types.
 //
 // The Select method is called by the marshalling code with the value of the selector field from the enclosing
-// struct. The selector field is determined by the `tpm2:"selector:<field_name>"` tag for the field that references
-// this union. The implementation should respond with the type that will be marshalled and unmarshalled for the
+// struct, and the implementation should respond with the type that will be marshalled or unmarshalled for the
 // selector value.
 type Union interface {
 	Select(selector reflect.Value) (reflect.Type, error)
