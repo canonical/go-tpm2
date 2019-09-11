@@ -9,6 +9,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/binary"
 	"testing"
 )
 
@@ -574,16 +575,11 @@ func TestMakeCredential(t *testing.T) {
 		t.Fatalf("Returned credential blob is nil")
 	}
 
-	cred, err := credentialBlob.ToStruct()
-	if err != nil {
-		t.Fatalf("Failed to marshal credential blob to structure: %v", err)
+	if binary.BigEndian.Uint16(credentialBlob) != 32 {
+		t.Errorf("Invalid integrityHMAC length")
 	}
-
-	if len(cred.IntegrityHMAC) != 32 {
-		t.Errorf("Invalid integrityHMAC")
-	}
-	if len(cred.EncIdentity) == 0 {
-		t.Errorf("Invalid encIdentity")
+	if len(credentialBlob) != 53 {
+		t.Errorf("Invalid credentialBlob length")
 	}
 
 	if secret == nil {
