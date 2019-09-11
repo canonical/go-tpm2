@@ -654,7 +654,7 @@ func (b SymKeyBitsU) XOR() AlgorithmId {
 //  - AlgorithmXOR: <nil>
 //  - AlgorithmNull: <nil>
 type SymModeU struct {
-	Sym AlgorithmId
+	Data interface{}
 }
 
 func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
@@ -671,6 +671,11 @@ func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
 		return nil, nil
 	}
 	return nil, invalidSelectorError{selector}
+}
+
+// Sym returns the underlying value as AlgorithmId. It panics if the underlying type is not AlgorithmId.
+func (m SymModeU) Sym() AlgorithmId {
+	return m.Data.(AlgorithmId)
 }
 
 // SymDef corresponds to the TPMT_SYM_DEF type, and is used to select the algorithm used for parameter encryption.
