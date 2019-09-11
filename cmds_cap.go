@@ -132,7 +132,7 @@ func (t *TPMContext) GetCapabilityHandles(handleType Handle, propertyCount uint3
 }
 
 func (t *TPMContext) GetCapabilityPCRs() (PCRSelectionList, error) {
-	data, err := t.GetCapability(CapabilityPCRs, 0, 100)
+	data, err := t.GetCapability(CapabilityPCRs, 0, CapabilityMaxProperties)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount
 }
 
 func (t *TPMContext) GetCapabilityECCCurves() (ECCCurveList, error) {
-	data, err := t.GetCapability(CapabilityECCCurves, uint32(ECCCurveFirst), 100)
+	data, err := t.GetCapability(CapabilityECCCurves, uint32(ECCCurveFirst), CapabilityMaxProperties)
 	if err != nil {
 		return nil, err
 	}

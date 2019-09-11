@@ -74,7 +74,7 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	}
 
 	getHandles := func(handleType Handle, out map[Handle]struct{}) error {
-		handles, err := t.GetCapabilityHandles(handleType, CapabilityMaxHandles)
+		handles, err := t.GetCapabilityHandles(handleType, CapabilityMaxProperties)
 		if err != nil {
 			return fmt.Errorf("cannot fetch handles from TPM after clear: %v", err)
 		}

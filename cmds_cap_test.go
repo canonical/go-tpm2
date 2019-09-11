@@ -12,7 +12,7 @@ func TestGetCapabilityAlgs(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	data, err := tpm.GetCapabilityAlgs(AlgorithmFirst, CapabilityMaxAlgs)
+	data, err := tpm.GetCapabilityAlgs(AlgorithmFirst, CapabilityMaxProperties)
 	if err != nil {
 		t.Fatalf("GetCapability failed: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestGetCapabilityCommands(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	data, err := tpm.GetCapabilityCommands(CommandFirst, CapabilityMaxCommands)
+	data, err := tpm.GetCapabilityCommands(CommandFirst, CapabilityMaxProperties)
 	if err != nil {
 		t.Fatalf("GetCapability failed: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestGetCapabilityHandles(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	data, err := tpm.GetCapabilityHandles(HandleTypePermanent, CapabilityMaxHandles)
+	data, err := tpm.GetCapabilityHandles(HandleTypePermanent, CapabilityMaxProperties)
 	if err != nil {
 		t.Fatalf("GetCapability failed: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestGetCapabilityTPMProperties(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	data, err := tpm.GetCapabilityTPMProperties(PropertyFixed, CapabilityMaxTPMProperties)
+	data, err := tpm.GetCapabilityTPMProperties(PropertyFixed, CapabilityMaxProperties)
 	if err != nil {
 		t.Fatalf("GetCapability failed: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestGetCapabilityPCRProperties(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	data, err := tpm.GetCapabilityPCRProperties(PropertyPCRFirst, CapabilityMaxPCRProperties)
+	data, err := tpm.GetCapabilityPCRProperties(PropertyPCRFirst, CapabilityMaxProperties)
 	if err != nil {
 		t.Fatalf("GetCapability failed: %v", err)
 	}

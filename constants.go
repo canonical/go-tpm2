@@ -4,6 +4,10 @@
 
 package tpm2
 
+import (
+	"math"
+)
+
 const (
 	StartupClear StartupType = iota
 	StartupState
@@ -325,13 +329,7 @@ const (
 )
 
 const (
-	CapabilityMaxAlgs          uint32 = 169
-	CapabilityMaxHandles       uint32 = 254
-	CapabilityMaxCommands      uint32 = 254
-	CapabilityMaxTPMProperties uint32 = 127
-	CapabilityMaxPCRProperties uint32 = 112
-	CapabilityMaxECCCurves     uint32 = 508
-	CapabilityMaxAuthPolicies  uint32 = 15
+	CapabilityMaxProperties uint32 = math.MaxUint32
 )
 
 const (
