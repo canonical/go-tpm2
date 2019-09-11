@@ -62,6 +62,10 @@ func isSizedStructParam(v reflect.Value) bool {
 	return false
 }
 
+func isSizedBuffer(t reflect.Type) bool {
+	return isByteSlice(t) && t != rawBytesType
+}
+
 func isParamEncryptable(param interface{}) bool {
 	v := reflect.ValueOf(param)
 	if v.Kind() == reflect.Ptr {

@@ -65,7 +65,7 @@ func isUnion(t reflect.Type) bool {
 	return t.Field(0).Type.NumMethod() == 0
 }
 
-func isSizedBuffer(t reflect.Type) bool {
+func isByteSlice(t reflect.Type) bool {
 	if t.Kind() != reflect.Slice {
 		return false
 	}
@@ -110,9 +110,9 @@ func parseFieldOptions(s string) muOptions {
 }
 
 type muContext struct {
-	depth      int
-	container  reflect.Value
-	options    muOptions
+	depth     int
+	container reflect.Value
+	options   muOptions
 }
 
 func beginStructFieldCtx(ctx *muContext, s reflect.Value, i int) *muContext {
@@ -246,28 +246,25 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 }
 
 func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
-	if slice.Type() == rawBytesType {
-		// Shortcut for raw byte-slice
+	if isByteSlice(slice.Type()) {
+		// Shortcut for byte slices
+		if slice.Type() != rawBytesType {
+			// Sized buffer
+			if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
+				return fmt.Errorf("cannot write size of sized buffer: %v", err)
+			}
+		}
 		_, err := buf.Write(slice.Bytes())
 		if err != nil {
-			return fmt.Errorf("cannot write byte slice directly to output buffer: %v", err)
+			return fmt.Errorf("cannot write byte slice contents: %v", err)
 		}
 		return nil
 	}
 
-	// Marshal size field
-	switch {
-	case ctx.options.raw:
-		// No size field - we've been instructed to marshal the slice as it is
-	case isSizedBuffer(slice.Type()):
-		// Sized byte-buffers have a 16-bit size field
-		if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
-			return fmt.Errorf("cannot write size of sized buffer: %v", err)
-		}
-	default:
-		// Treat all other slices as a list, which have a 32-bit size field
+	if !ctx.options.raw {
+		// Marshal length field
 		if err := binary.Write(buf, binary.BigEndian, uint32(slice.Len())); err != nil {
-			return fmt.Errorf("cannot write size of list: %v", err)
+			return fmt.Errorf("cannot write length of list: %v", err)
 		}
 	}
 
@@ -444,45 +441,47 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
-	if slice.Type() == rawBytesType {
-		if slice.IsNil() {
+	if isByteSlice(slice.Type()) {
+		// Shortcut for byte slice
+		switch {
+		case slice.Type() == rawBytesType && slice.IsNil():
 			return errors.New("nil raw byte slice")
+		case slice.Type() == rawBytesType:
+			// No size
+		default:
+			// Sized buffer
+			var size uint16
+			if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
+				return fmt.Errorf("cannot read size of sized buffer: %v", err)
+			}
+			if !slice.CanSet() {
+				return errors.New("cannot set slice")
+			} else {
+				slice.Set(reflect.MakeSlice(slice.Type(), int(size), int(size)))
+			}
 		}
-		// Shortcut for raw byte-slice
 		if _, err := io.ReadFull(buf, slice.Bytes()); err != nil {
 			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", err)
 		}
 		return nil
 	}
 
-	var l int
+	// Unmarshal the length
 	switch {
+	case ctx.options.raw && slice.IsNil():
+		return errors.New("nil raw slice")
 	case ctx.options.raw:
-		if slice.IsNil() {
-			return errors.New("nil raw slice")
-		}
-	case isSizedBuffer(slice.Type()):
-		// Sized byte-buffers have a 16-bit size field
-		var tmp uint16
-		if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
-			return fmt.Errorf("cannot read size of sized buffer: %v", err)
-		}
-		l = int(tmp)
+		// No length
 	default:
-		// Treat all other slices as a list, which have a 32-bit size field
-		var tmp uint32
-		if err := binary.Read(buf, binary.BigEndian, &tmp); err != nil {
-			return fmt.Errorf("cannot read size of list: %v", err)
+		var length uint32
+		if err := binary.Read(buf, binary.BigEndian, &length); err != nil {
+			return fmt.Errorf("cannot read length of list: %v", err)
 		}
-		l = int(tmp)
-	}
-
-	// Allocate the slice
-	if slice.IsNil() {
 		if !slice.CanSet() {
 			return errors.New("cannot set slice")
+		} else {
+			slice.Set(reflect.MakeSlice(slice.Type(), int(length), int(length)))
 		}
-		slice.Set(reflect.MakeSlice(slice.Type(), l, l))
 	}
 
 	for i := 0; i < slice.Len(); i++ {
@@ -586,7 +585,8 @@ func MarshalToBytes(vals ...interface{}) ([]byte, error) {
 // UnmarshalFromReader unmarshals data in the TPM wire format from buf to vals, according to the rules specified
 // in "Parameter marshalling and unmarshalling". The values supplied to this function must be pointers to the
 // destination values. Nil pointer fields encountered during unmarshalling will result in memory being allocated
-// for those values, unless the pointer represents a zero-sized sized struct.
+// for those values, unless the pointer represents a zero-sized sized struct. New slices will always be created -
+// even if the caller pre-allocates them, unless it is a RawBytes type or a field with the `tpm2:"raw"` tag.
 //
 // If this function does not complete successfully, it will return an error. In this case, partial results may
 // have been unmarshalled to the supplied destination values.
@@ -611,7 +611,8 @@ func UnmarshalFromReader(buf io.Reader, vals ...interface{}) error {
 // UnmarshalFromBytes unmarshals data in the TPM wire format from b to vals, according to the rules specified
 // in "Parameter marshalling and unmarshalling". The values supplied to this function must be pointers to the
 // destination values. Nil pointer fields encountered during unmarshalling will result in memory being allocated
-// for those values, unless the pointer represents a zero-sized sized struct.
+// for those values, unless the pointer represents a zero-sized sized struct. New slices will always be created -
+// even if the caller pre-allocates them, unless it is a RawBytes type or a field with the `tpm2:"raw"` tag.
 //
 // If successful, this function returns the number of bytes consumed from b. If this function does not complete
 // successfully, it will return an error and zero for the number of bytes consumed. In this case, partial results

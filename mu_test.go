@@ -166,6 +166,22 @@ func TestMarshalSizedBuffer(t *testing.T) {
 	if !reflect.DeepEqual(a, ao) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
+
+	// Test unmarshalling with a pre-allocated slice with a smaller capacity than required - it should be
+	// reallocated automatically
+	ao2 := make(TestSizedBuffer, 8, 8)
+
+	n, err = UnmarshalFromBytes(out, &ao2)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(a, ao2) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
 }
 
 type TestListUint32 []uint32
@@ -193,6 +209,22 @@ func TestMarshalList(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(a, ao) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+
+	// Test unmarshalling with a pre-allocated slice with a smaller capacity than required - it should be
+	// reallocated automatically
+	ao2 := make(TestListUint32, 2, 2)
+
+	n, err = UnmarshalFromBytes(out, &ao2)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(a, ao2) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
 }
