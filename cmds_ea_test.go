@@ -214,13 +214,7 @@ func TestPolicyOR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
-	trialSessionFlushed := false
-	defer func() {
-		if trialSessionFlushed {
-			return
-		}
-		flushContext(t, tpm, trialSessionContext)
-	}()
+	defer verifyContextFlushed(t, tpm, trialSessionContext)
 
 	pcrSelection := PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}}
 	if err := tpm.PolicyPCR(trialSessionContext, nil, pcrSelection); err != nil {
@@ -235,7 +229,6 @@ func TestPolicyOR(t *testing.T) {
 	if err := tpm.FlushContext(trialSessionContext); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
-	trialSessionFlushed = true
 
 	digestList := []Digest{trialPolicyDigest}
 	for i := 0; i < 4; i++ {

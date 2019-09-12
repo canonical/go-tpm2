@@ -37,15 +37,8 @@ func TestContextSave(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		flushed := false
-		defer func() {
-			if flushed {
-				return
-			}
-			flushContext(t, tpm, sessionContext)
-		}()
+		defer verifyContextFlushed(t, tpm, sessionContext)
 		run(t, sessionContext, sessionContext.Handle(), HandleNull)
-		flushed = true
 	})
 }
 
@@ -73,15 +66,8 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		flushed := false
-		defer func() {
-			if flushed {
-				return
-			}
-			flushContext(t, tpm, sc)
-		}()
+		defer verifyContextFlushed(t, tpm, sc)
 		restoredSc := run(t, sc)
-		flushed = true
 		defer flushContext(t, tpm, restoredSc)
 
 		handleType := HandleTypePolicySession

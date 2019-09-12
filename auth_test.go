@@ -82,12 +82,12 @@ func TestHMACSessions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
-			sessionLoaded := true
 			defer func() {
-				if !sessionLoaded {
-					return
+				if data.sessionAttrs&AttrContinueSession > 0 {
+					flushContext(t, tpm, sessionContext)
+				} else {
+					verifyContextFlushed(t, tpm, sessionContext)
 				}
-				flushContext(t, tpm, sessionContext)
 			}()
 
 			template := Public{
@@ -118,7 +118,6 @@ func TestHMACSessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
-				sessionLoaded = false
 				if err.Error() != "cannot marshal command handles and auth area for command "+
 					"TPM_CC_Create: error whilst processing resource context or handle with "+
 					"authorization at index 1: invalid resource context for session: "+
@@ -225,12 +224,12 @@ func TestPolicySessions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
-			sessionLoaded := true
 			defer func() {
-				if !sessionLoaded {
-					return
+				if data.sessionAttrs&AttrContinueSession > 0 {
+					flushContext(t, tpm, sessionContext)
+				} else {
+					verifyContextFlushed(t, tpm, sessionContext)
 				}
-				flushContext(t, tpm, sessionContext)
 			}()
 
 			session := Session{Context: sessionContext, Attrs: data.sessionAttrs,
@@ -249,7 +248,6 @@ func TestPolicySessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent usage of the session should fail")
 				}
-				sessionLoaded = false
 				if err.Error() != "cannot marshal command handles and auth area for command "+
 					"TPM_CC_Unseal: error whilst processing resource context or handle with "+
 					"authorization at index 1: invalid resource context for session: "+
