@@ -110,13 +110,6 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	}
 }
 
-func verifyCreationHash(t *testing.T, creationHash Digest, template *Public) {
-	nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
-	if len(creationHash) != int(nameAlgSize) {
-		t.Errorf("creation hash is the wrong length (%d bytes)", len(creationHash))
-	}
-}
-
 func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Handle) {
 	if creationTicket.Tag != TagCreation {
 		t.Errorf("creation ticket has the wrong tag")
