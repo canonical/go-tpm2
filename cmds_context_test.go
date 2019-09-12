@@ -185,12 +185,13 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("EvictControl should set the persistent context's handle to NULL")
 		}
 
-		_, _, _, err = tpm.ReadPublic(outContext)
+		_, err = tpm.WrapHandle(persist)
 		if err == nil {
-			t.Fatalf("Calling ReadPublic on a dead resource context should fail")
+			t.Fatalf("WrapHandle on an evicted resource should fail")
 		}
-		if err.Error() != "invalid resource context for objectContext: resource has been closed" {
-			t.Errorf("ReadPublic returned an unexpected error: %v", err)
+		if err.Error() != "TPM returned an error for handle 1 whilst executing command "+
+			"TPM_CC_ReadPublic: TPM_RC_HANDLE (the handle is not correct for the use)" {
+			t.Errorf("WrapHandle returned an unexpected error: %v", err)
 		}
 	}
 
@@ -254,11 +255,13 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("FlushContext should set the context's handle to NULL")
 	}
 
-	_, _, _, err = tpm.ReadPublic(context)
+	_, err = tpm.WrapHandle(h)
 	if err == nil {
-		t.Errorf("Calling ReadPublic on a dead resource context should fail")
+		t.Fatalf("WrapHandle on a flushed resource should fail")
 	}
-	if err.Error() != "invalid resource context for objectContext: resource has been closed" {
-		t.Errorf("ReadPublic returned an unexpected error: %v", err)
+	if err.Error() != "TPM returned a warning whilst executing command TPM_CC_ReadPublic: "+
+		"TPM_RC_REFERENCE_H0 (the 1st handle in the handle area references a transient object or "+
+		"session that is not loaded)" {
+		t.Errorf("WrapHandle returned an unexpected error: %v", err)
 	}
 }
