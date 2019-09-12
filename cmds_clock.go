@@ -8,7 +8,8 @@ package tpm2
 
 func (t *TPMContext) ReadClock(sessions ...*Session) (*TimeInfo, error) {
 	var currentTime TimeInfo
-	if err := t.RunCommand(CommandReadClock, sessions); err != nil {
+	if err := t.RunCommand(CommandReadClock, sessions, Separator, Separator, Separator,
+		&currentTime); err != nil {
 		return nil, err
 	}
 	return &currentTime, nil

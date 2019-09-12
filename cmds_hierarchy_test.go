@@ -303,15 +303,14 @@ func TestClear(t *testing.T) {
 		transientObjects = append(transientObjects, ownerPrimary)
 
 		// Persist storage primary key (should be evicted by Clear)
-		persist := Handle(0x8100ffff)
-		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary, persist)
+		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary,
+			Handle(0x8100ffff))
 		defer evictPersistentObject(t, tpm, HandleOwner, ownerPrimaryPersist)
 		transientObjects = append(transientObjects, ownerPrimaryPersist)
 
 		// Persist platform primary key (should persist across Clear)
-		persist2 := Handle(0x8180ffff)
 		platformPrimaryPersist := persistObjectForTesting(t, tpm, HandlePlatform, platformPrimary,
-			persist2)
+			Handle(0x8180ffff))
 		defer evictPersistentObject(t, tpm, HandlePlatform, platformPrimaryPersist)
 		persistentObjects = append(persistentObjects, platformPrimaryPersist)
 
