@@ -271,10 +271,8 @@ func TestClear(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, auth interface{}) {
-		cleared := false
-
-		var persistentObjects []ResourceContext
-		var transientObjects []ResourceContext
+		var persistentObjects []ResourceContext // Objects that persist across Clear
+		var transientObjects []ResourceContext  // Objects that are evicted by Clar
 
 		// Create platform primary key (should persist across Clear)
 		template := Public{
@@ -301,69 +299,25 @@ func TestClear(t *testing.T) {
 
 		// Create storage primary key (should be evicted by Clear)
 		ownerPrimary := createRSASrkForTesting(t, tpm, nil)
-		defer func() {
-			if cleared {
-				return
-			}
-			flushContext(t, tpm, ownerPrimary)
-		}()
+		defer flushContext(t, tpm, ownerPrimary)
 		transientObjects = append(transientObjects, ownerPrimary)
 
 		// Persist storage primary key (should be evicted by Clear)
 		persist := Handle(0x8100ffff)
-		if context, err := tpm.WrapHandle(persist); err == nil {
-			_, err := tpm.EvictControl(HandleOwner, context, persist, nil)
-			if err != nil {
-				t.Logf("EvictControl failed whilst trying to remove a handle at the start of "+
-					"the test: %v", err)
-			}
-		}
-		ownerPrimaryPersist, err := tpm.EvictControl(HandleOwner, ownerPrimary, persist, nil)
-		if err != nil {
-			t.Fatalf("EvictControl failed: %v", err)
-		}
-		defer func() {
-			if cleared {
-				return
-			}
-			if _, err := tpm.EvictControl(HandleOwner, ownerPrimaryPersist, persist, nil); err != nil {
-				t.Errorf("EvictControl failed: %v", err)
-			}
-		}()
+		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary, persist)
+		defer evictPersistentObject(t, tpm, HandleOwner, ownerPrimaryPersist)
 		transientObjects = append(transientObjects, ownerPrimaryPersist)
 
 		// Persist platform primary key (should persist across Clear)
 		persist2 := Handle(0x8180ffff)
-		if context, err := tpm.WrapHandle(persist2); err == nil {
-			_, err := tpm.EvictControl(HandlePlatform, context, persist2, nil)
-			if err != nil {
-				t.Logf("EvictControl failed whilst trying to remove a handle at the start of "+
-					"the test: %v", err)
-			}
-		}
-		platformPrimaryPersist, err := tpm.EvictControl(HandlePlatform, platformPrimary, persist2, nil)
-		if err != nil {
-			t.Fatalf("EvictControl failed: %v", err)
-		}
-		defer func() {
-			if cleared {
-				return
-			}
-			if _, err := tpm.EvictControl(HandlePlatform, platformPrimaryPersist, persist2,
-				nil); err != nil {
-				t.Errorf("EvictControl failed: %v", err)
-			}
-		}()
+		platformPrimaryPersist := persistObjectForTesting(t, tpm, HandlePlatform, platformPrimary,
+			persist2)
+		defer evictPersistentObject(t, tpm, HandlePlatform, platformPrimaryPersist)
 		persistentObjects = append(persistentObjects, platformPrimaryPersist)
 
 		// Set endorsement hierarchy auth value (should be reset by Clear)
 		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
-		defer func() {
-			if cleared {
-				return
-			}
-			resetHierarchyAuth(t, tpm, HandleEndorsement)
-		}()
+		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
 
 		// Create a context for a permanent resource (should persist across Clear)
 		owner, _ := tpm.WrapHandle(HandleOwner)
@@ -387,12 +341,7 @@ func TestClear(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 		nv1, _ := tpm.WrapHandle(nvPub1.Index)
-		defer func() {
-			if cleared {
-				return
-			}
-			undefineNVSpace(t, tpm, nv1, HandleOwner, nil)
-		}()
+		defer undefineNVSpace(t, tpm, nv1.Handle(), HandleOwner, nil)
 		transientObjects = append(transientObjects, nv1)
 
 		// Define an NV index in the platform hierarchy (should persist across Clear)
@@ -406,7 +355,7 @@ func TestClear(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 		nv2, _ := tpm.WrapHandle(nvPub2.Index)
-		defer undefineNVSpace(t, tpm, nv2, HandlePlatform, nil)
+		defer undefineNVSpace(t, tpm, nv2.Handle(), HandlePlatform, nil)
 		persistentObjects = append(persistentObjects, nv2)
 
 		var transientHandles []Handle
@@ -418,7 +367,6 @@ func TestClear(t *testing.T) {
 		if err := tpm.Clear(HandleLockout, auth); err != nil {
 			t.Fatalf("Clear failed: %v", err)
 		}
-		cleared = true
 
 		// Verify that handles that should have been flushed have been
 		for _, h := range transientHandles {
@@ -427,7 +375,7 @@ func TestClear(t *testing.T) {
 				t.Fatalf("GetCapability failed: %v", err)
 			}
 			if len(handles) > 0 && handles[0] == h {
-				t.Errorf("Handle 0x%08x should have been flushed", h)
+				t.Errorf("Unexpected behaviour: Handle 0x%08x should have been flushed", h)
 			}
 		}
 
@@ -472,25 +420,12 @@ func TestClear(t *testing.T) {
 	})
 	t.Run("RequirePW", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		cleared := false
-		defer func() {
-			if cleared {
-				return
-			}
-			resetHierarchyAuth(t, tpm, HandleLockout)
-		}()
+		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		run(t, testAuth)
-		cleared = true
 	})
 	t.Run("RequireSession", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		cleared := false
-		defer func() {
-			if cleared {
-				return
-			}
-			resetHierarchyAuth(t, tpm, HandleLockout)
-		}()
+		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
 		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
 			testAuth)
@@ -499,24 +434,16 @@ func TestClear(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
-		cleared = true
 	})
 	t.Run("RequireUnboundSession", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		cleared := false
-		defer func() {
-			if cleared {
-				return
-			}
-			resetHierarchyAuth(t, tpm, HandleLockout)
-		}()
+		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
-		cleared = true
 	})
 }
 
@@ -538,10 +465,6 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		if err := tpm.HierarchyChangeAuth(hierarchy, nil, session); err != nil {
 			t.Errorf("HierarchyChangeAuth failed: %v", err)
 		}
-	}
-
-	resetHierarchyAuthIgnoringErrors := func(t *testing.T, hierarchy Handle) {
-		tpm.HierarchyChangeAuth(hierarchy, nil, testAuth)
 	}
 
 	createSrk := func(t *testing.T, tpm *TPMContext, session interface{}) ResourceContext {
@@ -594,14 +517,14 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 	t.Run("OwnerWithPW", func(t *testing.T) {
 		run1(t, HandleOwner, nil)
-		defer resetHierarchyAuthIgnoringErrors(t, HandleOwner)
+		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		run2(t, HandleOwner, testAuth, createSrk)
 	})
 
 	t.Run("EndorsementWithPW", func(t *testing.T) {
 		run1(t, HandleEndorsement, nil)
-		defer resetHierarchyAuthIgnoringErrors(t, HandleEndorsement)
+		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
 
 		run2(t, HandleEndorsement, testAuth, createEk)
 	})
@@ -617,7 +540,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
 		run1(t, HandleOwner, &session)
-		defer resetHierarchyAuthIgnoringErrors(t, HandleOwner)
+		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		session.AuthValue = testAuth
 		run2(t, HandleOwner, &session, createSrk)
@@ -633,7 +556,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
 		run1(t, HandleOwner, &session)
-		defer resetHierarchyAuthIgnoringErrors(t, HandleOwner)
+		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		session.AuthValue = testAuth
 		run2(t, HandleOwner, &session, createSrk)

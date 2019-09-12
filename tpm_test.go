@@ -24,22 +24,67 @@ var (
 	testAuth  = []byte("1234")
 )
 
+// Set the hierarchy auth to testAuth. Fatal on failure
 func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
 		t.Fatalf("HierarchyChangeAuth failed: %v", err)
 	}
 }
 
+// Reset the hierarchy auth from testAuth to nil. Will succeed if HierarchyChangeAuth succeeds, or if it fails
+// because the hierarchy auth has already been reset by another action in the test. Otherwise it causes the test
+// to fail.
 func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
+	if hierarchy == HandleLockout {
+		// Lockout auth is DA protected, so don't attempt to reset if it has already been done by the test
+		if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
+			t.Errorf("GetCapability failed: %v", err)
+		} else if PermanentAttributes(props[0].Value)&AttrLockoutAuthSet == 0 {
+			return
+		}
+	}
 	if err := tpm.HierarchyChangeAuth(hierarchy, nil, testAuth); err != nil {
+		switch hierarchy {
+		case HandleLockout:
+		case HandlePlatform:
+			if err := tpm.HierarchyChangeAuth(HandlePlatform, nil, nil); err == nil {
+				return
+			}
+		default:
+			var attr PermanentAttributes
+			switch hierarchy {
+			case HandleOwner:
+				attr = AttrOwnerAuthSet
+			case HandleEndorsement:
+				attr = AttrEndorsementAuthSet
+			}
+			if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
+				t.Errorf("GetCapability failed: %v", err)
+			} else if PermanentAttributes(props[0].Value)&attr == 0 {
+				return
+			}
+		}
 		t.Errorf("HierarchyChangeAuth failed: %v", err)
 	}
 }
 
-func undefineNVSpace(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle, auth interface{}) {
+// Undefine a NV index set by a test. Fails the test if it doesn't succeed.
+func undefineNVSpace(t *testing.T, tpm *TPMContext, handle, authHandle Handle, auth interface{}) {
+	context, err := tpm.WrapHandle(handle)
+	if err != nil {
+		return
+	}
 	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
+}
+
+func undefineNVSpaceByContext(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle,
+	auth interface{}) {
+	if context.Handle() == HandleNull {
+		return
+	}
+	undefineNVSpace(t, tpm, context.Handle(), authHandle, auth)
 }
 
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
@@ -201,12 +246,45 @@ func nameAlgorithm(n Name) AlgorithmId {
 	return alg
 }
 
+// Persist a transient object for testing. If the persistent handle is already in use, it tries to evict the
+// existing resource first. Fatal if persisting the transient object fails.
+func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transient ResourceContext,
+	persist Handle) ResourceContext {
+	if context, err := tpm.WrapHandle(persist); err == nil {
+		_, err := tpm.EvictControl(auth, context, persist, nil)
+		if err != nil {
+			t.Logf("EvictControl failed whilst trying to remove a persistent handle that has "+
+				"previously been leaked: %v", err)
+		}
+	}
+	persistentContext, err := tpm.EvictControl(auth, transient, persist, nil)
+	if err != nil {
+		t.Fatalf("EvictControl failed: %v", err)
+	}
+	return persistentContext
+}
+
+// Evict a persistent object. Fails the test if the resource context is valid but the eviction doesn't succeed.
+func evictPersistentObject(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
+	if context.Handle() == HandleNull {
+		return
+	}
+	if _, err := tpm.EvictControl(auth, context, context.Handle(), nil); err != nil {
+		t.Errorf("EvictControl failed: %v", err)
+	}
+}
+
+// Flush a resource context. Fails the test if the resource context is valid but the flush doesn't succeed.
 func flushContext(t *testing.T, tpm *TPMContext, context ResourceContext) {
+	if context.Handle() == HandleNull {
+		return
+	}
 	if err := tpm.FlushContext(context); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 }
 
+// Fail the test if the resource context hasn't been invalidated. Will attempt to flush a valid resource context.
 func verifyContextFlushed(t *testing.T, tpm *TPMContext, context ResourceContext) {
 	if context.Handle() == HandleNull {
 		return

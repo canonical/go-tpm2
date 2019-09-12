@@ -397,7 +397,7 @@ func TestNVPublicName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WrapHandle failed: %v", err)
 	}
-	defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+	defer undefineNVSpaceByContext(t, tpm, rc, HandleOwner, nil)
 
 	name, err := pub.Name()
 	if err != nil {
