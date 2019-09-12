@@ -192,51 +192,6 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	return objectHandle
 }
 
-func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext,
-	userAuth Auth) ResourceContext {
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionContext)
-
-	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
-	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-
-	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
-		t.Fatalf("PolicySecret failed: %v", err)
-	}
-
-	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrSign,
-		Params: PublicParamsU{
-			&RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme: RSAScheme{
-					Scheme:  AlgorithmRSASSA,
-					Details: AsymSchemeU{&SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, &session)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
-		t.Fatalf("PolicySecret failed: %v", err)
-	}
-
-	akContext, _, err := tpm.Load(ek, priv, pub, &session)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	return akContext
-}
-
 func nameAlgorithm(n Name) AlgorithmId {
 	if len(n) == 4 {
 		return AlgorithmNull
