@@ -299,13 +299,13 @@ func TestClear(t *testing.T) {
 
 		// Create storage primary key (should be evicted by Clear)
 		ownerPrimary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, ownerPrimary)
+		defer verifyContextFlushed(t, tpm, ownerPrimary)
 		transientObjects = append(transientObjects, ownerPrimary)
 
 		// Persist storage primary key (should be evicted by Clear)
 		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary,
 			Handle(0x8100ffff))
-		defer evictPersistentObject(t, tpm, HandleOwner, ownerPrimaryPersist)
+		defer verifyPersistentObjectEvicted(t, tpm, HandleOwner, ownerPrimaryPersist)
 		transientObjects = append(transientObjects, ownerPrimaryPersist)
 
 		// Persist platform primary key (should persist across Clear)
@@ -340,7 +340,7 @@ func TestClear(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 		nv1, _ := tpm.WrapHandle(nvPub1.Index)
-		defer undefineNVSpace(t, tpm, nv1.Handle(), HandleOwner, nil)
+		defer verifyNVSpaceUndefined(t, tpm, nv1, HandleOwner, nil)
 		transientObjects = append(transientObjects, nv1)
 
 		// Define an NV index in the platform hierarchy (should persist across Clear)
@@ -354,7 +354,7 @@ func TestClear(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 		nv2, _ := tpm.WrapHandle(nvPub2.Index)
-		defer undefineNVSpace(t, tpm, nv2.Handle(), HandlePlatform, nil)
+		defer undefineNVSpace(t, tpm, nv2, HandlePlatform, nil)
 		persistentObjects = append(persistentObjects, nv2)
 
 		var transientHandles []Handle
@@ -375,13 +375,6 @@ func TestClear(t *testing.T) {
 			}
 			if len(handles) > 0 && handles[0] == h {
 				t.Errorf("Unexpected behaviour: Handle 0x%08x should have been flushed", h)
-			}
-		}
-
-		// Verify that contexts for flushed objects have been invalidated
-		for _, rc := range transientObjects {
-			if rc.Handle() != HandleNull {
-				t.Errorf("Expected handle 0x%08x to be evicted", rc.Handle())
 			}
 		}
 

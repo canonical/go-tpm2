@@ -157,7 +157,7 @@ func TestStartup(t *testing.T) {
 				if err != nil {
 					t.Fatalf("WrapHandle failed: %v", err)
 				}
-				defer undefineNVSpaceByContext(t, tpm, nv, HandleOwner, nil)
+				defer undefineNVSpace(t, tpm, nv, HandleOwner, nil)
 
 				if data2.write {
 					if err := tpm.NVWrite(nv, nv, []byte("foo"), 0, nil); err != nil {
@@ -240,7 +240,7 @@ func TestStartup(t *testing.T) {
 				if err != nil {
 					t.Fatalf("WrapHandle failed: %v", err)
 				}
-				defer undefineNVSpaceByContext(t, tpm, nv, HandleOwner, nil)
+				defer undefineNVSpace(t, tpm, nv, HandleOwner, nil)
 
 				if data2.in.Attrs.Type() == NVTypeOrdinary {
 					if err := tpm.NVWrite(nv, nv, []byte("foo"), 0, nil); err != nil {
@@ -281,7 +281,7 @@ func TestStartup(t *testing.T) {
 			if err != nil {
 				t.Fatalf("WrapHandle failed: %v", err)
 			}
-			defer undefineNVSpaceByContext(t, tpm, nv, HandleOwner, nil)
+			defer undefineNVSpace(t, tpm, nv, HandleOwner, nil)
 
 			if err := tpm.NVReadLock(nv, nv, nil); err != nil {
 				t.Errorf("NVReadLock failed: %v", err)

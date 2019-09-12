@@ -69,22 +69,19 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 }
 
 // Undefine a NV index set by a test. Fails the test if it doesn't succeed.
-func undefineNVSpace(t *testing.T, tpm *TPMContext, handle, authHandle Handle, auth interface{}) {
-	context, err := tpm.WrapHandle(handle)
-	if err != nil {
-		return
-	}
+func undefineNVSpace(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle, auth interface{}) {
 	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
 }
 
-func undefineNVSpaceByContext(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle,
+func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle,
 	auth interface{}) {
 	if context.Handle() == HandleNull {
 		return
 	}
-	undefineNVSpace(t, tpm, context.Handle(), authHandle, auth)
+	t.Errorf("Context is still live")
+	undefineNVSpace(t, tpm, context, authHandle, auth)
 }
 
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
@@ -266,19 +263,21 @@ func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transie
 
 // Evict a persistent object. Fails the test if the resource context is valid but the eviction doesn't succeed.
 func evictPersistentObject(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
-	if context.Handle() == HandleNull {
-		return
-	}
 	if _, err := tpm.EvictControl(auth, context, context.Handle(), nil); err != nil {
 		t.Errorf("EvictControl failed: %v", err)
 	}
 }
 
-// Flush a resource context. Fails the test if the resource context is valid but the flush doesn't succeed.
-func flushContext(t *testing.T, tpm *TPMContext, context ResourceContext) {
+func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
 	if context.Handle() == HandleNull {
 		return
 	}
+	t.Errorf("Context is still live")
+	evictPersistentObject(t, tpm, auth, context)
+}
+
+// Flush a resource context. Fails the test if the resource context is valid but the flush doesn't succeed.
+func flushContext(t *testing.T, tpm *TPMContext, context ResourceContext) {
 	if err := tpm.FlushContext(context); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
