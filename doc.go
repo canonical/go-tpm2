@@ -42,7 +42,7 @@ This package marshals go types to and from the TPM wire format, according to the
     * TPMS prefixed types (structures) <-> struct
     * TPMT prefixed types (structures with a tag field used as a union selector) <-> struct
     * TPMU prefixed types (unions) <-> struct with a single field and which implements the Union interface. These
-    must be referenced from a field in an encosing struct, where the field has the `tpm2:"selector:<field_name>"`
+    must be referenced from a field in an enclosing struct, where the field has the `tpm2:"selector:<field_name>"`
     tag referencing a valid selector field name in the enclosing struct.
 
 TPMI prefixed types (interface types) are not explicitly supported. These are just used for type checking during
