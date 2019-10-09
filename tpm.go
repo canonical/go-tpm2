@@ -94,7 +94,7 @@ type Session struct {
 //
 // Auth can be one of the following types:
 //  * string, []byte, or nil for plaintext password authorization.
-//  * *Session for session based authorization.
+//  * *Session for session based authorization (HMAC or policy).
 type HandleWithAuth struct {
 	Handle Handle
 	Auth   interface{}
@@ -105,7 +105,7 @@ type HandleWithAuth struct {
 //
 // Auth can be one of the following types:
 //  * string, []byte, or nil for plaintext password authorization.
-//  * *Session for session based authorization.
+//  * *Session for session based authorization (HMAC or policy).
 type ResourceWithAuth struct {
 	Context ResourceContext
 	Auth    interface{}
@@ -132,7 +132,13 @@ type ResourceWithAuth struct {
 // require authorization, the method also requires a corresponding authorization argument, the type of which is
 // the empty interface. Valid types for these authorization arguments are:
 //  * string, []byte, or nil for plaintext password authorization.
-//  * *Session for session based authorization.
+//  * *Session for session based authorization (HMAC or policy).
+//
+// Some methods also accept a variable number of optional *Session arguments, for sessions that don't provide
+// authorization for a corresponding handle. These sessions may be used for session based encryption, for the
+// purpose of transparently encrypting the first command and / or the first response parameter for a command
+// across the communication link between the TPM and the host CPU. Not all parameters are compatible with session
+// based encryption - only types that correspond to TPM2B prefixed types may be encrypted.
 type TPMContext struct {
 	tcti           io.ReadWriteCloser
 	resources      map[Handle]ResourceContext
