@@ -137,7 +137,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 	return nil
 }
 
-// NVWritePinCounterParams is a helper function for NVWrite for updating the contents of the NV pin pass or NV pin
+// NVSetPinCounterParams is a helper function for NVWrite for updating the contents of the NV pin pass or NV pin
 // fail index associated with nvIndex. If the index has the AttrNVWriteLocked attribute set, this will return an
 // error. If the type of nvIndex is not NVTypePinPass of NVTypePinFail, an error will be returned.
 //
@@ -155,7 +155,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been
 // written to.
-func (t *TPMContext) NVWritePinCounterParams(authContext, nvIndex ResourceContext, params *NVPinCounterParams,
+func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext, params *NVPinCounterParams,
 	authContextAuth interface{}, sessions ...*Session) error {
 	context, isNv := nvIndex.(*nvIndexContext)
 	if !isNv {
