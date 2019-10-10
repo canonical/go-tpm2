@@ -277,7 +277,7 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 //
 // On successful completion, the AttrNVWriteLocked attribute will be set. It will be cleared again (and writes
 // will be reenabled) on the next TPM reset or TPM restart unless the index has the AttrNVWriteDefine attribute
-// set, or the AttrNVWritten attribute is clear.
+// set and AttrNVWritten attribute is set.
 func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
 	if err := t.RunCommand(CommandNVWriteLock, nil,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {

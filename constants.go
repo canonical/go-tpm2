@@ -14,6 +14,21 @@ const (
 )
 
 const (
+	OpEq         ArithmeticOp = 0x0000 // TPM_EO_EQ
+	OpNeq        ArithmeticOp = 0x0001 // TPM_EO_NEQ
+	OpSignedGT   ArithmeticOp = 0x0002 // TPM_EO_SIGNED_GT
+	OpUnsignedGT ArithmeticOp = 0x0003 // TPM_EO_UNSIGNED_GT
+	OpSignedLT   ArithmeticOp = 0x0004 // TPM_EO_SIGNED_LT
+	OpUnsignedLT ArithmeticOp = 0x0005 // TPM_EO_UNSIGNED_LT
+	OpSignedGE   ArithmeticOp = 0x0006 // TPM_EO_SIGNED_GE
+	OpUnsignedGE ArithmeticOp = 0x0007 // TPM_EO_UNSIGNED_GE
+	OpSignedLE   ArithmeticOp = 0x0008 // TPM_EO_SIGNED_LE
+	OpUnsignedLE ArithmeticOp = 0x0009 // TPM_EO_UNSIGNED_LE
+	OpBitset     ArithmeticOp = 0x000a // TPM_EO_BITSET
+	OpBitclear   ArithmeticOp = 0x000b // TPM_EO_BITCLEAR
+)
+
+const (
 	TagNoSessions         StructTag = 0x8001 // TPM_ST_NO_SESSIONS
 	TagSessions           StructTag = 0x8002 // TPM_ST_SESSIONS
 	TagAttestNV           StructTag = 0x8014 // TPM_ST_ATTEST_NV
@@ -59,6 +74,7 @@ const (
 	CommandShutdown                   CommandCode = 0x00000145 // TPM_CC_Shutdown
 	CommandStirRandom                 CommandCode = 0x00000146 // TPM_CC_StirRandom
 	CommandActivateCredential         CommandCode = 0x00000147 // TPM_CC_ActivateCredential
+	CommandPolicyNV                   CommandCode = 0x00000149 // TPM_CC_PolicyNV
 	CommandCertifyCreation            CommandCode = 0x0000014A // TPM_CC_CertifyCreation
 	CommandNVRead                     CommandCode = 0x0000014E // TPM_CC_NV_Read
 	CommandNVReadLock                 CommandCode = 0x0000014F // TPM_CC_NV_ReadLock

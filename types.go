@@ -32,6 +32,9 @@ type CommandCode uint32
 // ResponseCode corresponds to the TPM_RC type.
 type ResponseCode uint32
 
+// ArithmeticOp corresponds to the TPM_EO type.
+type ArithmeticOp uint16
+
 // StructTag corresponds to the TPM_ST type.
 type StructTag uint16
 
@@ -158,6 +161,9 @@ type Nonce Digest
 
 // Auth corresponds to the TPM2B_AUTH type.
 type Auth Digest
+
+// Operand corresponds to the TPM2B_OPERAND type.
+type Operand Digest
 
 // Event corresponds to the TPM2B_EVENT type.
 type Event []byte

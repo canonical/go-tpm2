@@ -77,6 +77,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_StirRandom"
 	case CommandActivateCredential:
 		return "TPM_CC_ActivateCredential"
+	case CommandPolicyNV:
+		return "TPM_CC_PolicyNV"
 	case CommandCertifyCreation:
 		return "TPM_CC_CertifyCreation"
 	case CommandNVRead:

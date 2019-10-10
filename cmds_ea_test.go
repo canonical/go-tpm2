@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -590,4 +591,188 @@ func TestPolicyPassword(t *testing.T) {
 		AuthValue: testAuth}); err != nil {
 		t.Errorf("Unseal failed: %v", err)
 	}
+}
+
+func TestPolicyNV(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primary)
+
+	twentyFiveUint64 := make(Operand, 8)
+	binary.BigEndian.PutUint64(twentyFiveUint64, 25)
+
+	tenUint64 := make(Operand, 8)
+	binary.BigEndian.PutUint64(tenUint64, 10)
+
+	fortyUint32 := make(Operand, 4)
+	binary.BigEndian.PutUint32(fortyUint32, 40)
+
+	for _, data := range []struct {
+		desc      string
+		pub       NVPublic
+		prepare   func(*testing.T, ResourceContext, interface{})
+		operandB  Operand
+		offset    uint16
+		operation ArithmeticOp
+	}{
+		{
+			desc: "UnsignedLE",
+			pub: NVPublic{
+				Index:   Handle(0x0181ffff),
+				NameAlg: AlgorithmSHA256,
+				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+				Size:    8},
+			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0,
+					auth); err != nil {
+					t.Fatalf("NVWrite failed: %v", err)
+				}
+			},
+			operandB:  twentyFiveUint64,
+			offset:    0,
+			operation: OpUnsignedLE,
+		},
+		{
+			desc: "UnsignedGT",
+			pub: NVPublic{
+				Index:   Handle(0x0181ffff),
+				NameAlg: AlgorithmSHA256,
+				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+				Size:    8},
+			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0,
+					auth); err != nil {
+					t.Fatalf("NVWrite failed: %v", err)
+				}
+			},
+			operandB:  tenUint64,
+			offset:    0,
+			operation: OpUnsignedGT,
+		},
+		{
+			desc: "Offset",
+			pub: NVPublic{
+				Index:   Handle(0x0181ffff),
+				NameAlg: AlgorithmSHA256,
+				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+				Size:    8},
+			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4,
+					auth); err != nil {
+					t.Fatalf("NVWrite failed: %v", err)
+				}
+			},
+			operandB:  fortyUint32,
+			offset:    4,
+			operation: OpEq,
+		},
+	} {
+		createIndex := func(t *testing.T, authValue Auth) ResourceContext {
+			if err := tpm.NVDefineSpace(HandleOwner, authValue, &data.pub, nil); err != nil {
+				t.Fatalf("NVDefineSpace failed: %v", err)
+			}
+			index, err := tpm.WrapHandle(data.pub.Index)
+			if err != nil {
+				t.Fatalf("WrapHandle failed: %v", err)
+			}
+			return index
+		}
+
+		run := func(t *testing.T, index ResourceContext, auth interface{}) {
+			data.prepare(t, index, auth)
+
+			h := sha256.New()
+			h.Write(data.operandB)
+			binary.Write(h, binary.BigEndian, data.offset)
+			binary.Write(h, binary.BigEndian, data.operation)
+
+			args := h.Sum(nil)
+
+			h = sha256.New()
+			h.Write(make([]byte, 32))
+			binary.Write(h, binary.BigEndian, CommandPolicyNV)
+			h.Write(args)
+			h.Write(index.Name())
+
+			authPolicy := h.Sum(nil)
+
+			template := Public{
+				Type:       AlgorithmKeyedHash,
+				NameAlg:    AlgorithmSHA256,
+				Attrs:      AttrFixedTPM | AttrFixedParent,
+				AuthPolicy: authPolicy,
+				Params: PublicParamsU{
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+			sensitive := SensitiveCreate{Data: []byte("secret")}
+			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,
+				nil, nil)
+			if err != nil {
+				t.Fatalf("Create failed: %v", err)
+			}
+
+			objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+			if err != nil {
+				t.Fatalf("Load failed: %v", err)
+			}
+			defer flushContext(t, tpm, objectContext)
+
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
+				AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer verifyContextFlushed(t, tpm, sessionContext)
+
+			if err := tpm.PolicyNV(index, index, sessionContext, data.operandB, data.offset,
+				data.operation, auth); err != nil {
+				t.Fatalf("PolicyNV failed: %v", err)
+			}
+
+			digest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest, authPolicy) {
+				t.Errorf("Unexpected session digest")
+			}
+
+			if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext}); err != nil {
+				t.Errorf("Unseal failed: %v", err)
+			}
+		}
+
+		t.Run(fmt.Sprintf("%s/NoAuth", data.desc), func(t *testing.T) {
+			index := createIndex(t, nil)
+			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+			run(t, index, nil)
+		})
+
+		t.Run(fmt.Sprintf("%s/PasswordAuth", data.desc), func(t *testing.T) {
+			index := createIndex(t, testAuth)
+			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+			run(t, index, testAuth)
+		})
+
+		t.Run(fmt.Sprintf("%s/WithSessionAuth", data.desc), func(t *testing.T) {
+			index := createIndex(t, testAuth)
+			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+
+			// Don't use a bound session as the name of index changes when it is written to for the
+			// first time
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil,
+				AlgorithmSHA256, testAuth)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			session := &Session{Context: sessionContext, Attrs: AttrContinueSession,
+				AuthValue: testAuth}
+			run(t, index, session)
+		})
+	}
+
 }

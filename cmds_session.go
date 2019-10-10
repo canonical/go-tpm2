@@ -11,6 +11,54 @@ import (
 	"fmt"
 )
 
+// StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session. On successful
+// completion, it will return a ResourceContext that corresponds to the new session. The session can be used in
+// subsequent commands by passing it as the Context field of a Session struct instance to a command that
+// accepts a session.
+//
+// The type of session is defined by the sessionType parameter. If sessionType is SessionTypeHMAC or
+// SessionTypePolicy, then the created session may be used for authorization. If sessionType is SessionTypeTrial,
+// then the created session can only be used for computing an authorization policy digest.
+//
+// The authHash parameter must be a digest algorithm, and defines the algorithm used for computing command and
+// response parameter digests, command and response HMACs, and derivation of the session key and symmetric keys
+// for parameter encryption where used. The size of the digest algorithm is used to determine the nonce size used
+// for the session.
+//
+// If tpmKey is provided, it must correspond to an asymmetric decrypt key in the TPM. In this case, a random salt
+// value will contribute to the session key derivation, and the salt will be encrypted using the method specified
+// by tpmKey before being sent to the TPM.
+//
+// If bind is specified, then the auhorization value for the corresponding resource must be provided in authValue.
+// This will contribute to the session key derivation. The created session will be bound to the resource
+// associated with bind.
+//
+// If a session key is computed, this will be used (along with the value of the AuthValue field of the Session
+// struct that references the session in some circumstances) to derive a HMAC key for generating command and
+// response HMACs. If both tpmKey and bind are nil, no session key is created.
+//
+// If symmetric is provided, it defines the symmetric algorithm to use if the session is subsequently used for
+// session based command or response parameter encryption. Session based parameter encryption allows the first
+// command and/or response parameter for a command to be encrypted between the TPM and host CPU for supported
+// parameter types - go types that correspond to TPM2B prefixed types.
+//
+// If a Session instance with the AttrCommandEncrypt attribute set is provided in the variable length sessions
+// parameter, then the initial caller nonce will be encrypted as this is the first command parameter, despite not
+// being exposed via this API. If a Session instance with the AttrResponseEncrypt attribute set is provided, then
+// the initial TPM nonce will be encrypted in the response.
+//
+// If sessionType is SessionTypeHMAC and the session is subsequently used for authorization of a resource to
+// which the session is not bound, the AuthValue field of the Session struct referencing the session must be set
+// to the authorization value of the resource being authorized. If the session is used for authorization of the
+// resource to which the session is bound, then the auth value does not need to be provided unless the
+// authorization value of the bound resource has been changed since the start of the session. Passing the correct
+// authorization value won't cause authorization checks to fail, but passing an incorrect authorization value
+// will cause authorization checks to fail, even if it used for authorizing the bound resource.
+//
+// For any session type that is subsequently used for both an authorization and session based parameter encryption
+// in the same command, the AuthValue field of the Session struct referencing the session must be set to the
+// authorization value of the resource being authorized, as the authorization value of the resource is used in
+// derivation of the symmetric key regardless of bind state or whether it is required for authorization.
 func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef,
 	authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
 	if symmetric == nil {
@@ -89,6 +137,8 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	return sessionContext, nil
 }
 
-func (t *TPMContext) PolicyRestart(sessionHandle ResourceContext) error {
-	return t.RunCommand(CommandPolicyRestart, nil, sessionHandle)
+// PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to
+// reset the policy authorization session to its initial state.
+func (t *TPMContext) PolicyRestart(sessionContext ResourceContext) error {
+	return t.RunCommand(CommandPolicyRestart, nil, sessionContext)
 }

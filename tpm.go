@@ -80,11 +80,31 @@ const (
 // Session wraps a session ResourceContext with some additional parameters that define how a command should use
 // the session.
 type Session struct {
-	Context ResourceContext // A ResourceContext that references a loaded session on the TPM
-	// AuthValue will be included in the computation of the HMAC key if the session is used for authorization
-	// of an object to which it isn't bound.
+	Context ResourceContext // A ResourceContext that corresponds to a loaded session on the TPM
+
+	// AuthValue is the authorization value of the resource that the session is being used to provide an
+	// authorisation for. For HMAC sessions, AuthValue will be included in the HMAC key if the session
+	// associated with Context is not bound, or the session is used to provide authorization for a resource
+	// to which it isn't bound. In this case, AuthValue must match the authorization value of the resource
+	// that this session is being used to provide authorization for. If the resource that this session is
+	// being used to provide authorization for is the one that is bound to the session, then AuthValue can be
+	// omitted. If it is provided, then it must match the authorization value of the resource to which the
+	// session is bound.
+	//
+	// For policy sessions, AuthValue is not included in the HMAC key unless the TPMContext.PolicyAuthValue
+	// function has been called on the session associated with Context. If Context corresponds to a policy
+	// session and TPMContext.PolicyPassword has been executed on it, the value of AuthValue will be included
+	// in cleartext in the HMAC field of the generated command authorization. In both of these cases, AuthValue
+	// must match the authorization value of the resource for which the session is being used to provide
+	// authorization for.
+	//
+	// If the Attrs field has the AttrCommandEncrypt or AttrResponseEncrypt flags set and the session is also
+	// being used to provide authorization, then the authorization value of the resource for which the session
+	// is providing authorization is included in the derivation of the symmetric key. In this case, AuthValue
+	// must match the authorization value of the resource for which this session is providing authorization.
 	AuthValue []byte
-	Attrs     SessionAttributes // Session attributes
+
+	Attrs SessionAttributes // Session usage attributes
 
 	includeAuthValue bool
 }
@@ -135,10 +155,10 @@ type ResourceWithAuth struct {
 //  * *Session for session based authorization (HMAC or policy).
 //
 // Some methods also accept a variable number of optional *Session arguments, for sessions that don't provide
-// authorization for a corresponding handle. These sessions may be used for session based encryption, for the
+// authorization for a corresponding resource. These sessions may be used for session based encryption, for the
 // purpose of transparently encrypting the first command and / or the first response parameter for a command
-// across the communication link between the TPM and the host CPU. Not all parameters are compatible with session
-// based encryption - only types that correspond to TPM2B prefixed types may be encrypted.
+// between the TPM and the host CPU. Not all parameter types are compatible with session based encryption - only
+// go types that correspond to TPM2B prefixed types may be encrypted.
 type TPMContext struct {
 	tcti           io.ReadWriteCloser
 	resources      map[Handle]ResourceContext
