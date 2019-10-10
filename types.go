@@ -1467,6 +1467,12 @@ type IDObjectRaw []byte
 // NVType corresponds to the TPM_NT type.
 type NVType uint32
 
+// NVPinCounterParams corresponds to the TPMS_NV_PIN_COUNTER_PARAMETERS type.
+type NVPinCounterParams struct {
+	Count uint32
+	Limit uint32
+}
+
 // NVAttributes corresponds to the TPMA_NV type, and represents the attributes of a NV index. When exchanged with
 // the TPM, some bits are reserved to encode the type of the NV index (NVType).
 type NVAttributes uint32

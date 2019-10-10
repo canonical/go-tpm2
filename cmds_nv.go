@@ -7,6 +7,8 @@ package tpm2
 // Section 31 - Non-volatile Storage
 
 import (
+	"encoding/binary"
+	"errors"
 	"fmt"
 )
 
@@ -133,6 +135,40 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 
 	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
 	return nil
+}
+
+// NVWritePinCounterParams is a helper function for NVWrite for updating the contents of the NV pin pass or NV pin
+// fail index associated with nvIndex. If the index has the AttrNVWriteLocked attribute set, this will return an
+// error. If the type of nvIndex is not NVTypePinPass of NVTypePinFail, an error will be returned.
+//
+// The command requires authorization, defined by the state of the AttrNVPPWrite, AttrNVOwnerWrite,
+// AttrNVAuthWrite and AttrNVPolicyWrite attributes. The handle used for authorization is specified via
+// authContext. If the NV index has the AttrNVPPWrite attribute, authorization can be satisfied with
+// HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization can be satisfied with
+// HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
+// satisfied with nvIndex. The command requires the user auth role for authContext, provided via authContextAuth.
+//
+// If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can
+// be satisfied by supplying the authorization value for the index (either directly or using a HMAC session). If
+// nvIndex is being used for authorization and the AttrNVPolicyWrite attribute is defined, the authorization can
+// be satisfied using a policy session with a digest that matches the authorization policy for the index.
+//
+// On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been
+// written to.
+func (t *TPMContext) NVWritePinCounterParams(authContext, nvIndex ResourceContext, params *NVPinCounterParams,
+	authContextAuth interface{}, sessions ...*Session) error {
+	context, isNv := nvIndex.(*nvIndexContext)
+	if !isNv {
+		return errors.New("nvIndex does not correspond to a NV index")
+	}
+	if context.public.Attrs.Type() != NVTypePinPass && context.public.Attrs.Type() != NVTypePinFail {
+		return errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
+	}
+	data, err := MarshalToBytes(params)
+	if err != nil {
+		return fmt.Errorf("cannot marshal PIN counter parameters: %v", err)
+	}
+	return t.NVWrite(authContext, nvIndex, data, 0, authContextAuth, sessions...)
 }
 
 // NVIncrement executes the TPM2_NV_Increment command to increment the counter associated with nvIndex. If the
@@ -307,6 +343,76 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 	}
 
 	return data, nil
+}
+
+// NVReadCounter is a helper function for NVRead for reading the contents of the NV counter index associated with
+// nvIndex. If the index has the AttrNVReadLocked attribute set, this will return an error. If the type of nvIndex
+// is not NVTypeCounter, an error will be returned.
+//
+// The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead,
+// AttrNVAuthRead and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext.
+// If the NV index has the AttrNVPPRead attribute, authorization can be satisfied with HandlePlatform. If the NV
+// index has the AttrNVOwnerRead attribute, authorization can be satisfied with HandleOwner. If the NV index has
+// the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied with nvIndex. The command
+// requires the user auth role for authContext, provided via authContextAuth.
+//
+// If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can
+// be satisfied by supplying the authorization value for the index (either directly or using a HMAC session). If
+// nvIndex is being used for authorization and the AttrNVPolicyRead attribute is defined, the authorization can
+// be satisfied using a policy session with a digest that matches the authorization policy for the index.
+//
+// On successful completion, the current counter value will be returned.
+func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authContextAuth interface{},
+	sessions ...*Session) (uint64, error) {
+	context, isNv := nvIndex.(*nvIndexContext)
+	if !isNv {
+		return 0, errors.New("nvIndex does not correspond to a NV index")
+	}
+	if context.public.Attrs.Type() != NVTypeCounter {
+		return 0, errors.New("nvIndex does not correspond to a counter")
+	}
+	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuth, sessions...)
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(data), nil
+}
+
+// NVReadPinCounterParams is a helper function for NVRead for reading the contents of the NV pin pass or NV pin
+// fail index associated with nvIndex. If the index has the AttrNVReadLocked attribute set, this will return an
+// error. If the type of nvIndex is not NVTypePinPass of NVTypePinFail, an error will be returned.
+//
+// The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead,
+// AttrNVAuthRead and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext.
+// If the NV index has the AttrNVPPRead attribute, authorization can be satisfied with HandlePlatform. If the NV
+// index has the AttrNVOwnerRead attribute, authorization can be satisfied with HandleOwner. If the NV index has
+// the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied with nvIndex. The command
+// requires the user auth role for authContext, provided via authContextAuth.
+//
+// If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can
+// be satisfied by supplying the authorization value for the index (either directly or using a HMAC session). If
+// nvIndex is being used for authorization and the AttrNVPolicyRead attribute is defined, the authorization can
+// be satisfied using a policy session with a digest that matches the authorization policy for the index.
+//
+// On successful completion, the current PIN count and limit will be returned.
+func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext, authContextAuth interface{},
+	sessions ...*Session) (*NVPinCounterParams, error) {
+	context, isNv := nvIndex.(*nvIndexContext)
+	if !isNv {
+		return nil, errors.New("nvIndex does not correspond to a NV index")
+	}
+	if context.public.Attrs.Type() != NVTypePinPass && context.public.Attrs.Type() != NVTypePinFail {
+		return nil, errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
+	}
+	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuth, sessions...)
+	if err != nil {
+		return nil, err
+	}
+	var res NVPinCounterParams
+	if _, err := UnmarshalFromBytes(data, &res); err != nil {
+		return nil, wrapUnmarshallingError(CommandNVRead, "NV index data", err)
+	}
+	return &res, nil
 }
 
 // NVReadLock executes the TPM2_NV_ReadLock command to inhibit further reads of the NV index associated with

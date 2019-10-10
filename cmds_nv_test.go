@@ -316,6 +316,77 @@ func TestNVIncrement(t *testing.T) {
 	})
 }
 
+func TestNVReadCounter(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	define := func(t *testing.T, authValue Auth) ResourceContext {
+		pub := NVPublic{
+			Index:   Handle(0x0181ffff),
+			NameAlg: AlgorithmSHA256,
+			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeCounter),
+			Size:    8}
+
+		if err := tpm.NVDefineSpace(HandleOwner, authValue, &pub, nil); err != nil {
+			t.Fatalf("NVDefineSpace failed: %v", err)
+		}
+
+		rc, err := tpm.WrapHandle(pub.Index)
+		if err != nil {
+			t.Fatalf("WrapHandle failed: %v", err)
+		}
+
+		return rc
+	}
+
+	run := func(t *testing.T, rc ResourceContext, authInc interface{}) {
+		if err := tpm.NVIncrement(rc, rc, authInc); err != nil {
+			t.Fatalf("NVIncrement failed: %v", err)
+		}
+
+		count1, err := tpm.NVReadCounter(rc, rc, authInc)
+		if err != nil {
+			t.Fatalf("NVReadCounter failed: %v", err)
+		}
+
+		if err := tpm.NVIncrement(rc, rc, authInc); err != nil {
+			t.Fatalf("NVIncrement failed: %v", err)
+		}
+
+		count2, err := tpm.NVReadCounter(rc, rc, authInc)
+		if err != nil {
+			t.Fatalf("NVReadCounter failed: %v", err)
+		}
+
+		if count2-count1 != 1 {
+			t.Errorf("Unexpected count values (%d and %d)", count1, count2)
+		}
+	}
+
+	t.Run("NoAuth", func(t *testing.T) {
+		rc := define(t, nil)
+		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+		run(t, rc, nil)
+	})
+	t.Run("RequirePWAuth", func(t *testing.T) {
+		rc := define(t, testAuth)
+		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+		run(t, rc, testAuth)
+	})
+	t.Run("RequireSessionAuth", func(t *testing.T) {
+		rc := define(t, testAuth)
+		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, AlgorithmSHA256,
+			testAuth)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionContext)
+		session := Session{Context: sessionContext, AuthValue: testAuth, Attrs: AttrContinueSession}
+		run(t, rc, &session)
+	})
+}
+
 func TestNVExtend(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
