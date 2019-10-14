@@ -39,7 +39,9 @@ const (
 	TagAttestTime         StructTag = 0x8019 // TPM_ST_ATTEST_TIME
 	TagAttestCreation     StructTag = 0x801a // TPM_ST_ATTEST_CREATION
 	TagCreation           StructTag = 0x8021 // TPM_ST_CREATION
+	TagVerified           StructTag = 0x8022 // TPM_ST_VERIFIED
 	TagAuthSecret         StructTag = 0x8023 // TPM_ST_AUTH_SECRET
+	TagHashcheck          StructTag = 0x8024 // TPM_ST_HASHCHECK
 	TagAuthSigned         StructTag = 0x8025 // TPM_ST_AUTH_SIGNED
 )
 
@@ -82,6 +84,7 @@ const (
 	CommandPolicySecret               CommandCode = 0x00000151 // TPM_CC_PolicySecret
 	CommandCreate                     CommandCode = 0x00000153 // TPM_CC_Create
 	CommandLoad                       CommandCode = 0x00000157 // TPM_CC_Load
+	CommandSign                       CommandCode = 0x0000015D // TPM_CC_Sign
 	CommandUnseal                     CommandCode = 0x0000015E // TPM_CC_Unseal
 	CommandContextLoad                CommandCode = 0x00000161 // TPM_CC_ContextLoad
 	CommandContextSave                CommandCode = 0x00000162 // TPM_CC_ContextSave
@@ -94,6 +97,7 @@ const (
 	CommandPolicyOR                   CommandCode = 0x00000171 // TPM_CC_PolicyOR
 	CommandReadPublic                 CommandCode = 0x00000173 // TPM_CC_ReadPublic
 	CommandStartAuthSession           CommandCode = 0x00000176 // TPM_CC_StartAuthSession
+	CommandVerifySignature            CommandCode = 0x00000177 // TPM_CC_VerifySignature
 	CommandGetCapability              CommandCode = 0x0000017A // TPM_CC_GetCapability
 	CommandGetRandom                  CommandCode = 0x0000017B // TPM_CC_GetRandom
 	CommandGetTestResult              CommandCode = 0x0000017C // TPM_CC_GetTestResult

@@ -93,6 +93,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_Create"
 	case CommandLoad:
 		return "TPM_CC_Load"
+	case CommandSign:
+		return "TPM_CC_Sign"
 	case CommandUnseal:
 		return "TPM_CC_Unseal"
 	case CommandContextLoad:
@@ -117,6 +119,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_ReadPublic"
 	case CommandStartAuthSession:
 		return "TPM_CC_StartAuthSession"
+	case CommandVerifySignature:
+		return "TPM_CC_VerifySignature"
 	case CommandGetCapability:
 		return "TPM_CC_GetCapability"
 	case CommandGetRandom:

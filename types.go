@@ -256,6 +256,14 @@ type PCRSelection struct {
 type TkCreation struct {
 	Tag       StructTag // Ticket structure tag (TagCreation)
 	Hierarchy Handle    // The hierarchy of the object to which this ticket belongs.
+	Digest    Digest    // HMAC computed using the proof value of Hierarchy
+}
+
+// TkVerified corresponds to the TPMT_TK_VERIFIED type. It is created by TPMContext.VerifySignature and
+// provides evidence that the TPM has verified that a digest was signed by a specific key.
+type TkVerified struct {
+	Tag       StructTag // Ticket structure tag (TagVerified)
+	Hierarchy Handle    // The hierarchy of the object to which this ticket belongs.
 	Digest    Digest    // HMAC computed using the proof value of Hierarcht
 }
 
@@ -263,6 +271,13 @@ type TkCreation struct {
 // TPMContext.PolicySecret when the authorization has an expiration time.
 type TkAuth struct {
 	Tag       StructTag // Ticket structure tag (TagAuthSecret or TagAuthSigned)
+	Hierarchy Handle    // The hierarchy of the object used to produce this ticket
+	Digest    Digest    // HMAC computed using the proof value of Hierarchy
+}
+
+// TkHashcheck corresponds to the TPMT_TK_HASHCHECK type.
+type TkHashcheck struct {
+	Tag       StructTag // Ticket structure tag (TagHashcheck)
 	Hierarchy Handle    // The hierarchy of the object used to produce this ticket
 	Digest    Digest    // HMAC computed using the proof value of Hierarchy
 }
