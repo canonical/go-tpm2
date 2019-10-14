@@ -127,7 +127,7 @@ func TestCreate(t *testing.T) {
 		}
 	})
 
-	t.Run("WithAuth", func(t *testing.T) {
+	t.Run("CreateWithAuthValue", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
@@ -180,7 +180,7 @@ func TestCreate(t *testing.T) {
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
-	t.Run("RequireAuthPW", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
@@ -200,7 +200,7 @@ func TestCreate(t *testing.T) {
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
-	t.Run("RequireAuthSession", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
@@ -273,14 +273,14 @@ func TestLoad(t *testing.T) {
 		run(t, primary, nil)
 	})
 
-	t.Run("RequireAuthPW", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
 		run(t, primary, testAuth)
 	})
 
-	t.Run("RequireAuthSession", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
@@ -477,13 +477,13 @@ func TestUnseal(t *testing.T) {
 		run(t, handle, nil)
 	})
 
-	t.Run("WithPWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
 		run(t, handle, testAuth)
 	})
 
-	t.Run("WithHMACAuth", func(t *testing.T) {
+	t.Run("UseHMACSessionAuth", func(t *testing.T) {
 		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
 		sessionContext, err :=
@@ -495,7 +495,7 @@ func TestUnseal(t *testing.T) {
 		run(t, handle, &Session{Context: sessionContext, AuthValue: testAuth})
 	})
 
-	t.Run("WithPolicyAuth", func(t *testing.T) {
+	t.Run("UsePolicySessionAuth", func(t *testing.T) {
 		handle := create(t, make([]byte, 32), nil, 0)
 		defer flushContext(t, tpm, handle)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
@@ -553,19 +553,19 @@ func TestObjectChangeAuth(t *testing.T) {
 		}
 	}
 
-	t.Run("WithNoAuth", func(t *testing.T) {
+	t.Run("NoAuth", func(t *testing.T) {
 		context, pub := create(t, nil)
 		defer flushContext(t, tpm, context)
 		run(t, context, pub, Auth("foo"), nil)
 	})
 
-	t.Run("WithPWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		context, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, context)
 		run(t, context, pub, Auth("1234"), testAuth)
 	})
 
-	t.Run("WithUnboundSession", func(t *testing.T) {
+	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
 		context, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, context)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
@@ -577,7 +577,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		run(t, context, pub, Auth("foo"), &session)
 	})
 
-	t.Run("WithBoundSession", func(t *testing.T) {
+	t.Run("UseBoundSessionAuth", func(t *testing.T) {
 		context, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, context)
 		sessionContext, err := tpm.StartAuthSession(nil, context, SessionTypeHMAC, nil, AlgorithmSHA256,
@@ -673,12 +673,12 @@ func TestActivateCredential(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 		run(t, ak, nil)
 	})
-	t.Run("WithPWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)
 		defer flushContext(t, tpm, ak)
 		run(t, ak, testAuth)
 	})
-	t.Run("WithSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)
 		defer flushContext(t, tpm, ak)
 		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256,

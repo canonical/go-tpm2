@@ -200,14 +200,14 @@ func TestEvictControl(t *testing.T) {
 		defer flushContext(t, tpm, context)
 		run(t, context, Handle(0x8100ffff), nil)
 	})
-	t.Run("PasswordAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 		run(t, context, Handle(0x8100fff0), testAuth)
 	})
-	t.Run("SessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
 		setHierarchyAuthForTest(t, tpm, HandleOwner)

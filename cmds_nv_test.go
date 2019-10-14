@@ -62,7 +62,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			Size:    64}
 		run(t, nil, &pub, nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
@@ -74,7 +74,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			Size: 32}
 		run(t, nil, &pub, testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
@@ -96,7 +96,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			Size: 64}
 		run(t, nil, &pub, &session)
 	})
-	t.Run("WithAuth", func(t *testing.T) {
+	t.Run("DefineWithAuthValue", func(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: AlgorithmSHA1,
@@ -181,7 +181,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 		run(t, context, nil)
 	})
 
-	t.Run("UsePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		context := define(t)
 		defer verifyNVSpaceUndefined(t, tpm, context, HandlePlatform, nil)
 		setHierarchyAuthForTest(t, tpm, HandlePlatform)
@@ -289,14 +289,14 @@ func TestNVReadAndWrite(t *testing.T) {
 		runWrite(t, rc, d, 10, nil)
 		runRead(t, rc, d, 10, nil)
 	})
-	t.Run("WithPWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		d := []byte{1, 2, 3, 4}
 		runWrite(t, rc, d, 10, testAuth)
 		runRead(t, rc, d, 10, testAuth)
 	})
-	t.Run("WithSessionAuthBound1", func(t *testing.T) {
+	t.Run("UseSessionAuthBound1", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, AlgorithmSHA256,
@@ -314,7 +314,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		// session is no longer bound to it
 		runRead(t, rc, d, 0, &session)
 	})
-	t.Run("WithSessionAuthBound2", func(t *testing.T) {
+	t.Run("UseSessionAuthBound2", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext1, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, AlgorithmSHA256,
@@ -387,12 +387,12 @@ func TestNVIncrement(t *testing.T) {
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, AlgorithmSHA256,
@@ -458,12 +458,12 @@ func TestNVReadCounter(t *testing.T) {
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, AlgorithmSHA256,
@@ -540,12 +540,12 @@ func TestNVExtend(t *testing.T) {
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, []byte("foo"), nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, []byte("bar"), testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
@@ -617,12 +617,12 @@ func TestNVSetBits(t *testing.T) {
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, []uint64{0x1, 0x4000000000000}, nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, []uint64{0x2, 0xf2610ea91007d0}, testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
@@ -682,12 +682,12 @@ func TestNVWriteLock(t *testing.T) {
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, AlgorithmSHA256,
@@ -748,12 +748,12 @@ func TestNVReadLock(t *testing.T) {
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		run(t, rc, testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, AlgorithmSHA256,
@@ -830,12 +830,12 @@ func TestNVGlobalLock(t *testing.T) {
 	t.Run("NoAuth", func(t *testing.T) {
 		run(t, nil)
 	})
-	t.Run("RequirePWAuth", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 		run(t, testAuth)
 	})
-	t.Run("RequireSessionAuth", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 		owner, _ := tpm.WrapHandle(HandleOwner)

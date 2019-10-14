@@ -83,12 +83,12 @@ func TestDictionaryAttackParameters(t *testing.T) {
 	t.Run("NoAuth", func(t *testing.T) {
 		run(t, nil)
 	})
-	t.Run("RequirePW", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		run(t, testAuth)
 	})
-	t.Run("RequireSession", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
@@ -186,12 +186,12 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	t.Run("NoAuth", func(t *testing.T) {
 		run(t, nil)
 	})
-	t.Run("RequirePW", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		run(t, testAuth)
 	})
-	t.Run("RequireSession", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)

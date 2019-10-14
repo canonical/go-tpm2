@@ -110,7 +110,7 @@ func TestCreatePrimary(t *testing.T) {
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
-	t.Run("WithAuth", func(t *testing.T) {
+	t.Run("CreateWithAuthValue", func(t *testing.T) {
 		sensitive := SensitiveCreate{UserAuth: Auth(testAuth)}
 		template := Public{
 			Type:    AlgorithmRSA,
@@ -152,7 +152,7 @@ func TestCreatePrimary(t *testing.T) {
 		}
 	})
 
-	t.Run("RequireAuthPW", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
@@ -176,7 +176,7 @@ func TestCreatePrimary(t *testing.T) {
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
-	t.Run("RequireAuthSession", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
@@ -410,12 +410,12 @@ func TestClear(t *testing.T) {
 	t.Run("NoAuth", func(t *testing.T) {
 		run(t, nil)
 	})
-	t.Run("RequirePW", func(t *testing.T) {
+	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		run(t, testAuth)
 	})
-	t.Run("RequireSession", func(t *testing.T) {
+	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
@@ -427,7 +427,7 @@ func TestClear(t *testing.T) {
 		defer verifyContextFlushed(t, tpm, sessionContext)
 		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
 	})
-	t.Run("RequireUnboundSession", func(t *testing.T) {
+	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)

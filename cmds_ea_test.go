@@ -88,10 +88,10 @@ func TestPolicySecret(t *testing.T) {
 		}
 	}
 
-	t.Run("PWAuth", func(t *testing.T) {
+	t.Run("UsePassword", func(t *testing.T) {
 		run(t, nil, nil, 0, nil, testAuth)
 	})
-	t.Run("SessionAuth", func(t *testing.T) {
+	t.Run("UseSession", func(t *testing.T) {
 		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256,
 			testAuth)
 		if err != nil {
@@ -749,13 +749,13 @@ func TestPolicyNV(t *testing.T) {
 			run(t, index, nil)
 		})
 
-		t.Run(data.desc+"/PasswordAuth", func(t *testing.T) {
+		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
 			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
 			run(t, index, testAuth)
 		})
 
-		t.Run(data.desc+"/WithSessionAuth", func(t *testing.T) {
+		t.Run(data.desc+"/UseSessionAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
 			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
 
