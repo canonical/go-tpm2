@@ -60,11 +60,10 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 		return err
 	}
 
-	// If the session is not bound to authHandle, the TPM will respond with a HMAC generated with a key
-	// derived from the empty auth. If the session is bound, the TPM will respond with a HMAC generated from
-	// the original key
 	authSession := ctx.sessionParams[0].session
 	if authSession != nil {
+		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
+		// with a HMAC generated with a key based on an empty auth value.
 		ctx.sessionParams[0].session =
 			&Session{Context: authSession.Context, Attrs: authSession.Attrs}
 	}
@@ -136,11 +135,10 @@ func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 		return err
 	}
 
-	// If the session is not bound to authHandle, the TPM will respond with a HMAC generated with a key
-	// derived from newAuth. If the session is bound, the TPM will respond with a HMAC generated from the
-	// original key
 	authSession := ctx.sessionParams[0].session
 	if authSession != nil {
+		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
+		// with a HMAC generated with a key that includes newAuth instead.
 		ctx.sessionParams[0].session =
 			&Session{Context: authSession.Context, Attrs: authSession.Attrs, AuthValue: newAuth}
 	}

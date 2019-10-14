@@ -46,7 +46,7 @@ func TestStartup(t *testing.T) {
 			}
 		}
 
-		t.Run(data.desc + "/WithTransientObject", func(t *testing.T) {
+		t.Run(data.desc+"/WithTransientObject", func(t *testing.T) {
 			context := createRSASrkForTesting(t, tpm, nil)
 			defer verifyContextFlushed(t, tpm, context)
 
@@ -66,7 +66,7 @@ func TestStartup(t *testing.T) {
 			}
 		})
 
-		t.Run(data.desc + "/WithPersistentObject", func(t *testing.T) {
+		t.Run(data.desc+"/WithPersistentObject", func(t *testing.T) {
 			context := createRSASrkForTesting(t, tpm, nil)
 			defer verifyContextFlushed(t, tpm, context)
 
@@ -86,7 +86,7 @@ func TestStartup(t *testing.T) {
 			}
 		})
 
-		t.Run(data.desc + "/WithSession", func(t *testing.T) {
+		t.Run(data.desc+"/WithSession", func(t *testing.T) {
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
 				AlgorithmSHA256, nil)
 			if err != nil {
@@ -148,7 +148,7 @@ func TestStartup(t *testing.T) {
 				clear: true,
 			},
 		} {
-			t.Run(data.desc + "/NVWriteLocked/" + data2.desc, func(t *testing.T) {
+			t.Run(data.desc+"/NVWriteLocked/"+data2.desc, func(t *testing.T) {
 				if err := tpm.NVDefineSpace(HandleOwner, nil, &data2.in, nil); err != nil {
 					t.Fatalf("NVDefine failed: %v", err)
 				}
@@ -231,7 +231,7 @@ func TestStartup(t *testing.T) {
 					Size: 8},
 			},
 		} {
-			t.Run(data.desc + "/NVWritten/" + data2.desc, func(t *testing.T) {
+			t.Run(data.desc+"/NVWritten/"+data2.desc, func(t *testing.T) {
 				if err := tpm.NVDefineSpace(HandleOwner, nil, &data2.in, nil); err != nil {
 					t.Fatalf("NVDefine failed: %v", err)
 				}
@@ -266,7 +266,7 @@ func TestStartup(t *testing.T) {
 			})
 		}
 
-		t.Run(data.desc + "/NVReadLocked", func(t *testing.T) {
+		t.Run(data.desc+"/NVReadLocked", func(t *testing.T) {
 			template := NVPublic{
 				Index:   0x0181ffff,
 				NameAlg: AlgorithmSHA256,

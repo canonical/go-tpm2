@@ -73,16 +73,45 @@ func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext,
 	return nil
 }
 
+// NVUndefineSpace executes the TPM2_NV_UndefineSpaceSpecial command to remove the NV index associated with
+// nvIndex, and free the resources used by it. If nvIndex does not correspond to a NV index, then this function
+// will return an error. If the NV index associated with nvIndex does not have the AttrNVPlatformCreate and
+// AttrNVPolicyDelete attributes, then an error will be returned.
+//
+// The platform parameter must be HandlePlatform. The command requires the user auth role for the platform
+// hierarchy, provided via platformAuth. The command requires the admin role for nvIndex, provided via nvIndexAuth.
+//
+// On successful completion, nvIndex will be invalidated.
 func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth,
 	platformAuth interface{}) error {
-	if err := t.RunCommand(CommandNVUndefineSpaceSpecial, nil,
-		ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth},
-		HandleWithAuth{Handle: platform, Auth: platformAuth}); err != nil {
+	var s []*sessionParam
+	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
+	if err != nil {
+		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: "+
+			"%v", err)
+	}
+	s, err = t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: platform, Auth: platformAuth})
+	if err != nil {
+		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
+	}
+
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVUndefineSpaceSpecial, s, nvIndex, platform)
+	if err != nil {
 		return err
 	}
 
 	t.evictResourceContext(nvIndex)
-	return nil
+
+	authSession := ctx.sessionParams[0].session
+	if authSession != nil {
+		// If the HMAC key for this command includes the auth value for authHandle (eg, if the
+		// PolicyAuthValue assertion was executed), the TPM will respond with a HMAC generated with a key
+		// based on an empty auth value.
+		ctx.sessionParams[0].session =
+			&Session{Context: authSession.Context, Attrs: authSession.Attrs}
+	}
+
+	return t.processResponse(ctx)
 }
 
 func (t *TPMContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPublic, Name, error) {

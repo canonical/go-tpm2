@@ -743,19 +743,19 @@ func TestPolicyNV(t *testing.T) {
 			}
 		}
 
-		t.Run(data.desc + "/NoAuth", func(t *testing.T) {
+		t.Run(data.desc+"/NoAuth", func(t *testing.T) {
 			index := createIndex(t, nil)
 			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
 			run(t, index, nil)
 		})
 
-		t.Run(data.desc + "/PasswordAuth", func(t *testing.T) {
+		t.Run(data.desc+"/PasswordAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
 			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
 			run(t, index, testAuth)
 		})
 
-		t.Run(data.desc + "/WithSessionAuth", func(t *testing.T) {
+		t.Run(data.desc+"/WithSessionAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
 			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
 
