@@ -82,7 +82,7 @@ func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext,
 // hierarchy, provided via platformAuth. The command requires the admin role for nvIndex, provided via nvIndexAuth.
 //
 // On successful completion, nvIndex will be invalidated.
-func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth,
+func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth *Session,
 	platformAuth interface{}) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
@@ -474,7 +474,7 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 // NVChangeAuth executes the TPM2_NV_ChangeAuth command to change the authorization value for the NV index
 // associated with nvIndex, setting it to the new value defined by newAuth. The command requires the admin auth
 // role for nvIndex, provided via nvIndexAuth.
-func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth interface{},
+func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth *Session,
 	sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
