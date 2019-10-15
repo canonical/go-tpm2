@@ -107,8 +107,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 		// If the HMAC key for this command includes the auth value for authHandle (eg, if the
 		// PolicyAuthValue assertion was executed), the TPM will respond with a HMAC generated with a key
 		// based on an empty auth value.
-		ctx.sessionParams[0].session =
-			&Session{Context: authSession.Context, Attrs: authSession.Attrs}
+		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
 	}
 
 	return t.processResponse(ctx)
@@ -497,8 +496,7 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 	// original key
 	authSession := ctx.sessionParams[0].session
 	if authSession != nil {
-		ctx.sessionParams[0].session =
-			&Session{Context: authSession.Context, Attrs: authSession.Attrs, AuthValue: newAuth}
+		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
 	}
 
 	return t.processResponse(ctx)

@@ -875,42 +875,66 @@ func TestNVChangeAuth(t *testing.T) {
 		t.Fatalf("PolicyGetDigest failed: %v", err)
 	}
 
-	pub := NVPublic{
-		Index:      Handle(0x0181ffff),
-		NameAlg:    AlgorithmSHA256,
-		Attrs:      MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
-		AuthPolicy: authPolicy,
-		Size:       8}
-	if err := tpm.NVDefineSpace(HandleOwner, nil, &pub, nil); err != nil {
-		t.Fatalf("NVDefineSpace failed: %v", err)
-	}
-	rc, err := tpm.WrapHandle(pub.Index)
-	if err != nil {
-		t.Fatalf("WrapHandle failed: %v", err)
-	}
-	defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primary)
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionContext)
+	for _, data := range []struct {
+		desc   string
+		tpmKey ResourceContext
+	}{
+		{
+			desc: "Unsalted",
+		},
+		{
+			// This test highlights a bug where we didn't preserve the value of
+			// Session.includeAuthValue (which should be true) before computing the response HMAC.
+			// It's not caught by the "Unsalted" test because the lack of session key combined with
+			// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth
+			// to bail out early
+			desc:   "Salted",
+			tpmKey: primary,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			pub := NVPublic{
+				Index:      Handle(0x0181ffff),
+				NameAlg:    AlgorithmSHA256,
+				Attrs:      MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+				AuthPolicy: authPolicy,
+				Size:       8}
+			if err := tpm.NVDefineSpace(HandleOwner, nil, &pub, nil); err != nil {
+				t.Fatalf("NVDefineSpace failed: %v", err)
+			}
+			rc, err := tpm.WrapHandle(pub.Index)
+			if err != nil {
+				t.Fatalf("WrapHandle failed: %v", err)
+			}
+			defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 
-	executePolicy(sessionContext)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, nil, SessionTypePolicy, nil,
+				AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
 
-	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-	if err := tpm.NVChangeAuth(rc, testAuth, &session); err != nil {
-		t.Fatalf("NVChangeAuth failed: %v", err)
-	}
+			executePolicy(sessionContext)
 
-	if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, testAuth); err != nil {
-		t.Errorf("NVWrite failed: %v", err)
-	}
+			session := Session{Context: sessionContext, Attrs: AttrContinueSession}
+			if err := tpm.NVChangeAuth(rc, testAuth, &session); err != nil {
+				t.Fatalf("NVChangeAuth failed: %v", err)
+			}
 
-	executePolicy(sessionContext)
+			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, testAuth); err != nil {
+				t.Errorf("NVWrite failed: %v", err)
+			}
 
-	session.AuthValue = testAuth
-	if err := tpm.NVChangeAuth(rc, nil, &session); err != nil {
-		t.Errorf("NVChangeAuth failed: %v", err)
+			executePolicy(sessionContext)
+
+			session.AuthValue = testAuth
+			if err := tpm.NVChangeAuth(rc, nil, &session); err != nil {
+				t.Errorf("NVChangeAuth failed: %v", err)
+			}
+		})
 	}
 }

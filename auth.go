@@ -33,8 +33,8 @@ const (
 
 type sessionParam struct {
 	associatedContext ResourceContext
-	session           *Session
-	authValue         []byte
+	session           *Session // For any session that isn't a password session
+	authValue         []byte   // For a password session, this is the auth value
 }
 
 type authCommand struct {
@@ -150,6 +150,13 @@ func (s *Session) updateIncludeAuthValueInHMACKey(associatedContext ResourceCont
 	}
 }
 
+func (s *Session) copyWithNewAuthIfRequired(newAuth []byte) *Session {
+	if !s.includeAuthValue {
+		return s
+	}
+	return &Session{Context: s.Context, AuthValue: newAuth, Attrs: s.Attrs, includeAuthValue: true}
+}
+
 func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContext ResourceContext,
 	commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce,
 	encryptNonce Nonce) (*authCommand, error) {
@@ -211,7 +218,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Ses
 	}
 
 	key := session.computeSessionHMACKey()
-	if len(key) == 0 {
+	if len(key) == 0 && len(resp.HMAC) == 0 {
 		return nil
 	}
 

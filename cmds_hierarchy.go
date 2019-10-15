@@ -72,8 +72,7 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	if authSession != nil {
 		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
 		// with a HMAC generated with a key based on an empty auth value.
-		ctx.sessionParams[0].session =
-			&Session{Context: authSession.Context, Attrs: authSession.Attrs}
+		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
 	}
 
 	if err := t.processResponse(ctx); err != nil {
@@ -164,8 +163,7 @@ func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 	if authSession != nil {
 		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
 		// with a HMAC generated with a key that includes newAuth instead.
-		ctx.sessionParams[0].session =
-			&Session{Context: authSession.Context, Attrs: authSession.Attrs, AuthValue: newAuth}
+		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
 	}
 
 	return t.processResponse(ctx)

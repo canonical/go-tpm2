@@ -553,4 +553,29 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		session.AuthValue = testAuth
 		run2(t, HandleOwner, &session, createSrk)
 	})
+
+	t.Run("OwnerWithUnboundHMACSession2", func(t *testing.T) {
+		// This test highlights a bug where we didn't preserve the value of Session.includeAuthValue (which
+		// should be true) before computing the response HMAC. It's not caught by
+		// OwnerWithUnboundHMACSession because the lack of session key combined with
+		// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth to
+		// bail out early
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, primary)
+
+		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, AlgorithmSHA256,
+			nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionContext)
+
+		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
+
+		run1(t, HandleOwner, &session)
+		defer resetHierarchyAuth(t, tpm, HandleOwner)
+
+		session.AuthValue = testAuth
+		run2(t, HandleOwner, &session, createSrk)
+	})
 }
