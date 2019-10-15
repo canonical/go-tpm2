@@ -86,6 +86,7 @@ const (
 	CommandLoad                       CommandCode = 0x00000157 // TPM_CC_Load
 	CommandSign                       CommandCode = 0x0000015D // TPM_CC_Sign
 	CommandUnseal                     CommandCode = 0x0000015E // TPM_CC_Unseal
+	CommandPolicySigned               CommandCode = 0x00000160 // TPM_CC_PolicySigned
 	CommandContextLoad                CommandCode = 0x00000161 // TPM_CC_ContextLoad
 	CommandContextSave                CommandCode = 0x00000162 // TPM_CC_ContextSave
 	CommandFlushContext               CommandCode = 0x00000165 // TPM_CC_FlushContext
@@ -95,6 +96,7 @@ const (
 	CommandPolicyAuthValue            CommandCode = 0x0000016B // TPM_CC_PolicyAuthValue
 	CommandPolicyCommandCode          CommandCode = 0x0000016C // TPM_CC_PolicyCommandCode
 	CommandPolicyOR                   CommandCode = 0x00000171 // TPM_CC_PolicyOR
+	CommandPolicyTicket               CommandCode = 0x00000172 // TPM_CC_PolicyTicket
 	CommandReadPublic                 CommandCode = 0x00000173 // TPM_CC_ReadPublic
 	CommandStartAuthSession           CommandCode = 0x00000176 // TPM_CC_StartAuthSession
 	CommandVerifySignature            CommandCode = 0x00000177 // TPM_CC_VerifySignature

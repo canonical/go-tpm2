@@ -97,6 +97,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_Sign"
 	case CommandUnseal:
 		return "TPM_CC_Unseal"
+	case CommandPolicySigned:
+		return "TPM_CC_PolicySigned"
 	case CommandContextLoad:
 		return "TPM_CC_ContextLoad"
 	case CommandContextSave:
@@ -115,6 +117,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicyCommandCode"
 	case CommandPolicyOR:
 		return "TPM_CC_PolicyOR"
+	case CommandPolicyTicket:
+		return "TPM_CC_PolicyTicket"
 	case CommandReadPublic:
 		return "TPM_CC_ReadPublic"
 	case CommandStartAuthSession:

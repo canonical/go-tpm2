@@ -11,16 +11,62 @@ import (
 	"fmt"
 )
 
-// func (t *TPMContext) PolicySigned(authObject, policySession ResourceContext, includeNonceTPM bool,
-//	cpHashA Digest,	policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout,
-//	*TkAuth, error) {
-// }
+// PolicySigned executes the TPM2_PolicySigned command to include a signed authorization in a policy. The command
+// binds a policy to the signing key associated with authContext.
+//
+// An authorizing entity signs a digest of authorization qualifiers with the key associated with authContext. The
+// digest is computed as:
+//   digest := H{nonceTPM||expiration||cpHashA||policyRef}
+// ... where H is the digest algorithm for the session associated with policySession. Where there are no
+// restrictions, the digest is computed from 4 zero bytes, which corresponds to an expiration time of zero. The
+// signature is provided via the auth parameter.
+//
+// If the session associated with policySession is not a trial session, the signature will be validated against
+// a digest computed from the provided arguments, using the key associated with authContext. If the signature is
+// invalid, an error will be returned.
+//
+// The cpHashA parameter allows the caller to provide a command parameter digest, which provides a mechanism to
+// restrict the commands that the session associated with policySession may be used to authenticate. On
+// successful completion, the value of cpHashA is recorded on the session context associated with policySession.
+//
+// If the expiration parameter is not 0, it sets a timeout in seconds since the start of the session by which the
+// authorization will expire. If set to a negative number, a timeout value and corresponding ticket value will be
+// returned if the session associated with policySession is not a trial session.
+//
+// On successful completion, the policy digest of the session associated with policySession will be extended to
+// include the name of authContext and the value of policyRef.
+func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest,
+	policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout, *TkAuth, error) {
+	if err := t.checkResourceContextParam(policySession); err != nil {
+		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
+	}
+
+	sessionContext, isSession := policySession.(SessionContext)
+	if !isSession {
+		return nil, nil, errors.New("invalid resource context for policySession: not a session context")
+	}
+
+	var nonceTPM Nonce
+	if includeNonceTPM {
+		nonceTPM = sessionContext.NonceTPM()
+	}
+
+	var timeout Timeout
+	var policyTicket TkAuth
+
+	if err := t.RunCommand(CommandPolicySigned, sessions, authContext, policySession, Separator, nonceTPM,
+		cpHashA, policyRef, expiration, auth, Separator, Separator, &timeout, &policyTicket); err != nil {
+		return nil, nil, err
+	}
+
+	return timeout, &policyTicket, nil
+}
 
 // PolicySecret executes the TPM2_PolicySecret command to include a secret-based authorization to the policy
 // session associated with policySession. The command requires the user auth role for authContext, which is
 // provided via authContextAuth.
 //
-// On successful completion, knowledge of the authorization value associated with authHandle is proven. The
+// On successful completion, knowledge of the authorization value associated with authContext is proven. The
 // policy digest of the session associated with policySession will be extended to include the name of authContext
 // and the value of policyRef.
 //
@@ -55,9 +101,28 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 	return timeout, &policyTicket, nil
 }
 
-// func (t *TPMContext) PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest,
-//	policyRef Nonce, authName Name, ticket *TkAuth, sessions ...*Session) error {
-// }
+// PolicyTicket executes the TPM2_PolicyTicket command, and behaves similarly to TPMContext.PolicySigned with
+// the exception that it takes an authorization ticket rather than a signed authorization. The ticket parameter
+// represents a valid authorization with an expiration time, and will have been returned from a previous call to
+// TPMContext.PolicySigned or TPMContext.PolicySecret when called with an expiration time of less than zero.
+//
+// The timeout, cpHashA and policyRef arguments must match the values passed to the command that originally
+// produced the ticket. If the command that produced the ticket was TPMContext.PolicySecret, authName must
+// correspond to the name of the entity of which knowledge of the authorization value was proven. If the command
+// that produced the ticket was TPMContext.PolicySigned, authName must correspond to the name of the key that
+// produced the signed authorization.
+//
+// The cpHashA parameter allows the caller to provide a command parameter digest, which provides a mechanism to
+// restrict the commands that the session associated with policySession may be used to authenticate. On
+// successful completion, the value of cpHashA is recorded on the session context associated with policySession.
+//
+// On successful verification of the ticket, the policy digest of the session context associated with policySession
+// will be extended with the same values that the command that produced the ticket would extend it with.
+func (t *TPMContext) PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce,
+	authName Name, ticket *TkAuth, sessions ...*Session) error {
+	return t.RunCommand(CommandPolicyTicket, sessions, policySession, Separator, timeout, cpHashA, policyRef,
+		authName, ticket)
+}
 
 // PolicyOR executes the TPM2_PolicyOR command to allow a policy to be satisfied by different sets of conditions.
 // If policySession does not correspond to a trial session, it determines if the current policy digest of the

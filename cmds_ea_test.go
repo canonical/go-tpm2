@@ -13,27 +13,159 @@ import (
 	"time"
 )
 
+func policyUpdate(alg AlgorithmId, digest Digest, commandCode CommandCode, arg2 Name, arg3 Nonce) Digest {
+	h := cryptConstructHash(alg)
+	h.Write(digest)
+	binary.Write(h, binary.BigEndian, commandCode)
+	h.Write(arg2)
+
+	digest = h.Sum(nil)
+
+	h = cryptConstructHash(alg)
+	h.Write(digest)
+	h.Write(arg3)
+
+	return h.Sum(nil)
+}
+
+func TestPolicySigned(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primary)
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+		Params: PublicParamsU{
+			Data: &RSAParams{
+				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+				Scheme: RSAScheme{
+					Scheme: AlgorithmRSASSA,
+					Details: AsymSchemeU{
+						Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	key, keyName, err := tpm.Load(primary, priv, pub, nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer flushContext(t, tpm, key)
+
+	testHash := make([]byte, 32)
+	rand.Read(testHash)
+
+	for _, data := range []struct {
+		desc            string
+		includeNonceTPM bool
+		expiration      int32
+		cpHashA         Digest
+		policyRef       Nonce
+	}{
+		{
+			desc: "Basic",
+		},
+		{
+			desc:            "WithNonceTPM",
+			includeNonceTPM: true,
+		},
+		{
+			desc:      "WithPolicyRef",
+			policyRef: []byte("foo"),
+		},
+		{
+			desc:       "WithNegativeExpiration",
+			expiration: -200,
+		},
+		{
+			desc:       "WithExpiration",
+			expiration: 100,
+		},
+		{
+			desc:    "WithCpHash",
+			cpHashA: testHash,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
+				AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			h := sha256.New()
+			if data.includeNonceTPM {
+				h.Write(sessionContext.(SessionContext).NonceTPM())
+			}
+			binary.Write(h, binary.BigEndian, data.expiration)
+			h.Write(data.cpHashA)
+			h.Write(data.policyRef)
+
+			aHash := h.Sum(nil)
+
+			signature, err := tpm.Sign(key, aHash, nil, nil, nil)
+			if err != nil {
+				t.Fatalf("Sign failed: %v", err)
+			}
+
+			timeout, policyTicket, err := tpm.PolicySigned(key, sessionContext, data.includeNonceTPM,
+				data.cpHashA, data.policyRef, data.expiration, signature)
+			if err != nil {
+				t.Fatalf("PolicySigned failed: %v", err)
+			}
+
+			if policyTicket == nil {
+				t.Fatalf("Expected a policyTicket")
+			}
+			if policyTicket.Tag != TagAuthSigned {
+				t.Errorf("Unexpected tag: %v", policyTicket.Tag)
+			}
+
+			if data.expiration >= 0 {
+				if len(timeout) != 0 {
+					t.Errorf("Expected an empty timeout")
+				}
+				if policyTicket.Hierarchy != HandleNull {
+					t.Errorf("Unexpected hierarchy: 0x%08x", policyTicket.Hierarchy)
+				}
+			} else {
+				if len(timeout) == 0 {
+					t.Errorf("Expected a non zero-length timeout")
+				}
+				if policyTicket.Hierarchy != HandleOwner {
+					t.Errorf("Unexpected hierarchy: 0x%08x", policyTicket.Hierarchy)
+				}
+			}
+
+			expectedDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySigned,
+				keyName, data.policyRef)
+
+			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(expectedDigest, policyDigest) {
+				t.Errorf("Unexpected digest")
+			}
+		})
+	}
+}
+
 func TestPolicySecret(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)
-
-	trialDigest := func(t *testing.T, policyRef Nonce) Digest {
-		hasher := sha256.New()
-		hasher.Write(make([]byte, sha256.Size))
-		binary.Write(hasher, binary.BigEndian, CommandPolicySecret)
-		hasher.Write(primary.Name())
-
-		newDigest1 := hasher.Sum(nil)
-
-		hasher = sha256.New()
-		hasher.Write(newDigest1)
-		hasher.Write(policyRef)
-
-		return hasher.Sum(nil)
-	}
 
 	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32,
 		useSession func(ResourceContext), auth interface{}) {
@@ -77,7 +209,8 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("PolicyGetDigest failed: %v", err)
 		}
 
-		expectedDigest := trialDigest(t, policyRef)
+		expectedDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySecret,
+			primary.Name(), policyRef)
 
 		if !bytes.Equal(expectedDigest, policyDigest) {
 			t.Errorf("Unexpected digest")
@@ -107,7 +240,8 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, -100, nil, testAuth)
 	})
 	t.Run("WithExpiration", func(t *testing.T) {
-		policyDigest := trialDigest(t, nil)
+		policyDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySecret,
+			primary.Name(), nil)
 
 		secret := []byte("secret data")
 		template := Public{
@@ -146,7 +280,8 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, 1, useSession, testAuth)
 	})
 	t.Run("WithCpHash", func(t *testing.T) {
-		policyDigest := trialDigest(t, nil)
+		policyDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySecret,
+			primary.Name(), nil)
 
 		secret1 := []byte("secret data1")
 		secret2 := []byte("secret data2")
@@ -204,6 +339,183 @@ func TestPolicySecret(t *testing.T) {
 
 		run(t, cpHash, nil, 0, useSession, testAuth)
 	})
+}
+
+func TestPolicyTicketFromSecret(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
+	defer flushContext(t, tpm, primary)
+
+	testHash := make([]byte, 32)
+	rand.Read(testHash)
+
+	for _, data := range []struct {
+		desc      string
+		cpHashA   Digest
+		policyRef Nonce
+	}{
+		{
+			desc: "Basic",
+		},
+		{
+			desc:    "WithCpHash",
+			cpHashA: testHash,
+		},
+		{
+			desc:      "WithPolicyRef",
+			policyRef: []byte("5678"),
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
+				AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext1)
+
+			timeout, ticket, err := tpm.PolicySecret(primary, sessionContext1, data.cpHashA,
+				data.policyRef, -60, testAuth)
+			if err != nil {
+				t.Fatalf("PolicySecret failed: %v", err)
+			}
+
+			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
+				AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext2)
+
+			if err := tpm.PolicyTicket(sessionContext2, timeout, data.cpHashA, data.policyRef,
+				primary.Name(), ticket); err != nil {
+				t.Errorf("PolicyTicket failed: %v", err)
+			}
+
+			digest1, err := tpm.PolicyGetDigest(sessionContext1)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			digest2, err := tpm.PolicyGetDigest(sessionContext2)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest1, digest2) {
+				t.Errorf("Unexpected digest")
+			}
+		})
+	}
+}
+
+func TestPolicyTicketFromSigned(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, primary)
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+		Params: PublicParamsU{
+			Data: &RSAParams{
+				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+				Scheme: RSAScheme{
+					Scheme: AlgorithmRSASSA,
+					Details: AsymSchemeU{
+						Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	key, keyName, err := tpm.Load(primary, priv, pub, nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer flushContext(t, tpm, key)
+
+	testHash := make([]byte, 32)
+	rand.Read(testHash)
+
+	for _, data := range []struct {
+		desc      string
+		cpHashA   Digest
+		policyRef Nonce
+	}{
+		{
+			desc: "Basic",
+		},
+		{
+			desc:    "WithCpHash",
+			cpHashA: testHash,
+		},
+		{
+			desc:      "WithPolicyRef",
+			policyRef: []byte("5678"),
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
+				AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext1)
+
+			h := sha256.New()
+			h.Write(sessionContext1.(SessionContext).NonceTPM())
+			binary.Write(h, binary.BigEndian, int32(-60))
+			h.Write(data.cpHashA)
+			h.Write(data.policyRef)
+
+			aHash := h.Sum(nil)
+
+			signature, err := tpm.Sign(key, aHash, nil, nil, nil)
+			if err != nil {
+				t.Fatalf("Sign failed: %v", err)
+			}
+
+			timeout, ticket, err := tpm.PolicySigned(key, sessionContext1, true, data.cpHashA,
+				data.policyRef, -60, signature)
+			if err != nil {
+				t.Fatalf("PolicySigned failed: %v", err)
+			}
+
+			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
+				AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext2)
+
+			if err := tpm.PolicyTicket(sessionContext2, timeout, data.cpHashA, data.policyRef,
+				keyName, ticket); err != nil {
+				t.Errorf("PolicyTicket failed: %v", err)
+			}
+
+			digest1, err := tpm.PolicyGetDigest(sessionContext1)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			digest2, err := tpm.PolicyGetDigest(sessionContext2)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest1, digest2) {
+				t.Errorf("Unexpected digest")
+			}
+		})
+	}
 }
 
 func TestPolicyOR(t *testing.T) {
@@ -697,32 +1009,12 @@ func TestPolicyNV(t *testing.T) {
 
 			authPolicy := h.Sum(nil)
 
-			template := Public{
-				Type:       AlgorithmKeyedHash,
-				NameAlg:    AlgorithmSHA256,
-				Attrs:      AttrFixedTPM | AttrFixedParent,
-				AuthPolicy: authPolicy,
-				Params: PublicParamsU{
-					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
-			sensitive := SensitiveCreate{Data: []byte("secret")}
-			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,
-				nil, nil)
-			if err != nil {
-				t.Fatalf("Create failed: %v", err)
-			}
-
-			objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
-			if err != nil {
-				t.Fatalf("Load failed: %v", err)
-			}
-			defer flushContext(t, tpm, objectContext)
-
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
 				AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
-			defer verifyContextFlushed(t, tpm, sessionContext)
+			defer flushContext(t, tpm, sessionContext)
 
 			if err := tpm.PolicyNV(index, index, sessionContext, data.operandB, data.offset,
 				data.operation, auth); err != nil {
@@ -736,10 +1028,6 @@ func TestPolicyNV(t *testing.T) {
 
 			if !bytes.Equal(digest, authPolicy) {
 				t.Errorf("Unexpected session digest")
-			}
-
-			if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext}); err != nil {
-				t.Errorf("Unseal failed: %v", err)
 			}
 		}
 
