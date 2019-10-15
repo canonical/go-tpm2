@@ -25,8 +25,8 @@ import (
 // a digest computed from the provided arguments, using the key associated with authContext. If the signature is
 // invalid, an error will be returned.
 //
-// The cpHashA parameter allows the caller to provide a command parameter digest, which provides a mechanism to
-// restrict the commands that the session associated with policySession may be used to authenticate. On
+// The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by
+// providing a command parameter digest. Command parameter digests can be computed using ComputeCpHash. On
 // successful completion, the value of cpHashA is recorded on the session context associated with policySession.
 //
 // If the expiration parameter is not 0, it sets a timeout in seconds since the start of the session by which the
@@ -70,8 +70,8 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 // policy digest of the session associated with policySession will be extended to include the name of authContext
 // and the value of policyRef.
 //
-// The cpHashA parameter allows the caller to provide a command parameter digest, which provides a mechanism to
-// restrict the commands that the session associated with policySession may be used to authenticate. On
+// The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by
+// providing a command parameter digest. Command parameter digests can be computed using ComputeCpHash. On
 // successful completion, the value of cpHashA is recorded on the session context associated with policySession.
 //
 // If the expiration parameter is not 0, it sets a timeout in seconds since the start of the session by which the
@@ -112,8 +112,8 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 // that produced the ticket was TPMContext.PolicySigned, authName must correspond to the name of the key that
 // produced the signed authorization.
 //
-// The cpHashA parameter allows the caller to provide a command parameter digest, which provides a mechanism to
-// restrict the commands that the session associated with policySession may be used to authenticate. On
+// The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by
+// providing a command parameter digest. Command parameter digests can be computed using ComputeCpHash. On
 // successful completion, the value of cpHashA is recorded on the session context associated with policySession.
 //
 // On successful verification of the ticket, the policy digest of the session context associated with policySession
@@ -288,3 +288,47 @@ func (t *TPMContext) PolicyGetDigest(policySession ResourceContext) (Digest, err
 
 // func (t *TPMContext) PolicyAuthorizeNV(authHandle, nvIndex, policySession ResourceContext) error {
 // }
+
+// ComputeCpHash computes a command parameter digest from the specified command code and provided command
+// parameters, using the digest algorithm specified by hashAlg. The params argument corresponds to handle and
+// parameters area of a command in that order, separated by the Separator sentinel value. Handle arguments must
+// be represented by either the Handle type or ResourceContext type.
+//
+// The number of command handles and number / type of command parameters can be determined by looking in part 3
+// of the TPM 2.0 Library Specification for the specific command.
+//
+// The result of this is useful for extended authorization commands that restrict the bind an authorization to
+// a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
+// TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
+func ComputeCpHash(hashAlg AlgorithmId, command CommandCode, params ...interface{}) (Digest, error) {
+	var handles []Name
+	var i int
+
+	for _, param := range params {
+		if param == Separator {
+			break
+		}
+		i++
+		switch p := param.(type) {
+		case Handle:
+			handles = append(handles, permanentContext(p).Name())
+		case ResourceContext:
+			handles = append(handles, p.Name())
+		default:
+			return nil, makeInvalidParamError("params",
+				"parameter in handle area is not a Handle or ResourceContext")
+		}
+	}
+
+	var cpBytes []byte
+
+	if i < len(params)-1 {
+		var err error
+		cpBytes, err = MarshalToBytes(params[i+1:]...)
+		if err != nil {
+			return nil, fmt.Errorf("cannot marshal command parameters: %v", err)
+		}
+	}
+
+	return cryptComputeCpHash(hashAlg, command, handles, cpBytes), nil
+}

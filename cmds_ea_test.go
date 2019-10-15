@@ -318,7 +318,10 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext2)
 
-		cpHash := cryptComputeCpHash(AlgorithmSHA256, CommandUnseal, []Name{objectContext2.Name()}, nil)
+		cpHash, err := ComputeCpHash(AlgorithmSHA256, CommandUnseal, objectContext2)
+		if err != nil {
+			t.Fatalf("ComputeCpHash failed: %v", err)
+		}
 
 		useSession := func(sessionContext ResourceContext) {
 			_, err := tpm.Unseal(objectContext1,
@@ -1062,4 +1065,68 @@ func TestPolicyNV(t *testing.T) {
 		})
 	}
 
+}
+
+type mockResourceContext struct {
+	name Name
+}
+
+func (c *mockResourceContext) Name() Name {
+	return c.name
+}
+func (c *mockResourceContext) Handle() Handle {
+	return HandleNull
+}
+
+func TestComputeCpHash(t *testing.T) {
+	h := sha256.New()
+	h.Write([]byte("foo"))
+	name, _ := MarshalToBytes(AlgorithmSHA256, RawBytes(h.Sum(nil)))
+	rc := &mockResourceContext{name}
+
+	for _, data := range []struct {
+		desc     string
+		alg      AlgorithmId
+		command  CommandCode
+		params   []interface{}
+		expected Digest
+	}{
+		{
+			desc:    "Unseal",
+			alg:     AlgorithmSHA256,
+			command: CommandUnseal,
+			params:  []interface{}{rc},
+			expected: Digest{0xe5, 0xe8, 0x03, 0xe4, 0xcb, 0xd3, 0x3f, 0x78, 0xc5, 0x65, 0x1b, 0x49,
+				0xf2, 0x83, 0xba, 0x63, 0x8a, 0xdf, 0x34, 0xca, 0x69, 0x60, 0x76, 0x40, 0xfb,
+				0xea, 0x9e, 0xe2, 0x89, 0xfd, 0x93, 0xe7},
+		},
+		{
+			desc:    "EvictControl",
+			alg:     AlgorithmSHA1,
+			command: CommandEvictControl,
+			params:  []interface{}{HandleOwner, rc, Handle(0x8100ffff)},
+			expected: Digest{0x40, 0x93, 0x38, 0x44, 0x00, 0xde, 0x24, 0x3a, 0xcb, 0x81, 0x04, 0xba,
+				0x14, 0xbf, 0x2f, 0x2e, 0xf8, 0xa8, 0x27, 0x0b},
+		},
+		{
+			desc:    "DAParameters",
+			alg:     AlgorithmSHA256,
+			command: CommandDictionaryAttackParameters,
+			params:  []interface{}{HandleLockout, Separator, uint32(32), uint32(7200), uint32(86400)},
+			expected: Digest{0x8e, 0xa6, 0x7e, 0x49, 0x3d, 0x62, 0x56, 0x21, 0x4c, 0x2e, 0xd2, 0xe9,
+				0xfd, 0x69, 0xbe, 0x71, 0x4a, 0x5e, 0x1b, 0xab, 0x5d, 0x55, 0x24, 0x56, 0xd0,
+				0x29, 0x82, 0xe1, 0x5c, 0xd2, 0x61, 0xde},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			cpHash, err := ComputeCpHash(data.alg, data.command, data.params...)
+			if err != nil {
+				t.Fatalf("ComputeCpHash failed: %v", err)
+			}
+
+			if !bytes.Equal(cpHash, data.expected) {
+				t.Errorf("Unexpected digest (got %x, expected %x)", cpHash, data.expected)
+			}
+		})
+	}
 }
