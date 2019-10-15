@@ -290,16 +290,16 @@ func (t *TPMContext) PolicyGetDigest(policySession ResourceContext) (Digest, err
 // }
 
 // ComputeCpHash computes a command parameter digest from the specified command code and provided command
-// parameters, using the digest algorithm specified by hashAlg. The params argument corresponds to handle and
-// parameters area of a command in that order, separated by the Separator sentinel value. Handle arguments must
+// parameters, using the digest algorithm specified by hashAlg. The params argument corresponds to the handle and
+// parameters area of a command (in that order), separated by the Separator sentinel value. Handle arguments must
 // be represented by either the Handle type or ResourceContext type.
 //
 // The number of command handles and number / type of command parameters can be determined by looking in part 3
 // of the TPM 2.0 Library Specification for the specific command.
 //
-// The result of this is useful for extended authorization commands that restrict the bind an authorization to
-// a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
-// TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
+// The result of this is useful for extended authorization commands that bind an authorization to a command and
+// set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret, TPMContext.PolicyTicket
+// and TPMContext.PolicyCpHash.
 func ComputeCpHash(hashAlg AlgorithmId, command CommandCode, params ...interface{}) (Digest, error) {
 	var handles []Name
 	var i int
