@@ -234,6 +234,33 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	return objectHandle
 }
 
+func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent ResourceContext) ResourceContext {
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+		Params: PublicParamsU{
+			Data: &RSAParams{
+				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+				Scheme: RSAScheme{
+					Scheme: AlgorithmRSAPSS,
+					Details: AsymSchemeU{
+						Data: &SigSchemeRSAPSS{HashAlg: AlgorithmSHA256}}},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	priv, pub, _, _, _, err := tpm.Create(parent, nil, &template, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	key, _, err := tpm.Load(parent, priv, pub, nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	return key
+}
+
 func nameAlgorithm(n Name) AlgorithmId {
 	if len(n) == 4 {
 		return AlgorithmNull
