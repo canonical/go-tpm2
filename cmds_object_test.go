@@ -9,6 +9,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/binary"
 	"testing"
 )
@@ -355,9 +356,14 @@ func TestLoadExternal(t *testing.T) {
 		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("LoadExternal returned an invalid handle 0x%08x", objectContext.Handle())
 		}
-		nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
-		if len(name) != int(nameAlgSize)+2 {
-			t.Errorf("LoadExternal returned a name of the wrong length")
+
+		templateName, err := template.Name()
+		if err != nil {
+			t.Fatalf("Cannot compute name: %v", err)
+		}
+
+		if !bytes.Equal(name, templateName) {
+			t.Errorf("Unexpected name")
 		}
 	}
 
@@ -403,6 +409,36 @@ func TestLoadExternal(t *testing.T) {
 					CurveID:   ECCCurveNIST_P256,
 					KDF:       KDFScheme{Scheme: AlgorithmNull}}},
 			Unique: PublicIDU{&ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
+
+		run(t, &sensitive, &public, HandleNull)
+	})
+
+	t.Run("HMAC", func(t *testing.T) {
+		key := make([]byte, 32)
+		rand.Read(key)
+
+		seed := make([]byte, 32)
+
+		h := sha256.New()
+		h.Write(seed)
+		h.Write(key)
+		unique := h.Sum(nil)
+
+		sensitive := Sensitive{
+			Type:      AlgorithmKeyedHash,
+			SeedValue: seed,
+			Sensitive: SensitiveCompositeU{key}}
+		public := Public{
+			Type:    AlgorithmKeyedHash,
+			NameAlg: AlgorithmSHA256,
+			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+			Params: PublicParamsU{
+				&KeyedHashParams{
+					Scheme: KeyedHashScheme{
+						Scheme: AlgorithmHMAC,
+						Details: SchemeKeyedHashU{
+							&SchemeHMAC{HashAlg: AlgorithmSHA256}}}}},
+			Unique: PublicIDU{unique}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
