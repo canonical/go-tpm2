@@ -226,3 +226,38 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 
 	return rc, nil
 }
+
+// ForgetResource tells the TPMContext to drop its reference to the specified ResourceContext without flushing the
+// corresponding resources from the TPM.
+//
+// An error will be returned if the context corresponds to a session. It is not possible to forget ResourceContext
+// instances that correspond to a session, as it isn't possible to recreate them later on in order to flush the
+// corresponding resources from the TPM.
+//
+// An error will be returned if the specified context has been invalidated, or if it is being tracked by another
+// TPMContext instance.
+//
+// On succesful completion, the specified ResourceContext will be invalidated and can no longer be used. APIs
+// that return a ResourceContext for the corresponding TPM resource in the future will be newly created.
+func (t *TPMContext) ForgetResource(context ResourceContext) error {
+	if err := t.checkResourceContextParam(context); err != nil {
+		return err
+	}
+
+	switch context.Handle().Type() {
+	case HandleTypePCR:
+		panic("Got context for a PCR index, which shouldn't happen")
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		return errors.New("cannot forget a session context as it is not possible to recreate the context "+
+			"later on, which means that it would not be able to be flushed using this API. Please "+
+			"use TPMContext.FlushContext to flush it from the TPM instead")
+	case HandleTypePermanent:
+		// Permanent resources aren't tracked by TPMContext, and permanentContext is just a typedef of
+		// Handle anyway. Just do nothing in this case
+		return nil
+	}
+
+	t.evictResourceContext(context)
+
+	return nil
+}
