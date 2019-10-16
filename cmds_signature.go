@@ -11,10 +11,6 @@ package tpm2
 // will be returned. If the signature is invalid, then an error will be returned.
 func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature,
 	sessions ...*Session) (*TkVerified, error) {
-	if signature == nil {
-		return nil, makeInvalidParamError("signature", "nil value")
-	}
-
 	var validation TkVerified
 	if err := t.RunCommand(CommandVerifySignature, sessions, keyContext, Separator, digest, signature,
 		Separator, Separator, &validation); err != nil {

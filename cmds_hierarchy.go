@@ -13,10 +13,6 @@ import (
 func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{},
 	sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
-	if inPublic == nil {
-		return nil, nil, nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
-	}
-
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}

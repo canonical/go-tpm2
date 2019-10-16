@@ -248,8 +248,8 @@ func (t *TPMContext) ForgetResource(context ResourceContext) error {
 	case HandleTypePCR:
 		panic("Got context for a PCR index, which shouldn't happen")
 	case HandleTypeHMACSession, HandleTypePolicySession:
-		return errors.New("cannot forget a session context as it is not possible to recreate the context "+
-			"later on, which means that it would not be able to be flushed using this API. Please "+
+		return errors.New("cannot forget a session context as it is not possible to recreate the context " +
+			"later on, which means that it would not be able to be flushed using this API. Please " +
 			"use TPMContext.FlushContext to flush it from the TPM instead")
 	case HandleTypePermanent:
 		// Permanent resources aren't tracked by TPMContext, and permanentContext is just a typedef of

@@ -21,10 +21,6 @@ package tpm2
 func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data,
 	creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation,
 	signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
-	if creationTicket == nil {
-		return nil, nil, makeInvalidParamError("creationTicket", "nil value")
-	}
-
 	if signContext == nil {
 		signContext = permanentContext(HandleNull)
 	}

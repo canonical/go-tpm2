@@ -661,19 +661,18 @@ func TestMarshalUnionWithNilValue(t *testing.T) {
 }
 
 func TestMarshalUnionWithInvalidSelector(t *testing.T) {
-	a := TestUnionContainer{Select: 5}
-	_, err := MarshalToBytes(a)
-	if err == nil {
-		t.Fatalf("MarshalToBytes should fail to marshal a union with an invalid selector value")
+	a := TestUnionContainer{Select: 259}
+	out, err := MarshalToBytes(a)
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
-	if err.Error() != "cannot marshal struct type tpm2.TestUnionContainer: cannot marshal field Union: "+
-		"cannot marshal struct type tpm2.TestUnion: error marshalling union struct: cannot select "+
-		"union data type: invalid selector value: 5" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+
+	if !bytes.Equal(out, []byte{0x00, 0x00, 0x01, 0x03}) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 
 	var ao TestUnionContainer
-	_, err = UnmarshalFromBytes([]byte{0x00, 0x00, 0x01, 0x03, 0x10, 0xe1}, &ao)
+	_, err = UnmarshalFromBytes(out, &ao)
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should fail to marshal a union with an invalid selector value")
 	}

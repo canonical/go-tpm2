@@ -164,7 +164,6 @@ func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
 
 func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 	var d reflect.Value
-
 	if ptr.IsNil() {
 		d = reflect.Zero(ptr.Type().Elem())
 	} else {
@@ -195,10 +194,10 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 		return fmt.Errorf("invalid selector member name %s", ctx.options.selector)
 	}
 
-	selectedType, err := u.Interface().(Union).Select(selectorVal)
-	if err != nil {
-		return fmt.Errorf("cannot select union data type: %v", err)
-	}
+	// Ignore errors during marshalling as we can produce some confusing errors for really nested elements.
+	// In the event of an error, selectedType will be nil, we'll marshal nothing and the TPM's unmarshalling
+	// and parameter validation will catch the error when unmarshalling the selector value.
+	selectedType, _ := u.Interface().(Union).Select(selectorVal)
 	if selectedType == nil {
 		return nil
 	}

@@ -243,6 +243,7 @@ const (
 )
 
 const (
+	AlgorithmError          AlgorithmId = 0x0000 // TPM_ALG_ERROR
 	AlgorithmRSA            AlgorithmId = 0x0001 // TPM_ALG_RSA
 	AlgorithmSHA1           AlgorithmId = 0x0004 // TPM_ALG_SHA1
 	AlgorithmHMAC           AlgorithmId = 0x0005 // TPM_ALG_HMAC

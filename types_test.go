@@ -91,23 +91,14 @@ func TestPublicIDUnion(t *testing.T) {
 			desc: "InvalidSelector",
 			in: TestPublicIDUContainer{Alg: AlgorithmNull,
 				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
-			err: "cannot marshal struct type tpm2.TestPublicIDUContainer: cannot marshal field " +
-				"Unique: cannot marshal struct type tpm2.PublicIDU: error marshalling union " +
+			out: []byte{0x00, 0x10},
+			err: "cannot unmarshal struct type tpm2.TestPublicIDUContainer: cannot unmarshal field " +
+				"Unique: cannot unmarshal struct type tpm2.PublicIDU: error unmarshalling union " +
 				"struct: cannot select union data type: invalid selector value: TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			out, err := MarshalToBytes(data.in)
-			if data.err != "" {
-				if err == nil {
-					t.Fatalf("MarshaToBytes was expected to fail")
-				}
-				if err.Error() != data.err {
-					t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
-				}
-				return
-			}
-
 			if err != nil {
 				t.Fatalf("MarshalToBytes failed: %v", err)
 			}
@@ -118,15 +109,24 @@ func TestPublicIDUnion(t *testing.T) {
 
 			var a TestPublicIDUContainer
 			n, err := UnmarshalFromBytes(out, &a)
-			if err != nil {
-				t.Fatalf("UnmarshalFromBytes failed: %v", err)
-			}
-			if n != len(out) {
-				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-			}
+			if data.err != "" {
+				if err == nil {
+					t.Fatalf("UnmarshalFromBytes was expected to fail")
+				}
+				if err.Error() != data.err {
+					t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("UnmarshalFromBytes failed: %v", err)
+				}
+				if n != len(out) {
+					t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+				}
 
-			if !reflect.DeepEqual(data.in, a) {
-				t.Errorf("UnmarshalFromBytes didn't return the original data")
+				if !reflect.DeepEqual(data.in, a) {
+					t.Errorf("UnmarshalFromBytes didn't return the original data")
+				}
 			}
 		})
 	}
@@ -159,24 +159,15 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 		{
 			desc: "InvalidSelector",
 			in:   TestSchemeKeyedHashUContainer{Scheme: AlgorithmSHA256},
-			err: "cannot marshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot marshal " +
-				"field Details: cannot marshal struct type tpm2.SchemeKeyedHashU: error " +
-				"marshalling union struct: cannot select union data type: invalid selector " +
+			out:  []byte{0x00, 0x0b},
+			err: "cannot unmarshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot unmarshal " +
+				"field Details: cannot unmarshal struct type tpm2.SchemeKeyedHashU: error " +
+				"unmarshalling union struct: cannot select union data type: invalid selector " +
 				"value: TPM_ALG_SHA256",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			out, err := MarshalToBytes(data.in)
-			if data.err != "" {
-				if err == nil {
-					t.Fatalf("MarshaToBytes was expected to fail")
-				}
-				if err.Error() != data.err {
-					t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
-				}
-				return
-			}
-
 			if err != nil {
 				t.Fatalf("MarshalToBytes failed: %v", err)
 			}
@@ -187,15 +178,24 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 
 			var a TestSchemeKeyedHashUContainer
 			n, err := UnmarshalFromBytes(out, &a)
-			if err != nil {
-				t.Fatalf("UnmarshalFromBytes failed: %v", err)
-			}
-			if n != len(out) {
-				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-			}
+			if data.err != "" {
+				if err == nil {
+					t.Fatalf("UnmarshaFromBytes was expected to fail")
+				}
+				if err.Error() != data.err {
+					t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("UnmarshalFromBytes failed: %v", err)
+				}
+				if n != len(out) {
+					t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+				}
 
-			if !reflect.DeepEqual(data.in, a) {
-				t.Errorf("UnmarshalFromBytes didn't return the original data")
+				if !reflect.DeepEqual(data.in, a) {
+					t.Errorf("UnmarshalFromBytes didn't return the original data")
+				}
 			}
 		})
 	}

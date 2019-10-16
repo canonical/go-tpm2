@@ -42,10 +42,6 @@ import (
 // the TPMContext.WrapHandle function, specifying the value of the Index field of publicInfo as the handle.
 func (t *TPMContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVPublic, authHandleAuth interface{},
 	sessions ...*Session) error {
-	if publicInfo == nil {
-		return makeInvalidParamError("publicInfo", "nil value")
-	}
-
 	return t.RunCommand(CommandNVDefineSpace, sessions,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator, auth,
 		nvPublicSized{publicInfo})

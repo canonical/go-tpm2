@@ -13,10 +13,6 @@ import (
 func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{},
 	sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
-	if inPublic == nil {
-		return nil, nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
-	}
-
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -40,10 +36,6 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 
 func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public,
 	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error) {
-	if inPublic == nil {
-		return nil, nil, makeInvalidParamError("inPublic", "nil value")
-	}
-
 	var objectHandle Handle
 	var name Name
 
@@ -65,10 +57,6 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 
 func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle,
 	sessions ...*Session) (ResourceContext, Name, error) {
-	if inPublic == nil {
-		return nil, nil, makeInvalidParamError("inPublic", "nil value")
-	}
-
 	var objectHandle Handle
 	var name Name
 
@@ -109,10 +97,6 @@ func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Sess
 func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw,
 	secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest,
 	error) {
-	if credentialBlob == nil {
-		return nil, makeInvalidParamError("credentialBlob", "nil value")
-	}
-
 	var certInfo Digest
 	if err := t.RunCommand(CommandActivateCredential, sessions,
 		ResourceWithAuth{Context: activateContext, Auth: activateContextAuth},
@@ -162,10 +146,6 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 
 func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public,
 	parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
-	if inPublic == nil {
-		return nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
-	}
-
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
