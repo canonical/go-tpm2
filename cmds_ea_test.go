@@ -13,21 +13,6 @@ import (
 	"time"
 )
 
-func policyUpdate(alg AlgorithmId, digest Digest, commandCode CommandCode, arg2 Name, arg3 Nonce) Digest {
-	h := cryptConstructHash(alg)
-	h.Write(digest)
-	binary.Write(h, binary.BigEndian, commandCode)
-	h.Write(arg2)
-
-	digest = h.Sum(nil)
-
-	h = cryptConstructHash(alg)
-	h.Write(digest)
-	h.Write(arg3)
-
-	return h.Sum(nil)
-}
-
 func TestPolicySigned(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
@@ -124,15 +109,15 @@ func TestPolicySigned(t *testing.T) {
 				}
 			}
 
-			expectedDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySigned,
-				key.Name(), data.policyRef)
+			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+			trial.PolicySigned(key, data.policyRef)
 
 			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
 				t.Fatalf("PolicyGetDigest failed: %v", err)
 			}
 
-			if !bytes.Equal(expectedDigest, policyDigest) {
+			if !bytes.Equal(trial.GetDigest(), policyDigest) {
 				t.Errorf("Unexpected digest")
 			}
 		})
@@ -188,10 +173,10 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("PolicyGetDigest failed: %v", err)
 		}
 
-		expectedDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySecret,
-			primary.Name(), policyRef)
+		trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+		trial.PolicySecret(primary, policyRef)
 
-		if !bytes.Equal(expectedDigest, policyDigest) {
+		if !bytes.Equal(trial.GetDigest(), policyDigest) {
 			t.Errorf("Unexpected digest")
 		}
 
@@ -219,15 +204,15 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, -100, nil, testAuth)
 	})
 	t.Run("WithExpiration", func(t *testing.T) {
-		policyDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySecret,
-			primary.Name(), nil)
+		trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+		trial.PolicySecret(primary, nil)
 
 		secret := []byte("secret data")
 		template := Public{
 			Type:       AlgorithmKeyedHash,
 			NameAlg:    AlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
-			AuthPolicy: policyDigest,
+			AuthPolicy: trial.GetDigest(),
 			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
 
@@ -259,8 +244,8 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, 1, useSession, testAuth)
 	})
 	t.Run("WithCpHash", func(t *testing.T) {
-		policyDigest := policyUpdate(AlgorithmSHA256, make([]byte, 32), CommandPolicySecret,
-			primary.Name(), nil)
+		trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+		trial.PolicySecret(primary, nil)
 
 		secret1 := []byte("secret data1")
 		secret2 := []byte("secret data2")
@@ -268,7 +253,7 @@ func TestPolicySecret(t *testing.T) {
 			Type:       AlgorithmKeyedHash,
 			NameAlg:    AlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
-			AuthPolicy: policyDigest,
+			AuthPolicy: trial.GetDigest(),
 			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 		sensitive1 := SensitiveCreate{Data: secret1}
 		sensitive2 := SensitiveCreate{Data: secret2}
@@ -483,27 +468,11 @@ func TestPolicyOR(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	trialSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer verifyContextFlushed(t, tpm, trialSessionContext)
+	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial.PolicyCommandCode(CommandNVChangeAuth)
+	digest := trial.GetDigest()
 
-	pcrSelection := PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}}
-	if err := tpm.PolicyPCR(trialSessionContext, nil, pcrSelection); err != nil {
-		t.Fatalf("PolicyPCR failed: %v", err)
-	}
-
-	trialPolicyDigest, err := tpm.PolicyGetDigest(trialSessionContext)
-	if err != nil {
-		t.Fatalf("PolicyGetDigest failed: %v", err)
-	}
-
-	if err := tpm.FlushContext(trialSessionContext); err != nil {
-		t.Errorf("FlushContext failed: %v", err)
-	}
-
-	digestList := []Digest{trialPolicyDigest}
+	digestList := []Digest{digest}
 	for i := 0; i < 4; i++ {
 		digest := make(Digest, sha256.Size)
 		if _, err := rand.Read(digest); err != nil {
@@ -512,14 +481,16 @@ func TestPolicyOR(t *testing.T) {
 		digestList = append(digestList, digest)
 	}
 
+	trial.PolicyOR(digestList)
+
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
 	defer flushContext(t, tpm, sessionContext)
 
-	if err := tpm.PolicyPCR(sessionContext, nil, pcrSelection); err != nil {
-		t.Fatalf("PolicyPCR failed: %v", err)
+	if err := tpm.PolicyCommandCode(sessionContext, CommandNVChangeAuth); err != nil {
+		t.Fatalf("PolicyCommandCode failed: %v", err)
 	}
 	if err := tpm.PolicyOR(sessionContext, digestList); err != nil {
 		t.Fatalf("PolicyOR failed: %v", err)
@@ -530,19 +501,7 @@ func TestPolicyOR(t *testing.T) {
 		t.Fatalf("PolicyGetDigest failed: %v", err)
 	}
 
-	digests := new(bytes.Buffer)
-	for _, digest := range digestList {
-		digests.Write(digest)
-	}
-
-	hasher := sha256.New()
-	hasher.Write(make([]byte, sha256.Size))
-	binary.Write(hasher, binary.BigEndian, CommandPolicyOR)
-	hasher.Write(digests.Bytes())
-
-	expectedPolicyDigest := hasher.Sum(nil)
-
-	if !bytes.Equal(policyDigest, expectedPolicyDigest) {
+	if !bytes.Equal(policyDigest, trial.GetDigest()) {
 		t.Errorf("Unexpected policy digest")
 	}
 }
@@ -574,19 +533,15 @@ func TestPolicyPCR(t *testing.T) {
 		}
 	}
 
-	calculatePCRDigest := func(pcrs PCRSelectionList) []byte {
+	calculatePCRDigestFromTPM := func(pcrs PCRSelectionList) []byte {
 		_, pcrValues, err := tpm.PCRRead(pcrs)
 		if err != nil {
 			t.Fatalf("PCRRead failed: %v", err)
 		}
 
 		hasher := sha256.New()
-		j := 0
-		for _, selection := range pcrs {
-			for _ = range selection.Select {
-				hasher.Write(pcrValues[j])
-				j++
-			}
+		for _, v := range pcrValues {
+			hasher.Write(v)
 		}
 		return hasher.Sum(nil)
 	}
@@ -626,7 +581,7 @@ func TestPolicyPCR(t *testing.T) {
 		},
 		{
 			desc: "WithDigest",
-			digest: calculatePCRDigest(PCRSelectionList{
+			digest: calculatePCRDigestFromTPM(PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{8}},
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{8}}}),
 			pcrs: PCRSelectionList{
@@ -651,17 +606,17 @@ func TestPolicyPCR(t *testing.T) {
 				t.Fatalf("PolicyGetDigest failed: %v", err)
 			}
 
-			pcrDigest := calculatePCRDigest(data.pcrs)
+			pcrDigest := data.digest
+			if len(pcrDigest) == 0 {
+				pcrDigest = calculatePCRDigestFromTPM(data.pcrs)
+			}
 
-			hasher := sha256.New()
-			hasher.Write(make([]byte, sha256.Size))
-			binary.Write(hasher, binary.BigEndian, CommandPolicyPCR)
-			MarshalToWriter(hasher, data.pcrs)
-			hasher.Write(pcrDigest)
+			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+			if err := trial.PolicyPCR(pcrDigest, data.pcrs); err != nil {
+				t.Fatalf("Trial PolicyPCR failed: %v", err)
+			}
 
-			expectedPolicyDigest := hasher.Sum(nil)
-
-			if !bytes.Equal(policyDigest, expectedPolicyDigest) {
+			if !bytes.Equal(policyDigest, trial.GetDigest()) {
 				t.Errorf("Unexpected policy digest")
 			}
 		})
@@ -672,39 +627,16 @@ func TestPolicyCommandCode(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	hasher := sha256.New()
-	hasher.Write(make([]byte, 32))
-	binary.Write(hasher, binary.BigEndian, CommandPolicyCommandCode)
-	binary.Write(hasher, binary.BigEndian, CommandUnseal)
+	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial.PolicyCommandCode(CommandUnseal)
 
-	authPolicy := hasher.Sum(nil)
-
-	primary := createRSASrkForTesting(t, tpm, nil)
-	defer flushContext(t, tpm, primary)
-
-	template := Public{
-		Type:       AlgorithmKeyedHash,
-		NameAlg:    AlgorithmSHA256,
-		Attrs:      AttrFixedTPM | AttrFixedParent,
-		AuthPolicy: authPolicy,
-		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
-	sensitive := SensitiveCreate{Data: []byte("secret")}
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	defer flushContext(t, tpm, objectContext)
+	authPolicy := trial.GetDigest()
 
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
-	defer verifyContextFlushed(t, tpm, sessionContext)
+	defer flushContext(t, tpm, sessionContext)
 
 	if err := tpm.PolicyCommandCode(sessionContext, CommandUnseal); err != nil {
 		t.Fatalf("PolicyPassword failed: %v", err)
@@ -718,21 +650,16 @@ func TestPolicyCommandCode(t *testing.T) {
 	if !bytes.Equal(digest, authPolicy) {
 		t.Errorf("Unexpected session digest")
 	}
-
-	if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext}); err != nil {
-		t.Errorf("Unseal failed: %v", err)
-	}
 }
 
 func TestPolicyAuthValue(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	hasher := sha256.New()
-	hasher.Write(make([]byte, 32))
-	binary.Write(hasher, binary.BigEndian, CommandPolicyAuthValue)
+	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial.PolicyAuthValue()
 
-	authPolicy := hasher.Sum(nil)
+	authPolicy := trial.GetDigest()
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -813,11 +740,10 @@ func TestPolicyPassword(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	hasher := sha256.New()
-	hasher.Write(make([]byte, 32))
-	binary.Write(hasher, binary.BigEndian, CommandPolicyAuthValue)
+	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial.PolicyPassword()
 
-	authPolicy := hasher.Sum(nil)
+	authPolicy := trial.GetDigest()
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -955,20 +881,10 @@ func TestPolicyNV(t *testing.T) {
 		run := func(t *testing.T, index ResourceContext, auth interface{}) {
 			data.prepare(t, index, auth)
 
-			h := sha256.New()
-			h.Write(data.operandB)
-			binary.Write(h, binary.BigEndian, data.offset)
-			binary.Write(h, binary.BigEndian, data.operation)
+			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+			trial.PolicyNV(index, data.operandB, data.offset, data.operation)
 
-			args := h.Sum(nil)
-
-			h = sha256.New()
-			h.Write(make([]byte, 32))
-			binary.Write(h, binary.BigEndian, CommandPolicyNV)
-			h.Write(args)
-			h.Write(index.Name())
-
-			authPolicy := h.Sum(nil)
+			authPolicy := trial.GetDigest()
 
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
 				AlgorithmSHA256, nil)
