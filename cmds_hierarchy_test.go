@@ -20,7 +20,7 @@ func TestCreatePrimary(t *testing.T) {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
 
-		if objectContext.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("CreatePrimary returned an invalid handle 0x%08x", objectContext.Handle())
 		}
 		verifyPublicAgainstTemplate(t, outPublic, template)
@@ -385,8 +385,8 @@ func TestClear(t *testing.T) {
 				t.Fatalf("Object was evicted when it shouldn't have been")
 			}
 			handle := rc.Handle()
-			if rc.Handle()&HandleTypePolicySession == HandleTypePolicySession {
-				handle = handle&Handle(0xffffff) | HandleTypeLoadedSession
+			if rc.Handle().Type() == HandleTypePolicySession {
+				handle = handle&Handle(0xffffff) | HandleTypeLoadedSession.BaseHandle()
 			}
 			handles, err := tpm.GetCapabilityHandles(handle, 1)
 			if err != nil {

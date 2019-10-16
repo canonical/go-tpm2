@@ -29,7 +29,7 @@ func TestStartAuthSession(t *testing.T) {
 		sessionType SessionType
 		alg         AlgorithmId
 		bindAuth    []byte
-		handleType  Handle
+		handleType  HandleType
 		errMsg      string
 	}{
 		{
@@ -128,7 +128,7 @@ func TestStartAuthSession(t *testing.T) {
 				}
 				defer flushContext(t, tpm, sc)
 
-				if sc.Handle()&data.handleType != data.handleType {
+				if sc.Handle().Type() != data.handleType {
 					t.Errorf("StartAuthSession returned a handle of the wrong type")
 				}
 

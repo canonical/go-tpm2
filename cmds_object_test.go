@@ -258,7 +258,7 @@ func TestLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext)
 
-		if objectContext.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("Create returned an invalid handle 0x%08x", objectContext.Handle())
 		}
 		if len(name) != 34 {
@@ -352,7 +352,7 @@ func TestLoadExternal(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext)
 
-		if objectContext.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("LoadExternal returned an invalid handle 0x%08x", objectContext.Handle())
 		}
 		nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)

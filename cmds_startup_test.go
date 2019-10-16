@@ -98,8 +98,8 @@ func TestStartup(t *testing.T) {
 
 			run(t)
 
-			handles, err :=
-				tpm.GetCapabilityHandles(handle&Handle(0xffffff)|HandleTypeLoadedSession, 1)
+			handles, err := tpm.GetCapabilityHandles(
+				handle&Handle(0xffffff)|HandleTypeLoadedSession.BaseHandle(), 1)
 			if err != nil {
 				t.Fatalf("GetCapability failed: %v", err)
 			}

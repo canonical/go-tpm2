@@ -112,7 +112,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
 	nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
 	var parentQualifiedName Name
-	if parent.Handle()&HandleTypePermanent == HandleTypePermanent {
+	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
 	} else {
 		var err error

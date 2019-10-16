@@ -231,16 +231,15 @@ const (
 )
 
 const (
-	HandleTypePCR              Handle = 0x00000000 // HR_PCR
-	HandleTypeNVIndex          Handle = 0x01000000 // HR_NV_INDEX
-	HandleTypeHMACSession      Handle = 0x02000000 // HR_HMAC_SESSION
-	HandleTypePolicySession    Handle = 0x03000000 // HR_POLICY_SESSION
-	HandleTypePermanent        Handle = 0x40000000 // HR_PERMANENT
-	HandleTypeTransientObject  Handle = 0x80000000 // HR_TRANSIENT
-	HandleTypePersistentObject Handle = 0x81000000 // HR_PERSISTENT
-
-	HandleTypeLoadedSession Handle = 0x02000000
-	HandleTypeActiveSession Handle = 0x03000000
+	HandleTypePCR           HandleType = 0x00 // TPM_HT_PCR
+	HandleTypeNVIndex       HandleType = 0x01 // TPM_HT_NV_INDEX
+	HandleTypeHMACSession   HandleType = 0x02 // TPM_HT_HMAC_SESSION
+	HandleTypeLoadedSession HandleType = 0x02 // TPM_HT_LOADED_SESSION
+	HandleTypePolicySession HandleType = 0x03 // TPM_HT_POLICY_SESSION
+	HandleTypeSavedSession  HandleType = 0x03 // TPM_HT_SAVED_SESSION
+	HandleTypePermanent     HandleType = 0x40 // TPM_HT_PERMANENT
+	HandleTypeTransient     HandleType = 0x80 // TPM_HT_TRANSIENT
+	HandleTypePersistent    HandleType = 0x81 // TPM_HT_PERSISTENT
 )
 
 const (

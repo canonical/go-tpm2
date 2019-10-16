@@ -77,7 +77,7 @@ func (t *TPMContext) Startup(startupType StartupType) error {
 			// TPMA_NV_READ_LOCKED is cleared on a restart or reset
 			r.clearAttr(AttrNVReadLocked)
 		case *objectContext:
-			if rc.Handle()&HandleTypePersistentObject == HandleTypePersistentObject {
+			if rc.Handle().Type() == HandleTypePersistent {
 				continue
 			}
 			t.evictResourceContext(rc)

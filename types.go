@@ -58,6 +58,19 @@ type PropertyPCR uint32
 // Handle corresponds to the TPM_HANDLE type, and is a numeric identifier that references a resource on the TPM.
 type Handle uint32
 
+// Type returns the type of the handle.
+func (h Handle) Type() HandleType {
+	return HandleType(h >> 24)
+}
+
+// HandleType corresponds to the TPM_HT type, and is used to identify the type of a Handle.
+type HandleType uint8
+
+// BaseHandle returns the first handle for the handle type.
+func (h HandleType) BaseHandle() Handle {
+	return Handle(h) << 24
+}
+
 // 8) Attributes
 
 // AlgorithmAttributes corresponds to the TPMA_ALGORITHM type and represents the attributes for an algorithm.

@@ -79,8 +79,8 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 		return err
 	}
 
-	getHandles := func(handleType Handle, out map[Handle]struct{}) error {
-		handles, err := t.GetCapabilityHandles(handleType, CapabilityMaxProperties)
+	getHandles := func(handleType HandleType, out map[Handle]struct{}) error {
+		handles, err := t.GetCapabilityHandles(handleType.BaseHandle(), CapabilityMaxProperties)
 		if err != nil {
 			return fmt.Errorf("cannot fetch handles from TPM after clear: %v", err)
 		}
@@ -92,10 +92,10 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	}
 
 	handles := make(map[Handle]struct{})
-	if err := getHandles(HandleTypeTransientObject, handles); err != nil {
+	if err := getHandles(HandleTypeTransient, handles); err != nil {
 		return err
 	}
-	if err := getHandles(HandleTypePersistentObject, handles); err != nil {
+	if err := getHandles(HandleTypePersistent, handles); err != nil {
 		return err
 	}
 

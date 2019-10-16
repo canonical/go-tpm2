@@ -92,7 +92,7 @@ func TestGetCapabilityHandles(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	data, err := tpm.GetCapabilityHandles(HandleTypePermanent, CapabilityMaxProperties)
+	data, err := tpm.GetCapabilityHandles(HandleTypePermanent.BaseHandle(), CapabilityMaxProperties)
 	if err != nil {
 		t.Fatalf("GetCapability failed: %v", err)
 	}

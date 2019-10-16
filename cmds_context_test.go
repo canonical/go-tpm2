@@ -75,7 +75,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 			handleType = HandleTypeHMACSession
 		}
 
-		if restoredSc.Handle()&handleType != handleType {
+		if restoredSc.Handle().Type() != handleType {
 			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredSc.Handle())
 		}
 
@@ -114,7 +114,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		restoredRc := run(t, rc)
 		defer flushContext(t, tpm, restoredRc)
 
-		if restoredRc.Handle()&HandleTypeTransientObject != HandleTypeTransientObject {
+		if restoredRc.Handle().Type() != HandleTypeTransient {
 			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredRc.Handle())
 		}
 

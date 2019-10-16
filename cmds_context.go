@@ -126,8 +126,8 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 	}
 	context.Blob = blob
 
-	if saveContext.Handle()&HandleTypeHMACSession == HandleTypeHMACSession ||
-		saveContext.Handle()&HandleTypePolicySession == HandleTypePolicySession {
+	if saveContext.Handle().Type() == HandleTypeHMACSession ||
+		saveContext.Handle().Type() == HandleTypePolicySession {
 		t.evictResourceContext(saveContext)
 	}
 
