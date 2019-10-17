@@ -59,9 +59,8 @@ func TestStartup(t *testing.T) {
 				defer flushContext(t, tpm, c)
 				t.Fatalf("Unexpected behaviour: transient handle should have been flushed")
 			}
-			if err.Error() != "TPM returned a warning whilst executing command TPM_CC_ReadPublic: "+
-				"TPM_RC_REFERENCE_H0 (the 1st handle in the handle area references a transient "+
-				"object or session that is not loaded)" {
+			if err.Error() != "TPM returned a warning whilst executing command TPM_CC_ReadPublic: TPM_RC_REFERENCE_H0 (the 1st handle in the "+
+				"handle area references a transient object or session that is not loaded)" {
 				t.Errorf("Unexpected error: %v", err)
 			}
 		})
@@ -70,8 +69,7 @@ func TestStartup(t *testing.T) {
 			context := createRSASrkForTesting(t, tpm, nil)
 			defer verifyContextFlushed(t, tpm, context)
 
-			persistentContext := persistObjectForTesting(t, tpm, HandleOwner, context,
-				Handle(0x8100ffff))
+			persistentContext := persistObjectForTesting(t, tpm, HandleOwner, context, Handle(0x8100ffff))
 			defer evictPersistentObject(t, tpm, HandleOwner, persistentContext)
 
 			handle := persistentContext.Handle()
@@ -87,8 +85,7 @@ func TestStartup(t *testing.T) {
 		})
 
 		t.Run(data.desc+"/WithSession", func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -98,8 +95,7 @@ func TestStartup(t *testing.T) {
 
 			run(t)
 
-			handles, err := tpm.GetCapabilityHandles(
-				handle&Handle(0xffffff)|HandleTypeLoadedSession.BaseHandle(), 1)
+			handles, err := tpm.GetCapabilityHandles(handle&Handle(0xffffff)|HandleTypeLoadedSession.BaseHandle(), 1)
 			if err != nil {
 				t.Fatalf("GetCapability failed: %v", err)
 			}
@@ -119,9 +115,8 @@ func TestStartup(t *testing.T) {
 				in: NVPublic{
 					Index:   0x0181ffff,
 					NameAlg: AlgorithmSHA256,
-					Attrs: MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|
-						AttrNVWriteDefine, NVTypeOrdinary),
-					Size: 8},
+					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVWriteDefine, NVTypeOrdinary),
+					Size:    8},
 				write: true,
 				clear: false,
 			},
@@ -130,9 +125,8 @@ func TestStartup(t *testing.T) {
 				in: NVPublic{
 					Index:   0x0181ffff,
 					NameAlg: AlgorithmSHA256,
-					Attrs: MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|
-						AttrNVWriteStClear, NVTypeOrdinary),
-					Size: 8},
+					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVWriteStClear, NVTypeOrdinary),
+					Size:    8},
 				write: true,
 				clear: true,
 			},
@@ -141,9 +135,8 @@ func TestStartup(t *testing.T) {
 				in: NVPublic{
 					Index:   0x0181ffff,
 					NameAlg: AlgorithmSHA256,
-					Attrs: MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|
-						AttrNVWriteDefine, NVTypeOrdinary),
-					Size: 8},
+					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVWriteDefine, NVTypeOrdinary),
+					Size:    8},
 				write: false,
 				clear: true,
 			},
@@ -200,18 +193,16 @@ func TestStartup(t *testing.T) {
 				in: NVPublic{
 					Index:   0x0181ffff,
 					NameAlg: AlgorithmSHA256,
-					Attrs: MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|
-						AttrNVClearStClear, NVTypeOrdinary),
-					Size: 8},
+					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVClearStClear, NVTypeOrdinary),
+					Size:    8},
 			},
 			{
 				desc: "OrdinaryNVOrderly",
 				in: NVPublic{
 					Index:   0x0181ffff,
 					NameAlg: AlgorithmSHA256,
-					Attrs: MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|
-						AttrNVOrderly, NVTypeOrdinary),
-					Size: 8},
+					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVOrderly, NVTypeOrdinary),
+					Size:    8},
 			},
 			{
 				desc: "Counter",
@@ -270,9 +261,8 @@ func TestStartup(t *testing.T) {
 			template := NVPublic{
 				Index:   0x0181ffff,
 				NameAlg: AlgorithmSHA256,
-				Attrs: MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVReadStClear,
-					NVTypeOrdinary),
-				Size: 8}
+				Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVReadStClear, NVTypeOrdinary),
+				Size:    8}
 			if err := tpm.NVDefineSpace(HandleOwner, nil, &template, nil); err != nil {
 				t.Fatalf("NVDefine failed: %v", err)
 			}

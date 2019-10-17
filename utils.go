@@ -12,17 +12,16 @@ import (
 	"hash"
 )
 
-// ComputeCpHash computes a command parameter digest from the specified command code and provided command
-// parameters, using the digest algorithm specified by hashAlg. The params argument corresponds to the handle and
-// parameters area of a command (in that order), separated by the Separator sentinel value. Handle arguments must
-// be represented by either the Handle type or ResourceContext type.
+// ComputeCpHash computes a command parameter digest from the specified command code and provided command parameters, using the
+// digest algorithm specified by hashAlg. The params argument corresponds to the handle and parameters area of a command (in that
+// order), separated by the Separator sentinel value. Handle arguments must be represented by either the Handle type or
+// ResourceContext type.
 //
-// The number of command handles and number / type of command parameters can be determined by looking in part 3
-// of the TPM 2.0 Library Specification for the specific command.
+// The number of command handles and number / type of command parameters can be determined by looking in part 3 of the TPM 2.0
+// Library Specification for the specific command.
 //
-// The result of this is useful for extended authorization commands that bind an authorization to a command and
-// set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret, TPMContext.PolicyTicket
-// and TPMContext.PolicyCpHash.
+// The result of this is useful for extended authorization commands that bind an authorization to a command and set of command
+// parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret, TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
 func ComputeCpHash(hashAlg AlgorithmId, command CommandCode, params ...interface{}) (Digest, error) {
 	var handles []Name
 	var i int
@@ -38,8 +37,7 @@ func ComputeCpHash(hashAlg AlgorithmId, command CommandCode, params ...interface
 		case ResourceContext:
 			handles = append(handles, p.Name())
 		default:
-			return nil, makeInvalidParamError("params",
-				"parameter in handle area is not a Handle or ResourceContext")
+			return nil, makeInvalidParamError("params", "parameter in handle area is not a Handle or ResourceContext")
 		}
 	}
 
@@ -69,10 +67,9 @@ func (c *trialAuthPolicyExtendContext) commit() {
 	c.t.digest = c.h.Sum(nil)
 }
 
-// TrialAuthPolicy provides a mechanism for computing authorization policy digests without having to execute a
-// trial authorization policy session on the TPM. An advantage of this is that it is possible to compute digests
-// for PolicySecret and PolicyNV assertions without knowledge of the authorization value of the authorizing
-// entities used for those commands.
+// TrialAuthPolicy provides a mechanism for computing authorization policy digests without having to execute a trial authorization
+// policy session on the TPM. An advantage of this is that it is possible to compute digests for PolicySecret and PolicyNV assertions
+// without knowledge of the authorization value of the authorizing entities used for those commands.
 type TrialAuthPolicy struct {
 	alg    AlgorithmId
 	digest Digest

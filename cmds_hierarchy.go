@@ -10,9 +10,7 @@ import (
 	"fmt"
 )
 
-func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public,
-	outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{},
-	sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
+func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -28,8 +26,8 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 	if err := t.RunCommand(CommandCreatePrimary, sessions,
 		HandleWithAuth{Handle: primaryObject, Auth: primaryObjectAuth}, Separator,
 		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
-		&objectHandle, Separator, &outPublic, &creationData, &creationHash, &creationTicket,
-		&name); err != nil {
+		&objectHandle, Separator,
+		&outPublic, &creationData, &creationHash, &creationTicket, &name); err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
@@ -40,18 +38,16 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 	}
 	t.addResourceContext(objectContext)
 
-	return objectContext, outPublic.Ptr, creationData.Ptr, creationHash,
-		&creationTicket, name, nil
+	return objectContext, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, name, nil
 }
 
-// Clear executes the TPM2_Clear command to remove all context associated with the current owner. The command
-// requires knowledge of the authorization value for either the platform or lockout hierarchy. The hierarchy
-// is specified by passing either HandlePlatform or HandleLockout to authHandle. The command requires the user
-// auth role for authHandle, provided via authHandleAuth.
+// Clear executes the TPM2_Clear command to remove all context associated with the current owner. The command requires knowledge of
+// the authorization value for either the platform or lockout hierarchy. The hierarchy is specified by passing either HandlePlatform
+// or HandleLockout to authHandle. The command requires the user auth role for authHandle, provided via authHandleAuth.
 //
-// On successful completion, as well as the TPM having performed the operations associated with the TPM2_Clear
-// command, this function will invalidate all ResourceContext instances of NV indices associated with the current
-// owner, and all transient and persistent objects that reside in the storage and endorsement hierarchies.
+// On successful completion, as well as the TPM having performed the operations associated with the TPM2_Clear command, this function
+// will invalidate all ResourceContext instances of NV indices associated with the current owner, and all transient and persistent
+// objects that reside in the storage and endorsement hierarchies.
 func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
@@ -115,30 +111,28 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 	return nil
 }
 
-// ClearControl executes the TPM2_ClearControl command to enable or disable execution of the TPM2_Clear command
-// (via the TPMContext.Clear function).
+// ClearControl executes the TPM2_ClearControl command to enable or disable execution of the TPM2_Clear command (via the
+// TPMContext.Clear function).
 //
-// If disable is true, then this command will disable the execution of TPM2_Clear. In this case, the command
-// requires knowledge of the authorization value for the platform or lockout hierarchy. The hierarchy is
-// specified via the authHandle parameter by setting it to either HandlePlatform or HandleLockout.
+// If disable is true, then this command will disable the execution of TPM2_Clear. In this case, the command requires knowledge of
+// the authorization value for the platform or lockout hierarchy. The hierarchy is specified via the authHandle parameter by
+// setting it to either HandlePlatform or HandleLockout.
 //
-// If disable is false, then this command will enable execution of TPM2_Clear. In this case, the command requires
-// knowledge of the authorization value for the platform hierarchy, and authHandle must be set to HandlePlatform.
+// If disable is false, then this command will enable execution of TPM2_Clear. In this case, the command requires knowledge of the
+// authorization value for the platform hierarchy, and authHandle must be set to HandlePlatform.
 //
 // The command requires the user auth role for authHandle, provided via authHandleAuth.
 func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
-	return t.RunCommand(CommandClearControl, nil, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth},
-		Separator, disable)
+	return t.RunCommand(CommandClearControl, nil,
+		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator,
+		disable)
 }
 
-// HierarchyChangeAuth executes the TPM2_HierarchyChangeAuth command to change the authorization value for the
-// hierarchy associated with the authHandle parameter. The command requires the user auth role, provided via
-// authHandleAuth.
+// HierarchyChangeAuth executes the TPM2_HierarchyChangeAuth command to change the authorization value for the hierarchy associated
+// with the authHandle parameter. The command requires the user auth role, provided via authHandleAuth.
 //
-// On successful completion, the authorization value for the hierarchy associated with authHandle will be set
-// to the value of newAuth.
-func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{},
-	sessions ...*Session) error {
+// On successful completion, the authorization value for the hierarchy associated with authHandle will be set to the value of newAuth.
+func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}, sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
 	if err != nil {
@@ -149,7 +143,8 @@ func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s, authHandle, Separator,
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s,
+		authHandle, Separator,
 		newAuth)
 	if err != nil {
 		return err

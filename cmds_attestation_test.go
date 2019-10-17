@@ -16,8 +16,7 @@ func TestCertifyCreation(t *testing.T) {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrDecrypt,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
 			&RSAParams{
 				Symmetric: SymDefObject{
@@ -27,15 +26,13 @@ func TestCertifyCreation(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: AlgorithmNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, creationHash, creationTicket, name, err :=
-		tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
+	objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
 	defer flushContext(t, tpm, objectHandle)
 
-	certifyInfo, signature, err :=
-		tpm.CertifyCreation(nil, objectHandle, nil, creationHash, nil, creationTicket, nil)
+	certifyInfo, signature, err := tpm.CertifyCreation(nil, objectHandle, nil, creationHash, nil, creationTicket, nil)
 	if err != nil {
 		t.Fatalf("CertifyCreation failed: %v", err)
 	}

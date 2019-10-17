@@ -529,59 +529,54 @@ var (
 		ErrorPCRChanged:      "PCR have changed since checked",
 		ErrorTooManyContexts: "context ID counter is at maximum",
 		ErrorAuthUnavailable: "authValue or authPolicy is not available for selected entity",
-		ErrorReboot: "a _TPM_Init and Startup(CLEAR) is required before the TPM can resume " +
-			"operation",
-		ErrorUnbalanced: "the protection algorithms (hash and symmetric) are not reasonably balanced. " +
-			"The digest size of the hash must be larger than the key size of the symmetric algorithm",
-		ErrorCommandSize: "command commandSize value is inconsistent with contents of the command " +
-			"buffer; either the size is not the same as the octets loaded by the hardware " +
-			"interface layer or the value is not large enough to hold a command header",
+		ErrorReboot:          "a _TPM_Init and Startup(CLEAR) is required before the TPM can resume operation",
+		ErrorUnbalanced: "the protection algorithms (hash and symmetric) are not reasonably balanced. The digest size of the hash must be " +
+			"larger than the key size of the symmetric algorithm",
+		ErrorCommandSize: "command commandSize value is inconsistent with contents of the command buffer; either the size is not the same " +
+			"as the octets loaded by the hardware interface layer or the value is not large enough to hold a command header",
 		ErrorCommandCode: "command code not supported",
-		ErrorAuthsize: "the value of authorizationSize is out of range or the number of octets in the " +
-			"Authorization Area is greater than required",
-		ErrorAuthContext: "use of an authorization session with a context command or another command " +
-			"that cannot have an authorization session",
-		ErrorNVRange:  "NV offset+size is out of range",
-		ErrorNVSize:   "Requested allocation size is larger than allowed",
-		ErrorNVLocked: "NV access locked",
-		ErrorNVAuthorization: "NV access authorization fails in command actions (this failure does " +
-			"not affect lockout.action)",
-		ErrorNVUninitialized: "an NV Index is used before being initialized or the state saved by " +
-			"TPM2_Shutdown(STATE) could not be restored",
+		ErrorAuthsize: "the value of authorizationSize is out of range or the number of octets in the Authorization Area is greater than " +
+			"required",
+		ErrorAuthContext: "use of an authorization session with a context command or another command that cannot have an authorization " +
+			"session",
+		ErrorNVRange:         "NV offset+size is out of range",
+		ErrorNVSize:          "Requested allocation size is larger than allowed",
+		ErrorNVLocked:        "NV access locked",
+		ErrorNVAuthorization: "NV access authorization fails in command actions (this failure does not affect lockout.action)",
+		ErrorNVUninitialized: "an NV Index is used before being initialized or the state saved by TPM2_Shutdown(STATE) could not be " +
+			"restored",
 		ErrorNVSpace:    "insufficient space for NV allocation",
 		ErrorNVDefined:  "NV Index or persistent object already defined",
 		ErrorBadContext: "context in TPM2_ContextLoad() is not valid",
 		ErrorCpHash:     "cpHash value already set or not correct for use",
 		ErrorParent:     "handle for parent is not a valid parent",
 		ErrorNeedsTest:  "some function needs testing",
-		ErrorNoResult: "returned when an internal function cannot process a request due to an " +
-			"unspecified problem. This code is usually related to invalid parameters that are not " +
-			"properly filtered by the input unmarshaling code",
+		ErrorNoResult: "returned when an internal function cannot process a request due to an unspecified problem. This code is usually " +
+			"related to invalid parameters that are not properly filtered by the input unmarshaling code",
 		ErrorSensitive: "the sensitive area did not unmarshal correctly after decryption"}
 
 	errorCode1Descriptions = map[ErrorCode1]string{
-		ErrorAsymmetric: "asymmetric algorithm not supported or not correct",
-		ErrorAttributes: "inconsistent attributes",
-		ErrorHash:       "hash algorithm not supported or not appropriate",
-		ErrorValue:      "value is out of range or is not correct for the context",
-		ErrorHierarchy:  "hierarchy is not enabled or is not correct for the use",
-		ErrorKeySize:    "key size is not supported",
-		ErrorMGF:        "mask generation function not supported",
-		ErrorMode:       "mode of operation not supported",
-		ErrorType:       "the type of the value is not appropriate for the use",
-		ErrorHandle:     "the handle is not correct for the use",
-		ErrorKDF:        "unsupported key derivation function or function not appropriate for use",
-		ErrorRange:      "value was out of allowed range",
-		ErrorAuthFail:   "the authorization HMAC check failed and DA counter incremented",
-		ErrorNonce:      "invalid nonce size or nonce value mismatch",
-		ErrorPP:         "authorization requires assertion of PP",
-		ErrorScheme:     "unsupported or incompatible scheme",
-		ErrorSize:       "structure is the wrong size",
-		ErrorSymmetric:  "unsupported symmetric algorithm or key size, or not appropriate for instance",
-		ErrorTag:        "incorrect structure tag",
-		ErrorSelector:   "union selector is incorrect",
-		ErrorInsufficient: "the TPM was unable to unmarshal a value because there were not enough " +
-			"octets in the input buffer",
+		ErrorAsymmetric:   "asymmetric algorithm not supported or not correct",
+		ErrorAttributes:   "inconsistent attributes",
+		ErrorHash:         "hash algorithm not supported or not appropriate",
+		ErrorValue:        "value is out of range or is not correct for the context",
+		ErrorHierarchy:    "hierarchy is not enabled or is not correct for the use",
+		ErrorKeySize:      "key size is not supported",
+		ErrorMGF:          "mask generation function not supported",
+		ErrorMode:         "mode of operation not supported",
+		ErrorType:         "the type of the value is not appropriate for the use",
+		ErrorHandle:       "the handle is not correct for the use",
+		ErrorKDF:          "unsupported key derivation function or function not appropriate for use",
+		ErrorRange:        "value was out of allowed range",
+		ErrorAuthFail:     "the authorization HMAC check failed and DA counter incremented",
+		ErrorNonce:        "invalid nonce size or nonce value mismatch",
+		ErrorPP:           "authorization requires assertion of PP",
+		ErrorScheme:       "unsupported or incompatible scheme",
+		ErrorSize:         "structure is the wrong size",
+		ErrorSymmetric:    "unsupported symmetric algorithm or key size, or not appropriate for instance",
+		ErrorTag:          "incorrect structure tag",
+		ErrorSelector:     "union selector is incorrect",
+		ErrorInsufficient: "the TPM was unable to unmarshal a value because there were not enough octets in the input buffer",
 		ErrorSignature:    "the signature is not valid",
 		ErrorKey:          "key fields are not compatible with the selected use",
 		ErrorPolicyFail:   "a policy check failed",
@@ -590,57 +585,40 @@ var (
 		ErrorReservedBits: "reserved bits not set to zero as required",
 		ErrorBadAuth:      "authorization failure without DA implications",
 		ErrorExpired:      "the policy has expired",
-		ErrorPolicyCC: "the commandCode in the policy is not the commandCode of the command or the " +
-			"command code in a policy command references a command that is not implemented",
+		ErrorPolicyCC: "the commandCode in the policy is not the commandCode of the command or the command code in a policy command " +
+			"references a command that is not implemented",
 		ErrorBinding:  "public and sensitive portions of an object are not cryptographically bound",
 		ErrorCurve:    "curve not supported",
 		ErrorECCPoint: "point is not on the required curve"}
 
 	warningCodeDescriptions = map[WarningCode]string{
-		WarningContextGap:    "gap for context ID is too large",
-		WarningObjectMemory:  "out of memory for object contexts",
-		WarningSessionMemory: "out of memory for session contexts",
-		WarningMemory:        "out of shared object/session memory or need space for internal operations",
-		WarningSessionHandles: "out of session handles – a session must be flushed before a new " +
-			"session may be created",
-		WarningObjectHandles: "out of object handles – the handle space for objects is depleted and " +
-			"a reboot is required",
-		WarningLocality: "bad locality",
-		WarningYielded: "the TPM has suspended operation on the command; forward progress was made " +
-			"and the command may be retried",
-		WarningCanceled: "the command was canceled",
-		WarningTesting:  "TPM is performing self-tests",
-		WarningReferenceH0: "the 1st handle in the handle area references a transient object or " +
-			"session that is not loaded",
-		WarningReferenceH1: "the 2nd handle in the handle area references a transient object or " +
-			"session that is not loaded",
-		WarningReferenceH2: "the 3rd handle in the handle area references a transient object or " +
-			"session that is not loaded",
-		WarningReferenceH3: "the 4th handle in the handle area references a transient object or " +
-			"session that is not loaded",
-		WarningReferenceH4: "the 5th handle in the handle area references a transient object or " +
-			"session that is not loaded",
-		WarningReferenceH5: "the 6th handle in the handle area references a transient object or " +
-			"session that is not loaded",
-		WarningReferenceH6: "the 7th handle in the handle area references a transient object or " +
-			"session that is not loaded",
-		WarningReferenceS0: "the 1st authorization session handle references a session that is not " +
-			"loaded",
-		WarningReferenceS1: "the 2nd authorization session handle references a session that is not " +
-			"loaded",
-		WarningReferenceS2: "the 3rd authorization session handle references a session that is not " +
-			"loaded",
-		WarningReferenceS3: "the 4th authorization session handle references a session that is not " +
-			"loaded",
-		WarningReferenceS4: "the 5th authorization session handle references a session that is not " +
-			"loaded",
-		WarningReferenceS5: "the 6th authorization session handle references a session that is not " +
-			"loaded",
-		WarningReferenceS6: "the 7th authorization session handle references a session that is not " +
-			"loaded",
-		WarningNVRate: "the TPM is rate-limiting accesses to prevent wearout of NV",
-		WarningLockout: "authorizations for objects subject to DA protection are not allowed at this " +
-			"time because the TPM is in DA lockout mode",
+		WarningContextGap:     "gap for context ID is too large",
+		WarningObjectMemory:   "out of memory for object contexts",
+		WarningSessionMemory:  "out of memory for session contexts",
+		WarningMemory:         "out of shared object/session memory or need space for internal operations",
+		WarningSessionHandles: "out of session handles – a session must be flushed before a new session may be created",
+		WarningObjectHandles:  "out of object handles – the handle space for objects is depleted and a reboot is required",
+		WarningLocality:       "bad locality",
+		WarningYielded:        "the TPM has suspended operation on the command; forward progress was made and the command may be retried",
+		WarningCanceled:       "the command was canceled",
+		WarningTesting:        "TPM is performing self-tests",
+		WarningReferenceH0:    "the 1st handle in the handle area references a transient object or session that is not loaded",
+		WarningReferenceH1:    "the 2nd handle in the handle area references a transient object or session that is not loaded",
+		WarningReferenceH2:    "the 3rd handle in the handle area references a transient object or session that is not loaded",
+		WarningReferenceH3:    "the 4th handle in the handle area references a transient object or session that is not loaded",
+		WarningReferenceH4:    "the 5th handle in the handle area references a transient object or session that is not loaded",
+		WarningReferenceH5:    "the 6th handle in the handle area references a transient object or session that is not loaded",
+		WarningReferenceH6:    "the 7th handle in the handle area references a transient object or session that is not loaded",
+		WarningReferenceS0:    "the 1st authorization session handle references a session that is not loaded",
+		WarningReferenceS1:    "the 2nd authorization session handle references a session that is not loaded",
+		WarningReferenceS2:    "the 3rd authorization session handle references a session that is not loaded",
+		WarningReferenceS3:    "the 4th authorization session handle references a session that is not loaded",
+		WarningReferenceS4:    "the 5th authorization session handle references a session that is not loaded",
+		WarningReferenceS5:    "the 6th authorization session handle references a session that is not loaded",
+		WarningReferenceS6:    "the 7th authorization session handle references a session that is not loaded",
+		WarningNVRate:         "the TPM is rate-limiting accesses to prevent wearout of NV",
+		WarningLockout: "authorizations for objects subject to DA protection are not allowed at this time because the TPM is in DA " +
+			"lockout mode",
 		WarningRetry:         "the TPM was not able to start the command",
 		WarningNVUnavailable: "the command may require writing of NV and NV is not current accessible"}
 )

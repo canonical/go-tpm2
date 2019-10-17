@@ -77,8 +77,7 @@ func TestHMACSessions(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC,
-				nil, AlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, AlgorithmSHA256, data.bindAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -93,8 +92,7 @@ func TestHMACSessions(t *testing.T) {
 			template := Public{
 				Type:    AlgorithmRSA,
 				NameAlg: AlgorithmSHA256,
-				Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin |
-					AttrUserWithAuth | AttrDecrypt | AttrSign,
+				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 				Params: PublicParamsU{
 					&RSAParams{
 						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -102,8 +100,7 @@ func TestHMACSessions(t *testing.T) {
 						KeyBits:   2048,
 						Exponent:  0}}}
 
-			session := &Session{Context: sessionContext, AuthValue: data.sessionAuth,
-				Attrs: data.sessionAttrs}
+			session := &Session{Context: sessionContext, AuthValue: data.sessionAuth, Attrs: data.sessionAttrs}
 			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)
@@ -118,12 +115,9 @@ func TestHMACSessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
-				if err.Error() != "cannot marshal command handles and auth area for command "+
-					"TPM_CC_Create: error whilst processing resource context or handle with "+
-					"authorization at index 1: invalid resource context for session: "+
-					"resource has been closed" {
-					t.Errorf("Subsequent use of the session failed with an unexpected "+
-						"error: %v", err)
+				if err.Error() != "cannot marshal command handles and auth area for command TPM_CC_Create: error whilst processing resource "+
+					"context or handle with authorization at index 1: invalid resource context for session: resource has been closed" {
+					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 				}
 			}
 		})
@@ -219,8 +213,7 @@ func TestPolicySessions(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil,
-				AlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, AlgorithmSHA256, data.bindAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -232,8 +225,7 @@ func TestPolicySessions(t *testing.T) {
 				}
 			}()
 
-			session := Session{Context: sessionContext, Attrs: data.sessionAttrs,
-				AuthValue: data.sessionAuth}
+			session := Session{Context: sessionContext, Attrs: data.sessionAttrs, AuthValue: data.sessionAuth}
 			_, err = tpm.Unseal(objectContext, &session)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)
@@ -248,10 +240,8 @@ func TestPolicySessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent usage of the session should fail")
 				}
-				if err.Error() != "cannot marshal command handles and auth area for command "+
-					"TPM_CC_Unseal: error whilst processing resource context or handle with "+
-					"authorization at index 1: invalid resource context for session: "+
-					"resource has been closed" {
+				if err.Error() != "cannot marshal command handles and auth area for command TPM_CC_Unseal: error whilst processing resource "+
+					"context or handle with authorization at index 1: invalid resource context for session: resource has been closed" {
 					t.Errorf("Unexpected error: %v", err)
 				}
 			}

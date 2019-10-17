@@ -20,22 +20,21 @@ var (
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
-// CustomMarshaller is implemented by types that require custom marshalling and unmarshalling behaviour because
-// they are non-standard and not directly supported by the marshalling code.
+// CustomMarshaller is implemented by types that require custom marshalling and unmarshalling behaviour because they are non-standard
+// and not directly supported by the marshalling code.
 type CustomMarshaller interface {
 	Marshal(buf io.Writer) error
 	Unmarshal(buf io.Reader) error
 }
 
-// RawBytes is a special byte slice type which is marshalled and unmarshalled without a size field. The slice must
-// be pre-allocated to the correct length by the caller during unmarshalling.
+// RawBytes is a special byte slice type which is marshalled and unmarshalled without a size field. The slice must be pre-allocated to
+// the correct length by the caller during unmarshalling.
 type RawBytes []byte
 
 // Union is implemented by types that implement the TPMU prefixed TPM types.
 //
-// The Select method is called by the marshalling code with the value of the selector field from the enclosing
-// struct, and the implementation should respond with the type that will be marshalled or unmarshalled for the
-// selector value.
+// The Select method is called by the marshalling code with the value of the selector field from the enclosing struct, and the
+// implementation should respond with the type that will be marshalled or unmarshalled for the selector value.
 type Union interface {
 	Select(selector reflect.Value) (reflect.Type, error)
 }
@@ -212,8 +211,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 
 	if d.Type() != selectedType {
 		if !d.Type().ConvertibleTo(selectedType) {
-			return fmt.Errorf("data has incorrect type %s (expected %s)", d.Type(),
-				selectedType)
+			return fmt.Errorf("data has incorrect type %s (expected %s)", d.Type(), selectedType)
 		}
 		d = d.Convert(selectedType)
 	}
@@ -274,8 +272,7 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 		origVal := val
 		switch {
 		case val.Kind() != reflect.Ptr && !val.CanAddr():
-			return fmt.Errorf("cannot marshal non-addressable non-pointer type %s with custom "+
-				"marshaller", val.Type())
+			return fmt.Errorf("cannot marshal non-addressable non-pointer type %s with custom marshaller", val.Type())
 		case val.Kind() != reflect.Ptr:
 			val = val.Addr()
 		case val.IsNil():
@@ -484,8 +481,7 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 		origVal := val
 		switch {
 		case val.Kind() != reflect.Ptr && !val.CanAddr():
-			return fmt.Errorf("cannot unmarshal non-addressable non-pointer type %s with custom "+
-				"marshaller", val.Type())
+			return fmt.Errorf("cannot unmarshal non-addressable non-pointer type %s with custom marshaller", val.Type())
 		case val.Kind() != reflect.Ptr:
 			val = val.Addr()
 		default:
@@ -494,8 +490,7 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 			}
 		}
 		if err := val.Interface().(CustomMarshaller).Unmarshal(buf); err != nil {
-			return fmt.Errorf("cannot unmarshal type %s with custom marshaller: %v",
-				origVal.Type(), err)
+			return fmt.Errorf("cannot unmarshal type %s with custom marshaller: %v", origVal.Type(), err)
 		}
 		return nil
 	}
@@ -533,19 +528,18 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 			return fmt.Errorf("cannot unmarshal non-addressable type %s", val.Type())
 		}
 		if err := binary.Read(buf, binary.BigEndian, val.Addr().Interface()); err != nil {
-			return fmt.Errorf("cannot unmarshal type %s: read from buffer failed: %v",
-				val.Type(), err)
+			return fmt.Errorf("cannot unmarshal type %s: read from buffer failed: %v", val.Type(), err)
 		}
 	}
 	return nil
 }
 
-// MarshalToWriter marshals vals to buf in the TPM wire format, according to the rules specified in "Parameter
-// marshalling and unmarshalling". A nil pointer encountered during marshalling causes the zero value for the type
-// to be marshalled, unless the pointer is to a sized structure.
+// MarshalToWriter marshals vals to buf in the TPM wire format, according to the rules specified in "Parameter marshalling and
+// unmarshalling". A nil pointer encountered during marshalling causes the zero value for the type to be marshalled, unless the
+// pointer is to a sized structure.
 //
-// If this function does not complete successfully, it will return an error. In this case, a partial result may
-// have been written to buf.
+// If this function does not complete successfully, it will return an error. In this case, a partial result may have been written
+// to buf.
 func MarshalToWriter(buf io.Writer, vals ...interface{}) error {
 	for _, val := range vals {
 		if err := marshalValue(buf, reflect.ValueOf(val), nil); err != nil {
@@ -555,12 +549,12 @@ func MarshalToWriter(buf io.Writer, vals ...interface{}) error {
 	return nil
 }
 
-// MarshalToBytes marshals vals to the TPM wire format, according to the rules specified in "Parameter marshalling
-// and unmarshalling". A nil pointer encountered during marshalling causes the zero value for the type to be
-// marshalled, unless the pointer is to a sized structure.
+// MarshalToBytes marshals vals to the TPM wire format, according to the rules specified in "Parameter marshalling and unmarshalling".
+// A nil pointer encountered during marshalling causes the zero value for the type to be marshalled, unless the pointer is to a sized
+// structure.
 //
-// If successful, this function returns the marshalled data. If this function does not complete successfully, it
-// will return an error. In this case, no data will be returned.
+// If successful, this function returns the marshalled data. If this function does not complete successfully, it will return an error.
+// In this case, no data will be returned.
 func MarshalToBytes(vals ...interface{}) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := MarshalToWriter(buf, vals...); err != nil {
@@ -569,14 +563,14 @@ func MarshalToBytes(vals ...interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// UnmarshalFromReader unmarshals data in the TPM wire format from buf to vals, according to the rules specified
-// in "Parameter marshalling and unmarshalling". The values supplied to this function must be pointers to the
-// destination values. Nil pointer fields encountered during unmarshalling will result in memory being allocated
-// for those values, unless the pointer represents a zero-sized sized struct. New slices will always be created -
-// even if the caller pre-allocates them, unless it is a RawBytes type or a field with the `tpm2:"raw"` tag.
+// UnmarshalFromReader unmarshals data in the TPM wire format from buf to vals, according to the rules specified in "Parameter
+// marshalling and unmarshalling". The values supplied to this function must be pointers to the destination values. Nil pointer
+// fields encountered during unmarshalling will result in memory being allocated for those values, unless the pointer represents a
+// zero-sized sized struct. New slices will always be created - even if the caller pre-allocates them, unless it is a RawBytes type
+// or a field with the `tpm2:"raw"` tag.
 //
-// If this function does not complete successfully, it will return an error. In this case, partial results may
-// have been unmarshalled to the supplied destination values.
+// If this function does not complete successfully, it will return an error. In this case, partial results may have been unmarshalled
+// to the supplied destination values.
 func UnmarshalFromReader(buf io.Reader, vals ...interface{}) error {
 	for _, val := range vals {
 		v := reflect.ValueOf(val)
@@ -595,15 +589,15 @@ func UnmarshalFromReader(buf io.Reader, vals ...interface{}) error {
 	return nil
 }
 
-// UnmarshalFromBytes unmarshals data in the TPM wire format from b to vals, according to the rules specified
-// in "Parameter marshalling and unmarshalling". The values supplied to this function must be pointers to the
-// destination values. Nil pointer fields encountered during unmarshalling will result in memory being allocated
-// for those values, unless the pointer represents a zero-sized sized struct. New slices will always be created -
-// even if the caller pre-allocates them, unless it is a RawBytes type or a field with the `tpm2:"raw"` tag.
+// UnmarshalFromBytes unmarshals data in the TPM wire format from b to vals, according to the rules specified in "Parameter
+// marshalling and unmarshalling". The values supplied to this function must be pointers to the destination values. Nil pointer
+// fields encountered during unmarshalling will result in memory being allocated for those values, unless the pointer represents a
+// zero-sized sized struct. New slices will always be created - even if the caller pre-allocates them, unless it is a RawBytes type
+// or a field with the `tpm2:"raw"` tag.
 //
-// If successful, this function returns the number of bytes consumed from b. If this function does not complete
-// successfully, it will return an error and zero for the number of bytes consumed. In this case, partial results
-// may have been unmarshalled to the supplied destination values.
+// If successful, this function returns the number of bytes consumed from b. If this function does not complete successfully, it will
+// return an error and zero for the number of bytes consumed. In this case, partial results may have been unmarshalled to the
+// supplied destination values.
 func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 	buf := bytes.NewReader(b)
 	if err := UnmarshalFromReader(buf, vals...); err != nil {

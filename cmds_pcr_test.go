@@ -41,8 +41,7 @@ func TestPCRExtend(t *testing.T) {
 		t.Run(data.desc, func(t *testing.T) {
 			pcrSelection := PCRSelectionList{}
 			for _, alg := range data.algorithms {
-				pcrSelection = append(pcrSelection,
-					PCRSelection{Hash: alg, Select: PCRSelectionData{data.index}})
+				pcrSelection = append(pcrSelection, PCRSelection{Hash: alg, Select: PCRSelectionData{data.index}})
 			}
 
 			origUpdateCounter, origValues, err := tpm.PCRRead(pcrSelection)
@@ -69,8 +68,7 @@ func TestPCRExtend(t *testing.T) {
 
 			expectedUpdateCounter := origUpdateCounter + uint32(len(data.algorithms))
 			if newUpdateCounter != expectedUpdateCounter {
-				t.Errorf("Unexpected update count (got %d, expected %d)", newUpdateCounter,
-					expectedUpdateCounter)
+				t.Errorf("Unexpected update count (got %d, expected %d)", newUpdateCounter, expectedUpdateCounter)
 			}
 
 			for i, alg := range data.algorithms {
@@ -81,8 +79,7 @@ func TestPCRExtend(t *testing.T) {
 				expected := hasher.Sum(nil)
 
 				if !bytes.Equal(expected, newValues[i]) {
-					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, "+
-						"expected %x)", alg, newValues[i], expected)
+					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[i], expected)
 				}
 			}
 		})
@@ -141,8 +138,7 @@ func TestPCREvent(t *testing.T) {
 					}
 				}
 				if !bytes.Equal(digest, expectedDigest) {
-					t.Errorf("PCREvent returned an unexpected digest for algorithm %v "+
-						"(got %x, expected %x)", alg, digest, expectedDigest)
+					t.Errorf("PCREvent returned an unexpected digest for algorithm %v (got %x, expected %x)", alg, digest, expectedDigest)
 				}
 			}
 
@@ -153,8 +149,7 @@ func TestPCREvent(t *testing.T) {
 
 			expectedUpdateCounter := origUpdateCounter + uint32(len(digests))
 			if newUpdateCounter != expectedUpdateCounter {
-				t.Errorf("Unexpected update count (got %d, expected %d)", newUpdateCounter,
-					expectedUpdateCounter)
+				t.Errorf("Unexpected update count (got %d, expected %d)", newUpdateCounter, expectedUpdateCounter)
 			}
 
 			for i, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
@@ -170,8 +165,7 @@ func TestPCREvent(t *testing.T) {
 				expected := hasher.Sum(nil)
 
 				if !bytes.Equal(expected, newValues[i]) {
-					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, "+
-						"expected %x)", alg, newValues[i], expected)
+					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[i], expected)
 				}
 			}
 		})
@@ -280,8 +274,7 @@ func TestPCRRead(t *testing.T) {
 			for _, selection := range data.selection {
 				for _, i := range selection.Select {
 					if !bytes.Equal(expectedDigests[i][selection.Hash], digests[j]) {
-						t.Errorf("Unexpected digest (got %x, expected %x)", digests[j],
-							expectedDigests[i][selection.Hash])
+						t.Errorf("Unexpected digest (got %x, expected %x)", digests[j], expectedDigests[i][selection.Hash])
 					}
 					j++
 				}

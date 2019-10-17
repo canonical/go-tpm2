@@ -114,8 +114,8 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		if !cryptIsKnownDigest(context.hashAlg) {
 			return nil, fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
 		}
-		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceCaller,
-			context.nonceTPM, uint(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
+		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceCaller, context.nonceTPM,
+			uint(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
@@ -123,8 +123,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 			return nil, fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case AlgorithmXOR:
-		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceCaller,
-			context.nonceTPM, data); err != nil {
+		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceCaller, context.nonceTPM, data); err != nil {
 			return nil, fmt.Errorf("XOR parameter obfuscation failed: %v", err)
 		}
 	default:
@@ -160,8 +159,8 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 		if !cryptIsKnownDigest(context.hashAlg) {
 			return fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
 		}
-		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceTPM,
-			context.nonceCaller, uint(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
+		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceTPM, context.nonceCaller,
+			uint(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
@@ -169,8 +168,7 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case AlgorithmXOR:
-		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceTPM,
-			context.nonceCaller, data); err != nil {
+		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceTPM, context.nonceCaller, data); err != nil {
 			return fmt.Errorf("XOR parameter obfuscation failed: %v", err)
 		}
 	default:

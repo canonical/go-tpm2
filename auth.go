@@ -157,24 +157,21 @@ func (s *Session) copyWithNewAuthIfRequired(newAuth []byte) *Session {
 	return &Session{Context: s.Context, AuthValue: newAuth, Attrs: s.Attrs, includeAuthValue: true}
 }
 
-func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContext ResourceContext,
-	commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce,
-	encryptNonce Nonce) (*authCommand, error) {
+func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContext ResourceContext, commandCode CommandCode,
+	commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) (*authCommand, error) {
 	sessionContext := session.Context.(*sessionContext)
 
 	attrs := attrsFromSession(session)
 	var hmac []byte
 
-	if sessionContext.sessionType == SessionTypePolicy &&
-		sessionContext.policyHMACType == policyHMACTypePassword {
+	if sessionContext.sessionType == SessionTypePolicy && sessionContext.policyHMACType == policyHMACTypePassword {
 		hmac = session.AuthValue
 	} else {
 		session.updateIncludeAuthValueInHMACKey(associatedContext)
 		key := session.computeSessionHMACKey()
 		if len(key) > 0 {
 			cpHash := cryptComputeCpHash(sessionContext.hashAlg, commandCode, commandHandles, cpBytes)
-			hmac = cryptComputeSessionCommandHMAC(sessionContext, key, cpHash, decryptNonce,
-				encryptNonce, attrs)
+			hmac = cryptComputeSessionCommandHMAC(sessionContext, key, cpHash, decryptNonce, encryptNonce, attrs)
 		}
 
 	}
@@ -189,18 +186,17 @@ func buildCommandPasswordAuth(authValue Auth) *authCommand {
 	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: authValue}
 }
 
-func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name,
-	cpBytes []byte, decryptNonce, encryptNonce Nonce) (*authCommand, error) {
+func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
+	decryptNonce, encryptNonce Nonce) (*authCommand, error) {
 	if param.session == nil {
 		return buildCommandPasswordAuth(Auth(param.authValue)), nil
 	}
-	return buildCommandSessionAuth(tpm, param.session, param.associatedContext, commandCode,
-		commandHandles, cpBytes, decryptNonce, encryptNonce)
+	return buildCommandSessionAuth(tpm, param.session, param.associatedContext, commandCode, commandHandles, cpBytes, decryptNonce,
+		encryptNonce)
 }
 
-func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Session,
-	associatedContext ResourceContext, commandCode CommandCode, responseCode ResponseCode,
-	rpBytes []byte) error {
+func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Session, associatedContext ResourceContext,
+	commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
 	sessionContext := session.Context.(*sessionContext)
 	sessionContext.nonceTPM = resp.Nonce
 
@@ -211,8 +207,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Ses
 	if sessionContext.sessionType == SessionTypePolicy &&
 		sessionContext.policyHMACType == policyHMACTypePassword {
 		if len(resp.HMAC) != 0 {
-			return InvalidAuthResponseError{Command: commandCode,
-				msg: "non-zero length HMAC for policy password auth"}
+			return InvalidAuthResponseError{Command: commandCode, msg: "non-zero length HMAC for policy password auth"}
 		}
 		return nil
 	}
@@ -238,12 +233,11 @@ func processResponseAuth(tpm *TPMContext, resp authResponse, param *sessionParam
 		return nil
 	}
 
-	return processResponseSessionAuth(tpm, resp, param.session, param.associatedContext, commandCode,
-		responseCode, rpBytes)
+	return processResponseSessionAuth(tpm, resp, param.session, param.associatedContext, commandCode, responseCode, rpBytes)
 }
 
-func buildCommandAuthArea(tpm *TPMContext, sessionParams []*sessionParam, commandCode CommandCode,
-	commandHandles []Name, cpBytes []byte) (commandAuthArea, error) {
+func buildCommandAuthArea(tpm *TPMContext, sessionParams []*sessionParam, commandCode CommandCode, commandHandles []Name,
+	cpBytes []byte) (commandAuthArea, error) {
 	if len(sessionParams) > 3 {
 		return nil, errors.New("too many session parameters provided")
 	}
@@ -276,25 +270,22 @@ func buildCommandAuthArea(tpm *TPMContext, sessionParams []*sessionParam, comman
 	return area, nil
 }
 
-func processResponseAuthArea(tpm *TPMContext, authResponses []authResponse, sessionParams []*sessionParam,
-	commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
+func processResponseAuthArea(tpm *TPMContext, authResponses []authResponse, sessionParams []*sessionParam, commandCode CommandCode,
+	responseCode ResponseCode, rpBytes []byte) error {
 	for i, resp := range authResponses {
-		if err := processResponseAuth(tpm, resp, sessionParams[i], commandCode, responseCode,
-			rpBytes); err != nil {
+		if err := processResponseAuth(tpm, resp, sessionParams[i], commandCode, responseCode, rpBytes); err != nil {
 			return err
 		}
 	}
 
 	if err := decryptResponseParameter(sessionParams, rpBytes); err != nil {
-		return wrapUnmarshallingError(commandCode, "response parameters",
-			fmt.Errorf("cannot decrypt first response parameter: %v", err))
+		return wrapUnmarshallingError(commandCode, "response parameters", fmt.Errorf("cannot decrypt first response parameter: %v", err))
 	}
 
 	return nil
 }
 
-func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in interface{}) ([]*sessionParam,
-	error) {
+func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in interface{}) ([]*sessionParam, error) {
 	makeSessionParamFromAuth := func(auth interface{}) *sessionParam {
 		switch a := auth.(type) {
 		case string:

@@ -8,7 +8,10 @@ package tpm2
 
 func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...*Session) (Digest, error) {
 	var randomBytes Digest
-	if err := t.RunCommand(CommandGetRandom, sessions, Separator, bytesRequested, Separator, Separator,
+	if err := t.RunCommand(CommandGetRandom, sessions,
+		Separator,
+		bytesRequested, Separator,
+		Separator,
 		&randomBytes); err != nil {
 		return nil, err
 	}

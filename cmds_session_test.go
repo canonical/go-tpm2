@@ -120,8 +120,7 @@ func TestStartAuthSession(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sc, err := tpm.StartAuthSession(data.tpmKey, data.bind, data.sessionType, nil,
-				data.alg, data.bindAuth)
+			sc, err := tpm.StartAuthSession(data.tpmKey, data.bind, data.sessionType, nil, data.alg, data.bindAuth)
 			if data.errMsg == "" {
 				if err != nil {
 					t.Fatalf("StartAuthSession returned an error: %v", err)
@@ -137,8 +136,7 @@ func TestStartAuthSession(t *testing.T) {
 					t.Fatalf("StartAuthSession didn't return a session context")
 				}
 				if context.hashAlg != data.alg {
-					t.Errorf("The returned session context has the wrong algorithm (got %v)",
-						context.hashAlg)
+					t.Errorf("The returned session context has the wrong algorithm (got %v)", context.hashAlg)
 				}
 				if data.bind == nil || data.sessionType != SessionTypeHMAC {
 					if context.isBound {
@@ -150,8 +148,7 @@ func TestStartAuthSession(t *testing.T) {
 					}
 					boundEntity := computeBindName(data.bind.Name(), data.bindAuth)
 					if !bytes.Equal(boundEntity, context.boundEntity) {
-						t.Errorf("The returned session context has the wrong bound " +
-							"resource")
+						t.Errorf("The returned session context has the wrong bound resource")
 					}
 				}
 				digestSize, _ := cryptGetDigestSize(data.alg)
@@ -160,12 +157,10 @@ func TestStartAuthSession(t *testing.T) {
 					sessionKeySize = 0
 				}
 				if len(context.sessionKey) != sessionKeySize {
-					t.Errorf("The returned session key has the wrong length (got %d)",
-						len(context.sessionKey))
+					t.Errorf("The returned session key has the wrong length (got %d)", len(context.sessionKey))
 				}
 				if len(context.nonceCaller) != int(digestSize) {
-					t.Errorf("The returned caller nonce has the wrong length (got %d)",
-						len(context.nonceCaller))
+					t.Errorf("The returned caller nonce has the wrong length (got %d)", len(context.nonceCaller))
 				}
 				if len(context.nonceTPM) != int(digestSize) {
 					t.Errorf("The returned TPM nonce has the wrong length (got %d)",

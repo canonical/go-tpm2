@@ -10,11 +10,10 @@ import (
 	"fmt"
 )
 
-// ResourceContext corresponds to a resource that resides on the TPM. Implementations of ResourceContext maintain
-// some host-side state in order to be able to participate in HMAC sessions and session-based parameter encryption.
-// ResourceContext instances are tracked by the TPMContext that created them (when the corresponding TPM resource
-// is created or loaded), and are invalidated when the resource is flushed from the TPM. Once invalidated, they
-// can no longer be used.
+// ResourceContext corresponds to a resource that resides on the TPM. Implementations of ResourceContext maintain some host-side
+// state in order to be able to participate in HMAC sessions and session-based parameter encryption. ResourceContext instances are
+// tracked by the TPMContext that created them (when the corresponding TPM resource is created or loaded), and are invalidated when
+// the resource is flushed from the TPM. Once invalidated, they can no longer be used.
 type ResourceContext interface {
 	// Handle returns the handle of the resource on the TPM. If the resource has been flushed from the TPM,
 	// this will return HandleNull
@@ -185,16 +184,16 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 	return nil
 }
 
-// WrapHandle creates and returns a ResourceContext for the specified handle. TPMContext will maintain a reference
-// to the returned ResourceContext until it is flushed from the TPM. If the TPMContext is already tracking a
-// ResourceContext for the specified handle, it returns the existing ResourceContext.
+// WrapHandle creates and returns a ResourceContext for the specified handle. TPMContext will maintain a reference to the returned
+// ResourceContext until it is flushed from the TPM. If the TPMContext is already tracking a ResourceContext for the specified
+// handle, it returns the existing ResourceContext.
 //
-// If the handle references a NV index or an object, it will execute some TPM commands to initialize state that is
-// maintained on the host side. An error will be returned if this fails. It will return an error if the specified
-// handle references a NV index or object that does not currently reside on the TPM.
+// If the handle references a NV index or an object, it will execute some TPM commands to initialize state that is maintained on the
+// host side. An error will be returned if this fails. It will return an error if the specified handle references a NV index or
+// object that does not currently reside on the TPM.
 //
-// It will return an error if handle references a PCR index or a session. It is not possible to create a
-// ResourceContext for a session that is not started by TPMContext.StartAuthSession.
+// It will return an error if handle references a PCR index or a session. It is not possible to create a ResourceContext for a
+// session that is not started by TPMContext.StartAuthSession.
 //
 // It always succeeds if the specified handle references a permanent resource.
 func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
@@ -227,18 +226,17 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	return rc, nil
 }
 
-// ForgetResource tells the TPMContext to drop its reference to the specified ResourceContext without flushing the
-// corresponding resources from the TPM.
+// ForgetResource tells the TPMContext to drop its reference to the specified ResourceContext without flushing the corresponding
+// resources from the TPM.
 //
-// An error will be returned if the context corresponds to a session. It is not possible to forget ResourceContext
-// instances that correspond to a session, as it isn't possible to recreate them later on in order to flush the
-// corresponding resources from the TPM.
+// An error will be returned if the context corresponds to a session. It is not possible to forget ResourceContext instances that
+// correspond to a session, as it isn't possible to recreate them later on in order to flush the corresponding resources from the
+// TPM.
 //
-// An error will be returned if the specified context has been invalidated, or if it is being tracked by another
-// TPMContext instance.
+// An error will be returned if the specified context has been invalidated, or if it is being tracked by another TPMContext instance.
 //
-// On succesful completion, the specified ResourceContext will be invalidated and can no longer be used. APIs
-// that return a ResourceContext for the corresponding TPM resource in the future will be newly created.
+// On succesful completion, the specified ResourceContext will be invalidated and can no longer be used. APIs that return a
+// ResourceContext for the corresponding TPM resource in the future will return a newly created ResourceContext.
 func (t *TPMContext) ForgetResource(context ResourceContext) error {
 	if err := t.checkResourceContextParam(context); err != nil {
 		return err
@@ -248,9 +246,8 @@ func (t *TPMContext) ForgetResource(context ResourceContext) error {
 	case HandleTypePCR:
 		panic("Got context for a PCR index, which shouldn't happen")
 	case HandleTypeHMACSession, HandleTypePolicySession:
-		return errors.New("cannot forget a session context as it is not possible to recreate the context " +
-			"later on, which means that it would not be able to be flushed using this API. Please " +
-			"use TPMContext.FlushContext to flush it from the TPM instead")
+		return errors.New("cannot forget a session context as it is not possible to recreate the context later on, which means that it " +
+			"would not be able to be flushed using this API. Please use TPMContext.FlushContext to flush it from the TPM instead")
 	case HandleTypePermanent:
 		// Permanent resources aren't tracked by TPMContext, and permanentContext is just a typedef of
 		// Handle anyway. Just do nothing in this case

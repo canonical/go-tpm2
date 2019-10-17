@@ -35,9 +35,7 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err :=
-				tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric,
-					AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -52,11 +50,9 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 				Params: PublicParamsU{
 					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
-			session := Session{Context: sessionContext,
-				Attrs: AttrContinueSession | AttrCommandEncrypt}
+			session := Session{Context: sessionContext, Attrs: AttrContinueSession | AttrCommandEncrypt}
 
-			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,
-				nil, nil, &session)
+			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil, &session)
 			if err != nil {
 				t.Fatalf("Create failed: %v", err)
 			}
@@ -105,9 +101,7 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err :=
-				tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric,
-					AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -123,8 +117,7 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
 
-			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,
-				nil, nil)
+			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("Create failed: %v", err)
 			}
@@ -135,8 +128,7 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 			}
 			defer flushContext(t, tpm, objectContext)
 
-			session := Session{Context: sessionContext,
-				Attrs: AttrContinueSession | AttrResponseEncrypt}
+			session := Session{Context: sessionContext, Attrs: AttrContinueSession | AttrResponseEncrypt}
 
 			data, err := tpm.Unseal(objectContext, nil, &session)
 			if err != nil {
@@ -176,9 +168,7 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err :=
-				tpm.StartAuthSession(nil, primary, SessionTypeHMAC, &data.symmetric,
-					AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -194,12 +184,12 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
 
-			session := Session{Context: sessionContext,
+			session := Session{
+				Context:   sessionContext,
 				Attrs:     AttrContinueSession | AttrCommandEncrypt,
 				AuthValue: testAuth}
 
-			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,
-				nil, &session)
+			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, &session)
 			if err != nil {
 				t.Fatalf("Create failed: %v", err)
 			}
@@ -257,8 +247,7 @@ func TestResponseParameterEncryptionShared(t *testing.T) {
 					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 			sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
-			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil,
-				nil, nil)
+			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("Create failed: %v", err)
 			}
@@ -269,14 +258,14 @@ func TestResponseParameterEncryptionShared(t *testing.T) {
 			}
 			defer flushContext(t, tpm, objectContext)
 
-			sessionContext, err := tpm.StartAuthSession(primary, objectContext, SessionTypeHMAC,
-				&data.symmetric, AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(primary, objectContext, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext)
 
-			session := Session{Context: sessionContext,
+			session := Session{
+				Context:   sessionContext,
 				Attrs:     AttrContinueSession | AttrResponseEncrypt,
 				AuthValue: testAuth}
 

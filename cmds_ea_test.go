@@ -58,8 +58,7 @@ func TestPolicySigned(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -80,8 +79,8 @@ func TestPolicySigned(t *testing.T) {
 				t.Fatalf("Sign failed: %v", err)
 			}
 
-			timeout, policyTicket, err := tpm.PolicySigned(key, sessionContext, data.includeNonceTPM,
-				data.cpHashA, data.policyRef, data.expiration, signature)
+			timeout, policyTicket, err :=
+				tpm.PolicySigned(key, sessionContext, data.includeNonceTPM, data.cpHashA, data.policyRef, data.expiration, signature)
 			if err != nil {
 				t.Fatalf("PolicySigned failed: %v", err)
 			}
@@ -131,16 +130,14 @@ func TestPolicySecret(t *testing.T) {
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)
 
-	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32,
-		useSession func(ResourceContext), auth interface{}) {
+	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32, useSession func(ResourceContext), auth interface{}) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		timeout, policyTicket, err := tpm.PolicySecret(primary, sessionContext, cpHashA, policyRef,
-			expiration, auth)
+		timeout, policyTicket, err := tpm.PolicySecret(primary, sessionContext, cpHashA, policyRef, expiration, auth)
 		if err != nil {
 			t.Fatalf("PolicySecret failed: %v", err)
 		}
@@ -189,8 +186,7 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, 0, nil, testAuth)
 	})
 	t.Run("UseSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256,
-			testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -216,8 +212,7 @@ func TestPolicySecret(t *testing.T) {
 			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
 
-		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil,
-			testAuth)
+		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, testAuth)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
@@ -230,8 +225,7 @@ func TestPolicySecret(t *testing.T) {
 
 		useSession := func(sessionContext ResourceContext) {
 			time.Sleep(2 * time.Second)
-			_, err := tpm.Unseal(objectContext,
-				&Session{Context: sessionContext, Attrs: AttrContinueSession})
+			_, err := tpm.Unseal(objectContext, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
 			}
@@ -258,8 +252,7 @@ func TestPolicySecret(t *testing.T) {
 		sensitive1 := SensitiveCreate{Data: secret1}
 		sensitive2 := SensitiveCreate{Data: secret2}
 
-		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive1, &template, nil, nil,
-			testAuth)
+		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive1, &template, nil, nil, testAuth)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
@@ -270,8 +263,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext1)
 
-		outPrivate, outPublic, _, _, _, err = tpm.Create(primary, &sensitive2, &template, nil, nil,
-			testAuth)
+		outPrivate, outPublic, _, _, _, err = tpm.Create(primary, &sensitive2, &template, nil, nil, testAuth)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
@@ -288,8 +280,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 
 		useSession := func(sessionContext ResourceContext) {
-			_, err := tpm.Unseal(objectContext1,
-				&Session{Context: sessionContext, Attrs: AttrContinueSession})
+			_, err := tpm.Unseal(objectContext1, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
 			}
@@ -297,8 +288,7 @@ func TestPolicySecret(t *testing.T) {
 			if !isSessionErr || se.Code != ErrorPolicyFail {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			_, err = tpm.Unseal(objectContext2,
-				&Session{Context: sessionContext, Attrs: AttrContinueSession})
+			_, err = tpm.Unseal(objectContext2, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err != nil {
 				t.Errorf("Unseal failed: %v", err)
 			}
@@ -336,28 +326,24 @@ func TestPolicyTicketFromSecret(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext1)
 
-			timeout, ticket, err := tpm.PolicySecret(primary, sessionContext1, data.cpHashA,
-				data.policyRef, -60, testAuth)
+			timeout, ticket, err := tpm.PolicySecret(primary, sessionContext1, data.cpHashA, data.policyRef, -60, testAuth)
 			if err != nil {
 				t.Fatalf("PolicySecret failed: %v", err)
 			}
 
-			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext2)
 
-			if err := tpm.PolicyTicket(sessionContext2, timeout, data.cpHashA, data.policyRef,
-				primary.Name(), ticket); err != nil {
+			if err := tpm.PolicyTicket(sessionContext2, timeout, data.cpHashA, data.policyRef, primary.Name(), ticket); err != nil {
 				t.Errorf("PolicyTicket failed: %v", err)
 			}
 
@@ -409,8 +395,7 @@ func TestPolicyTicketFromSigned(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -429,21 +414,18 @@ func TestPolicyTicketFromSigned(t *testing.T) {
 				t.Fatalf("Sign failed: %v", err)
 			}
 
-			timeout, ticket, err := tpm.PolicySigned(key, sessionContext1, true, data.cpHashA,
-				data.policyRef, -60, signature)
+			timeout, ticket, err := tpm.PolicySigned(key, sessionContext1, true, data.cpHashA, data.policyRef, -60, signature)
 			if err != nil {
 				t.Fatalf("PolicySigned failed: %v", err)
 			}
 
-			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext2)
 
-			if err := tpm.PolicyTicket(sessionContext2, timeout, data.cpHashA, data.policyRef,
-				key.Name(), ticket); err != nil {
+			if err := tpm.PolicyTicket(sessionContext2, timeout, data.cpHashA, data.policyRef, key.Name(), ticket); err != nil {
 				t.Errorf("PolicyTicket failed: %v", err)
 			}
 
@@ -590,8 +572,7 @@ func TestPolicyPCR(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -708,8 +689,7 @@ func TestPolicyAuthValue(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy,
-				nil, AlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, AlgorithmSHA256, data.bindAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -728,8 +708,7 @@ func TestPolicyAuthValue(t *testing.T) {
 				t.Errorf("Unexpected session digest")
 			}
 
-			if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext,
-				AuthValue: testAuth}); err != nil {
+			if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext, AuthValue: testAuth}); err != nil {
 				t.Errorf("Unseal failed: %v", err)
 			}
 		})
@@ -785,8 +764,7 @@ func TestPolicyPassword(t *testing.T) {
 		t.Errorf("Unexpected session digest")
 	}
 
-	if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext,
-		AuthValue: testAuth}); err != nil {
+	if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext, AuthValue: testAuth}); err != nil {
 		t.Errorf("Unseal failed: %v", err)
 	}
 }
@@ -823,8 +801,7 @@ func TestPolicyNV(t *testing.T) {
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0,
-					auth); err != nil {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, auth); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -840,8 +817,7 @@ func TestPolicyNV(t *testing.T) {
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0,
-					auth); err != nil {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, auth); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -857,8 +833,7 @@ func TestPolicyNV(t *testing.T) {
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4,
-					auth); err != nil {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4, auth); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -886,15 +861,13 @@ func TestPolicyNV(t *testing.T) {
 
 			authPolicy := trial.GetDigest()
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil,
-				AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext)
 
-			if err := tpm.PolicyNV(index, index, sessionContext, data.operandB, data.offset,
-				data.operation, auth); err != nil {
+			if err := tpm.PolicyNV(index, index, sessionContext, data.operandB, data.offset, data.operation, auth); err != nil {
 				t.Fatalf("PolicyNV failed: %v", err)
 			}
 
@@ -924,10 +897,8 @@ func TestPolicyNV(t *testing.T) {
 			index := createIndex(t, testAuth)
 			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
 
-			// Don't use a bound session as the name of index changes when it is written to for the
-			// first time
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil,
-				AlgorithmSHA256, testAuth)
+			// Don't use a bound session as the name of index changes when it is written to for the first time
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -938,5 +909,4 @@ func TestPolicyNV(t *testing.T) {
 			run(t, index, session)
 		})
 	}
-
 }

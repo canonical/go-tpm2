@@ -60,8 +60,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		return restoredContext
 	}
 
-	runSessionTest := func(t *testing.T, tpmKey, bind ResourceContext, sessionType SessionType,
-		hashAlg AlgorithmId) {
+	runSessionTest := func(t *testing.T, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg AlgorithmId) {
 		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -155,8 +154,7 @@ func TestEvictControl(t *testing.T) {
 		if handle, err := tpm.WrapHandle(persist); err == nil {
 			_, err := tpm.EvictControl(HandleOwner, handle, persist, authAuth)
 			if err != nil {
-				t.Logf("EvictControl failed whilst trying to remove a handle at the start of "+
-					"the test: %v", err)
+				t.Logf("EvictControl failed whilst trying to remove a handle at the start of the test: %v", err)
 			}
 		}
 
@@ -189,8 +187,8 @@ func TestEvictControl(t *testing.T) {
 		if err == nil {
 			t.Fatalf("WrapHandle on an evicted resource should fail")
 		}
-		if err.Error() != "TPM returned an error for handle 1 whilst executing command "+
-			"TPM_CC_ReadPublic: TPM_RC_HANDLE (the handle is not correct for the use)" {
+		if err.Error() != "TPM returned an error for handle 1 whilst executing command TPM_CC_ReadPublic: TPM_RC_HANDLE (the handle is not "+
+			"correct for the use)" {
 			t.Errorf("WrapHandle returned an unexpected error: %v", err)
 		}
 	}
@@ -213,14 +211,12 @@ func TestEvictControl(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleOwner)
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err :=
-			tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, context, Handle(0x8100ff00),
-			&Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
+		run(t, context, Handle(0x8100ff00), &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
 	})
 }
 
@@ -259,9 +255,8 @@ func TestFlushContext(t *testing.T) {
 	if err == nil {
 		t.Fatalf("WrapHandle on a flushed resource should fail")
 	}
-	if err.Error() != "TPM returned a warning whilst executing command TPM_CC_ReadPublic: "+
-		"TPM_RC_REFERENCE_H0 (the 1st handle in the handle area references a transient object or "+
-		"session that is not loaded)" {
+	if err.Error() != "TPM returned a warning whilst executing command TPM_CC_ReadPublic: TPM_RC_REFERENCE_H0 (the 1st handle in the "+
+		"handle area references a transient object or session that is not loaded)" {
 		t.Errorf("WrapHandle returned an unexpected error: %v", err)
 	}
 }

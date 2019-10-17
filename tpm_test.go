@@ -126,8 +126,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 		t.Errorf("creation data has invalid pcrSelect")
 	}
 	if len(creationData.PCRDigest) != int(nameAlgSize) {
-		t.Errorf("creation data has a pcrDigest of the wrong length (got %d)",
-			len(creationData.PCRDigest))
+		t.Errorf("creation data has a pcrDigest of the wrong length (got %d)", len(creationData.PCRDigest))
 	}
 	if creationData.ParentNameAlg != nameAlgorithm(parent.Name()) {
 		t.Errorf("creation data has the wrong parentNameAlg (got %v)", creationData.ParentNameAlg)
@@ -165,8 +164,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrDecrypt,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
 			&RSAParams{
 				Symmetric: SymDefObject{
@@ -189,8 +187,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) (Resou
 	template := Public{
 		Type:    AlgorithmECC,
 		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrDecrypt,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
 			&ECCParams{
 				Symmetric: SymDefObject{
@@ -201,8 +198,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) (Resou
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: AlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
-		nil, nil)
+	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -215,9 +211,8 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 		NameAlg: AlgorithmSHA256,
 		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy |
 			AttrRestricted | AttrDecrypt,
-		AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46,
-			0xa5, 0xd7, 0x24, 0xfd, 0x52, 0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b,
-			0x33, 0x14, 0x69, 0xaa},
+		AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
+			0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 		Params: PublicParamsU{
 			&RSAParams{
 				Symmetric: SymDefObject{
@@ -277,8 +272,7 @@ func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transie
 	if context, err := tpm.WrapHandle(persist); err == nil {
 		_, err := tpm.EvictControl(auth, context, persist, nil)
 		if err != nil {
-			t.Logf("EvictControl failed whilst trying to remove a persistent handle that has "+
-				"previously been leaked: %v", err)
+			t.Logf("EvictControl failed whilst trying to remove a persistent handle that has previously been leaked: %v", err)
 		}
 	}
 	persistentContext, err := tpm.EvictControl(auth, transient, persist, nil)

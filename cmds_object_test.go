@@ -32,8 +32,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrRestricted | AttrSign,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrSign,
 		Params: PublicParamsU{
 			&RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -63,11 +62,10 @@ func TestCreate(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, parent ResourceContext, hierarchy Handle, sensitive *SensitiveCreate,
-		template *Public, outsideInfo Data, creationPCR PCRSelectionList,
-		session interface{}) (*Public, Private) {
-		outPrivate, outPublic, creationData, creationHash, creationTicket, err := tpm.Create(
-			parent, sensitive, template, outsideInfo, creationPCR, session)
+	run := func(t *testing.T, parent ResourceContext, hierarchy Handle, sensitive *SensitiveCreate, template *Public, outsideInfo Data,
+		creationPCR PCRSelectionList, session interface{}) (*Public, Private) {
+		outPrivate, outPublic, creationData, creationHash, creationTicket, err :=
+			tpm.Create(parent, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
@@ -90,8 +88,7 @@ func TestCreate(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -113,8 +110,7 @@ func TestCreate(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmECC,
 			NameAlg: AlgorithmSHA1,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&ECCParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -136,8 +132,7 @@ func TestCreate(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -167,8 +162,7 @@ func TestCreate(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -188,8 +182,7 @@ func TestCreate(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -208,8 +201,7 @@ func TestCreate(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -217,8 +209,7 @@ func TestCreate(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		sessionContext, err :=
-			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -239,8 +230,7 @@ func TestLoad(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -285,8 +275,7 @@ func TestLoad(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err :=
-			tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -308,8 +297,7 @@ func TestReadPublic(t *testing.T) {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-			AttrDecrypt | AttrSign,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 		Params: PublicParamsU{
 			&RSAParams{
 				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -522,8 +510,7 @@ func TestUnseal(t *testing.T) {
 	t.Run("UseHMACSessionAuth", func(t *testing.T) {
 		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
-		sessionContext, err :=
-			tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -616,8 +603,7 @@ func TestObjectChangeAuth(t *testing.T) {
 	t.Run("UseBoundSessionAuth", func(t *testing.T) {
 		context, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, context)
-		sessionContext, err := tpm.StartAuthSession(nil, context, SessionTypeHMAC, nil, AlgorithmSHA256,
-			testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, context, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -693,8 +679,7 @@ func TestActivateCredential(t *testing.T) {
 			t.Fatalf("PolicySecret failed: %v", err)
 		}
 
-		credentialOut, err := tpm.ActivateCredential(ak, ek, credentialBlob, secret, auth,
-			&Session{Context: sessionContext})
+		credentialOut, err := tpm.ActivateCredential(ak, ek, credentialBlob, secret, auth, &Session{Context: sessionContext})
 		if err != nil {
 			t.Fatalf("ActivateCredential failed: %v", err)
 		}
@@ -717,8 +702,7 @@ func TestActivateCredential(t *testing.T) {
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)
 		defer flushContext(t, tpm, ak)
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256,
-			testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

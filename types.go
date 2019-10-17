@@ -88,8 +88,8 @@ type PermanentAttributes uint32
 // StatupClearAttributes corresponds to the TPMA_STARTUP_CLEAR type.
 type StartupClearAttributes uint32
 
-// CommandAttributes corresponds to the TPMA_CC type and represents the attributes of a command. It also encodes
-// the command code to which these attributes belong, and the number of command handles for the command.
+// CommandAttributes corresponds to the TPMA_CC type and represents the attributes of a command. It also encodes the command code to
+// which these attributes belong, and the number of command handles for the command.
 type CommandAttributes uint32
 
 // CommandCode returns the command code that a set of attributes belongs to.
@@ -97,8 +97,7 @@ func (a CommandAttributes) CommandCode() CommandCode {
 	return CommandCode(a & 0xffff)
 }
 
-// NumberOfCommandHandles returns the number of command handles for the command that a set of attributes
-// belong to.
+// NumberOfCommandHandles returns the number of command handles for the command that a set of attributes belong to.
 func (a CommandAttributes) NumberOfCommandHandles() int {
 	return int((a & 0x0e000000) >> 25)
 }
@@ -197,8 +196,8 @@ type Name []byte
 
 // 10.6) PCR Structures
 
-// PCRSelectionData is a list of PCR indexes. It is marshalled to and from the TPMS_PCR_SELECT type, which is
-// a bitmap of the PCR indexes contained within this list.
+// PCRSelectionData is a list of PCR indexes. It is marshalled to and from the TPMS_PCR_SELECT type, which is a bitmap of the PCR
+// indexes contained within this list.
 type PCRSelectionData []int
 
 func (d *PCRSelectionData) Marshal(buf io.Writer) error {
@@ -264,24 +263,24 @@ type PCRSelection struct {
 
 // 10.7 Tickets
 
-// TkCreation corresponds to the TPMT_TK_CREATION type. It is created by TPMContext.Create and
-// TPMContext.CreatePrimary, and is used to cryptographically bind the CreationData to the created object.
+// TkCreation corresponds to the TPMT_TK_CREATION type. It is created by TPMContext.Create and TPMContext.CreatePrimary, and is used
+// to cryptographically bind the CreationData to the created object.
 type TkCreation struct {
 	Tag       StructTag // Ticket structure tag (TagCreation)
 	Hierarchy Handle    // The hierarchy of the object to which this ticket belongs.
 	Digest    Digest    // HMAC computed using the proof value of Hierarchy
 }
 
-// TkVerified corresponds to the TPMT_TK_VERIFIED type. It is created by TPMContext.VerifySignature and
-// provides evidence that the TPM has verified that a digest was signed by a specific key.
+// TkVerified corresponds to the TPMT_TK_VERIFIED type. It is created by TPMContext.VerifySignature and provides evidence that the
+// TPM has verified that a digest was signed by a specific key.
 type TkVerified struct {
 	Tag       StructTag // Ticket structure tag (TagVerified)
 	Hierarchy Handle    // The hierarchy of the object to which this ticket belongs.
 	Digest    Digest    // HMAC computed using the proof value of Hierarcht
 }
 
-// TkAuth corresponds to the TPMT_TK_AUTH type. It is created by TPMContext.PolicySigned and
-// TPMContext.PolicySecret when the authorization has an expiration time.
+// TkAuth corresponds to the TPMT_TK_AUTH type. It is created by TPMContext.PolicySigned and TPMContext.PolicySecret when the
+// authorization has an expiration time.
 type TkAuth struct {
 	Tag       StructTag // Ticket structure tag (TagAuthSecret or TagAuthSigned)
 	Hierarchy Handle    // The hierarchy of the object used to produce this ticket
@@ -297,8 +296,7 @@ type TkHashcheck struct {
 
 // 10.8 Property Structures
 
-// AlgorithmProperty corresponds to the TPMS_ALG_PROPERTY type. It is used to report the properties of an
-// algorithm.
+// AlgorithmProperty corresponds to the TPMS_ALG_PROPERTY type. It is used to report the properties of an algorithm.
 type AlgorithmProperty struct {
 	Alg        AlgorithmId         // Algorithm identifier
 	Properties AlgorithmAttributes // Attributes of the algorithm
@@ -310,15 +308,13 @@ type TaggedProperty struct {
 	Value    uint32   // Value of the property
 }
 
-// TaggedPCRSelect corresponds to the TPMS_TAGGED_PCR_SELECT type. It is used to report the PCR indexes associated
-// with a property.
+// TaggedPCRSelect corresponds to the TPMS_TAGGED_PCR_SELECT type. It is used to report the PCR indexes associated with a property.
 type TaggedPCRSelect struct {
 	Tag    PropertyPCR      // Property identifier
 	Select PCRSelectionData // PCRs associated with Tag
 }
 
-// TaggedPolicy corresponds to the TPMS_TAGGED_POLICY type. It is used to report the authorization policy for a
-// permanent resource.
+// TaggedPolicy corresponds to the TPMS_TAGGED_POLICY type. It is used to report the authorization policy for a permanent resource.
 type TaggedPolicy struct {
 	Handle     Handle     // Permanent handle
 	PolicyHash TaggedHash // Policy algorithm and hash
@@ -350,12 +346,10 @@ type PCRSelectionList []PCRSelection
 // AlgorithmPropertyList is a slice of AlgorithmProperty values, and corresponds to the TPML_ALG_PROPERTY type.
 type AlgorithmPropertyList []AlgorithmProperty
 
-// TaggedTPMPropertyList is a slice of TaggedProperty values, and corresponds to the TPML_TAGGED_TPM_PROPERTY
-// type.
+// TaggedTPMPropertyList is a slice of TaggedProperty values, and corresponds to the TPML_TAGGED_TPM_PROPERTY type.
 type TaggedTPMPropertyList []TaggedProperty
 
-// TaggedPCRPropertyList is a slice of TaggedPCRSelect values, and corresponds to the TPML_TAGGED_PCR_PROPERTY
-// type.
+// TaggedPCRPropertyList is a slice of TaggedPCRSelect values, and corresponds to the TPML_TAGGED_PCR_PROPERTY type.
 type TaggedPCRPropertyList []TaggedPCRSelect
 
 // ECCCurveList is a slice of ECCCurve values, and corresponds to the TPML_ECC_CURVE type.
@@ -366,8 +360,8 @@ type TaggedPolicyList []TaggedPolicy
 
 // 10.10) Capabilities Structures
 
-// Capabilities is a fake union type that corresponds to the TPMU_CAPABILITIES type. The selector type is
-// Capability. Valid types for Data for each selector value are:
+// Capabilities is a fake union type that corresponds to the TPMU_CAPABILITIES type. The selector type is Capability. Valid types
+// for Data for each selector value are:
 //  - CapabilityAlgs: AlgorithmPropertyList
 //  - CapabilityHandles: HandleList
 //  - CapabilityCommands: CommandAttributesList
@@ -382,8 +376,7 @@ type CapabilitiesU struct {
 	Data interface{}
 }
 
-// Algorithms returns the underlying value as AlgorithmPropertyList. It panics if the underlying type is not
-// AlgorithmPropertyList.
+// Algorithms returns the underlying value as AlgorithmPropertyList. It panics if the underlying type is not AlgorithmPropertyList.
 func (c CapabilitiesU) Algorithms() AlgorithmPropertyList {
 	return c.Data.(AlgorithmPropertyList)
 }
@@ -393,38 +386,32 @@ func (c CapabilitiesU) Handles() HandleList {
 	return c.Data.(HandleList)
 }
 
-// Command returns the underlying value as CommandAttributesList. It panics if the underlying type is not
-// CommandAttributesList.
+// Command returns the underlying value as CommandAttributesList. It panics if the underlying type is not CommandAttributesList.
 func (c CapabilitiesU) Command() CommandAttributesList {
 	return c.Data.(CommandAttributesList)
 }
 
-// PPCommands returns the underlying value as CommandCodeList. If panics if the underlying type is not
-// CommandCodeList.
+// PPCommands returns the underlying value as CommandCodeList. If panics if the underlying type is not CommandCodeList.
 func (c CapabilitiesU) PPCommands() CommandCodeList {
 	return c.Data.(CommandCodeList)
 }
 
-// AuditCommands returns the underlying value as CommandCodeList. It panics if the underlying type is not
-// CommandCodeList.
+// AuditCommands returns the underlying value as CommandCodeList. It panics if the underlying type is not CommandCodeList.
 func (c CapabilitiesU) AuditCommands() CommandCodeList {
 	return c.Data.(CommandCodeList)
 }
 
-// AssignedPCR returns the underlying value as PCRSelectionList. It panics if the underlying type is not
-// PCRSelectionList.
+// AssignedPCR returns the underlying value as PCRSelectionList. It panics if the underlying type is not PCRSelectionList.
 func (c CapabilitiesU) AssignedPCR() PCRSelectionList {
 	return c.Data.(PCRSelectionList)
 }
 
-// TPMProperties returns the underlying value as TaggedTPMPropertyList. It panics if the underlying type is not
-// TaggedTPMPropertyList.
+// TPMProperties returns the underlying value as TaggedTPMPropertyList. It panics if the underlying type is not TaggedTPMPropertyList.
 func (c CapabilitiesU) TPMProperties() TaggedTPMPropertyList {
 	return c.Data.(TaggedTPMPropertyList)
 }
 
-// PCRProperties returns the underlying value as TaggedPCRPropertyList. It panics if the underlying type is not
-// TaggedPCRPropertyList.
+// PCRProperties returns the underlying value as TaggedPCRPropertyList. It panics if the underlying type is not TaggedPCRPropertyList.
 func (c CapabilitiesU) PCRProperties() TaggedPCRPropertyList {
 	return c.Data.(TaggedPCRPropertyList)
 }
@@ -434,8 +421,7 @@ func (c CapabilitiesU) ECCCurves() ECCCurveList {
 	return c.Data.(ECCCurveList)
 }
 
-// AuthPolicies returns the underlying value as TaggedPolicyList. It panics if the underlying type is not
-// TaggedPolicyList.
+// AuthPolicies returns the underlying value as TaggedPolicyList. It panics if the underlying type is not TaggedPolicyList.
 func (c CapabilitiesU) AuthPolicies() TaggedPolicyList {
 	return c.Data.(TaggedPolicyList)
 }
@@ -478,8 +464,7 @@ type CapabilityData struct {
 type ClockInfo struct {
 	Clock      uint64 // Time value in milliseconds that increments whilst the TPM is powered
 	ResetCount uint32 // Number of TPM resets since the TPM was last cleared
-	// RestartCount is the number of TPM restarts or resumes since the last TPM reset or the last time the
-	// TPM was cleared.
+	// RestartCount is the number of TPM restarts or resumes since the last TPM reset or the last time the TPM was cleared.
 	RestartCount uint32
 	// Safe indicates the the value reported by Clock is guaranteed to be unique for the current owner.
 	Safe bool
@@ -511,8 +496,7 @@ type QuoteInfo struct {
 	PCRDigest Digest           // Digest of the selected PCRs, using the hash algorithm of the signing key
 }
 
-// CommandAuditInfo corresponds to the TPMS_COMMAND_AUDIT_INFO type, and is returned by
-// TPMContext.GetCommandAuditDigest.
+// CommandAuditInfo corresponds to the TPMS_COMMAND_AUDIT_INFO type, and is returned by TPMContext.GetCommandAuditDigest.
 type CommandAuditInfo struct {
 	AuditCounter  uint64      // Monotonic audit counter
 	DigestAlg     AlgorithmId // Hash algorithm used for the command audit
@@ -520,11 +504,10 @@ type CommandAuditInfo struct {
 	CommandDigest Digest      // Digest of command codes being audited, using DigestAlg
 }
 
-// SessionAuditInfo corresponds to the TPMS_SESSION_AUDIT_INFO type, and is returned by
-// TPMContext.GetSessionAuditDigest.
+// SessionAuditInfo corresponds to the TPMS_SESSION_AUDIT_INFO type, and is returned by TPMContext.GetSessionAuditDigest.
 type SessionAuditInfo struct {
-	// ExclusiveSession indicates the current exclusive status of the session. It is true if all of the
-	// commands recorded in SessionDigest were executed without any intervening commands that did not use
+	// ExclusiveSession indicates the current exclusive status of the session. It is true if all of the commands recorded in
+	// SessionDigest were executed without any intervening commands that did not use
 	// the audit session.
 	ExclusiveSession bool
 	SessionDigest    Digest // Current value of the session audit digest
@@ -543,8 +526,8 @@ type NVCertifyInfo struct {
 	NVContents MaxNVBuffer // Contents of the NV index
 }
 
-// AttestU is a fake union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag. Valid
-// types for Data for each selector value are:
+// AttestU is a fake union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag. Valid types for Data for
+// each selector value are:
 //  - TagAttestNV: *NVCertifyInfo
 //  - TagAttestCommandAudit: *CommandAuditInfo
 //  - TagAttestSessionAudir: *SessionAuditInfo
@@ -591,14 +574,12 @@ func (a AttestU) Quote() *QuoteInfo {
 	return a.Data.(*QuoteInfo)
 }
 
-// CommandAudit returns the underlying value as *CommandAuditInfo. It panics if the underlying type is not
-// *CommandAuditInfo.
+// CommandAudit returns the underlying value as *CommandAuditInfo. It panics if the underlying type is not *CommandAuditInfo.
 func (a AttestU) CommandAudit() *CommandAuditInfo {
 	return a.Data.(*CommandAuditInfo)
 }
 
-// SessionAudit returns the underlying value as *SessionAuditInfo. It panics if the underlying type is not
-// *SessionAuditInfo.
+// SessionAudit returns the underlying value as *SessionAuditInfo. It panics if the underlying type is not *SessionAuditInfo.
 func (a AttestU) SessionAudit() *SessionAuditInfo {
 	return a.Data.(*SessionAuditInfo)
 }
@@ -613,8 +594,8 @@ func (a AttestU) NV() *NVCertifyInfo {
 	return a.Data.(*NVCertifyInfo)
 }
 
-// Attest corresponds to the TPMS_ATTEST type, and is returned by the attestation commands. The signature of the
-// attestation is over this structure.
+// Attest corresponds to the TPMS_ATTEST type, and is returned by the attestation commands. The signature of the attestation is over
+// this structure.
 type Attest struct {
 	Magic           TPMGenerated // Always TPMGeneratedValue
 	Type            StructTag    // Type of the attestation structure
@@ -625,8 +606,8 @@ type Attest struct {
 	Attest          AttestU      `tpm2:"selector:Type"` // Type specific attestation data
 }
 
-// AttestRaw corresponds to the TPM2B_ATTEST type, and is returned by the attestation commands. The signature of
-// the attestation is over this data.
+// AttestRaw corresponds to the TPM2B_ATTEST type, and is returned by the attestation commands. The signature of the attestation is
+// over this data.
 type AttestRaw []byte
 
 // ToStruct unmarshals the underlying buffer to the corresponding Attest structure.
@@ -642,9 +623,8 @@ func (a AttestRaw) ToStruct() (*Attest, error) {
 
 // 11.1) Symmetric
 
-// SymKeyBitsU is a fake union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to specify
-// symmetric encryption key sizes. The selector type is AlgorithmId. Valid types for Data for each selector
-// value are:
+// SymKeyBitsU is a fake union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to specify symmetric encryption key
+// sizes. The selector type is AlgorithmId. Valid types for Data for each selector value are:
 //  - AlgorithmAES: uint16
 //  - AlgorithmSM4: uint16
 //  - AlgorithmCamellia: uint16
@@ -680,8 +660,8 @@ func (b SymKeyBitsU) XOR() AlgorithmId {
 	return b.Data.(AlgorithmId)
 }
 
-// SymModeU is a fake union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId.
-// Valid types for Data for each selector value are:
+// SymModeU is a fake union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId. Valid types for Data
+// for each selector value are:
 //  - AlgorithmAES: AlgorithmId
 //  - AlgorithmSM4: AlgorithmId
 //  - AlgorithmCamellia: AlgorithmId
@@ -719,8 +699,7 @@ type SymDef struct {
 	Mode      SymModeU    `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 
-// SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an object's symmetric
-// algorithm.
+// SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an object's symmetric algorithm.
 type SymDefObject struct {
 	Algorithm AlgorithmId // Symmetric algorithm
 	KeyBits   SymKeyBitsU `tpm2:"selector:Algorithm"` // Symmetric key size
@@ -730,8 +709,7 @@ type SymDefObject struct {
 // SymKey corresponds to the TPM2B_SYM_KEY type.
 type SymKey []byte
 
-// SymCipherParams corresponds to the TPMS_SYMCIPHER_PARMS type, and contains the parameters for a symmetric
-// object.
+// SymCipherParams corresponds to the TPMS_SYMCIPHER_PARMS type, and contains the parameters for a symmetric object.
 type SymCipherParams struct {
 	Sym SymDefObject
 }
@@ -742,8 +720,8 @@ type Label []byte
 // SensitiveData corresponds to the TPM2B_SENSITIVE_DATA type.
 type SensitiveData []byte
 
-// SensitiveCreate corresponds to the TPMS_SENSITIVE_CREATE type and is used to define the values to be placed in
-// the sensitive area of a created object.
+// SensitiveCreate corresponds to the TPMS_SENSITIVE_CREATE type and is used to define the values to be placed in the sensitive area
+// of a created object.
 type SensitiveCreate struct {
 	UserAuth Auth          // Authorization value
 	Data     SensitiveData // Secret data
@@ -753,8 +731,8 @@ type sensitiveCreateSized struct {
 	Ptr *SensitiveCreate `tpm2:"sized"`
 }
 
-// SchemeHash corresponds to the TPMS_SCHEME_HASH type, and is used for schemes that only require a hash algorithm
-// to complete their definition.
+// SchemeHash corresponds to the TPMS_SCHEME_HASH type, and is used for schemes that only require a hash algorithm to complete their
+// definition.
 type SchemeHash struct {
 	HashAlg AlgorithmId // Hash algorithm used to digest the message
 }
@@ -774,8 +752,8 @@ type SchemeXOR struct {
 // SchemeHMAC corresponds to the TPMS_SCHEME_HMAC type.
 type SchemeHMAC SchemeHash
 
-// SchemeKeyedHashU is a fake union type that corresponds to the TPMU_SCHEME_KEYED_HASH type. The selector type is
-// AlgorithmId. Valid types for Data for each selector value are:
+// SchemeKeyedHashU is a fake union type that corresponds to the TPMU_SCHEME_KEYED_HASH type. The selector type is AlgorithmId. Valid
+// types for Data for each selector value are:
 //  - AlgorithmHMAC: *SchemeHMAC
 //  - AlgorithmXOR: *SchemeXOR
 //  - AlgorithmNull: <nil>
@@ -822,8 +800,8 @@ type SigSchemeECDAA SchemeECDAA
 type SigSchemeSM2 SchemeHash
 type SigSchemeECSCHNORR SchemeHash
 
-// SigSchemeU is a fake union type that corresponds to the TPMU_SIG_SCHEME type. The selector type is AlgorithmId.
-// Valid types for Data for each selector value are:
+// SigSchemeU is a fake union type that corresponds to the TPMU_SIG_SCHEME type. The selector type is AlgorithmId. Valid types for
+// Data for each selector value are:
 //  - AlgorithmRSASSA: *SigSchemeRSASSA
 //  - AlgorithmRSAPSS: *SigSchemeRSAPSS
 //  - AlgorithmECDSA: *SigSchemeECDSA
@@ -858,14 +836,12 @@ func (s SigSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
 	return nil, invalidSelectorError{selector}
 }
 
-// RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not
-// *SigSchemeRSASSA
+// RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not *SigSchemeRSASSA
 func (s SigSchemeU) RSASSA() *SigSchemeRSASSA {
 	return s.Data.(*SigSchemeRSASSA)
 }
 
-// RSAPSS returns the underlying value as *SigSchemeRSAPSS. It panics if the underlying type is not
-// *SigSchemeRSAPSS
+// RSAPSS returns the underlying value as *SigSchemeRSAPSS. It panics if the underlying type is not *SigSchemeRSAPSS
 func (s SigSchemeU) RSAPSS() *SigSchemeRSAPSS {
 	return s.Data.(*SigSchemeRSAPSS)
 }
@@ -885,8 +861,7 @@ func (s SigSchemeU) SM2() *SigSchemeSM2 {
 	return s.Data.(*SigSchemeSM2)
 }
 
-// ECSCHNORR returns the underlying value as *SigSchemeECSCHNORR. It panics if the underlying type is not
-// *SigSchemeECSCHNORR
+// ECSCHNORR returns the underlying value as *SigSchemeECSCHNORR. It panics if the underlying type is not *SigSchemeECSCHNORR
 func (s SigSchemeU) ECSCHNORR() *SigSchemeECSCHNORR {
 	return s.Data.(*SigSchemeECSCHNORR)
 }
@@ -896,8 +871,7 @@ func (s SigSchemeU) HMAC() *SchemeHMAC {
 	return s.Data.(*SchemeHMAC)
 }
 
-// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to
-// *SchemeHash.
+// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to *SchemeHash.
 func (s SigSchemeU) Any() *SchemeHash {
 	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
 }
@@ -915,8 +889,8 @@ type SchemeKDF1_SP800_56A SchemeHash
 type SchemeKDF2 SchemeHash
 type SchemeKDF1_SP800_108 SchemeHash
 
-// KDFSchemeU is a fake union type that corresponds to the TPMU_KDF_SCHEME type. The selector type is AlgorithmId.
-// Valid types for Data for each selector value are:
+// KDFSchemeU is a fake union type that corresponds to the TPMU_KDF_SCHEME type. The selector type is AlgorithmId. Valid types for
+// Data for each selector value are:
 //  - AlgorithmMGF1: *SchemeMGF1
 //  - AlgorithmKDF1_SP800_56A: *SchemeKDF1_SP800_56A
 //  - AlgorithmKDF2: *SchemeKF2
@@ -975,8 +949,8 @@ type KeySchemeECMQV SchemeHash
 type EncSchemeRSAES Empty
 type EncSchemeOAEP SchemeHash
 
-// AsymSchemeU is a fake union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is
-// AlgorithmId. Valid types for Data for each selector value are:
+// AsymSchemeU is a fake union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is AlgorithmId. Valid types for
+// Data for each selector value are:
 //  - AlgorithmRSASSA: *SigSchemeRSASSA
 //  - AlgorithmRSAES: *EncSchemeRSAES
 //  - AlgorithmRSAPSS: *SigSchemeRSAPSS
@@ -1030,14 +1004,12 @@ func (s AsymSchemeU) ECMQV() *KeySchemeECMQV {
 	return s.Data.(*KeySchemeECMQV)
 }
 
-// RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not
-// *SigSchemeRSASSA.
+// RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not *SigSchemeRSASSA.
 func (s AsymSchemeU) RSASSA() *SigSchemeRSASSA {
 	return s.Data.(*SigSchemeRSASSA)
 }
 
-// RSAPSS returns the underlying value as *SigSchemeRSAPSS. It panics if the underlying type is not
-// *SigSchemeRSAPSS.
+// RSAPSS returns the underlying value as *SigSchemeRSAPSS. It panics if the underlying type is not *SigSchemeRSAPSS.
 func (s AsymSchemeU) RSAPSS() *SigSchemeRSAPSS {
 	return s.Data.(*SigSchemeRSAPSS)
 }
@@ -1057,8 +1029,7 @@ func (s AsymSchemeU) SM2() *SigSchemeSM2 {
 	return s.Data.(*SigSchemeSM2)
 }
 
-// ECSCHNORR returns the underlying value as *SigSchemeECSCHNORR. It panics if the underlying type is not
-// *SigSchemeECSCHNORR.
+// ECSCHNORR returns the underlying value as *SigSchemeECSCHNORR. It panics if the underlying type is not *SigSchemeECSCHNORR.
 func (s AsymSchemeU) ECSCHNORR() *SigSchemeECSCHNORR {
 	return s.Data.(*SigSchemeECSCHNORR)
 }
@@ -1073,8 +1044,7 @@ func (s AsymSchemeU) OAEP() *EncSchemeOAEP {
 	return s.Data.(*EncSchemeOAEP)
 }
 
-// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to
-// *SchemeHash.
+// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to *SchemeHash.
 func (s AsymSchemeU) Any() *SchemeHash {
 	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
 }
@@ -1138,8 +1108,8 @@ type SignatureECDAA SignatureECC
 type SignatureSM2 SignatureECC
 type SignatureECSCHNORR SignatureECC
 
-// SignatureU is a fake union type that corresponds to TPMU_SIGNATURE. The selector type is AlgorithmId. Valid
-// types for Data for each selector value are:
+// SignatureU is a fake union type that corresponds to TPMU_SIGNATURE. The selector type is AlgorithmId. Valid types for Data for
+// each selector value are:
 //  - AlgorithmRSASSA: *SignatureRSASSA
 //  - AlgorithmRSAPSS: *SignatureRSAPSS
 //  - AlgorithmECDSA: *SignatureECDSA
@@ -1174,14 +1144,12 @@ func (s SignatureU) Select(selector reflect.Value) (reflect.Type, error) {
 	return nil, invalidSelectorError{selector}
 }
 
-// RSASSA returns the underlying value as *SignatureRSASSA. It panics if the underlying type is not
-// *SignatureRSASSA.
+// RSASSA returns the underlying value as *SignatureRSASSA. It panics if the underlying type is not *SignatureRSASSA.
 func (s SignatureU) RSASSA() *SignatureRSASSA {
 	return s.Data.(*SignatureRSASSA)
 }
 
-// RSAPSS returns the underlying value as *SignatureRSAPSS. It panics if the underlying type is not
-// *SignatureRSAPSS.
+// RSAPSS returns the underlying value as *SignatureRSAPSS. It panics if the underlying type is not *SignatureRSAPSS.
 func (s SignatureU) RSAPSS() *SignatureRSAPSS {
 	return s.Data.(*SignatureRSAPSS)
 }
@@ -1201,8 +1169,7 @@ func (s SignatureU) SM2() *SignatureSM2 {
 	return s.Data.(*SignatureSM2)
 }
 
-// ECSCHNORR returns the underlying value as *SignatureECSCHNORR. It panics if the underlying type is not
-// *SignatureECSCHNORR.
+// ECSCHNORR returns the underlying value as *SignatureECSCHNORR. It panics if the underlying type is not *SignatureECSCHNORR.
 func (s SignatureU) ECSCHNORR() *SignatureECSCHNORR {
 	return s.Data.(*SignatureECSCHNORR)
 }
@@ -1212,14 +1179,13 @@ func (s SignatureU) HMAC() *TaggedHash {
 	return s.Data.(*TaggedHash)
 }
 
-// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to
-// *SchemeHash.
+// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to *SchemeHash.
 func (s SignatureU) Any() *SchemeHash {
 	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
 }
 
-// Signature corresponds to the TPMT_SIGNATURE type. It is returned by the attestation commands, and is a
-// parameter for TPMContext.VerifySignature and TPMContext.PolicySigned.
+// Signature corresponds to the TPMT_SIGNATURE type. It is returned by the attestation commands, and is a parameter for
+// TPMContext.VerifySignature and TPMContext.PolicySigned.
 type Signature struct {
 	SigAlg    AlgorithmId // Signature algorithm
 	Signature SignatureU  `tpm2:"selector:SigAlg"` // Actual signature
@@ -1234,8 +1200,8 @@ type EncryptedSecret []byte
 
 // 12.2) Public Area Structures
 
-// PublicIDU is a fake union type that corresponds to the TPMU_PUBLIC_ID type. The selector type is AlgorithmId.
-// Valid types for Data for each selector value are:
+// PublicIDU is a fake union type that corresponds to the TPMU_PUBLIC_ID type. The selector type is AlgorithmId. Valid types for Data
+// for each selector value are:
 //  - AlgorithmRSA: PublicKeyRSA
 //  - AlgorithmKeyedHash: Digest
 //  - AlgorithmECC: *ECCPoint
@@ -1278,14 +1244,12 @@ func (p PublicIDU) ECC() *ECCPoint {
 	return p.Data.(*ECCPoint)
 }
 
-// KeyedHashParams corresponds to the TPMS_KEYEDHASH_PARMS type, and defines the public parameters for a keyedhash
-// object.
+// KeyedHashParams corresponds to the TPMS_KEYEDHASH_PARMS type, and defines the public parameters for a keyedhash object.
 type KeyedHashParams struct {
 	Scheme KeyedHashScheme // Signing method for a keyed hash signing object
 }
 
-// AsymParams corresponds to the TPMS_ASYM_PARMS type, and defines the common public parameters for an asymmetric
-// key.
+// AsymParams corresponds to the TPMS_ASYM_PARMS type, and defines the common public parameters for an asymmetric key.
 type AsymParams struct {
 	Symmetric SymDefObject // Symmetric algorithm for a restricted decrypt key.
 	// For a key with the AttrSign attribute: a signing scheme.
@@ -1317,8 +1281,8 @@ type ECCParams struct {
 	KDF     KDFScheme // Unused - always AlgorithmNull
 }
 
-// PublicParamsU is a fake union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is
-// AlgorithmId. Valid types for Data for each selector value are:
+// PublicParamsU is a fake union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is AlgorithmId. Valid types
+// for Data for each selector value are:
 //  - AlgorithmRSA: *RSAParams
 //  - AlgorithmKeyedHash: *KeyedHashParams
 //  - AlgorithmECC: *ECCParams
@@ -1341,14 +1305,12 @@ func (p PublicParamsU) Select(selector reflect.Value) (reflect.Type, error) {
 	return nil, invalidSelectorError{selector}
 }
 
-// KeyedHashDetail returns the underlying value as *KeyedHashParams. It panics if the underlying type is not
-// *KeyedHashParams.
+// KeyedHashDetail returns the underlying value as *KeyedHashParams. It panics if the underlying type is not *KeyedHashParams.
 func (p PublicParamsU) KeyedHashDetail() *KeyedHashParams {
 	return p.Data.(*KeyedHashParams)
 }
 
-// SymDetail returns the underlying value as *SymCipherParams. It panics if the underlying type is not
-// *SymCipherParams.
+// SymDetail returns the underlying value as *SymCipherParams. It panics if the underlying type is not *SymCipherParams.
 func (p PublicParamsU) SymDetail() *SymCipherParams {
 	return p.Data.(*SymCipherParams)
 }
@@ -1363,8 +1325,7 @@ func (p PublicParamsU) ECCDetail() *ECCParams {
 	return p.Data.(*ECCParams)
 }
 
-// AsymDetail returns the underlying value as *AsymParams. It panics if the underlying type is not *RSAParams or
-// *ECCParams.
+// AsymDetail returns the underlying value as *AsymParams. It panics if the underlying type is not *RSAParams or *ECCParams.
 func (p PublicParamsU) AsymDetail() *AsymParams {
 	switch d := p.Data.(type) {
 	case *RSAParams:
@@ -1426,8 +1387,8 @@ type publicSized struct {
 // PrivateVendorSpecific corresponds to the TPM2B_PRIVATE_VENDOR_SPECIFIC type.
 type PrivateVendorSpecific []byte
 
-// SensitiveCompositeU is a fake union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector
-// type is AlgorithmId. Valid types for Data for each selector value are:
+// SensitiveCompositeU is a fake union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector type is AlgorithmId.
+// Valid types for Data for each selector value are:
 //  - AlgorithmRSA: PrivateKeyRSA
 //  - AlgorithmECC: ECCParameter
 //  - AlgorithmKeyedHash: SensitiveData
@@ -1470,8 +1431,8 @@ func (s SensitiveCompositeU) Sym() SymKey {
 	return s.Data.(SymKey)
 }
 
-// Any returns the underlying value as PrivateVendorSpecific. It panics if the underlying type is not convertible
-// to PrivateVendorSpecific.
+// Any returns the underlying value as PrivateVendorSpecific. It panics if the underlying type is not convertible to
+// PrivateVendorSpecific.
 func (s SensitiveCompositeU) Any() PrivateVendorSpecific {
 	return reflect.ValueOf(s.Data).Convert(reflect.TypeOf((PrivateVendorSpecific)(nil))).Interface().(PrivateVendorSpecific)
 }
@@ -1507,8 +1468,8 @@ type NVPinCounterParams struct {
 	Limit uint32
 }
 
-// NVAttributes corresponds to the TPMA_NV type, and represents the attributes of a NV index. When exchanged with
-// the TPM, some bits are reserved to encode the type of the NV index (NVType).
+// NVAttributes corresponds to the TPMA_NV type, and represents the attributes of a NV index. When exchanged with the TPM, some bits
+// are reserved to encode the type of the NV index (NVType).
 type NVAttributes uint32
 
 // Type returns the NVType from a composite NVAttributes value.
@@ -1516,8 +1477,8 @@ func (a NVAttributes) Type() NVType {
 	return NVType((a & 0xf0) >> 4)
 }
 
-// MakeNVAttributes converts a NVAttributes value and NVType value in to a composite NVAttributes value suitable
-// for marshalling to the TPM wire format.
+// MakeNVAttributes converts a NVAttributes value and NVType value in to a composite NVAttributes value suitable for marshalling to
+// the TPM wire format.
 func MakeNVAttributes(a NVAttributes, t NVType) NVAttributes {
 	return a | NVAttributes(t<<4)
 }
@@ -1566,8 +1527,7 @@ type Context struct {
 
 // 15) Creation Data
 
-// CreationData corresponds to the TPMS_CREATION_DATA type, which provides information about the creation
-// environment of an object.
+// CreationData corresponds to the TPMS_CREATION_DATA type, which provides information about the creation environment of an object.
 type CreationData struct {
 	PCRSelect PCRSelectionList // PCRs included in PCRDigest
 	// Digest of the selected PCRs using the name algorithm of the object associated with this data.

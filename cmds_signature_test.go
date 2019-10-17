@@ -52,8 +52,7 @@ func TestSignAndVerify(t *testing.T) {
 			template := Public{
 				Type:    AlgorithmRSA,
 				NameAlg: AlgorithmSHA256,
-				Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin |
-					AttrUserWithAuth | AttrSign,
+				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 				Params: PublicParamsU{
 					Data: &RSAParams{
 						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -112,8 +111,7 @@ func TestSignAndVerify(t *testing.T) {
 			key := create(t, testAuth)
 			defer flushContext(t, tpm, key)
 
-			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil,
-				AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

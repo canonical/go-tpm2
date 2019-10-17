@@ -86,8 +86,7 @@ func cryptComputeCpHash(hashAlg AlgorithmId, commandCode CommandCode, commandHan
 	return hash.Sum(nil)
 }
 
-func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandCode CommandCode,
-	rpBytes []byte) []byte {
+func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) []byte {
 	hash := cryptConstructHash(hashAlg)
 
 	binary.Write(hash, binary.BigEndian, responseCode)
@@ -97,8 +96,8 @@ func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandC
 	return hash.Sum(nil)
 }
 
-func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt,
-	nonceEncrypt Nonce, attrs sessionAttrs) []byte {
+func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce,
+	attrs sessionAttrs) []byte {
 	hmac := hmac.New(hashAlgToGoConstructor(alg), key)
 
 	hmac.Write(pHash)
@@ -111,19 +110,16 @@ func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOld
 	return hmac.Sum(nil)
 }
 
-func cryptComputeSessionCommandHMAC(context *sessionContext, key, cpHash []byte, nonceDecrypt,
-	nonceEncrypt Nonce, attrs sessionAttrs) []byte {
-	return computeSessionHMAC(context.hashAlg, key, cpHash, context.nonceCaller, context.nonceTPM,
-		nonceDecrypt, nonceEncrypt, attrs)
+func cryptComputeSessionCommandHMAC(context *sessionContext, key, cpHash []byte, nonceDecrypt, nonceEncrypt Nonce,
+	attrs sessionAttrs) []byte {
+	return computeSessionHMAC(context.hashAlg, key, cpHash, context.nonceCaller, context.nonceTPM, nonceDecrypt, nonceEncrypt, attrs)
 }
 
 func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte, attrs sessionAttrs) []byte {
-	return computeSessionHMAC(context.hashAlg, key, rpHash, context.nonceTPM, context.nonceCaller, nil, nil,
-		attrs)
+	return computeSessionHMAC(context.hashAlg, key, rpHash, context.nonceTPM, context.nonceCaller, nil, nil, attrs)
 }
 
-func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint, counterInOut *uint32,
-	once bool) []byte {
+func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint, counterInOut *uint32, once bool) []byte {
 	digestSize, known := cryptGetDigestSize(hashAlg)
 	if !known {
 		panic(fmt.Sprintf("Unknown digest algorithm %v", hashAlg))
@@ -276,9 +272,7 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 
 	mulX, _ := curve.ScalarMult(tpmX, tpmY, ephPriv)
 
-	return ECCParameter(mulX.Bytes()),
-		&ECCPoint{X: ECCParameter(ephX.Bytes()), Y: ECCParameter(ephY.Bytes())},
-		nil
+	return ECCParameter(mulX.Bytes()), &ECCPoint{X: ECCParameter(ephX.Bytes()), Y: ECCParameter(ephY.Bytes())}, nil
 }
 
 func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
@@ -304,12 +298,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}
-		salt := cryptKDFe(public.NameAlg,
-			[]byte(z),
-			[]byte("SECRET"),
-			[]byte(q.X),
-			[]byte(public.Unique.ECC().X),
-			digestSize*8)
+		salt := cryptKDFe(public.NameAlg, []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC().X), digestSize*8)
 		return EncryptedSecret(encryptedSalt), salt, nil
 	}
 

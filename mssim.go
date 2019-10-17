@@ -96,15 +96,15 @@ func (t *TctiMssim) platformCommand(cmd uint32) error {
 	return nil
 }
 
-// Reset submits the reset command on the platform connection, which initiates a reset of the TPM simulator and
-// results in the execution of _TPM_Init().
+// Reset submits the reset command on the platform connection, which initiates a reset of the TPM simulator and results in the
+// execution of _TPM_Init().
 func (t *TctiMssim) Reset() error {
 	return t.platformCommand(cmdReset)
 }
 
-// OpenMssim attempts to open a connection to a TPM simulator on the specified host. tpmPort is the port on which
-// the TPM command server is listening. platformPort is the port on which the platform server is listening. If
-// host is an empty string, it defaults to "localhost".
+// OpenMssim attempts to open a connection to a TPM simulator on the specified host. tpmPort is the port on which the TPM command
+// server is listening. platformPort is the port on which the platform server is listening. If host is an empty string, it defaults
+// to "localhost".
 //
 // If successful, it returns a new TctiMssim instance which can be passed to NewTPMContext.
 func OpenMssim(host string, tpmPort, platformPort uint) (*TctiMssim, error) {

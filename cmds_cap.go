@@ -10,18 +10,16 @@ import (
 
 // Section 30 - Capability Commands
 
-// GetCapability executes the TPM2_GetCapability command, which returns various properties of the TPM and
-// its current state. The capability parameter indicates the category of data to be returned. The property
-// parameter indicates the first value of the selected category to be returned. The propertyCount parameter
-// indicates the number of values to be returned.
+// GetCapability executes the TPM2_GetCapability command, which returns various properties of the TPM and its current state. The
+// capability parameter indicates the category of data to be returned. The property parameter indicates the first value of the
+// selected category to be returned. The propertyCount parameter indicates the number of values to be returned.
 //
 // If no property in the TPM corresponds to the value of property, then the next property is returned.
 //
-// The underlying implementation of TPM2_GetCapability is not required to (or may not be able to) return
-// all of the requested values in a single request. This function will re-execute the TPM2_GetCapability
-// command until all of the requested properties have been returned.
-func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData,
-	error) {
+// The underlying implementation of TPM2_GetCapability is not required to (or may not be able to) return all of the requested
+// values in a single request. This function will re-execute the TPM2_GetCapability command until all of the requested properties
+// have been returned.
+func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData, error) {
 	var capabilityData *CapabilityData
 
 	nextProperty := property
@@ -31,14 +29,17 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 		var moreData bool
 		var data CapabilityData
 
-		if err := t.RunCommand(CommandGetCapability, nil, Separator, capability, nextProperty, remaining,
-			Separator, Separator, &moreData, &data); err != nil {
+		if err := t.RunCommand(CommandGetCapability, nil,
+			Separator,
+			capability, nextProperty, remaining, Separator,
+			Separator,
+			&moreData, &data); err != nil {
 			return nil, err
 		}
 
 		if data.Capability != capability {
-			return nil, fmt.Errorf("TPM responded with data for the wrong capability for command "+
-				"%s (got %s)", CommandGetCapability, data.Capability)
+			return nil, fmt.Errorf("TPM responded with data for the wrong capability for command %s (got %s)",
+				CommandGetCapability, data.Capability)
 		}
 
 		if capabilityData == nil {
@@ -47,44 +48,34 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 			var s int
 			switch data.Capability {
 			case CapabilityAlgs:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.Algorithms(), data.Data.Algorithms()...)
+				capabilityData.Data.Data = append(capabilityData.Data.Algorithms(), data.Data.Algorithms()...)
 				s = len(data.Data.Algorithms())
 			case CapabilityHandles:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.Handles(), data.Data.Handles()...)
+				capabilityData.Data.Data = append(capabilityData.Data.Handles(), data.Data.Handles()...)
 				s = len(data.Data.Handles())
 			case CapabilityCommands:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.Command(), data.Data.Command()...)
+				capabilityData.Data.Data = append(capabilityData.Data.Command(), data.Data.Command()...)
 				s = len(data.Data.Command())
 			case CapabilityPPCommands:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.PPCommands(), data.Data.PPCommands()...)
+				capabilityData.Data.Data = append(capabilityData.Data.PPCommands(), data.Data.PPCommands()...)
 				s = len(data.Data.PPCommands())
 			case CapabilityAuditCommands:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.AuditCommands(), data.Data.AuditCommands()...)
+				capabilityData.Data.Data = append(capabilityData.Data.AuditCommands(), data.Data.AuditCommands()...)
 				s = len(data.Data.AuditCommands())
 			case CapabilityPCRs:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.AssignedPCR(), data.Data.AssignedPCR()...)
+				capabilityData.Data.Data = append(capabilityData.Data.AssignedPCR(), data.Data.AssignedPCR()...)
 				s = len(data.Data.AssignedPCR())
 			case CapabilityTPMProperties:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.TPMProperties(), data.Data.TPMProperties()...)
+				capabilityData.Data.Data = append(capabilityData.Data.TPMProperties(), data.Data.TPMProperties()...)
 				s = len(data.Data.TPMProperties())
 			case CapabilityPCRProperties:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.PCRProperties(), data.Data.PCRProperties()...)
+				capabilityData.Data.Data = append(capabilityData.Data.PCRProperties(), data.Data.PCRProperties()...)
 				s = len(data.Data.PCRProperties())
 			case CapabilityECCCurves:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.ECCCurves(), data.Data.ECCCurves()...)
+				capabilityData.Data.Data = append(capabilityData.Data.ECCCurves(), data.Data.ECCCurves()...)
 				s = len(data.Data.ECCCurves())
 			case CapabilityAuthPolicies:
-				capabilityData.Data.Data =
-					append(capabilityData.Data.AuthPolicies(), data.Data.AuthPolicies()...)
+				capabilityData.Data.Data = append(capabilityData.Data.AuthPolicies(), data.Data.AuthPolicies()...)
 				s = len(data.Data.AuthPolicies())
 			}
 			nextProperty += uint32(s)
@@ -99,11 +90,10 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 	return capabilityData, nil
 }
 
-// GetCapabilityAlgs is a helper function that wraps around TPMContext.GetCapability, and returns properties
-// of the algorithms supported by the TPM. The first parameter indicates the first algorithm for which to
-// return properties. If this algorithm isn't supported, then the properties of the next supported algorithm
-// are returned instead. The propertyCount parameter indicates the number of algorithms for which to return
-// properties.
+// GetCapabilityAlgs is a helper function that wraps around TPMContext.GetCapability, and returns properties of the algorithms
+// supported by the TPM. The first parameter indicates the first algorithm for which to return properties. If this algorithm isn't
+// supported, then the properties of the next supported algorithm are returned instead. The propertyCount parameter indicates the
+// number of algorithms for which to return properties.
 func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32) (AlgorithmPropertyList, error) {
 	data, err := t.GetCapability(CapabilityAlgs, uint32(first), propertyCount)
 	if err != nil {
@@ -112,11 +102,10 @@ func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32) 
 	return data.Data.Algorithms(), nil
 }
 
-// GetCapabilityCommands is a helper function that wraps around TPMContext.GetCapability, and returns
-// attributes of the commands supported by the TPM. The first parameter indicates the first command for
-// which to return attributes. If this command isn't supported, then the attributes of the next supported
-// command are returned instead. The propertyCount parameter indicates the number of commands for which to
-// return attributes.
+// GetCapabilityCommands is a helper function that wraps around TPMContext.GetCapability, and returns attributes of the commands
+// supported by the TPM. The first parameter indicates the first command for which to return attributes. If this command isn't
+// supported, then the attributes of the next supported command are returned instead. The propertyCount parameter indicates the
+// number of commands for which to return attributes.
 func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint32) (CommandAttributesList,
 	error) {
 	data, err := t.GetCapability(CapabilityCommands, uint32(first), propertyCount)
@@ -126,10 +115,9 @@ func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint
 	return data.Data.Command(), nil
 }
 
-// GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a
-// list of commands that require physical presence for platform authorization. The first parameter indicates
-// the command code at which the returned list should start. The propertyCount parameter indicates the maximum
-// number of command codes to return.
+// GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that
+// require physical presence for platform authorization. The first parameter indicates the command code at which the returned list
+// should start. The propertyCount parameter indicates the maximum number of command codes to return.
 func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount uint32) (CommandCodeList, error) {
 	data, err := t.GetCapability(CapabilityPPCommands, uint32(first), propertyCount)
 	if err != nil {
@@ -138,10 +126,9 @@ func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount ui
 	return data.Data.PPCommands(), nil
 }
 
-// GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a
-// list of commands that are currently set for command audit. The first parameter indicates the command
-// code at which the returned list should start. The propertyCount parameter indicates the maximum number
-// of command codes to return.
+// GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that are
+// currently set for command audit. The first parameter indicates the command code at which the returned list should start. The
+// propertyCount parameter indicates the maximum number of command codes to return.
 func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount uint32) (CommandCodeList,
 	error) {
 	data, err := t.GetCapability(CapabilityAuditCommands, uint32(first), propertyCount)
@@ -151,10 +138,9 @@ func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount
 	return data.Data.AuditCommands(), nil
 }
 
-// GetCapabilityHandles is a helper function that wraps around TPMContext.GetCapability, and returns a
-// list of handles of resources on the TPM. The handleType parameter indicates the type of handles to
-// be returned (represented by the most-significant byte), and also the handle at which the list should
-// start. The propertyCount parameter indicates the maximum number of handles to return.
+// GetCapabilityHandles is a helper function that wraps around TPMContext.GetCapability, and returns a list of handles of resources
+// on the TPM. The handleType parameter indicates the type of handles to be returned (represented by the most-significant byte),
+// and also the handle at which the list should start. The propertyCount parameter indicates the maximum number of handles to return.
 func (t *TPMContext) GetCapabilityHandles(handleType Handle, propertyCount uint32) (HandleList, error) {
 	data, err := t.GetCapability(CapabilityHandles, uint32(handleType), propertyCount)
 	if err != nil {
@@ -163,8 +149,8 @@ func (t *TPMContext) GetCapabilityHandles(handleType Handle, propertyCount uint3
 	return data.Data.Handles(), nil
 }
 
-// GetCapabilityPCRs is a helper function that wraps around TPMContext.GetCapability, and returns the
-// current allocation of PCRs on the TPM.
+// GetCapabilityPCRs is a helper function that wraps around TPMContext.GetCapability, and returns the current allocation of PCRs on
+// the TPM.
 func (t *TPMContext) GetCapabilityPCRs() (PCRSelectionList, error) {
 	data, err := t.GetCapability(CapabilityPCRs, 0, CapabilityMaxProperties)
 	if err != nil {
@@ -173,12 +159,11 @@ func (t *TPMContext) GetCapabilityPCRs() (PCRSelectionList, error) {
 	return data.Data.AssignedPCR(), nil
 }
 
-// GetCapabilityTPMProperties is a helper function that wraps around TPMContext.GetCapability, and returns
-// the values of properties of the TPM. The first parameter indicates the first property for which to
-// return a value. If the property does not exist, then the value of the next available property is
-// returned. The propertyCount parameter indicates the number of properties for which to return values.
-func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount uint32) (TaggedTPMPropertyList,
-	error) {
+// GetCapabilityTPMProperties is a helper function that wraps around TPMContext.GetCapability, and returns the values of properties of
+// the TPM. The first parameter indicates the first property for which to return a value. If the property does not exist, then the
+// value of the next available property is returned. The propertyCount parameter indicates the number of properties for which to
+// return values.
+func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount uint32) (TaggedTPMPropertyList, error) {
 	data, err := t.GetCapability(CapabilityTPMProperties, uint32(first), propertyCount)
 	if err != nil {
 		return nil, err
@@ -186,13 +171,11 @@ func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount ui
 	return data.Data.TPMProperties(), nil
 }
 
-// GetCapabilityPCRProperties is a helper function that wraps around TPMContext.GetCapability, and returns
-// the values of PCR properties. The first parameter indicates the first property for which to return a value.
-// If the property does not exist, then the value of the next available property is returned. The propertyCount
-// parameter indicates the number of properties for which to return values. Each returned property value is
-// a list of PCR indexes associated with a property.
-func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount uint32) (TaggedPCRPropertyList,
-	error) {
+// GetCapabilityPCRProperties is a helper function that wraps around TPMContext.GetCapability, and returns the values of PCR
+// properties. The first parameter indicates the first property for which to return a value. If the property does not exist, then
+// the value of the next available property is returned. The propertyCount parameter indicates the number of properties for which to
+// return values. Each returned property value is a list of PCR indexes associated with a property.
+func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount uint32) (TaggedPCRPropertyList, error) {
 	data, err := t.GetCapability(CapabilityPCRProperties, uint32(first), propertyCount)
 	if err != nil {
 		return nil, err
@@ -200,8 +183,8 @@ func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount
 	return data.Data.PCRProperties(), nil
 }
 
-// GetCapabilityECCCurves is a helper function that wraps around TPMContext.GetCapability, and returns a list
-// of ECC curves supported by the TPM.
+// GetCapabilityECCCurves is a helper function that wraps around TPMContext.GetCapability, and returns a list of ECC curves supported
+// by the TPM.
 func (t *TPMContext) GetCapabilityECCCurves() (ECCCurveList, error) {
 	data, err := t.GetCapability(CapabilityECCCurves, uint32(ECCCurveFirst), CapabilityMaxProperties)
 	if err != nil {
@@ -210,11 +193,10 @@ func (t *TPMContext) GetCapabilityECCCurves() (ECCCurveList, error) {
 	return data.Data.ECCCurves(), nil
 }
 
-// GetCapabilityAuthPolicies is a helper function that wraps around TPMContext.GetCapability, and returns
-// auth policy digests associated with permanent handles. The first parameter indicates the first handle
-// for which to return an auth policy. If the handle doesn't exist, then the auth policy for the next
-// available handle is returned. The propertyCount parameter indicates the number of permanent handles for
-// which to return an auth policy.
+// GetCapabilityAuthPolicies is a helper function that wraps around TPMContext.GetCapability, and returns auth policy digests
+// associated with permanent handles. The first parameter indicates the first handle for which to return an auth policy. If the
+// handle doesn't exist, then the auth policy for the next available handle is returned. The propertyCount parameter indicates the
+// number of permanent handles for which to return an auth policy.
 func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint32) (TaggedPolicyList, error) {
 	data, err := t.GetCapability(CapabilityAuthPolicies, uint32(first), propertyCount)
 	if err != nil {

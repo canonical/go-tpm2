@@ -42,15 +42,19 @@ func (l *PCRSelectionList) subtract(x PCRSelectionList) {
 }
 
 func (t *TPMContext) PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error {
-	return t.RunCommand(CommandPCRExtend, nil, HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth},
-		Separator, digests)
+	return t.RunCommand(CommandPCRExtend, nil,
+		HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth}, Separator,
+		digests)
 }
 
 func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{},
 	sessions ...*Session) (TaggedHashList, error) {
 	var digests TaggedHashList
-	if err := t.RunCommand(CommandPCREvent, sessions, HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth},
-		Separator, eventData, Separator, Separator, &digests); err != nil {
+	if err := t.RunCommand(CommandPCREvent, sessions,
+		HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth}, Separator,
+		eventData, Separator,
+		Separator,
+		&digests); err != nil {
 		return nil, err
 	}
 	return digests, nil
@@ -75,7 +79,10 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestLis
 		var pcrSelectionOut PCRSelectionList
 		var values DigestList
 
-		if err := t.RunCommand(CommandPCRRead, nil, Separator, remaining, Separator, Separator,
+		if err := t.RunCommand(CommandPCRRead, nil,
+			Separator,
+			remaining, Separator,
+			Separator,
 			&updateCounter, &pcrSelectionOut, &values); err != nil {
 			return 0, nil, err
 		}
@@ -83,8 +90,8 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestLis
 		if i == 0 {
 			pcrUpdateCounter = updateCounter
 		} else if updateCounter != pcrUpdateCounter {
-			return 0, nil, fmt.Errorf("TPM responded with the wrong pcrUpdateCounter value: "+
-				"got %d, expected %d", updateCounter, pcrUpdateCounter)
+			return 0, nil, fmt.Errorf("TPM responded with the wrong pcrUpdateCounter value: got %d, expected %d",
+				updateCounter, pcrUpdateCounter)
 		}
 
 		pcrValues = append(pcrValues, values...)

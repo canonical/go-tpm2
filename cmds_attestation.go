@@ -10,17 +10,15 @@ package tpm2
 //	inScheme *SigScheme, sessions ...*Session) (AttestRaw, *Signature, error) {
 // }
 
-// CertifyCreation executes the TPM2_CertifyCreation command, which is used to prove the association
-// between the object represented by objectContext and its creation data represented by
-// creationHash. It does this by computing a ticket from creationHash and the name of the object
-// represented by objectContext and then verifying that it matches the provided creationTicket,
-// which was provided by the TPM at object creation time.
+// CertifyCreation executes the TPM2_CertifyCreation command, which is used to prove the association between the object represented
+// by objectContext and its creation data represented by creationHash. It does this by computing a ticket from creationHash and the
+// name of the object represented by objectContext and then verifying that it matches the provided creationTicket, which was provided
+// by the TPM at object creation time.
 //
-// If successful, it returns an attestation structure. If signContext is not nil, the attestation
-// structure will be signed by the associated key and returned separately.
-func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data,
-	creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation,
-	signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+// If successful, it returns an attestation structure. If signContext is not nil, the attestation structure will be signed by the
+// associated key and returned separately.
+func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,
+	inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if signContext == nil {
 		signContext = permanentContext(HandleNull)
 	}
@@ -33,8 +31,9 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 
 	if err := t.RunCommand(CommandCertifyCreation, sessions,
 		ResourceWithAuth{Context: signContext, Auth: signContextAuth}, objectContext, Separator,
-		qualifyingData, creationHash, inScheme, creationTicket, Separator, Separator, &certifyInfo,
-		&signature); err != nil {
+		qualifyingData, creationHash, inScheme, creationTicket, Separator,
+		Separator,
+		&certifyInfo, &signature); err != nil {
 		return nil, nil, err
 	}
 

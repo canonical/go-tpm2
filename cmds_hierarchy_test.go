@@ -12,8 +12,8 @@ func TestCreatePrimary(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, hierarchy Handle, sensitive *SensitiveCreate, template *Public,
-		outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public) {
+	run := func(t *testing.T, hierarchy Handle, sensitive *SensitiveCreate, template *Public, outsideInfo Data,
+		creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public) {
 		objectContext, outPublic, creationData, creationHash, creationTicket, name, err :=
 			tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
@@ -40,8 +40,7 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -64,8 +63,7 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmECC,
 			NameAlg: AlgorithmSHA1,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&ECCParams{
 					Symmetric: SymDefObject{
@@ -90,11 +88,9 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy |
-				AttrRestricted | AttrDecrypt,
-			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc,
-				0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52, 0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64,
-				0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
+			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
+				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -115,8 +111,7 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -137,8 +132,7 @@ func TestCreatePrimary(t *testing.T) {
 		childTemplate := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
@@ -159,8 +153,7 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -181,8 +174,7 @@ func TestCreatePrimary(t *testing.T) {
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil,
-			AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -193,8 +185,7 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -214,8 +205,7 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -239,8 +229,7 @@ func TestCreatePrimary(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmECC,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -255,12 +244,10 @@ func TestCreatePrimary(t *testing.T) {
 		if err == nil {
 			t.Fatalf("CreatePrimary should fail with an invalid template")
 		}
-		if err.Error() != "cannot marshal command parameters for command TPM_CC_CreatePrimary: cannot "+
-			"marshal struct type tpm2.publicSized: cannot marshal field Ptr: cannot marshal sized "+
-			"type *tpm2.Public: cannot marshal pointer to struct to temporary buffer: cannot marshal "+
-			"element: cannot marshal struct type tpm2.Public: cannot marshal field Params: cannot "+
-			"marshal struct type tpm2.PublicParamsU: error marshalling union struct: data has "+
-			"incorrect type *tpm2.RSAParams (expected *tpm2.ECCParams)" {
+		if err.Error() != "cannot marshal command parameters for command TPM_CC_CreatePrimary: cannot marshal struct type "+
+			"tpm2.publicSized: cannot marshal field Ptr: cannot marshal sized type *tpm2.Public: cannot marshal pointer to struct to "+
+			"temporary buffer: cannot marshal element: cannot marshal struct type tpm2.Public: cannot marshal field Params: cannot marshal "+
+			"struct type tpm2.PublicParamsU: error marshalling union struct: data has incorrect type *tpm2.RSAParams (expected *tpm2.ECCParams)" {
 			t.Errorf("CreatePrimary returned an unexpected error: %v", err)
 		}
 	})
@@ -278,8 +265,7 @@ func TestClear(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -303,14 +289,12 @@ func TestClear(t *testing.T) {
 		transientObjects = append(transientObjects, ownerPrimary)
 
 		// Persist storage primary key (should be evicted by Clear)
-		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary,
-			Handle(0x8100ffff))
+		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary, Handle(0x8100ffff))
 		defer verifyPersistentObjectEvicted(t, tpm, HandleOwner, ownerPrimaryPersist)
 		transientObjects = append(transientObjects, ownerPrimaryPersist)
 
 		// Persist platform primary key (should persist across Clear)
-		platformPrimaryPersist := persistObjectForTesting(t, tpm, HandlePlatform, platformPrimary,
-			Handle(0x8180ffff))
+		platformPrimaryPersist := persistObjectForTesting(t, tpm, HandlePlatform, platformPrimary, Handle(0x8180ffff))
 		defer evictPersistentObject(t, tpm, HandlePlatform, platformPrimaryPersist)
 		persistentObjects = append(persistentObjects, platformPrimaryPersist)
 
@@ -347,9 +331,8 @@ func TestClear(t *testing.T) {
 		nvPub2 := NVPublic{
 			Index:   0x0141ffff,
 			NameAlg: AlgorithmSHA256,
-			Attrs: MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead|AttrNVPlatformCreate,
-				NVTypeOrdinary),
-			Size: 8}
+			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead|AttrNVPlatformCreate, NVTypeOrdinary),
+			Size:    8}
 		if err := tpm.NVDefineSpace(HandlePlatform, nil, &nvPub2, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
@@ -419,8 +402,7 @@ func TestClear(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
-			testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -463,8 +445,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -474,8 +455,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: AlgorithmNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil,
-			session)
+		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -485,11 +465,9 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		template := Public{
 			Type:    AlgorithmRSA,
 			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy |
-				AttrRestricted | AttrDecrypt,
-			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc,
-				0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52, 0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64,
-				0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
+			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
+				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
@@ -555,16 +533,13 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	})
 
 	t.Run("OwnerWithUnboundHMACSession2", func(t *testing.T) {
-		// This test highlights a bug where we didn't preserve the value of Session.includeAuthValue (which
-		// should be true) before computing the response HMAC. It's not caught by
-		// OwnerWithUnboundHMACSession because the lack of session key combined with
-		// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth to
-		// bail out early
+		// This test highlights a bug where we didn't preserve the value of Session.includeAuthValue (which should be true) before computing
+		// the response HMAC. It's not caught by OwnerWithUnboundHMACSession because the lack of session key combined with
+		// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth to bail out early
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, AlgorithmSHA256,
-			nil)
+		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

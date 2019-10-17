@@ -12,7 +12,10 @@ func (t *TPMContext) SelfTest(fullTest bool) error {
 
 func (t *TPMContext) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, error) {
 	var toDoList AlgorithmList
-	if err := t.RunCommand(CommandIncrementalSelfTest, nil, Separator, toTest, Separator, Separator,
+	if err := t.RunCommand(CommandIncrementalSelfTest, nil,
+		Separator,
+		toTest, Separator,
+		Separator,
 		&toDoList); err != nil {
 		return nil, err
 	}
@@ -22,8 +25,7 @@ func (t *TPMContext) IncrementalSelfTest(toTest AlgorithmList) (AlgorithmList, e
 func (t *TPMContext) GetTestResult() (MaxBuffer, ResponseCode, error) {
 	var outData MaxBuffer
 	var testResult ResponseCode
-	if err := t.RunCommand(CommandGetTestResult, nil, Separator, Separator, Separator, &outData,
-		&testResult); err != nil {
+	if err := t.RunCommand(CommandGetTestResult, nil, Separator, Separator, Separator, &outData, &testResult); err != nil {
 		return nil, 0, err
 	}
 	return outData, testResult, nil
