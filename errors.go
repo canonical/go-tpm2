@@ -6,8 +6,13 @@ package tpm2
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 )
+
+// ErrResourceDoesNotExist is returned from TPMContext.WrapHandle if it is called with a handle that does not correspond to a
+// resource that is loaded in to the TPM.
+var ErrResourceDoesNotExist = errors.New("the resource does not exist on the TPM")
 
 // UnmarshallingError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap around
 // this function) for most errors that occur after successfully reading a command response from the transmission interface.
