@@ -59,8 +59,7 @@ func TestStartup(t *testing.T) {
 				defer flushContext(t, tpm, c)
 				t.Fatalf("Unexpected behaviour: transient handle should have been flushed")
 			}
-			if err.Error() != "TPM returned a warning whilst executing command TPM_CC_ReadPublic: TPM_RC_REFERENCE_H0 (the 1st handle in the "+
-				"handle area references a transient object or session that is not loaded)" {
+			if err != ErrResourceDoesNotExist {
 				t.Errorf("Unexpected error: %v", err)
 			}
 		})
