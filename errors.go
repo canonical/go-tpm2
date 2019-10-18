@@ -14,27 +14,41 @@ import (
 // resource that is loaded in to the TPM.
 var ErrResourceDoesNotExist = errors.New("the resource does not exist on the TPM")
 
-// UnmarshallingError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap around
-// this function) for most errors that occur after successfully reading a command response from the transmission interface.
-type UnmarshallingError struct {
-	Command CommandCode // Command code associated with this error
-	context string
-	err     error
-}
-
-func (e UnmarshallingError) Error() string {
-	return fmt.Sprintf("cannot unmarshal %s for command %s: %v", e.context, e.Command, e.err)
-}
-
-// InvalidAuthResponseError is returned from TPMContext.RunCommand (and any other methods that wrap around this function) if a
-// response HMAC check failed.
-type InvalidAuthResponseError struct {
+// InvalidResponseHeaderError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap
+// around this function) if the TPM responds with a header that is invalid. This could be because there are insufficient bytes,
+// or because the responseSize field has an invalid value
+type InvalidResponseHeaderError struct {
 	Command CommandCode
 	msg     string
 }
 
-func (e InvalidAuthResponseError) Error() string {
-	return fmt.Sprintf("TPM returned an invalid auth response for command %s: %s", e.Command, e.msg)
+func (e InvalidResponseHeaderError) Error() string {
+	return fmt.Sprintf("TPM returned an invalid header for command %s: %v", e.Command, e.msg)
+}
+
+// InvalidResponseHeaderError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap
+// around this function) if the TPM responds with a payload that is invalid. This could be because there are fewer bytes than
+// indicated in the header, or unmarshalling of the response payload failed because of an invalid union selector value.
+type InvalidResponsePayloadError struct {
+	Command CommandCode
+	Bytes   []byte
+	msg     string
+}
+
+func (e InvalidResponsePayloadError) Error() string {
+	return fmt.Sprintf("TPM returned an invalid payload for command %s: %v", e.Command, e.msg)
+}
+
+// InvalidResponseAuthError is returned from TPMContext.RunCommand (and any other methods that wrap around this function) if a
+// response HMAC check failed.
+type InvalidResponseAuthError struct {
+	Command CommandCode
+	Index   int
+	msg     string
+}
+
+func (e InvalidResponseAuthError) Error() string {
+	return fmt.Sprintf("TPM returned an invalid authorization for command %s at index %d: %s", e.Command, e.Index, e.msg)
 }
 
 // TPMReadError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap around this

@@ -115,8 +115,8 @@ func TestHMACSessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
-				if err.Error() != "cannot marshal command handles and auth area for command TPM_CC_Create: error whilst processing resource "+
-					"context or handle with authorization at index 1: invalid resource context for session: resource has been closed" {
+				if err.Error() != "cannot process ResourceWithAuth for command TPM_CC_Create at index 1: invalid resource context for session: "+
+					"resource has been closed" {
 					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 				}
 			}
@@ -240,8 +240,8 @@ func TestPolicySessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent usage of the session should fail")
 				}
-				if err.Error() != "cannot marshal command handles and auth area for command TPM_CC_Unseal: error whilst processing resource "+
-					"context or handle with authorization at index 1: invalid resource context for session: resource has been closed" {
+				if err.Error() != "cannot process ResourceWithAuth for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
+					"resource has been closed" {
 					t.Errorf("Unexpected error: %v", err)
 				}
 			}

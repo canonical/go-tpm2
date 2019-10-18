@@ -402,9 +402,8 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 		return nil, err
 	}
 	var res NVPinCounterParams
-	if _, err := UnmarshalFromBytes(data, &res); err != nil {
-		return nil, wrapUnmarshallingError(CommandNVRead, "NV index data", err)
-	}
+	UnmarshalFromBytes(data, &res)
+
 	return &res, nil
 }
 

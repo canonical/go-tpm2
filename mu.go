@@ -20,6 +20,34 @@ var (
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
+type invalidSelectorError struct {
+	selector interface{}
+}
+
+func (e invalidSelectorError) Error() string {
+	return fmt.Sprintf("invalid selector value: %v", e.selector)
+}
+
+type nestedMuError struct {
+	msg string
+	err error
+}
+
+func (e nestedMuError) Error() string {
+	return fmt.Sprintf("%s: %v", e.msg, e.err)
+}
+
+func (e nestedMuError) originalError() error {
+	for {
+		switch x := e.err.(type) {
+		case nestedMuError:
+			e = x
+		default:
+			return e.err
+		}
+	}
+}
+
 // CustomMarshaller is implemented by types that require custom marshalling and unmarshalling behaviour because they are non-standard
 // and not directly supported by the marshalling code.
 type CustomMarshaller interface {
@@ -75,14 +103,6 @@ func hasCustomMarshallerImpl(t reflect.Type) bool {
 	}
 	return t.Implements(customMarshallerType)
 
-}
-
-type invalidSelectorError struct {
-	selector interface{}
-}
-
-func (e invalidSelectorError) Error() string {
-	return fmt.Sprintf("invalid selector value: %v", e.selector)
 }
 
 type muOptions struct {
@@ -143,20 +163,20 @@ func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
 		return errors.New("not a pointer to a struct")
 	case s.IsNil():
 		if err := binary.Write(buf, binary.BigEndian, uint16(0)); err != nil {
-			return fmt.Errorf("cannot write size of zero sized struct: %v", err)
+			return nestedMuError{"cannot write size of zero sized struct", err}
 		}
 		return nil
 	}
 
 	tmpBuf := new(bytes.Buffer)
 	if err := marshalPtr(tmpBuf, s, beginSizedStructCtx(ctx)); err != nil {
-		return fmt.Errorf("cannot marshal pointer to struct to temporary buffer: %v", err)
+		return nestedMuError{"cannot marshal pointer to struct to temporary buffer", err}
 	}
 	if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
-		return fmt.Errorf("cannot write size of struct: %v", err)
+		return nestedMuError{"cannot write size of struct", err}
 	}
 	if _, err := tmpBuf.WriteTo(buf); err != nil {
-		return fmt.Errorf("cannot write marshalled struct: %v", err)
+		return nestedMuError{"cannot write marshalled struct", err}
 	}
 	return nil
 }
@@ -170,7 +190,7 @@ func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 	}
 
 	if err := marshalValue(buf, d, beginPtrElemCtx(ctx, ptr)); err != nil {
-		return fmt.Errorf("cannot marshal element: %v", err)
+		return nestedMuError{"cannot marshal element", err}
 	}
 	return nil
 }
@@ -222,14 +242,14 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	if isUnion(s.Type()) {
 		if err := marshalUnion(buf, s, ctx); err != nil {
-			return fmt.Errorf("error marshalling union struct: %v", err)
+			return nestedMuError{"error marshalling union struct", err}
 		}
 		return nil
 	}
 
 	for i := 0; i < s.NumField(); i++ {
 		if err := marshalValue(buf, s.Field(i), beginStructFieldCtx(ctx, s, i)); err != nil {
-			return fmt.Errorf("cannot marshal field %s: %v", s.Type().Field(i).Name, err)
+			return nestedMuError{"cannot marshal field " + s.Type().Field(i).Name, err}
 		}
 	}
 
@@ -242,12 +262,12 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 		if slice.Type() != rawBytesType && !ctx.options.raw {
 			// Sized buffer
 			if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
-				return fmt.Errorf("cannot write size of sized buffer: %v", err)
+				return nestedMuError{"cannot write size of sized buffer", err}
 			}
 		}
 		_, err := buf.Write(slice.Bytes())
 		if err != nil {
-			return fmt.Errorf("cannot write byte slice contents: %v", err)
+			return nestedMuError{"cannot write byte slice contents", err}
 		}
 		return nil
 	}
@@ -255,13 +275,13 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 	if !ctx.options.raw {
 		// Marshal length field
 		if err := binary.Write(buf, binary.BigEndian, uint32(slice.Len())); err != nil {
-			return fmt.Errorf("cannot write length of list: %v", err)
+			return nestedMuError{"cannot write length of list", err}
 		}
 	}
 
 	for i := 0; i < slice.Len(); i++ {
 		if err := marshalValue(buf, slice.Index(i), beginSliceElemCtx(ctx, slice)); err != nil {
-			return fmt.Errorf("cannot marshal value at index %d: %v", i, err)
+			return nestedMuError{fmt.Sprintf("cannot marshal value at index %d", i), err}
 		}
 	}
 	return nil
@@ -292,7 +312,7 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 
 	if ctx.options.sized {
 		if err := marshalSized(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot marshal sized type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot marshal sized type %s", val.Type()), err}
 		}
 		return nil
 	}
@@ -300,21 +320,21 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 	switch val.Kind() {
 	case reflect.Ptr:
 		if err := marshalPtr(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot marshal pointer type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot marshal pointer type %s", val.Type()), err}
 		}
 	case reflect.Struct:
 		if err := marshalStruct(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot marshal struct type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot marshal struct type %s", val.Type()), err}
 		}
 	case reflect.Slice:
 		if err := marshalSlice(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot marshal slice type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot marshal slice type %s", val.Type()), err}
 		}
 	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
 		return fmt.Errorf("cannot marshal type %s: unsupported kind %s", val.Type(), val.Kind())
 	default:
 		if err := binary.Write(buf, binary.BigEndian, val.Interface()); err != nil {
-			return fmt.Errorf("cannot marshal type %s: write to buffer failed: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot marshal type %s: write to buffer failed", val.Type()), err}
 		}
 	}
 	return nil
@@ -330,7 +350,7 @@ func unmarshalSized(buf io.Reader, s reflect.Value, ctx *muContext) error {
 
 	var size uint16
 	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
-		return fmt.Errorf("cannot read size of struct: %v", err)
+		return nestedMuError{"cannot read size of struct", err}
 	}
 	switch {
 	case size == 0 && !s.IsNil():
@@ -341,7 +361,7 @@ func unmarshalSized(buf io.Reader, s reflect.Value, ctx *muContext) error {
 
 	lr := io.LimitReader(buf, int64(size))
 	if err := unmarshalPtr(lr, s, beginSizedStructCtx(ctx)); err != nil {
-		return fmt.Errorf("cannot unmarshal pointer to struct: %v", err)
+		return nestedMuError{"cannot unmarshal pointer to struct", err}
 	}
 	return nil
 }
@@ -355,7 +375,7 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 	}
 
 	if err := unmarshalValue(buf, ptr.Elem(), beginPtrElemCtx(ctx, ptr)); err != nil {
-		return fmt.Errorf("cannot unmarshal element: %v", err)
+		return nestedMuError{"cannot unmarshal element", err}
 	}
 	return nil
 }
@@ -380,7 +400,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 
 	selectedType, err := u.Interface().(Union).Select(selectorVal)
 	if err != nil {
-		return fmt.Errorf("cannot select union data type: %v", err)
+		return nestedMuError{"cannot select union data type", err}
 	}
 	if selectedType == nil {
 		return nil
@@ -398,7 +418,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 	}
 
 	if err := unmarshalValue(buf, d, beginUnionDataCtx(ctx, u)); err != nil {
-		return fmt.Errorf("cannot unmarshal data value: %v", err)
+		return nestedMuError{"cannot unmarshal data value", err}
 	}
 
 	if f.IsNil() {
@@ -411,14 +431,14 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	if isUnion(s.Type()) {
 		if err := unmarshalUnion(buf, s, ctx); err != nil {
-			return fmt.Errorf("error unmarshalling union struct: %v", err)
+			return nestedMuError{"error unmarshalling union struct", err}
 		}
 		return nil
 	}
 
 	for i := 0; i < s.NumField(); i++ {
 		if err := unmarshalValue(buf, s.Field(i), beginStructFieldCtx(ctx, s, i)); err != nil {
-			return fmt.Errorf("cannot unmarshal field %s: %v", s.Type().Field(i).Name, err)
+			return nestedMuError{"cannot unmarshal field " + s.Type().Field(i).Name, err}
 		}
 	}
 	return nil
@@ -436,7 +456,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 			// Sized buffer
 			var size uint16
 			if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
-				return fmt.Errorf("cannot read size of sized buffer: %v", err)
+				return nestedMuError{"cannot read size of sized buffer", err}
 			}
 			if !slice.CanSet() {
 				return errors.New("cannot set slice")
@@ -445,7 +465,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 			}
 		}
 		if _, err := io.ReadFull(buf, slice.Bytes()); err != nil {
-			return fmt.Errorf("cannot read byte slice directly from input buffer: %v", err)
+			return nestedMuError{"cannot read byte slice directly from input buffer", err}
 		}
 		return nil
 	}
@@ -459,7 +479,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 	default:
 		var length uint32
 		if err := binary.Read(buf, binary.BigEndian, &length); err != nil {
-			return fmt.Errorf("cannot read length of list: %v", err)
+			return nestedMuError{"cannot read length of list", err}
 		}
 		if !slice.CanSet() {
 			return errors.New("cannot set slice")
@@ -470,7 +490,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 
 	for i := 0; i < slice.Len(); i++ {
 		if err := unmarshalValue(buf, slice.Index(i), beginSliceElemCtx(ctx, slice)); err != nil {
-			return fmt.Errorf("cannot unmarshal value at index %d: %v", i, err)
+			return nestedMuError{fmt.Sprintf("cannot unmarshal value at index %d", i), err}
 		}
 	}
 	return nil
@@ -503,7 +523,7 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 
 	if ctx.options.sized {
 		if err := unmarshalSized(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot unmarshal sized type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot unmarshal sized type %s", val.Type()), err}
 		}
 		return nil
 	}
@@ -511,15 +531,15 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 	switch val.Kind() {
 	case reflect.Ptr:
 		if err := unmarshalPtr(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot unmarshal pointer type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot unmarshal pointer type %s", val.Type()), err}
 		}
 	case reflect.Struct:
 		if err := unmarshalStruct(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot unmarshal struct type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot unmarshal struct type %s", val.Type()), err}
 		}
 	case reflect.Slice:
 		if err := unmarshalSlice(buf, val, ctx); err != nil {
-			return fmt.Errorf("cannot unmarshal slice type %s: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot unmarshal slice type %s", val.Type()), err}
 		}
 	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
 		return fmt.Errorf("cannot unmarshal type %s: unsupported kind %s", val.Type(), val.Kind())
@@ -528,7 +548,7 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 			return fmt.Errorf("cannot unmarshal non-addressable type %s", val.Type())
 		}
 		if err := binary.Read(buf, binary.BigEndian, val.Addr().Interface()); err != nil {
-			return fmt.Errorf("cannot unmarshal type %s: read from buffer failed: %v", val.Type(), err)
+			return nestedMuError{fmt.Sprintf("cannot unmarshal type %s: read from buffer failed", val.Type()), err}
 		}
 	}
 	return nil
