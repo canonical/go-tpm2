@@ -62,16 +62,17 @@ func (d *TctiDeviceLinux) Close() error {
 }
 
 // OpenTPMDevice attempts to open a connection to the Linux TPM character device at the specified path. If successful, it returns a
-// new TctiDeviceLinux instance which can be passed to NewTPMContext.
+// new TctiDeviceLinux instance which can be passed to NewTPMContext. Failure to open the TPM character device will result in a
+// *os.PathError being returned
 func OpenTPMDevice(path string) (*TctiDeviceLinux, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open linux TPM device: %v", err)
+		return nil, err
 	}
 
 	s, err := f.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("cannot stat linux TPM device: %v", err)
+		return nil, err
 	}
 
 	if s.Mode()&os.ModeDevice == 0 {
