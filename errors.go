@@ -73,6 +73,30 @@ func (e TPMWriteError) Error() string {
 	return fmt.Sprintf("cannot write command %s to TPM: %v", e.Command, e.Err)
 }
 
+// Ideally we would just support go's error wrapping using the %w verb support in fmt.Errorf, but that requires go >= 1.13
+type wrapError struct {
+	msg string
+	err error
+}
+
+func (e *wrapError) Error() string {
+	return e.msg
+}
+
+func (e *wrapError) Unwrap() error {
+	return e.err
+}
+
+func errorUnwrapOriginal(err error) error {
+	for {
+		e, ok := err.(*wrapError)
+		if !ok {
+			return err
+		}
+		err = e.Unwrap()
+	}
+}
+
 const (
 	formatMask ResponseCode = 1 << 7
 

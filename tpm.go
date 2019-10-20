@@ -26,19 +26,14 @@ func wrapMarshallingError(commandCode CommandCode, context string, err error) er
 }
 
 func handleUnmarshallingError(context *cmdContext, scope string, err error) error {
-	origErr := err
-	switch e := err.(type) {
-	case nestedMuError:
-		err = e.originalError()
-	}
-
-	_, isSelectorError := err.(invalidSelectorError)
-	if err == io.EOF || err == io.ErrUnexpectedEOF || isSelectorError {
+	origErr := errorUnwrapOriginal(err)
+	_, isSelectorError := origErr.(invalidSelectorError)
+	if origErr == io.EOF || origErr == io.ErrUnexpectedEOF || isSelectorError {
 		return InvalidResponsePayloadError{context.commandCode, context.responseBytes,
-			fmt.Sprintf("cannot unmarshal %s: %v", scope, origErr)}
+			fmt.Sprintf("cannot unmarshal %s: %v", scope, err)}
 	}
 
-	return fmt.Errorf("cannot unmarshal %s for command %s: %v", scope, context.commandCode, origErr)
+	return fmt.Errorf("cannot unmarshal %s for command %s: %v", scope, context.commandCode, err)
 }
 
 type responseAuthAreaRawSlice struct {
