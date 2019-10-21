@@ -44,17 +44,6 @@ func TestMarshalBasic(t *testing.T) {
 	}
 }
 
-func TestUnmarshalValue(t *testing.T) {
-	var a uint32
-	_, err := UnmarshalFromBytes([]byte{0xff, 0xff, 0xff, 0xff}, a)
-	if err == nil {
-		t.Fatalf("UnmarshalFromBytes shouldn't be able to unmarshal to a non-pointer type")
-	}
-	if err.Error() != "cannot unmarshal to non-pointer type uint32" {
-		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
-	}
-}
-
 func TestMarshalPtr(t *testing.T) {
 	var a uint32 = 45623564
 	var b bool = true
@@ -437,18 +426,6 @@ type TestStructWithNonPointerSizedStruct struct {
 	S TestSizedStruct `tpm2:"sized"`
 }
 
-func TestMarshalSizedStructAsValue(t *testing.T) {
-	a := TestStructWithNonPointerSizedStruct{}
-	_, err := MarshalToBytes(a)
-	if err == nil {
-		t.Fatalf("MarshalToBytes should fail to marshal a non-pointer sized struct")
-	}
-	if err.Error() != "cannot marshal struct type tpm2.TestStructWithNonPointerSizedStruct: cannot marshal field S: cannot marshal "+
-		"sized type tpm2.TestSizedStruct: not a pointer" {
-		t.Errorf("UnmarshalFromBytes returned unexpected error: %v", err)
-	}
-}
-
 type TestStructWithPointerSizedStruct struct {
 	A uint32
 	S *TestSizedStruct `tpm2:"sized"`
@@ -739,44 +716,6 @@ func TestMarshalUnionDataImplicitTypeConversion(t *testing.T) {
 	}
 }
 
-type TestInvalidUnionContainer struct {
-	Select uint32
-	Union  TestUnion
-}
-
-func TestMarshalUnionInInvalidContainer(t *testing.T) {
-	a := TestInvalidUnionContainer{
-		Select: 2,
-		Union:  TestUnion{TestListUint32{3287743, 98731}}}
-	_, err := MarshalToBytes(a)
-	if err == nil {
-		t.Fatalf("MarshalToBytes should fail to marshal a union inside an invalid container")
-	}
-	if err.Error() != "cannot marshal struct type tpm2.TestInvalidUnionContainer: cannot marshal field Union: cannot marshal struct "+
-		"type tpm2.TestUnion: error marshalling union struct: no selector member defined in container" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
-	}
-
-	var ao TestInvalidUnionContainer
-	_, err = UnmarshalFromBytes([]byte{0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x32, 0x2a, 0xbf, 0x00, 0x01, 0x81, 0xab}, &ao)
-	if err == nil {
-		t.Fatalf("UnmarshalFromBytes should fail to unmarshal to a union inside an invalid container")
-	}
-	if err.Error() != "cannot unmarshal struct type tpm2.TestInvalidUnionContainer: cannot unmarshal field Union: cannot unmarshal struct "+
-		"type tpm2.TestUnion: error unmarshalling union struct: no selector member defined in container" {
-		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
-	}
-
-	b := TestUnion{uint16(5432)}
-	_, err = MarshalToBytes(b)
-	if err == nil {
-		t.Fatalf("MarshalToBytes should fail to unmarshal to a union inside an invalid container")
-	}
-	if err.Error() != "cannot marshal struct type tpm2.TestUnion: error marshalling union struct: not inside a container" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
-	}
-}
-
 type TestStructWithCustomMarshaller struct {
 	A uint16
 	B TestListUint32
@@ -818,14 +757,6 @@ func TestMarshalStructWithCustomMarshaller(t *testing.T) {
 
 	if !reflect.DeepEqual(a, ao) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	_, err = MarshalToBytes(a)
-	if err == nil {
-		t.Fatal("MarshalToBytes should fail to marshal a truct with a custom marshaller supplied as a value")
-	}
-	if err.Error() != "cannot marshal non-addressable non-pointer type tpm2.TestStructWithCustomMarshaller with custom marshaller" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }
 
@@ -901,16 +832,5 @@ func TestMarshalStructWithCustomMarshallerAsValueFromContainer(t *testing.T) {
 
 	if !reflect.DeepEqual(a, ao) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
-	}
-
-	// This sucks, but any container type with types that implement CustomMarshaller must be passed to
-	// MarshalToBytes as a pointer. This isn't ideal, but test this case anyway
-	_, err = MarshalToBytes(a)
-	if err == nil {
-		t.Fatal("MarshalToBytes should fail to marshal a truct with a custom marshaller supplied as a value")
-	}
-	if err.Error() != "cannot marshal struct type tpm2.TestStructWithEmbeddedCustomMarshallerTypeAsValue: cannot marshal field B: "+
-		"cannot marshal non-addressable non-pointer type tpm2.TestStructWithCustomMarshaller with custom marshaller" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }

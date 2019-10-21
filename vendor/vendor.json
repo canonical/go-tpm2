@@ -7,6 +7,18 @@
 			"path": "golang.org/x/sys/unix",
 			"revision": "dd2ff4accc098aceecb86b36eaa7829b2a17b1c9",
 			"revisionTime": "2018-03-01T08:23:35Z"
+		},
+		{
+			"checksumSHA1": "hurBRtR9I3o8NVs74ggKny2c4go=",
+			"path": "golang.org/x/xerrors",
+			"revision": "1b5146add8981d58be77b16229c0ff0f8bebd8c1",
+			"revisionTime": "2019-10-05T12:30:33Z"
+		},
+		{
+			"checksumSHA1": "LnzK4nslUNXBIfAt9PbXCJCvMdA=",
+			"path": "golang.org/x/xerrors/internal",
+			"revision": "1b5146add8981d58be77b16229c0ff0f8bebd8c1",
+			"revisionTime": "2019-10-05T12:30:33Z"
 		}
 	],
 	"rootPath": "github.com/chrisccoulson/go-tpm2"

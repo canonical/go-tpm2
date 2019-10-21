@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+
+	"golang.org/x/xerrors"
 )
 
 func concat(chunks ...[]byte) []byte {
@@ -26,9 +28,8 @@ func wrapMarshallingError(commandCode CommandCode, context string, err error) er
 }
 
 func handleUnmarshallingError(context *cmdContext, scope string, err error) error {
-	origErr := errorUnwrapOriginal(err)
-	_, isSelectorError := origErr.(invalidSelectorError)
-	if origErr == io.EOF || origErr == io.ErrUnexpectedEOF || isSelectorError {
+	var s invalidSelectorError
+	if xerrors.Is(err, io.EOF) || xerrors.Is(err, io.ErrUnexpectedEOF) || xerrors.As(err, &s) {
 		return InvalidResponsePayloadError{context.commandCode, context.responseBytes,
 			fmt.Sprintf("cannot unmarshal %s: %v", scope, err)}
 	}
