@@ -22,7 +22,7 @@ type InvalidResponseHeaderError struct {
 	msg     string
 }
 
-func (e InvalidResponseHeaderError) Error() string {
+func (e *InvalidResponseHeaderError) Error() string {
 	return fmt.Sprintf("TPM returned an invalid header for command %s: %v", e.Command, e.msg)
 }
 
@@ -35,7 +35,7 @@ type InvalidResponsePayloadError struct {
 	msg     string
 }
 
-func (e InvalidResponsePayloadError) Error() string {
+func (e *InvalidResponsePayloadError) Error() string {
 	return fmt.Sprintf("TPM returned an invalid payload for command %s: %v", e.Command, e.msg)
 }
 
@@ -47,7 +47,7 @@ type InvalidResponseAuthError struct {
 	msg     string
 }
 
-func (e InvalidResponseAuthError) Error() string {
+func (e *InvalidResponseAuthError) Error() string {
 	return fmt.Sprintf("TPM returned an invalid authorization for command %s at index %d: %s", e.Command, e.Index, e.msg)
 }
 
@@ -58,11 +58,11 @@ type TPMReadError struct {
 	err     error
 }
 
-func (e TPMReadError) Error() string {
+func (e *TPMReadError) Error() string {
 	return fmt.Sprintf("cannot read response to command %s from TPM: %v", e.Command, e.err)
 }
 
-func (e TPMReadError) Unwrap() error {
+func (e *TPMReadError) Unwrap() error {
 	return e.err
 }
 
@@ -73,11 +73,11 @@ type TPMWriteError struct {
 	err     error
 }
 
-func (e TPMWriteError) Error() string {
+func (e *TPMWriteError) Error() string {
 	return fmt.Sprintf("cannot write command %s to TPM: %v", e.Command, e.err)
 }
 
-func (e TPMWriteError) Unwrap() error {
+func (e *TPMWriteError) Unwrap() error {
 	return e.err
 }
 
@@ -105,7 +105,7 @@ type TPM1Error struct {
 	Code    ResponseCode // Response code
 }
 
-func (e TPM1Error) Error() string {
+func (e *TPM1Error) Error() string {
 	return fmt.Sprintf("TPM returned a 1.2 error whilst executing command %s: 0x%08x", e.Command, e.Code)
 }
 
@@ -116,9 +116,8 @@ type TPMVendorError struct {
 	Code    ResponseCode // Response code
 }
 
-func (e TPMVendorError) Error() string {
-	return fmt.Sprintf("TPM returned a vendor defined error whilst executing command %s: 0x%08x", e.Command,
-		e.Code)
+func (e *TPMVendorError) Error() string {
+	return fmt.Sprintf("TPM returned a vendor defined error whilst executing command %s: 0x%08x", e.Command, e.Code)
 }
 
 // WarningCode represents a response from the TPM that is not necessarily an error.
@@ -131,7 +130,7 @@ type TPMWarning struct {
 	Code    WarningCode // Warning code
 }
 
-func (e TPMWarning) Error() string {
+func (e *TPMWarning) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned a warning whilst executing command %s: %s", e.Command, e.Code)
 	if desc, hasDesc := warningCodeDescriptions[e.Code]; hasDesc {
@@ -151,7 +150,7 @@ type TPMError struct {
 	Code    ErrorCode0  // Error code
 }
 
-func (e TPMError) Error() string {
+func (e *TPMError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error whilst executing command %s: %s", e.Command, e.Code)
 	if desc, hasDesc := errorCode0Descriptions[e.Code]; hasDesc {
@@ -171,7 +170,7 @@ type TPMParameterError struct {
 	Index   int         // Index of the command parameter associated with this error, starting from 1
 }
 
-func (e TPMParameterError) Error() string {
+func (e *TPMParameterError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for parameter %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
@@ -188,7 +187,7 @@ type TPMSessionError struct {
 	Index   int         // Index of the session associated with this error in the authorization area, starting from 1
 }
 
-func (e TPMSessionError) Error() string {
+func (e *TPMSessionError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for session %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
@@ -205,7 +204,7 @@ type TPMHandleError struct {
 	Index   int         // Index of the command handle associated with this error, starting from 1
 }
 
-func (e TPMHandleError) Error() string {
+func (e *TPMHandleError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for handle %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
 	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
@@ -224,27 +223,27 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 
 	if resp&formatMask == 0 {
 		if resp&fmt0VersionMask == 0 {
-			return TPM1Error{command, resp}
+			return &TPM1Error{command, resp}
 		}
 
 		if resp&fmt0VendorMask > 0 {
-			return TPMVendorError{command, resp}
+			return &TPMVendorError{command, resp}
 		}
 
 		if resp&fmt0SeverityMask > 0 {
-			return TPMWarning{command, WarningCode(resp & fmt0ErrorCodeMask)}
+			return &TPMWarning{command, WarningCode(resp & fmt0ErrorCodeMask)}
 		}
 
-		return TPMError{command, ErrorCode0(resp & fmt0ErrorCodeMask)}
+		return &TPMError{command, ErrorCode0(resp & fmt0ErrorCodeMask)}
 	}
 
 	if resp&fmt1ParameterMask > 0 {
-		return TPMParameterError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift)}
+		return &TPMParameterError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift)}
 	}
 
 	if resp&fmt1SessionMask > 0 {
-		return TPMSessionError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+		return &TPMSessionError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
 	}
 
-	return TPMHandleError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+	return &TPMHandleError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
 }

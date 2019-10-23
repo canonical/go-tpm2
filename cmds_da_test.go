@@ -140,11 +140,11 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 				t.Fatalf("Expected Create to fail")
 			}
 			switch e := err.(type) {
-			case TPMWarning:
+			case *TPMWarning:
 				if e.Code == WarningLockout {
 					break Loop
 				}
-			case TPMSessionError:
+			case *TPMSessionError:
 				if e.Code == ErrorAuthFail {
 					continue
 				}
@@ -156,7 +156,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Create should have failed")
 		}
-		warning, isWarning := err.(TPMWarning)
+		warning, isWarning := err.(*TPMWarning)
 		if !isWarning || warning.Code != WarningLockout {
 			t.Errorf("Unexpected error: %v", err)
 		}

@@ -219,11 +219,11 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 
 	if err != nil {
 		switch e := err.(type) {
-		case TPMWarning:
+		case *TPMWarning:
 			if e.Code == WarningReferenceH0 {
 				return nil, ErrResourceDoesNotExist
 			}
-		case TPMHandleError:
+		case *TPMHandleError:
 			if e.Code == ErrorHandle {
 				return nil, ErrResourceDoesNotExist
 			}

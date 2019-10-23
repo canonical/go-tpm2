@@ -229,7 +229,7 @@ func TestPolicySecret(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
 			}
-			se, isSessionErr := err.(TPMSessionError)
+			se, isSessionErr := err.(*TPMSessionError)
 			if !isSessionErr || se.Code != ErrorExpired {
 				t.Errorf("Unexpected error: %v", err)
 			}
@@ -284,7 +284,7 @@ func TestPolicySecret(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
 			}
-			se, isSessionErr := err.(TPMSessionError)
+			se, isSessionErr := err.(*TPMSessionError)
 			if !isSessionErr || se.Code != ErrorPolicyFail {
 				t.Errorf("Unexpected error: %v", err)
 			}

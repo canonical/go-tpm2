@@ -206,7 +206,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Ses
 	if sessionContext.sessionType == SessionTypePolicy &&
 		sessionContext.policyHMACType == policyHMACTypePassword {
 		if len(resp.HMAC) != 0 {
-			return InvalidResponseAuthError{Command: commandCode, msg: "non-zero length HMAC for policy password auth"}
+			return &InvalidResponseAuthError{Command: commandCode, msg: "non-zero length HMAC for policy password auth"}
 		}
 		return nil
 	}
@@ -220,7 +220,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Ses
 	hmac := cryptComputeSessionResponseHMAC(sessionContext, key, rpHash, resp.SessionAttrs)
 
 	if !bytes.Equal(hmac, resp.HMAC) {
-		return InvalidResponseAuthError{Command: commandCode, msg: "incorrect HMAC"}
+		return &InvalidResponseAuthError{Command: commandCode, msg: "incorrect HMAC"}
 	}
 
 	return nil
@@ -271,7 +271,7 @@ func processResponseAuthArea(tpm *TPMContext, authResponses []authResponse, sess
 	for i, resp := range authResponses {
 		if err := processResponseAuth(tpm, resp, sessionParams[i], commandCode, responseCode, rpBytes); err != nil {
 			switch e := err.(type) {
-			case InvalidResponseAuthError:
+			case *InvalidResponseAuthError:
 				e.Index = i
 				return e
 			}

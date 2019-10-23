@@ -30,7 +30,7 @@ func wrapMarshallingError(commandCode CommandCode, context string, err error) er
 func handleUnmarshallingError(context *cmdContext, scope string, err error) error {
 	var s invalidSelectorError
 	if xerrors.Is(err, io.EOF) || xerrors.Is(err, io.ErrUnexpectedEOF) || xerrors.As(err, &s) {
-		return InvalidResponsePayloadError{context.commandCode, context.responseBytes,
+		return &InvalidResponsePayloadError{context.commandCode, context.responseBytes,
 			fmt.Sprintf("cannot unmarshal %s: %v", scope, err)}
 	}
 
@@ -192,7 +192,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	}
 
 	if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
-		return 0, 0, nil, TPMWriteError{Command: commandCode, err: err}
+		return 0, 0, nil, &TPMWriteError{Command: commandCode, err: err}
 	}
 
 	var rHeader responseHeader
@@ -200,26 +200,26 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	rHeaderBytes := make([]byte, rHeaderSize)
 	if _, err := io.ReadFull(t.tcti, rHeaderBytes); err != nil {
 		if err == io.ErrUnexpectedEOF {
-			return 0, 0, nil, InvalidResponseHeaderError{commandCode, "insufficient bytes"}
+			return 0, 0, nil, &InvalidResponseHeaderError{commandCode, "insufficient bytes"}
 		}
-		return 0, 0, nil, TPMReadError{Command: commandCode, err: err}
+		return 0, 0, nil, &TPMReadError{Command: commandCode, err: err}
 	}
 
 	if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
-		return 0, 0, nil, InvalidResponseHeaderError{commandCode, fmt.Sprintf("cannot unmarshal header: %v", err)}
+		return 0, 0, nil, &InvalidResponseHeaderError{commandCode, fmt.Sprintf("cannot unmarshal header: %v", err)}
 	}
 
 	if rHeader.ResponseSize < rHeaderSize {
-		return 0, 0, nil, InvalidResponseHeaderError{commandCode, fmt.Sprintf("invalid responseSize value (%d)", rHeader.ResponseSize)}
+		return 0, 0, nil, &InvalidResponseHeaderError{commandCode, fmt.Sprintf("invalid responseSize value (%d)", rHeader.ResponseSize)}
 	}
 
 	responseBytes := make([]byte, rHeader.ResponseSize-rHeaderSize)
 	if _, err := io.ReadFull(t.tcti, responseBytes); err != nil {
 		if err == io.ErrUnexpectedEOF {
-			return 0, 0, nil, InvalidResponsePayloadError{commandCode, responseBytes,
+			return 0, 0, nil, &InvalidResponsePayloadError{commandCode, responseBytes,
 				"number of response payload bytes is less than indicated in the response header"}
 		}
-		return 0, 0, nil, TPMReadError{Command: commandCode, err: err}
+		return 0, 0, nil, &TPMReadError{Command: commandCode, err: err}
 	}
 
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
@@ -311,7 +311,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			break
 		}
 
-		warning, isWarning := err.(TPMWarning)
+		warning, isWarning := err.(*TPMWarning)
 		if tries >= t.maxSubmissions || !isWarning ||
 			!(warning.Code == WarningYielded || warning.Code == WarningTesting || warning.Code == WarningRetry) {
 			return nil, err
@@ -370,7 +370,7 @@ func (t *TPMContext) processResponse(context *cmdContext, params ...interface{})
 		_, err := io.ReadFull(buf, rpBytes)
 		if err != nil {
 			if err == io.ErrUnexpectedEOF {
-				return InvalidResponsePayloadError{context.commandCode, context.responseBytes,
+				return &InvalidResponsePayloadError{context.commandCode, context.responseBytes,
 					"number of response parameter bytes is less than indicated in the parameterSize field"}
 			}
 			return handleUnmarshallingError(context, "response parameters",
@@ -384,10 +384,10 @@ func (t *TPMContext) processResponse(context *cmdContext, params ...interface{})
 		if err := processResponseAuthArea(t, authArea.Data, context.sessionParams, context.commandCode, context.responseCode,
 			rpBytes); err != nil {
 			switch e := err.(type) {
-			case InvalidResponseAuthError:
+			case *InvalidResponseAuthError:
 				return e
 			}
-			return InvalidResponsePayloadError{context.commandCode, context.responseBytes,
+			return &InvalidResponsePayloadError{context.commandCode, context.responseBytes,
 				fmt.Sprintf("cannot process response auth area: %v", err)}
 		}
 
