@@ -6,11 +6,12 @@ package tpm2
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
 	"unsafe"
+
+	"golang.org/x/xerrors"
 )
 
 // 5.3) Miscellaneous Types
@@ -119,7 +120,7 @@ type TaggedHash struct {
 
 func (p *TaggedHash) Marshal(buf io.Writer) error {
 	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
-		return err
+		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
 	size, known := cryptGetDigestSize(p.HashAlg)
 	if !known {
@@ -130,19 +131,15 @@ func (p *TaggedHash) Marshal(buf io.Writer) error {
 		return fmt.Errorf("invalid digest size %d", len(p.Digest))
 	}
 
-	n, err := buf.Write(p.Digest)
-	if err != nil {
-		return fmt.Errorf("cannot write digest: %v", err)
-	}
-	if n != int(size) {
-		return fmt.Errorf("cannot write entire digest")
+	if _, err := buf.Write(p.Digest); err != nil {
+		return xerrors.Errorf("cannot write digest: %w", err)
 	}
 	return nil
 }
 
 func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
-		return err
+		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
 	size, known := cryptGetDigestSize(p.HashAlg)
 	if !known {
@@ -150,12 +147,8 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	}
 
 	p.Digest = make(Digest, size)
-	n, err := buf.Read(p.Digest)
-	if err != nil {
-		return fmt.Errorf("cannot read digest: %v", err)
-	}
-	if n != int(size) {
-		return fmt.Errorf("cannot read digest: %v", io.EOF)
+	if _, err := io.ReadFull(buf, p.Digest); err != nil {
+		return xerrors.Errorf("cannot read digest: %w", err)
 	}
 	return nil
 }
@@ -213,14 +206,10 @@ func (d *PCRSelectionData) Marshal(buf io.Writer) error {
 	}
 
 	if err := binary.Write(buf, binary.BigEndian, uint8(len(bytes))); err != nil {
-		return fmt.Errorf("cannot write size of PCR selection bit mask: %v", err)
+		return xerrors.Errorf("cannot write size of PCR selection bit mask: %w", err)
 	}
-	n, err := buf.Write(bytes)
-	if err != nil {
-		return fmt.Errorf("cannot write PCR selection bit mask: %v", err)
-	}
-	if n != len(bytes) {
-		return errors.New("cannot write complete PCR selection bit mask")
+	if _, err := buf.Write(bytes); err != nil {
+		return xerrors.Errorf("cannot write PCR selection bit mask: %w", err)
 	}
 	return nil
 }
@@ -228,17 +217,13 @@ func (d *PCRSelectionData) Marshal(buf io.Writer) error {
 func (d *PCRSelectionData) Unmarshal(buf io.Reader) error {
 	var size uint8
 	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
-		return fmt.Errorf("cannot read size of PCR selection bit mask: %v", err)
+		return xerrors.Errorf("cannot read size of PCR selection bit mask: %w", err)
 	}
 
 	bytes := make([]byte, size)
 
-	n, err := buf.Read(bytes)
-	if err != nil {
-		return fmt.Errorf("cannot read PCR selection bit mask: %v", err)
-	}
-	if n != int(size) {
-		return errors.New("cannot read complete PCR selection bit mask")
+	if _, err := io.ReadFull(buf, bytes); err != nil {
+		return xerrors.Errorf("cannot read PCR selection bit mask: %w", err)
 	}
 
 	*d = make(PCRSelectionData, 0)

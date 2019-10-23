@@ -174,7 +174,7 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 	}
 	data, err := MarshalToBytes(params)
 	if err != nil {
-		return fmt.Errorf("cannot marshal PIN counter parameters: %v", err)
+		panic(fmt.Sprintf("cannot marshal PIN counter parameters: %v", err))
 	}
 	return t.NVWrite(authContext, nvIndex, data, 0, authContextAuth, sessions...)
 }

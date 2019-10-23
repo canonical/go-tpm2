@@ -53,7 +53,7 @@ type resourceContextData struct {
 	TPMBlob     ContextData
 }
 
-func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData, error) {
+func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
 	d := resourceContextData{TPMBlob: tpmBlob}
 
 	switch c := context.(type) {
@@ -76,9 +76,9 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) (ContextData,
 
 	data, err := MarshalToBytes(d)
 	if err != nil {
-		return nil, fmt.Errorf("cannot marshal resource context: %v", err)
+		panic(fmt.Sprintf("cannot marshal wrapped resource context data: %v", err))
 	}
-	return data, nil
+	return data
 }
 
 func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
@@ -134,11 +134,7 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 		return nil, err
 	}
 
-	blob, err := wrapContextBlob(context.Blob, saveContext)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create context data: %v", err)
-	}
-	context.Blob = blob
+	context.Blob = wrapContextBlob(context.Blob, saveContext)
 
 	if saveContext.Handle().Type() == HandleTypeHMACSession || saveContext.Handle().Type() == HandleTypePolicySession {
 		t.evictResourceContext(saveContext)

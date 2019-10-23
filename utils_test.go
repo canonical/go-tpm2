@@ -315,9 +315,7 @@ func TestTrialPolicyPCR(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ComputeAuthPolicy failed: %v", err)
 			}
-			if err := trial.PolicyPCR(data.digest, data.pcrs); err != nil {
-				t.Fatalf("Trial PolicyPCR failed: %v", err)
-			}
+			trial.PolicyPCR(data.digest, data.pcrs)
 
 			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {

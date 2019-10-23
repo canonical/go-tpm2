@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+
+	"golang.org/x/xerrors"
 )
 
 type policyHMACType uint8
@@ -59,25 +61,21 @@ type commandAuthAreaRawSlice struct {
 func (a *commandAuthArea) Marshal(buf io.Writer) error {
 	tmpBuf := new(bytes.Buffer)
 	if err := MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(*a)}); err != nil {
-		return nil
+		panic(fmt.Sprintf("cannot marshal raw command auth area to temporary buffer: %v", err))
 	}
 
 	if err := binary.Write(buf, binary.BigEndian, uint32(tmpBuf.Len())); err != nil {
-		return fmt.Errorf("cannot write size of auth area to buffer: %v", err)
+		return xerrors.Errorf("cannot write size of auth area to buffer: %w", err)
 	}
 
-	n, err := buf.Write(tmpBuf.Bytes())
-	if err != nil {
-		return fmt.Errorf("cannot write marshalled auth area to buffer: %v", err)
-	}
-	if n != tmpBuf.Len() {
-		return errors.New("cannot write complete marshalled auth area to buffer")
+	if _, err := tmpBuf.WriteTo(buf);  err != nil {
+		return xerrors.Errorf("cannot write marshalled auth area to buffer: %w", err)
 	}
 	return nil
 }
 
 func (a *commandAuthArea) Unmarshal(buf io.Reader) error {
-	return errors.New("no need to unmarshal a command's auth area")
+	panic("no need to unmarshal a command's auth area")
 }
 
 func attrsFromSession(session *Session) sessionAttrs {
@@ -158,7 +156,7 @@ func (s *Session) copyWithNewAuthIfRequired(newAuth []byte) *Session {
 }
 
 func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContext ResourceContext, commandCode CommandCode,
-	commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) (*authCommand, error) {
+	commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) *authCommand {
 	sessionContext := session.Context.(*sessionContext)
 
 	attrs := attrsFromSession(session)
@@ -176,10 +174,11 @@ func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContex
 
 	}
 
-	return &authCommand{SessionHandle: session.Context.Handle(),
+	return &authCommand{
+		SessionHandle: session.Context.Handle(),
 		Nonce:        sessionContext.nonceCaller,
 		SessionAttrs: attrs,
-		HMAC:         hmac}, nil
+		HMAC:         hmac}
 }
 
 func buildCommandPasswordAuth(authValue Auth) *authCommand {
@@ -187,9 +186,9 @@ func buildCommandPasswordAuth(authValue Auth) *authCommand {
 }
 
 func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name, cpBytes []byte,
-	decryptNonce, encryptNonce Nonce) (*authCommand, error) {
+	decryptNonce, encryptNonce Nonce) *authCommand {
 	if param.session == nil {
-		return buildCommandPasswordAuth(Auth(param.authValue)), nil
+		return buildCommandPasswordAuth(Auth(param.authValue))
 	}
 	return buildCommandSessionAuth(tpm, param.session, param.associatedContext, commandCode, commandHandles, cpBytes, decryptNonce,
 		encryptNonce)
@@ -260,10 +259,7 @@ func buildCommandAuthArea(tpm *TPMContext, sessionParams []*sessionParam, comman
 			dn = decryptNonce
 			en = encryptNonce
 		}
-		a, err := buildCommandAuth(tpm, param, commandCode, commandHandles, cpBytes, dn, en)
-		if err != nil {
-			return nil, fmt.Errorf("cannot build auth at index %d: %v", i, err)
-		}
+		a := buildCommandAuth(tpm, param, commandCode, commandHandles, cpBytes, dn, en)
 		area = append(area, *a)
 	}
 

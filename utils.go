@@ -133,15 +133,13 @@ func (p *TrialAuthPolicy) PolicyOR(pHashList DigestList) {
 	h.commit()
 }
 
-func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) error {
+func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) {
 	h := p.beginExtend(CommandPolicyPCR)
 	if err := MarshalToWriter(h, pcrs); err != nil {
-		return fmt.Errorf("cannot marshal PCR selection: %v", err)
+		panic(fmt.Sprintf("cannot marshal PCR selection: %v", err))
 	}
 	h.Write(pcrDigest)
 	h.commit()
-
-	return nil
 }
 
 func (p *TrialAuthPolicy) PolicyNV(nvIndex ResourceContext, operandB Operand, offset uint16,

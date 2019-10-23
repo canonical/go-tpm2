@@ -593,9 +593,7 @@ func TestPolicyPCR(t *testing.T) {
 			}
 
 			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
-			if err := trial.PolicyPCR(pcrDigest, data.pcrs); err != nil {
-				t.Fatalf("Trial PolicyPCR failed: %v", err)
-			}
+			trial.PolicyPCR(pcrDigest, data.pcrs)
 
 			if !bytes.Equal(policyDigest, trial.GetDigest()) {
 				t.Errorf("Unexpected policy digest")
