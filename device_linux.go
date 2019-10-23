@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"golang.org/x/sys/unix"
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -26,7 +27,7 @@ func (d *TctiDeviceLinux) readMoreData() error {
 	fds := []unix.PollFd{unix.PollFd{Fd: int32(d.f.Fd()), Events: unix.POLLIN}}
 	_, err := unix.Ppoll(fds, nil, nil)
 	if err != nil {
-		return fmt.Errorf("polling device failed: %v", err)
+		return xerrors.Errorf("polling device failed: %w", err)
 	}
 
 	if fds[0].Events != fds[0].Revents {
@@ -36,7 +37,7 @@ func (d *TctiDeviceLinux) readMoreData() error {
 	buf := make([]byte, maxCommandSize)
 	n, err := d.f.Read(buf)
 	if err != nil {
-		return fmt.Errorf("reading from device failed: %v", err)
+		return xerrors.Errorf("reading from device failed: %w", err)
 	}
 
 	d.buf = bytes.NewReader(buf[:n])
@@ -63,16 +64,16 @@ func (d *TctiDeviceLinux) Close() error {
 
 // OpenTPMDevice attempts to open a connection to the Linux TPM character device at the specified path. If successful, it returns a
 // new TctiDeviceLinux instance which can be passed to NewTPMContext. Failure to open the TPM character device will result in a
-// *os.PathError being returned
+// wrapped *os.PathError being returned
 func OpenTPMDevice(path string) (*TctiDeviceLinux, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("cannot open linux TPM device: %w", err)
 	}
 
 	s, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("cannot stat linux TPM device: %w", err)
 	}
 
 	if s.Mode()&os.ModeDevice == 0 {

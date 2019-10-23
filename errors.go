@@ -55,22 +55,30 @@ func (e InvalidResponseAuthError) Error() string {
 // function) if the transmission interface returns an error during reading.
 type TPMReadError struct {
 	Command CommandCode // Command code associated with this error
-	Err     error       // Error returned from the transmission interface
+	err     error
 }
 
 func (e TPMReadError) Error() string {
-	return fmt.Sprintf("cannot read response to command %s from TPM: %v", e.Command, e.Err)
+	return fmt.Sprintf("cannot read response to command %s from TPM: %v", e.Command, e.err)
+}
+
+func (e TPMReadError) Unwrap() error {
+	return e.err
 }
 
 // TPMWriteError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap around this
 // function) if the transmission interface returns an error during writing.
 type TPMWriteError struct {
 	Command CommandCode // Command code associated with this error
-	Err     error       // Error returned from the transmission interface
+	err     error
 }
 
 func (e TPMWriteError) Error() string {
-	return fmt.Sprintf("cannot write command %s to TPM: %v", e.Command, e.Err)
+	return fmt.Sprintf("cannot write command %s to TPM: %v", e.Command, e.err)
+}
+
+func (e TPMWriteError) Unwrap() error {
+	return e.err
 }
 
 const (

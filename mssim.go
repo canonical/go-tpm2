@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -19,6 +21,16 @@ const (
 	cmdReset          uint32 = 17
 	cmdSessionEnd     uint32 = 20
 )
+
+// PlatformCommandError corresponds to an error code in response to a platform command executed on a TPM simulator.
+type PlatformCommandError struct {
+	commandCode uint32
+	Code        uint32
+}
+
+func (e PlatformCommandError) Error() string {
+	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
+}
 
 // TctiMssim represents a connection to a TPM simulator that implements the Microsoft TPM2 simulator interface.
 type TctiMssim struct {
@@ -33,19 +45,19 @@ type TctiMssim struct {
 func (t *TctiMssim) readMoreData() error {
 	var size uint32
 	if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
-		return fmt.Errorf("cannot read response size: %v", err)
+		return xerrors.Errorf("cannot read response size from TPM command channel: %w", err)
 	}
 
 	buf := make([]byte, size)
 	if _, err := io.ReadFull(t.tpm, buf); err != nil {
-		return fmt.Errorf("cannot read response: %v", err)
+		return xerrors.Errorf("cannot read response from TPM command channel: %w", err)
 	}
 
 	t.buf = bytes.NewReader(buf)
 
 	var trash uint32
 	if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
-		return fmt.Errorf("cannot read zero bytes after response: %v", err)
+		return xerrors.Errorf("cannot read zero bytes from TPM command channel after response: %w", err)
 	}
 	return nil
 }
@@ -70,27 +82,31 @@ func (t *TctiMssim) Write(data []byte) (int, error) {
 
 func (t *TctiMssim) Close() (out error) {
 	if err := binary.Write(t.platform, binary.BigEndian, cmdSessionEnd); err != nil {
-		out = err
+		out = xerrors.Errorf("cannot send session end command on platform channel: %w", err)
 	}
 	if err := binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd); err != nil {
-		out = err
+		out = xerrors.Errorf("cannot send session end command on TPM command channel: %w", err)
 	}
-	t.platform.Close()
-	t.tpm.Close()
+	if err := t.platform.Close(); err != nil {
+		out = xerrors.Errorf("cannot close platform channel: %w", err)
+	}
+	if err := t.tpm.Close(); err != nil {
+		out = xerrors.Errorf("cannot close TPM command channel: %w", err)
+	}
 	return
 }
 
 func (t *TctiMssim) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
-		return fmt.Errorf("cannot marshal platform command: %v", err)
+		return xerrors.Errorf("cannot send command: %w", err)
 	}
 
 	var resp uint32
 	if err := binary.Read(t.platform, binary.BigEndian, &resp); err != nil {
-		return fmt.Errorf("cannot read response to platform command: %v", err)
+		return xerrors.Errorf("cannot read response to command: %w", err)
 	}
 	if resp != 0 {
-		return fmt.Errorf("received error code %d in response to platform command %d", resp, cmd)
+		return &PlatformCommandError{cmd, resp}
 	}
 
 	return nil
@@ -120,22 +136,22 @@ func OpenMssim(host string, tpmPort, platformPort uint) (*TctiMssim, error) {
 
 	tpm, err := net.Dial("tcp", tpmAddress)
 	if err != nil {
-		return nil, fmt.Errorf("cannot connect to TPM socket: %v", err)
+		return nil, xerrors.Errorf("cannot connect to TPM socket: %w", err)
 	}
 	tcti.tpm = tpm
 
 	platform, err := net.Dial("tcp", platformAddress)
 	if err != nil {
 		tcti.tpm.Close()
-		return nil, fmt.Errorf("cannot connect to platform socket: %v", err)
+		return nil, xerrors.Errorf("cannot connect to platform socket: %w", err)
 	}
 	tcti.platform = platform
 
 	if err := tcti.platformCommand(cmdPowerOn); err != nil {
-		return nil, fmt.Errorf("cannot complete power on command: %v", err)
+		return nil, xerrors.Errorf("cannot complete power on command: %w", err)
 	}
 	if err := tcti.platformCommand(cmdNVOn); err != nil {
-		return nil, fmt.Errorf("cannot complete NV on command: %v", err)
+		return nil, xerrors.Errorf("cannot complete NV on command: %w", err)
 	}
 
 	return tcti, nil

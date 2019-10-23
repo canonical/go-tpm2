@@ -192,7 +192,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	}
 
 	if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
-		return 0, 0, nil, TPMWriteError{Command: commandCode, Err: err}
+		return 0, 0, nil, TPMWriteError{Command: commandCode, err: err}
 	}
 
 	var rHeader responseHeader
@@ -202,7 +202,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 		if err == io.ErrUnexpectedEOF {
 			return 0, 0, nil, InvalidResponseHeaderError{commandCode, "insufficient bytes"}
 		}
-		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
+		return 0, 0, nil, TPMReadError{Command: commandCode, err: err}
 	}
 
 	if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
@@ -219,7 +219,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 			return 0, 0, nil, InvalidResponsePayloadError{commandCode, responseBytes,
 				"number of response payload bytes is less than indicated in the response header"}
 		}
-		return 0, 0, nil, TPMReadError{Command: commandCode, Err: err}
+		return 0, 0, nil, TPMReadError{Command: commandCode, err: err}
 	}
 
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
