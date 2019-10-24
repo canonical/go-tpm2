@@ -19,70 +19,31 @@ func (e ResourceDoesNotExistError) Error() string {
 	return fmt.Sprintf("a resource at handle 0x%08x does not exist on the TPM", e.Handle)
 }
 
-// InvalidResponseHeaderError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap
-// around this function) if the TPM responds with a header that is invalid. This could be because there are insufficient bytes,
-// or because the responseSize field has an invalid value
-type InvalidResponseHeaderError struct {
+// InvalidResponseError is returned from any TPMContext method that executes a TPM command if the TPM's response is invalid. An
+// invalid response could be one that is shorter than the response header, one with an invalid responseSize field, a payload that is
+// shorter than the responseSize field indicates, a payload that unmarshals incorrectly because of an invalid union selector value,
+// or an invalid response authorization. Any sessions used in the command that caused this error should be considered invalid and
+// should be flushed from the TPM.
+type InvalidResponseError struct {
 	Command CommandCode
 	msg     string
 }
 
-func (e *InvalidResponseHeaderError) Error() string {
-	return fmt.Sprintf("TPM returned an invalid header for command %s: %v", e.Command, e.msg)
+func (e *InvalidResponseError) Error() string {
+	return fmt.Sprintf("TPM returned an invalid response for command %s: %v", e.Command, e.msg)
 }
 
-// InvalidResponseHeaderError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap
-// around this function) if the TPM responds with a payload that is invalid. This could be because there are fewer bytes than
-// indicated in the header, or unmarshalling of the response payload failed because of an invalid union selector value.
-type InvalidResponsePayloadError struct {
-	Command CommandCode
-	Bytes   []byte
-	msg     string
+// TctiError is returned from any TPMContext method if the underlying TCTI returns an error.
+type TctiError struct {
+	Op string // The operation that caused the error
+	err error
 }
 
-func (e *InvalidResponsePayloadError) Error() string {
-	return fmt.Sprintf("TPM returned an invalid payload for command %s: %v", e.Command, e.msg)
+func (e *TctiError) Error() string {
+	return fmt.Sprintf("cannot complete %s operation on TCTI: %v", e.Op, e.err)
 }
 
-// InvalidResponseAuthError is returned from TPMContext.RunCommand (and any other methods that wrap around this function) if a
-// response HMAC check failed.
-type InvalidResponseAuthError struct {
-	Command CommandCode
-	Index   int
-	msg     string
-}
-
-func (e *InvalidResponseAuthError) Error() string {
-	return fmt.Sprintf("TPM returned an invalid authorization for command %s at index %d: %s", e.Command, e.Index, e.msg)
-}
-
-// TPMReadError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap around this
-// function) if the transmission interface returns an error during reading.
-type TPMReadError struct {
-	Command CommandCode // Command code associated with this error
-	err     error
-}
-
-func (e *TPMReadError) Error() string {
-	return fmt.Sprintf("cannot read response to command %s from TPM: %v", e.Command, e.err)
-}
-
-func (e *TPMReadError) Unwrap() error {
-	return e.err
-}
-
-// TPMWriteError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap around this
-// function) if the transmission interface returns an error during writing.
-type TPMWriteError struct {
-	Command CommandCode // Command code associated with this error
-	err     error
-}
-
-func (e *TPMWriteError) Error() string {
-	return fmt.Sprintf("cannot write command %s to TPM: %v", e.Command, e.err)
-}
-
-func (e *TPMWriteError) Unwrap() error {
+func (e *TctiError) Unwrap() error {
 	return e.err
 }
 
