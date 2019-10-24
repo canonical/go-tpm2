@@ -6,13 +6,18 @@ package tpm2
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 )
 
-// ErrResourceDoesNotExist is returned from TPMContext.WrapHandle if it is called with a handle that does not correspond to a
+// ResourceDoesNotExistError is returned from TPMContext.WrapHandle if it is called with a handle that does not correspond to a
 // resource that is loaded in to the TPM.
-var ErrResourceDoesNotExist = errors.New("the resource does not exist on the TPM")
+type ResourceDoesNotExistError struct {
+	Handle Handle
+}
+
+func (e ResourceDoesNotExistError) Error() string {
+	return fmt.Sprintf("a resource at handle 0x%08x does not exist on the TPM", e.Handle)
+}
 
 // InvalidResponseHeaderError is returned from TPMContext.RunCommandBytes and TPMContext.RunCommand (and any other methods that wrap
 // around this function) if the TPM responds with a header that is invalid. This could be because there are insufficient bytes,
