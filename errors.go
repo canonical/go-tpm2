@@ -35,7 +35,7 @@ func (e *InvalidResponseError) Error() string {
 
 // TctiError is returned from any TPMContext method if the underlying TCTI returns an error.
 type TctiError struct {
-	Op string // The operation that caused the error
+	Op  string // The operation that caused the error
 	err error
 }
 
@@ -46,23 +46,6 @@ func (e *TctiError) Error() string {
 func (e *TctiError) Unwrap() error {
 	return e.err
 }
-
-const (
-	formatMask ResponseCode = 1 << 7
-
-	fmt0ErrorCodeMask ResponseCode = 0x7f
-	fmt0VersionMask   ResponseCode = 1 << 8
-	fmt0VendorMask    ResponseCode = 1 << 10
-	fmt0SeverityMask  ResponseCode = 1 << 11
-
-	fmt1ErrorCodeMask            ResponseCode = 0x3f
-	fmt1ParameterIndexMask       ResponseCode = 0xf00
-	fmt1HandleOrSessionIndexMask ResponseCode = 0x700
-	fmt1ParameterMask            ResponseCode = 1 << 6
-	fmt1SessionMask              ResponseCode = 1 << 11
-
-	fmt1IndexShift uint = 8
-)
 
 // TPM1Error is returned from DecodeResponseCode and TPMContext.RunCommand (and any other methods that wrap around this function) if
 // the TPM response code indicates an error from a TPM 1.2 device.
@@ -179,37 +162,51 @@ func (e *TPMHandleError) Error() string {
 	return builder.String()
 }
 
+const (
+	formatMask ResponseCode = 1 << 7
+
+	fmt0ErrorCodeMask ResponseCode = 0x7f
+	fmt0VersionMask   ResponseCode = 1 << 8
+	fmt0VendorMask    ResponseCode = 1 << 10
+	fmt0SeverityMask  ResponseCode = 1 << 11
+
+	fmt1ErrorCodeMask            ResponseCode = 0x3f
+	fmt1IndexShift               uint         = 8
+	fmt1ParameterIndexMask       ResponseCode = 0xf << fmt1IndexShift
+	fmt1HandleOrSessionIndexMask ResponseCode = 0x7 << fmt1IndexShift
+	fmt1ParameterMask            ResponseCode = 1 << 6
+	fmt1SessionMask              ResponseCode = 1 << 11
+)
+
 // DecodeResponseCode decodes the ResponseCode provided via resp. If the specified response code is Success, it returns no error,
 // else it returns an error that is appropriate for the response code. The command code is used for adding context to the returned
 // error.
 func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
-	if resp == ResponseCode(Success) {
+	switch {
+	case resp == ResponseCode(Success):
 		return nil
-	}
-
-	if resp&formatMask == 0 {
-		if resp&fmt0VersionMask == 0 {
+	case resp&formatMask == 0:
+		// Format 0 error codes
+		switch {
+		case resp&fmt0VersionMask == 0:
 			return &TPM1Error{command, resp}
-		}
-
-		if resp&fmt0VendorMask > 0 {
+		case resp&fmt0VendorMask > 0:
 			return &TPMVendorError{command, resp}
-		}
-
-		if resp&fmt0SeverityMask > 0 {
+		case resp&fmt0SeverityMask > 0:
 			return &TPMWarning{command, WarningCode(resp & fmt0ErrorCodeMask)}
+		default:
+			return &TPMError{command, ErrorCode0(resp & fmt0ErrorCodeMask)}
+		}
+	default:
+		// Format 1 error codes
+		switch {
+		case resp&fmt1ParameterMask > 0:
+			return &TPMParameterError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift)}
+		case resp&fmt1SessionMask > 0:
+			return &TPMSessionError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+		default:
+			return &TPMHandleError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
 		}
 
-		return &TPMError{command, ErrorCode0(resp & fmt0ErrorCodeMask)}
 	}
-
-	if resp&fmt1ParameterMask > 0 {
-		return &TPMParameterError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift)}
-	}
-
-	if resp&fmt1SessionMask > 0 {
-		return &TPMSessionError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
-	}
-
-	return &TPMHandleError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
 }

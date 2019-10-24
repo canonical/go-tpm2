@@ -85,7 +85,7 @@ func TestWrapHandle(t *testing.T) {
 	}
 	switch e := err.(type) {
 	case ResourceDoesNotExistError:
-		if e.Handle != primaryHandle + 1 {
+		if e.Handle != primaryHandle+1 {
 			t.Errorf("WrapHandle returned the correct error with the wrong handle")
 		}
 	default:
@@ -97,7 +97,7 @@ func TestWrapHandle(t *testing.T) {
 	}
 	switch e := err.(type) {
 	case ResourceDoesNotExistError:
-		if e.Handle != persistentHandle + 1 {
+		if e.Handle != persistentHandle+1 {
 			t.Errorf("WrapHandle returned the correct error with the wrong handle")
 		}
 	default:
@@ -109,7 +109,7 @@ func TestWrapHandle(t *testing.T) {
 	}
 	switch e := err.(type) {
 	case ResourceDoesNotExistError:
-		if e.Handle != nvPub.Index + 1 {
+		if e.Handle != nvPub.Index+1 {
 			t.Errorf("WrapHandle returned the correct error with the wrong handle")
 		}
 	default:

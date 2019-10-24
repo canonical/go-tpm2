@@ -68,7 +68,7 @@ func (a *commandAuthArea) Marshal(buf io.Writer) error {
 		return xerrors.Errorf("cannot write size of auth area to buffer: %w", err)
 	}
 
-	if _, err := tmpBuf.WriteTo(buf);  err != nil {
+	if _, err := tmpBuf.WriteTo(buf); err != nil {
 		return xerrors.Errorf("cannot write marshalled auth area to buffer: %w", err)
 	}
 	return nil
@@ -176,9 +176,9 @@ func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContex
 
 	return &authCommand{
 		SessionHandle: session.Context.Handle(),
-		Nonce:        sessionContext.nonceCaller,
-		SessionAttrs: attrs,
-		HMAC:         hmac}
+		Nonce:         sessionContext.nonceCaller,
+		SessionAttrs:  attrs,
+		HMAC:          hmac}
 }
 
 func buildCommandPasswordAuth(authValue Auth) *authCommand {
