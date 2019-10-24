@@ -156,8 +156,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Create should have failed")
 		}
-		warning, isWarning := err.(*TPMWarning)
-		if !isWarning || warning.Code != WarningLockout {
+		if e, ok := err.(*TPMWarning); !ok || e.Code != WarningLockout {
 			t.Errorf("Unexpected error: %v", err)
 		}
 

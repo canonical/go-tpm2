@@ -83,36 +83,21 @@ func TestWrapHandle(t *testing.T) {
 	if err == nil {
 		t.Fatalf("WrapHandle should return an error for a dead transient object")
 	}
-	switch e := err.(type) {
-	case ResourceDoesNotExistError:
-		if e.Handle != primaryHandle+1 {
-			t.Errorf("WrapHandle returned the correct error with the wrong handle")
-		}
-	default:
+	if e, ok := err.(ResourceDoesNotExistError); !ok || e.Handle != primaryHandle+1 {
 		t.Errorf("WrapHandle returned an unexpected error for a dead transient object: %v", err)
 	}
 	_, err = tpm.WrapHandle(persistentHandle + 1)
 	if err == nil {
 		t.Fatalf("WrapHandle should return an error for a dead persistent object")
 	}
-	switch e := err.(type) {
-	case ResourceDoesNotExistError:
-		if e.Handle != persistentHandle+1 {
-			t.Errorf("WrapHandle returned the correct error with the wrong handle")
-		}
-	default:
+	if e, ok := err.(ResourceDoesNotExistError); !ok || e.Handle != persistentHandle+1 {
 		t.Errorf("WrapHandle returned an unexpected error for a dead persistent object: %v", err)
 	}
 	_, err = tpm.WrapHandle(nvPub.Index + 1)
 	if err == nil {
 		t.Fatalf("WrapHandle should return an error for a dead NV index")
 	}
-	switch e := err.(type) {
-	case ResourceDoesNotExistError:
-		if e.Handle != nvPub.Index+1 {
-			t.Errorf("WrapHandle returned the correct error with the wrong handle")
-		}
-	default:
+	if e, ok := err.(ResourceDoesNotExistError); !ok || e.Handle != nvPub.Index+1 {
 		t.Errorf("WrapHandle returned an unexpected error for a dead NV index: %v", err)
 	}
 }

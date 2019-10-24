@@ -315,9 +315,10 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			break
 		}
 
-		warning, isWarning := err.(*TPMWarning)
-		if tries >= t.maxSubmissions || !isWarning ||
-			!(warning.Code == WarningYielded || warning.Code == WarningTesting || warning.Code == WarningRetry) {
+		if tries >= t.maxSubmissions {
+			return nil, err
+		}
+		if e, ok := err.(*TPMWarning); !ok || !(e.Code == WarningYielded || e.Code == WarningTesting || e.Code == WarningRetry) {
 			return nil, err
 		}
 	}
