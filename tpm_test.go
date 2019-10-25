@@ -7,6 +7,8 @@ package tpm2
 import (
 	"bytes"
 	"flag"
+	"fmt"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -377,4 +379,24 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 	if err := tpm.Close(); err != nil {
 		t.Errorf("Close failed: %v", err)
 	}
+}
+
+func TestMain(m *testing.M) {
+	os.Exit(func() int {
+		defer func() {
+			if !*useMssim {
+				return
+			}
+
+			tcti, err := OpenMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to open mssim connection: %v\n", err)
+				return
+			}
+			if err := tcti.Stop(); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to stop TPM simulator: %v\n", err)
+			}
+		}()
+		return m.Run()
+	}())
 }

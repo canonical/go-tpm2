@@ -20,6 +20,7 @@ const (
 	cmdNVOn           uint32 = 11
 	cmdReset          uint32 = 17
 	cmdSessionEnd     uint32 = 20
+	cmdStop           uint32 = 21
 )
 
 // PlatformCommandError corresponds to an error code in response to a platform command executed on a TPM simulator.
@@ -79,11 +80,15 @@ func (t *TctiMssim) Write(data []byte) (int, error) {
 	return t.tpm.Write(buf)
 }
 
+func sendSessionEnd(conn net.Conn) error {
+	return binary.Write(conn, binary.BigEndian, cmdSessionEnd)
+}
+
 func (t *TctiMssim) Close() (out error) {
-	if err := binary.Write(t.platform, binary.BigEndian, cmdSessionEnd); err != nil {
+	if err := sendSessionEnd(t.platform); err != nil {
 		out = xerrors.Errorf("cannot send session end command on platform channel: %w", err)
 	}
-	if err := binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd); err != nil {
+	if err := sendSessionEnd(t.tpm); err != nil {
 		out = xerrors.Errorf("cannot send session end command on TPM command channel: %w", err)
 	}
 	if err := t.platform.Close(); err != nil {
@@ -115,6 +120,21 @@ func (t *TctiMssim) platformCommand(cmd uint32) error {
 // execution of _TPM_Init().
 func (t *TctiMssim) Reset() error {
 	return t.platformCommand(cmdReset)
+}
+
+func sendStop(conn net.Conn) error {
+	return binary.Write(conn, binary.BigEndian, cmdStop)
+}
+
+// Stop submits a stop command on both the TPM command and platform channels, which initiates a shutdown of the TPM simulator.
+func (t *TctiMssim) Stop() (out error) {
+	if err := sendStop(t.platform); err != nil {
+		out = xerrors.Errorf("cannot send stop command on platform channel: %w", err)
+	}
+	if err := sendStop(t.tpm); err != nil {
+		out = xerrors.Errorf("cannot send stop command on TPM command channel: %w", err)
+	}
+	return nil
 }
 
 // OpenMssim attempts to open a connection to a TPM simulator on the specified host. tpmPort is the port on which the TPM command

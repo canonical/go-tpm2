@@ -33,10 +33,7 @@ if [ $WITH_MSSIM -eq 1 ]; then
         fi
 
         $TPM_SIMULATOR -m >/dev/null &
-        TPM_PID=$!
         MSSIM_ARGS=-use-mssim
-
-        trap "kill $TPM_PID" EXIT
 fi
 
 
