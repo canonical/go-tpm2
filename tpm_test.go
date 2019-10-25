@@ -396,6 +396,7 @@ func TestMain(m *testing.M) {
 			if err := tcti.Stop(); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to stop TPM simulator: %v\n", err)
 			}
+			tcti.Close()
 		}()
 		return m.Run()
 	}())
