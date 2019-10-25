@@ -15,10 +15,6 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func concat(chunks ...[]byte) []byte {
-	return bytes.Join(chunks, nil)
-}
-
 func makeInvalidParamError(name, msg string) error {
 	return fmt.Errorf("invalid %s parameter: %s", name, msg)
 }
@@ -189,12 +185,12 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
 
-	cHeaderBytes, err := MarshalToBytes(cHeader)
+	bytes, err := MarshalToBytes(cHeader, RawBytes(commandBytes))
 	if err != nil {
-		return 0, 0, nil, wrapMarshallingError(commandCode, "command header", err)
+		return 0, 0, nil, wrapMarshallingError(commandCode, "complete command packet", err)
 	}
 
-	if _, err := t.tcti.Write(concat(cHeaderBytes, commandBytes)); err != nil {
+	if _, err := t.tcti.Write(bytes); err != nil {
 		return 0, 0, nil, &TctiError{"write", err}
 	}
 
@@ -266,24 +262,15 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
 	}
 
-	var chBytes []byte
-	var cpBytes []byte
-	var caBytes []byte
+	cBytes := new(bytes.Buffer)
 
-	var err error
-
-	if len(commandHandles) > 0 {
-		chBytes, err = MarshalToBytes(commandHandles...)
-		if err != nil {
-			return nil, wrapMarshallingError(commandCode, "command handles", err)
-		}
+	if err := MarshalToWriter(cBytes, commandHandles...); err != nil {
+		return nil, wrapMarshallingError(commandCode, "command handles", err)
 	}
 
-	if len(commandParams) > 0 {
-		cpBytes, err = MarshalToBytes(commandParams...)
-		if err != nil {
-			return nil, wrapMarshallingError(commandCode, "command parameters", err)
-		}
+	cpBytes, err := MarshalToBytes(commandParams...)
+	if err != nil {
+		return nil, wrapMarshallingError(commandCode, "command parameters", err)
 	}
 
 	tag := TagNoSessions
@@ -293,10 +280,13 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		if err != nil {
 			return nil, fmt.Errorf("cannot build command auth area for command %s: %v", commandCode, err)
 		}
-		caBytes, err = MarshalToBytes(&authArea)
-		if err != nil {
+		if err := MarshalToWriter(cBytes, &authArea); err != nil {
 			return nil, wrapMarshallingError(commandCode, "command auth area", err)
 		}
+	}
+
+	if err := MarshalToWriter(cBytes, RawBytes(cpBytes)); err != nil {
+		return nil, wrapMarshallingError(commandCode, "raw command parameter bytes", err)
 	}
 
 	var responseCode ResponseCode
@@ -305,7 +295,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 
 	for tries := uint(1); ; tries++ {
 		var err error
-		responseCode, responseTag, responseBytes, err = t.RunCommandBytes(tag, commandCode, concat(chBytes, caBytes, cpBytes))
+		responseCode, responseTag, responseBytes, err = t.RunCommandBytes(tag, commandCode, cBytes.Bytes())
 		if err != nil {
 			return nil, err
 		}
