@@ -389,6 +389,10 @@ func (t *TPMContext) processResponse(context *cmdContext, params ...interface{})
 		}
 	}
 
+	if buf.Len() > 0 {
+		return &InvalidResponseError{context.commandCode, fmt.Sprintf("response contains %d trailing bytes", buf.Len())}
+	}
+
 	return nil
 }
 
