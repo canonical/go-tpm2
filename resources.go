@@ -224,7 +224,7 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 				return nil, ResourceDoesNotExistError{handle}
 			}
 		case *TPMHandleError:
-			if e.Code == ErrorHandle {
+			if e.Code() == ErrorHandle {
 				return nil, ResourceDoesNotExistError{handle}
 			}
 		}

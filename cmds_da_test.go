@@ -145,7 +145,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 					break Loop
 				}
 			case *TPMSessionError:
-				if e.Code == ErrorAuthFail {
+				if e.Code() == ErrorAuthFail {
 					continue
 				}
 			}

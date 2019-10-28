@@ -108,57 +108,92 @@ func (e *TPMError) Error() string {
 }
 
 // TPMParameterError is returned from DecodeResponseCode and any TPMContext method that executes a command on the TPM if the TPM
-// response code indicates an error that is associated with a command parameter.
+// response code indicates an error that is associated with a command parameter. It wraps a *TPMError.
 type TPMParameterError struct {
-	Command CommandCode // Command code associated with this error
-	Code    ErrorCode   // Error code
-	Index   int         // Index of the parameter associated with this error in the command parameter area, starting from 1
+	Index int // Index of the parameter associated with this error in the command parameter area, starting from 1
+	err   error
 }
 
 func (e *TPMParameterError) Error() string {
+	ue := e.err.(*TPMError)
 	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned an error for parameter %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
+	fmt.Fprintf(&builder, "TPM returned an error for parameter %d whilst executing command %s: %s", e.Index, ue.Command, ue.Code)
+	if desc, hasDesc := errorCodeDescriptions[ue.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
 	return builder.String()
+}
+
+func (e *TPMParameterError) Unwrap() error {
+	return e.err
+}
+
+func (e *TPMParameterError) Command() CommandCode {
+	return e.err.(*TPMError).Command
+}
+
+func (e *TPMParameterError) Code() ErrorCode {
+	return e.err.(*TPMError).Code
 }
 
 // TPMSessionError is returned from DecodeResponseCode and any TPMContext method that executes a command on the TPM if the TPM
-// response code indicates an error that is associated with a session.
+// response code indicates an error that is associated with a session. It wraps a *TPMError.
 type TPMSessionError struct {
-	Command CommandCode // Command code associated with this error
-	Code    ErrorCode   // Error code
-	Index   int         // Index of the session associated with this error in the authorization area, starting from 1
+	Index int // Index of the session associated with this error in the authorization area, starting from 1
+	err   error
 }
 
 func (e *TPMSessionError) Error() string {
+	ue := e.err.(*TPMError)
 	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned an error for session %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
+	fmt.Fprintf(&builder, "TPM returned an error for session %d whilst executing command %s: %s", e.Index, ue.Command, ue.Code)
+	if desc, hasDesc := errorCodeDescriptions[ue.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
 	return builder.String()
+}
+
+func (e *TPMSessionError) Unwrap() error {
+	return e.err
+}
+
+func (e *TPMSessionError) Command() CommandCode {
+	return e.err.(*TPMError).Command
+}
+
+func (e *TPMSessionError) Code() ErrorCode {
+	return e.err.(*TPMError).Code
 }
 
 // TPMHandleError is returned from DecodeResponseCode and any TPMContext method that executes a command on the TPM if the TPM
-// response code indicates an error that is associated with a command handle.
+// response code indicates an error that is associated with a command handle. It wraps a *TPMError.
 type TPMHandleError struct {
-	Command CommandCode // Command code associated with this error
-	Code    ErrorCode   // Error code
-
 	// Index is the index of the handle associated with this error in the command handle area, starting from 1. An index of 0 corresponds
 	// to an unspecified handle
 	Index int
+	err   error
 }
 
 func (e *TPMHandleError) Error() string {
+	ue := e.err.(*TPMError)
 	var builder bytes.Buffer
-	fmt.Fprintf(&builder, "TPM returned an error for handle %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
+	fmt.Fprintf(&builder, "TPM returned an error for handle %d whilst executing command %s: %s", e.Index, ue.Command, ue.Code)
+	if desc, hasDesc := errorCodeDescriptions[ue.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
 	return builder.String()
+}
+
+func (e *TPMHandleError) Unwrap() error {
+	return e.err
+}
+
+func (e *TPMHandleError) Command() CommandCode {
+	return e.err.(*TPMError).Command
+}
+
+func (e *TPMHandleError) Code() ErrorCode {
+	return e.err.(*TPMError).Code
 }
 
 const (
@@ -198,15 +233,16 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 		}
 	default:
 		// Format 1 error codes
+		err := &TPMError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start}
 		switch {
 		case resp&fmt1ParameterMask > 0:
-			return &TPMParameterError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start, int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift)}
+			return &TPMParameterError{int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift), err}
 		case resp&fmt1SessionMask > 0:
-			return &TPMSessionError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start, int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+			return &TPMSessionError{int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift), err}
 		case resp&fmt1HandleOrSessionIndexMask > 0:
-			return &TPMHandleError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start, int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+			return &TPMHandleError{int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift), err}
 		default:
-			return &TPMError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start}
+			return err
 		}
 
 	}
