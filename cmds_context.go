@@ -123,6 +123,8 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 //
 // Note that if saveContext corresponds to a session, the host-side state that is added to the returned context blob includes the
 // session key.
+//
+// If no more contexts can be saved, a *TPMError error will be returned with an error code of ErrorTooManyContexts.
 func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) {
 	var context Context
 
@@ -211,6 +213,10 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 // The auth handle specifies a hierarchy - it should be HandlePlatform for objects within the platform hierarchy, or HandleOwner for
 // objects within the storage or endorsement hierarchies. If the object is in the null hierarchy, this function will return an error.
 // The auth handle requires the user auth role, provided via authAuth.
+//
+// If there is insuffient space to persist a transient object, a *TPMError error with an error code of ErrorNVSpace will be returned.
+// If a persistent object already exists at the specified handle, a *TPMError error with an error code of ErrorNVDefined will be
+// returned.
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and objectContext will be invalidated.

@@ -71,10 +71,16 @@ const (
 	// session will be invalidated.
 	AttrContinueSession SessionAttributes = 1 << iota
 
-	// AttrCommandEncrypt specifies that the session should be used for encryption of the first command parameter.
+	// AttrCommandEncrypt specifies that the session should be used for encryption of the first command parameter before being sent
+	// from the host to the TPM. This can only be used for parameters that have types corresponding to TPM2B prefixed TCG types,
+	// and requires a session that was configured with a valid symmetric algorithm via the symmetric argument of
+	// TPMContext.StartAuthSession.
 	AttrCommandEncrypt
 
-	// AttrResponseEncrypt specifies that the session should be used for encryption of the first response parameter.
+	// AttrResponseEncrypt specifies that the session should be used for encryption of the first response parameter before being sent
+	// from the TPM to the host. This can only be used for parameters that have types corresponding to TPM2B prefixed TCG types, and
+	// requires a session that was configured with a valid symmetric algorithm via the symmetric argument of TPMContext.StartAuthSession.
+	// This package automatically decrypts the received encrypted response parameter.
 	AttrResponseEncrypt
 )
 
@@ -98,7 +104,8 @@ type Session struct {
 	// If the Attrs field has the AttrCommandEncrypt or AttrResponseEncrypt flags set and the session is also being used to provide
 	// authorization, then the authorization value of the resource for which the session is providing authorization is included in
 	// the derivation of the symmetric key. In this case, AuthValue must match the authorization value of the resource for which this
-	// session is providing authorization.
+	// session is providing authorization and cannot be omitted, even if the session is bound to the resource for which it is providing
+	// an authorization.
 	AuthValue []byte
 
 	Attrs SessionAttributes // Session usage attributes
@@ -143,16 +150,18 @@ type ResourceWithAuth struct {
 //
 // TPMContext maintains some host-side state of TPM resources that are loaded and created by this API.
 //
-// Many methods require Handle or ResourceContext arguments that correspond to resources on the TPM. Where those require
-// authorization, the method also requires a corresponding authorization argument, the type of which is the empty interface. Valid
-// types for these authorization arguments are:
+// Methods that execute commands on the TPM will return errors where the TPM responds with them. These are in the form of *TPMError,
+// *TPMWarning, *TPMHandleError, *TPMSessionError, *TPMParameterError and *TPMVendorError types.
+//
+// Many methods that execute commands on the TPM require Handle or ResourceContext arguments that correspond to resources on the TPM.
+// Where those require authorization, the method also requires a corresponding authorization argument, the type of which is the empty
+// interface (in most cases). Valid types for these authorization arguments are:
 //  * string, []byte, or nil for plaintext password authorization.
 //  * *Session for session based authorization (HMAC or policy).
 //
-// Some methods also accept a variable number of optional *Session arguments, for sessions that don't provide authorization for a
-// corresponding resource. These sessions may be used for session based encryption, for the purpose of transparently encrypting the
-// first command and / or the first response parameter for a command between the TPM and the host CPU. Not all parameter types are
-// compatible with session based encryption - only go types that correspond to TPM2B prefixed types may be encrypted.
+// Some methods also accept a variable number of optional *Session arguments - these are for sessions that don't provide authorization
+// for a corresponding TPM resource. These sessions may be used for session based parameter encryption or (in the future) command
+// auditing.
 type TPMContext struct {
 	tcti           io.ReadWriteCloser
 	resources      map[Handle]ResourceContext

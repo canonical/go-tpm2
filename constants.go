@@ -118,20 +118,40 @@ const (
 )
 
 const (
-	ErrorInitialize      ErrorCode0 = 0x00 // TPM_RC_INITIALIZE
-	ErrorFailure         ErrorCode0 = 0x01 // TPM_RC_FAILURE
-	ErrorSequence        ErrorCode0 = 0x03 // TPM_RC_SEQUENCE
-	ErrorDisabled        ErrorCode0 = 0x20 // TPM_RC_DISABLED
-	ErrorExclusive       ErrorCode0 = 0x21 // TPM_RC_EXCLUSIVE
-	ErrorAuthType        ErrorCode0 = 0x24 // TPM_RC_AUTH_TYPE
-	ErrorAuthMissing     ErrorCode0 = 0x25 // TPM_RC_AUTH_MISSING
-	ErrorPolicy          ErrorCode0 = 0x26 // TPM_RC_POLICY
-	ErrorPCR             ErrorCode0 = 0x27 // TPM_RC_PCR
-	ErrorPCRChanged      ErrorCode0 = 0x28 // TPM_RC_PCR_CHANGED
-	ErrorUpgrade         ErrorCode0 = 0x2d // TPM_RC_UPGRADE
+	// ErrorInitialize corresponds to TPM_RC_INITIALIZE and is returned from any command executed between a _TPM_Init event and a
+	// TPM2_Startup command.
+	ErrorInitialize ErrorCode0 = 0x00
+
+	// ErrorFailure corresponds to TPM_RC_FAILURE and is returned from any command if the TPM is in failure mode.
+	ErrorFailure ErrorCode0 = 0x01
+
+	ErrorSequence  ErrorCode0 = 0x03 // TPM_RC_SEQUENCE
+	ErrorDisabled  ErrorCode0 = 0x20 // TPM_RC_DISABLED
+	ErrorExclusive ErrorCode0 = 0x21 // TPM_RC_EXCLUSIVE
+
+	// ErrorAuthType corresponds to TPM_RC_AUTH_TYPE and is returned from any command where the authorization type is expected to be
+	// a policy session, but another authorization type has been provided.
+	ErrorAuthType ErrorCode0 = 0x24
+
+	ErrorAuthMissing ErrorCode0 = 0x25 // TPM_RC_AUTH_MISSING
+	ErrorPolicy      ErrorCode0 = 0x26 // TPM_RC_POLICY
+	ErrorPCR         ErrorCode0 = 0x27 // TPM_RC_PCR
+
+	// ErrorPCRChanged corresponds to TPM_RC_PCR_CHANGED and is returned from any command where a policy session is used and the PCR
+	// contents have been updated since the last time that they were checked in the session with a TPM2_PolicyPCR assertion.
+	ErrorPCRChanged ErrorCode0 = 0x28
+
+	// ErrorUpgrade corresponds to TPM_RC_UPGRADE and is returned from any command that isn't TPM2_FieldUpgradeData if the TPM is in
+	// field upgrade mode.
+	ErrorUpgrade ErrorCode0 = 0x2d
+
 	ErrorTooManyContexts ErrorCode0 = 0x2e // TPM_RC_TOO_MANY_CONTEXTS
 	ErrorAuthUnavailable ErrorCode0 = 0x2f // TPM_RC_AUTH_UNAVAILABLE
-	ErrorReboot          ErrorCode0 = 0x30 // TPM_RC_REBOOT
+
+	// ErrorReboot corresponds to TPM_RC_REBOOT and is returned from any command if the TPM requires a _TPM_Init event before it will
+	// execute any more commands.
+	ErrorReboot ErrorCode0 = 0x30
+
 	ErrorUnbalanced      ErrorCode0 = 0x31 // TPM_RC_UNBALANCED
 	ErrorCommandSize     ErrorCode0 = 0x42 // TPM_RC_COMMAND_SIZE
 	ErrorCommandCode     ErrorCode0 = 0x43 // TPM_RC_COMMAND_CODE
@@ -148,8 +168,12 @@ const (
 	ErrorCpHash          ErrorCode0 = 0x51 // TPM_RC_CPHASH
 	ErrorParent          ErrorCode0 = 0x52 // TPM_RC_PARENT
 	ErrorNeedsTest       ErrorCode0 = 0x53 // TPM_RC_NEEDS_TEST
-	ErrorNoResult        ErrorCode0 = 0x54 // TPM_RC_NO_RESULT
-	ErrorSensitive       ErrorCode0 = 0x55 // TPM_RC_SENSITIVE
+
+	// ErrorNoResult corresponds to TPM_RC_NO_RESULT and is returned from any command if the TPM cannot process a request due to an
+	// unspecified problem.
+	ErrorNoResult ErrorCode0 = 0x54
+
+	ErrorSensitive ErrorCode0 = 0x55 // TPM_RC_SENSITIVE
 )
 
 const (

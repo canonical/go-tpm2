@@ -48,6 +48,8 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 // On successful completion, as well as the TPM having performed the operations associated with the TPM2_Clear command, this function
 // will invalidate all ResourceContext instances of NV indices associated with the current owner, and all transient and persistent
 // objects that reside in the storage and endorsement hierarchies.
+//
+// If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
 func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})

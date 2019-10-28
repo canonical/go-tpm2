@@ -24,7 +24,9 @@ import (
 //
 // The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
 // parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
-// recorded on the session context associated with policySession.
+// recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
+// already has a command parameter digest defined, a *TPMError error with an error code of ErrorCpHash will be returned if cpHashA
+// does not match the digest already recorded on the session context.
 //
 // If the expiration parameter is not 0, it sets a timeout in seconds since the start of the session by which the authorization will
 // expire. If set to a negative number, a timeout value and corresponding ticket value will be returned if the session associated with
@@ -69,7 +71,9 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 //
 // The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
 // parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA
-// is recorded on the session context associated with policySession.
+// is recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
+// already has a command parameter digest defined, a *TPMError error with an error code of ErrorCpHash will be returned if cpHashA
+// does not match the digest already recorded on the session context.
 //
 // If the expiration parameter is not 0, it sets a timeout in seconds since the start of the session by which the authorization will
 // expire. If set to a negative number, a timeout value and corresponding ticket value will be returned if the session associated with
@@ -110,7 +114,9 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 //
 // The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
 // parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
-// recorded on the session context associated with policySession.
+// recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
+// already has a command parameter digest defined, a *TPMError error with an error code of ErrorCpHash will be returned if cpHashA
+// does not match the digest already recorded on the session context.
 //
 // On successful verification of the ticket, the policy digest of the session context associated with policySession will be extended
 // with the same values that the command that produced the ticket would extend it with.
@@ -141,6 +147,9 @@ func (t *TPMContext) PolicyOR(policySession ResourceContext, pHashList DigestLis
 // be compared to this value and an error will be returned if they don't match, without making any changes to the session context. If
 // policySession corresponds to a trial session, the digest computed from the selected PCRs is not compared to the value of
 // pcrDigest - instead, the policy digest of the session is extended to include the value of the PCR selection and the value of pcrDigest.
+//
+// If the PCR contents have changed since the last time this command was executed for this session, a *TPMError error will be returned
+// with an error code of ErrorPCRChanged.
 func (t *TPMContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, pcrs PCRSelectionList, sessions ...*Session) error {
 	return t.RunCommand(CommandPolicyPCR, sessions,
 		policySession, Separator,
@@ -154,8 +163,14 @@ func (t *TPMContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, 
 // caller specifies a comparison operator via the operation parameter, and a value to which to compare the value of the NV index to
 // via the operandB parameter. The offset parameter specifies the offset in to the NV index data from which the first operand begins.
 //
-// If the comparison fails and policySession does not correspond to a trial session, an error will be returned and no changes will be
-// made to the session context associated with policySession.
+// If the comparison fails and policySession does not correspond to a trial session, a *TPMError error will be returned with an error
+// code of ErrorPolicy and no changes will be made to the session context associated with policySession.
+//
+// If the index associated with nvIndex has the AttrNVReadLocked attribute set and policySession does not correspond to a trial
+// session, a *TPMError error with an error code of ErrorNVLocked will be returned.
+//
+// If the index associated with nvIndex has not been initialized (ie, the AttrNVWritten attribute is not set) and policySession does
+// not correspond to a trial session, a *TPMError with an error code of ErrorNVUninitialized will be returned.
 //
 // The command requires authorization to read the NV index, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead
 // and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext. If the NV index has the
