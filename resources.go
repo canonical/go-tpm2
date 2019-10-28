@@ -189,8 +189,8 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 // handle, it returns the existing ResourceContext.
 //
 // If the handle references a NV index or an object, it will execute some TPM commands to initialize state that is maintained on the
-// host side. An error will be returned if this fails. It will return a ResourceDoesNotExistError error if the specified handle
-// references a NV index or object that does not currently reside on the TPM.
+// host side. An error will be returned if this fails. It will return a ResourceUnavailableError error if the specified handle
+// references a NV index or object that is currently unavailable.
 //
 // It will return an error if handle references a PCR index or a session. It is not possible to create a ResourceContext for a
 // session that is not started by TPMContext.StartAuthSession.
@@ -221,11 +221,11 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 		switch e := err.(type) {
 		case *TPMWarning:
 			if e.Code == WarningReferenceH0 {
-				return nil, ResourceDoesNotExistError{handle}
+				return nil, ResourceUnavailableError{handle}
 			}
 		case *TPMHandleError:
 			if e.Code() == ErrorHandle {
-				return nil, ResourceDoesNotExistError{handle}
+				return nil, ResourceUnavailableError{handle}
 			}
 		}
 		return nil, err

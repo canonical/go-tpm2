@@ -59,7 +59,7 @@ func TestStartup(t *testing.T) {
 				defer flushContext(t, tpm, c)
 				t.Fatalf("Unexpected behaviour: transient handle should have been flushed")
 			}
-			if _, ok := err.(ResourceDoesNotExistError); !ok {
+			if _, ok := err.(ResourceUnavailableError); !ok {
 				t.Errorf("Unexpected error: %v", err)
 			}
 		})

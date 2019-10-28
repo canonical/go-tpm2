@@ -9,14 +9,15 @@ import (
 	"fmt"
 )
 
-// ResourceDoesNotExistError is returned from TPMContext.WrapHandle if it is called with a handle that does not correspond to a
-// resource that is loaded in to the TPM.
-type ResourceDoesNotExistError struct {
+// ResourceUnavailableError is returned from TPMContext.WrapHandle if it is called with a handle that does not correspond to a
+// resource that is available on the TPM. This could be because the resource doesn't exist on the TPM, or it lives within a
+// hierarchy that is disabled.
+type ResourceUnavailableError struct {
 	Handle Handle
 }
 
-func (e ResourceDoesNotExistError) Error() string {
-	return fmt.Sprintf("a resource at handle 0x%08x does not exist on the TPM", e.Handle)
+func (e ResourceUnavailableError) Error() string {
+	return fmt.Sprintf("a resource at handle 0x%08x is not available on the TPM", e.Handle)
 }
 
 // InvalidResponseError is returned from any TPMContext method that executes a TPM command if the TPM's response is invalid. An

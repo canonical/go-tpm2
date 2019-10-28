@@ -187,7 +187,7 @@ func TestEvictControl(t *testing.T) {
 		if err == nil {
 			t.Fatalf("WrapHandle on an evicted resource should fail")
 		}
-		if _, ok := err.(ResourceDoesNotExistError); !ok {
+		if _, ok := err.(ResourceUnavailableError); !ok {
 			t.Errorf("WrapHandle returned an unexpected error: %v", err)
 		}
 	}
@@ -254,7 +254,7 @@ func TestFlushContext(t *testing.T) {
 	if err == nil {
 		t.Fatalf("WrapHandle on a flushed resource should fail")
 	}
-	if _, ok := err.(ResourceDoesNotExistError); !ok {
+	if _, ok := err.(ResourceUnavailableError); !ok {
 		t.Fatalf("WrapHandle on a flushed resource should fail")
 	}
 }
