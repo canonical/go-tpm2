@@ -118,98 +118,216 @@ const (
 )
 
 const (
-	// ErrorInitialize corresponds to TPM_RC_INITIALIZE and is returned from any command executed between a _TPM_Init event and a
+	// ErrorInitialize corresponds to TPM_RC_INITIALIZE and is returned for any command executed between a _TPM_Init event and a
 	// TPM2_Startup command.
-	ErrorInitialize ErrorCode0 = 0x00
+	ErrorInitialize ErrorCode = 0x00
 
-	// ErrorFailure corresponds to TPM_RC_FAILURE and is returned from any command if the TPM is in failure mode.
-	ErrorFailure ErrorCode0 = 0x01
+	// ErrorFailure corresponds to TPM_RC_FAILURE and is returned for any command if the TPM is in failure mode.
+	ErrorFailure ErrorCode = 0x01
 
-	ErrorSequence  ErrorCode0 = 0x03 // TPM_RC_SEQUENCE
-	ErrorDisabled  ErrorCode0 = 0x20 // TPM_RC_DISABLED
-	ErrorExclusive ErrorCode0 = 0x21 // TPM_RC_EXCLUSIVE
+	ErrorSequence  ErrorCode = 0x03 // TPM_RC_SEQUENCE
+	ErrorDisabled  ErrorCode = 0x20 // TPM_RC_DISABLED
+	ErrorExclusive ErrorCode = 0x21 // TPM_RC_EXCLUSIVE
 
-	// ErrorAuthType corresponds to TPM_RC_AUTH_TYPE and is returned from any command where the authorization type is expected to be
-	// a policy session, but another authorization type has been provided.
-	ErrorAuthType ErrorCode0 = 0x24
+	// ErrorAuthType corresponds to TPM_RC_AUTH_TYPE and is returned for a command where an authorization is required and the
+	// authorization type is expected to be a policy session, but another authorization type has been provided.
+	ErrorAuthType ErrorCode = 0x24
 
-	ErrorAuthMissing ErrorCode0 = 0x25 // TPM_RC_AUTH_MISSING
-	ErrorPolicy      ErrorCode0 = 0x26 // TPM_RC_POLICY
-	ErrorPCR         ErrorCode0 = 0x27 // TPM_RC_PCR
+	// ErrorAuthMissing corresponds to TPM_RC_AUTH_MISSING and is returned for a command that accepts a ResourceContext or Handle
+	// argument that requires authorization, but no authorization session has been provided in the command payload.
+	ErrorAuthMissing ErrorCode = 0x25
 
-	// ErrorPCRChanged corresponds to TPM_RC_PCR_CHANGED and is returned from any command where a policy session is used and the PCR
-	// contents have been updated since the last time that they were checked in the session with a TPM2_PolicyPCR assertion.
-	ErrorPCRChanged ErrorCode0 = 0x28
+	ErrorPolicy ErrorCode = 0x26 // TPM_RC_POLICY
+	ErrorPCR    ErrorCode = 0x27 // TPM_RC_PCR
 
-	// ErrorUpgrade corresponds to TPM_RC_UPGRADE and is returned from any command that isn't TPM2_FieldUpgradeData if the TPM is in
+	// ErrorPCRChanged corresponds to TPM_RC_PCR_CHANGED and is returned for a command where a policy session is used for authorization
+	// and the PCR contents have been updated since the last time that they were checked in the session with a TPM2_PolicyPCR assertion.
+	ErrorPCRChanged ErrorCode = 0x28
+
+	// ErrorUpgrade corresponds to TPM_RC_UPGRADE and is returned for any command that isn't TPM2_FieldUpgradeData if the TPM is in
 	// field upgrade mode.
-	ErrorUpgrade ErrorCode0 = 0x2d
+	ErrorUpgrade ErrorCode = 0x2d
 
-	ErrorTooManyContexts ErrorCode0 = 0x2e // TPM_RC_TOO_MANY_CONTEXTS
-	ErrorAuthUnavailable ErrorCode0 = 0x2f // TPM_RC_AUTH_UNAVAILABLE
+	ErrorTooManyContexts ErrorCode = 0x2e // TPM_RC_TOO_MANY_CONTEXTS
 
-	// ErrorReboot corresponds to TPM_RC_REBOOT and is returned from any command if the TPM requires a _TPM_Init event before it will
+	// ErrorAuthUnavailable corresponds to TPM_RC_AUTH_UNAVAILABLE and is returned for a command where the provided authorization
+	// requires the use of the authorization value for an entity, but the authorization value cannot be used. For example, if the entity
+	// is an object and the command requires the user auth role but the object does not have the AttrUserWithAuth attribute.
+	ErrorAuthUnavailable ErrorCode = 0x2f
+
+	// ErrorReboot corresponds to TPM_RC_REBOOT and is returned for any command if the TPM requires a _TPM_Init event before it will
 	// execute any more commands.
-	ErrorReboot ErrorCode0 = 0x30
+	ErrorReboot ErrorCode = 0x30
 
-	ErrorUnbalanced      ErrorCode0 = 0x31 // TPM_RC_UNBALANCED
-	ErrorCommandSize     ErrorCode0 = 0x42 // TPM_RC_COMMAND_SIZE
-	ErrorCommandCode     ErrorCode0 = 0x43 // TPM_RC_COMMAND_CODE
-	ErrorAuthsize        ErrorCode0 = 0x44 // TPM_RC_AUTHSIZE
-	ErrorAuthContext     ErrorCode0 = 0x45 // TPM_RC_AUTH_CONTEXT
-	ErrorNVRange         ErrorCode0 = 0x46 // TPM_RC_NV_RANGE
-	ErrorNVSize          ErrorCode0 = 0x47 // TPM_RC_NV_SIZE
-	ErrorNVLocked        ErrorCode0 = 0x48 // TPM_RC_NV_LOCKED
-	ErrorNVAuthorization ErrorCode0 = 0x49 // TPM_RC_NV_AUTHORIZATION
-	ErrorNVUninitialized ErrorCode0 = 0x4a // TPM_RC_NV_UNINITIALIZED
-	ErrorNVSpace         ErrorCode0 = 0x4b // TPM_RC_NV_SPACE
-	ErrorNVDefined       ErrorCode0 = 0x4c // TPM_RC_NV_DEFINED
-	ErrorBadContext      ErrorCode0 = 0x50 // TPM_RC_BAD_CONTEXT
-	ErrorCpHash          ErrorCode0 = 0x51 // TPM_RC_CPHASH
-	ErrorParent          ErrorCode0 = 0x52 // TPM_RC_PARENT
-	ErrorNeedsTest       ErrorCode0 = 0x53 // TPM_RC_NEEDS_TEST
+	ErrorUnbalanced ErrorCode = 0x31 // TPM_RC_UNBALANCED
 
-	// ErrorNoResult corresponds to TPM_RC_NO_RESULT and is returned from any command if the TPM cannot process a request due to an
+	// ErrorCommandSize corresponds to TPM_RC_COMMAND_SIZE and indicates that the value of the commandSize field in the command header
+	// does not match the size of the command packet transmitted to the TPM.
+	ErrorCommandSize ErrorCode = 0x42
+
+	// ErrorCommandCode corresponds to TPM_RC_COMMAND_CODE and is returned for any command that is not implemented by the TPM.
+	ErrorCommandCode ErrorCode = 0x43
+
+	ErrorAuthsize ErrorCode = 0x44 // TPM_RC_AUTHSIZE
+
+	// ErrorAuthContext corresponds to TPM_RC_AUTH_CONTEXT and is returned for any command that does not accept any sessions if
+	// sessions have been provided in the command payload.
+	ErrorAuthContext ErrorCode = 0x45
+
+	ErrorNVRange         ErrorCode = 0x46 // TPM_RC_NV_RANGE
+	ErrorNVSize          ErrorCode = 0x47 // TPM_RC_NV_SIZE
+	ErrorNVLocked        ErrorCode = 0x48 // TPM_RC_NV_LOCKED
+	ErrorNVAuthorization ErrorCode = 0x49 // TPM_RC_NV_AUTHORIZATION
+	ErrorNVUninitialized ErrorCode = 0x4a // TPM_RC_NV_UNINITIALIZED
+	ErrorNVSpace         ErrorCode = 0x4b // TPM_RC_NV_SPACE
+	ErrorNVDefined       ErrorCode = 0x4c // TPM_RC_NV_DEFINED
+	ErrorBadContext      ErrorCode = 0x50 // TPM_RC_BAD_CONTEXT
+	ErrorCpHash          ErrorCode = 0x51 // TPM_RC_CPHASH
+	ErrorParent          ErrorCode = 0x52 // TPM_RC_PARENT
+	ErrorNeedsTest       ErrorCode = 0x53 // TPM_RC_NEEDS_TEST
+
+	// ErrorNoResult corresponds to TPM_RC_NO_RESULT and is returned for any command if the TPM cannot process a request due to an
 	// unspecified problem.
-	ErrorNoResult ErrorCode0 = 0x54
+	ErrorNoResult ErrorCode = 0x54
 
-	ErrorSensitive ErrorCode0 = 0x55 // TPM_RC_SENSITIVE
-)
+	ErrorSensitive ErrorCode = 0x55 // TPM_RC_SENSITIVE
 
-const (
-	ErrorAsymmetric   ErrorCode1 = 0x01 // TPM_RC_ASYMMETRIC
-	ErrorAttributes   ErrorCode1 = 0x02 // TPM_RC_ATTRIBUTES
-	ErrorHash         ErrorCode1 = 0x03 // TPM_RC_HASH
-	ErrorValue        ErrorCode1 = 0x04 // TPM_RC_VALUE
-	ErrorHierarchy    ErrorCode1 = 0x05 // TPM_RC_HIERARCHY
-	ErrorKeySize      ErrorCode1 = 0x07 // TPM_RC_KEY_SIZE
-	ErrorMGF          ErrorCode1 = 0x08 // TPM_RC_MGF
-	ErrorMode         ErrorCode1 = 0x09 // TPM_RC_MODE
-	ErrorType         ErrorCode1 = 0x0a // TPM_RC_TYPE
-	ErrorHandle       ErrorCode1 = 0x0b // TPM_RC_HANDLE
-	ErrorKDF          ErrorCode1 = 0x0c // TPM_RC_KDF
-	ErrorRange        ErrorCode1 = 0x0d // TPM_RC_RANGE
-	ErrorAuthFail     ErrorCode1 = 0x0e // TPM_RC_AUTH_FAIL
-	ErrorNonce        ErrorCode1 = 0x0f // TPM_RC_NONCE
-	ErrorPP           ErrorCode1 = 0x10 // TPM_RC_PP
-	ErrorScheme       ErrorCode1 = 0x12 // TPM_RC_SCHEME
-	ErrorSize         ErrorCode1 = 0x15 // TPM_RC_SIZE
-	ErrorSymmetric    ErrorCode1 = 0x16 // TPM_RC_SYMMETRIC
-	ErrorTag          ErrorCode1 = 0x17 // TPM_RC_TAG
-	ErrorSelector     ErrorCode1 = 0x18 // TPM_RC_SELECTOR
-	ErrorInsufficient ErrorCode1 = 0x1a // TPM_RC_INSUFFICIENT
-	ErrorSignature    ErrorCode1 = 0x1b // TPM_RC_SIGNATURE
-	ErrorKey          ErrorCode1 = 0x1c // TPM_RC_KEY
-	ErrorPolicyFail   ErrorCode1 = 0x1d // TPM_RC_POLICY_FAIL
-	ErrorIntegrity    ErrorCode1 = 0x1f // TPM_RC_INTEGRITY
-	ErrorTicket       ErrorCode1 = 0x20 // TPM_RC_TICKET
-	ErrorReservedBits ErrorCode1 = 0x21 // TPM_RC_RESERVED_BITS
-	ErrorBadAuth      ErrorCode1 = 0x22 // TPM_RC_BAD_AUTH
-	ErrorExpired      ErrorCode1 = 0x23 // TPM_RC_EXPIRED
-	ErrorPolicyCC     ErrorCode1 = 0x24 // TPM_RC_POLICY_CC
-	ErrorBinding      ErrorCode1 = 0x25 // TPM_RC_BINDING
-	ErrorCurve        ErrorCode1 = 0x26 // TPM_RC_CURVE
-	ErrorECCPoint     ErrorCode1 = 0x27 // TPM_RC_ECC_POINT
+	errorCode1Start ErrorCode = 0x80
+
+	ErrorAsymmetric ErrorCode = errorCode1Start + 0x01 // TPM_RC_ASYMMETRIC
+
+	// ErrorAttributes corresponds to TPM_RC_ATTRIBUTES and is returned as a *TPMSessionError for a command in the following
+	// circumstances:
+	// * More than one *Session instance with the AttrCommandEncrypt attribute has been provided.
+	// * More than one *Session instance with the AttrResponseEncrypt attribute has been provided.
+	// * A *Session instance referencing a trial session has been provided for authorization.
+	ErrorAttributes ErrorCode = errorCode1Start + 0x02
+
+	// ErrorHash corresponds to TPM_RC_HASH and is returned as a *TPMParameterError error for any command that accepts a AlgorithmId
+	// parameter that corresponds to the TPMI_ALG_HASH interface type if the parameter value is not a valid digest algorithm.
+	ErrorHash ErrorCode = errorCode1Start + 0x03
+
+	// ErrorValue corresponds to TPM_RC_VALUE and is returned as a *TPMParameterError or *TPMHandleError for any command where an
+	// argument value is incorrect or out of range for the command.
+	ErrorValue ErrorCode = errorCode1Start + 0x04 // TPM_RC_VALUE
+
+	// ErrorHierarchy corresponds to TPM_RC_HIERARCHY and is returned as a *TPMHandleError error for any command that accepts a
+	// ResourceContext or Handle argument if that argument corresponds to a hierarchy on the TPM that has been disabled.
+	ErrorHierarchy ErrorCode = errorCode1Start + 0x05
+
+	ErrorKeySize ErrorCode = errorCode1Start + 0x07 // TPM_RC_KEY_SIZE
+	ErrorMGF     ErrorCode = errorCode1Start + 0x08 // TPM_RC_MGF
+
+	// ErrorMode corresponds to TPM_RC_MODE and is returned as a *TPMParameterError error for any command that accepts a AlgorithmId
+	// parameter that corresponds to the TPMI_ALG_SYM_MODE interface type if the parameter value is not a valid symmetric mode.
+	ErrorMode ErrorCode = errorCode1Start + 0x09
+
+	// ErrorType corresponds to TPM_RC_TYPE and is returned as a *TPMParameterError error for any command that accepts a AlgorithmId
+	// parameter that corresponds to the TPMI_ALG_PUBLIC interface type if the parameter value is not a valid public type.
+	ErrorType ErrorCode = errorCode1Start + 0x0a
+
+	ErrorHandle ErrorCode = errorCode1Start + 0x0b // TPM_RC_HANDLE
+
+	// ErrorKDF corresponds to TPM_RC_KDF and is returned as a *TPMParameterError error for any command that accepts a AlgorithmId
+	// parameter that corresponds to the TPMI_ALG_KDF interface type if the parameter value is not a valid key derivation function.
+	ErrorKDF ErrorCode = errorCode1Start + 0x0c
+
+	ErrorRange ErrorCode = errorCode1Start + 0x0d // TPM_RC_RANGE
+
+	// ErrorAuthFail corresponds to TPM_RC_AUTH_FAIL and is returned as a *TPMSessionError error for a command if an authorization
+	// check fails. The dictionary attack counter is incremented when this error is returned.
+	ErrorAuthFail ErrorCode = errorCode1Start + 0x0e
+
+	// ErrorNonce corresponds to TPM_RC_NONCE and is returned as a *TPMSessionError error for any command where a password authorization
+	// has been provided and the authorization session in the command payload contains a non-zero sized nonce field.
+	ErrorNonce ErrorCode = errorCode1Start + 0x0f
+
+	// ErrorPP corresponds to TPM_RC_PP and is returned as a *TPMSessionError for a command in the following circumstances:
+	// * Authorization of the platform hierarchy is provided and the command requires an assertion of physical presence that hasn't been
+	//   provided.
+	// * Authorization is provided with a policy session that includes the TPM2_PolicyPhysicalPresence assertion, and an assertion of
+	//   physical presence hasn't been provided.
+	ErrorPP ErrorCode = errorCode1Start + 0x10
+
+	// ErrorScheme corresponds to TPM_RC_SCHEME and is returned as a *TPMParameterError error for any command that accepts a AlgorithmId
+	// parameter that corresponds to the TPMI_ALG_SIG_SCHEME or TPMI_ALG_ECC_SCHEME interface types if the parameter value is not a valid
+	// signature or ECC key exchange scheme.
+	ErrorScheme ErrorCode = errorCode1Start + 0x12
+
+	// ErrorSize corresponds to TPM_RC_SIZE and is returned for a command in the following circumstances:
+	// * As a *TPMParameterError if the command accepts a parameter type corresponding to TPM2B or TPML prefixed types and the size or
+	//   length field has an invalid value.
+	// * As a *TPMHandleError with an unspecified handle if the TPM's parameter unmarshalling doesn't consume all of the bytes in the
+	//   input buffer.
+	// * As a *TPMHandleError with an unspecified handle if the size field of the command's authorization area is an invalid value.
+	// * As a *TPMSessionError if the authorization area for a command payload contains more than 3 sessions.
+	ErrorSize ErrorCode = errorCode1Start + 0x15
+
+	// ErrorSymmetric corresponds to TPM_RC_SYMMETRIC and is returned for a command in the following circumstances:
+	// * As a *TPMParameterError if the command accepts a AlgorithmId parameter that corresponds to the TPMI_ALG_SYM interface type
+	//   and the parameter value is not a valid symmetric algorithm.
+	// * As a *TPMSessionError if a *Session instance is provided with the AttrCommandEncrypt attribute set but the session has no
+	//   symmetric algorithm.
+	// * As a *TPMSessionError if a *Session instance is provided with the AttrResponseEncrypt attribute set but the session has no
+	//   symmetric algorithm.
+	ErrorSymmetric ErrorCode = errorCode1Start + 0x16
+
+	// ErrorTag corresponds to TPM_RC_TAG and is returned as a *TPMParameterError error for a command that accepts a StructTag parameter
+	// if the parameter value is not the correct value.
+	ErrorTag ErrorCode = errorCode1Start + 0x17
+
+	// ErrorSelector corresponds to TPM_RC_SELECTOR and is returned as a *TPMParameterError error for a command that accepts a parameter
+	// type corresponding to a TPMU prefixed type if the value of the selector field in the surrounding TPMT prefixed type is incorrect.
+	ErrorSelector ErrorCode = errorCode1Start + 0x18
+
+	// ErrorInsufficient corresponds to TPM_RC_INSUFFICIENT and is returned as a *TPMParameterError for a command if there is
+	// insufficient data in the TPM's input buffer to complete unmarshalling of the command parameters.
+	ErrorInsufficient ErrorCode = errorCode1Start + 0x1a
+
+	ErrorSignature ErrorCode = errorCode1Start + 0x1b // TPM_RC_SIGNATURE
+	ErrorKey       ErrorCode = errorCode1Start + 0x1c // TPM_RC_KEY
+
+	// ErrorPolicyFail corresponds to TPM_RC_POLICY_FAIL and is returned as a *TPMSessionError error for a command in the following
+	// circumstances:
+	// * A policy session is used for authorization and the policy session digest does not match the authorization policy digest for
+	//   the entity being authorized.
+	// * A policy session is used for authorization and the digest algorithm of the session does not match the name algorithm of the
+	//   entity being authorized.
+	// * A policy session is used for authorization but the authorization is for the admin or DUP role and the policy session does not
+	//   include a TPM2_PolicyCommandCode assertion.
+	// * A policy session is used for authorization and the policy session includes a TPM2_PolicyNvWritten assertion but the entity
+	//   being authorized is not a NV index.
+	// * A policy session is used for authorization, the policy session includes the TPM2_PolicyNvWritten assertion, but the NV index
+	//   being authorized does not have the AttrNVWritten attribute set.
+	ErrorPolicyFail ErrorCode = errorCode1Start + 0x1d
+
+	ErrorIntegrity ErrorCode = errorCode1Start + 0x1f // TPM_RC_INTEGRITY
+	ErrorTicket    ErrorCode = errorCode1Start + 0x20 // TPM_RC_TICKET
+
+	// ErroReservedBits corresponds to TPM_RC_RESERVED_BITS and is returned as a *TPMParameterError error for a command that accepts
+	// a parameter type corresponding to a TPMA prefixed type if the parameter value has reserved bits set.
+	ErrorReservedBits ErrorCode = errorCode1Start + 0x21
+
+	// ErrorBadAuth corresponds to TPM_RC_BAD_AUTH and is returned as a *TPMSessionError error for a command if an authorization
+	// check fails and the authorized entity is excempt from dictionary attack protections.
+	ErrorBadAuth ErrorCode = errorCode1Start + 0x22
+
+	// ErrorExpired corresponds to TPM_RC_EXPIRED and is returned as a *TPMSessionError error for a command if a policy session is used
+	// for authorization, and the session has expired.
+	ErrorExpired ErrorCode = errorCode1Start + 0x23
+
+	// ErrorPolicyCC corresponds to TPM_RC_POLICY_CC and is returned as a *TPMSessionError error for a command if a policy session is
+	// used for authorization, the session includes a TPM2_PolicyCommandCode assertion, but the command code doesn't match the command
+	// for which the authorization is being used for.
+	ErrorPolicyCC ErrorCode = errorCode1Start + 0x24
+
+	ErrorBinding ErrorCode = errorCode1Start + 0x25 // TPM_RC_BINDING
+
+	// ErrorCurve corresponds to TPM_RC_CURVE and is returned as a *TPMParameterError for a command that accepts a ECCCurve parameter
+	// if the parameter value is incorrect.
+	ErrorCurve ErrorCode = errorCode1Start + 0x26
+
+	ErrorECCPoint ErrorCode = errorCode1Start + 0x27 // TPM_RC_ECC_POINT
 )
 
 const (

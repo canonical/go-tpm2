@@ -161,7 +161,7 @@ func (c CommandCode) Format(s fmt.State, f rune) {
 	}
 }
 
-func (e ErrorCode0) String() string {
+func (e ErrorCode) String() string {
 	switch e {
 	case ErrorInitialize:
 		return "TPM_RC_INITIALIZE"
@@ -227,22 +227,7 @@ func (e ErrorCode0) String() string {
 		return "TPM_RC_NO_RESULT"
 	case ErrorSensitive:
 		return "TPM_RC_SENSITIVE"
-	default:
-		return fmt.Sprintf("0x%02x", uint8(e))
-	}
-}
-
-func (e ErrorCode0) Format(s fmt.State, f rune) {
-	switch f {
-	case 's', 'v':
-		fmt.Fprintf(s, "%s", e.String())
-	default:
-		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint8(e))
-	}
-}
-
-func (e ErrorCode1) String() string {
-	switch e {
+	// Format 1 error codes start here
 	case ErrorAsymmetric:
 		return "TPM_RC_ASYMMETRIC"
 	case ErrorAttributes:
@@ -314,7 +299,7 @@ func (e ErrorCode1) String() string {
 	}
 }
 
-func (e ErrorCode1) Format(s fmt.State, f rune) {
+func (e ErrorCode) Format(s fmt.State, f rune) {
 	switch f {
 	case 's', 'v':
 		fmt.Fprintf(s, "%s", e.String())
@@ -516,7 +501,7 @@ func (c Capability) Format(s fmt.State, f rune) {
 }
 
 var (
-	errorCode0Descriptions = map[ErrorCode0]string{
+	errorCodeDescriptions = map[ErrorCode]string{
 		ErrorInitialize:      "TPM not initialized by TPM2_Startup or already initialized",
 		ErrorFailure:         "commands not being accepted because of a TPM failure",
 		ErrorSequence:        "improper use of a sequence handle",
@@ -553,9 +538,7 @@ var (
 		ErrorNeedsTest:  "some function needs testing",
 		ErrorNoResult: "returned when an internal function cannot process a request due to an unspecified problem. This code is usually " +
 			"related to invalid parameters that are not properly filtered by the input unmarshaling code",
-		ErrorSensitive: "the sensitive area did not unmarshal correctly after decryption"}
-
-	errorCode1Descriptions = map[ErrorCode1]string{
+		ErrorSensitive:    "the sensitive area did not unmarshal correctly after decryption",
 		ErrorAsymmetric:   "asymmetric algorithm not supported or not correct",
 		ErrorAttributes:   "inconsistent attributes",
 		ErrorHash:         "hash algorithm not supported or not appropriate",

@@ -43,4 +43,9 @@ func TestDecodeResponse(t *testing.T) {
 	if e, ok := err.(*TPMHandleError); !ok || e.Code != ErrorSymmetric || e.Index != 4 {
 		t.Errorf("Unexpected error: %v", err)
 	}
+
+	err = DecodeResponseCode(CommandSign, ResponseCode(0x00000084))
+	if e, ok := err.(*TPMError); !ok || e.Code != ErrorValue {
+		t.Errorf("Unexpected error: %v", err)
+	}
 }

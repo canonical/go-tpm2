@@ -38,7 +38,7 @@ func computeStartupType(startupType StartupType, time *TimeInfo) suType {
 //  * A call with startupType == StartupState preceded by a call to TPMContext.Shutdown with shutdownType == StartupState will cause
 //    a TPM resume.
 //  * A call with startupType == StartupState that isn't preceded by a call to TPMContext.Shutdown with shutdownType == StartupState
-//    will fail with an error.
+//    will fail with a *TPMParameterError error with an error code of ErrorValue.
 //
 // If called with startupType == StartupState, a *TPMError error with an error code of ErrorNVUninitialized will be returned if the
 // saved state cannot be recovered. In this case, the function must be called with startupType == StartupClear.
@@ -97,6 +97,9 @@ func (t *TPMContext) Startup(startupType StartupType) error {
 // Calling this with shutdownType == StartupClear prepares the TPM for a TPM reset. Calling it with shutdownType == StartupState
 // prepares the TPM for either a TPM restart or TPM resume, depending on how TPMContext.Startup is called. Some commands executed
 // after TPMContext.Shutdown but before a power cycle will nullify the effect of this function.
+//
+// If a PCR bank has been reconfigured and shutdownType == StartupState, a *TPMParameterError error with an error code of
+// ErrorType will be returned.
 func (t *TPMContext) Shutdown(shutdownType StartupType) error {
 	return t.RunCommand(CommandShutdown, nil, Separator, shutdownType)
 }

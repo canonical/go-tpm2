@@ -19,6 +19,9 @@ import (
 // The underlying implementation of TPM2_GetCapability is not required to (or may not be able to) return all of the requested
 // values in a single request. This function will re-execute the TPM2_GetCapability command until all of the requested properties
 // have been returned.
+//
+// If capability is CapabilityHandles and property does not correspond to a valid handle type, a *TPMParameterError error with
+// an error code of ErrorHandle is returned for parameter index 2.
 func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32) (*CapabilityData, error) {
 	var capabilityData *CapabilityData
 

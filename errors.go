@@ -88,41 +88,37 @@ func (e *TPMWarning) Error() string {
 	return builder.String()
 }
 
-// ErrorCode0 represents a format-zero error code from the TPM. These error codes are not associated with a handle, parameter or
-// session.
-type ErrorCode0 ResponseCode
+// ErrorCode represents an error code from the TPM.
+type ErrorCode ResponseCode
 
 // TPMError is returned from DecodeResponseCode and any TPMContext method that executes a command on the TPM if the TPM response
 // code indicates an error that is not associated with a handle, parameter or session.
 type TPMError struct {
 	Command CommandCode // Command code associated with this error
-	Code    ErrorCode0  // Error code
+	Code    ErrorCode   // Error code
 }
 
 func (e *TPMError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error whilst executing command %s: %s", e.Command, e.Code)
-	if desc, hasDesc := errorCode0Descriptions[e.Code]; hasDesc {
+	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
 	return builder.String()
 }
 
-// ErrorCode1 represents a format-one error code from the TPM. These error codes are associated with a handle, parameter or session.
-type ErrorCode1 ResponseCode
-
 // TPMParameterError is returned from DecodeResponseCode and any TPMContext method that executes a command on the TPM if the TPM
 // response code indicates an error that is associated with a command parameter.
 type TPMParameterError struct {
 	Command CommandCode // Command code associated with this error
-	Code    ErrorCode1  // Error code
+	Code    ErrorCode   // Error code
 	Index   int         // Index of the parameter associated with this error in the command parameter area, starting from 1
 }
 
 func (e *TPMParameterError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for parameter %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
+	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
 	return builder.String()
@@ -132,14 +128,14 @@ func (e *TPMParameterError) Error() string {
 // response code indicates an error that is associated with a session.
 type TPMSessionError struct {
 	Command CommandCode // Command code associated with this error
-	Code    ErrorCode1  // Error code
+	Code    ErrorCode   // Error code
 	Index   int         // Index of the session associated with this error in the authorization area, starting from 1
 }
 
 func (e *TPMSessionError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for session %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
+	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
 	return builder.String()
@@ -149,14 +145,17 @@ func (e *TPMSessionError) Error() string {
 // response code indicates an error that is associated with a command handle.
 type TPMHandleError struct {
 	Command CommandCode // Command code associated with this error
-	Code    ErrorCode1  // Error code
-	Index   int         // Index of the handle associated with this error in the command handle area, starting from 1
+	Code    ErrorCode   // Error code
+
+	// Index is the index of the handle associated with this error in the command handle area, starting from 1. An index of 0 corresponds
+	// to an unspecified handle
+	Index int
 }
 
 func (e *TPMHandleError) Error() string {
 	var builder bytes.Buffer
 	fmt.Fprintf(&builder, "TPM returned an error for handle %d whilst executing command %s: %s", e.Index, e.Command, e.Code)
-	if desc, hasDesc := errorCode1Descriptions[e.Code]; hasDesc {
+	if desc, hasDesc := errorCodeDescriptions[e.Code]; hasDesc {
 		fmt.Fprintf(&builder, " (%s)", desc)
 	}
 	return builder.String()
@@ -195,17 +194,19 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 		case resp&fmt0SeverityMask > 0:
 			return &TPMWarning{command, WarningCode(resp & fmt0ErrorCodeMask)}
 		default:
-			return &TPMError{command, ErrorCode0(resp & fmt0ErrorCodeMask)}
+			return &TPMError{command, ErrorCode(resp & fmt0ErrorCodeMask)}
 		}
 	default:
 		// Format 1 error codes
 		switch {
 		case resp&fmt1ParameterMask > 0:
-			return &TPMParameterError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift)}
+			return &TPMParameterError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start, int((resp & fmt1ParameterIndexMask) >> fmt1IndexShift)}
 		case resp&fmt1SessionMask > 0:
-			return &TPMSessionError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+			return &TPMSessionError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start, int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+		case resp&fmt1HandleOrSessionIndexMask > 0:
+			return &TPMHandleError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start, int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
 		default:
-			return &TPMHandleError{command, ErrorCode1(resp & fmt1ErrorCodeMask), int((resp & fmt1HandleOrSessionIndexMask) >> fmt1IndexShift)}
+			return &TPMError{command, ErrorCode(resp&fmt1ErrorCodeMask) + errorCode1Start}
 		}
 
 	}

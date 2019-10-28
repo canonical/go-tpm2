@@ -83,10 +83,12 @@ type ObjectAttributes uint32
 // Locality corresponds to the TPMA_LOCALITY type.
 type Locality uint8
 
-// PermanentAttributes corresponds to the TPMA_PERMANENT type.
+// PermanentAttributes corresponds to the TPMA_PERMANENT type and is returned when querying the value of PropertyPermanent
+// with TPMContext.GetCapabilityTPMProperties.
 type PermanentAttributes uint32
 
-// StatupClearAttributes corresponds to the TPMA_STARTUP_CLEAR type.
+// StatupClearAttributes corresponds to the TPMA_STARTUP_CLEAR type and is returned when querying the value of PropertyStartupClear
+// with TPMContext.GetCapabilityTPMProperties.
 type StartupClearAttributes uint32
 
 // CommandAttributes corresponds to the TPMA_CC type and represents the attributes of a command. It also encodes the command code to
@@ -109,7 +111,7 @@ type Empty struct{}
 
 // TaggedHash corresponds to the TPMT_HA type.
 type TaggedHash struct {
-	HashAlg AlgorithmId // Algorithm of the digest contained with Digest
+	HashAlg AlgorithmId // Algorithm of the digest contained with Digest. Valid values are determined by the TPMI_ALG_HASH interface type
 	Digest  []byte      // Digest data
 }
 
@@ -242,7 +244,9 @@ func (d *PCRSelectionData) Unmarshal(buf io.Reader) error {
 
 // PCRSelection corresponds to the TPMS_PCR_SELECTION type.
 type PCRSelection struct {
-	Hash   AlgorithmId      // The hash algorithm associated with the selection
+	// Hash is the digest algorithm associated with the selection. Valid values are determined by the TPMI_ALG_HASH interface type.
+	Hash AlgorithmId
+
 	Select PCRSelectionData // The selected PCRs
 }
 
@@ -613,7 +617,7 @@ func (a AttestRaw) ToStruct() (*Attest, error) {
 //  - AlgorithmAES: uint16
 //  - AlgorithmSM4: uint16
 //  - AlgorithmCamellia: uint16
-//  - AlgorithmXOR: AlgorithmId
+//  - AlgorithmXOR: AlgorithmId (valid values are determined by the TPMI_ALG_HASH interface type)
 //  - AlgorithmNull: <nil>
 type SymKeyBitsU struct {
 	Data interface{}
@@ -647,9 +651,9 @@ func (b SymKeyBitsU) XOR() AlgorithmId {
 
 // SymModeU is a fake union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId. Valid types for Data
 // for each selector value are:
-//  - AlgorithmAES: AlgorithmId
-//  - AlgorithmSM4: AlgorithmId
-//  - AlgorithmCamellia: AlgorithmId
+//  - AlgorithmAES: AlgorithmId (valid values are determined by the TPMI_ALG_SYM_MODE interface type)
+//  - AlgorithmSM4: AlgorithmId (valid values are determined by the TPMI_ALG_SYM_MODE interface type)
+//  - AlgorithmCamellia: AlgorithmId (valid values are determined by the TPMI_ALG_SYM_MODE interface type)
 //  - AlgorithmXOR: <nil>
 //  - AlgorithmNull: <nil>
 type SymModeU struct {
@@ -679,14 +683,14 @@ func (m SymModeU) Sym() AlgorithmId {
 
 // SymDef corresponds to the TPMT_SYM_DEF type, and is used to select the algorithm used for parameter encryption.
 type SymDef struct {
-	Algorithm AlgorithmId // Symmetric algorithm
+	Algorithm AlgorithmId // Symmetric algorithm. Valid values are determined by the TPMI_ALG_SYM interface type
 	KeyBits   SymKeyBitsU `tpm2:"selector:Algorithm"` // Symmetric key size
 	Mode      SymModeU    `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 
 // SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an object's symmetric algorithm.
 type SymDefObject struct {
-	Algorithm AlgorithmId // Symmetric algorithm
+	Algorithm AlgorithmId // Symmetric algorithm. Valid values are determined by the TPMI_ALG_SYM_OBJECT interface type
 	KeyBits   SymKeyBitsU `tpm2:"selector:Algorithm"` // Symmetric key size
 	Mode      SymModeU    `tpm2:"selector:Algorithm"` // Symmetric mode
 }
@@ -719,19 +723,19 @@ type sensitiveCreateSized struct {
 // SchemeHash corresponds to the TPMS_SCHEME_HASH type, and is used for schemes that only require a hash algorithm to complete their
 // definition.
 type SchemeHash struct {
-	HashAlg AlgorithmId // Hash algorithm used to digest the message
+	HashAlg AlgorithmId // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
 }
 
 // SchemeECDAA corresponds to the TPMS_SCHEME_ECDAA type.
 type SchemeECDAA struct {
-	HashAlg AlgorithmId // Hash algorithm used to digest the message
+	HashAlg AlgorithmId // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
 	Count   uint16
 }
 
 // SchemeXOR corresponds to the TPMS_SCHEME_XOR type, and is used to define the XOR encryption scheme.
 type SchemeXOR struct {
-	HashAlg AlgorithmId // Hash algorithm used to digest the message
-	KDF     AlgorithmId // Hash algorithm used for the KDF
+	HashAlg AlgorithmId // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
+	KDF     AlgorithmId // Hash algorithm used for the KDF. Valid values are determined by the TPMI_ALG_KDF interface type
 }
 
 // SchemeHMAC corresponds to the TPMS_SCHEME_HMAC type.
@@ -770,7 +774,7 @@ func (d SchemeKeyedHashU) XOR() *SchemeXOR {
 
 // KeyedHashScheme corresponds to the TPMS_KEYEDHASH_SCHEME type.
 type KeyedHashScheme struct {
-	Scheme  AlgorithmId
+	Scheme  AlgorithmId      // Scheme selector. Valid values are determined by the TPMI_ALG_KEYEDHASH_SCHEME interface type
 	Details SchemeKeyedHashU `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
@@ -863,8 +867,8 @@ func (s SigSchemeU) Any() *SchemeHash {
 
 // SigScheme corresponds to the TPMT_SIG_SCHEME type.
 type SigScheme struct {
-	Scheme  AlgorithmId
-	Details SigSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_SIG_SCHEME interface type
+	Details SigSchemeU  `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
 // 11.2.3 Key Derivation Schemes
@@ -925,8 +929,8 @@ func (s KDFSchemeU) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
 
 // KDFScheme corresponds to the TPMT_KDF_SCHEME type.
 type KDFScheme struct {
-	Scheme  AlgorithmId
-	Details KDFSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_KDF interface type
+	Details KDFSchemeU  `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
 type KeySchemeECDH SchemeHash
@@ -1036,7 +1040,7 @@ func (s AsymSchemeU) Any() *SchemeHash {
 
 // AsymScheme corresponds to the TPMT_ASYM_SCHEME type.
 type AsymScheme struct {
-	Scheme  AlgorithmId
+	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_ASYM_SCHEME interface type
 	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
@@ -1044,7 +1048,7 @@ type AsymScheme struct {
 
 // RSAScheme corresponds to the TPMT_RSA_SCHEME type.
 type RSAScheme struct {
-	Scheme  AlgorithmId
+	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_RSA_SCHEME interface type
 	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
@@ -1067,7 +1071,7 @@ type ECCPoint struct {
 
 // ECCScheme corresponds to the TPMT_ECC_SCHEME type.
 type ECCScheme struct {
-	Scheme  AlgorithmId
+	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_ECC_SCHEME interface type
 	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
@@ -1075,13 +1079,15 @@ type ECCScheme struct {
 
 // SignatureRSA corresponds to the TPMS_SIGNATURE_RSA type.
 type SignatureRSA struct {
-	Hash AlgorithmId  // Hash algorithm used to digest the message
+	Hash AlgorithmId  // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
 	Sig  PublicKeyRSA // Signature, which is the same size as the public key
 }
 
 // SignatureECC corresponds to the TPMS_SIGNATURE_ECC type.
 type SignatureECC struct {
-	Hash       AlgorithmId // Hash algorithm used in the signature process
+	// Hash is the digest algorithm used in the signature process. Valid values are determined by the TPMI_ALG_HASH interface type.
+	Hash AlgorithmId
+
 	SignatureR ECCParameter
 	SignatureS ECCParameter
 }
@@ -1172,7 +1178,7 @@ func (s SignatureU) Any() *SchemeHash {
 // Signature corresponds to the TPMT_SIGNATURE type. It is returned by the attestation commands, and is a parameter for
 // TPMContext.VerifySignature and TPMContext.PolicySigned.
 type Signature struct {
-	SigAlg    AlgorithmId // Signature algorithm
+	SigAlg    AlgorithmId // Signature algorithm. Valid values are determined by the TPMI_ALG_SIG_SCHEME interface type
 	Signature SignatureU  `tpm2:"selector:SigAlg"` // Actual signature
 }
 
@@ -1325,8 +1331,10 @@ func (p PublicParamsU) AsymDetail() *AsymParams {
 
 // Public corresponds to the TPMT_PUBLIC type, and defines the public area for an object.
 type Public struct {
-	Type       AlgorithmId      // Type of this object
-	NameAlg    AlgorithmId      // Algorithm used to compute the name of this object
+	Type AlgorithmId // Type of this object. Valid values are determined by the TPMI_ALG_PUBLIC interface type
+
+	// NameAlg is the algorithm used to compute the name of this object. Valid values are determined by the TPMI_ALG_HASH interface type.
+	NameAlg    AlgorithmId
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
 	Params     PublicParamsU    `tpm2:"selector:Type"` // Type specific parameters
@@ -1470,8 +1478,11 @@ func MakeNVAttributes(a NVAttributes, t NVType) NVAttributes {
 
 // NVPublic corresponds to the TPMS_NV_PUBLIC type, which describes a NV index.
 type NVPublic struct {
-	Index      Handle       // Handle of the NV index
-	NameAlg    AlgorithmId  // Hash algorithm used to compute the name of this index
+	Index Handle // Handle of the NV index
+
+	// NameAlg is the digest algorithm used to compute the name of the index. Valid values are determined by the TPMI_ALG_HASH interface
+	// type.
+	NameAlg    AlgorithmId
 	Attrs      NVAttributes // Attributes of this index
 	AuthPolicy Digest       // Authorization policy for this index
 	Size       uint16       // Size of this index

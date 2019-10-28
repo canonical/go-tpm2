@@ -15,6 +15,20 @@ package tpm2
 // name of the object represented by objectContext and then verifying that it matches the provided creationTicket, which was provided
 // by the TPM at object creation time.
 //
+// If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
+// code of ErrorKey will be returned for handle index 1.
+//
+// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
+// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
+// returned for parameter index 3.
+//
+// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
+// ErrorScheme will be returned for parameter index 3.
+//
+// If creationTicket corresponds to an invalid ticket, a *TPMParameterError error with an error code of ErrorTicket will be returned
+// for parameter index 4.
+//
 // If successful, it returns an attestation structure. If signContext is not nil, the attestation structure will be signed by the
 // associated key and returned separately.
 func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,

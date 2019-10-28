@@ -121,7 +121,8 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 // setting it to either HandlePlatform or HandleLockout.
 //
 // If disable is false, then this command will enable execution of TPM2_Clear. In this case, the command requires knowledge of the
-// authorization value for the platform hierarchy, and authHandle must be set to HandlePlatform.
+// authorization value for the platform hierarchy, and authHandle must be set to HandlePlatform. If authHandle is set to HandleOwner,
+// a *TPMError error with an error code of ErrorAuthFail will be returned.
 //
 // The command requires the user auth role for authHandle, provided via authHandleAuth.
 func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
@@ -132,6 +133,8 @@ func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAut
 
 // HierarchyChangeAuth executes the TPM2_HierarchyChangeAuth command to change the authorization value for the hierarchy associated
 // with the authHandle parameter. The command requires the user auth role, provided via authHandleAuth.
+//
+// If the value of newAuth is too long, a *TPMParameterError error with an error code of ErrorSize will be returned.
 //
 // On successful completion, the authorization value for the hierarchy associated with authHandle will be set to the value of newAuth.
 func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}, sessions ...*Session) error {
