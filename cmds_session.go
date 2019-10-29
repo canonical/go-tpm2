@@ -63,6 +63,11 @@ import (
 // command, the AuthValue field of the Session struct referencing the session must be set to the authorization value of the resource
 // being authorized, as the authorization value of the resource is used in derivation of the symmetric key regardless of bind state
 // or whether it is required for authorization.
+//
+// If no more sessions can be created without first context loading the oldest saved session, then a *TPMWarning error with a warning
+// code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
+// warning code of WarningSessionMemory will be returned. If there are no more session handles available, a *TPMwarning error with
+// a warning code of WarningSessionHandles will be returned.
 func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: AlgorithmNull}

@@ -124,7 +124,9 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 // Note that if saveContext corresponds to a session, the host-side state that is added to the returned context blob includes the
 // session key.
 //
-// If no more contexts can be saved, a *TPMError error will be returned with an error code of ErrorTooManyContexts.
+// If saveContext corresponds to a session and no more contexts can be saved, a *TPMError error will be returned with an error code
+// of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
+// WarningContextGap will be returned.
 func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) {
 	var context Context
 
@@ -157,6 +159,12 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 // If the size of the context's integrity HMAC does not match the context integrity digest algorithm for the TPM, or the context
 // blob is too short, a *TPMParameterError error with an error code of ErrorSize will be returned. If the integrity HMAC check fails,
 // a *TPMParameterError with an error code of ErrorIntegrity will be returned.
+//
+// If the context corresponds to a session, no more sessions can be created until the oldest session is context loaded, and context
+// doesn't correspond to the oldest session, a *TPMWarning error with a warning code of WarningContextGap will be returned.
+//
+// If there are no more slots available for objects or loaded sessions, a *TPMWarning error with a warning code of either
+// WarningSessionMemory or WarningObjectMemory will be returned.
 //
 // On successful completion, it returns a ResourceContext which corresponds to the resource loaded in to the
 // TPM.

@@ -337,28 +337,50 @@ const (
 	WarningMemory         WarningCode = 0x04 // TPM_RC_MEMORY
 	WarningSessionHandles WarningCode = 0x05 // TPM_RC_SESSION_HANDLES
 	WarningObjectHandles  WarningCode = 0x06 // TPM_RC_OBJECT_HANDLES
-	WarningLocality       WarningCode = 0x07 // TPM_RC_LOCALITY
-	WarningYielded        WarningCode = 0x08 // TPM_RC_YIELDED
-	WarningCanceled       WarningCode = 0x09 // TPM_RC_CANCELED
-	WarningTesting        WarningCode = 0x0a // TPM_RC_TESTING
-	WarningReferenceH0    WarningCode = 0x10 // TPM_RC_REFERENCE_H0
-	WarningReferenceH1    WarningCode = 0x11 // TPM_RC_REFERENCE_H1
-	WarningReferenceH2    WarningCode = 0x12 // TPM_RC_REFERENCE_H2
-	WarningReferenceH3    WarningCode = 0x13 // TPM_RC_REFERENCE_H3
-	WarningReferenceH4    WarningCode = 0x14 // TPM_RC_REFERENCE_H4
-	WarningReferenceH5    WarningCode = 0x15 // TPM_RC_REFERENCE_H5
-	WarningReferenceH6    WarningCode = 0x16 // TPM_RC_REFERENCE_H6
-	WarningReferenceS0    WarningCode = 0x18 // TPM_RC_REFERENCE_S0
-	WarningReferenceS1    WarningCode = 0x19 // TPM_RC_REFERENCE_S1
-	WarningReferenceS2    WarningCode = 0x1a // TPM_RC_REFERENCE_S2
-	WarningReferenceS3    WarningCode = 0x1b // TPM_RC_REFERENCE_S3
-	WarningReferenceS4    WarningCode = 0x1c // TPM_RC_REFERENCE_S4
-	WarningReferenceS5    WarningCode = 0x1d // TPM_RC_REFERENCE_S5
-	WarningReferenceS6    WarningCode = 0x1e // TPM_RC_REFERENCE_S6
-	WarningNVRate         WarningCode = 0x20 // TPM_RC_NV_RATE
-	WarningLockout        WarningCode = 0x21 // TPM_RC_LOCKOUT
-	WarningRetry          WarningCode = 0x22 // TPM_RC_RETRY
-	WarningNVUnavailable  WarningCode = 0x23 // TPM_RC_NV_UNAVAILABLE
+
+	// WarningLocality corresponds to TPM_RC_LOCALITY and is returned for a command if a policy session is used for authorization and the
+	// session includes a TPM2_PolicyLocality assertion, but the command isn't executed with the authorized locality.
+	WarningLocality WarningCode = 0x07
+
+	// WarningYielded corresponds to TPM_RC_YIELDED and is returned for any command that is suspended as a hint that the command can be
+	// retried. This is handled automatically by all methods on TPMContext that execute commands via TPMContext.RunCommand by
+	// resubmitting the command.
+	WarningYielded WarningCode = 0x08
+
+	// WarningCanceled corresponds to TPM_RC_CANCELED and is returned for any command that is canceled before being able to complete.
+	WarningCanceled WarningCode = 0x09
+
+	WarningTesting     WarningCode = 0x0a // TPM_RC_TESTING
+	WarningReferenceH0 WarningCode = 0x10 // TPM_RC_REFERENCE_H0
+	WarningReferenceH1 WarningCode = 0x11 // TPM_RC_REFERENCE_H1
+	WarningReferenceH2 WarningCode = 0x12 // TPM_RC_REFERENCE_H2
+	WarningReferenceH3 WarningCode = 0x13 // TPM_RC_REFERENCE_H3
+	WarningReferenceH4 WarningCode = 0x14 // TPM_RC_REFERENCE_H4
+	WarningReferenceH5 WarningCode = 0x15 // TPM_RC_REFERENCE_H5
+	WarningReferenceH6 WarningCode = 0x16 // TPM_RC_REFERENCE_H6
+	WarningReferenceS0 WarningCode = 0x18 // TPM_RC_REFERENCE_S0
+	WarningReferenceS1 WarningCode = 0x19 // TPM_RC_REFERENCE_S1
+	WarningReferenceS2 WarningCode = 0x1a // TPM_RC_REFERENCE_S2
+	WarningReferenceS3 WarningCode = 0x1b // TPM_RC_REFERENCE_S3
+	WarningReferenceS4 WarningCode = 0x1c // TPM_RC_REFERENCE_S4
+	WarningReferenceS5 WarningCode = 0x1d // TPM_RC_REFERENCE_S5
+	WarningReferenceS6 WarningCode = 0x1e // TPM_RC_REFERENCE_S6
+
+	// WarningNVRate corresponds to TPM_RC_NV_RATE and is returned for any command that requires NV access if NV access is currently
+	// rate limited to prevent the NV memory from wearing out.
+	WarningNVRate WarningCode = 0x20
+
+	// WarningLockout corresponds to TPM_RC_LOCKOUT and is returned for any command that requires authorization for an entity that is
+	// subject to dictionary attack protection, and the TPM is in dictionary attack lockout mode.
+	WarningLockout WarningCode = 0x21
+
+	// WarningRetry corresponds to TPM_RC_RETRY and is returned for any command if the TPM was not able to start the command. This is
+	// handled automatically by all methods on TPMContext that execute commands via TPMContext.RunCommand by resubmitting the command.
+	WarningRetry WarningCode = 0x22
+
+	// WarningNVUnavailable corresponds to TPM_RC_NV_UNAVAILABLE and is returned for any command that requires NV access but NV memory
+	// is currently not available.
+	WarningNVUnavailable WarningCode = 0x23
 )
 
 const (
