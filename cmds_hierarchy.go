@@ -10,6 +10,56 @@ import (
 	"fmt"
 )
 
+// CreatePrimary executes the TPM2_CreatePrimary command to create a new primary object in the hierarchy corresponding to
+// primaryObject.
+//
+// The primaryObject parameter should correspond to a hierarchy. The command requires authorization with the user auth role for
+// primaryObject, provided via primaryObjectAuth.
+//
+// A template for the object is provided via the inPublic parameter. The Type field of inPublic defines the algorithm for the object.
+// The NameAlg field defines the digest algorithm for computing the name of the object. The Attrs field defines the attributes of
+// the object. The AuthPolicy field allows an authorization policy to be defined for the new object.
+//
+// Data that will form part of the sensitive area of the object can be provided via inSensitive, which is optional.
+//
+// If the Attrs field of inPublic does not have the AttrSensitiveDataOrigin attribute set, then the sensitive data in the created
+// object is initialized with the data provided via the Data field of inSensitive.
+//
+// If the Attrs field of inPublic has the AttrSensitiveDataOrigin attribute set and Type is AlgorithmSymCipher, then the sensitive
+// data in the created object is initialized with a TPM generated key. The size of this key is determined by the value of the Params
+// field of inPublic. If Type is AlgorithmKeyedHash, then the sensitive data in the created object is initialized with a TPM
+// generated value that is the same size as the name algorithm selected by the NameAlg field of inPublic.
+//
+// If the Type field of inPublic is AlgorithmRSA or AlgorithmECC, then the sensitive data in the created object is initialized with
+// a TPM generated private key. The size of this is determined by the value of the Params field of inPublic.
+//
+// If the Type field of inPublic is AlgorithmKeyedHash and the Attrs field has AttrSensitiveDataOrigin, AttrSign and AttrDecrypt all
+// clear, then the created object is a sealed data object.
+//
+// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is not AlgorithmKeyedHash,
+// then the newly created object will be a storage parent.
+//
+// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is AlgorithmKeyedHash, then
+// the newly created object will be a derivation parent.
+//
+// The authorization value for the created object is initialized to the value of the UserAuth field of inSensitive.
+//
+// If there are no available slots for new objects on the TPM, a *TPMWarning error with a warning code of WarningObjectMemory will
+// be returned.
+//
+// CreatePrimary performs many of the same checks as TPMContext.Create. For the purpose of checking the public attributes, the primary
+// seeds are assumed to have the AttrFixedTPM, AttrFixedParent, AttrDecrypt and AttrRestricted attributes set.
+//
+// On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM. If the Type field
+// of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object will have a Unique field that is the digest
+// of the sensitive data and the value of the object's seed in the sensitive area, computed using the object's name algorithm. If
+// the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned *Public object will have a Unique field containing
+// details about the public part of the key, computed from the private part of the key.
+//
+// The returned *CreationData will contain a digest computed from the values of PCRs selected by the creationPCR parameter at creation
+// time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
+// can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
+// method.
 func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
@@ -124,7 +174,7 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 // authorization value for the platform hierarchy, and authHandle must be set to HandlePlatform. If authHandle is set to HandleOwner,
 // a *TPMError error with an error code of ErrorAuthFail will be returned.
 //
-// The command requires the user auth role for authHandle, provided via authHandleAuth.
+// The command requires the authorization with the user auth role for authHandle, provided via authHandleAuth.
 func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
 	return t.RunCommand(CommandClearControl, nil,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator,
@@ -132,9 +182,11 @@ func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAut
 }
 
 // HierarchyChangeAuth executes the TPM2_HierarchyChangeAuth command to change the authorization value for the hierarchy associated
-// with the authHandle parameter. The command requires the user auth role, provided via authHandleAuth.
+// with the authHandle parameter. The command requires authorization with the user auth role for authHandle, provided via
+// authHandleAuth.
 //
-// If the value of newAuth is too long, a *TPMParameterError error with an error code of ErrorSize will be returned.
+// If the value of newAuth is longer than the context integrity digest algorithm for the TPM, a *TPMParameterError error with an
+// error code of ErrorSize will be returned.
 //
 // On successful completion, the authorization value for the hierarchy associated with authHandle will be set to the value of newAuth.
 func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}, sessions ...*Session) error {

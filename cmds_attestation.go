@@ -29,6 +29,9 @@ package tpm2
 // If creationTicket corresponds to an invalid ticket, a *TPMParameterError error with an error code of ErrorTicket will be returned
 // for parameter index 4.
 //
+// If the digest generated for signing is greater than or has a larger size than the modulus of the key associated with signContext, a
+// *TPMError with an error code of ErrorValue will be returned.
+//
 // If successful, it returns an attestation structure. If signContext is not nil, the attestation structure will be signed by the
 // associated key and returned separately.
 func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,

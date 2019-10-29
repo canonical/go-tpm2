@@ -121,8 +121,7 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 // with the session from the TPM (it becomes an active session rather than a loaded session). In this case, saveContext is
 // invalidated.
 //
-// Note that if saveContext corresponds to a session, the host-side state that is added to the returned context blob includes the
-// session key.
+// If saveContext corresponds to a session, the host-side state that is added to the returned context blob includes the session key.
 //
 // If saveContext corresponds to a session and no more contexts can be saved, a *TPMError error will be returned with an error code
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
@@ -150,24 +149,27 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 // ContextLoad executes the TPM2_ContextLoad command with the supplied Context, in order to restore a context previously saved from
 // TPMContext.ContextSave.
 //
+// If the size field of the integrity HMAC in the context blob is greater than the size of the largest digest algorithm, a *TPMError
+// with an error code of ErrorSize is returned. If the context blob is shorter than the size indicated for the integrity HMAC, a
+// *TPMError with an error code of ErrorInsufficient is returned.
+//
+// If the size of the context's integrity HMAC does not match the context integrity digest algorithm for the TPM, or the context
+// blob is too short, a *TPMParameterError error with an error code of ErrorSize will be returned. If the integrity HMAC check fails,
+// a *TPMParameterError with an error code of ErrorIntegrity will be returned.
+//
 // If the hierarchy that the context is part of is disabled, a *TPMParameterError error with an error code of ErrorHierarchy will be
 // returned.
 //
 // If the context corresponds to a session but the handle doesn't reference a saved session or the sequence number is invalid, a
 // *TPMParameterError error with an error code of ErrorHandle will be returned.
 //
-// If the size of the context's integrity HMAC does not match the context integrity digest algorithm for the TPM, or the context
-// blob is too short, a *TPMParameterError error with an error code of ErrorSize will be returned. If the integrity HMAC check fails,
-// a *TPMParameterError with an error code of ErrorIntegrity will be returned.
-//
-// If the context corresponds to a session, no more sessions can be created until the oldest session is context loaded, and context
+// If the context corresponds to a session and no more sessions can be created until the oldest session is context loaded, and context
 // doesn't correspond to the oldest session, a *TPMWarning error with a warning code of WarningContextGap will be returned.
 //
 // If there are no more slots available for objects or loaded sessions, a *TPMWarning error with a warning code of either
 // WarningSessionMemory or WarningObjectMemory will be returned.
 //
-// On successful completion, it returns a ResourceContext which corresponds to the resource loaded in to the
-// TPM.
+// On successful completion, it returns a ResourceContext which corresponds to the resource loaded in to the TPM.
 func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 	if context == nil {
 		return nil, makeInvalidParamError("context", "nil value")
@@ -233,21 +235,21 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 // The auth handle specifies a hierarchy - it should be HandlePlatform for objects within the platform hierarchy, or HandleOwner for
 // objects within the storage or endorsement hierarchies. If auth is HandlePlatform but objectContext corresponds to an object outside
 // of the platform hierarchy, or auth is HandleOwner but objectContext corresponds to an object inside of the platform hierarchy, a
-// *TPMHandleError error with an error code of ErrorHierarchy will be returned for handle index 2. The auth handle requires the user
-// auth role, provided via authAuth.
-//
-// If there is insuffient space to persist a transient object, a *TPMError error with an error code of ErrorNVSpace will be returned.
-// If a persistent object already exists at the specified handle, a *TPMError error with an error code of ErrorNVDefined will be
-// returned.
+// *TPMHandleError error with an error code of ErrorHierarchy will be returned for handle index 2. The auth handle requires
+// authorization with the user auth role, provided via authAuth.
 //
 // If objectContext corresponds to a transient object that only has a public part loaded, or which has the AttrStClear attribute set,
 // then a *TPMHandleError error with an error code of ErrorAttributes will be returned for handle index 2.
 //
+// If objectContext corresponds to a persistent object and persistentHandle is not the handle for that object, a *TPMHandleError error
+// with an error code of ErrorHandle will be returned for handle index 2.
+//
 // If objectContext corresponds to a transient object and persistentHandle is not in the correct range determined by the value of
 // auth, a *TPMParameterError error with an error code of ErrorRange will be returned.
 //
-// If objectContext corresponds to a persistent object and persistentHandle is not the handle for that object, a *TPMHandleError error
-// with an error code of ErrorHandle will be returned for handle index 2.
+// If there is insuffient space to persist a transient object, a *TPMError error with an error code of ErrorNVSpace will be returned.
+// If a persistent object already exists at the specified handle, a *TPMError error with an error code of ErrorNVDefined will be
+// returned.
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and objectContext will be invalidated.

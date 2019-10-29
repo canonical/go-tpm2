@@ -31,8 +31,8 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 	return &validation, nil
 }
 
-// Sign executes the TPM2_Sign command to sign the provided digest with the key associated with keyContext. The function requires the
-// user auth role for keyContext, provided via keyContextAuth.
+// Sign executes the TPM2_Sign command to sign the provided digest with the key associated with keyContext. The function requires
+// authorization with the user auth role for keyContext, provided via keyContextAuth.
 //
 // If the object associated with keyContext is not a signing key, a *TPMHandleError error with an error code of ErrorKey will be
 // returned.

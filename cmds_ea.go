@@ -19,18 +19,10 @@ import (
 // ... where H is the digest algorithm associated with the auth parameter. Where there are no restrictions, the digest is computed
 // from 4 zero bytes, which corresponds to an expiration time of zero. The signature is provided via the auth parameter.
 //
-// If the session associated with policySession is not a trial session, the signature will be validated against a digest computed from
-// the provided arguments, using the key associated with authContext. If the signature is invalid, a *TPMParameterError error with an
-// error code of ErrorSignature will be returned for parameter index 5.
-//
-// If the session associated with policySession is not a trial session and the signing scheme or digest algorithm associated with
-// the auth parameter is not supported by the TPM, a *TPMParameterError error with an error code of ErrorScheme will be returned for
-// parameter index 5.
-//
 // If includeNonceTPM is set to true, this function includes the most recently received TPM nonce value for the session associated
 // with policySession in the command. In this case, the nonce value must be included in the digest that is signed by the authorizing
 // entity.
-
+//
 // The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
 // parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
 // recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
@@ -39,14 +31,22 @@ import (
 // length of cpHashA does not match the digest algorithm for the session, a *TPMParameterError error with an error code of ErrorSize
 // will be returned for parameter index 2.
 //
-// If the expiration parameter is not 0, it sets a timeout in seconds since the start of the session by which the authorization will
-// expire. If set to a negative number, a timeout value and corresponding ticket value will be returned if the session associated with
-// policySession is not a trial session. If the session associated with policySession is not a trial session and expiration
-// corresponds to a time in the past, or the TPM's time epoch has changed since the session was started, a *TPMParameterError error
-// with an error code of ErrorExpired will be returned for parameter index 4.
+// If the expiration parameter is not 0, it sets a timeout based on the absolute value of expiration in seconds since the start of
+// the session by which the authorization will expire. If the session associated with policySession is not a trial session and
+// expiration corresponds to a time in the past, or the TPM's time epoch has changed since the session was started, a
+// *TPMParameterError error with an error code of ErrorExpired will be returned for parameter index 4.
+//
+// If the session associated with policySession is not a trial session and the signing scheme or digest algorithm associated with
+// the auth parameter is not supported by the TPM, a *TPMParameterError error with an error code of ErrorScheme will be returned for
+// parameter index 5.
+//
+// If the session associated with policySession is not a trial session, the signature will be validated against a digest computed from
+// the provided arguments, using the key associated with authContext. If the signature is invalid, a *TPMParameterError error with an
+// error code of ErrorSignature will be returned for parameter index 5.
 //
 // On successful completion, the policy digest of the session associated with policySession will be extended to include the name of
-// authContext and the value of policyRef.
+// authContext and the value of policyRef. If expiration is less than zero, a timeout value and corresponding *TkAuth ticket will be
+// returned if policySession does not correspond to a trial session.
 func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout, *TkAuth, error) {
 	if err := t.checkResourceContextParam(policySession); err != nil {
 		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
@@ -77,27 +77,27 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 }
 
 // PolicySecret executes the TPM2_PolicySecret command to include a secret-based authorization to the policy session associated
-// with policySession. The command requires the user auth role for authContext, which is provided via authContextAuth.
-//
-// If authContextAuth corresponds a policy session, and that session does not include a TPM2_PolicyPassword or TPM2_PolicyAuthValue
-// assertion, a *TPMSessionError error with an error code of ErrorMode will be returned for session index 1.
-//
-// On successful completion, knowledge of the authorization value associated with authContext is proven. The policy digest of the
-// session associated with policySession will be extended to include the name of authContext and the value of policyRef.
+// with policySession. The command requires authorization with the user auth role for authContext, which is provided via
+// authContextAuth. If authContextAuth corresponds a policy session, and that session does not include a TPM2_PolicyPassword or
+// TPM2_PolicyAuthValue assertion, a *TPMSessionError error with an error code of ErrorMode will be returned for session index 1.
 //
 // The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
-// parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA
-// is recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
+// parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
+// recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
 // already has a command parameter digest defined, a *TPMError error with an error code of ErrorCpHash will be returned if cpHashA
 // does not match the digest already recorded on the session context. If policySession does not correspond to a trial session and the
 // length of cpHashA does not match the digest algorithm for the session, a *TPMParameterError error with an error code of ErrorSize
 // will be returned for parameter index 2.
 //
-// If the expiration parameter is not 0, it sets a timeout in seconds since the start of the session by which the authorization will
-// expire. If set to a negative number, a timeout value and corresponding ticket value will be returned if the session associated with
-// policySession is not a trial session. If the session associated with policySession is not a trial session and expiration
-// corresponds to a time in the past, or the TPM's time epoch has changed since the session was started, a *TPMParameterError error
-// with an error code of ErrorExpired will be returned for parameter index 4.
+// If the expiration parameter is not 0, it sets a timeout based on the absolute value of expiration in seconds since the start of
+// the session by which the authorization will expire. If the session associated with policySession is not a trial session and
+// expiration corresponds to a time in the past, or the TPM's time epoch has changed since the session was started, a
+// *TPMParameterError error with an error code of ErrorExpired will be returned for parameter index 4.
+//
+// On successful completion, knowledge of the authorization value associated with authContext is proven. The policy digest of the
+// session associated with policySession will be extended to include the name of authContext and the value of policyRef. If expiration
+// is less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a
+// trial session.
 func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error) {
 	if err := t.checkResourceContextParam(policySession); err != nil {
 		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
@@ -127,10 +127,10 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 // expiration time, and will have been returned from a previous call to TPMContext.PolicySigned or TPMContext.PolicySecret when called
 // with an expiration time of less than zero.
 //
-// The timeout, cpHashA and policyRef arguments must match the values passed to the command that originally produced the ticket. If
-// the command that produced the ticket was TPMContext.PolicySecret, authName must correspond to the name of the entity of which
-// knowledge of the authorization value was proven. If the command that produced the ticket was TPMContext.PolicySigned, authName
-// must correspond to the name of the key that produced the signed authorization.
+// If policySession corresponds to a trial session, a *TPMHandleError error with an error code of ErrorAttributes will be returned.
+//
+// If the size of timeout is not the expected size, a *TPMParameterError with an error code of ErrorSize will be returned for
+// parameter index 1.
 //
 // The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
 // parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
@@ -139,7 +139,10 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 // the digest already recorded on the session context. If the length of cpHashA does not match the digest algorithm for the session,
 // a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 2.
 //
-// If policySession corresponds to a trial session, a *TPMHandleError error with an error code of ErrorAttributes will be returned.
+// The timeout, cpHashA and policyRef arguments must match the values passed to the command that originally produced the ticket. If
+// the command that produced the ticket was TPMContext.PolicySecret, authName must correspond to the name of the entity of which
+// knowledge of the authorization value was proven. If the command that produced the ticket was TPMContext.PolicySigned, authName
+// must correspond to the name of the key that produced the signed authorization.
 //
 // If the ticket is invalid, a *TPMParameterError error with an error code of ErrorTicket will be returned for parameter index 5. If
 // the ticket corresponds to an authorization that has expired, a *TPMParameterError error with an error code of ErrorExpired will
@@ -191,8 +194,18 @@ func (t *TPMContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, 
 // caller specifies a comparison operator via the operation parameter, and a value to which to compare the value of the NV index to
 // via the operandB parameter. The offset parameter specifies the offset in to the NV index data from which the first operand begins.
 //
-// If the comparison fails and policySession does not correspond to a trial session, a *TPMError error will be returned with an error
-// code of ErrorPolicy.
+// The command requires authorization to read the NV index, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead
+// and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext. If the NV index has the
+// AttrNVPPRead attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute,
+// authorization can be satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute,
+// authorization can be satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided
+// via authContextAuth. If the resource associated with authContext is not permitted to authorize this access and policySession does
+// not correspond to a trial session, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
+//
+// If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
+// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
+// digest that matches the authorization policy for the index.
 //
 // If the index associated with nvIndex has the AttrNVReadLocked attribute set and policySession does not correspond to a trial
 // session, a *TPMError error with an error code of ErrorNVLocked will be returned.
@@ -200,19 +213,15 @@ func (t *TPMContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, 
 // If the index associated with nvIndex has not been initialized (ie, the AttrNVWritten attribute is not set) and policySession does
 // not correspond to a trial session, a *TPMError with an error code of ErrorNVUninitialized will be returned.
 //
-// If the size of the NV index minus the value of offset is less than the size of operandB and policySession does not correspond to
-// a trial session, a *TPMParameterError with an error code of ErrorSize will be returned for parameter index 1.
+// If the session associated with policySession is not a trial session and offset is outside of the bounds of the NV index, a
+// *TPMParameterError error with an error code of ErrorValue is returned for paramter index 2.
 //
-// The command requires authorization to read the NV index, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead
-// and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext. If the NV index has the
-// AttrNVPPRead attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute,
-// authorization can be satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute,
-// authorization can be satisfied with nvIndex. The command requires the user auth role for authContext, provided via authContextAuth.
+// If the session associated with policySession is not a trial session and the size of operandB in combination with the value of
+// offset would result in a read outside of the bounds of the NV index, a *TPMParameterError error with an error code of ErrorSize
+// is returned for paramter index 1.
 //
-// If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
-// authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
-// digest that matches the authorization policy for the index.
+// If the comparison fails and policySession does not correspond to a trial session, a *TPMError error will be returned with an error
+// code of ErrorPolicy.
 //
 // On successful completion, the policy digest of the session context associated with policySession is extended to include the values
 // of operandB, offset, operation and the name of nvIndex.

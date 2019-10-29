@@ -25,10 +25,13 @@ import (
 //
 // If tpmKey is provided, it must correspond to an asymmetric decrypt key in the TPM. In this case, a random salt value will
 // contribute to the session key derivation, and the salt will be encrypted using the method specified by tpmKey before being sent to
-// the TPM. If tpmKey is provided but does not correspond to a decrypt key, a *TPMHandleError error with an error code of
-// ErrorAttributes will be returned for handle index 1. If tpmKey references an object with only a public part loaded, a
-// *TPMHandleError error with an error code of ErrorHandle will be returned for handle index 1. If tpmKey references a decrypt key
-// that is not an asymmetric key, a *TPMHandleError error with an error code of ErrorKey will be returned for handle index 1.
+// the TPM. If tpmKey is provided but does not correspond to an asymmetric key, a *TPMHandleError error with an error code of ErrorKey
+// will be returned for handle index 1. If tpmKey is provided but corresponds to an object with only its public part loaded, a
+// *TPMHandleError error with an error code of ErrorHandle will be returned for handle index 1. If tpmKey is provided but does not
+// correspond to a decrypt key, a *TPMHandleError error with an error code of ErrorAttributes will be returned for handle index 1.
+//
+// If tpmkey is provided but decryption of the salt fails on the TPM, a *TPMParameterError error with an error code of ErrorValue or
+// ErrorKey may be returned for parameter index 2.
 //
 // If bind is specified, then the auhorization value for the corresponding resource must be provided in authValue. This will
 // contribute to the session key derivation. The created session will be bound to the resource associated with bind. If bind
@@ -42,9 +45,9 @@ import (
 //
 // If symmetric is provided, it defines the symmetric algorithm to use if the session is subsequently used for session based command
 // or response parameter encryption. Session based parameter encryption allows the first command and/or response parameter for a
-// command to be encrypted between the TPM and host CPU for supported parameter types - go types that correspond to TPM2B prefixed
-// types. If symmetric is provided and corresponds to a symmetric block cipher (ie, SymDef.Algorithm is not AlgorithmXOR) then
-// the value of SymDef.Mode.Data must be AlgorithmCFB, else a *TPMParameterError error with an error code of ErrorMode is returned
+// command to be encrypted between the TPM and host CPU for supported parameter types (go types that correspond to TPM2B prefixed
+// types). If symmetric is provided and corresponds to a symmetric block cipher (ie, the Algorithm field is not AlgorithmXOR) then
+// the value of symmetric.Mode.Sym() must be AlgorithmCFB, else a *TPMParameterError error with an error code of ErrorMode is returned
 // for parameter index 4.
 //
 // If a Session instance with the AttrCommandEncrypt attribute set is provided in the variable length sessions parameter, then the
