@@ -149,9 +149,9 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 //
 // If the integrity value or IV for inPrivate cannot be unmarshalled correctly, a *TPMParameterError error with an error code of
 // either ErrorSize or ErrorInsufficient will be returned for parameter index 1. If the integrity check of inPrivate fails, a
-// *TPMParameterError error with an error code of ErrorIntegrity will be returned for parameter index 2. If the size of the IV
+// *TPMParameterError error with an error code of ErrorIntegrity will be returned for parameter index 1. If the size of the IV
 // for inPrivate doesn't match the block size for the encryption algorithm, a *TPMParameterError error with an error code of
-// ErrorValue will be returned for parameter index 2.
+// ErrorValue will be returned for parameter index 1.
 //
 // TPM2_Load performs many of the same validations of the public attributes as TPM2_Create, and may return similar error codes as
 // *TPMParameterError for parameter index 2.
@@ -320,6 +320,33 @@ func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Sess
 	return t.readPublic(objectContext.Handle(), sessions...)
 }
 
+// ActivateCredential executes the TPM2_ActivateCredential command to associate a certificate with the object associated with
+// activateContext.
+//
+// The activateContext parameter corresponds to an object to which credentialBlob is to be associated. It would typically be an
+// attestation key. Authorization with the admin role is required for activateContext, provided via activateContextAuth.
+//
+// The credentialBlob parameter is an encrypted credential and the secret parameter is an encrypted seed. Both of these are typically
+// issued by a certificate authority.
+//
+// The keyContext parameter corresponds to an asymmetric restricted decrypt key that should be used to decrypt the encrypted seed
+// value. It is typically an endorsement key. Authorization with the user auth role is required for keyContext, provided via
+// keyContextAuth.
+//
+// If keyContext does not correspond to an asymmetric restricted decrypt key, a *TPMHandleError error with an error code of ErrorType
+// is returned for handle index 2.
+//
+// If recovering the seed from secret fails, a *TPMParameterError error with an error code of ErrorScheme, ErrorValue, ErrorSize or
+// ErrorECCPoint may be returned for parameter index 2.
+//
+// If the integrity value of IV for credentialBlob cannot be unmarshalled correctly or any other errors occur during unmarshalling
+// of credentialBlob, a *TPMParameterError error with an error code of either ErrorSize or ErrorInsufficient will be returned for
+// parameter index 1. If the integrity check of credentialBlob fails, a *TPMParameterError error with an error code of ErrorIntegrity
+// will be returned for parameter index 1. If the size of the IV for credentialBlob doesn't match the block size for the encryption
+// algorithm, a *TPMParameterError error with an error code of ErrorValue will be returned for parameter index 1.
+//
+// On success, the decrypted credential is returned. This is typically used to decrypt a certificate issued by a certificate
+// authority.
 func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest, error) {
 	var certInfo Digest
 	if err := t.RunCommand(CommandActivateCredential, sessions,
@@ -332,6 +359,33 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceCont
 	return certInfo, nil
 }
 
+// MakeCredential executes the TPM2_MakeCredential command to allow the TPM to perform the actions of a certificate authority, in
+// order to create an activation credential.
+//
+// The object associated with context must be the public part of a storage key, which would typically be the endorsement key of the
+// TPM from which the request originates. The certificate authority would normally be in receipt of the TPM manufacturer issued
+// endorsement certificate corresponding to this key and would have validated this to verify that the key is a valid TPM resident
+// endorsement key. The credential parameter is the activation credential, which would typically be used to protect the generated
+// certificate. The objectName parameter is the name of object for which a certificate is requested. The public part of this object
+// would normally be validated by the certificate authority to ensure that it is the public area for a valid attestation key.
+//
+// If context does not correspond to an asymmetric restricted decrypt key, a *TPMHandleError error with an error code of ErrorType is
+// returned.
+//
+// If the size of credential is larger than the name algorithm associated with context, a *TPMParameterError error with an error code
+// of ErrorSize will be returned for parameter index 1.
+//
+// If the algorithm of the object associated with context is AlgorithmECC, a *TPMError with an error code of ErrorKey will be returned
+// if the ECC key is invalid. If the algorithm of the object associated with context is AlgorithmRSA, a *TPMError with an error code
+// of ErrorScheme will be returned if the padding scheme is invalid or not supported.
+//
+// On success, the encrypted activation credential is returned as IDObjectRaw. The activation credential is encrypted with a key
+// derived from a randomly generated seed and objectName, and an integrity HMAC of the encrypted credential and objectName is
+// prepended using a HMAC key derived from the same seed. The seed is encrypted using the public key associated with context, and
+// returned as EncryptedSecret.
+//
+// The certificate authority would typically return the generated certificate encrypted by credential, the encrypted credential blob
+// and the encrypted seed to the originator of the request.
 func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
 	var credentialBlob IDObjectRaw
 	var secret EncryptedSecret
