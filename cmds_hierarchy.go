@@ -47,8 +47,44 @@ import (
 // If there are no available slots for new objects on the TPM, a *TPMWarning error with a warning code of WarningObjectMemory will
 // be returned.
 //
-// CreatePrimary performs many of the same checks as TPMContext.Create. For the purpose of checking the public attributes, the primary
-// seeds are assumed to have the AttrFixedTPM, AttrFixedParent, AttrDecrypt and AttrRestricted attributes set.
+// If the attributes in the Attrs field of inPublic are inconsistent or inappropriate for the usage, a *TPMParameterError error with
+// an error code of ErrorAttributes will be returned for parameter index 2.
+//
+// If the NameAlg field of inPublic is AlgorithmNull, then a *TPMParameterError error with an error code of ErrorHash will be returned
+// for parameter index 2.
+//
+// If an authorization policy is defined via the AuthPolicy field of inPublic then the length of the digest must match the name
+// algorithm selected via the NameAlg field, else a *TPMParameterError error with an error code of ErrorSize is returned for parameter
+// index 2.
+//
+// If the scheme in the Params field of inPublic is inappropriate for the usage, a *TPMParameterError errow with an error code of
+// ErrorScheme will be returned for parameter index 2.
+//
+// If the digest algorithm specified by the scheme in the Params field of inPublic is inappropriate for the usage, a
+// *TPMParameterError error with an error code of ErrorHash will be returned for parameter index 2.
+//
+// If the Type field of inPublic is not AlgorithmKeyedHash, a *TPMParameterError error with an error code of ErrorSymmetric will be
+// returned for parameter index 2 if the symmetric algorithm specified in the Params field of inPublic is inappropriate for the
+// usage.
+//
+// If the Type field of inPublic is AlgorithmECC and the KDF scheme specified in the Params field of inPublic is not AlgorithmNull,
+// a *TPMParameterError error with an error code of ErrorKDF will be returned for parameter index 2.
+//
+// If the length of the UserAuth field of inSensitive is longer than the name algorithm selected by the NameAlg field of inPublic, a
+// *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
+//
+// If the Type field of inPublic is AlgorithmRSA and the Params field specifies an unsupported exponent, a *TPMError with an error
+// code of ErrorRange will be returned. If the specified key size is an unsupported value, a *TPMError with an error code of
+// ErrorValue will be returned.
+//
+// If the Type field of inPublic is AlgorithmSymCipher and the key size is an unsupported value, a *TPMError with an error code of
+// ErrorKeySize will be returned. If the AttrSensitiveDataOrigin attribute is not set and the length of the Data field of inSensitive
+// does not match the key size specified in the Params field of inPublic, a *TPMError with an error code of ErrorKeySize will be
+// returned.
+//
+// If the Type field of inPublic is AlgorithmKeyedHash and the AttrSensitiveDataOrigin attribute is not set, a *TPMError with an error
+// code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest algorithm
+// selected by the specified scheme.
 //
 // On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM. If the Type field
 // of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object will have a Unique field that is the digest
