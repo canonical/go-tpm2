@@ -7,6 +7,7 @@ package tpm2
 // Section 28 - Context Management
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -81,36 +82,6 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
 	return data
 }
 
-func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
-	var d resourceContextData
-	if _, err := UnmarshalFromBytes(blob, &d); err != nil {
-		return nil, nil, fmt.Errorf("cannot unmarshal resource context: %v", err)
-	}
-
-	switch d.ContextType {
-	case contextTypeObject:
-		dd := d.Data.Data.(*objectContextData)
-		return d.TPMBlob, &objectContext{public: Public(*dd.Public), name: dd.Name}, nil
-	case contextTypeSession:
-		dd := d.Data.Data.(*sessionContextData)
-		if !cryptIsKnownDigest(dd.HashAlg) {
-			return nil, nil, fmt.Errorf("invalid session hash algorithm %v", dd.HashAlg)
-		}
-		return d.TPMBlob, &sessionContext{
-			hashAlg:        dd.HashAlg,
-			sessionType:    dd.SessionType,
-			policyHMACType: dd.PolicyHMACType,
-			isBound:        dd.IsBound,
-			boundEntity:    dd.BoundEntity,
-			sessionKey:     dd.SessionKey,
-			nonceCaller:    dd.NonceCaller,
-			nonceTPM:       dd.NonceTPM,
-			symmetric:      dd.Symmetric}, nil
-	}
-
-	return nil, nil, fmt.Errorf("invalid saved context type (%d)", d.ContextType)
-}
-
 // ContextSave executes the TPM2_ContextSave command on the handle referenced by saveContext, in order to save the context associated
 // with that handle outside of the TPM. The TPM encrypts and integrity protects the context with a key derived from the hierarchy
 // proof. If saveContext does not correspond to a transient object or a session, then it will return an error.
@@ -118,8 +89,8 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 // On successful completion, it returns a Context instance that can be passed to TPMContext.ContextLoad. Note that this function
 // wraps the context data returned from the TPM with some host-side state associated with the resource, so that it can be restored
 // fully in TPMContext.ContextLoad. If saveContext corresponds to a session, then TPM2_ContextSave also flushes resources associated
-// with the session from the TPM (it becomes an active session rather than a loaded session). In this case, saveContext is
-// invalidated.
+// with the session from the TPM (it becomes an active session rather than a loaded session). In this case, saveContext is marked as
+// not loaded and can not be used for any authorizations.
 //
 // If saveContext corresponds to a session, the host-side state that is added to the returned context blob includes the session key.
 //
@@ -127,6 +98,12 @@ func unwrapContextBlob(blob ContextData) (ContextData, ResourceContext, error) {
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
 // WarningContextGap will be returned.
 func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) {
+	if sc, isSession := saveContext.(*sessionContext); isSession {
+		if sc.flags&sessionContextFull == 0 {
+			return nil, errors.New("cannot context save a session with an incomplete ResourceContext")
+		}
+	}
+
 	var context Context
 
 	if err := t.RunCommand(CommandContextSave, nil,
@@ -139,8 +116,8 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 
 	context.Blob = wrapContextBlob(context.Blob, saveContext)
 
-	if saveContext.Handle().Type() == HandleTypeHMACSession || saveContext.Handle().Type() == HandleTypePolicySession {
-		t.evictResourceContext(saveContext)
+	if sc, isSession := saveContext.(*sessionContext); isSession {
+		sc.flags &= ^sessionContextLoaded
 	}
 
 	return &context, nil
@@ -175,33 +152,73 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 		return nil, makeInvalidParamError("context", "nil value")
 	}
 
-	tmpContext := Context{
+	var d resourceContextData
+	if _, err := UnmarshalFromBytes(context.Blob, &d); err != nil {
+		return nil, fmt.Errorf("cannot unmarshal context data blob: %v", err)
+	}
+
+	switch d.ContextType {
+	case contextTypeObject:
+		if context.SavedHandle.Type() != HandleTypeTransient {
+			return nil, errors.New("cannot load context: inconsistent attributes")
+		}
+	case contextTypeSession:
+		if context.SavedHandle.Type() != HandleTypeHMACSession && context.SavedHandle.Type() != HandleTypePolicySession {
+			return nil, errors.New("cannot load context: inconsistent attributes")
+		}
+		if !cryptIsKnownDigest(d.Data.Data.(*sessionContextData).HashAlg) {
+			return nil, fmt.Errorf("cannot load context: invalid session hash algorithm %v", d.Data.Data.(*sessionContextData).HashAlg)
+		}
+	default:
+		return nil, errors.New("cannot load context: inconsistent attributes")
+	}
+
+	tpmContext := Context{
 		Sequence:    context.Sequence,
 		SavedHandle: context.SavedHandle,
-		Hierarchy:   context.Hierarchy}
-	blob, rc, err := unwrapContextBlob(context.Blob)
-	if err != nil {
-		return nil, fmt.Errorf("cannot unwrap context data: %v", err)
-	}
-	tmpContext.Blob = blob
+		Hierarchy:   context.Hierarchy,
+		Blob:        d.TPMBlob}
 
 	var loadedHandle Handle
 
 	if err := t.RunCommand(CommandContextLoad, nil,
 		Separator,
-		tmpContext, Separator,
+		tpmContext, Separator,
 		&loadedHandle); err != nil {
 		return nil, err
 	}
 
-	switch c := rc.(type) {
-	case *objectContext:
-		c.handle = loadedHandle
-	case *sessionContext:
-		c.handle = loadedHandle
-	}
+	var rc ResourceContext
 
-	t.addResourceContext(rc)
+	switch d.ContextType {
+	case contextTypeObject:
+		dd := d.Data.Data.(*objectContextData)
+		rc = &objectContext{handle: loadedHandle, public: Public(*dd.Public), name: dd.Name}
+		t.addResourceContext(rc)
+	case contextTypeSession:
+		dd := d.Data.Data.(*sessionContextData)
+		r, exists := t.resources[normalizeHandleForMap(loadedHandle)]
+		var sc *sessionContext
+		if !exists {
+			sc = &sessionContext{handle: loadedHandle}
+			rc = sc
+			t.addResourceContext(rc)
+		} else {
+			sc = r.(*sessionContext)
+			sc.handle = loadedHandle
+			rc = r
+		}
+		sc.flags = sessionContextFull | sessionContextLoaded
+		sc.hashAlg = dd.HashAlg
+		sc.sessionType = dd.SessionType
+		sc.policyHMACType = dd.PolicyHMACType
+		sc.isBound = dd.IsBound
+		sc.boundEntity = dd.BoundEntity
+		sc.sessionKey = dd.SessionKey
+		sc.nonceCaller = dd.NonceCaller
+		sc.nonceTPM = dd.NonceTPM
+		sc.symmetric = dd.Symmetric
+	}
 
 	return rc, nil
 }

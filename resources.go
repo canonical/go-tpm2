@@ -96,8 +96,16 @@ func (r *nvIndexContext) clearAttr(a NVAttributes) {
 	r.name = name
 }
 
+type sessionContextFlags int
+
+const (
+	sessionContextFull sessionContextFlags = 1 << iota
+	sessionContextLoaded
+)
+
 type sessionContext struct {
 	handle         Handle
+	flags          sessionContextFlags
 	hashAlg        AlgorithmId
 	sessionType    SessionType
 	policyHMACType policyHMACType
@@ -127,6 +135,25 @@ func (r *sessionContext) NonceTPM() Nonce {
 	return r.nonceTPM
 }
 
+func makeIncompleteSessionContext(t *TPMContext, handle Handle) (ResourceContext, error) {
+	hr := handle & 0x00ffffff
+	h, err := t.GetCapabilityHandles(hr|(Handle(HandleTypeLoadedSession)<<24), 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(h) > 0 && h[0] == handle {
+		return &sessionContext{handle: handle, flags: sessionContextLoaded}, nil
+	}
+	h, err = t.GetCapabilityHandles(hr|(Handle(HandleTypeSavedSession)<<24), 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(h) > 0 && h[0]&0x00ffffff == hr {
+		return &sessionContext{handle: hr | (Handle(HandleTypeHMACSession) << 24)}, nil
+	}
+	return nil, nil
+}
+
 func makeNVIndexContext(t *TPMContext, handle Handle) (ResourceContext, error) {
 	pub, name, err := t.nvReadPublic(handle)
 	if err != nil {
@@ -143,6 +170,13 @@ func makeObjectContext(t *TPMContext, handle Handle) (ResourceContext, error) {
 	return &objectContext{handle: handle, public: *pub, name: name}, nil
 }
 
+func normalizeHandleForMap(handle Handle) Handle {
+	if handle.Type() != HandleTypePolicySession {
+		return handle
+	}
+	return (handle & 0x00ffffff) | (Handle(HandleTypeHMACSession) << 24)
+}
+
 func (t *TPMContext) evictResourceContext(rc ResourceContext) {
 	if _, isPermanent := rc.(permanentContext); isPermanent {
 		panic("Attempting to evict a permanent resource context")
@@ -150,7 +184,7 @@ func (t *TPMContext) evictResourceContext(rc ResourceContext) {
 	if err := t.checkResourceContextParam(rc); err != nil {
 		panic(fmt.Sprintf("Attempting to evict an invalid resource context: %v", err))
 	}
-	delete(t.resources, rc.Handle())
+	delete(t.resources, normalizeHandleForMap(rc.Handle()))
 	rc.(resourceContextPrivate).invalidate()
 }
 
@@ -161,10 +195,11 @@ func (t *TPMContext) addResourceContext(rc ResourceContext) {
 	if rc.Handle() == HandleNull {
 		panic("Attempting to add a closed resource context")
 	}
-	if _, exists := t.resources[rc.Handle()]; exists {
+	handle := normalizeHandleForMap(rc.Handle())
+	if _, exists := t.resources[handle]; exists {
 		panic(fmt.Sprintf("Resource object for handle 0x%08x already exists", rc.Handle()))
 	}
-	t.resources[rc.Handle()] = rc
+	t.resources[handle] = rc
 }
 
 func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
@@ -177,7 +212,7 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 	if rc.Handle() == HandleNull {
 		return errors.New("resource has been closed")
 	}
-	erc, exists := t.resources[rc.Handle()]
+	erc, exists := t.resources[normalizeHandleForMap(rc.Handle())]
 	if !exists || erc != rc {
 		return errors.New("resource belongs to another TPM context")
 	}
@@ -191,6 +226,14 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 // If the handle references a NV index or an object, it will execute some TPM commands to initialize state that is maintained on the
 // host side. An error will be returned if this fails. It will return a ResourceUnavailableError error if the specified handle
 // references a NV index or object that is currently unavailable.
+//
+// If the handle references a session, it will execute some commands to determine if the session exists on the TPM and whether it is
+// saved or loaded. If the session is saved then the returned ResourceContext will return a Handle with a HandleType of
+// HandleTypeHMACSession regardless of the HandleType of the supplied handle. Regardless of whether the session is saved or loaded,
+// the returned ResourceContext will not be complete and the session associated with it cannot be used in any command. If the session
+// is a saved session and the session is loaded again via TPMContext.ContextLoad, then the ResourceContext will be complete and the
+// session associated with it can be used as normal. It will return a ResourceUnavailableError error if no session with the specified
+// handle exists.
 //
 // It will return an error if handle references a PCR index or a session. It is not possible to create a ResourceContext for a
 // session that is not started by TPMContext.StartAuthSession.
@@ -210,7 +253,10 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	case HandleTypeNVIndex:
 		rc, err = makeNVIndexContext(t, handle)
 	case HandleTypeHMACSession, HandleTypePolicySession:
-		err = errors.New("cannot wrap the handle of an existing session")
+		rc, err = makeIncompleteSessionContext(t, handle)
+		if rc == nil {
+			return nil, ResourceUnavailableError{handle}
+		}
 	case HandleTypePermanent:
 		rc = permanentContext(handle)
 	case HandleTypeTransient, HandleTypePersistent:
@@ -239,10 +285,6 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 // ForgetResource tells the TPMContext to drop its reference to the specified ResourceContext without flushing the corresponding
 // resources from the TPM.
 //
-// An error will be returned if the context corresponds to a session. It is not possible to forget ResourceContext instances that
-// correspond to a session, as it isn't possible to recreate them later on in order to flush the corresponding resources from the
-// TPM.
-//
 // An error will be returned if the specified context has been invalidated, or if it is being tracked by another TPMContext instance.
 //
 // On succesful completion, the specified ResourceContext will be invalidated and can no longer be used. APIs that return a
@@ -255,9 +297,6 @@ func (t *TPMContext) ForgetResource(context ResourceContext) error {
 	switch context.Handle().Type() {
 	case HandleTypePCR:
 		panic("Got context for a PCR index, which shouldn't happen")
-	case HandleTypeHMACSession, HandleTypePolicySession:
-		return errors.New("cannot forget a session context as it is not possible to recreate the context later on, which means that it " +
-			"would not be able to be flushed using this API. Please use TPMContext.FlushContext to flush it from the TPM instead")
 	case HandleTypePermanent:
 		// Permanent resources aren't tracked by TPMContext, and permanentContext is just a typedef of
 		// Handle anyway. Just do nothing in this case

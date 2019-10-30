@@ -52,9 +52,12 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
 	}
 
-	sessionContext, isSession := policySession.(SessionContext)
+	sessionContext, isSession := policySession.(*sessionContext)
 	if !isSession {
 		return nil, nil, errors.New("invalid resource context for policySession: not a session context")
+	}
+	if sessionContext.flags&sessionContextFull == 0 {
+		return nil, nil, errors.New("invalid resource context for policySession: not complete")
 	}
 
 	var nonceTPM Nonce
@@ -103,9 +106,12 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
 	}
 
-	sessionContext, isSession := policySession.(SessionContext)
+	sessionContext, isSession := policySession.(*sessionContext)
 	if !isSession {
 		return nil, nil, errors.New("invalid resource context for policySession: not a session context")
+	}
+	if sessionContext.flags&sessionContextFull == 0 {
+		return nil, nil, errors.New("invalid resource context for policySession: not complete")
 	}
 
 	var timeout Timeout
@@ -285,6 +291,9 @@ func (t *TPMContext) PolicyAuthValue(policySession ResourceContext) error {
 	if !isSessionContext {
 		return errors.New("invalid resource context for policySession: not a session context")
 	}
+	if sc.flags&sessionContextFull == 0 {
+		return errors.New("invalid resource context for policySession: not complete")
+	}
 
 	if err := t.RunCommand(CommandPolicyAuthValue, nil, policySession); err != nil {
 		return err
@@ -310,6 +319,9 @@ func (t *TPMContext) PolicyPassword(policySession ResourceContext) error {
 	sc, isSessionContext := policySession.(*sessionContext)
 	if !isSessionContext {
 		return errors.New("invalid resource context for policySession: not a session context")
+	}
+	if sc.flags&sessionContextFull == 0 {
+		return errors.New("invalid resource context for policySession: not complete")
 	}
 
 	if err := t.RunCommand(CommandPolicyPassword, nil, policySession); err != nil {

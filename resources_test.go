@@ -26,21 +26,39 @@ func TestWrapHandle(t *testing.T) {
 	persistentPrimary := persistObjectForTesting(t, tpm, HandleOwner, primary, persistentHandle)
 	defer verifyPersistentObjectEvicted(t, tpm, HandleOwner, persistentPrimary)
 
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer verifyContextFlushed(t, tpm, sessionContext)
+	sessionHandle := sessionContext.Handle()
+
+	savedSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer verifyContextFlushed(t, tpm, savedSessionContext)
+	savedSessionHandle := savedSessionContext.Handle()
+
+	if _, err := tpm.ContextSave(savedSessionContext); err != nil {
+		t.Fatalf("ContextSave failed: %v", err)
+	}
+
 	closeTPM(t, tpm)
 	closed = true
-	if primary.Handle() != HandleNull || persistentPrimary.Handle() != HandleNull {
+	if primary.Handle() != HandleNull || persistentPrimary.Handle() != HandleNull || sessionContext.Handle() != HandleNull {
 		t.Fatalf("Expected resource contexts to be invalid")
 	}
 
 	tpm = openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	primary, err := tpm.WrapHandle(primaryHandle)
+	primary, err = tpm.WrapHandle(primaryHandle)
 	if err != nil {
 		t.Errorf("WrapHandle failed with a live transient object: %v", err)
 	}
 	if primary == nil {
-		t.Errorf("WrapHandle returned a nil pointer for a live transient object")
+		t.Fatalf("WrapHandle returned a nil pointer for a live transient object")
 	}
 	if primary.Handle() != primaryHandle {
 		t.Errorf("WrapHandle returned an invalid context for a live transient object")
@@ -52,12 +70,39 @@ func TestWrapHandle(t *testing.T) {
 		t.Errorf("WrapHandle failed with a live persistent object: %v", err)
 	}
 	if persistentPrimary == nil {
-		t.Errorf("WrapHandle returned a nil pointer for a live persistent object")
+		t.Fatalf("WrapHandle returned a nil pointer for a live persistent object")
 	}
 	if persistentPrimary.Handle() != persistentHandle {
 		t.Errorf("WrapHandle returned an invalid context for a live persistent object")
 	}
 	defer evictPersistentObject(t, tpm, HandleOwner, persistentPrimary)
+
+	sessionContext, err = tpm.WrapHandle(sessionHandle)
+	if err != nil {
+		t.Errorf("WrapHandle failed with a loaded session: %v", err)
+	}
+	if sessionContext == nil {
+		t.Fatalf("WrapHandle returned a nil pointer for a loaded session")
+	}
+	if sessionContext.Handle() != sessionHandle {
+		t.Errorf("WrapHandle returned an invalid context for a loaded session")
+	}
+	defer flushContext(t, tpm, sessionContext)
+
+	savedSessionContext, err = tpm.WrapHandle(savedSessionHandle)
+	if err != nil {
+		t.Errorf("WrapHandle failed with a saved session: %v", err)
+	}
+	if savedSessionContext == nil {
+		t.Fatalf("WrapHandle returned a nil pointer for a saved session")
+	}
+	if savedSessionContext.Handle().Type() != HandleTypeHMACSession {
+		t.Errorf("WrapHandle returned a context with an invalid handle type for a saved session")
+	}
+	if savedSessionContext.Handle()&0x00ffffff != savedSessionHandle&0x00ffffff {
+		t.Errorf("WrapHandle returned an invalid context for a saved session")
+	}
+	defer flushContext(t, tpm, savedSessionContext)
 
 	nvPub := NVPublic{
 		Index:   0x018100ff,
@@ -72,7 +117,7 @@ func TestWrapHandle(t *testing.T) {
 		t.Errorf("WrapHandle failed with a live NV index: %v", err)
 	}
 	if index == nil {
-		t.Errorf("WrapHandle returned a nil pointer for a live NV index")
+		t.Fatalf("WrapHandle returned a nil pointer for a live NV index")
 	}
 	if index.Handle() != nvPub.Index {
 		t.Errorf("WrapHandle returned an invalid context for a live NV index")

@@ -121,6 +121,10 @@ func computeBindName(name Name, auth Auth) Name {
 	return r
 }
 
+func (c *sessionContext) isUsable() bool {
+	return c.flags&(sessionContextFull|sessionContextLoaded) == sessionContextFull|sessionContextLoaded
+}
+
 func (s *Session) computeSessionHMACKey() []byte {
 	var key []byte
 	key = append(key, s.Context.(*sessionContext).sessionKey...)
@@ -337,9 +341,12 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 		if err := t.checkResourceContextParam(s.session.Context); err != nil {
 			return nil, fmt.Errorf("invalid resource context for session: %v", err)
 		}
-		_, isSessionContext := s.session.Context.(*sessionContext)
+		sc, isSessionContext := s.session.Context.(*sessionContext)
 		if !isSessionContext {
 			return nil, errors.New("invalid resource context for session: not a session context")
+		}
+		if !sc.isUsable() {
+			return nil, errors.New("invalid resource context for session: not complete and loaded")
 		}
 	}
 

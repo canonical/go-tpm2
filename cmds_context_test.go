@@ -33,12 +33,43 @@ func TestContextSave(t *testing.T) {
 		run(t, rc, Handle(0x80000000), HandleOwner)
 	})
 	t.Run("Session", func(t *testing.T) {
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionContext)
+		run(t, sessionContext, sessionContext.Handle(), HandleNull)
+		// Make sure that ContextSave marked the session context as not loaded, and that we get the expected error if we attempt to use it
+		err = tpm.Clear(HandleLockout, &Session{Context: sessionContext})
+		if err == nil {
+			t.Fatalf("Expected an error")
+		}
+		if err.Error() != "error whilst processing handle with authorization for authHandle: invalid resource context for session: not "+
+			"complete and loaded" {
+			t.Errorf("Unexpected error: %v", err)
+		}
+	})
+	t.Run("IncompleteSession", func(t *testing.T) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, sessionContext, sessionContext.Handle(), HandleNull)
+		sessionHandle := sessionContext.Handle()
+		tpm.ForgetResource(sessionContext)
+
+		sessionContext, err = tpm.WrapHandle(sessionHandle)
+		if err != nil {
+			t.Fatalf("WrapHandle failed: %v", err)
+		}
+		defer flushContext(t, tpm, sessionContext)
+		_, err = tpm.ContextSave(sessionContext)
+		if err == nil {
+			t.Fatalf("Expected an error")
+		}
+		if err.Error() != "cannot context save a session with an incomplete ResourceContext" {
+			t.Errorf("Unexpected error: %v", err)
+		}
 	})
 }
 
@@ -46,71 +77,18 @@ func TestContextSaveAndLoad(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, rc ResourceContext) ResourceContext {
+	t.Run("TransientObject", func(t *testing.T) {
+		rc := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, rc)
+
 		context, err := tpm.ContextSave(rc)
 		if err != nil {
 			t.Fatalf("ContextSave failed: %v", err)
 		}
-
-		restoredContext, err := tpm.ContextLoad(context)
+		restoredRc, err := tpm.ContextLoad(context)
 		if err != nil {
 			t.Fatalf("ContextLoad failed: %v", err)
 		}
-
-		return restoredContext
-	}
-
-	runSessionTest := func(t *testing.T, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg AlgorithmId) {
-		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sc)
-		restoredSc := run(t, sc)
-		defer flushContext(t, tpm, restoredSc)
-
-		handleType := HandleTypePolicySession
-		if sessionType == SessionTypeHMAC {
-			handleType = HandleTypeHMACSession
-		}
-
-		if restoredSc.Handle().Type() != handleType {
-			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredSc.Handle())
-		}
-
-		scImpl := sc.(*sessionContext)
-		restoredScImpl := restoredSc.(*sessionContext)
-
-		if scImpl.hashAlg != restoredScImpl.hashAlg {
-			t.Errorf("Restored context has the wrong hash algorithm")
-		}
-		if scImpl.sessionType != restoredScImpl.sessionType {
-			t.Errorf("Restored context has the wrong session type")
-		}
-		if scImpl.policyHMACType != restoredScImpl.policyHMACType {
-			t.Errorf("Restored context has the wrong policy HMAC type")
-		}
-		if scImpl.isBound != restoredScImpl.isBound {
-			t.Errorf("Restored context has the wrong bind status")
-		}
-		if !bytes.Equal(scImpl.boundEntity, restoredScImpl.boundEntity) {
-			t.Errorf("Restored context has the wrong bound resource entity")
-		}
-		if !bytes.Equal(scImpl.sessionKey, restoredScImpl.sessionKey) {
-			t.Errorf("Restored context has the wrong session key")
-		}
-		if !bytes.Equal(scImpl.nonceCaller, restoredScImpl.nonceCaller) {
-			t.Errorf("Restored context has the wrong nonceCaller")
-		}
-		if !bytes.Equal(scImpl.nonceTPM, restoredScImpl.nonceTPM) {
-			t.Errorf("Restored context has the wrong nonceTPM")
-		}
-	}
-
-	t.Run("TransientObject", func(t *testing.T) {
-		rc := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, rc)
-		restoredRc := run(t, rc)
 		defer flushContext(t, tpm, restoredRc)
 
 		if restoredRc.Handle().Type() != HandleTypeTransient {
@@ -127,22 +105,112 @@ func TestContextSaveAndLoad(t *testing.T) {
 			t.Errorf("Restored context has the wrong name")
 		}
 	})
+
+	runSessionTest := func(t *testing.T, forget bool, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg AlgorithmId) {
+		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sc)
+
+		scImpl := sc.(*sessionContext)
+		var data struct {
+			handle         Handle
+			hashAlg        AlgorithmId
+			sessionType    SessionType
+			policyHMACType policyHMACType
+			isBound        bool
+			boundEntity    Name
+			sessionKey     []byte
+			nonceCaller    Nonce
+			nonceTPM       Nonce
+			symmetric      *SymDef
+		}
+		data.handle = scImpl.handle
+		data.hashAlg = scImpl.hashAlg
+		data.sessionType = scImpl.sessionType
+		data.policyHMACType = scImpl.policyHMACType
+		data.isBound = scImpl.isBound
+		data.boundEntity = scImpl.boundEntity
+		data.sessionKey = scImpl.sessionKey
+		data.nonceCaller = scImpl.nonceCaller
+		data.nonceTPM = scImpl.nonceTPM
+		data.symmetric = scImpl.symmetric
+
+		context, err := tpm.ContextSave(sc)
+		if err != nil {
+			t.Fatalf("ContextSave failed: %v", err)
+		}
+		if forget {
+			tpm.ForgetResource(sc)
+		}
+		restoredSc, err := tpm.ContextLoad(context)
+		if err != nil {
+			t.Fatalf("ContextLoad failed: %v", err)
+		}
+		defer flushContext(t, tpm, restoredSc)
+
+		if !forget && restoredSc != sc {
+			t.Errorf("Expected the same ResourceContext back")
+		}
+
+		if restoredSc.Handle() != data.handle {
+			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredSc.Handle())
+		}
+
+		scImpl = restoredSc.(*sessionContext)
+
+		if scImpl.hashAlg != data.hashAlg {
+			t.Errorf("Restored context has the wrong hash algorithm")
+		}
+		if scImpl.sessionType != data.sessionType {
+			t.Errorf("Restored context has the wrong session type")
+		}
+		if scImpl.policyHMACType != data.policyHMACType {
+			t.Errorf("Restored context has the wrong policy HMAC type")
+		}
+		if scImpl.isBound != data.isBound {
+			t.Errorf("Restored context has the wrong bind status")
+		}
+		if !bytes.Equal(scImpl.boundEntity, data.boundEntity) {
+			t.Errorf("Restored context has the wrong bound resource entity")
+		}
+		if !bytes.Equal(scImpl.sessionKey, data.sessionKey) {
+			t.Errorf("Restored context has the wrong session key")
+		}
+		if !bytes.Equal(scImpl.nonceCaller, data.nonceCaller) {
+			t.Errorf("Restored context has the wrong nonceCaller")
+		}
+		if !bytes.Equal(scImpl.nonceTPM, data.nonceTPM) {
+			t.Errorf("Restored context has the wrong nonceTPM")
+		}
+		if !reflect.DeepEqual(scImpl.symmetric, data.symmetric) {
+			t.Errorf("Restored context has the wrong symmetric")
+		}
+	}
+
 	t.Run("Session1", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 		owner, _ := tpm.WrapHandle(HandleOwner)
-		runSessionTest(t, primary, owner, SessionTypeHMAC, AlgorithmSHA256)
+		runSessionTest(t, false, primary, owner, SessionTypeHMAC, AlgorithmSHA256)
 	})
 	t.Run("Session2", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		runSessionTest(t, nil, primary, SessionTypeHMAC, AlgorithmSHA1)
+		runSessionTest(t, false, nil, primary, SessionTypeHMAC, AlgorithmSHA1)
 	})
 	t.Run("Session3", func(t *testing.T) {
-		runSessionTest(t, nil, nil, SessionTypeHMAC, AlgorithmSHA256)
+		runSessionTest(t, false, nil, nil, SessionTypeHMAC, AlgorithmSHA256)
 	})
 	t.Run("Session4", func(t *testing.T) {
-		runSessionTest(t, nil, nil, SessionTypePolicy, AlgorithmSHA256)
+		runSessionTest(t, false, nil, nil, SessionTypePolicy, AlgorithmSHA256)
+	})
+	t.Run("Session5", func(t *testing.T) {
+		primary := createRSASrkForTesting(t, tpm, nil)
+		defer flushContext(t, tpm, primary)
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		runSessionTest(t, true, primary, owner, SessionTypeHMAC, AlgorithmSHA256)
 	})
 }
 
