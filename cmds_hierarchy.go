@@ -118,10 +118,7 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
-	outPubCopy := outPublic.Ptr.Copy()
-	if outPubCopy != nil {
-		objectContext.public = *outPubCopy
-	}
+	outPublic.Ptr.copyTo(&objectContext.public)
 	t.addResourceContext(objectContext)
 
 	return objectContext, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, name, nil

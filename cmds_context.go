@@ -244,24 +244,24 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 	return nil
 }
 
-// EvictControl executes the TPM2_EvictControl command on the handle referenced by objectContext. To persist a transient object,
-// objectContext should correspond to the transient object and persistentHandle should specify the persistent handle to which the
-// resource associated with objectContext should be persisted. To evict a persistent object, objectContext should correspond to the
+// EvictControl executes the TPM2_EvictControl command on the handle referenced by object. To persist a transient object,
+// object should correspond to the transient object and persistentHandle should specify the persistent handle to which the
+// resource associated with object should be persisted. To evict a persistent object, object should correspond to the
 // persistent object and persistentHandle should be the handle associated with that resource.
 //
 // The auth handle specifies a hierarchy - it should be HandlePlatform for objects within the platform hierarchy, or HandleOwner for
-// objects within the storage or endorsement hierarchies. If auth is HandlePlatform but objectContext corresponds to an object outside
-// of the platform hierarchy, or auth is HandleOwner but objectContext corresponds to an object inside of the platform hierarchy, a
+// objects within the storage or endorsement hierarchies. If auth is HandlePlatform but object corresponds to an object outside
+// of the platform hierarchy, or auth is HandleOwner but object corresponds to an object inside of the platform hierarchy, a
 // *TPMHandleError error with an error code of ErrorHierarchy will be returned for handle index 2. The auth handle requires
 // authorization with the user auth role, provided via authAuth.
 //
-// If objectContext corresponds to a transient object that only has a public part loaded, or which has the AttrStClear attribute set,
+// If object corresponds to a transient object that only has a public part loaded, or which has the AttrStClear attribute set,
 // then a *TPMHandleError error with an error code of ErrorAttributes will be returned for handle index 2.
 //
-// If objectContext corresponds to a persistent object and persistentHandle is not the handle for that object, a *TPMHandleError error
+// If object corresponds to a persistent object and persistentHandle is not the handle for that object, a *TPMHandleError error
 // with an error code of ErrorHandle will be returned for handle index 2.
 //
-// If objectContext corresponds to a transient object and persistentHandle is not in the correct range determined by the value of
+// If object corresponds to a transient object and persistentHandle is not in the correct range determined by the value of
 // auth, a *TPMParameterError error with an error code of ErrorRange will be returned.
 //
 // If there is insuffient space to persist a transient object, a *TPMError error with an error code of ErrorNVSpace will be returned.
@@ -269,17 +269,23 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 // returned.
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
-// On successful completion of evicting a persistent object, it returns a nil ResourceContext, and objectContext will be invalidated.
-func (t *TPMContext) EvictControl(auth Handle, objectContext ResourceContext, persistentHandle Handle, authAuth interface{}) (ResourceContext, error) {
+// On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
+func (t *TPMContext) EvictControl(auth Handle, object ResourceContext, persistentHandle Handle, authAuth interface{}) (ResourceContext, error) {
 	if err := t.RunCommand(CommandEvictControl, nil,
-		HandleWithAuth{Handle: auth, Auth: authAuth}, objectContext, Separator,
+		HandleWithAuth{Handle: auth, Auth: authAuth}, object, Separator,
 		persistentHandle); err != nil {
 		return nil, err
 	}
 
-	if objectContext.Handle() == persistentHandle {
-		t.evictResourceContext(objectContext)
+	if object.Handle() == persistentHandle {
+		t.evictResourceContext(object)
 		return nil, nil
 	}
-	return t.WrapHandle(persistentHandle)
+
+	public := &object.(*objectContext).public
+	objectContext := &objectContext{handle: persistentHandle, name: object.Name()}
+	public.copyTo(&objectContext.public)
+	t.addResourceContext(objectContext)
+
+	return objectContext, nil
 }

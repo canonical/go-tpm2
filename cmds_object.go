@@ -203,10 +203,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
-	pubCopy := inPublic.Copy()
-	if pubCopy != nil {
-		objectContext.public = *pubCopy
-	}
+	inPublic.copyTo(&objectContext.public)
 	t.addResourceContext(objectContext)
 
 	return objectContext, name, nil
@@ -284,10 +281,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
-	pubCopy := inPublic.Copy()
-	if pubCopy != nil {
-		objectContext.public = *pubCopy
-	}
+	inPublic.copyTo(&objectContext.public)
 	t.addResourceContext(objectContext)
 
 	return objectContext, name, nil
@@ -571,10 +565,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
-	outPubCopy := outPublic.Ptr.Copy()
-	if outPubCopy != nil {
-		objectContext.public = *outPubCopy
-	}
+	outPublic.Ptr.copyTo(&objectContext.public)
 	t.addResourceContext(objectContext)
 
 	return objectContext, outPrivate, outPublic.Ptr, name, nil

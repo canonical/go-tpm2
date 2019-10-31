@@ -1357,18 +1357,16 @@ func (p *Public) Name() (Name, error) {
 	return name, nil
 }
 
-// Copy performs a deep copy of this object by marshalling it and then unmarshalling it to a new object.
-func (p *Public) Copy() *Public {
+func (p *Public) copyTo(dest *Public) error {
 	b, err := MarshalToBytes(p)
 	if err != nil {
-		return nil
+		return err
 	}
-	var c Public
-	n, err := UnmarshalFromBytes(b, &c)
-	if err != nil || n != len(b) {
-		return nil
+	_, err = UnmarshalFromBytes(b, dest)
+	if err != nil {
+		return err
 	}
-	return &c
+	return nil
 }
 
 type publicSized struct {
