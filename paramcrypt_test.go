@@ -13,7 +13,7 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	primary := createRSASrkForTesting(t, tpm, nil)
+	primary := createRSASrkForTesting(t, tpm, testAuth)
 	defer flushContext(t, tpm, primary)
 
 	for _, data := range []struct {
@@ -34,7 +34,7 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
 		},
 	} {
-		t.Run(data.desc, func(t *testing.T) {
+		run := func(t *testing.T, primaryAuth interface{}) {
 			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
@@ -52,12 +52,12 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 			sensitive := SensitiveCreate{Data: secret}
 			session := Session{Context: sessionContext, Attrs: AttrContinueSession | AttrCommandEncrypt}
 
-			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil, &session)
+			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, primaryAuth, &session)
 			if err != nil {
 				t.Fatalf("Create failed: %v", err)
 			}
 
-			objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+			objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, primaryAuth)
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
 			}
@@ -71,6 +71,19 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 			if !bytes.Equal(data, secret) {
 				t.Errorf("Got unexpected data")
 			}
+		}
+
+		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
+			run(t, testAuth)
+		})
+
+		t.Run(data.desc+"/UseSessionAuth", func(t *testing.T) {
+			sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+			run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 		})
 	}
 }
@@ -100,22 +113,16 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
 		},
 	} {
-		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, nil)
-			if err != nil {
-				t.Fatalf("StartAuthSession failed: %v", err)
-			}
-			defer flushContext(t, tpm, sessionContext)
+		secret := []byte("sensitive data")
 
-			secret := []byte("sensitive data")
-
+		prepare := func(t *testing.T) ResourceContext {
 			template := Public{
 				Type:    AlgorithmKeyedHash,
 				NameAlg: AlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
 					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
-			sensitive := SensitiveCreate{Data: secret}
+			sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 			if err != nil {
@@ -126,11 +133,20 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
 			}
-			defer flushContext(t, tpm, objectContext)
+
+			return objectContext
+		}
+
+		run := func(t *testing.T, objectContext ResourceContext, unsealAuth interface{}) {
+			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
 
 			session := Session{Context: sessionContext, Attrs: AttrContinueSession | AttrResponseEncrypt}
 
-			data, err := tpm.Unseal(objectContext, nil, &session)
+			data, err := tpm.Unseal(objectContext, unsealAuth, &session)
 			if err != nil {
 				t.Fatalf("Unseal failed: %v", err)
 			}
@@ -138,6 +154,25 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 			if !bytes.Equal(data, secret) {
 				t.Errorf("Got unexpected data")
 			}
+		}
+
+		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
+			object := prepare(t)
+			defer flushContext(t, tpm, object)
+			run(t, object, testAuth)
+		})
+
+		t.Run(data.desc+"/UseSessionAuth", func(t *testing.T) {
+			object := prepare(t)
+			defer flushContext(t, tpm, object)
+
+			sessionContext, err := tpm.StartAuthSession(nil, object, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			run(t, object, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 		})
 	}
 }
