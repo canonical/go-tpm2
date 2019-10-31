@@ -36,9 +36,9 @@ func (r permanentContext) Handle() Handle {
 }
 
 func (r permanentContext) Name() Name {
-	name := make([]byte, 4)
+	name := make(Name, binary.Size(r))
 	binary.BigEndian.PutUint32(name, uint32(r))
-	return Name(name)
+	return name
 }
 
 func (r permanentContext) invalidate() {
@@ -61,6 +61,7 @@ func (r *objectContext) Name() Name {
 func (r *objectContext) invalidate() {
 	r.handle = HandleNull
 	r.public = Public{}
+	r.name = make(Name, binary.Size(r.handle))
 	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
 }
 
@@ -81,6 +82,7 @@ func (r *nvIndexContext) Name() Name {
 func (r *nvIndexContext) invalidate() {
 	r.handle = HandleNull
 	r.public = NVPublic{}
+	r.name = make(Name, binary.Size(r.handle))
 	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
 }
 
@@ -122,9 +124,9 @@ func (r *sessionContext) Handle() Handle {
 }
 
 func (r *sessionContext) Name() Name {
-	name := make([]byte, 4)
+	name := make(Name, binary.Size(r.handle))
 	binary.BigEndian.PutUint32(name, uint32(r.handle))
-	return Name(name)
+	return name
 }
 
 func (r *sessionContext) invalidate() {
