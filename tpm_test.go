@@ -185,7 +185,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	return objectHandle
 }
 
-func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) (ResourceContext, Name) {
+func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
 	template := Public{
 		Type:    AlgorithmECC,
 		NameAlg: AlgorithmSHA256,
@@ -200,11 +200,11 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) (Resou
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: AlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, name, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
-	return objectHandle, name
+	return objectHandle
 }
 
 func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {

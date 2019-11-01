@@ -29,6 +29,14 @@ var (
 		AlgorithmSHA512: crypto.SHA512}
 )
 
+func cryptGetHash(alg AlgorithmId) crypto.Hash {
+	h, ok := knownDigests[alg]
+	if !ok {
+		panic(fmt.Sprintf("unknown hash algorithm %v", alg))
+	}
+	return h
+}
+
 func cryptGetHashConstructor(alg AlgorithmId) func() hash.Hash {
 	h, ok := knownDigests[alg]
 	if !ok {

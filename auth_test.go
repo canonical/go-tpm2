@@ -17,7 +17,7 @@ func TestHMACSessions(t *testing.T) {
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)
 
-	primaryECC, _ := createECCSrkForTesting(t, tpm, nil)
+	primaryECC := createECCSrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primaryECC)
 
 	for _, data := range []struct {
