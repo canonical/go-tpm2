@@ -6,15 +6,13 @@ package tpm2
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -24,26 +22,25 @@ import (
 var (
 	defaultRSAExponent = 65537
 
-	knownDigests = map[AlgorithmId]struct {
-		constructor func() hash.Hash
-		size        int
-	}{
-		AlgorithmSHA1:   {constructor: sha1.New, size: sha1.Size},
-		AlgorithmSHA256: {constructor: sha256.New, size: sha256.Size},
-		AlgorithmSHA384: {constructor: sha512.New384, size: sha512.Size384},
-		AlgorithmSHA512: {constructor: sha512.New, size: sha512.Size}}
+	knownDigests = map[AlgorithmId]crypto.Hash{
+		AlgorithmSHA1:   crypto.SHA1,
+		AlgorithmSHA256: crypto.SHA256,
+		AlgorithmSHA384: crypto.SHA384,
+		AlgorithmSHA512: crypto.SHA512}
 )
 
-func hashAlgToGoConstructor(hashAlg AlgorithmId) func() hash.Hash {
-	knownDigest, isKnown := knownDigests[hashAlg]
-	if !isKnown {
-		panic(fmt.Sprintf("Unknown hash algorithm %v", hashAlg))
+func cryptGetHashConstructor(alg AlgorithmId) func() hash.Hash {
+	h, ok := knownDigests[alg]
+	if !ok {
+		panic(fmt.Sprintf("unknown hash algorithm %v", alg))
 	}
-	return knownDigest.constructor
+	return func() hash.Hash {
+		return h.New()
+	}
 }
 
-func cryptConstructHash(hashAlg AlgorithmId) hash.Hash {
-	return hashAlgToGoConstructor(hashAlg)()
+func cryptConstructHash(alg AlgorithmId) hash.Hash {
+	return cryptGetHashConstructor(alg)()
 }
 
 func cryptIsKnownDigest(alg AlgorithmId) bool {
@@ -51,12 +48,12 @@ func cryptIsKnownDigest(alg AlgorithmId) bool {
 	return isKnown
 }
 
-func cryptGetDigestSize(alg AlgorithmId) (uint, bool) {
-	known, isKnown := knownDigests[alg]
-	if !isKnown {
-		return 0, false
+func cryptGetDigestSize(alg AlgorithmId) uint {
+	h, ok := knownDigests[alg]
+	if !ok {
+		panic(fmt.Sprintf("nknown hash algorithm %v", alg))
 	}
-	return uint(known.size), true
+	return uint(h.Size())
 }
 
 func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
@@ -98,7 +95,7 @@ func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandC
 
 func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce,
 	attrs sessionAttrs) []byte {
-	hmac := hmac.New(hashAlgToGoConstructor(alg), key)
+	hmac := hmac.New(cryptGetHashConstructor(alg), key)
 
 	hmac.Write(pHash)
 	hmac.Write(nonceNewer)
@@ -120,10 +117,7 @@ func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte
 }
 
 func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint, counterInOut *uint32, once bool) []byte {
-	digestSize, known := cryptGetDigestSize(hashAlg)
-	if !known {
-		panic(fmt.Sprintf("Unknown digest algorithm %v", hashAlg))
-	}
+	digestSize := cryptGetDigestSize(hashAlg)
 	if once && sizeInBits&7 > 0 {
 		panic("sizeInBits must be a multiple of 8 when called with once == true")
 	}
@@ -147,7 +141,7 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 			digestSize = nbytes
 		}
 
-		h := hmac.New(hashAlgToGoConstructor(hashAlg), key)
+		h := hmac.New(cryptGetHashConstructor(hashAlg), key)
 
 		binary.Write(h, binary.BigEndian, counter)
 		h.Write(label)
@@ -171,10 +165,7 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 }
 
 func cryptKDFe(hashAlg AlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits uint) []byte {
-	digestSize, known := cryptGetDigestSize(hashAlg)
-	if !known {
-		panic(fmt.Sprintf("Unknown digest algorithm %v", hashAlg))
-	}
+	digestSize := cryptGetDigestSize(hashAlg)
 
 	var counter uint32 = 0
 	buf := new(bytes.Buffer)
@@ -276,10 +267,10 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 }
 
 func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
-	digestSize, known := cryptGetDigestSize(public.NameAlg)
-	if !known {
+	if !cryptIsKnownDigest(public.NameAlg) {
 		return nil, nil, fmt.Errorf("cannot determine size of unknown nameAlg %v", public.NameAlg)
 	}
+	digestSize := cryptGetDigestSize(public.NameAlg)
 
 	switch public.Type {
 	case AlgorithmRSA:
@@ -306,10 +297,10 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 }
 
 func cryptXORObfuscation(hashAlg AlgorithmId, key []byte, contextU, contextV Nonce, data []byte) error {
-	digestSize, known := cryptGetDigestSize(hashAlg)
-	if !known {
+	if !cryptIsKnownDigest(hashAlg) {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", hashAlg)
 	}
+	digestSize := cryptGetDigestSize(hashAlg)
 
 	var counter uint32 = 0
 	datasize := uint(len(data))

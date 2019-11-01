@@ -77,11 +77,10 @@ type TrialAuthPolicy struct {
 
 // ComputeAuthPolicy creates a new context for computing an authorization policy digest.
 func ComputeAuthPolicy(alg AlgorithmId) (*TrialAuthPolicy, error) {
-	size, known := cryptGetDigestSize(alg)
-	if !known {
+	if !cryptIsKnownDigest(alg) {
 		return nil, errors.New("invalid algorithm")
 	}
-	return &TrialAuthPolicy{alg: alg, digest: make(Digest, size)}, nil
+	return &TrialAuthPolicy{alg: alg, digest: make(Digest, cryptGetDigestSize(alg))}, nil
 }
 
 func (p *TrialAuthPolicy) beginExtend(commandCode CommandCode) *trialAuthPolicyExtendContext {

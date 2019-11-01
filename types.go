@@ -124,10 +124,10 @@ func (p *TaggedHash) Marshal(buf io.Writer) error {
 	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
-	size, known := cryptGetDigestSize(p.HashAlg)
-	if !known {
+	if !cryptIsKnownDigest(p.HashAlg) {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
+	size := cryptGetDigestSize(p.HashAlg)
 
 	if int(size) != len(p.Digest) {
 		return fmt.Errorf("invalid digest size %d", len(p.Digest))
@@ -143,10 +143,10 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
-	size, known := cryptGetDigestSize(p.HashAlg)
-	if !known {
+	if !cryptIsKnownDigest(p.HashAlg) {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
+	size := cryptGetDigestSize(p.HashAlg)
 
 	p.Digest = make(Digest, size)
 	if _, err := io.ReadFull(buf, p.Digest); err != nil {

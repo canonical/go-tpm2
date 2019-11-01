@@ -213,7 +213,7 @@ func TestPCRRead(t *testing.T) {
 			expectedDigests[data.index] = make(map[AlgorithmId][]byte)
 		}
 		for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
-			digestSize, _ := cryptGetDigestSize(alg)
+			digestSize := cryptGetDigestSize(alg)
 
 			hasher := cryptConstructHash(alg)
 			hasher.Write(data.data)

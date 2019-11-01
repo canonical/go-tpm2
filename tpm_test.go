@@ -112,7 +112,7 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 
 func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest,
 	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
-	nameAlgSize, _ := cryptGetDigestSize(template.NameAlg)
+	nameAlgSize := cryptGetDigestSize(template.NameAlg)
 	var parentQualifiedName Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -211,7 +211,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	template := Public{
 		Type:    AlgorithmRSA,
 		NameAlg: AlgorithmSHA256,
-		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy |	AttrRestricted | AttrDecrypt,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 		AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 			0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 		Params: PublicParamsU{
