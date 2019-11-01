@@ -128,8 +128,6 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 		return err
 	}
 
-	t.evictResourceContext(nvIndex)
-
 	authSession := ctx.sessionParams[0].session
 	if authSession != nil {
 		// If the HMAC key for this command includes the auth value for authHandle (eg,
@@ -138,7 +136,12 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
 	}
 
-	return t.processResponse(ctx)
+	if err := t.processResponse(ctx); err != nil {
+		return err
+	}
+
+	t.evictResourceContext(nvIndex)
+	return nil
 }
 
 func (t *TPMContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPublic, Name, error) {
