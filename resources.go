@@ -156,16 +156,16 @@ func makeIncompleteSessionContext(t *TPMContext, handle Handle) (ResourceContext
 	return nil, nil
 }
 
-func makeNVIndexContext(t *TPMContext, handle Handle) (ResourceContext, error) {
-	pub, name, err := t.nvReadPublic(handle)
+func makeNVIndexContext(t *TPMContext, handle Handle, sessions ...*Session) (ResourceContext, error) {
+	pub, name, err := t.nvReadPublic(handle, sessions...)
 	if err != nil {
 		return nil, err
 	}
 	return &nvIndexContext{handle: handle, public: *pub, name: name}, nil
 }
 
-func makeObjectContext(t *TPMContext, handle Handle) (ResourceContext, error) {
-	pub, name, _, err := t.readPublic(handle)
+func makeObjectContext(t *TPMContext, handle Handle, sessions ...*Session) (ResourceContext, error) {
+	pub, name, _, err := t.readPublic(handle, sessions...)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 // session that is not started by TPMContext.StartAuthSession.
 //
 // It always succeeds if the specified handle references a permanent resource.
-func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
+func (t *TPMContext) WrapHandle(handle Handle, sessions ...*Session) (ResourceContext, error) {
 	if rc, exists := t.resources[handle]; exists {
 		return rc, nil
 	}
@@ -253,7 +253,7 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	case HandleTypePCR:
 		err = errors.New("cannot wrap a PCR handle")
 	case HandleTypeNVIndex:
-		rc, err = makeNVIndexContext(t, handle)
+		rc, err = makeNVIndexContext(t, handle, sessions...)
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		rc, err = makeIncompleteSessionContext(t, handle)
 		if rc == nil {
@@ -262,7 +262,7 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 	case HandleTypePermanent:
 		rc = permanentContext(handle)
 	case HandleTypeTransient, HandleTypePersistent:
-		rc, err = makeObjectContext(t, handle)
+		rc, err = makeObjectContext(t, handle, sessions...)
 	}
 
 	if err != nil {
