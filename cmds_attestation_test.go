@@ -40,7 +40,7 @@ func TestCertifyCreation(t *testing.T) {
 		t.Fatalf("CertifyCreation returned a nil certifyInfo")
 	}
 
-	attest, err := certifyInfo.ToStruct()
+	attest, err := certifyInfo.Decode()
 	if err != nil {
 		t.Fatalf("certifyInfo failed to unmarshal: %v", err)
 	}

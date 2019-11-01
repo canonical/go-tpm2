@@ -599,8 +599,8 @@ type Attest struct {
 // over this data.
 type AttestRaw []byte
 
-// ToStruct unmarshals the underlying buffer to the corresponding Attest structure.
-func (a AttestRaw) ToStruct() (*Attest, error) {
+// Decode unmarshals the underlying buffer to the corresponding Attest structure.
+func (a AttestRaw) Decode() (*Attest, error) {
 	var out Attest
 	if _, err := UnmarshalFromBytes(a, &out); err != nil {
 		return nil, err
