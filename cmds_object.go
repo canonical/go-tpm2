@@ -7,6 +7,7 @@ package tpm2
 // Section 12 - Object Commands
 
 import (
+	"bytes"
 	"fmt"
 )
 
@@ -297,6 +298,11 @@ func (t *TPMContext) readPublic(objectHandle Handle, sessions ...*Session) (*Pub
 		Separator,
 		&outPublic, &name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
+	}
+	if n, err := outPublic.Ptr.Name(); err != nil {
+		return nil, nil, nil, &InvalidResponseError{CommandReadPublic, fmt.Sprintf("cannot compute name of returned public area: %v", err)}
+	} else if !bytes.Equal(n, name) {
+		return nil, nil, nil, &InvalidResponseError{CommandReadPublic, "name and public area don't match"}
 	}
 	return outPublic.Ptr, name, qualifiedName, nil
 }
