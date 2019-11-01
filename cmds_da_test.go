@@ -106,8 +106,30 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
+	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
+		Params: PublicParamsU{
+			&RSAParams{
+				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+				Scheme:    RSAScheme{Scheme: AlgorithmNull},
+				KeyBits:   2048,
+				Exponent:  0}}}
+	sensitive := SensitiveCreate{UserAuth: testAuth}
+	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	context, _, err := tpm.Load(primary, priv, pub, nil)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer flushContext(t, tpm, context)
 
 	origMaxTries, origRecoveryTime, origLockoutRecovery := getDictionaryAttackParams(t, tpm)
 	if err := tpm.DictionaryAttackParameters(HandleLockout, 2, origRecoveryTime, origLockoutRecovery,
@@ -122,22 +144,11 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	}()
 
 	run := func(t *testing.T, auth interface{}) {
-		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
-			Attrs: AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth |
-				AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
-					KeyBits:   2048,
-					Exponent:  0}}}
 	Loop:
 		for i := 0; i < 3; i++ {
-			_, _, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
+			_, err := tpm.ObjectChangeAuth(context, primary, nil, nil)
 			if err == nil {
-				t.Fatalf("Expected Create to fail")
+				t.Fatalf("Expected ObjectChangeAuth to fail")
 			}
 			switch e := err.(type) {
 			case *TPMWarning:
@@ -152,9 +163,9 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		_, _, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, testAuth)
+		_, err := tpm.ObjectChangeAuth(context, primary, nil, testAuth)
 		if err == nil {
-			t.Fatalf("Create should have failed")
+			t.Fatalf("ObjectChangeAuth should have failed")
 		}
 		if e, ok := err.(*TPMWarning); !ok || e.Code != WarningLockout {
 			t.Errorf("Unexpected error: %v", err)
@@ -176,9 +187,9 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Errorf("DictionaryAttackLockReset should have reset TPM_PT_LOCKOUT_COUNTER")
 		}
 
-		_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, testAuth)
+		_, err = tpm.ObjectChangeAuth(context, primary, nil, testAuth)
 		if err != nil {
-			t.Errorf("Create failed: %v", err)
+			t.Errorf("ObjectChangeAuth failed: %v", err)
 		}
 	}
 
