@@ -122,8 +122,8 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	if err := t.RunCommand(CommandCreate, sessions,
 		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
 		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
-		Separator, &outPrivate, &outPublic, &creationData, &creationHash,
-		&creationTicket); err != nil {
+		Separator,
+		&outPrivate, &outPublic, &creationData, &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
