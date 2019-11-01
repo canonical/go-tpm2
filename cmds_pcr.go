@@ -90,8 +90,8 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestLis
 		if i == 0 {
 			pcrUpdateCounter = updateCounter
 		} else if updateCounter != pcrUpdateCounter {
-			return 0, nil, fmt.Errorf("TPM responded with the wrong pcrUpdateCounter value: got %d, expected %d",
-				updateCounter, pcrUpdateCounter)
+			return 0, nil, &InvalidResponseError{CommandPCRRead, fmt.Sprintf("TPM responded with the wrong pcrUpdateCounter value: got %d, "+
+				"expected %d", updateCounter, pcrUpdateCounter)}
 		}
 
 		pcrValues = append(pcrValues, values...)

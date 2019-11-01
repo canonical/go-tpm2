@@ -41,8 +41,8 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 		}
 
 		if data.Capability != capability {
-			return nil, fmt.Errorf("TPM responded with data for the wrong capability for command %s (got %s)",
-				CommandGetCapability, data.Capability)
+			return nil, &InvalidResponseError{CommandGetCapability, fmt.Sprintf("TPM responded with data for the wrong capability (got %s)",
+				data.Capability)}
 		}
 
 		if capabilityData == nil {

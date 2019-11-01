@@ -473,6 +473,9 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 	if err != nil {
 		return 0, err
 	}
+	if len(data) != binary.Size(uint64(0)) {
+		return 0, &InvalidResponseError{CommandNVRead, fmt.Sprintf("unexpected number of bytes returned (got %d)", len(data))}
+	}
 	return binary.BigEndian.Uint64(data), nil
 }
 
@@ -511,8 +514,9 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 		return nil, err
 	}
 	var res NVPinCounterParams
-	UnmarshalFromBytes(data, &res)
-
+	if _, err := UnmarshalFromBytes(data, &res); err != nil {
+		return nil, &InvalidResponseError{CommandNVRead, fmt.Sprintf("cannot unmarshal response bytes: %v", err)}
+	}
 	return &res, nil
 }
 
