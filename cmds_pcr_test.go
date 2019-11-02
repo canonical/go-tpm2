@@ -73,13 +73,13 @@ func TestPCRExtend(t *testing.T) {
 
 			for i, alg := range data.algorithms {
 				hasher := cryptConstructHash(alg)
-				hasher.Write(origValues[i])
+				hasher.Write(origValues[alg][data.index])
 				hasher.Write(hashList[i].Digest)
 
 				expected := hasher.Sum(nil)
 
-				if !bytes.Equal(expected, newValues[i]) {
-					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[i], expected)
+				if !bytes.Equal(expected, newValues[alg][data.index]) {
+					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[alg][data.index], expected)
 				}
 			}
 		})
@@ -152,9 +152,9 @@ func TestPCREvent(t *testing.T) {
 				t.Errorf("Unexpected update count (got %d, expected %d)", newUpdateCounter, expectedUpdateCounter)
 			}
 
-			for i, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
+			for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
 				hasher := cryptConstructHash(alg)
-				hasher.Write(origValues[i])
+				hasher.Write(origValues[alg][data.index])
 				for _, d := range digests {
 					if d.HashAlg == alg {
 						hasher.Write(d.Digest)
@@ -164,8 +164,8 @@ func TestPCREvent(t *testing.T) {
 
 				expected := hasher.Sum(nil)
 
-				if !bytes.Equal(expected, newValues[i]) {
-					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[i], expected)
+				if !bytes.Equal(expected, newValues[alg][data.index]) {
+					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[alg][data.index], expected)
 				}
 			}
 		})
@@ -178,7 +178,7 @@ func TestPCRRead(t *testing.T) {
 
 	resetTPMSimulator(t, tpm, tcti)
 
-	expectedDigests := make(map[int]map[AlgorithmId][]byte)
+	expectedDigests := make(PCRValues)
 
 	for _, data := range []struct {
 		index int
@@ -209,20 +209,22 @@ func TestPCRRead(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
-		if _, exists := expectedDigests[data.index]; !exists {
-			expectedDigests[data.index] = make(map[AlgorithmId][]byte)
-		}
 		for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
+			expectedDigests.EnsureBank(alg)
 			digestSize := cryptGetDigestSize(alg)
 
-			hasher := cryptConstructHash(alg)
-			hasher.Write(data.data)
-			dataDigest := hasher.Sum(nil)
+			if _, ok := expectedDigests[alg][data.index]; !ok {
+				expectedDigests[alg][data.index] = make(Digest, digestSize)
+			}
 
-			hasher = cryptConstructHash(alg)
-			hasher.Write(make([]byte, digestSize))
-			hasher.Write(dataDigest)
-			expectedDigests[data.index][alg] = hasher.Sum(nil)
+			h := cryptConstructHash(alg)
+			h.Write(data.data)
+			dataDigest := h.Sum(nil)
+
+			h = cryptConstructHash(alg)
+			h.Write(expectedDigests[alg][data.index])
+			h.Write(dataDigest)
+			expectedDigests[alg][data.index] = h.Sum(nil)
 		}
 	}
 
@@ -270,13 +272,17 @@ func TestPCRRead(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
-			j := 0
 			for _, selection := range data.selection {
+				if _, ok := digests[selection.Hash]; !ok {
+					t.Fatalf("No digests for algorithm %v", selection.Hash)
+				}
 				for _, i := range selection.Select {
-					if !bytes.Equal(expectedDigests[i][selection.Hash], digests[j]) {
-						t.Errorf("Unexpected digest (got %x, expected %x)", digests[j], expectedDigests[i][selection.Hash])
+					if _, ok := digests[selection.Hash][i]; !ok {
+						t.Fatalf("No digest for PCR%d, algorithm %v", i, selection.Hash)
 					}
-					j++
+					if !bytes.Equal(expectedDigests[selection.Hash][i], digests[selection.Hash][i]) {
+						t.Errorf("Unexpected digest (got %x, expected %x)", digests[selection.Hash][i], expectedDigests[selection.Hash][i])
+					}
 				}
 			}
 		})

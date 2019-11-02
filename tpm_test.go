@@ -166,17 +166,18 @@ func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Ha
 	}
 }
 
-func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg AlgorithmId, pcrs PCRSelectionList) []byte {
+func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg AlgorithmId, pcrs PCRSelectionList) Digest {
 	_, pcrValues, err := tpm.PCRRead(pcrs)
 	if err != nil {
 		t.Fatalf("PCRRead failed: %v", err)
 	}
 
-	h := cryptConstructHash(alg)
-	for _, v := range pcrValues {
-		h.Write(v)
+	digest, err := ComputePCRDigest(alg, pcrs, pcrValues)
+	if err != nil {
+		t.Fatalf("ComputePCRDigest failed: %v", err)
 	}
-	return h.Sum(nil)
+
+	return digest
 }
 
 func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signature) {

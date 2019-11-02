@@ -11,6 +11,14 @@ import (
 	"sort"
 )
 
+type PCRValues map[AlgorithmId]map[int]Digest
+
+func (v PCRValues) EnsureBank(alg AlgorithmId) {
+	if _, ok := v[alg]; !ok {
+		v[alg] = make(map[int]Digest)
+	}
+}
+
 func (l *PCRSelectionList) subtract(x PCRSelectionList) {
 	for i, sl := range *l {
 		for _, sx := range x {
@@ -60,19 +68,18 @@ func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth i
 	return digests, nil
 }
 
-func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestList, error) {
+func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRValues, error) {
 	var remaining PCRSelectionList
 	for _, s := range pcrSelectionIn {
 		c := PCRSelection{Hash: s.Hash}
-		sort.Ints(s.Select)
-		for _, i := range s.Select {
-			c.Select = append(c.Select, i)
-		}
+		c.Select = make([]int, len(s.Select))
+		copy(c.Select, s.Select)
+		sort.Ints(c.Select)
 		remaining = append(remaining, c)
 	}
 
 	var pcrUpdateCounter uint32
-	var pcrValues DigestList
+	pcrValues := make(PCRValues)
 
 	for i := 0; ; i++ {
 		var updateCounter uint32
@@ -94,7 +101,19 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, DigestLis
 				"expected %d", updateCounter, pcrUpdateCounter)}
 		}
 
-		pcrValues = append(pcrValues, values...)
+		for _, s := range pcrSelectionOut {
+			pcrValues.EnsureBank(s.Hash)
+			for _, i := range s.Select {
+				if _, exists := pcrValues[s.Hash][i]; exists {
+					return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM responded with an unexpected PCR digest"}
+				}
+				pcrValues[s.Hash][i] = values[0]
+				values = values[1:]
+			}
+		}
+		if len(values) > 0 {
+			return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM returned too many digests"}
+		}
 
 		remaining.subtract(pcrSelectionOut)
 		if len(remaining) == 0 {

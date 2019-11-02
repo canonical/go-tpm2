@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"sort"
 )
 
 // ComputeCpHash computes a command parameter digest from the specified command code and provided command parameters, using the
@@ -52,6 +53,33 @@ func ComputeCpHash(hashAlg AlgorithmId, command CommandCode, params ...interface
 	}
 
 	return cryptComputeCpHash(hashAlg, command, handles, cpBytes), nil
+}
+
+// ComputePCRDigest computes a digest using the specified algorithm from the provided set of PCR values and the provided PCR
+// selection. It is most useful for computing an input to TPMContext.PolicyPCR, and validating quotes and creation data.
+func ComputePCRDigest(alg AlgorithmId, pcrs PCRSelectionList, values PCRValues) (Digest, error) {
+	if !cryptIsKnownDigest(alg) {
+		return nil, fmt.Errorf("unknown digest algorithm %v", alg)
+	}
+	h := cryptConstructHash(alg)
+
+	for _, s := range pcrs {
+		if _, ok := values[s.Hash]; !ok {
+			return nil, fmt.Errorf("the provided values don't contain digests for the selected PCR bank %v", s.Hash)
+		}
+		sel := make([]int, len(s.Select))
+		copy(sel, s.Select)
+		sort.Ints(sel)
+		for _, i := range sel {
+			d, ok := values[s.Hash][i]
+			if !ok {
+				return nil, fmt.Errorf("the provided values don't contain a digest for PCR%d in bank %v", i, s.Hash)
+			}
+			h.Write(d)
+		}
+	}
+
+	return h.Sum(nil), nil
 }
 
 type trialAuthPolicyExtendContext struct {
