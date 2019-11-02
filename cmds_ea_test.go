@@ -513,19 +513,6 @@ func TestPolicyPCR(t *testing.T) {
 		}
 	}
 
-	calculatePCRDigestFromTPM := func(pcrs PCRSelectionList) []byte {
-		_, pcrValues, err := tpm.PCRRead(pcrs)
-		if err != nil {
-			t.Fatalf("PCRRead failed: %v", err)
-		}
-
-		hasher := sha256.New()
-		for _, v := range pcrValues {
-			hasher.Write(v)
-		}
-		return hasher.Sum(nil)
-	}
-
 	for _, data := range []struct {
 		desc   string
 		digest Digest
@@ -561,7 +548,7 @@ func TestPolicyPCR(t *testing.T) {
 		},
 		{
 			desc: "WithDigest",
-			digest: calculatePCRDigestFromTPM(PCRSelectionList{
+			digest: computePCRDigestFromTPM(t, tpm, AlgorithmSHA256, PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{8}},
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{8}}}),
 			pcrs: PCRSelectionList{
@@ -587,7 +574,7 @@ func TestPolicyPCR(t *testing.T) {
 
 			pcrDigest := data.digest
 			if len(pcrDigest) == 0 {
-				pcrDigest = calculatePCRDigestFromTPM(data.pcrs)
+				pcrDigest = computePCRDigestFromTPM(t, tpm, AlgorithmSHA256, data.pcrs)
 			}
 
 			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)

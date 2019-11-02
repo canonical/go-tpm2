@@ -6,8 +6,12 @@ package tpm2
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
 	"flag"
 	"fmt"
+	"math/big"
 	"os"
 	"reflect"
 	"testing"
@@ -130,7 +134,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	if len(creationData.PCRDigest) != int(nameAlgSize) {
 		t.Errorf("creation data has a pcrDigest of the wrong length (got %d)", len(creationData.PCRDigest))
 	}
-	if creationData.ParentNameAlg != nameAlgorithm(parent.Name()) {
+	if creationData.ParentNameAlg != parent.Name().Algorithm() {
 		t.Errorf("creation data has the wrong parentNameAlg (got %v)", creationData.ParentNameAlg)
 	}
 	if !bytes.Equal(creationData.ParentName, parent.Name()) {
@@ -159,6 +163,65 @@ func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Ha
 	}
 	if creationTicket.Hierarchy != hierarchy {
 		t.Errorf("creation ticket has the wrong hierarchy (got 0x%08x)", creationTicket.Hierarchy)
+	}
+}
+
+func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg AlgorithmId, pcrs PCRSelectionList) []byte {
+	_, pcrValues, err := tpm.PCRRead(pcrs)
+	if err != nil {
+		t.Fatalf("PCRRead failed: %v", err)
+	}
+
+	h := cryptConstructHash(alg)
+	for _, v := range pcrValues {
+		h.Write(v)
+	}
+	return h.Sum(nil)
+}
+
+func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signature) {
+	switch pub.Type {
+	case AlgorithmRSA:
+		exp := int(pub.Params.RSADetail().Exponent)
+		if exp == 0 {
+			exp = defaultRSAExponent
+		}
+		pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA()), E: exp}
+
+		switch signature.SigAlg {
+		case AlgorithmRSASSA:
+			sig := (*SignatureRSA)(signature.Signature.RSASSA())
+			if !cryptIsKnownDigest(sig.Hash) {
+				t.Fatalf("Signature has unknown digest")
+			}
+			if err := rsa.VerifyPKCS1v15(&pubKey, cryptGetHash(sig.Hash), digest, sig.Sig); err != nil {
+				t.Errorf("Signature is invalid")
+			}
+		case AlgorithmRSAPSS:
+			sig := (*SignatureRSA)(signature.Signature.RSAPSS())
+			if !cryptIsKnownDigest(sig.Hash) {
+				t.Fatalf("Signature has unknown digest")
+			}
+			if err := rsa.VerifyPSS(&pubKey, cryptGetHash(sig.Hash), digest, sig.Sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}); err != nil {
+				t.Errorf("Signature is invalid")
+			}
+		default:
+			t.Errorf("Unknown signature algorithm")
+		}
+	case AlgorithmECC:
+		pubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(pub.Unique.ECC().X), Y: new(big.Int).SetBytes(pub.Unique.ECC().Y)}
+
+		switch signature.SigAlg {
+		case AlgorithmECDSA:
+			sig := signature.Signature.ECDSA()
+			if !ecdsa.Verify(&pubKey, digest, new(big.Int).SetBytes(sig.SignatureR), new(big.Int).SetBytes(sig.SignatureS)) {
+				t.Errorf("Signature is invalid")
+			}
+		default:
+			t.Errorf("Unknown signature algorithm")
+		}
+	default:
+		t.Errorf("Unknown public type")
 	}
 }
 
@@ -230,6 +293,49 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	return objectHandle
 }
 
+func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext, userAuth Auth) ResourceContext {
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer flushContext(t, tpm, sessionContext)
+
+	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
+	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
+
+	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
+		t.Fatalf("PolicySecret failed: %v", err)
+	}
+
+	template := Public{
+		Type:    AlgorithmRSA,
+		NameAlg: AlgorithmSHA256,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrSign,
+		Params: PublicParamsU{
+			&RSAParams{
+				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+				Scheme: RSAScheme{
+					Scheme:  AlgorithmRSASSA,
+					Details: AsymSchemeU{&SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
+	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, &session)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
+		t.Fatalf("PolicySecret failed: %v", err)
+	}
+
+	akContext, _, err := tpm.Load(ek, priv, pub, &session)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	return akContext
+}
+
 func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent ResourceContext) ResourceContext {
 	template := Public{
 		Type:    AlgorithmRSA,
@@ -255,15 +361,6 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 	}
 
 	return key
-}
-
-func nameAlgorithm(n Name) AlgorithmId {
-	if len(n) == 4 {
-		return AlgorithmNull
-	}
-	var alg AlgorithmId
-	UnmarshalFromBytes([]byte(n), &alg)
-	return alg
 }
 
 // Persist a transient object for testing. If the persistent handle is already in use, it tries to evict the

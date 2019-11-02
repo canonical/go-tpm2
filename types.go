@@ -189,6 +189,44 @@ type Timeout []byte
 // Name corresponds to the TPM2B_NAME type.
 type Name []byte
 
+// IsHandle returns true if the name contains a handle.
+func (n Name) IsHandle() bool {
+	return len(n) == binary.Size(Handle(0))
+}
+
+// Handle returns the handle of the resource that this name corresponds to. If it does not contain a handle, it will panic.
+func (n Name) Handle() Handle {
+	if !n.IsHandle() {
+		panic("name is not a handle")
+	}
+	return Handle(binary.BigEndian.Uint32(n))
+}
+
+// Algorithm returns the digest algorithm of the name, if it contains a digest. If the name does not contain a digest, AlgorithmNull
+// will be returned.
+func (n Name) Algorithm() AlgorithmId {
+	if len(n) < binary.Size(AlgorithmId(0)) || n.IsHandle() {
+		return AlgorithmNull
+	}
+	a := AlgorithmId(binary.BigEndian.Uint16(n))
+	if !cryptIsKnownDigest(a) {
+		return AlgorithmNull
+	}
+	size := cryptGetDigestSize(a)
+	if int(size) != len(n)-binary.Size(AlgorithmId(0)) {
+		return AlgorithmNull
+	}
+	return a
+}
+
+// Digest returns the name as a digest, without the algorithm identifier. If it doesn't contain a digest, it will panic.
+func (n Name) Digest() Digest {
+	if n.Algorithm() == AlgorithmNull {
+		panic("name is not a valid digest")
+	}
+	return Digest(n[binary.Size(AlgorithmId(0)):])
+}
+
 // 10.6) PCR Structures
 
 // PCRSelectionData is a list of PCR indexes. It is marshalled to and from the TPMS_PCR_SELECT type, which is a bitmap of the PCR

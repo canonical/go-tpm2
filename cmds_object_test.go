@@ -14,50 +14,6 @@ import (
 	"testing"
 )
 
-func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext,
-	userAuth Auth) ResourceContext {
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionContext)
-
-	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
-	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-
-	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
-		t.Fatalf("PolicySecret failed: %v", err)
-	}
-
-	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
-		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrSign,
-		Params: PublicParamsU{
-			&RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme: RSAScheme{
-					Scheme:  AlgorithmRSASSA,
-					Details: AsymSchemeU{&SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, &session)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
-		t.Fatalf("PolicySecret failed: %v", err)
-	}
-
-	akContext, _, err := tpm.Load(ek, priv, pub, &session)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	return akContext
-}
-
 func TestCreate(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
@@ -252,8 +208,8 @@ func TestLoad(t *testing.T) {
 		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("Create returned an invalid handle 0x%08x", objectContext.Handle())
 		}
-		if len(name) != 34 {
-			t.Errorf("Create returned a name of the wrong length %d", len(name))
+		if name.Algorithm() != AlgorithmSHA256 {
+			t.Errorf("Create returned a name with the wrong algorithm %v", name.Algorithm())
 		}
 	}
 
@@ -325,8 +281,8 @@ func TestReadPublic(t *testing.T) {
 	if !bytes.Equal(name1, name2) {
 		t.Errorf("ReadPublic returned an unexpected name")
 	}
-	if len(qualifiedName) != 34 {
-		t.Errorf("ReadPublic returned a qualifiedName of the wrong length")
+	if qualifiedName.Algorithm() != AlgorithmSHA256 {
+		t.Errorf("ReadPublic returned a qualifiedName of the wrong algorithm")
 	}
 }
 

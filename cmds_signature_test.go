@@ -6,11 +6,8 @@ package tpm2
 
 import (
 	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"math/big"
 	"testing"
 )
 
@@ -53,39 +50,23 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Sign failed: %v", err)
 			}
+			if signature == nil {
+				t.Fatalf("nil signature")
+			}
 
 			return signature
 		}
 
 		verify := func(t *testing.T, pub *Public, digest []byte, signature *Signature, scheme, hashAlg AlgorithmId) {
-			if scheme != signature.SigAlg {
-				t.Fatalf("Signature has the wrong scheme")
+			if signature.SigAlg != scheme {
+				t.Errorf("Signature has the wrong scheme")
+			}
+			if signature.Signature.Any().HashAlg != hashAlg {
+				t.Errorf("Signature has the wrong hash algorithm")
 			}
 
-			exp := int(pub.Params.RSADetail().Exponent)
-			if exp == 0 {
-				exp = defaultRSAExponent
-			}
-			pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA()), E: exp}
+			verifySignature(t, pub, digest, signature)
 
-			switch scheme {
-			case AlgorithmRSASSA:
-				sig := (*SignatureRSA)(signature.Signature.RSASSA())
-				if hashAlg != sig.Hash {
-					t.Errorf("Signature has the wrong hash")
-				}
-				if err := rsa.VerifyPKCS1v15(&pubKey, cryptGetHash(sig.Hash), digest, sig.Sig); err != nil {
-					t.Errorf("Signature is invalid")
-				}
-			case AlgorithmRSAPSS:
-				sig := (*SignatureRSA)(signature.Signature.RSAPSS())
-				if hashAlg != sig.Hash {
-					t.Errorf("Signature has the wrong hash")
-				}
-				if err := rsa.VerifyPSS(&pubKey, cryptGetHash(sig.Hash), digest, sig.Sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}); err != nil {
-					t.Errorf("Signature is invalid")
-				}
-			}
 		}
 
 		t.Run("UseKeyScheme", func(t *testing.T) {
@@ -215,16 +196,12 @@ func TestSign(t *testing.T) {
 		if AlgorithmECDSA != signature.SigAlg {
 			t.Fatalf("Signature has the wrong scheme")
 		}
-
-		pubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(pub.Unique.ECC().X), Y: new(big.Int).SetBytes(pub.Unique.ECC().Y)}
-
 		sig := signature.Signature.ECDSA()
 		if AlgorithmSHA256 != sig.Hash {
 			t.Errorf("Signature has the wrong hash")
 		}
-		if !ecdsa.Verify(&pubKey, digest, new(big.Int).SetBytes(sig.SignatureR), new(big.Int).SetBytes(sig.SignatureS)) {
-			t.Errorf("Signature is invalid")
-		}
+
+		verifySignature(t, pub, digest, signature)
 	})
 }
 
@@ -262,6 +239,9 @@ func TestVerifySignature(t *testing.T) {
 			if valid {
 				if err != nil {
 					t.Fatalf("VerifySignature failed: %v", err)
+				}
+				if verified == nil {
+					t.Fatalf("nil verified")
 				}
 				if verified.Tag != TagVerified {
 					t.Errorf("Invalid tag %v", verified.Tag)

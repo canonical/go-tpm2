@@ -76,14 +76,17 @@ const (
 	CommandShutdown                   CommandCode = 0x00000145 // TPM_CC_Shutdown
 	CommandStirRandom                 CommandCode = 0x00000146 // TPM_CC_StirRandom
 	CommandActivateCredential         CommandCode = 0x00000147 // TPM_CC_ActivateCredential
+	CommandCertify                    CommandCode = 0x00000148 // TPM_CC_Certify
 	CommandPolicyNV                   CommandCode = 0x00000149 // TPM_CC_PolicyNV
 	CommandCertifyCreation            CommandCode = 0x0000014A // TPM_CC_CertifyCreation
+	CommandGetTime                    CommandCode = 0x0000014C // TPM_CC_GetTime
 	CommandNVRead                     CommandCode = 0x0000014E // TPM_CC_NV_Read
 	CommandNVReadLock                 CommandCode = 0x0000014F // TPM_CC_NV_ReadLock
 	CommandObjectChangeAuth           CommandCode = 0x00000150 // TPM_CC_ObjectChangeAuth
 	CommandPolicySecret               CommandCode = 0x00000151 // TPM_CC_PolicySecret
 	CommandCreate                     CommandCode = 0x00000153 // TPM_CC_Create
 	CommandLoad                       CommandCode = 0x00000157 // TPM_CC_Load
+	CommandQuote                      CommandCode = 0x00000158 // TPM_CC_Quote
 	CommandSign                       CommandCode = 0x0000015D // TPM_CC_Sign
 	CommandUnseal                     CommandCode = 0x0000015E // TPM_CC_Unseal
 	CommandPolicySigned               CommandCode = 0x00000160 // TPM_CC_PolicySigned
