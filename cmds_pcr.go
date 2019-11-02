@@ -131,7 +131,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRValues
 
 		if len(values) == 0 {
 			if !pcrSelectionOut.empty() {
-				return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM returned no digests but indicated that it should have done"}
+				return 0, nil, makeInvalidParamError("pcrSelectionIn", "unimplemented PCRs specified")
 			}
 			break
 		}
