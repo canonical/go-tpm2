@@ -459,9 +459,10 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 	for _, data := range []struct {
 		desc           string
 		x, y, expected PCRSelectionList
+		err            string
 	}{
 		{
-			desc: "1",
+			desc: "SingleSelection",
 			x: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
@@ -470,24 +471,23 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 5}}},
 		},
 		{
-			desc: "2",
+			desc: "UnexpectedAlgorithm",
 			x: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 3, 4}}},
-			expected: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			err: "PCRSelection has unexpected algorithm",
 		},
 		{
-			desc: "3",
+			desc: "SingleSelectionEmptyResult",
 			x: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{},
+			expected: PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256}},
 		},
 		{
-			desc: "4",
+			desc: "MultipleSelection",
 			x: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
@@ -499,7 +499,7 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
 		},
 		{
-			desc: "5",
+			desc: "MultipleSectionEmptyResult1",
 			x: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
@@ -507,23 +507,45 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			expected: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}}},
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
+				PCRSelection{Hash: AlgorithmSHA256}},
 		},
 		{
-			desc: "6",
+			desc: "MultipleSelectionEmptyResult2",
 			x: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
 				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
 				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{},
+			expected: PCRSelectionList{PCRSelection{Hash: AlgorithmSHA1}, PCRSelection{Hash: AlgorithmSHA256}},
+		},
+		{
+			desc: "MismatchedLength",
+			x: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}}},
+			err: "incorrect number of PCRSelections",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			data.x.subtract(data.y)
-			if !reflect.DeepEqual(data.x, data.expected) {
-				t.Errorf("Unexpected result %v", data.x)
+			res, err := data.x.subtract(data.y)
+			if data.err == "" {
+				if err != nil {
+					t.Fatalf("subtract failed: %v", err)
+				}
+				if !reflect.DeepEqual(res, data.expected) {
+					t.Errorf("Unexpected result %v", res)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("Expected subtract to fail")
+				}
+				if err.Error() != data.err {
+					t.Errorf("Unexpected error: %v", err)
+				}
 			}
 		})
 	}

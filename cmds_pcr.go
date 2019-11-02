@@ -32,7 +32,7 @@ func (l PCRSelectionList) subtract(r PCRSelectionList) (PCRSelectionList, error)
 			return nil, errors.New("PCRSelection has unexpected algorithm")
 		}
 		so := PCRSelection{Hash: sl.Hash}
-		Loop:
+	Loop:
 		for _, sli := range sl.Select {
 			for _, sri := range r[i].Select {
 				if sri == sli {
