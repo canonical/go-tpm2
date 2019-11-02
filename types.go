@@ -630,7 +630,7 @@ type Attest struct {
 	ExtraData       Data         // External information provided by the caller
 	ClockInfo       ClockInfo    // Clock information
 	FirmwareVersion uint64       // TPM vendor specific value indicating the version of the firmware
-	Attest          AttestU      `tpm2:"selector:Type"` // Type specific attestation data
+	Attested        AttestU      `tpm2:"selector:Type"` // Type specific attestation data
 }
 
 // AttestRaw corresponds to the TPM2B_ATTEST type, and is returned by the attestation commands. The signature of the attestation is

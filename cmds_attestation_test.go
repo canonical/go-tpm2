@@ -95,10 +95,10 @@ func TestCertify(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReadPublic failed: %v", err)
 		}
-		if !bytes.Equal(attest.Attest.Certify().Name, name) {
+		if !bytes.Equal(attest.Attested.Certify().Name, name) {
 			t.Errorf("certifyInfo has the wrong name")
 		}
-		if !bytes.Equal(attest.Attest.Certify().QualifiedName, qn) {
+		if !bytes.Equal(attest.Attested.Certify().QualifiedName, qn) {
 			t.Errorf("certifyInfo has the wrong qualifiedName")
 		}
 
@@ -256,10 +256,10 @@ func TestCertifyCreation(t *testing.T) {
 
 		attest := verifyAttest(t, tpm, certifyInfo, TagAttestCreation, signContext, qualifyingData)
 
-		if !bytes.Equal(attest.Attest.Creation().ObjectName, name) {
+		if !bytes.Equal(attest.Attested.Creation().ObjectName, name) {
 			t.Errorf("certifyInfo has the wrong objectName")
 		}
-		if !bytes.Equal(attest.Attest.Creation().CreationHash, creationHash) {
+		if !bytes.Equal(attest.Attested.Creation().CreationHash, creationHash) {
 			t.Errorf("certifyInfo has the wrong creationHash")
 		}
 
@@ -400,10 +400,10 @@ func TestQuote(t *testing.T) {
 		attest := verifyAttest(t, tpm, quoted, TagAttestQuote, signContext, qualifyingData)
 
 		pcrDigest := computePCRDigestFromTPM(t, tpm, alg, pcrs)
-		if !reflect.DeepEqual(attest.Attest.Quote().PCRSelect, pcrs) {
+		if !reflect.DeepEqual(attest.Attested.Quote().PCRSelect, pcrs) {
 			t.Errorf("quoted has the wrong pcrSelect")
 		}
-		if !bytes.Equal(attest.Attest.Quote().PCRDigest, pcrDigest) {
+		if !bytes.Equal(attest.Attested.Quote().PCRDigest, pcrDigest) {
 			t.Errorf("quoted has the wrong pcrDigest")
 		}
 
@@ -520,13 +520,13 @@ func TestGetTime(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReadClock failed: %v", err)
 		}
-		if attest.Attest.Time().Time.ClockInfo.ResetCount != time.ClockInfo.ResetCount {
+		if attest.Attested.Time().Time.ClockInfo.ResetCount != time.ClockInfo.ResetCount {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.resetCount is unexpected")
 		}
-		if attest.Attest.Time().Time.ClockInfo.RestartCount != time.ClockInfo.RestartCount {
+		if attest.Attested.Time().Time.ClockInfo.RestartCount != time.ClockInfo.RestartCount {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.restartCount is unexpected")
 		}
-		if attest.Attest.Time().Time.ClockInfo.Safe != time.ClockInfo.Safe {
+		if attest.Attested.Time().Time.ClockInfo.Safe != time.ClockInfo.Safe {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.safe is unexpected")
 		}
 
