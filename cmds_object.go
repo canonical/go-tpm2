@@ -562,9 +562,18 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned
 // *Public object will have a Unique field containing details about the public part of the key, computed from the private part of the
 // key.
-func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
+func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
+	}
+
+	if inPublic == nil {
+		return nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
+	}
+
+	inTemplate, err := inPublic.ToTemplate()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("cannot marshal public template: %v", err)
 	}
 
 	var objectHandle Handle
@@ -574,7 +583,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 
 	if err := t.RunCommand(CommandCreateLoaded, sessions,
 		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
-		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, Separator,
+		sensitiveCreateSized{inSensitive}, inTemplate, Separator,
 		&objectHandle, Separator,
 		&outPrivate, &outPublic, &name); err != nil {
 		return nil, nil, nil, nil, err

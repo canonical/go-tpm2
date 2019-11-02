@@ -744,6 +744,12 @@ type SymCipherParams struct {
 // Label corresponds to the TPM2B_LABEL type.
 type Label []byte
 
+// Derive corresponds to the TPMS_DERIVE type.
+type Derive struct {
+	Label   Label
+	Context Label
+}
+
 // SensitiveData corresponds to the TPM2B_SENSITIVE_DATA type.
 type SensitiveData []byte
 
@@ -1407,8 +1413,64 @@ func (p *Public) copyTo(dest *Public) error {
 	return nil
 }
 
+func (p *Public) ToTemplate() (Template, error) {
+	b, err := MarshalToBytes(p)
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal object: %v", err)
+	}
+	return b, nil
+}
+
 type publicSized struct {
 	Ptr *Public `tpm2:"sized"`
+}
+
+// PublicDerived is similar to Public but can be used as a template to create a derived object with TPMContext.CreateLoaded
+type PublicDerived struct {
+	Type AlgorithmId // Type of this object. Valid values are determined by the TPMI_ALG_PUBLIC interface type
+
+	// NameAlg is the algorithm used to compute the name of this object. Valid values are determined by the TPMI_ALG_HASH interface type.
+	NameAlg    AlgorithmId
+	Attrs      ObjectAttributes // Object attributes
+	AuthPolicy Digest           // Authorization policy for this object
+	Params     PublicParamsU    `tpm2:"selector:Type"` // Type specific parameters
+
+	// Unique contains the derivation values. These take precedence over any values specified in SensitiveCreate.Data when creating a
+	// derived object,
+	Unique *Derive
+}
+
+// Name computes the name of this object
+func (p *PublicDerived) Name() (Name, error) {
+	if !cryptIsKnownDigest(p.NameAlg) {
+		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
+	}
+	hasher := cryptConstructHash(p.NameAlg)
+	if err := MarshalToWriter(hasher, p); err != nil {
+		return nil, fmt.Errorf("cannot marshal public object: %v", err)
+	}
+	name, err := MarshalToBytes(p.NameAlg, RawBytes(hasher.Sum(nil)))
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
+	}
+	return name, nil
+}
+
+func (p *PublicDerived) ToTemplate() (Template, error) {
+	b, err := MarshalToBytes(p)
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal object: %v", err)
+	}
+	return b, nil
+}
+
+// Template corresponds to the TPM2B_TEMPLATE type
+type Template []byte
+
+// PublicTemplate exists to allow either Public or PublicDerived structures to be used as the template value for
+// TPMContext.CreateLoaded.
+type PublicTemplate interface {
+	ToTemplate() (Template, error)
 }
 
 // 12.3) Private Area Structures
