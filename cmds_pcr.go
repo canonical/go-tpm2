@@ -7,8 +7,8 @@ package tpm2
 // Section 22 - Integrity Collection (PCR)
 
 import (
+	"errors"
 	"fmt"
-	"sort"
 )
 
 // PCRValues contains a collection of PCR values, keyed by AlgorithmId and PCR index.
@@ -21,34 +21,39 @@ func (v PCRValues) EnsureBank(alg AlgorithmId) {
 	}
 }
 
-func (l *PCRSelectionList) subtract(x PCRSelectionList) {
-	for i, sl := range *l {
-		for _, sx := range x {
-			if sx.Hash != sl.Hash {
-				continue
-			}
-			n := 0
+func (l PCRSelectionList) subtract(r PCRSelectionList) (PCRSelectionList, error) {
+	if len(l) != len(r) {
+		return nil, errors.New("incorrect number of PCRSelections")
+	}
+
+	var o PCRSelectionList
+	for i, sl := range l {
+		if r[i].Hash != sl.Hash {
+			return nil, errors.New("PCRSelection has unexpected algorithm")
+		}
+		so := PCRSelection{Hash: sl.Hash}
 		Loop:
-			for _, sls := range sl.Select {
-				for _, sxs := range sx.Select {
-					if sxs == sls {
-						continue Loop
-					}
+		for _, sli := range sl.Select {
+			for _, sri := range r[i].Select {
+				if sri == sli {
+					continue Loop
 				}
-				(*l)[i].Select[n] = sls
-				n++
 			}
-			(*l)[i].Select = (*l)[i].Select[:n]
+			so.Select = append(so.Select, sli)
+		}
+		o = append(o, so)
+	}
+
+	return o, nil
+}
+
+func (l PCRSelectionList) empty() bool {
+	for _, s := range l {
+		if len(s.Select) > 0 {
+			return false
 		}
 	}
-	n := 0
-	for _, sl := range *l {
-		if len(sl.Select) > 0 {
-			(*l)[n] = sl
-			n++
-		}
-	}
-	*l = (*l)[:n]
+	return true
 }
 
 // PCRExtend executes the TPM2_PCR_Extend command to extend the PCR associated with the pcrHandle parameter with the tagged digests
@@ -96,10 +101,8 @@ func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth i
 func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRValues, error) {
 	var remaining PCRSelectionList
 	for _, s := range pcrSelectionIn {
-		c := PCRSelection{Hash: s.Hash}
-		c.Select = make([]int, len(s.Select))
+		c := PCRSelection{Hash: s.Hash, Select: make([]int, len(s.Select))}
 		copy(c.Select, s.Select)
-		sort.Ints(c.Select)
 		remaining = append(remaining, c)
 	}
 
@@ -127,10 +130,8 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRValues
 		}
 
 		if len(values) == 0 {
-			for _, s := range pcrSelectionOut {
-				if len(s.Select) > 0 {
-					return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM returned no digests but indicated that it should have done"}
-				}
+			if !pcrSelectionOut.empty() {
+				return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM returned no digests but indicated that it should have done"}
 			}
 			break
 		}
@@ -152,8 +153,13 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRValues
 			return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM returned too many digests"}
 		}
 
-		remaining.subtract(pcrSelectionOut)
-		if len(remaining) == 0 {
+		var err error
+		remaining, err = remaining.subtract(pcrSelectionOut)
+		if err != nil {
+			return 0, nil, &InvalidResponseError{CommandPCRRead, fmt.Sprintf("cannot determine outstanding PCR selection from selection returned "+
+				"from TPM: %v", err)}
+		}
+		if remaining.empty() {
 			break
 		}
 	}
