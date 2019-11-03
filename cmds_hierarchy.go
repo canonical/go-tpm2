@@ -133,11 +133,15 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 // objects that reside in the storage and endorsement hierarchies.
 //
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
-func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error {
+func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
+	}
+	s, err = t.validateAndAppendSessionParam(s, sessions)
+	if err != nil {
+		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
 	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, authHandle)
@@ -208,8 +212,8 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}) error 
 // a *TPMError error with an error code of ErrorAuthFail will be returned.
 //
 // The command requires the authorization with the user auth role for authHandle, provided via authHandleAuth.
-func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}) error {
-	return t.RunCommand(CommandClearControl, nil,
+func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}, sessions ...*Session) error {
+	return t.RunCommand(CommandClearControl, sessions,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator,
 		disable)
 }

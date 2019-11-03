@@ -169,8 +169,8 @@ func (t *TPMContext) PolicyTicket(policySession ResourceContext, timeout Timeout
 //
 // On successful completion, the policy digest of the session context associated with policySession is cleared, and then extended to
 // include the concatenation of all of the digests contained in pHashList.
-func (t *TPMContext) PolicyOR(policySession ResourceContext, pHashList DigestList) error {
-	return t.RunCommand(CommandPolicyOR, nil,
+func (t *TPMContext) PolicyOR(policySession ResourceContext, pHashList DigestList, sessions ...*Session) error {
+	return t.RunCommand(CommandPolicyOR, sessions,
 		policySession, Separator,
 		pHashList)
 }
@@ -250,8 +250,8 @@ func (t *TPMContext) PolicyNV(authContext, nvIndex, policySession ResourceContex
 //
 // On successful completion, the policy digest of the session context associated with policySession will be extended to
 // include the value of the specified command code, and the command code will be recorded on the session context.
-func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code CommandCode) error {
-	return t.RunCommand(CommandPolicyCommandCode, nil,
+func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code CommandCode, sessions ...*Session) error {
+	return t.RunCommand(CommandPolicyCommandCode, sessions,
 		policySession, Separator,
 		code)
 }
@@ -282,7 +282,7 @@ func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code Comma
 //
 // When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
 // must be set to the authorization value of the entity being authorized.
-func (t *TPMContext) PolicyAuthValue(policySession ResourceContext) error {
+func (t *TPMContext) PolicyAuthValue(policySession ResourceContext, sessions ...*Session) error {
 	if err := t.checkResourceContextParam(policySession); err != nil {
 		return fmt.Errorf("invalid resource context for policySession: %v", err)
 	}
@@ -295,7 +295,7 @@ func (t *TPMContext) PolicyAuthValue(policySession ResourceContext) error {
 		return errors.New("invalid resource context for policySession: not complete")
 	}
 
-	if err := t.RunCommand(CommandPolicyAuthValue, nil, policySession); err != nil {
+	if err := t.RunCommand(CommandPolicyAuthValue, sessions, policySession); err != nil {
 		return err
 	}
 
@@ -311,7 +311,7 @@ func (t *TPMContext) PolicyAuthValue(policySession ResourceContext) error {
 //
 // When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
 // must be set to the authorization value of the entity being authorized.
-func (t *TPMContext) PolicyPassword(policySession ResourceContext) error {
+func (t *TPMContext) PolicyPassword(policySession ResourceContext, sessions ...*Session) error {
 	if err := t.checkResourceContextParam(policySession); err != nil {
 		return fmt.Errorf("invalid resource context for policySession: %v", err)
 	}
@@ -324,7 +324,7 @@ func (t *TPMContext) PolicyPassword(policySession ResourceContext) error {
 		return errors.New("invalid resource context for policySession: not complete")
 	}
 
-	if err := t.RunCommand(CommandPolicyPassword, nil, policySession); err != nil {
+	if err := t.RunCommand(CommandPolicyPassword, sessions, policySession); err != nil {
 		return err
 	}
 
@@ -334,10 +334,10 @@ func (t *TPMContext) PolicyPassword(policySession ResourceContext) error {
 
 // PolicyGetDigest executes the TPM2_PolicyGetDigest command to return the current policy digest of the session context associated
 // with policySession.
-func (t *TPMContext) PolicyGetDigest(policySession ResourceContext) (Digest, error) {
+func (t *TPMContext) PolicyGetDigest(policySession ResourceContext, sessions ...*Session) (Digest, error) {
 	var policyDigest Digest
 
-	if err := t.RunCommand(CommandPolicyGetDigest, nil,
+	if err := t.RunCommand(CommandPolicyGetDigest, sessions,
 		policySession, Separator,
 		Separator,
 		Separator,

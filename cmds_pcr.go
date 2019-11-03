@@ -65,8 +65,8 @@ func (l PCRSelectionList) empty() bool {
 //
 // If the PCR associated with pcrHandle can not be extended from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
-func (t *TPMContext) PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}) error {
-	return t.RunCommand(CommandPCRExtend, nil,
+func (t *TPMContext) PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}, sessions ...*Session) error {
+	return t.RunCommand(CommandPCRExtend, sessions,
 		HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth}, Separator,
 		digests)
 }
@@ -98,7 +98,7 @@ func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth i
 // continually execute the TPM2_PCR_Read command until all requested values have been read.
 //
 // On success, the current value of pcrUpdateCounter is returned, as well as the requested PCR values.
-func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRValues, error) {
+func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Session) (uint32, PCRValues, error) {
 	var remaining PCRSelectionList
 	for _, s := range pcrSelectionIn {
 		c := PCRSelection{Hash: s.Hash, Select: make([]int, len(s.Select))}
@@ -114,7 +114,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList) (uint32, PCRValues
 		var pcrSelectionOut PCRSelectionList
 		var values DigestList
 
-		if err := t.RunCommand(CommandPCRRead, nil,
+		if err := t.RunCommand(CommandPCRRead, sessions,
 			Separator,
 			remaining, Separator,
 			Separator,

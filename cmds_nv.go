@@ -94,8 +94,8 @@ func (t *TPMContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVP
 // of ErrorNVAuthorization will be returned.
 //
 // On successful completion, nvIndex will be invalidated.
-func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext, authHandleAuth interface{}) error {
-	if err := t.RunCommand(CommandNVUndefineSpace, nil,
+func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext, authHandleAuth interface{}, sessions ...*Session) error {
+	if err := t.RunCommand(CommandNVUndefineSpace, sessions,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, nvIndex); err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext,
 // hierarchy, provided via platformAuth. The command requires authorization with the admin role for nvIndex, provided via nvIndexAuth.
 //
 // On successful completion, nvIndex will be invalidated.
-func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth *Session, platformAuth interface{}) error {
+func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth *Session, platformAuth interface{}, sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
 	if err != nil {
@@ -121,6 +121,10 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 	s, err = t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: platform, Auth: platformAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
+	}
+	s, err = t.validateAndAppendSessionParam(s, sessions)
+	if err != nil {
+		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
 	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVUndefineSpaceSpecial, s, nvIndex, platform)
@@ -265,8 +269,8 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 // handle index 2.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
-	if err := t.RunCommand(CommandNVIncrement, nil,
+func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) error {
+	if err := t.RunCommand(CommandNVIncrement, sessions,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
 		return err
 	}
@@ -329,8 +333,8 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 // handle index 2.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuth interface{}) error {
-	if err := t.RunCommand(CommandNVSetBits, nil,
+func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuth interface{}, sessions ...*Session) error {
+	if err := t.RunCommand(CommandNVSetBits, sessions,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
 		bits); err != nil {
 		return err
@@ -360,8 +364,8 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 //
 // On successful completion, the AttrNVWriteLocked attribute will be set. It will be cleared again (and writes will be reenabled) on
 // the next TPM reset or TPM restart unless the index has the AttrNVWriteDefine attribute set and AttrNVWritten attribute is set.
-func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
-	if err := t.RunCommand(CommandNVWriteLock, nil,
+func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) error {
+	if err := t.RunCommand(CommandNVWriteLock, sessions,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
 		return err
 	}
@@ -379,8 +383,8 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 // On successful completion, the AttrNVWriteLocked attribute will be set for all NV indexes that have the AttrNVGlobalLock attribute
 // set. If an index also has the AttrNVWriteDefine attribute set, this will permanently inhibit further writes unless AttrNVWritten
 // is clear.
-func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}) error {
-	if err := t.RunCommand(CommandNVGlobalWriteLock, nil,
+func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}, sessions ...*Session) error {
+	if err := t.RunCommand(CommandNVGlobalWriteLock, sessions,
 		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}); err != nil {
 		return err
 	}
@@ -543,8 +547,8 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 //
 // On successful completion, the AttrNVReadLocked attribute will be set. It will be cleared again (and reads will be reenabled) on
 // the next TPM reset or TPM restart.
-func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuth interface{}) error {
-	if err := t.RunCommand(CommandNVReadLock, nil,
+func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) error {
+	if err := t.RunCommand(CommandNVReadLock, sessions,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
 		return err
 	}
@@ -558,8 +562,7 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 //
 // If the size of newAuth is greater than the name algorithm for the index, a *TPMParameterError error with an error code of ErrorSize
 // will be returned.
-func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth *Session,
-	sessions ...*Session) error {
+func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth *Session, sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
 	if err != nil {

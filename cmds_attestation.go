@@ -78,8 +78,7 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 //
 // If successful, it returns an attestation structure. If signContext is not nil, the attestation structure will be signed by the
 // associated key and returned too.
-func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest,
-	inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if signContext == nil {
 		signContext = permanentContext(HandleNull)
 	}

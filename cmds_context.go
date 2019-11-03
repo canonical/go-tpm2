@@ -270,8 +270,8 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
-func (t *TPMContext) EvictControl(auth Handle, object ResourceContext, persistentHandle Handle, authAuth interface{}) (ResourceContext, error) {
-	if err := t.RunCommand(CommandEvictControl, nil,
+func (t *TPMContext) EvictControl(auth Handle, object ResourceContext, persistentHandle Handle, authAuth interface{}, sessions ...*Session) (ResourceContext, error) {
+	if err := t.RunCommand(CommandEvictControl, sessions,
 		HandleWithAuth{Handle: auth, Auth: authAuth}, object, Separator,
 		persistentHandle); err != nil {
 		return nil, err

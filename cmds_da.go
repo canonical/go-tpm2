@@ -11,8 +11,8 @@ package tpm2
 // lockHandleAuth.
 //
 // On successful completion, the lockout counter will be reset to zero.
-func (t *TPMContext) DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth interface{}) error {
-	return t.RunCommand(CommandDictionaryAttackLockReset, nil,
+func (t *TPMContext) DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth interface{}, sessions ...*Session) error {
+	return t.RunCommand(CommandDictionaryAttackLockReset, sessions,
 		HandleWithAuth{Handle: lockHandle, Auth: lockHandleAuth})
 }
 
@@ -27,8 +27,8 @@ func (t *TPMContext) DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth
 //
 // The lockHandle parameter must be HandleLockout. The command requires authorization with the user auth role for lockHandle, provided
 // via lockHandleAuth.
-func (t *TPMContext) DictionaryAttackParameters(lockHandle Handle, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockHandleAuth interface{}) error {
-	return t.RunCommand(CommandDictionaryAttackParameters, nil,
+func (t *TPMContext) DictionaryAttackParameters(lockHandle Handle, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockHandleAuth interface{}, sessions ...*Session) error {
+	return t.RunCommand(CommandDictionaryAttackParameters, sessions,
 		HandleWithAuth{Handle: lockHandle, Auth: lockHandleAuth}, Separator,
 		newMaxTries, newRecoveryTime, lockoutRecovery)
 }

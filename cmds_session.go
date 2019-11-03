@@ -151,6 +151,6 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 
 // PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to reset the policy
 // authorization session to its initial state.
-func (t *TPMContext) PolicyRestart(sessionContext ResourceContext) error {
-	return t.RunCommand(CommandPolicyRestart, nil, sessionContext)
+func (t *TPMContext) PolicyRestart(sessionContext ResourceContext, sessions ...*Session) error {
+	return t.RunCommand(CommandPolicyRestart, sessions, sessionContext)
 }
