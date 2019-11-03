@@ -487,7 +487,7 @@ func TestPolicyOR(t *testing.T) {
 }
 
 func TestPolicyPCR(t *testing.T) {
-	tpm, _ := openTPMSimulatorForTesting(t)
+	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {

@@ -10,7 +10,7 @@ import (
 )
 
 func TestPCRExtend(t *testing.T) {
-	tpm, _ := openTPMSimulatorForTesting(t)
+	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -87,7 +87,7 @@ func TestPCRExtend(t *testing.T) {
 }
 
 func TestPCREvent(t *testing.T) {
-	tpm, _ := openTPMSimulatorForTesting(t)
+	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
