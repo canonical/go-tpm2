@@ -1373,6 +1373,12 @@ func (p PublicParamsU) AsymDetail() *AsymParams {
 	}
 }
 
+// PublicParams corresponds to the TPMT_PUBLIC_PARMS type.
+type PublicParams struct {
+	Type       AlgorithmId   // Type specifier. Valid values are determined by the TPMI_ALG_PUBLIC interface type
+	Parameters PublicParamsU `tpm2:"selector:Type"` // Algorithm details
+}
+
 // Public corresponds to the TPMT_PUBLIC type, and defines the public area for an object.
 type Public struct {
 	Type AlgorithmId // Type of this object. Valid values are determined by the TPMI_ALG_PUBLIC interface type

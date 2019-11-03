@@ -112,6 +112,7 @@ const (
 	CommandReadClock                  CommandCode = 0x00000181 // TPM_CC_ReadClock
 	CommandPCRExtend                  CommandCode = 0x00000182 // TPM_CC_PCR_Extend
 	CommandPolicyGetDigest            CommandCode = 0x00000189 // TPM_CC_PolicyGetDigest
+	CommandTestParms                  CommandCode = 0x0000018A // TPM_CC_TestParms
 	CommandPolicyPassword             CommandCode = 0x0000018C // TPM_CC_PolicyPassword
 	CommandCreateLoaded               CommandCode = 0x00000191 // TPM_CC_CreateLoaded
 )

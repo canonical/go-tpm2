@@ -149,6 +149,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PCR_Extend"
 	case CommandPolicyGetDigest:
 		return "TPM_CC_PolicyGetDigest"
+	case CommandTestParms:
+		return "TPM_CC_TestParms"
 	case CommandPolicyPassword:
 		return "TPM_CC_PolicyPassword"
 	case CommandCreateLoaded:

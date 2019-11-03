@@ -207,3 +207,8 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 	}
 	return data.Data.AuthPolicies(), nil
 }
+
+// TestParms executes the TPM2_TestParms command to check if the specified combination of algorithm parameters is supported.
+func (t *TPMContext) TestParms(parameters *PublicParams) error {
+	return t.RunCommand(CommandTestParms, nil, Separator, parameters)
+}

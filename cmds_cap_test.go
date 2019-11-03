@@ -204,3 +204,120 @@ func TestGetCapabilityPCRProperties(t *testing.T) {
 		t.Errorf("TPM property list is empty")
 	}
 }
+
+func TestTestParms(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	for _, data := range []struct {
+		desc  string
+		parms *PublicParams
+		valid bool
+		err   ErrorCode
+	}{
+		{
+			desc: "RSARestrictedDecrypt",
+			parms: &PublicParams{
+				Type: AlgorithmRSA,
+				Parameters: PublicParamsU{
+					Data: &RSAParams{
+						Symmetric: SymDefObject{
+							Algorithm: AlgorithmAES,
+							KeyBits:   SymKeyBitsU{Data: uint16(128)},
+							Mode:      SymModeU{Data: AlgorithmCFB}},
+						Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						KeyBits:  2048,
+						Exponent: 0}}},
+			valid: true,
+		},
+		{
+			desc: "ECCSigning",
+			parms: &PublicParams{
+				Type: AlgorithmECC,
+				Parameters: PublicParamsU{
+					Data: &ECCParams{
+						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+						Scheme: ECCScheme{
+							Scheme:  AlgorithmECDSA,
+							Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: AlgorithmSHA256}}},
+						CurveID: ECCCurveNIST_P256,
+						KDF:     KDFScheme{Scheme: AlgorithmNull}}}},
+			valid: true,
+		},
+		{
+			desc: "RSAInvalidKeyBits",
+			parms: &PublicParams{
+				Type: AlgorithmRSA,
+				Parameters: PublicParamsU{
+					Data: &RSAParams{
+						Symmetric: SymDefObject{
+							Algorithm: AlgorithmAES,
+							KeyBits:   SymKeyBitsU{Data: uint16(128)},
+							Mode:      SymModeU{Data: AlgorithmCFB}},
+						Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						KeyBits:  2047,
+						Exponent: 0}}},
+			err: ErrorValue,
+		},
+		{
+			desc: "ECCInvalidHash",
+			parms: &PublicParams{
+				Type: AlgorithmECC,
+				Parameters: PublicParamsU{
+					Data: &ECCParams{
+						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+						Scheme: ECCScheme{
+							Scheme:  AlgorithmECDSA,
+							Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: AlgorithmECC}}},
+						CurveID: ECCCurveNIST_P256,
+						KDF:     KDFScheme{Scheme: AlgorithmNull}}}},
+			err: ErrorHash,
+		},
+		{
+			desc: "InvalidType",
+			parms: &PublicParams{
+				Type:       AlgorithmRSASSA,
+				Parameters: PublicParamsU{}},
+			err: ErrorType,
+		},
+		{
+			desc: "Symmetric",
+			parms: &PublicParams{
+				Type: AlgorithmSymCipher,
+				Parameters: PublicParamsU{
+					Data: &SymCipherParams{
+						Sym: SymDefObject{
+							Algorithm: AlgorithmAES,
+							KeyBits:   SymKeyBitsU{Data: uint16(256)},
+							Mode:      SymModeU{Data: AlgorithmCFB}}}}},
+			valid: true,
+		},
+		{
+			desc: "SymmetricInvalid",
+			parms: &PublicParams{
+				Type: AlgorithmSymCipher,
+				Parameters: PublicParamsU{
+					Data: &SymCipherParams{
+						Sym: SymDefObject{
+							Algorithm: AlgorithmXOR,
+							KeyBits:   SymKeyBitsU{Data: AlgorithmSHA256}}}}},
+			err: ErrorSymmetric,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			err := tpm.TestParms(data.parms)
+			if data.valid {
+				if err != nil {
+					t.Errorf("TestParms failed: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("Expected TestParms to fail")
+				}
+				if e, ok := err.(*TPMParameterError); !ok || e.Code() != data.err || e.Index != 1 {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
