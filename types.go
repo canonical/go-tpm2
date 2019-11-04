@@ -1008,17 +1008,17 @@ type AsymSchemeId AlgorithmId
 
 // AsymSchemeU is a fake union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is AsymSchemeId. Valid types for
 // Data for each selector value are:
-//  - AsymSchemeAlgRSASSA: *SigSchemeRSASSA
-//  - AsymSchemeAlgRSAES: *EncSchemeRSAES
-//  - AsymSchemeAlgRSAPSS: *SigSchemeRSAPSS
-//  - AsymSchemeAlgOAEP: *EncSchemeOAEP
-//  - AsymSchemeAlgECDSA: *SigSchemeECDSA
-//  - AsymSchemeAlgECDH: *KeySchemeECDH
-//  - AsymSchemeAlgECDAA: *SigSchemeECDAA
-//  - AsymSchemeAlgSM2: *SigSchemeSM2
-//  - AsymSchemeAlgECSCHNORR: *SigSchemeECSCHNORR
-//  - AsymSchemeAlgECMQV: *KeySchemeECMQV
-//  - AsymSchemeAlgNull: <nil>
+//  - AsymSchemeRSASSA: *SigSchemeRSASSA
+//  - AsymSchemeRSAES: *EncSchemeRSAES
+//  - AsymSchemeRSAPSS: *SigSchemeRSAPSS
+//  - AsymSchemeOAEP: *EncSchemeOAEP
+//  - AsymSchemeECDSA: *SigSchemeECDSA
+//  - AsymSchemeECDH: *KeySchemeECDH
+//  - AsymSchemeECDAA: *SigSchemeECDAA
+//  - AsymSchemeSM2: *SigSchemeSM2
+//  - AsymSchemeECSCHNORR: *SigSchemeECSCHNORR
+//  - AsymSchemeECMQV: *KeySchemeECMQV
+//  - AsymSchemeNull: <nil>
 type AsymSchemeU struct {
 	Data interface{}
 }
@@ -1115,7 +1115,7 @@ type AsymScheme struct {
 // 11.2.4 RSA
 
 // RSASchemeId corresponds to the TPMI_ALG_RSA_SCHEME type.
-type RSASchemeId AlgorithmId
+type RSASchemeId AsymSchemeId
 
 // RSAScheme corresponds to the TPMT_RSA_SCHEME type.
 type RSAScheme struct {
@@ -1141,7 +1141,7 @@ type ECCPoint struct {
 }
 
 // ECCSchemeId corresponds to the TPMI_ALG_ECC_SCHEME type.
-type ECCSchemeId AlgorithmId
+type ECCSchemeId AsymSchemeId
 
 // ECCScheme corresponds to the TPMT_ECC_SCHEME type.
 type ECCScheme struct {
