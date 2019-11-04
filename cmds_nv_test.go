@@ -206,14 +206,19 @@ func TestNVReadAndWrite(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	pub := NVPublic{
+	pub1 := NVPublic{
 		Index:   Handle(0x0181ffff),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 		Size:    64}
+	pub2 := NVPublic{
+		Index:   Handle(0x0181ffff),
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+		Size:    1600}
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
-		if err := tpm.NVDefineSpace(HandleOwner, authValue, &pub, nil); err != nil {
+	define := func(t *testing.T, pub *NVPublic, authValue Auth) ResourceContext {
+		if err := tpm.NVDefineSpace(HandleOwner, authValue, pub, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
@@ -243,7 +248,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		}
 	}
 
-	runRead := func(t *testing.T, rc ResourceContext, data MaxNVBuffer, offset uint16, auth interface{}) {
+	runRead := func(t *testing.T, rc ResourceContext, pub *NVPublic, data MaxNVBuffer, offset uint16, auth interface{}) {
 		d, err := tpm.NVRead(rc, rc, uint16(len(data)), offset, auth)
 		if err != nil {
 			t.Fatalf("NVRead failed: %v", err)
@@ -270,67 +275,85 @@ func TestNVReadAndWrite(t *testing.T) {
 	}
 
 	t.Run("Full", func(t *testing.T) {
-		rc := define(t, nil)
+		rc := define(t, &pub1, nil)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
-		d := make([]byte, pub.Size)
+		d := make([]byte, pub1.Size)
 		rand.Read(d)
 		runWrite(t, rc, d, 0, nil)
-		runRead(t, rc, d, 0, nil)
+		runRead(t, rc, &pub1, d, 0, nil)
 	})
 	t.Run("Partial", func(t *testing.T) {
-		rc := define(t, nil)
+		rc := define(t, &pub1, nil)
 		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
 		d := []byte{1, 2, 3, 4}
 		runWrite(t, rc, d, 10, nil)
-		runRead(t, rc, d, 10, nil)
+		runRead(t, rc, &pub1, d, 10, nil)
 	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
-		d := []byte{1, 2, 3, 4}
-		runWrite(t, rc, d, 10, testAuth)
-		runRead(t, rc, d, 10, testAuth)
-	})
-	t.Run("UseSessionAuthBound1", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
-		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth}
-		d := make([]byte, pub.Size)
-		rand.Read(d)
-		runWrite(t, rc, d, 0, &session)
 
-		// Writing updates the NV index's attributes which also changes the name. This means that the
-		// session is no longer bound to it
-		runRead(t, rc, d, 0, &session)
-	})
-	t.Run("UseSessionAuthBound2", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
-		sessionContext1, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext1)
-		session := Session{Context: sessionContext1, Attrs: AttrContinueSession, AuthValue: testAuth}
-		d := make([]byte, pub.Size)
-		rand.Read(d)
-		runWrite(t, rc, d, 0, &session)
+	for _, data := range []struct {
+		desc string
+		pub  *NVPublic
+	}{
+		{
+			desc: "Small",
+			pub:  &pub1,
+		},
+		{
+			desc: "Large",
+			pub:  &pub2,
+		},
+	} {
+		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
+			rc := define(t, data.pub, testAuth)
+			defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+			d := make([]byte, data.pub.Size)
+			rand.Read(d)
+			runWrite(t, rc, d, 0, testAuth)
+			runRead(t, rc, data.pub, d, 0, testAuth)
+		})
 
-		// Writing updates the NV index's attributes which also changes the name. This means that the
-		// session is no longer bound to it. Create a new bound session
-		sessionContext2, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext2)
-		session = Session{Context: sessionContext2, Attrs: AttrContinueSession, AuthValue: testAuth}
-		runRead(t, rc, d, 0, &session)
-	})
+		t.Run(data.desc+"/UseSessionAuthBound1", func(t *testing.T) {
+			rc := define(t, data.pub, testAuth)
+			defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+			session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth}
+			d := make([]byte, data.pub.Size)
+			rand.Read(d)
+			runWrite(t, rc, d, 0, &session)
+
+			// Writing updates the NV index's attributes which also changes the name. This means that the
+			// session is no longer bound to it
+			runRead(t, rc, data.pub, d, 0, &session)
+		})
+
+		t.Run(data.desc+"/UseSessionAuthBound2", func(t *testing.T) {
+			rc := define(t, data.pub, testAuth)
+			defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+			sessionContext1, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext1)
+			session := Session{Context: sessionContext1, Attrs: AttrContinueSession, AuthValue: testAuth}
+			d := make([]byte, data.pub.Size)
+			rand.Read(d)
+			runWrite(t, rc, d, 0, &session)
+
+			// Writing updates the NV index's attributes which also changes the name. This means that the
+			// session is no longer bound to it. Create a new bound session
+			sessionContext2, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext2)
+			session = Session{Context: sessionContext2, Attrs: AttrContinueSession, AuthValue: testAuth}
+			runRead(t, rc, data.pub, d, 0, &session)
+		})
+	}
 }
 
 func TestNVIncrement(t *testing.T) {

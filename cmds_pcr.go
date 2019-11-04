@@ -95,7 +95,8 @@ func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth i
 
 // PCRRead executes the TPM2_PCR_Read command to return the values of the PCRs defined in the pcrSelectionIn parameter. The
 // underlying command may not be able to read all of the specified PCRs in a single transaction, so this function will
-// continually execute the TPM2_PCR_Read command until all requested values have been read.
+// re-execute the TPM2_PCR_Read command until all requested values have been read. As a consequence, any *Session instances
+// provided should have the AttrContinueSession attribute defined.
 //
 // On success, the current value of pcrUpdateCounter is returned, as well as the requested PCR values.
 func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Session) (uint32, PCRValues, error) {

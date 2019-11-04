@@ -13,6 +13,19 @@ import (
 	"fmt"
 )
 
+func (t *TPMContext) initNVMaxBufferSize() {
+	if t.maxNVBufferSize > 0 {
+		return
+	}
+	props, err := t.GetCapabilityTPMProperties(PropertyNVBufferMax, 1)
+	switch {
+	case err == nil && len(props) > 0:
+		t.maxNVBufferSize = uint16(props[0].Value)
+	default:
+		t.maxNVBufferSize = 512
+	}
+}
+
 // NVDefineSpace executes the TPM2_NV_DefineSpace command to reserve space to hold the data associated with a NV index described by
 // the publicInfo parameter. The Index field of publicInfo defines the handle at which the index should be reserved. The NameAlg
 // field defines the digest algorithm for computing the name of the NV index. The Attrs field is used to describe attributes for
@@ -190,6 +203,13 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
+// If data is too large to be written in a single command, this function will re-execute the TPM2_NV_Write command until all data is
+// written. As a consequence, any *Session instances provided should have the AttrContinueSession attribute defined. An error will
+// be returned if the write will require more than one command execution and there are sessions without the AttrContinueSession
+// attribute defined. If authContextAuth is a *Session instance that references a bound session and this is the first write to this
+// index, the first write will break the session binding. In this case, the AuthValue field should be set to the authorization value
+// of the resource associated with authContext to avoid a partial write when the write is split across multiple commands.
+//
 // If the index has the AttrNVWriteLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
 // If the type of the index is NVTypeCounter, NVTypeBits or NVTypeExtend, a *TPMError error with an error code fo ErrorAttributes
@@ -204,13 +224,43 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuth interface{}, sessions ...*Session) error {
-	if err := t.RunCommand(CommandNVWrite, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
-		data, offset); err != nil {
-		return err
+	t.initNVMaxBufferSize()
+
+	remaining := uint16(len(data))
+	total := uint16(0)
+
+	if remaining > t.maxNVBufferSize {
+		session, ok := authContextAuth.(*Session)
+		if ok && session.Attrs&AttrContinueSession == 0 {
+			return makeInvalidParamError("authContextAuth", "the AttrContinueSession attribute is required for a split write")
+		}
+
+		for i, s := range sessions {
+			if s.Attrs&AttrContinueSession == 0 {
+				return makeInvalidParamError("sessions", fmt.Sprintf("the AttrContineSession attribute is required for session at index %d for "+
+					"a split write", i))
+			}
+		}
 	}
 
-	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
+	for remaining > 0 {
+		s := remaining
+		if s > t.maxNVBufferSize {
+			s = t.maxNVBufferSize
+		}
+
+		if err := t.RunCommand(CommandNVWrite, sessions,
+			ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+			data[total:total+s], offset+total); err != nil {
+			return err
+		}
+
+		nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
+
+		total += s
+		remaining -= s
+	}
+
 	return nil
 }
 
@@ -418,6 +468,9 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 // authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
+// If the requested data can not be read in a single command, this function will re-execute the TPM2_NV_Read command until all data
+// is read. As a consequence, any *Session instances provided should have the AttrContinueSession attribute defined.
+//
 // If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
 // If the index has not been initialized (ie, the AttrNVWritten attribute is not set), a *TPMError error with an error code of
@@ -434,13 +487,31 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 //
 // On successful completion, the requested data will be returned.
 func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{}, sessions ...*Session) (MaxNVBuffer, error) {
-	var data MaxNVBuffer
-	if err := t.RunCommand(CommandNVRead, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
-		size, offset, Separator,
-		Separator,
-		&data); err != nil {
-		return nil, err
+	t.initNVMaxBufferSize()
+
+	data := make(MaxNVBuffer, size)
+	total := uint16(0)
+	remaining := size
+
+	for remaining > 0 {
+		s := remaining
+		if s > t.maxNVBufferSize {
+			s = t.maxNVBufferSize
+		}
+
+		var tmpData MaxNVBuffer
+
+		if err := t.RunCommand(CommandNVRead, sessions,
+			ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+			s, offset+total, Separator,
+			Separator,
+			&tmpData); err != nil {
+			return nil, err
+		}
+
+		copy(data[total:], tmpData)
+		total += s
+		remaining -= s
 	}
 
 	return data, nil

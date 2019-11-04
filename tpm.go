@@ -163,9 +163,10 @@ type ResourceWithAuth struct {
 // for a corresponding TPM resource. These sessions may be used for session based parameter encryption or (in the future) command
 // auditing.
 type TPMContext struct {
-	tcti           io.ReadWriteCloser
-	resources      map[Handle]ResourceContext
-	maxSubmissions uint
+	tcti            io.ReadWriteCloser
+	resources       map[Handle]ResourceContext
+	maxSubmissions  uint
+	maxNVBufferSize uint16
 }
 
 // Close invalidates all non-permanent ResourceContext instances tracked by this TPMContext and then calls Close on the
