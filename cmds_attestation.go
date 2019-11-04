@@ -34,7 +34,7 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 		signContext = permanentContext(HandleNull)
 	}
 	if inScheme == nil {
-		inScheme = &SigScheme{Scheme: AlgorithmNull}
+		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
 	var certifyInfo AttestRaw
@@ -83,7 +83,7 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 		signContext = permanentContext(HandleNull)
 	}
 	if inScheme == nil {
-		inScheme = &SigScheme{Scheme: AlgorithmNull}
+		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
 	var certifyInfo AttestRaw
@@ -124,7 +124,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 		signContext = permanentContext(HandleNull)
 	}
 	if inScheme == nil {
-		inScheme = &SigScheme{Scheme: AlgorithmNull}
+		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
 	var quoted AttestRaw
@@ -176,7 +176,7 @@ func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext ResourceCont
 		signContext = permanentContext(HandleNull)
 	}
 	if inScheme == nil {
-		inScheme = &SigScheme{Scheme: AlgorithmNull}
+		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
 	var timeInfo AttestRaw

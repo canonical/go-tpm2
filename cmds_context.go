@@ -18,7 +18,7 @@ type objectContextData struct {
 }
 
 type sessionContextData struct {
-	HashAlg        AlgorithmId
+	HashAlg        HashAlgorithmId
 	SessionType    SessionType
 	PolicyHMACType policyHMACType
 	IsBound        bool

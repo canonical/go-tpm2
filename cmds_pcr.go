@@ -12,10 +12,10 @@ import (
 )
 
 // PCRValues contains a collection of PCR values, keyed by AlgorithmId and PCR index.
-type PCRValues map[AlgorithmId]map[int]Digest
+type PCRValues map[HashAlgorithmId]map[int]Digest
 
 // EnsureBank initializes a map of PCR indices to PCR values for the specified algorithm if one doesn't exist already.
-func (v PCRValues) EnsureBank(alg AlgorithmId) {
+func (v PCRValues) EnsureBank(alg HashAlgorithmId) {
 	if _, ok := v[alg]; !ok {
 		v[alg] = make(map[int]Digest)
 	}

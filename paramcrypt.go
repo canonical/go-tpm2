@@ -107,8 +107,8 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 	symmetric := context.symmetric
 
 	switch symmetric.Algorithm {
-	case AlgorithmAES:
-		if symmetric.Mode.Sym() != AlgorithmCFB {
+	case SymAlgorithmAES:
+		if symmetric.Mode.Sym() != SymModeCFB {
 			return nil, fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
 		}
 		if !cryptIsKnownDigest(context.hashAlg) {
@@ -122,7 +122,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		if err := cryptEncryptSymmetricAES(symKey, symmetric.Mode.Sym(), data, iv); err != nil {
 			return nil, fmt.Errorf("AES encryption failed: %v", err)
 		}
-	case AlgorithmXOR:
+	case SymAlgorithmXOR:
 		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceCaller, context.nonceTPM, data); err != nil {
 			return nil, fmt.Errorf("XOR parameter obfuscation failed: %v", err)
 		}
@@ -152,8 +152,8 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 	symmetric := context.symmetric
 
 	switch symmetric.Algorithm {
-	case AlgorithmAES:
-		if symmetric.Mode.Sym() != AlgorithmCFB {
+	case SymAlgorithmAES:
+		if symmetric.Mode.Sym() != SymModeCFB {
 			return fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
 		}
 		if !cryptIsKnownDigest(context.hashAlg) {
@@ -167,7 +167,7 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 		if err := cryptDecryptSymmetricAES(symKey, symmetric.Mode.Sym(), data, iv); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
-	case AlgorithmXOR:
+	case SymAlgorithmXOR:
 		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceTPM, context.nonceCaller, data); err != nil {
 			return fmt.Errorf("XOR parameter obfuscation failed: %v", err)
 		}

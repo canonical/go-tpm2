@@ -84,7 +84,7 @@ func TestStartup(t *testing.T) {
 		})
 
 		t.Run(data.desc+"/WithSession", func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -113,7 +113,7 @@ func TestStartup(t *testing.T) {
 				desc: "WriteDefine",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVWriteDefine, NVTypeOrdinary),
 					Size:    8},
 				write: true,
@@ -123,7 +123,7 @@ func TestStartup(t *testing.T) {
 				desc: "WriteStClear",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVWriteStClear, NVTypeOrdinary),
 					Size:    8},
 				write: true,
@@ -133,7 +133,7 @@ func TestStartup(t *testing.T) {
 				desc: "WriteDefineNotWritten",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVWriteDefine, NVTypeOrdinary),
 					Size:    8},
 				write: false,
@@ -183,7 +183,7 @@ func TestStartup(t *testing.T) {
 				desc: "Ordinary",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 					Size:    8},
 			},
@@ -191,7 +191,7 @@ func TestStartup(t *testing.T) {
 				desc: "OrdinaryNVClearStClear",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVClearStClear, NVTypeOrdinary),
 					Size:    8},
 			},
@@ -199,7 +199,7 @@ func TestStartup(t *testing.T) {
 				desc: "OrdinaryNVOrderly",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVOrderly, NVTypeOrdinary),
 					Size:    8},
 			},
@@ -207,7 +207,7 @@ func TestStartup(t *testing.T) {
 				desc: "Counter",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeCounter),
 					Size:    8},
 			},
@@ -215,7 +215,7 @@ func TestStartup(t *testing.T) {
 				desc: "CounterNVOrderly",
 				in: NVPublic{
 					Index:   0x0181ffff,
-					NameAlg: AlgorithmSHA256,
+					NameAlg: HashAlgorithmSHA256,
 					Attrs: MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|
 						AttrNVOrderly, NVTypeCounter),
 					Size: 8},
@@ -259,7 +259,7 @@ func TestStartup(t *testing.T) {
 		t.Run(data.desc+"/NVReadLocked", func(t *testing.T) {
 			template := NVPublic{
 				Index:   0x0181ffff,
-				NameAlg: AlgorithmSHA256,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite|AttrNVReadStClear, NVTypeOrdinary),
 				Size:    8}
 			if err := tpm.NVDefineSpace(HandleOwner, nil, &template, nil); err != nil {

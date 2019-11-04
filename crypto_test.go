@@ -38,11 +38,11 @@ func TestSymmetricAES(t *testing.T) {
 			var secret []byte
 			secret = append(secret, data.data...)
 
-			if err := cryptEncryptSymmetricAES(key, AlgorithmCFB, secret, iv); err != nil {
+			if err := cryptEncryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
 				t.Fatalf("AES encryption failed: %v", err)
 			}
 
-			if err := cryptDecryptSymmetricAES(key, AlgorithmCFB, secret, iv); err != nil {
+			if err := cryptDecryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
 				t.Fatalf("AES decryption failed: %v", err)
 			}
 
@@ -57,25 +57,25 @@ func TestXORObfuscation(t *testing.T) {
 	for _, data := range []struct {
 		desc      string
 		keyLength int
-		alg       AlgorithmId
+		alg       HashAlgorithmId
 		data      []byte
 	}{
 		{
 			desc:      "SHA256/1",
 			keyLength: 32,
-			alg:       AlgorithmSHA256,
+			alg:       HashAlgorithmSHA256,
 			data:      []byte("secret data"),
 		},
 		{
 			desc:      "SHA256/2",
 			keyLength: 60,
-			alg:       AlgorithmSHA256,
+			alg:       HashAlgorithmSHA256,
 			data:      []byte("super secret data"),
 		},
 		{
 			desc:      "SHA1/1",
 			keyLength: 60,
-			alg:       AlgorithmSHA1,
+			alg:       HashAlgorithmSHA1,
 			data:      []byte("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"),
 		},
 	} {

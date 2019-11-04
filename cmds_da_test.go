@@ -92,7 +92,7 @@ func TestDictionaryAttackParameters(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
+		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, HashAlgorithmSHA256,
 			testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -110,13 +110,13 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	defer flushContext(t, tpm, primary)
 
 	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 		Params: PublicParamsU{
 			&RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:    RSAScheme{Scheme: AlgorithmNull},
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  0}}}
 	sensitive := SensitiveCreate{UserAuth: testAuth}
@@ -205,7 +205,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256,
+		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, HashAlgorithmSHA256,
 			testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)

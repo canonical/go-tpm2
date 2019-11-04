@@ -105,14 +105,34 @@ func (a CommandAttributes) NumberOfCommandHandles() int {
 	return int((a & 0x0e000000) >> 25)
 }
 
+// 9) Interface types
+
+// HashAlgorithmId corresponds to the TPMI_ALG_HASH type
+type HashAlgorithmId AlgorithmId
+
+// SymAlgorithmId corresponds to the TPMI_ALG_SYM type
+type SymAlgorithmId AlgorithmId
+
+// SymObjectAlgorithmId corresponds to the TPMI_ALG_SYM_OBJECT type
+type SymObjectAlgorithmId AlgorithmId
+
+// SymModeId corresponds to the TPMI_ALG_SYM_MODE type
+type SymModeId AlgorithmId
+
+// KDFAlgorithmId corresppnds to the TPMI_ALG_KDF type
+type KDFAlgorithmId AlgorithmId
+
+// SigSchemeId corresponds to the TPMI_ALG_SIG_SCHEME type
+type SigSchemeId AlgorithmId
+
 // 10) Structure Definitions
 
 type Empty struct{}
 
 // TaggedHash corresponds to the TPMT_HA type.
 type TaggedHash struct {
-	HashAlg AlgorithmId // Algorithm of the digest contained with Digest. Valid values are determined by the TPMI_ALG_HASH interface type
-	Digest  []byte      // Digest data
+	HashAlg HashAlgorithmId // Algorithm of the digest contained with Digest
+	Digest  []byte          // Digest data
 }
 
 // TaggedHash represents the TPMT_HA type in the TCG spec. In the spec, TPMT_HA.digest is a union type
@@ -202,29 +222,29 @@ func (n Name) Handle() Handle {
 	return Handle(binary.BigEndian.Uint32(n))
 }
 
-// Algorithm returns the digest algorithm of the name, if it contains a digest. If the name does not contain a digest, AlgorithmNull
-// will be returned.
-func (n Name) Algorithm() AlgorithmId {
-	if len(n) < binary.Size(AlgorithmId(0)) || n.IsHandle() {
-		return AlgorithmNull
+// Algorithm returns the digest algorithm of the name, if it contains a digest. If the name does not contain a digest,
+// HashAlgorithmNull will be returned.
+func (n Name) Algorithm() HashAlgorithmId {
+	if len(n) < binary.Size(HashAlgorithmId(0)) || n.IsHandle() {
+		return HashAlgorithmNull
 	}
-	a := AlgorithmId(binary.BigEndian.Uint16(n))
+	a := HashAlgorithmId(binary.BigEndian.Uint16(n))
 	if !cryptIsKnownDigest(a) {
-		return AlgorithmNull
+		return HashAlgorithmNull
 	}
 	size := cryptGetDigestSize(a)
-	if int(size) != len(n)-binary.Size(AlgorithmId(0)) {
-		return AlgorithmNull
+	if int(size) != len(n)-binary.Size(HashAlgorithmId(0)) {
+		return HashAlgorithmNull
 	}
 	return a
 }
 
 // Digest returns the name as a digest, without the algorithm identifier. If it doesn't contain a digest, it will panic.
 func (n Name) Digest() Digest {
-	if n.Algorithm() == AlgorithmNull {
+	if n.Algorithm() == HashAlgorithmNull {
 		panic("name is not a valid digest")
 	}
-	return Digest(n[binary.Size(AlgorithmId(0)):])
+	return Digest(n[binary.Size(HashAlgorithmId(0)):])
 }
 
 // 10.6) PCR Structures
@@ -282,9 +302,7 @@ func (d *PCRSelectionData) Unmarshal(buf io.Reader) error {
 
 // PCRSelection corresponds to the TPMS_PCR_SELECTION type.
 type PCRSelection struct {
-	// Hash is the digest algorithm associated with the selection. Valid values are determined by the TPMI_ALG_HASH interface type.
-	Hash AlgorithmId
-
+	Hash   HashAlgorithmId  // Hash is the digest algorithm associated with the selection
 	Select PCRSelectionData // The selected PCRs
 }
 
@@ -655,14 +673,14 @@ func (a AttestRaw) Decode() (*Attest, error) {
 //  - AlgorithmAES: uint16
 //  - AlgorithmSM4: uint16
 //  - AlgorithmCamellia: uint16
-//  - AlgorithmXOR: AlgorithmId (valid values are determined by the TPMI_ALG_HASH interface type)
+//  - AlgorithmXOR: HashAlgorithmId
 //  - AlgorithmNull: <nil>
 type SymKeyBitsU struct {
 	Data interface{}
 }
 
 func (b SymKeyBitsU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
+	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
 		fallthrough
 	case AlgorithmSM4:
@@ -670,7 +688,7 @@ func (b SymKeyBitsU) Select(selector reflect.Value) (reflect.Type, error) {
 	case AlgorithmCamellia:
 		return reflect.TypeOf(uint16(0)), nil
 	case AlgorithmXOR:
-		return reflect.TypeOf(AlgorithmId(0)), nil
+		return reflect.TypeOf(HashAlgorithmId(0)), nil
 	case AlgorithmNull:
 		return nil, nil
 	}
@@ -682,16 +700,16 @@ func (b SymKeyBitsU) Sym() uint16 {
 	return b.Data.(uint16)
 }
 
-// XOR returns the underlying value as AlgorithmId. It panics if the underlying type is not AlgorithmId.
-func (b SymKeyBitsU) XOR() AlgorithmId {
-	return b.Data.(AlgorithmId)
+// XOR returns the underlying value as HashAlgorithmId. It panics if the underlying type is not HashAlgorithmId.
+func (b SymKeyBitsU) XOR() HashAlgorithmId {
+	return b.Data.(HashAlgorithmId)
 }
 
 // SymModeU is a fake union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId. Valid types for Data
 // for each selector value are:
-//  - AlgorithmAES: AlgorithmId (valid values are determined by the TPMI_ALG_SYM_MODE interface type)
-//  - AlgorithmSM4: AlgorithmId (valid values are determined by the TPMI_ALG_SYM_MODE interface type)
-//  - AlgorithmCamellia: AlgorithmId (valid values are determined by the TPMI_ALG_SYM_MODE interface type)
+//  - AlgorithmAES: SymModeId
+//  - AlgorithmSM4: SymModeId
+//  - AlgorithmCamellia: SymModeId
 //  - AlgorithmXOR: <nil>
 //  - AlgorithmNull: <nil>
 type SymModeU struct {
@@ -699,13 +717,13 @@ type SymModeU struct {
 }
 
 func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
+	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
 		fallthrough
 	case AlgorithmSM4:
 		fallthrough
 	case AlgorithmCamellia:
-		return reflect.TypeOf(AlgorithmId(0)), nil
+		return reflect.TypeOf(SymModeId(0)), nil
 	case AlgorithmXOR:
 		fallthrough
 	case AlgorithmNull:
@@ -714,23 +732,23 @@ func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
 	return nil, invalidSelectorError{selector}
 }
 
-// Sym returns the underlying value as AlgorithmId. It panics if the underlying type is not AlgorithmId.
-func (m SymModeU) Sym() AlgorithmId {
-	return m.Data.(AlgorithmId)
+// Sym returns the underlying value as SymModeId. It panics if the underlying type is not SymModeId.
+func (m SymModeU) Sym() SymModeId {
+	return m.Data.(SymModeId)
 }
 
 // SymDef corresponds to the TPMT_SYM_DEF type, and is used to select the algorithm used for parameter encryption.
 type SymDef struct {
-	Algorithm AlgorithmId // Symmetric algorithm. Valid values are determined by the TPMI_ALG_SYM interface type
-	KeyBits   SymKeyBitsU `tpm2:"selector:Algorithm"` // Symmetric key size
-	Mode      SymModeU    `tpm2:"selector:Algorithm"` // Symmetric mode
+	Algorithm SymAlgorithmId // Symmetric algorithm
+	KeyBits   SymKeyBitsU    `tpm2:"selector:Algorithm"` // Symmetric key size
+	Mode      SymModeU       `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 
 // SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an object's symmetric algorithm.
 type SymDefObject struct {
-	Algorithm AlgorithmId // Symmetric algorithm. Valid values are determined by the TPMI_ALG_SYM_OBJECT interface type
-	KeyBits   SymKeyBitsU `tpm2:"selector:Algorithm"` // Symmetric key size
-	Mode      SymModeU    `tpm2:"selector:Algorithm"` // Symmetric mode
+	Algorithm SymObjectAlgorithmId // Symmetric algorithm
+	KeyBits   SymKeyBitsU          `tpm2:"selector:Algorithm"` // Symmetric key size
+	Mode      SymModeU             `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 
 // SymKey corresponds to the TPM2B_SYM_KEY type.
@@ -750,9 +768,6 @@ type Derive struct {
 	Context Label
 }
 
-// SensitiveData corresponds to the TPM2B_SENSITIVE_DATA type.
-type SensitiveData []byte
-
 // SensitiveCreate corresponds to the TPMS_SENSITIVE_CREATE type and is used to define the values to be placed in the sensitive area
 // of a created object.
 type SensitiveCreate struct {
@@ -764,43 +779,49 @@ type sensitiveCreateSized struct {
 	Ptr *SensitiveCreate `tpm2:"sized"`
 }
 
+// SensitiveData corresponds to the TPM2B_SENSITIVE_DATA type.
+type SensitiveData []byte
+
 // SchemeHash corresponds to the TPMS_SCHEME_HASH type, and is used for schemes that only require a hash algorithm to complete their
 // definition.
 type SchemeHash struct {
-	HashAlg AlgorithmId // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
+	HashAlg HashAlgorithmId // Hash algorithm used to digest the message
 }
 
 // SchemeECDAA corresponds to the TPMS_SCHEME_ECDAA type.
 type SchemeECDAA struct {
-	HashAlg AlgorithmId // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
+	HashAlg HashAlgorithmId // Hash algorithm used to digest the message
 	Count   uint16
 }
 
-// SchemeXOR corresponds to the TPMS_SCHEME_XOR type, and is used to define the XOR encryption scheme.
-type SchemeXOR struct {
-	HashAlg AlgorithmId // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
-	KDF     AlgorithmId // Hash algorithm used for the KDF. Valid values are determined by the TPMI_ALG_KDF interface type
-}
+// KeyedHashSchemeId corresponds to the TPMI_ALG_KEYEDHASH_SCHEME type
+type KeyedHashSchemeId AlgorithmId
 
 // SchemeHMAC corresponds to the TPMS_SCHEME_HMAC type.
 type SchemeHMAC SchemeHash
 
-// SchemeKeyedHashU is a fake union type that corresponds to the TPMU_SCHEME_KEYED_HASH type. The selector type is AlgorithmId. Valid
+// SchemeXOR corresponds to the TPMS_SCHEME_XOR type, and is used to define the XOR encryption scheme.
+type SchemeXOR struct {
+	HashAlg HashAlgorithmId // Hash algorithm used to digest the message
+	KDF     KDFAlgorithmId  // Hash algorithm used for the KDF
+}
+
+// SchemeKeyedHashU is a fake union type that corresponds to the TPMU_SCHEME_KEYED_HASH type. The selector type is KeyedHashSchemeId. Valid
 // types for Data for each selector value are:
-//  - AlgorithmHMAC: *SchemeHMAC
-//  - AlgorithmXOR: *SchemeXOR
-//  - AlgorithmNull: <nil>
+//  - KeyedHashSchemeHMAC: *SchemeHMAC
+//  - KeyedHashSchemeXOR: *SchemeXOR
+//  - KeyedHashSchemeNull: <nil>
 type SchemeKeyedHashU struct {
 	Data interface{}
 }
 
 func (d SchemeKeyedHashU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmHMAC:
+	switch selector.Interface().(KeyedHashSchemeId) {
+	case KeyedHashSchemeHMAC:
 		return reflect.TypeOf((*SchemeHMAC)(nil)), nil
-	case AlgorithmXOR:
+	case KeyedHashSchemeXOR:
 		return reflect.TypeOf((*SchemeXOR)(nil)), nil
-	case AlgorithmNull:
+	case KeyedHashSchemeNull:
 		return nil, nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -816,10 +837,10 @@ func (d SchemeKeyedHashU) XOR() *SchemeXOR {
 	return d.Data.(*SchemeXOR)
 }
 
-// KeyedHashScheme corresponds to the TPMS_KEYEDHASH_SCHEME type.
+// KeyedHashScheme corresponds to the TPMT_KEYEDHASH_SCHEME type.
 type KeyedHashScheme struct {
-	Scheme  AlgorithmId      // Scheme selector. Valid values are determined by the TPMI_ALG_KEYEDHASH_SCHEME interface type
-	Details SchemeKeyedHashU `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Scheme  KeyedHashSchemeId // Scheme selector
+	Details SchemeKeyedHashU  `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
 // 11.2 Assymetric
@@ -833,37 +854,37 @@ type SigSchemeECDAA SchemeECDAA
 type SigSchemeSM2 SchemeHash
 type SigSchemeECSCHNORR SchemeHash
 
-// SigSchemeU is a fake union type that corresponds to the TPMU_SIG_SCHEME type. The selector type is AlgorithmId. Valid types for
+// SigSchemeU is a fake union type that corresponds to the TPMU_SIG_SCHEME type. The selector type is SigSchemeId. Valid types for
 // Data for each selector value are:
-//  - AlgorithmRSASSA: *SigSchemeRSASSA
-//  - AlgorithmRSAPSS: *SigSchemeRSAPSS
-//  - AlgorithmECDSA: *SigSchemeECDSA
-//  - AlgorithmECDAA: *SigSchemeECDAA
-//  - AlgorithmSM2: *SigSchemeSM2
-//  - AlgorithmECSCHNORR: *SigSchemeECSCHNORR
-//  - AlgorithmHMAC: *SigSchemeHMAC
-//  - AlgorithmNull: <nil>
+//  - SigSchemeAlgRSASSA: *SigSchemeRSASSA
+//  - SigSchemeAlgRSAPSS: *SigSchemeRSAPSS
+//  - SigSchemeAlgECDSA: *SigSchemeECDSA
+//  - SigSchemeAlgECDAA: *SigSchemeECDAA
+//  - SigSchemeAlgSM2: *SigSchemeSM2
+//  - SigSchemeAlgECSCHNORR: *SigSchemeECSCHNORR
+//  - SigSchemeAlgHMAC: *SigSchemeHMAC
+//  - SigSchemeAlgNull: <nil>
 type SigSchemeU struct {
 	Data interface{}
 }
 
 func (s SigSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmRSASSA:
+	switch selector.Interface().(SigSchemeId) {
+	case SigSchemeAlgRSASSA:
 		return reflect.TypeOf((*SigSchemeRSASSA)(nil)), nil
-	case AlgorithmRSAPSS:
+	case SigSchemeAlgRSAPSS:
 		return reflect.TypeOf((*SigSchemeRSAPSS)(nil)), nil
-	case AlgorithmECDSA:
+	case SigSchemeAlgECDSA:
 		return reflect.TypeOf((*SigSchemeECDSA)(nil)), nil
-	case AlgorithmECDAA:
+	case SigSchemeAlgECDAA:
 		return reflect.TypeOf((*SigSchemeECDAA)(nil)), nil
-	case AlgorithmSM2:
+	case SigSchemeAlgSM2:
 		return reflect.TypeOf((*SigSchemeSM2)(nil)), nil
-	case AlgorithmECSCHNORR:
+	case SigSchemeAlgECSCHNORR:
 		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil)), nil
-	case AlgorithmHMAC:
+	case SigSchemeAlgHMAC:
 		return reflect.TypeOf((*SchemeHMAC)(nil)), nil
-	case AlgorithmNull:
+	case SigSchemeAlgNull:
 		return nil, nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -911,7 +932,7 @@ func (s SigSchemeU) Any() *SchemeHash {
 
 // SigScheme corresponds to the TPMT_SIG_SCHEME type.
 type SigScheme struct {
-	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_SIG_SCHEME interface type
+	Scheme  SigSchemeId // Scheme selector
 	Details SigSchemeU  `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
@@ -922,28 +943,28 @@ type SchemeKDF1_SP800_56A SchemeHash
 type SchemeKDF2 SchemeHash
 type SchemeKDF1_SP800_108 SchemeHash
 
-// KDFSchemeU is a fake union type that corresponds to the TPMU_KDF_SCHEME type. The selector type is AlgorithmId. Valid types for
+// KDFSchemeU is a fake union type that corresponds to the TPMU_KDF_SCHEME type. The selector type is KDFAlgorithmId. Valid types for
 // Data for each selector value are:
-//  - AlgorithmMGF1: *SchemeMGF1
-//  - AlgorithmKDF1_SP800_56A: *SchemeKDF1_SP800_56A
-//  - AlgorithmKDF2: *SchemeKF2
-//  - AlgorithmKDF1_SP800_108: *SchemeKDF1_SP800_108
-//  - AlgorithmNull: <nil>
+//  - KDFAlgorithmMGF1: *SchemeMGF1
+//  - KDFAlgorithmKDF1_SP800_56A: *SchemeKDF1_SP800_56A
+//  - KDFAlgorithmKDF2: *SchemeKF2
+//  - KDFAlgorithmKDF1_SP800_108: *SchemeKDF1_SP800_108
+//  - KDFAlgorithmNull: <nil>
 type KDFSchemeU struct {
 	Data interface{}
 }
 
 func (s KDFSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmMGF1:
+	switch selector.Interface().(KDFAlgorithmId) {
+	case KDFAlgorithmMGF1:
 		return reflect.TypeOf((*SchemeMGF1)(nil)), nil
-	case AlgorithmKDF1_SP800_56A:
+	case KDFAlgorithmKDF1_SP800_56A:
 		return reflect.TypeOf((*SchemeKDF1_SP800_56A)(nil)), nil
-	case AlgorithmKDF2:
+	case KDFAlgorithmKDF2:
 		return reflect.TypeOf((*SchemeKDF2)(nil)), nil
-	case AlgorithmKDF1_SP800_108:
+	case KDFAlgorithmKDF1_SP800_108:
 		return reflect.TypeOf((*SchemeKDF1_SP800_108)(nil)), nil
-	case AlgorithmNull:
+	case KDFAlgorithmNull:
 		return nil, nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -973,8 +994,8 @@ func (s KDFSchemeU) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
 
 // KDFScheme corresponds to the TPMT_KDF_SCHEME type.
 type KDFScheme struct {
-	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_KDF interface type
-	Details KDFSchemeU  `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Scheme  KDFAlgorithmId // Scheme selector
+	Details KDFSchemeU     `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
 type KeySchemeECDH SchemeHash
@@ -982,46 +1003,49 @@ type KeySchemeECMQV SchemeHash
 type EncSchemeRSAES Empty
 type EncSchemeOAEP SchemeHash
 
-// AsymSchemeU is a fake union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is AlgorithmId. Valid types for
+// AsymSchemeId corresponds to the TPMI_ALG_ASYM_SCHEME type
+type AsymSchemeId AlgorithmId
+
+// AsymSchemeU is a fake union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is AsymSchemeId. Valid types for
 // Data for each selector value are:
-//  - AlgorithmRSASSA: *SigSchemeRSASSA
-//  - AlgorithmRSAES: *EncSchemeRSAES
-//  - AlgorithmRSAPSS: *SigSchemeRSAPSS
-//  - AlgorithmOAEP: *EncSchemeOAEP
-//  - AlgorithmECDSA: *SigSchemeECDSA
-//  - AlgorithmECDH: *KeySchemeECDH
-//  - AlgorithmECDAA: *SigSchemeECDAA
-//  - AlgorithmSM2: *SigSchemeSM2
-//  - AlgorithmECSCHNORR: *SigSchemeECSCHNORR
-//  - AlgorithmECMQV: *KeySchemeECMQV
-//  - AlgorithmNull: <nil>
+//  - AsymSchemeAlgRSASSA: *SigSchemeRSASSA
+//  - AsymSchemeAlgRSAES: *EncSchemeRSAES
+//  - AsymSchemeAlgRSAPSS: *SigSchemeRSAPSS
+//  - AsymSchemeAlgOAEP: *EncSchemeOAEP
+//  - AsymSchemeAlgECDSA: *SigSchemeECDSA
+//  - AsymSchemeAlgECDH: *KeySchemeECDH
+//  - AsymSchemeAlgECDAA: *SigSchemeECDAA
+//  - AsymSchemeAlgSM2: *SigSchemeSM2
+//  - AsymSchemeAlgECSCHNORR: *SigSchemeECSCHNORR
+//  - AsymSchemeAlgECMQV: *KeySchemeECMQV
+//  - AsymSchemeAlgNull: <nil>
 type AsymSchemeU struct {
 	Data interface{}
 }
 
 func (s AsymSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmRSASSA:
+	switch selector.Convert(reflect.TypeOf(AsymSchemeId(0))).Interface().(AsymSchemeId) {
+	case AsymSchemeRSASSA:
 		return reflect.TypeOf((*SigSchemeRSASSA)(nil)), nil
-	case AlgorithmRSAES:
+	case AsymSchemeRSAES:
 		return reflect.TypeOf((*EncSchemeRSAES)(nil)), nil
-	case AlgorithmRSAPSS:
+	case AsymSchemeRSAPSS:
 		return reflect.TypeOf((*SigSchemeRSAPSS)(nil)), nil
-	case AlgorithmOAEP:
+	case AsymSchemeOAEP:
 		return reflect.TypeOf((*EncSchemeOAEP)(nil)), nil
-	case AlgorithmECDSA:
+	case AsymSchemeECDSA:
 		return reflect.TypeOf((*SigSchemeECDSA)(nil)), nil
-	case AlgorithmECDH:
+	case AsymSchemeECDH:
 		return reflect.TypeOf((*KeySchemeECDH)(nil)), nil
-	case AlgorithmECDAA:
+	case AsymSchemeECDAA:
 		return reflect.TypeOf((*SigSchemeECDAA)(nil)), nil
-	case AlgorithmSM2:
+	case AsymSchemeSM2:
 		return reflect.TypeOf((*SigSchemeSM2)(nil)), nil
-	case AlgorithmECSCHNORR:
+	case AsymSchemeECSCHNORR:
 		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil)), nil
-	case AlgorithmECMQV:
+	case AsymSchemeECMQV:
 		return reflect.TypeOf((*KeySchemeECMQV)(nil)), nil
-	case AlgorithmNull:
+	case AsymSchemeNull:
 		return nil, nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -1084,15 +1108,18 @@ func (s AsymSchemeU) Any() *SchemeHash {
 
 // AsymScheme corresponds to the TPMT_ASYM_SCHEME type.
 type AsymScheme struct {
-	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_ASYM_SCHEME interface type
-	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Scheme  AsymSchemeId // Scheme selector
+	Details AsymSchemeU  `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
 // 11.2.4 RSA
 
+// RSASchemeId corresponds to the TPMI_ALG_RSA_SCHEME type.
+type RSASchemeId AlgorithmId
+
 // RSAScheme corresponds to the TPMT_RSA_SCHEME type.
 type RSAScheme struct {
-	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_RSA_SCHEME interface type
+	Scheme  RSASchemeId // Scheme selector
 	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
@@ -1113,9 +1140,12 @@ type ECCPoint struct {
 	Y ECCParameter // Y coordinate
 }
 
+// ECCSchemeId corresponds to the TPMI_ALG_ECC_SCHEME type.
+type ECCSchemeId AlgorithmId
+
 // ECCScheme corresponds to the TPMT_ECC_SCHEME type.
 type ECCScheme struct {
-	Scheme  AlgorithmId // Scheme selector. Valid values are determined by the TPMI_ALG_ECC_SCHEME interface type
+	Scheme  ECCSchemeId // Scheme selector
 	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
@@ -1123,15 +1153,13 @@ type ECCScheme struct {
 
 // SignatureRSA corresponds to the TPMS_SIGNATURE_RSA type.
 type SignatureRSA struct {
-	Hash AlgorithmId  // Hash algorithm used to digest the message. Valid values are determined by the TPMI_ALG_HASH interface type
-	Sig  PublicKeyRSA // Signature, which is the same size as the public key
+	Hash HashAlgorithmId // Hash algorithm used to digest the message
+	Sig  PublicKeyRSA    // Signature, which is the same size as the public key
 }
 
 // SignatureECC corresponds to the TPMS_SIGNATURE_ECC type.
 type SignatureECC struct {
-	// Hash is the digest algorithm used in the signature process. Valid values are determined by the TPMI_ALG_HASH interface type.
-	Hash AlgorithmId
-
+	Hash       HashAlgorithmId // Hash is the digest algorithm used in the signature process
 	SignatureR ECCParameter
 	SignatureS ECCParameter
 }
@@ -1143,37 +1171,37 @@ type SignatureECDAA SignatureECC
 type SignatureSM2 SignatureECC
 type SignatureECSCHNORR SignatureECC
 
-// SignatureU is a fake union type that corresponds to TPMU_SIGNATURE. The selector type is AlgorithmId. Valid types for Data for
+// SignatureU is a fake union type that corresponds to TPMU_SIGNATURE. The selector type is SigSchemeId. Valid types for Data for
 // each selector value are:
-//  - AlgorithmRSASSA: *SignatureRSASSA
-//  - AlgorithmRSAPSS: *SignatureRSAPSS
-//  - AlgorithmECDSA: *SignatureECDSA
-//  - AlgorithmECDAA: *SignatureECDAA
-//  - AlgorithmSM2: *SignatureSM2
-//  - AlgorithmECSCHNORR: *SignatureECSCHNORR
-//  - AlgorithmHMAC: *TaggedHash
-//  - AlgorithmNull: <nil>
+//  - SigSchemeAlgRSASSA: *SignatureRSASSA
+//  - SigSchemeAlgRSAPSS: *SignatureRSAPSS
+//  - SigSchemeAlgECDSA: *SignatureECDSA
+//  - SigSchemeAlgECDAA: *SignatureECDAA
+//  - SigSchemeAlgSM2: *SignatureSM2
+//  - SigSchemeAlgECSCHNORR: *SignatureECSCHNORR
+//  - SigSchemeAlgHMAC: *TaggedHash
+//  - SigSchemeAlgNull: <nil>
 type SignatureU struct {
 	Data interface{}
 }
 
 func (s SignatureU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmRSASSA:
+	switch selector.Interface().(SigSchemeId) {
+	case SigSchemeAlgRSASSA:
 		return reflect.TypeOf((*SignatureRSASSA)(nil)), nil
-	case AlgorithmRSAPSS:
+	case SigSchemeAlgRSAPSS:
 		return reflect.TypeOf((*SignatureRSAPSS)(nil)), nil
-	case AlgorithmECDSA:
+	case SigSchemeAlgECDSA:
 		return reflect.TypeOf((*SignatureECDSA)(nil)), nil
-	case AlgorithmECDAA:
+	case SigSchemeAlgECDAA:
 		return reflect.TypeOf((*SignatureECDAA)(nil)), nil
-	case AlgorithmSM2:
+	case SigSchemeAlgSM2:
 		return reflect.TypeOf((*SignatureSM2)(nil)), nil
-	case AlgorithmECSCHNORR:
+	case SigSchemeAlgECSCHNORR:
 		return reflect.TypeOf((*SignatureECSCHNORR)(nil)), nil
-	case AlgorithmHMAC:
+	case SigSchemeAlgHMAC:
 		return reflect.TypeOf((*TaggedHash)(nil)), nil
-	case AlgorithmNull:
+	case SigSchemeAlgNull:
 		return nil, nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -1222,7 +1250,7 @@ func (s SignatureU) Any() *SchemeHash {
 // Signature corresponds to the TPMT_SIGNATURE type. It is returned by the attestation commands, and is a parameter for
 // TPMContext.VerifySignature and TPMContext.PolicySigned.
 type Signature struct {
-	SigAlg    AlgorithmId // Signature algorithm. Valid values are determined by the TPMI_ALG_SIG_SCHEME interface type
+	SigAlg    SigSchemeId // Signature algorithm
 	Signature SignatureU  `tpm2:"selector:SigAlg"` // Actual signature
 }
 
@@ -1235,25 +1263,28 @@ type EncryptedSecret []byte
 
 // 12.2) Public Area Structures
 
-// PublicIDU is a fake union type that corresponds to the TPMU_PUBLIC_ID type. The selector type is AlgorithmId. Valid types for Data
+// ObjectTypeId corresponds to the TPMI_ALG_PUBLIC type.
+type ObjectTypeId AlgorithmId
+
+// PublicIDU is a fake union type that corresponds to the TPMU_PUBLIC_ID type. The selector type is ObjectTypeId. Valid types for Data
 // for each selector value are:
-//  - AlgorithmRSA: PublicKeyRSA
-//  - AlgorithmKeyedHash: Digest
-//  - AlgorithmECC: *ECCPoint
-//  - AlgorithmSymCipher: Digest
+//  - ObjectTypeRSA: PublicKeyRSA
+//  - ObjectTypeKeyedHash: Digest
+//  - ObjectTypeECC: *ECCPoint
+//  - ObjectTypeSymCipher: Digest
 type PublicIDU struct {
 	Data interface{}
 }
 
 func (p PublicIDU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmRSA:
+	switch selector.Interface().(ObjectTypeId) {
+	case ObjectTypeRSA:
 		return reflect.TypeOf(PublicKeyRSA(nil)), nil
-	case AlgorithmKeyedHash:
+	case ObjectTypeKeyedHash:
 		return reflect.TypeOf(Digest(nil)), nil
-	case AlgorithmECC:
+	case ObjectTypeECC:
 		return reflect.TypeOf((*ECCPoint)(nil)), nil
-	case AlgorithmSymCipher:
+	case ObjectTypeSymCipher:
 		return reflect.TypeOf(Digest(nil)), nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -1316,25 +1347,25 @@ type ECCParams struct {
 	KDF     KDFScheme // Unused - always AlgorithmNull
 }
 
-// PublicParamsU is a fake union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is AlgorithmId. Valid types
+// PublicParamsU is a fake union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is ObjectTypeId. Valid types
 // for Data for each selector value are:
-//  - AlgorithmRSA: *RSAParams
-//  - AlgorithmKeyedHash: *KeyedHashParams
-//  - AlgorithmECC: *ECCParams
-//  - AlgorithmSymCipher: *SymCipherParams
+//  - ObjectTypeRSA: *RSAParams
+//  - ObjectTypeKeyedHash: *KeyedHashParams
+//  - ObjectTypeECC: *ECCParams
+//  - ObjectTypeSymCipher: *SymCipherParams
 type PublicParamsU struct {
 	Data interface{}
 }
 
 func (p PublicParamsU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmRSA:
+	switch selector.Interface().(ObjectTypeId) {
+	case ObjectTypeRSA:
 		return reflect.TypeOf((*RSAParams)(nil)), nil
-	case AlgorithmKeyedHash:
+	case ObjectTypeKeyedHash:
 		return reflect.TypeOf((*KeyedHashParams)(nil)), nil
-	case AlgorithmECC:
+	case ObjectTypeECC:
 		return reflect.TypeOf((*ECCParams)(nil)), nil
-	case AlgorithmSymCipher:
+	case ObjectTypeSymCipher:
 		return reflect.TypeOf((*SymCipherParams)(nil)), nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -1375,16 +1406,14 @@ func (p PublicParamsU) AsymDetail() *AsymParams {
 
 // PublicParams corresponds to the TPMT_PUBLIC_PARMS type.
 type PublicParams struct {
-	Type       AlgorithmId   // Type specifier. Valid values are determined by the TPMI_ALG_PUBLIC interface type
+	Type       ObjectTypeId  // Type specifier
 	Parameters PublicParamsU `tpm2:"selector:Type"` // Algorithm details
 }
 
 // Public corresponds to the TPMT_PUBLIC type, and defines the public area for an object.
 type Public struct {
-	Type AlgorithmId // Type of this object. Valid values are determined by the TPMI_ALG_PUBLIC interface type
-
-	// NameAlg is the algorithm used to compute the name of this object. Valid values are determined by the TPMI_ALG_HASH interface type.
-	NameAlg    AlgorithmId
+	Type       ObjectTypeId     // Type of this object
+	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
 	Params     PublicParamsU    `tpm2:"selector:Type"` // Type specific parameters
@@ -1433,10 +1462,8 @@ type publicSized struct {
 
 // PublicDerived is similar to Public but can be used as a template to create a derived object with TPMContext.CreateLoaded
 type PublicDerived struct {
-	Type AlgorithmId // Type of this object. Valid values are determined by the TPMI_ALG_PUBLIC interface type
-
-	// NameAlg is the algorithm used to compute the name of this object. Valid values are determined by the TPMI_ALG_HASH interface type.
-	NameAlg    AlgorithmId
+	Type       ObjectTypeId     // Type of this object
+	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
 	Params     PublicParamsU    `tpm2:"selector:Type"` // Type specific parameters
@@ -1484,25 +1511,25 @@ type PublicTemplate interface {
 // PrivateVendorSpecific corresponds to the TPM2B_PRIVATE_VENDOR_SPECIFIC type.
 type PrivateVendorSpecific []byte
 
-// SensitiveCompositeU is a fake union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector type is AlgorithmId.
+// SensitiveCompositeU is a fake union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector type is ObjectTypeId.
 // Valid types for Data for each selector value are:
-//  - AlgorithmRSA: PrivateKeyRSA
-//  - AlgorithmECC: ECCParameter
-//  - AlgorithmKeyedHash: SensitiveData
-//  - AlgorithmSymCipher: SymKey
+//  - ObjectTypeRSA: PrivateKeyRSA
+//  - ObjectTypeECC: ECCParameter
+//  - ObjectTypeKeyedHash: SensitiveData
+//  - ObjectTypeSymCipher: SymKey
 type SensitiveCompositeU struct {
 	Data interface{}
 }
 
 func (s SensitiveCompositeU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(AlgorithmId) {
-	case AlgorithmRSA:
+	switch selector.Interface().(ObjectTypeId) {
+	case ObjectTypeRSA:
 		return reflect.TypeOf(PrivateKeyRSA(nil)), nil
-	case AlgorithmECC:
+	case ObjectTypeECC:
 		return reflect.TypeOf(ECCParameter(nil)), nil
-	case AlgorithmKeyedHash:
+	case ObjectTypeKeyedHash:
 		return reflect.TypeOf(SensitiveData(nil)), nil
-	case AlgorithmSymCipher:
+	case ObjectTypeSymCipher:
 		return reflect.TypeOf(SymKey(nil)), nil
 	}
 	return nil, invalidSelectorError{selector}
@@ -1536,7 +1563,7 @@ func (s SensitiveCompositeU) Any() PrivateVendorSpecific {
 
 // Sensitive corresponds to the TPMT_SENSITIVE type.
 type Sensitive struct {
-	Type      AlgorithmId         // Same as the corresponding Type in the Public object
+	Type      ObjectTypeId        // Same as the corresponding Type in the Public object
 	AuthValue Auth                // Authorization value
 	SeedValue Digest              // For a parent object, the seed value for protecting descendant objects
 	Sensitive SensitiveCompositeU `tpm2:"selector:Type"` // Type specific private data
@@ -1582,14 +1609,11 @@ func MakeNVAttributes(a NVAttributes, t NVType) NVAttributes {
 
 // NVPublic corresponds to the TPMS_NV_PUBLIC type, which describes a NV index.
 type NVPublic struct {
-	Index Handle // Handle of the NV index
-
-	// NameAlg is the digest algorithm used to compute the name of the index. Valid values are determined by the TPMI_ALG_HASH interface
-	// type.
-	NameAlg    AlgorithmId
-	Attrs      NVAttributes // Attributes of this index
-	AuthPolicy Digest       // Authorization policy for this index
-	Size       uint16       // Size of this index
+	Index      Handle          // Handle of the NV index
+	NameAlg    HashAlgorithmId // NameAlg is the digest algorithm used to compute the name of the index
+	Attrs      NVAttributes    // Attributes of this index
+	AuthPolicy Digest          // Authorization policy for this index
+	Size       uint16          // Size of this index
 }
 
 // Name computes the name of this NV index

@@ -71,9 +71,9 @@ import (
 // code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
 // warning code of WarningSessionMemory will be returned. If there are no more session handles available, a *TPMwarning error with
 // a warning code of WarningSessionHandles will be returned.
-func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash AlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
 	if symmetric == nil {
-		symmetric = &SymDef{Algorithm: AlgorithmNull}
+		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}
 	if !cryptIsKnownDigest(authHash) {
 		return nil, makeInvalidParamError("authHash", fmt.Sprintf("unsupported digest algorithm %v", authHash))

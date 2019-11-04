@@ -108,7 +108,7 @@ const (
 type sessionContext struct {
 	handle         Handle
 	flags          sessionContextFlags
-	hashAlg        AlgorithmId
+	hashAlg        HashAlgorithmId
 	sessionType    SessionType
 	policyHMACType policyHMACType
 	isBound        bool

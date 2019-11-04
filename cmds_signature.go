@@ -57,7 +57,7 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 // for parameter index 3.
 func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *SigScheme, validation *TkHashcheck, keyContextAuth interface{}, sessions ...*Session) (*Signature, error) {
 	if inScheme == nil {
-		inScheme = &SigScheme{Scheme: AlgorithmNull}
+		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 	if validation == nil {
 		validation = &TkHashcheck{Tag: TagHashcheck, Hierarchy: HandleNull}

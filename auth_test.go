@@ -77,7 +77,7 @@ func TestHMACSessions(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, AlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, HashAlgorithmSHA256, data.bindAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -90,13 +90,13 @@ func TestHMACSessions(t *testing.T) {
 			}()
 
 			template := Public{
-				Type:    AlgorithmRSA,
-				NameAlg: AlgorithmSHA256,
+				Type:    ObjectTypeRSA,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 				Params: PublicParamsU{
 					&RSAParams{
-						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-						Scheme:    RSAScheme{Scheme: AlgorithmNull},
+						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+						Scheme:    RSAScheme{Scheme: RSASchemeNull},
 						KeyBits:   2048,
 						Exponent:  0}}}
 
@@ -134,11 +134,11 @@ func TestPolicySessions(t *testing.T) {
 	secret := []byte("super secret data")
 
 	template := Public{
-		Type:       AlgorithmKeyedHash,
-		NameAlg:    AlgorithmSHA256,
+		Type:       ObjectTypeKeyedHash,
+		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: make([]byte, 32),
-		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, testAuth)
@@ -213,7 +213,7 @@ func TestPolicySessions(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, AlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256, data.bindAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

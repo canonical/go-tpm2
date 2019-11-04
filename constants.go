@@ -451,6 +451,103 @@ const (
 )
 
 const (
+	HashAlgorithmNull    = HashAlgorithmId(AlgorithmNull)
+	HashAlgorithmSHA1    = HashAlgorithmId(AlgorithmSHA1)
+	HashAlgorithmSHA256  = HashAlgorithmId(AlgorithmSHA256)
+	HashAlgorithmSHA384  = HashAlgorithmId(AlgorithmSHA384)
+	HashAlgorithmSHA512  = HashAlgorithmId(AlgorithmSHA512)
+	HashAlgorithmSM3_256 = HashAlgorithmId(AlgorithmSM3_256)
+)
+
+const (
+	SymAlgorithmAES      = SymAlgorithmId(AlgorithmAES)
+	SymAlgorithmXOR      = SymAlgorithmId(AlgorithmXOR)
+	SymAlgorithmNull     = SymAlgorithmId(AlgorithmNull)
+	SymAlgorithmSM4      = SymAlgorithmId(AlgorithmSM4)
+	SymAlgorithmCamellia = SymAlgorithmId(AlgorithmCamellia)
+)
+
+const (
+	SymObjectAlgorithmAES      = SymObjectAlgorithmId(AlgorithmAES)
+	SymObjectAlgorithmNull     = SymObjectAlgorithmId(AlgorithmNull)
+	SymObjectAlgorithmSM4      = SymObjectAlgorithmId(AlgorithmSM4)
+	SymObjectAlgorithmCamellia = SymObjectAlgorithmId(AlgorithmCamellia)
+)
+
+const (
+	SymModeNull = SymModeId(AlgorithmNull)
+	SymModeCTR  = SymModeId(AlgorithmCTR)
+	SymModeOFB  = SymModeId(AlgorithmOFB)
+	SymModeCBC  = SymModeId(AlgorithmCBC)
+	SymModeCFB  = SymModeId(AlgorithmCFB)
+	SymModeECB  = SymModeId(AlgorithmECB)
+)
+
+const (
+	KDFAlgorithmMGF1           = KDFAlgorithmId(AlgorithmMGF1)
+	KDFAlgorithmNull           = KDFAlgorithmId(AlgorithmNull)
+	KDFAlgorithmKDF1_SP800_56A = KDFAlgorithmId(AlgorithmKDF1_SP800_56A)
+	KDFAlgorithmKDF2           = KDFAlgorithmId(AlgorithmKDF2)
+	KDFAlgorithmKDF1_SP800_108 = KDFAlgorithmId(AlgorithmKDF1_SP800_108)
+)
+
+const (
+	SigSchemeAlgHMAC      = SigSchemeId(AlgorithmHMAC)
+	SigSchemeAlgNull      = SigSchemeId(AlgorithmNull)
+	SigSchemeAlgRSASSA    = SigSchemeId(AlgorithmRSASSA)
+	SigSchemeAlgRSAPSS    = SigSchemeId(AlgorithmRSAPSS)
+	SigSchemeAlgECDSA     = SigSchemeId(AlgorithmECDSA)
+	SigSchemeAlgECDAA     = SigSchemeId(AlgorithmECDAA)
+	SigSchemeAlgSM2       = SigSchemeId(AlgorithmSM2)
+	SigSchemeAlgECSCHNORR = SigSchemeId(AlgorithmECSCHNORR)
+)
+
+const (
+	KeyedHashSchemeHMAC = KeyedHashSchemeId(AlgorithmHMAC)
+	KeyedHashSchemeXOR  = KeyedHashSchemeId(AlgorithmXOR)
+	KeyedHashSchemeNull = KeyedHashSchemeId(AlgorithmNull)
+)
+
+const (
+	AsymSchemeNull      = AsymSchemeId(AlgorithmNull)
+	AsymSchemeRSASSA    = AsymSchemeId(AlgorithmRSASSA)
+	AsymSchemeRSAES     = AsymSchemeId(AlgorithmRSAES)
+	AsymSchemeRSAPSS    = AsymSchemeId(AlgorithmRSAPSS)
+	AsymSchemeOAEP      = AsymSchemeId(AlgorithmOAEP)
+	AsymSchemeECDSA     = AsymSchemeId(AlgorithmECDSA)
+	AsymSchemeECDH      = AsymSchemeId(AlgorithmECDH)
+	AsymSchemeECDAA     = AsymSchemeId(AlgorithmECDAA)
+	AsymSchemeSM2       = AsymSchemeId(AlgorithmSM2)
+	AsymSchemeECSCHNORR = AsymSchemeId(AlgorithmECSCHNORR)
+	AsymSchemeECMQV     = AsymSchemeId(AlgorithmECMQV)
+)
+
+const (
+	RSASchemeNull   = RSASchemeId(AlgorithmNull)
+	RSASchemeRSASSA = RSASchemeId(AlgorithmRSASSA)
+	RSASchemeRSAES  = RSASchemeId(AlgorithmRSAES)
+	RSASchemeRSAPSS = RSASchemeId(AlgorithmRSAPSS)
+	RSASchemeOAEP   = RSASchemeId(AlgorithmOAEP)
+)
+
+const (
+	ECCSchemeNull      = ECCSchemeId(AlgorithmNull)
+	ECCSchemeECDSA     = ECCSchemeId(AlgorithmECDSA)
+	ECCSchemeECDH      = ECCSchemeId(AlgorithmECDH)
+	ECCSchemeECDAA     = ECCSchemeId(AlgorithmECDAA)
+	ECCSchemeSM2       = ECCSchemeId(AlgorithmSM2)
+	ECCSchemeECSCHNORR = ECCSchemeId(AlgorithmECSCHNORR)
+	ECCSchemeECMQV     = ECCSchemeId(AlgorithmECMQV)
+)
+
+const (
+	ObjectTypeRSA       = ObjectTypeId(AlgorithmRSA)
+	ObjectTypeKeyedHash = ObjectTypeId(AlgorithmKeyedHash)
+	ObjectTypeECC       = ObjectTypeId(AlgorithmECC)
+	ObjectTypeSymCipher = ObjectTypeId(AlgorithmSymCipher)
+)
+
+const (
 	AttrFixedTPM             ObjectAttributes = 1 << 1  // fixedTPM
 	AttrStClear              ObjectAttributes = 1 << 2  // stClear
 	AttrFixedParent          ObjectAttributes = 1 << 4  // fixedParent

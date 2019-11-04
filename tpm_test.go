@@ -134,7 +134,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	if len(creationData.PCRDigest) != int(nameAlgSize) {
 		t.Errorf("creation data has a pcrDigest of the wrong length (got %d)", len(creationData.PCRDigest))
 	}
-	if creationData.ParentNameAlg != parent.Name().Algorithm() {
+	if creationData.ParentNameAlg != AlgorithmId(parent.Name().Algorithm()) {
 		t.Errorf("creation data has the wrong parentNameAlg (got %v)", creationData.ParentNameAlg)
 	}
 	if !bytes.Equal(creationData.ParentName, parent.Name()) {
@@ -166,7 +166,7 @@ func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Ha
 	}
 }
 
-func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg AlgorithmId, pcrs PCRSelectionList) Digest {
+func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg HashAlgorithmId, pcrs PCRSelectionList) Digest {
 	_, pcrValues, err := tpm.PCRRead(pcrs)
 	if err != nil {
 		t.Fatalf("PCRRead failed: %v", err)
@@ -182,7 +182,7 @@ func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg AlgorithmId, pcr
 
 func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signature) {
 	switch pub.Type {
-	case AlgorithmRSA:
+	case ObjectTypeRSA:
 		exp := int(pub.Params.RSADetail().Exponent)
 		if exp == 0 {
 			exp = defaultRSAExponent
@@ -190,7 +190,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 		pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA()), E: exp}
 
 		switch signature.SigAlg {
-		case AlgorithmRSASSA:
+		case SigSchemeAlgRSASSA:
 			sig := (*SignatureRSA)(signature.Signature.RSASSA())
 			if !cryptIsKnownDigest(sig.Hash) {
 				t.Fatalf("Signature has unknown digest")
@@ -198,7 +198,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 			if err := rsa.VerifyPKCS1v15(&pubKey, cryptGetHash(sig.Hash), digest, sig.Sig); err != nil {
 				t.Errorf("Signature is invalid")
 			}
-		case AlgorithmRSAPSS:
+		case SigSchemeAlgRSAPSS:
 			sig := (*SignatureRSA)(signature.Signature.RSAPSS())
 			if !cryptIsKnownDigest(sig.Hash) {
 				t.Fatalf("Signature has unknown digest")
@@ -209,11 +209,11 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 		default:
 			t.Errorf("Unknown signature algorithm")
 		}
-	case AlgorithmECC:
+	case ObjectTypeECC:
 		pubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(pub.Unique.ECC().X), Y: new(big.Int).SetBytes(pub.Unique.ECC().Y)}
 
 		switch signature.SigAlg {
-		case AlgorithmECDSA:
+		case SigSchemeAlgECDSA:
 			sig := signature.Signature.ECDSA()
 			if !ecdsa.Verify(&pubKey, digest, new(big.Int).SetBytes(sig.SignatureR), new(big.Int).SetBytes(sig.SignatureS)) {
 				t.Errorf("Signature is invalid")
@@ -228,16 +228,16 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 
 func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
 	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
 			&RSAParams{
 				Symmetric: SymDefObject{
-					Algorithm: AlgorithmAES,
+					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   SymKeyBitsU{uint16(128)},
-					Mode:      SymModeU{AlgorithmCFB}},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
+					Mode:      SymModeU{SymModeCFB}},
+				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
@@ -251,18 +251,18 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 
 func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
 	template := Public{
-		Type:    AlgorithmECC,
-		NameAlg: AlgorithmSHA256,
+		Type:    ObjectTypeECC,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
 			&ECCParams{
 				Symmetric: SymDefObject{
-					Algorithm: AlgorithmAES,
+					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   SymKeyBitsU{uint16(128)},
-					Mode:      SymModeU{AlgorithmCFB}},
-				Scheme:  ECCScheme{Scheme: AlgorithmNull},
+					Mode:      SymModeU{SymModeCFB}},
+				Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 				CurveID: ECCCurveNIST_P256,
-				KDF:     KDFScheme{Scheme: AlgorithmNull}}}}
+				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
 	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
@@ -273,18 +273,18 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 
 func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 		AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 			0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 		Params: PublicParamsU{
 			&RSAParams{
 				Symmetric: SymDefObject{
-					Algorithm: AlgorithmAES,
+					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   SymKeyBitsU{uint16(128)},
-					Mode:      SymModeU{AlgorithmCFB}},
-				Scheme:   RSAScheme{Scheme: AlgorithmNull},
+					Mode:      SymModeU{SymModeCFB}},
+				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleEndorsement, nil, &template, nil, nil, nil)
@@ -295,7 +295,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 }
 
 func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext, userAuth Auth) ResourceContext {
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -309,15 +309,15 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 	}
 
 	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrSign,
 		Params: PublicParamsU{
 			&RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
-					Scheme:  AlgorithmRSASSA,
-					Details: AsymSchemeU{&SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}},
+					Scheme:  RSASchemeRSASSA,
+					Details: AsymSchemeU{&SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
@@ -339,16 +339,16 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 
 func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent ResourceContext) ResourceContext {
 	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 		Params: PublicParamsU{
 			Data: &RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
-					Scheme: AlgorithmRSAPSS,
+					Scheme: RSASchemeRSAPSS,
 					Details: AsymSchemeU{
-						Data: &SigSchemeRSAPSS{HashAlg: AlgorithmSHA256}}},
+						Data: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	priv, pub, _, _, _, err := tpm.Create(parent, nil, &template, nil, nil, nil)

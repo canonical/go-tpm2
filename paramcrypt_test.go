@@ -23,19 +23,19 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 		{
 			desc: "AES",
 			symmetric: SymDef{
-				Algorithm: AlgorithmAES,
+				Algorithm: SymAlgorithmAES,
 				KeyBits:   SymKeyBitsU{uint16(128)},
-				Mode:      SymModeU{AlgorithmCFB}},
+				Mode:      SymModeU{SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
-				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
+				Algorithm: SymAlgorithmXOR,
+				KeyBits:   SymKeyBitsU{HashAlgorithmSHA256}},
 		},
 	} {
 		run := func(t *testing.T, primaryAuth interface{}) {
-			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -44,11 +44,11 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 			secret := []byte("sensitive data")
 
 			template := Public{
-				Type:    AlgorithmKeyedHash,
-				NameAlg: AlgorithmSHA256,
+				Type:    ObjectTypeKeyedHash,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
 			session := Session{Context: sessionContext, Attrs: AttrContinueSession | AttrCommandEncrypt}
 
@@ -78,7 +78,7 @@ func TestCommandParameterEncryptionDedicated(t *testing.T) {
 		})
 
 		t.Run(data.desc+"/UseSessionAuth", func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -102,26 +102,26 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 		{
 			desc: "AES",
 			symmetric: SymDef{
-				Algorithm: AlgorithmAES,
+				Algorithm: SymAlgorithmAES,
 				KeyBits:   SymKeyBitsU{uint16(128)},
-				Mode:      SymModeU{AlgorithmCFB}},
+				Mode:      SymModeU{SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
-				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
+				Algorithm: SymAlgorithmXOR,
+				KeyBits:   SymKeyBitsU{HashAlgorithmSHA256}},
 		},
 	} {
 		secret := []byte("sensitive data")
 
 		prepare := func(t *testing.T) ResourceContext {
 			template := Public{
-				Type:    AlgorithmKeyedHash,
-				NameAlg: AlgorithmSHA256,
+				Type:    ObjectTypeKeyedHash,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 			sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
@@ -138,7 +138,7 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 		}
 
 		run := func(t *testing.T, objectContext ResourceContext, unsealAuth interface{}) {
-			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -166,7 +166,7 @@ func TestResponseParameterEncryptionDedicated(t *testing.T) {
 			object := prepare(t)
 			defer flushContext(t, tpm, object)
 
-			sessionContext, err := tpm.StartAuthSession(nil, object, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, object, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -191,19 +191,19 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 		{
 			desc: "AES",
 			symmetric: SymDef{
-				Algorithm: AlgorithmAES,
+				Algorithm: SymAlgorithmAES,
 				KeyBits:   SymKeyBitsU{uint16(128)},
-				Mode:      SymModeU{AlgorithmCFB}},
+				Mode:      SymModeU{SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
-				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
+				Algorithm: SymAlgorithmXOR,
+				KeyBits:   SymKeyBitsU{HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -212,11 +212,11 @@ func TestCommandParameterEncryptionShared(t *testing.T) {
 			secret := []byte("sensitive data")
 
 			template := Public{
-				Type:    AlgorithmKeyedHash,
-				NameAlg: AlgorithmSHA256,
+				Type:    ObjectTypeKeyedHash,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 			sensitive := SensitiveCreate{Data: secret}
 
 			session := Session{
@@ -260,26 +260,26 @@ func TestResponseParameterEncryptionShared(t *testing.T) {
 		{
 			desc: "AES",
 			symmetric: SymDef{
-				Algorithm: AlgorithmAES,
+				Algorithm: SymAlgorithmAES,
 				KeyBits:   SymKeyBitsU{uint16(128)},
-				Mode:      SymModeU{AlgorithmCFB}},
+				Mode:      SymModeU{SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
-				Algorithm: AlgorithmXOR,
-				KeyBits:   SymKeyBitsU{AlgorithmSHA256}},
+				Algorithm: SymAlgorithmXOR,
+				KeyBits:   SymKeyBitsU{HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			secret := []byte("sensitive data")
 
 			template := Public{
-				Type:    AlgorithmKeyedHash,
-				NameAlg: AlgorithmSHA256,
+				Type:    ObjectTypeKeyedHash,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 				Params: PublicParamsU{
-					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+					&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 			sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 			outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
@@ -293,7 +293,7 @@ func TestResponseParameterEncryptionShared(t *testing.T) {
 			}
 			defer flushContext(t, tpm, objectContext)
 
-			sessionContext, err := tpm.StartAuthSession(primary, objectContext, SessionTypeHMAC, &data.symmetric, AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(primary, objectContext, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

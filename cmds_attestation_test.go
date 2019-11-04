@@ -59,12 +59,12 @@ func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag Struct
 	return attest
 }
 
-func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceContext, attest AttestRaw, signature *Signature, scheme, hash AlgorithmId) {
+func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceContext, attest AttestRaw, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
 	if signature == nil {
 		t.Fatalf("nil signature")
 	}
 	if signContext == nil {
-		if signature.SigAlg != AlgorithmNull {
+		if signature.SigAlg != SigSchemeAlgNull {
 			t.Errorf("Unexpected signature algorithm")
 		}
 	} else {
@@ -117,7 +117,7 @@ func TestCertify(t *testing.T) {
 			t.Errorf("certifyInfo has the wrong qualifiedName")
 		}
 
-		verifyAttestSignature(t, tpm, signContext, certifyInfo, signature, AlgorithmRSASSA, AlgorithmSHA256)
+		verifyAttestSignature(t, tpm, signContext, certifyInfo, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 	}
 
 	t.Run("NoSignature", func(t *testing.T) {
@@ -141,8 +141,8 @@ func TestCertify(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, primary, ak, HandleEndorsement, nil, &scheme, nil, nil)
 	})
 
@@ -151,13 +151,13 @@ func TestCertify(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
@@ -172,8 +172,8 @@ func TestCertify(t *testing.T) {
 		defer flushContext(t, tpm, key)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, primary, key, HandleOwner, nil, &scheme, nil, nil)
 	})
 
@@ -199,7 +199,7 @@ func TestCertify(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -222,7 +222,7 @@ func TestCertify(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -244,16 +244,16 @@ func TestCertifyCreation(t *testing.T) {
 
 	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuth interface{}) {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 
@@ -278,7 +278,7 @@ func TestCertifyCreation(t *testing.T) {
 			t.Errorf("certifyInfo has the wrong creationHash")
 		}
 
-		verifyAttestSignature(t, tpm, signContext, certifyInfo, signature, AlgorithmRSASSA, AlgorithmSHA256)
+		verifyAttestSignature(t, tpm, signContext, certifyInfo, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 	}
 
 	t.Run("NoSignature", func(t *testing.T) {
@@ -296,8 +296,8 @@ func TestCertifyCreation(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, ak, HandleEndorsement, nil, &scheme, nil)
 	})
 
@@ -306,13 +306,13 @@ func TestCertifyCreation(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
@@ -327,8 +327,8 @@ func TestCertifyCreation(t *testing.T) {
 		defer flushContext(t, tpm, key)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, key, HandleOwner, nil, &scheme, nil)
 	})
 
@@ -348,7 +348,7 @@ func TestCertifyCreation(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -359,16 +359,16 @@ func TestCertifyCreation(t *testing.T) {
 
 	t.Run("InvalidTicket", func(t *testing.T) {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 
@@ -406,7 +406,7 @@ func TestQuote(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg AlgorithmId, signContextAuth interface{}) {
+	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuth interface{}) {
 		quoted, signature, err := tpm.Quote(signContext, qualifyingData, inScheme, pcrs, signContextAuth)
 		if err != nil {
 			t.Fatalf("Quote failed: %v", err)
@@ -422,7 +422,7 @@ func TestQuote(t *testing.T) {
 			t.Errorf("quoted has the wrong pcrDigest")
 		}
 
-		verifyAttestSignature(t, tpm, signContext, quoted, signature, AlgorithmRSASSA, alg)
+		verifyAttestSignature(t, tpm, signContext, quoted, signature, SigSchemeAlgRSASSA, alg)
 	}
 
 	t.Run("WithSignature", func(t *testing.T) {
@@ -430,8 +430,8 @@ func TestQuote(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 
 		pcrs := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA256, Select: []int{7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, AlgorithmSHA256, nil)
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{7}}}
+		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
@@ -439,11 +439,11 @@ func TestQuote(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		pcrs := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA1, Select: []int{2, 4, 7}}}
-		run(t, ak, HandleEndorsement, nil, &scheme, pcrs, AlgorithmSHA256, nil)
+			PCRSelection{Hash: HashAlgorithmSHA1, Select: []int{2, 4, 7}}}
+		run(t, ak, HandleEndorsement, nil, &scheme, pcrs, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("UseInScheme", func(t *testing.T) {
@@ -451,13 +451,13 @@ func TestQuote(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
@@ -472,11 +472,11 @@ func TestQuote(t *testing.T) {
 		defer flushContext(t, tpm, key)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA1}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}}
 		pcrs := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA256, Select: []int{4, 7}}}
-		run(t, key, HandleOwner, nil, &scheme, pcrs, AlgorithmSHA1, nil)
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{4, 7}}}
+		run(t, key, HandleOwner, nil, &scheme, pcrs, HashAlgorithmSHA1, nil)
 	})
 
 	t.Run("WithExtraData", func(t *testing.T) {
@@ -484,8 +484,8 @@ func TestQuote(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 
 		pcrs := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA256, Select: []int{7}}}
-		run(t, ak, HandleEndorsement, []byte("bar"), nil, pcrs, AlgorithmSHA256, nil)
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{7}}}
+		run(t, ak, HandleEndorsement, []byte("bar"), nil, pcrs, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("UsePasswordAuth", func(t *testing.T) {
@@ -493,23 +493,23 @@ func TestQuote(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 
 		pcrs := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA256, Select: []int{1, 7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, AlgorithmSHA256, testAuth)
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{1, 7}}}
+		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, testAuth)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
 		pcrs := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA256, Select: []int{1, 7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, AlgorithmSHA256, &Session{Context: sessionContext})
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{1, 7}}}
+		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, &Session{Context: sessionContext})
 	})
 }
 
@@ -552,7 +552,7 @@ func TestGetTime(t *testing.T) {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.safe is unexpected")
 		}
 
-		verifyAttestSignature(t, tpm, signContext, timeInfo, signature, AlgorithmRSASSA, AlgorithmSHA256)
+		verifyAttestSignature(t, tpm, signContext, timeInfo, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 	}
 
 	t.Run("NoSignature", func(t *testing.T) {
@@ -570,8 +570,8 @@ func TestGetTime(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, ak, HandleEndorsement, nil, &scheme, nil, nil)
 	})
 
@@ -580,13 +580,13 @@ func TestGetTime(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
@@ -601,8 +601,8 @@ func TestGetTime(t *testing.T) {
 		defer flushContext(t, tpm, key)
 
 		scheme := SigScheme{
-			Scheme:  AlgorithmRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+			Scheme:  SigSchemeAlgRSASSA,
+			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, key, HandleOwner, nil, &scheme, nil, nil)
 	})
 
@@ -622,7 +622,7 @@ func TestGetTime(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -648,7 +648,7 @@ func TestGetTime(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
 		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
 
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

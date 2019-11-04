@@ -38,21 +38,21 @@ func TestCreatePrimary(t *testing.T) {
 
 	t.Run("RSASrk", func(t *testing.T) {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 		creationPCR := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 		objectContext, pub := run(t, HandleOwner, nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
@@ -61,21 +61,21 @@ func TestCreatePrimary(t *testing.T) {
 
 	t.Run("ECCSrk", func(t *testing.T) {
 		template := Public{
-			Type:    AlgorithmECC,
-			NameAlg: AlgorithmSHA1,
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&ECCParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:  ECCScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 					CurveID: ECCCurveNIST_P256,
-					KDF:     KDFScheme{Scheme: AlgorithmNull}}}}
+					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 		creationPCR := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 		objectContext, pub := run(t, HandleOwner, nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
@@ -86,18 +86,18 @@ func TestCreatePrimary(t *testing.T) {
 
 	t.Run("Ek", func(t *testing.T) {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 
@@ -109,34 +109,34 @@ func TestCreatePrimary(t *testing.T) {
 	t.Run("CreateWithAuthValue", func(t *testing.T) {
 		sensitive := SensitiveCreate{UserAuth: Auth(testAuth)}
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 		creationPCR := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 		objectContext, pub := run(t, HandleOwner, &sensitive, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 
 		childTemplate := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 
@@ -151,16 +151,16 @@ func TestCreatePrimary(t *testing.T) {
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 
@@ -174,7 +174,7 @@ func TestCreatePrimary(t *testing.T) {
 		defer resetHierarchyAuth(t, tpm, HandleOwner)
 
 		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -183,16 +183,16 @@ func TestCreatePrimary(t *testing.T) {
 		session := Session{Context: sessionContext, AuthValue: testAuth}
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 
@@ -203,21 +203,21 @@ func TestCreatePrimary(t *testing.T) {
 
 	t.Run("WithOutsideInfo", func(t *testing.T) {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 		creationPCR := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 		data := Data("foo")
 
 		objectContext, pub := run(t, HandleOwner, nil, &template, data, creationPCR, nil)
@@ -227,16 +227,16 @@ func TestCreatePrimary(t *testing.T) {
 
 	t.Run("InvalidTemplate", func(t *testing.T) {
 		template := Public{
-			Type:    AlgorithmECC,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 
@@ -263,16 +263,16 @@ func TestClear(t *testing.T) {
 
 		// Create platform primary key (should persist across Clear)
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 		platformPrimary, _, _, _, _, _, err := tpm.CreatePrimary(HandlePlatform, nil, &template, nil, nil,
@@ -307,7 +307,7 @@ func TestClear(t *testing.T) {
 		persistentObjects = append(persistentObjects, owner)
 
 		// Create a session (should persist across Clear)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -317,7 +317,7 @@ func TestClear(t *testing.T) {
 		// Define an NV index in the owner hierarchy (should be undefined by Clear)
 		nvPub1 := NVPublic{
 			Index:   0x0181ffff,
-			NameAlg: AlgorithmSHA256,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 			Size:    8}
 		if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub1, nil); err != nil {
@@ -330,7 +330,7 @@ func TestClear(t *testing.T) {
 		// Define an NV index in the platform hierarchy (should persist across Clear)
 		nvPub2 := NVPublic{
 			Index:   0x0141ffff,
-			NameAlg: AlgorithmSHA256,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead|AttrNVPlatformCreate, NVTypeOrdinary),
 			Size:    8}
 		if err := tpm.NVDefineSpace(HandlePlatform, nil, &nvPub2, nil); err != nil {
@@ -402,7 +402,7 @@ func TestClear(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
 		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -412,7 +412,7 @@ func TestClear(t *testing.T) {
 	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, HandleLockout)
 		defer resetHierarchyAuth(t, tpm, HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -443,16 +443,16 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 	createSrk := func(t *testing.T, tpm *TPMContext, session interface{}) ResourceContext {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, session)
@@ -463,18 +463,18 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	}
 	createEk := func(t *testing.T, tpm *TPMContext, session interface{}) ResourceContext {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(HandleEndorsement, nil, &template, nil, nil,
@@ -501,7 +501,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 	t.Run("OwnerWithBoundHMACSession", func(t *testing.T) {
 		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -517,7 +517,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	})
 
 	t.Run("OwnerWithUnboundHMACSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -539,7 +539,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

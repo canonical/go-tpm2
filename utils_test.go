@@ -21,19 +21,19 @@ func (c *mockResourceContext) Handle() Handle {
 func TestComputeCpHash(t *testing.T) {
 	h := sha256.New()
 	h.Write([]byte("foo"))
-	name, _ := MarshalToBytes(AlgorithmSHA256, RawBytes(h.Sum(nil)))
+	name, _ := MarshalToBytes(HashAlgorithmSHA256, RawBytes(h.Sum(nil)))
 	rc := &mockResourceContext{name}
 
 	for _, data := range []struct {
 		desc     string
-		alg      AlgorithmId
+		alg      HashAlgorithmId
 		command  CommandCode
 		params   []interface{}
 		expected Digest
 	}{
 		{
 			desc:    "Unseal",
-			alg:     AlgorithmSHA256,
+			alg:     HashAlgorithmSHA256,
 			command: CommandUnseal,
 			params:  []interface{}{rc},
 			expected: Digest{0xe5, 0xe8, 0x03, 0xe4, 0xcb, 0xd3, 0x3f, 0x78, 0xc5, 0x65, 0x1b, 0x49, 0xf2, 0x83, 0xba, 0x63, 0x8a, 0xdf, 0x34,
@@ -41,7 +41,7 @@ func TestComputeCpHash(t *testing.T) {
 		},
 		{
 			desc:    "EvictControl",
-			alg:     AlgorithmSHA1,
+			alg:     HashAlgorithmSHA1,
 			command: CommandEvictControl,
 			params:  []interface{}{HandleOwner, rc, Handle(0x8100ffff)},
 			expected: Digest{0x40, 0x93, 0x38, 0x44, 0x00, 0xde, 0x24, 0x3a, 0xcb, 0x81, 0x04, 0xba, 0x14, 0xbf, 0x2f, 0x2e, 0xf8, 0xa8, 0x27,
@@ -49,7 +49,7 @@ func TestComputeCpHash(t *testing.T) {
 		},
 		{
 			desc:    "DAParameters",
-			alg:     AlgorithmSHA256,
+			alg:     HashAlgorithmSHA256,
 			command: CommandDictionaryAttackParameters,
 			params:  []interface{}{HandleLockout, Separator, uint32(32), uint32(7200), uint32(86400)},
 			expected: Digest{0x8e, 0xa6, 0x7e, 0x49, 0x3d, 0x62, 0x56, 0x21, 0x4c, 0x2e, 0xd2, 0xe9, 0xfd, 0x69, 0xbe, 0x71, 0x4a, 0x5e, 0x1b,
@@ -81,21 +81,21 @@ func TestTrialPolicySigned(t *testing.T) {
 
 	for _, data := range []struct {
 		desc      string
-		alg       AlgorithmId
+		alg       HashAlgorithmId
 		policyRef Nonce
 	}{
 		{
 			desc: "NoPolicyRef",
-			alg:  AlgorithmSHA256,
+			alg:  HashAlgorithmSHA256,
 		},
 		{
 			desc:      "WithPolicyRef",
-			alg:       AlgorithmSHA256,
+			alg:       HashAlgorithmSHA256,
 			policyRef: []byte("bar"),
 		},
 		{
 			desc: "SHA1",
-			alg:  AlgorithmSHA1,
+			alg:  HashAlgorithmSHA1,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -147,21 +147,21 @@ func TestTrialPolicySecret(t *testing.T) {
 
 	for _, data := range []struct {
 		desc      string
-		alg       AlgorithmId
+		alg       HashAlgorithmId
 		policyRef Nonce
 	}{
 		{
 			desc: "NoPolicyRef",
-			alg:  AlgorithmSHA256,
+			alg:  HashAlgorithmSHA256,
 		},
 		{
 			desc:      "WithPolicyRef",
-			alg:       AlgorithmSHA256,
+			alg:       HashAlgorithmSHA256,
 			policyRef: []byte("bar"),
 		},
 		{
 			desc: "SHA1",
-			alg:  AlgorithmSHA1,
+			alg:  HashAlgorithmSHA1,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -197,9 +197,9 @@ func TestTrialPolicyOR(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	digests := make(map[AlgorithmId]DigestList)
+	digests := make(map[HashAlgorithmId]DigestList)
 	for _, d := range []string{"foo", "bar", "xyz"} {
-		for _, a := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
+		for _, a := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
 			if _, exists := digests[a]; !exists {
 				digests[a] = make(DigestList, 0)
 			}
@@ -211,23 +211,23 @@ func TestTrialPolicyOR(t *testing.T) {
 
 	for _, data := range []struct {
 		desc      string
-		alg       AlgorithmId
+		alg       HashAlgorithmId
 		pHashList DigestList
 	}{
 		{
 			desc: "SHA256",
-			alg:  AlgorithmSHA256,
+			alg:  HashAlgorithmSHA256,
 			pHashList: DigestList{
-				digests[AlgorithmSHA256][0],
-				digests[AlgorithmSHA256][2],
-				digests[AlgorithmSHA256][1]},
+				digests[HashAlgorithmSHA256][0],
+				digests[HashAlgorithmSHA256][2],
+				digests[HashAlgorithmSHA256][1]},
 		},
 		{
 			desc: "SHA1",
-			alg:  AlgorithmSHA1,
+			alg:  HashAlgorithmSHA1,
 			pHashList: DigestList{
-				digests[AlgorithmSHA1][1],
-				digests[AlgorithmSHA1][0]},
+				digests[HashAlgorithmSHA1][1],
+				digests[HashAlgorithmSHA1][0]},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -264,8 +264,8 @@ func TestTrialPolicyPCR(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	digests := make(map[AlgorithmId]Digest)
-	for _, a := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
+	digests := make(map[HashAlgorithmId]Digest)
+	for _, a := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
 		h := cryptConstructHash(a)
 		h.Write([]byte("foo"))
 		digests[a] = h.Sum(nil)
@@ -273,31 +273,31 @@ func TestTrialPolicyPCR(t *testing.T) {
 
 	for _, data := range []struct {
 		desc   string
-		alg    AlgorithmId
+		alg    HashAlgorithmId
 		digest Digest
 		pcrs   PCRSelectionList
 	}{
 		{
 			desc:   "SHA256",
-			alg:    AlgorithmSHA256,
-			digest: digests[AlgorithmSHA256],
+			alg:    HashAlgorithmSHA256,
+			digest: digests[HashAlgorithmSHA256],
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}},
 		},
 		{
 			desc:   "SHA1",
-			alg:    AlgorithmSHA1,
-			digest: digests[AlgorithmSHA1],
+			alg:    HashAlgorithmSHA1,
+			digest: digests[HashAlgorithmSHA1],
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{7, 8}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}}},
 		},
 		{
 			desc:   "Mixed",
-			alg:    AlgorithmSHA256,
-			digest: digests[AlgorithmSHA256],
+			alg:    HashAlgorithmSHA256,
+			digest: digests[HashAlgorithmSHA256],
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{7, 8}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{2, 4}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2, 4}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -335,7 +335,7 @@ func TestTrialPolicyNV(t *testing.T) {
 
 	nvPub := NVPublic{
 		Index:   0x0181ffff,
-		NameAlg: AlgorithmSHA256,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 		Size:    64}
 	if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub, nil); err != nil {
@@ -358,28 +358,28 @@ func TestTrialPolicyNV(t *testing.T) {
 
 	for _, data := range []struct {
 		desc      string
-		alg       AlgorithmId
+		alg       HashAlgorithmId
 		operandB  Operand
 		offset    uint16
 		operation ArithmeticOp
 	}{
 		{
 			desc:      "SHA256",
-			alg:       AlgorithmSHA256,
+			alg:       HashAlgorithmSHA256,
 			operandB:  tenUint64,
 			offset:    0,
 			operation: OpUnsignedLT,
 		},
 		{
 			desc:      "SHA1",
-			alg:       AlgorithmSHA1,
+			alg:       HashAlgorithmSHA1,
 			operandB:  twentyFiveUint64,
 			offset:    0,
 			operation: OpUnsignedGE,
 		},
 		{
 			desc:      "Partial",
-			alg:       AlgorithmSHA1,
+			alg:       HashAlgorithmSHA1,
 			operandB:  fortyUint32,
 			offset:    4,
 			operation: OpUnsignedGE,
@@ -420,22 +420,22 @@ func TestTrialPolicyCommandCode(t *testing.T) {
 
 	for _, data := range []struct {
 		desc string
-		alg  AlgorithmId
+		alg  HashAlgorithmId
 		code CommandCode
 	}{
 		{
 			desc: "Unseal",
-			alg:  AlgorithmSHA256,
+			alg:  HashAlgorithmSHA256,
 			code: CommandUnseal,
 		},
 		{
 			desc: "NVChangeAuth",
-			alg:  AlgorithmSHA256,
+			alg:  HashAlgorithmSHA256,
 			code: CommandNVChangeAuth,
 		},
 		{
 			desc: "SHA1",
-			alg:  AlgorithmSHA1,
+			alg:  HashAlgorithmSHA1,
 			code: CommandUnseal,
 		},
 	} {
@@ -474,15 +474,15 @@ func TestTrialPolicyAuthValue(t *testing.T) {
 
 	for _, data := range []struct {
 		desc string
-		alg  AlgorithmId
+		alg  HashAlgorithmId
 	}{
 		{
 			desc: "SHA256",
-			alg:  AlgorithmSHA256,
+			alg:  HashAlgorithmSHA256,
 		},
 		{
 			desc: "SHA1",
-			alg:  AlgorithmSHA1,
+			alg:  HashAlgorithmSHA1,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -520,15 +520,15 @@ func TestTrialPolicyPassword(t *testing.T) {
 
 	for _, data := range []struct {
 		desc string
-		alg  AlgorithmId
+		alg  HashAlgorithmId
 	}{
 		{
 			desc: "SHA256",
-			alg:  AlgorithmSHA256,
+			alg:  HashAlgorithmSHA256,
 		},
 		{
 			desc: "SHA1",
-			alg:  AlgorithmSHA1,
+			alg:  HashAlgorithmSHA1,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

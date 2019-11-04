@@ -23,7 +23,7 @@ import (
 //
 // The result of this is useful for extended authorization commands that bind an authorization to a command and set of command
 // parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret, TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
-func ComputeCpHash(hashAlg AlgorithmId, command CommandCode, params ...interface{}) (Digest, error) {
+func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...interface{}) (Digest, error) {
 	var handles []Name
 	var i int
 
@@ -57,7 +57,7 @@ func ComputeCpHash(hashAlg AlgorithmId, command CommandCode, params ...interface
 
 // ComputePCRDigest computes a digest using the specified algorithm from the provided set of PCR values and the provided PCR
 // selection. It is most useful for computing an input to TPMContext.PolicyPCR, and validating quotes and creation data.
-func ComputePCRDigest(alg AlgorithmId, pcrs PCRSelectionList, values PCRValues) (Digest, error) {
+func ComputePCRDigest(alg HashAlgorithmId, pcrs PCRSelectionList, values PCRValues) (Digest, error) {
 	if !cryptIsKnownDigest(alg) {
 		return nil, fmt.Errorf("unknown digest algorithm %v", alg)
 	}
@@ -99,12 +99,12 @@ func (c *trialAuthPolicyExtendContext) commit() {
 // policy session on the TPM. An advantage of this is that it is possible to compute digests for PolicySecret and PolicyNV assertions
 // without knowledge of the authorization value of the authorizing entities used for those commands.
 type TrialAuthPolicy struct {
-	alg    AlgorithmId
+	alg    HashAlgorithmId
 	digest Digest
 }
 
 // ComputeAuthPolicy creates a new context for computing an authorization policy digest.
-func ComputeAuthPolicy(alg AlgorithmId) (*TrialAuthPolicy, error) {
+func ComputeAuthPolicy(alg HashAlgorithmId) (*TrialAuthPolicy, error) {
 	if !cryptIsKnownDigest(alg) {
 		return nil, errors.New("invalid algorithm")
 	}

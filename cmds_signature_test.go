@@ -23,12 +23,12 @@ func TestSign(t *testing.T) {
 
 		create := func(t *testing.T, scheme *RSAScheme, authValue []byte) (ResourceContext, *Public) {
 			template := Public{
-				Type:    AlgorithmRSA,
-				NameAlg: AlgorithmSHA256,
+				Type:    ObjectTypeRSA,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 				Params: PublicParamsU{
 					Data: &RSAParams{
-						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 						Scheme:    *scheme,
 						KeyBits:   2048,
 						Exponent:  0}}}
@@ -57,7 +57,7 @@ func TestSign(t *testing.T) {
 			return signature
 		}
 
-		verify := func(t *testing.T, pub *Public, digest []byte, signature *Signature, scheme, hashAlg AlgorithmId) {
+		verify := func(t *testing.T, pub *Public, digest []byte, signature *Signature, scheme SigSchemeId, hashAlg HashAlgorithmId) {
 			if signature.SigAlg != scheme {
 				t.Errorf("Signature has the wrong scheme")
 			}
@@ -71,8 +71,8 @@ func TestSign(t *testing.T) {
 
 		t.Run("UseKeyScheme", func(t *testing.T) {
 			scheme := RSAScheme{
-				Scheme:  AlgorithmRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+				Scheme:  RSASchemeRSASSA,
+				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			key, pub := create(t, &scheme, nil)
 			defer flushContext(t, tpm, key)
 
@@ -81,16 +81,16 @@ func TestSign(t *testing.T) {
 			digest := h.Sum(nil)
 
 			signature := sign(t, key, digest, nil, nil)
-			verify(t, pub, digest, signature, AlgorithmRSASSA, AlgorithmSHA256)
+			verify(t, pub, digest, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 		})
 
 		t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
 			keyScheme := RSAScheme{
-				Scheme:  AlgorithmRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+				Scheme:  RSASchemeRSASSA,
+				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			inScheme := SigScheme{
-				Scheme:  AlgorithmRSASSA,
-				Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+				Scheme:  SigSchemeAlgRSASSA,
+				Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 
 			key, pub := create(t, &keyScheme, nil)
 			defer flushContext(t, tpm, key)
@@ -100,14 +100,14 @@ func TestSign(t *testing.T) {
 			digest := h.Sum(nil)
 
 			signature := sign(t, key, digest, &inScheme, nil)
-			verify(t, pub, digest, signature, AlgorithmRSASSA, AlgorithmSHA256)
+			verify(t, pub, digest, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 		})
 
 		t.Run("UseInScheme", func(t *testing.T) {
-			keyScheme := RSAScheme{Scheme: AlgorithmNull}
+			keyScheme := RSAScheme{Scheme: RSASchemeNull}
 			inScheme := SigScheme{
-				Scheme:  AlgorithmRSAPSS,
-				Details: SigSchemeU{Data: &SigSchemeRSAPSS{HashAlg: AlgorithmSHA1}}}
+				Scheme:  SigSchemeAlgRSAPSS,
+				Details: SigSchemeU{Data: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA1}}}
 
 			key, pub := create(t, &keyScheme, nil)
 			defer flushContext(t, tpm, key)
@@ -117,13 +117,13 @@ func TestSign(t *testing.T) {
 			digest := h.Sum(nil)
 
 			signature := sign(t, key, digest, &inScheme, nil)
-			verify(t, pub, digest, signature, AlgorithmRSAPSS, AlgorithmSHA1)
+			verify(t, pub, digest, signature, SigSchemeAlgRSAPSS, HashAlgorithmSHA1)
 		})
 
 		t.Run("UsePasswordAuth", func(t *testing.T) {
 			scheme := RSAScheme{
-				Scheme:  AlgorithmRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+				Scheme:  RSASchemeRSASSA,
+				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			key, pub := create(t, &scheme, testAuth)
 			defer flushContext(t, tpm, key)
 
@@ -132,13 +132,13 @@ func TestSign(t *testing.T) {
 			digest := h.Sum(nil)
 
 			signature := sign(t, key, digest, nil, testAuth)
-			verify(t, pub, digest, signature, AlgorithmRSASSA, AlgorithmSHA256)
+			verify(t, pub, digest, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 		})
 
 		t.Run("UseSessionAuth", func(t *testing.T) {
 			scheme := RSAScheme{
-				Scheme:  AlgorithmRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: AlgorithmSHA256}}}
+				Scheme:  RSASchemeRSASSA,
+				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			key, pub := create(t, &scheme, testAuth)
 			defer flushContext(t, tpm, key)
 
@@ -146,14 +146,14 @@ func TestSign(t *testing.T) {
 			h.Write(msg)
 			digest := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer verifyContextFlushed(t, tpm, sessionContext)
 
 			signature := sign(t, key, digest, nil, &Session{Context: sessionContext})
-			verify(t, pub, digest, signature, AlgorithmRSASSA, AlgorithmSHA256)
+			verify(t, pub, digest, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 		})
 	})
 
@@ -162,17 +162,17 @@ func TestSign(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmECC,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 			Params: PublicParamsU{
 				Data: &ECCParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme: ECCScheme{
-						Scheme:  AlgorithmECDSA,
-						Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: AlgorithmSHA256}}},
+						Scheme:  ECCSchemeECDSA,
+						Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
 					CurveID: ECCCurveNIST_P256,
-					KDF:     KDFScheme{Scheme: AlgorithmNull}}}}
+					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
@@ -193,11 +193,11 @@ func TestSign(t *testing.T) {
 			t.Fatalf("Sign failed: %v", err)
 		}
 
-		if AlgorithmECDSA != signature.SigAlg {
+		if SigSchemeAlgECDSA != signature.SigAlg {
 			t.Fatalf("Signature has the wrong scheme")
 		}
 		sig := signature.Signature.ECDSA()
-		if AlgorithmSHA256 != sig.Hash {
+		if HashAlgorithmSHA256 != sig.Hash {
 			t.Errorf("Signature has the wrong hash")
 		}
 
@@ -218,13 +218,13 @@ func TestVerifySignature(t *testing.T) {
 		}
 
 		public := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
 			Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
@@ -270,8 +270,8 @@ func TestVerifySignature(t *testing.T) {
 			}
 
 			signature := Signature{
-				SigAlg:    AlgorithmRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: AlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				SigAlg:    SigSchemeAlgRSASSA,
+				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
 			run(t, true, digest, &signature)
 		})
 
@@ -286,8 +286,8 @@ func TestVerifySignature(t *testing.T) {
 			}
 
 			signature := Signature{
-				SigAlg:    AlgorithmRSAPSS,
-				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: AlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				SigAlg:    SigSchemeAlgRSAPSS,
+				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
 			run(t, true, digest, &signature)
 		})
 
@@ -302,8 +302,8 @@ func TestVerifySignature(t *testing.T) {
 			}
 
 			signature := Signature{
-				SigAlg:    AlgorithmRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: AlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				SigAlg:    SigSchemeAlgRSASSA,
+				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
 			run(t, false, digest, &signature)
 		})
 
@@ -318,8 +318,8 @@ func TestVerifySignature(t *testing.T) {
 			}
 
 			signature := Signature{
-				SigAlg:    AlgorithmRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: AlgorithmSHA1, Sig: PublicKeyRSA(s)}}}
+				SigAlg:    SigSchemeAlgRSASSA,
+				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA1, Sig: PublicKeyRSA(s)}}}
 			run(t, true, digest, &signature)
 		})
 	})

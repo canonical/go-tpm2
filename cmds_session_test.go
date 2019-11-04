@@ -27,7 +27,7 @@ func TestStartAuthSession(t *testing.T) {
 		tpmKey      ResourceContext
 		bind        ResourceContext
 		sessionType SessionType
-		alg         AlgorithmId
+		alg         HashAlgorithmId
 		bindAuth    []byte
 		handleType  HandleType
 		errMsg      string
@@ -35,14 +35,14 @@ func TestStartAuthSession(t *testing.T) {
 		{
 			desc:        "HMACUnboundUnsaltedSHA256",
 			sessionType: SessionTypeHMAC,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			handleType:  HandleTypeHMACSession,
 		},
 		{
 			desc:        "HMACBoundUnsaltedSHA256",
 			bind:        primary,
 			sessionType: SessionTypeHMAC,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			bindAuth:    auth,
 			handleType:  HandleTypeHMACSession,
 		},
@@ -50,14 +50,14 @@ func TestStartAuthSession(t *testing.T) {
 			desc:        "HMACUnboundSaltedRSASHA256",
 			tpmKey:      primary,
 			sessionType: SessionTypeHMAC,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			handleType:  HandleTypeHMACSession,
 		},
 		{
 			desc:        "HMACUnboundSaltedECCSHA256",
 			tpmKey:      primaryECC,
 			sessionType: SessionTypeHMAC,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			handleType:  HandleTypeHMACSession,
 		},
 		{
@@ -65,34 +65,34 @@ func TestStartAuthSession(t *testing.T) {
 			tpmKey:      primary,
 			bind:        primary,
 			sessionType: SessionTypeHMAC,
-			alg:         AlgorithmSHA1,
+			alg:         HashAlgorithmSHA1,
 			bindAuth:    auth,
 			handleType:  HandleTypeHMACSession,
 		},
 		{
 			desc:        "TrialSessionSHA256",
 			sessionType: SessionTypeTrial,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			handleType:  HandleTypePolicySession,
 		},
 		{
 			desc:        "PolicySessionUnboundUnsaltedSHA256",
 			sessionType: SessionTypePolicy,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			handleType:  HandleTypePolicySession,
 		},
 		{
 			desc:        "PolicySessionUnboundSaltedSHA256",
 			tpmKey:      primary,
 			sessionType: SessionTypePolicy,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			handleType:  HandleTypePolicySession,
 		},
 		{
 			desc:        "PolicySessionBoundUnsaltedSHA256",
 			bind:        primary,
 			sessionType: SessionTypePolicy,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			bindAuth:    auth,
 			handleType:  HandleTypePolicySession,
 		},
@@ -101,21 +101,21 @@ func TestStartAuthSession(t *testing.T) {
 			tpmKey:      primary,
 			bind:        primary,
 			sessionType: SessionTypePolicy,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			bindAuth:    auth,
 			handleType:  HandleTypePolicySession,
 		},
 		{
 			desc:        "HMACUnboundUnsaltedInvalidAlg",
 			sessionType: SessionTypeHMAC,
-			alg:         AlgorithmNull,
+			alg:         HashAlgorithmNull,
 			errMsg:      "invalid authHash parameter: unsupported digest algorithm TPM_ALG_NULL",
 		},
 		{
 			desc:        "HMACUnboundSaltedInvalidKey",
 			tpmKey:      owner,
 			sessionType: SessionTypeHMAC,
-			alg:         AlgorithmSHA256,
+			alg:         HashAlgorithmSHA256,
 			errMsg:      "invalid resource context for tpmKey: not an object",
 		},
 	} {
@@ -182,13 +182,13 @@ func TestPolicyRestart(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	sc, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	sc, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
 
 	if err := tpm.PolicyPCR(sc, nil,
-		PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}}); err != nil {
+		PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7}}}); err != nil {
 		t.Fatalf("PolicyPCR failed: %v", err)
 	}
 

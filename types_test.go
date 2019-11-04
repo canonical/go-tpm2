@@ -63,7 +63,7 @@ func TestHandle(t *testing.T) {
 }
 
 type TestPublicIDUContainer struct {
-	Alg    AlgorithmId
+	Alg    ObjectTypeId
 	Unique PublicIDU `tpm2:"selector:Alg"`
 }
 
@@ -76,19 +76,19 @@ func TestPublicIDUnion(t *testing.T) {
 	}{
 		{
 			desc: "RSA",
-			in: TestPublicIDUContainer{Alg: AlgorithmRSA,
+			in: TestPublicIDUContainer{Alg: ObjectTypeRSA,
 				Unique: PublicIDU{PublicKeyRSA{0x01, 0x02, 0x03}}},
 			out: []byte{0x00, 0x01, 0x00, 0x03, 0x01, 0x02, 0x03},
 		},
 		{
 			desc: "KeyedHash",
-			in: TestPublicIDUContainer{Alg: AlgorithmKeyedHash,
+			in: TestPublicIDUContainer{Alg: ObjectTypeKeyedHash,
 				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x08, 0x00, 0x04, 0x04, 0x05, 0x06, 0x07},
 		},
 		{
 			desc: "InvalidSelector",
-			in: TestPublicIDUContainer{Alg: AlgorithmNull,
+			in: TestPublicIDUContainer{Alg: ObjectTypeId(AlgorithmNull),
 				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
 			err: "cannot unmarshal struct type tpm2.TestPublicIDUContainer: cannot unmarshal field Unique: cannot unmarshal struct type " +
@@ -131,7 +131,7 @@ func TestPublicIDUnion(t *testing.T) {
 }
 
 type TestSchemeKeyedHashUContainer struct {
-	Scheme  AlgorithmId
+	Scheme  KeyedHashSchemeId
 	Details SchemeKeyedHashU `tpm2:"selector:Scheme"`
 }
 
@@ -145,18 +145,18 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 		{
 			desc: "HMAC",
 			in: TestSchemeKeyedHashUContainer{
-				Scheme:  AlgorithmHMAC,
-				Details: SchemeKeyedHashU{&SchemeHMAC{HashAlg: AlgorithmSHA256}}},
+				Scheme:  KeyedHashSchemeHMAC,
+				Details: SchemeKeyedHashU{&SchemeHMAC{HashAlg: HashAlgorithmSHA256}}},
 			out: []byte{0x00, 0x05, 0x00, 0x0b},
 		},
 		{
 			desc: "Null",
-			in:   TestSchemeKeyedHashUContainer{Scheme: AlgorithmNull},
+			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeNull},
 			out:  []byte{0x00, 0x10},
 		},
 		{
 			desc: "InvalidSelector",
-			in:   TestSchemeKeyedHashUContainer{Scheme: AlgorithmSHA256},
+			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
 			out:  []byte{0x00, 0x0b},
 			err: "cannot unmarshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot unmarshal field Details: cannot unmarshal struct type " +
 				"tpm2.SchemeKeyedHashU: error unmarshalling union struct: cannot select union data type: invalid selector value: TPM_ALG_SHA256",
@@ -249,7 +249,7 @@ func TestPCRSelectionList(t *testing.T) {
 		{
 			desc: "1",
 			in: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{3, 6, 24}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{3, 6, 24}}},
 			out: []byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x04, 0x04, 0x48, 0x00, 0x00, 0x01},
 		},
 	} {
@@ -291,61 +291,62 @@ func TestTaggedHash(t *testing.T) {
 	}{
 		{
 			desc: "SHA1",
-			in:   TaggedHash{HashAlg: AlgorithmSHA1, Digest: sha1Hash[:]},
+			in:   TaggedHash{HashAlg: HashAlgorithmSHA1, Digest: sha1Hash[:]},
 			out:  append([]byte{0x00, 0x04}, sha1Hash[:]...),
 		},
 		{
 			desc: "SHA256",
-			in:   TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]},
+			in:   TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]},
 			out:  append([]byte{0x00, 0x0b}, sha256Hash[:]...),
 		},
 		{
 			desc: "WrongDigestSize",
-			in:   TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha1Hash[:]},
+			in:   TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha1Hash[:]},
 			err:  "cannot marshal type *tpm2.TaggedHash with custom marshaller: invalid digest size 20",
 		},
 		{
 			desc: "UnknownAlg",
-			in:   TaggedHash{HashAlg: AlgorithmHMAC, Digest: sha1Hash[:]},
-			err: "cannot marshal type *tpm2.TaggedHash with custom marshaller: cannot determine digest size: unknown digest algorithm: " +
-				"TPM_ALG_HMAC",
+			in:   TaggedHash{HashAlg: HashAlgorithmNull, Digest: sha1Hash[:]},
+			err:  "cannot marshal type *tpm2.TaggedHash with custom marshaller: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
 		},
 	} {
-		out, err := MarshalToBytes(&data.in)
-		if data.err != "" {
-			if err == nil {
-				t.Fatalf("Expected MarshalToBytes to fail")
+		t.Run(data.desc, func(t *testing.T) {
+			out, err := MarshalToBytes(&data.in)
+			if data.err != "" {
+				if err == nil {
+					t.Fatalf("Expected MarshalToBytes to fail")
+				}
+				if err.Error() != data.err {
+					t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+				}
+				return
 			}
-			if err.Error() != data.err {
-				t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+
+			if err != nil {
+				t.Fatalf("MarshalToBytes failed: %v", err)
 			}
-			return
-		}
 
-		if err != nil {
-			t.Fatalf("MarshalToBytes failed: %v", err)
-		}
+			if !bytes.Equal(out, data.out) {
+				t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
+			}
 
-		if !bytes.Equal(out, data.out) {
-			t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
-		}
+			var a TaggedHash
+			n, err := UnmarshalFromBytes(out, &a)
+			if err != nil {
+				t.Fatalf("UnmarshalFromBytes failed: %v", err)
+			}
+			if n != len(out) {
+				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+			}
 
-		var a TaggedHash
-		n, err := UnmarshalFromBytes(out, &a)
-		if err != nil {
-			t.Fatalf("UnmarshalFromBytes failed: %v", err)
-		}
-		if n != len(out) {
-			t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-		}
-
-		if !reflect.DeepEqual(data.in, a) {
-			t.Errorf("UnmarshalFromBytes didn't return the original data")
-		}
+			if !reflect.DeepEqual(data.in, a) {
+				t.Errorf("UnmarshalFromBytes didn't return the original data")
+			}
+		})
 	}
 
 	t.Run("UnmarshalTruncated", func(t *testing.T) {
-		in := TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]}
+		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
 		out, err := MarshalToBytes(&in)
 		if err != nil {
 			t.Fatalf("MarshalToBytes failed: %v", err)
@@ -356,18 +357,19 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
 		}
-		if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot read digest: EOF" {
+		if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot read digest: unexpected EOF" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})
 
 	t.Run("UnmarshalFromLongerBuffer", func(t *testing.T) {
-		in := TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]}
+		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
 		out, err := MarshalToBytes(&in)
 		if err != nil {
 			t.Fatalf("MarshalToBytes failed: %v", err)
 		}
 
+		expectedN := len(out)
 		out = append(out, []byte{0, 0, 0, 0}...)
 
 		var a TaggedHash
@@ -375,7 +377,7 @@ func TestTaggedHash(t *testing.T) {
 		if err != nil {
 			t.Fatalf("UnmarshalFromBytes failed: %v", err)
 		}
-		if n != len(out) {
+		if n != expectedN {
 			t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
 		}
 
@@ -385,7 +387,7 @@ func TestTaggedHash(t *testing.T) {
 	})
 
 	t.Run("UnmarshalUnknownAlg", func(t *testing.T) {
-		in := TaggedHash{HashAlg: AlgorithmSHA256, Digest: sha256Hash[:]}
+		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
 		out, err := MarshalToBytes(&in)
 		if err != nil {
 			t.Fatalf("MarshalToBytes failed: %v", err)
@@ -396,8 +398,8 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
 		}
-		if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot determine digest size: unknown digest "+
-			"algorithm: TPM_ALG_HMAC" {
+		if err.Error() != "cannot unmarshal type tpm2.TaggedHash with custom marshaller: cannot determine digest size for unknown "+
+			"algorithm TPM_ALG_HMAC" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})
@@ -432,7 +434,7 @@ func TestNVPublicName(t *testing.T) {
 
 	pub := NVPublic{
 		Index:   Handle(0x0181ffff),
-		NameAlg: AlgorithmSHA256,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 		Size:    64}
 	if err := tpm.NVDefineSpace(HandleOwner, nil, &pub, nil); err != nil {
@@ -464,69 +466,69 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 		{
 			desc: "SingleSelection",
 			x: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 2, 3, 4}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 2, 3, 4}}},
 			expected: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5}}},
 		},
 		{
 			desc: "UnexpectedAlgorithm",
 			x: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 3, 4}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 3, 4}}},
 			err: "PCRSelection has unexpected algorithm",
 		},
 		{
 			desc: "SingleSelectionEmptyResult",
 			x: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{PCRSelection{Hash: AlgorithmSHA256}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA256}},
 		},
 		{
 			desc: "MultipleSelection",
 			x: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 4, 5}}},
 			expected: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
 		},
 		{
 			desc: "MultipleSectionEmptyResult1",
 			x: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			expected: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
-				PCRSelection{Hash: AlgorithmSHA256}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
+				PCRSelection{Hash: HashAlgorithmSHA256}},
 		},
 		{
 			desc: "MultipleSelectionEmptyResult2",
 			x: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{PCRSelection{Hash: AlgorithmSHA1}, PCRSelection{Hash: AlgorithmSHA256}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA1}, PCRSelection{Hash: HashAlgorithmSHA256}},
 		},
 		{
 			desc: "MismatchedLength",
 			x: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}}},
 			err: "incorrect number of PCRSelections",
 		},
 	} {

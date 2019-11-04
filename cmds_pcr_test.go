@@ -16,25 +16,25 @@ func TestPCRExtend(t *testing.T) {
 	for _, data := range []struct {
 		desc       string
 		index      int
-		algorithms []AlgorithmId
+		algorithms []HashAlgorithmId
 		data       []byte
 	}{
 		{
 			desc:       "1",
 			index:      0,
-			algorithms: []AlgorithmId{AlgorithmSHA1},
+			algorithms: []HashAlgorithmId{HashAlgorithmSHA1},
 			data:       []byte("foo"),
 		},
 		{
 			desc:       "2",
 			index:      3,
-			algorithms: []AlgorithmId{AlgorithmSHA256},
+			algorithms: []HashAlgorithmId{HashAlgorithmSHA256},
 			data:       []byte("bar"),
 		},
 		{
 			desc:       "3",
 			index:      3,
-			algorithms: []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256},
+			algorithms: []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256},
 			data:       []byte("foo"),
 		},
 	} {
@@ -113,8 +113,8 @@ func TestPCREvent(t *testing.T) {
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			pcrSelection := PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{data.index}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{data.index}}}
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{data.index}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{data.index}}}
 
 			origUpdateCounter, origValues, err := tpm.PCRRead(pcrSelection)
 			if err != nil {
@@ -126,7 +126,7 @@ func TestPCREvent(t *testing.T) {
 				t.Fatalf("PCREvent failed: %v", err)
 			}
 
-			for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
+			for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
 				hasher := cryptConstructHash(alg)
 				hasher.Write(data.data)
 				expectedDigest := hasher.Sum(nil)
@@ -152,7 +152,7 @@ func TestPCREvent(t *testing.T) {
 				t.Errorf("Unexpected update count (got %d, expected %d)", newUpdateCounter, expectedUpdateCounter)
 			}
 
-			for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
+			for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
 				hasher := cryptConstructHash(alg)
 				hasher.Write(origValues[alg][data.index])
 				for _, d := range digests {
@@ -209,7 +209,7 @@ func TestPCRRead(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
-		for _, alg := range []AlgorithmId{AlgorithmSHA1, AlgorithmSHA256} {
+		for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
 			expectedDigests.EnsureBank(alg)
 			digestSize := cryptGetDigestSize(alg)
 
@@ -235,36 +235,36 @@ func TestPCRRead(t *testing.T) {
 		{
 			desc: "SinglePCRSingleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1}}},
 		},
 		{
 			desc: "MultiplePCRSingleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{2, 3, 1}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2, 3, 1}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{2}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{2}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank2",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{2}},
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{2}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2}}},
 		},
 		{
 			desc: "MultiplePCRMultipleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 2, 5}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 5, 2}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 2, 5}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5, 2}}},
 		},
 		{
 			desc: "MultipleRequest",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{1, 2, 3, 4, 5}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{1, 5, 2, 3, 4}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 2, 3, 4, 5}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5, 2, 3, 4}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

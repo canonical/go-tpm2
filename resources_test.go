@@ -26,14 +26,14 @@ func TestWrapHandle(t *testing.T) {
 	persistentPrimary := persistObjectForTesting(t, tpm, HandleOwner, primary, persistentHandle)
 	defer verifyPersistentObjectEvicted(t, tpm, HandleOwner, persistentPrimary)
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
 	defer verifyContextFlushed(t, tpm, sessionContext)
 	sessionHandle := sessionContext.Handle()
 
-	savedSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	savedSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestWrapHandle(t *testing.T) {
 
 	nvPub := NVPublic{
 		Index:   0x018100ff,
-		NameAlg: AlgorithmSHA256,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 		Size:    8}
 	if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub, nil); err != nil {

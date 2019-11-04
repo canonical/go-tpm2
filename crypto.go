@@ -22,14 +22,14 @@ import (
 var (
 	defaultRSAExponent = 65537
 
-	knownDigests = map[AlgorithmId]crypto.Hash{
-		AlgorithmSHA1:   crypto.SHA1,
-		AlgorithmSHA256: crypto.SHA256,
-		AlgorithmSHA384: crypto.SHA384,
-		AlgorithmSHA512: crypto.SHA512}
+	knownDigests = map[HashAlgorithmId]crypto.Hash{
+		HashAlgorithmSHA1:   crypto.SHA1,
+		HashAlgorithmSHA256: crypto.SHA256,
+		HashAlgorithmSHA384: crypto.SHA384,
+		HashAlgorithmSHA512: crypto.SHA512}
 )
 
-func cryptGetHash(alg AlgorithmId) crypto.Hash {
+func cryptGetHash(alg HashAlgorithmId) crypto.Hash {
 	h, ok := knownDigests[alg]
 	if !ok {
 		panic(fmt.Sprintf("unknown hash algorithm %v", alg))
@@ -37,7 +37,7 @@ func cryptGetHash(alg AlgorithmId) crypto.Hash {
 	return h
 }
 
-func cryptGetHashConstructor(alg AlgorithmId) func() hash.Hash {
+func cryptGetHashConstructor(alg HashAlgorithmId) func() hash.Hash {
 	h, ok := knownDigests[alg]
 	if !ok {
 		panic(fmt.Sprintf("unknown hash algorithm %v", alg))
@@ -47,16 +47,16 @@ func cryptGetHashConstructor(alg AlgorithmId) func() hash.Hash {
 	}
 }
 
-func cryptConstructHash(alg AlgorithmId) hash.Hash {
+func cryptConstructHash(alg HashAlgorithmId) hash.Hash {
 	return cryptGetHashConstructor(alg)()
 }
 
-func cryptIsKnownDigest(alg AlgorithmId) bool {
+func cryptIsKnownDigest(alg HashAlgorithmId) bool {
 	_, isKnown := knownDigests[alg]
 	return isKnown
 }
 
-func cryptGetDigestSize(alg AlgorithmId) uint {
+func cryptGetDigestSize(alg HashAlgorithmId) uint {
 	h, ok := knownDigests[alg]
 	if !ok {
 		panic(fmt.Sprintf("nknown hash algorithm %v", alg))
@@ -78,7 +78,7 @@ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 	return nil
 }
 
-func cryptComputeCpHash(hashAlg AlgorithmId, commandCode CommandCode, commandHandles []Name,
+func cryptComputeCpHash(hashAlg HashAlgorithmId, commandCode CommandCode, commandHandles []Name,
 	cpBytes []byte) []byte {
 	hash := cryptConstructHash(hashAlg)
 
@@ -91,7 +91,7 @@ func cryptComputeCpHash(hashAlg AlgorithmId, commandCode CommandCode, commandHan
 	return hash.Sum(nil)
 }
 
-func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) []byte {
+func cryptComputeRpHash(hashAlg HashAlgorithmId, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) []byte {
 	hash := cryptConstructHash(hashAlg)
 
 	binary.Write(hash, binary.BigEndian, responseCode)
@@ -101,7 +101,7 @@ func cryptComputeRpHash(hashAlg AlgorithmId, responseCode ResponseCode, commandC
 	return hash.Sum(nil)
 }
 
-func computeSessionHMAC(alg AlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce,
+func computeSessionHMAC(alg HashAlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce,
 	attrs sessionAttrs) []byte {
 	hmac := hmac.New(cryptGetHashConstructor(alg), key)
 
@@ -124,7 +124,7 @@ func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte
 	return computeSessionHMAC(context.hashAlg, key, rpHash, context.nonceTPM, context.nonceCaller, nil, nil, attrs)
 }
 
-func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint, counterInOut *uint32, once bool) []byte {
+func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint, counterInOut *uint32, once bool) []byte {
 	digestSize := cryptGetDigestSize(hashAlg)
 	if once && sizeInBits&7 > 0 {
 		panic("sizeInBits must be a multiple of 8 when called with once == true")
@@ -172,7 +172,7 @@ func cryptKDFa(hashAlg AlgorithmId, key, label, contextU, contextV []byte, sizeI
 	return outKey
 }
 
-func cryptKDFe(hashAlg AlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits uint) []byte {
+func cryptKDFe(hashAlg HashAlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits uint) []byte {
 	digestSize := cryptGetDigestSize(hashAlg)
 
 	var counter uint32 = 0
@@ -209,8 +209,8 @@ func cryptComputeNonce(nonce []byte) error {
 	return err
 }
 
-func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []byte) ([]byte, error) {
-	if public.Type != AlgorithmRSA {
+func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []byte) ([]byte, error) {
+	if public.Type != ObjectTypeRSA {
 		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
@@ -221,17 +221,17 @@ func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []
 	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA()), E: exp}
 
 	padding := public.Params.RSADetail().Scheme.Scheme
-	if paddingOverride != AlgorithmNull {
+	if paddingOverride != RSASchemeNull {
 		padding = paddingOverride
 	}
 
 	switch padding {
-	case AlgorithmOAEP:
+	case RSASchemeOAEP:
 		schemeHashAlg := public.NameAlg
-		if paddingOverride == AlgorithmNull {
+		if paddingOverride == RSASchemeNull {
 			schemeHashAlg = public.Params.RSADetail().Scheme.Details.OAEP().HashAlg
 		}
-		if schemeHashAlg == AlgorithmNull {
+		if schemeHashAlg == HashAlgorithmNull {
 			schemeHashAlg = public.NameAlg
 		}
 		if !cryptIsKnownDigest(schemeHashAlg) {
@@ -241,14 +241,14 @@ func cryptEncryptRSA(public *Public, paddingOverride AlgorithmId, data, label []
 		labelCopy := make([]byte, len(label)+1)
 		copy(labelCopy, label)
 		return rsa.EncryptOAEP(hash, rand.Reader, pubKey, data, labelCopy)
-	case AlgorithmRSAES:
+	case RSASchemeRSAES:
 		return rsa.EncryptPKCS1v15(rand.Reader, pubKey, data)
 	}
 	return nil, fmt.Errorf("unsupported RSA scheme: %v", padding)
 }
 
 func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
-	if public.Type != AlgorithmECC {
+	if public.Type != ObjectTypeECC {
 		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
@@ -281,14 +281,14 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 	digestSize := cryptGetDigestSize(public.NameAlg)
 
 	switch public.Type {
-	case AlgorithmRSA:
+	case ObjectTypeRSA:
 		salt := make([]byte, digestSize)
 		if _, err := rand.Read(salt); err != nil {
 			return nil, nil, fmt.Errorf("cannot read random bytes for salt: %v", err)
 		}
-		encryptedSalt, err := cryptEncryptRSA(public, AlgorithmOAEP, salt, []byte("SECRET"))
+		encryptedSalt, err := cryptEncryptRSA(public, RSASchemeOAEP, salt, []byte("SECRET"))
 		return encryptedSalt, salt, err
-	case AlgorithmECC:
+	case ObjectTypeECC:
 		z, q, err := cryptGetECDHPoint(public)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to compute secret: %v", err)
@@ -304,7 +304,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 	return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
 }
 
-func cryptXORObfuscation(hashAlg AlgorithmId, key []byte, contextU, contextV Nonce, data []byte) error {
+func cryptXORObfuscation(hashAlg HashAlgorithmId, key []byte, contextU, contextV Nonce, data []byte) error {
 	if !cryptIsKnownDigest(hashAlg) {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", hashAlg)
 	}
@@ -328,13 +328,13 @@ func cryptXORObfuscation(hashAlg AlgorithmId, key []byte, contextU, contextV Non
 	return nil
 }
 
-func cryptEncryptSymmetricAES(key []byte, mode AlgorithmId, data, iv []byte) error {
+func cryptEncryptSymmetricAES(key []byte, mode SymModeId, data, iv []byte) error {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return fmt.Errorf("cannot construct new block cipher: %v", err)
 	}
 
-	if mode != AlgorithmCFB {
+	if mode != SymModeCFB {
 		return fmt.Errorf("unsupported block cipher mode %v", mode)
 	}
 
@@ -343,13 +343,13 @@ func cryptEncryptSymmetricAES(key []byte, mode AlgorithmId, data, iv []byte) err
 	return nil
 }
 
-func cryptDecryptSymmetricAES(key []byte, mode AlgorithmId, data, iv []byte) error {
+func cryptDecryptSymmetricAES(key []byte, mode SymModeId, data, iv []byte) error {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return fmt.Errorf("cannot construct new block cipher: %v", err)
 	}
 
-	if mode != AlgorithmCFB {
+	if mode != SymModeCFB {
 		return fmt.Errorf("unsupported block cipher mode %v", mode)
 	}
 

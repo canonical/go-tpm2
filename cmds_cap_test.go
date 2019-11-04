@@ -218,14 +218,14 @@ func TestTestParms(t *testing.T) {
 		{
 			desc: "RSARestrictedDecrypt",
 			parms: &PublicParams{
-				Type: AlgorithmRSA,
+				Type: ObjectTypeRSA,
 				Parameters: PublicParamsU{
 					Data: &RSAParams{
 						Symmetric: SymDefObject{
-							Algorithm: AlgorithmAES,
+							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   SymKeyBitsU{Data: uint16(128)},
-							Mode:      SymModeU{Data: AlgorithmCFB}},
-						Scheme:   RSAScheme{Scheme: AlgorithmNull},
+							Mode:      SymModeU{Data: SymModeCFB}},
+						Scheme:   RSAScheme{Scheme: RSASchemeNull},
 						KeyBits:  2048,
 						Exponent: 0}}},
 			valid: true,
@@ -233,75 +233,43 @@ func TestTestParms(t *testing.T) {
 		{
 			desc: "ECCSigning",
 			parms: &PublicParams{
-				Type: AlgorithmECC,
+				Type: ObjectTypeECC,
 				Parameters: PublicParamsU{
 					Data: &ECCParams{
-						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
+						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 						Scheme: ECCScheme{
-							Scheme:  AlgorithmECDSA,
-							Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: AlgorithmSHA256}}},
+							Scheme:  ECCSchemeECDSA,
+							Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
 						CurveID: ECCCurveNIST_P256,
-						KDF:     KDFScheme{Scheme: AlgorithmNull}}}},
+						KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}},
 			valid: true,
 		},
 		{
 			desc: "RSAInvalidKeyBits",
 			parms: &PublicParams{
-				Type: AlgorithmRSA,
+				Type: ObjectTypeRSA,
 				Parameters: PublicParamsU{
 					Data: &RSAParams{
 						Symmetric: SymDefObject{
-							Algorithm: AlgorithmAES,
+							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   SymKeyBitsU{Data: uint16(128)},
-							Mode:      SymModeU{Data: AlgorithmCFB}},
-						Scheme:   RSAScheme{Scheme: AlgorithmNull},
+							Mode:      SymModeU{Data: SymModeCFB}},
+						Scheme:   RSAScheme{Scheme: RSASchemeNull},
 						KeyBits:  2047,
 						Exponent: 0}}},
 			err: ErrorValue,
 		},
 		{
-			desc: "ECCInvalidHash",
-			parms: &PublicParams{
-				Type: AlgorithmECC,
-				Parameters: PublicParamsU{
-					Data: &ECCParams{
-						Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-						Scheme: ECCScheme{
-							Scheme:  AlgorithmECDSA,
-							Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: AlgorithmECC}}},
-						CurveID: ECCCurveNIST_P256,
-						KDF:     KDFScheme{Scheme: AlgorithmNull}}}},
-			err: ErrorHash,
-		},
-		{
-			desc: "InvalidType",
-			parms: &PublicParams{
-				Type:       AlgorithmRSASSA,
-				Parameters: PublicParamsU{}},
-			err: ErrorType,
-		},
-		{
 			desc: "Symmetric",
 			parms: &PublicParams{
-				Type: AlgorithmSymCipher,
+				Type: ObjectTypeSymCipher,
 				Parameters: PublicParamsU{
 					Data: &SymCipherParams{
 						Sym: SymDefObject{
-							Algorithm: AlgorithmAES,
+							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   SymKeyBitsU{Data: uint16(256)},
-							Mode:      SymModeU{Data: AlgorithmCFB}}}}},
+							Mode:      SymModeU{Data: SymModeCFB}}}}},
 			valid: true,
-		},
-		{
-			desc: "SymmetricInvalid",
-			parms: &PublicParams{
-				Type: AlgorithmSymCipher,
-				Parameters: PublicParamsU{
-					Data: &SymCipherParams{
-						Sym: SymDefObject{
-							Algorithm: AlgorithmXOR,
-							KeyBits:   SymKeyBitsU{Data: AlgorithmSHA256}}}}},
-			err: ErrorSymmetric,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

@@ -42,18 +42,18 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 		creationPCR := PCRSelectionList{
-			PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
+			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, creationPCR, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)
@@ -64,15 +64,15 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmECC,
-			NameAlg: AlgorithmSHA1,
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&ECCParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    ECCScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    ECCScheme{Scheme: ECCSchemeNull},
 					CurveID:   ECCCurveNIST_P256,
-					KDF:       KDFScheme{Scheme: AlgorithmNull}}}}
+					KDF:       KDFScheme{Scheme: KDFAlgorithmNull}}}}
 
 		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, nil)
 		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
@@ -86,16 +86,16 @@ func TestCreate(t *testing.T) {
 
 		sensitive := SensitiveCreate{UserAuth: Auth(testAuth)}
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
 				&RSAParams{
 					Symmetric: SymDefObject{
-						Algorithm: AlgorithmAES,
+						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{AlgorithmCFB}},
-					Scheme:   RSAScheme{Scheme: AlgorithmNull},
+						Mode:      SymModeU{SymModeCFB}},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
 
@@ -116,13 +116,13 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 		outsideInfo := Data("foo")
@@ -136,13 +136,13 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 
@@ -155,17 +155,17 @@ func TestCreate(t *testing.T) {
 		defer flushContext(t, tpm, primary)
 
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -184,13 +184,13 @@ func TestLoad(t *testing.T) {
 
 	run := func(t *testing.T, parent ResourceContext, session interface{}) {
 		template := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  0}}}
 
@@ -208,7 +208,7 @@ func TestLoad(t *testing.T) {
 		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("Create returned an invalid handle 0x%08x", objectContext.Handle())
 		}
-		if name.Algorithm() != AlgorithmSHA256 {
+		if name.Algorithm() != HashAlgorithmSHA256 {
 			t.Errorf("Create returned a name with the wrong algorithm %v", name.Algorithm())
 		}
 	}
@@ -231,7 +231,7 @@ func TestLoad(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -251,13 +251,13 @@ func TestReadPublic(t *testing.T) {
 	defer flushContext(t, tpm, primary)
 
 	template := Public{
-		Type:    AlgorithmRSA,
-		NameAlg: AlgorithmSHA256,
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 		Params: PublicParamsU{
 			&RSAParams{
-				Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-				Scheme:    RSAScheme{Scheme: AlgorithmNull},
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  0}}}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
@@ -281,7 +281,7 @@ func TestReadPublic(t *testing.T) {
 	if !bytes.Equal(name1, name2) {
 		t.Errorf("ReadPublic returned an unexpected name")
 	}
-	if qualifiedName.Algorithm() != AlgorithmSHA256 {
+	if qualifiedName.Algorithm() != HashAlgorithmSHA256 {
 		t.Errorf("ReadPublic returned a qualifiedName of the wrong algorithm")
 	}
 }
@@ -317,16 +317,16 @@ func TestLoadExternal(t *testing.T) {
 			t.Fatalf("Generating an RSA key failed: %v", err)
 		}
 		sensitive := Sensitive{
-			Type:      AlgorithmRSA,
+			Type:      ObjectTypeRSA,
 			Sensitive: SensitiveCompositeU{PrivateKeyRSA(key.Primes[0].Bytes())}}
 		public := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
 			Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
@@ -340,18 +340,18 @@ func TestLoadExternal(t *testing.T) {
 			t.Fatalf("Generating an ECC key failed: %v", err)
 		}
 		sensitive := Sensitive{
-			Type:      AlgorithmECC,
+			Type:      ObjectTypeECC,
 			Sensitive: SensitiveCompositeU{ECCParameter(priv)}}
 		public := Public{
-			Type:    AlgorithmECC,
-			NameAlg: AlgorithmSHA1,
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&ECCParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    ECCScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    ECCScheme{Scheme: ECCSchemeNull},
 					CurveID:   ECCCurveNIST_P256,
-					KDF:       KDFScheme{Scheme: AlgorithmNull}}},
+					KDF:       KDFScheme{Scheme: KDFAlgorithmNull}}},
 			Unique: PublicIDU{&ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
 
 		run(t, &sensitive, &public, HandleNull)
@@ -369,19 +369,19 @@ func TestLoadExternal(t *testing.T) {
 		unique := h.Sum(nil)
 
 		sensitive := Sensitive{
-			Type:      AlgorithmKeyedHash,
+			Type:      ObjectTypeKeyedHash,
 			SeedValue: seed,
 			Sensitive: SensitiveCompositeU{key}}
 		public := Public{
-			Type:    AlgorithmKeyedHash,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeKeyedHash,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 			Params: PublicParamsU{
 				&KeyedHashParams{
 					Scheme: KeyedHashScheme{
-						Scheme: AlgorithmHMAC,
+						Scheme: KeyedHashSchemeHMAC,
 						Details: SchemeKeyedHashU{
-							&SchemeHMAC{HashAlg: AlgorithmSHA256}}}}},
+							&SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}},
 			Unique: PublicIDU{unique}}
 
 		run(t, &sensitive, &public, HandleNull)
@@ -394,13 +394,13 @@ func TestLoadExternal(t *testing.T) {
 		}
 
 		public := Public{
-			Type:    AlgorithmRSA,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
 				&RSAParams{
-					Symmetric: SymDefObject{Algorithm: AlgorithmNull},
-					Scheme:    RSAScheme{Scheme: AlgorithmNull},
+					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
 			Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
@@ -421,11 +421,11 @@ func TestUnseal(t *testing.T) {
 	create := func(t *testing.T, authPolicy Digest, authValue Auth,
 		extraAttrs ObjectAttributes) ResourceContext {
 		template := Public{
-			Type:       AlgorithmKeyedHash,
-			NameAlg:    AlgorithmSHA256,
+			Type:       ObjectTypeKeyedHash,
+			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent | extraAttrs,
 			AuthPolicy: authPolicy,
-			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
 		sensitive := SensitiveCreate{Data: secret, UserAuth: authValue}
 
@@ -466,7 +466,7 @@ func TestUnseal(t *testing.T) {
 	t.Run("UseHMACSessionAuth", func(t *testing.T) {
 		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
-		sessionContext, err := tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -477,7 +477,7 @@ func TestUnseal(t *testing.T) {
 	t.Run("UsePolicySessionAuth", func(t *testing.T) {
 		handle := create(t, make([]byte, 32), nil, 0)
 		defer flushContext(t, tpm, handle)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -496,10 +496,10 @@ func TestObjectChangeAuth(t *testing.T) {
 	create := func(t *testing.T, userAuth Auth) (ResourceContext, *Public) {
 		sensitive := SensitiveCreate{Data: []byte("sensitive data"), UserAuth: userAuth}
 		template := Public{
-			Type:    AlgorithmKeyedHash,
-			NameAlg: AlgorithmSHA256,
+			Type:    ObjectTypeKeyedHash,
+			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
-			Params:  PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+			Params:  PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 		if err != nil {
@@ -547,7 +547,7 @@ func TestObjectChangeAuth(t *testing.T) {
 	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
 		context, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, context)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -559,7 +559,7 @@ func TestObjectChangeAuth(t *testing.T) {
 	t.Run("UseBoundSessionAuth", func(t *testing.T) {
 		context, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, context)
-		sessionContext, err := tpm.StartAuthSession(nil, context, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, context, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -625,7 +625,7 @@ func TestActivateCredential(t *testing.T) {
 			t.Fatalf("MakeCredential failed: %v", err)
 		}
 
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -658,7 +658,7 @@ func TestActivateCredential(t *testing.T) {
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)
 		defer flushContext(t, tpm, ak)
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

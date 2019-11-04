@@ -472,6 +472,50 @@ func (a AlgorithmId) Format(s fmt.State, f rune) {
 	}
 }
 
+func (a HashAlgorithmId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a SymAlgorithmId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a SymObjectAlgorithmId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a SymModeId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a KDFAlgorithmId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a SigSchemeId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a KeyedHashSchemeId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a AsymSchemeId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a RSASchemeId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a ECCSchemeId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
+func (a ObjectTypeId) Format(s fmt.State, f rune) {
+	AlgorithmId(a).Format(s, f)
+}
+
 func (c Capability) String() string {
 	switch c {
 	case CapabilityAlgs:

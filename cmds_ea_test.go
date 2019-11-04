@@ -58,7 +58,7 @@ func TestPolicySigned(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -108,7 +108,7 @@ func TestPolicySigned(t *testing.T) {
 				}
 			}
 
-			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicySigned(key, data.policyRef)
 
 			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
@@ -131,7 +131,7 @@ func TestPolicySecret(t *testing.T) {
 	defer flushContext(t, tpm, primary)
 
 	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32, useSession func(ResourceContext), auth interface{}) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("PolicyGetDigest failed: %v", err)
 		}
 
-		trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+		trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 		trial.PolicySecret(primary, policyRef)
 
 		if !bytes.Equal(trial.GetDigest(), policyDigest) {
@@ -186,7 +186,7 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, 0, nil, testAuth)
 	})
 	t.Run("UseSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -200,16 +200,16 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, -100, nil, testAuth)
 	})
 	t.Run("WithExpiration", func(t *testing.T) {
-		trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+		trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 		trial.PolicySecret(primary, nil)
 
 		secret := []byte("secret data")
 		template := Public{
-			Type:       AlgorithmKeyedHash,
-			NameAlg:    AlgorithmSHA256,
+			Type:       ObjectTypeKeyedHash,
+			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: trial.GetDigest(),
-			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, testAuth)
@@ -237,17 +237,17 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, 1, useSession, testAuth)
 	})
 	t.Run("WithCpHash", func(t *testing.T) {
-		trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+		trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 		trial.PolicySecret(primary, nil)
 
 		secret1 := []byte("secret data1")
 		secret2 := []byte("secret data2")
 		template := Public{
-			Type:       AlgorithmKeyedHash,
-			NameAlg:    AlgorithmSHA256,
+			Type:       ObjectTypeKeyedHash,
+			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: trial.GetDigest(),
-			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive1 := SensitiveCreate{Data: secret1}
 		sensitive2 := SensitiveCreate{Data: secret2}
 
@@ -273,7 +273,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext2)
 
-		cpHash, err := ComputeCpHash(AlgorithmSHA256, CommandUnseal, objectContext2)
+		cpHash, err := ComputeCpHash(HashAlgorithmSHA256, CommandUnseal, objectContext2)
 		if err != nil {
 			t.Fatalf("ComputeCpHash failed: %v", err)
 		}
@@ -324,7 +324,7 @@ func TestPolicyTicketFromSecret(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -335,7 +335,7 @@ func TestPolicyTicketFromSecret(t *testing.T) {
 				t.Fatalf("PolicySecret failed: %v", err)
 			}
 
-			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -393,7 +393,7 @@ func TestPolicyTicketFromSigned(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -417,7 +417,7 @@ func TestPolicyTicketFromSigned(t *testing.T) {
 				t.Fatalf("PolicySigned failed: %v", err)
 			}
 
-			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext2, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -448,7 +448,7 @@ func TestPolicyOR(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyCommandCode(CommandNVChangeAuth)
 	digest := trial.GetDigest()
 
@@ -463,7 +463,7 @@ func TestPolicyOR(t *testing.T) {
 
 	trial.PolicyOR(digestList)
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -521,43 +521,43 @@ func TestPolicyPCR(t *testing.T) {
 		{
 			desc: "SinglePCRSingleBank",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{8}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank2",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{8}}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}}},
 		},
 		{
 			desc: "MultiplePCRSingleBank",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}}},
 		},
 		{
 			desc: "MultiplePCRMultipleBank",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}},
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{7, 8, 9}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8, 9}}},
 		},
 		{
 			desc: "WithDigest",
-			digest: computePCRDigestFromTPM(t, tpm, AlgorithmSHA256, PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{8}}}),
+			digest: computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, PCRSelectionList{
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}}),
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: AlgorithmSHA256, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: AlgorithmSHA1, Select: PCRSelectionData{8}}},
+				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
+				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -574,10 +574,10 @@ func TestPolicyPCR(t *testing.T) {
 
 			pcrDigest := data.digest
 			if len(pcrDigest) == 0 {
-				pcrDigest = computePCRDigestFromTPM(t, tpm, AlgorithmSHA256, data.pcrs)
+				pcrDigest = computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, data.pcrs)
 			}
 
-			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyPCR(pcrDigest, data.pcrs)
 
 			if !bytes.Equal(policyDigest, trial.GetDigest()) {
@@ -591,12 +591,12 @@ func TestPolicyCommandCode(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyCommandCode(CommandUnseal)
 
 	authPolicy := trial.GetDigest()
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -620,7 +620,7 @@ func TestPolicyAuthValue(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 
 	authPolicy := trial.GetDigest()
@@ -629,11 +629,11 @@ func TestPolicyAuthValue(t *testing.T) {
 	defer flushContext(t, tpm, primary)
 
 	template := Public{
-		Type:       AlgorithmKeyedHash,
-		NameAlg:    AlgorithmSHA256,
+		Type:       ObjectTypeKeyedHash,
+		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
@@ -672,7 +672,7 @@ func TestPolicyAuthValue(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, AlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256, data.bindAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -702,7 +702,7 @@ func TestPolicyPassword(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyPassword()
 
 	authPolicy := trial.GetDigest()
@@ -711,11 +711,11 @@ func TestPolicyPassword(t *testing.T) {
 	defer flushContext(t, tpm, primary)
 
 	template := Public{
-		Type:       AlgorithmKeyedHash,
-		NameAlg:    AlgorithmSHA256,
+		Type:       ObjectTypeKeyedHash,
+		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: AlgorithmNull}}}}
+		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
@@ -728,7 +728,7 @@ func TestPolicyPassword(t *testing.T) {
 	}
 	defer flushContext(t, tpm, objectContext)
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -780,7 +780,7 @@ func TestPolicyNV(t *testing.T) {
 			desc: "UnsignedLE",
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
-				NameAlg: AlgorithmSHA256,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
@@ -796,7 +796,7 @@ func TestPolicyNV(t *testing.T) {
 			desc: "UnsignedGT",
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
-				NameAlg: AlgorithmSHA256,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
@@ -812,7 +812,7 @@ func TestPolicyNV(t *testing.T) {
 			desc: "Offset",
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
-				NameAlg: AlgorithmSHA256,
+				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
@@ -839,12 +839,12 @@ func TestPolicyNV(t *testing.T) {
 		run := func(t *testing.T, index ResourceContext, auth interface{}) {
 			data.prepare(t, index, auth)
 
-			trial, _ := ComputeAuthPolicy(AlgorithmSHA256)
+			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyNV(index, data.operandB, data.offset, data.operation)
 
 			authPolicy := trial.GetDigest()
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, AlgorithmSHA256, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -881,7 +881,7 @@ func TestPolicyNV(t *testing.T) {
 			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
 
 			// Don't use a bound session as the name of index changes when it is written to for the first time
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, AlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
