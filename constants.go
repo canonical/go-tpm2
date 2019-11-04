@@ -390,8 +390,7 @@ const (
 const (
 	HandleOwner       Handle = 0x40000001 // TPM_RH_OWNER
 	HandleNull        Handle = 0x40000007 // TPM_RH_NULL
-	HandleUnassigned  Handle = 0x40000008 // TPM_RH_UNASSIGNED
-	HandlePW          Handle = 0x40000009 // TPM_RH_PW
+	HandlePW          Handle = 0x40000009 // TPM_RS_PW
 	HandleLockout     Handle = 0x4000000a // TPM_RH_LOCKOUT
 	HandleEndorsement Handle = 0x4000000b // TPM_RH_ENDORSEMENT
 	HandlePlatform    Handle = 0x4000000c // TPM_RH_PLATFORM

@@ -388,6 +388,36 @@ func (e WarningCode) Format(s fmt.State, f rune) {
 	}
 }
 
+func (h Handle) String() string {
+	switch h {
+	case HandleOwner:
+		return "TPM_RH_OWNER"
+	case HandleNull:
+		return "TPM_RH_NULL"
+	case HandlePW:
+		return "TPM_RS_PW"
+	case HandleLockout:
+		return "TPM_RH_LOCKOUT"
+	case HandleEndorsement:
+		return "TPM_RH_ENDORSEMENT"
+	case HandlePlatform:
+		return "TPM_RH_PLATFORM"
+	case HandlePlatformNV:
+		return "TPM_RH_PLATFORM_NV"
+	default:
+		return fmt.Sprintf("0x%08x", uint32(h))
+	}
+}
+
+func (h Handle) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v':
+		fmt.Fprintf(s, "%s", h.String())
+	default:
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(h))
+	}
+}
+
 func (a AlgorithmId) String() string {
 	switch a {
 	case AlgorithmRSA:
