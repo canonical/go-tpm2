@@ -451,100 +451,100 @@ const (
 )
 
 const (
-	HashAlgorithmNull    = HashAlgorithmId(AlgorithmNull)
-	HashAlgorithmSHA1    = HashAlgorithmId(AlgorithmSHA1)
-	HashAlgorithmSHA256  = HashAlgorithmId(AlgorithmSHA256)
-	HashAlgorithmSHA384  = HashAlgorithmId(AlgorithmSHA384)
-	HashAlgorithmSHA512  = HashAlgorithmId(AlgorithmSHA512)
-	HashAlgorithmSM3_256 = HashAlgorithmId(AlgorithmSM3_256)
+	HashAlgorithmNull    HashAlgorithmId = HashAlgorithmId(AlgorithmNull)    // TPM_ALG_NULL
+	HashAlgorithmSHA1    HashAlgorithmId = HashAlgorithmId(AlgorithmSHA1)    // TPM_ALG_SHA1
+	HashAlgorithmSHA256  HashAlgorithmId = HashAlgorithmId(AlgorithmSHA256)  // TPM_ALG_SHA256
+	HashAlgorithmSHA384  HashAlgorithmId = HashAlgorithmId(AlgorithmSHA384)  // TPM_ALG_SHA384
+	HashAlgorithmSHA512  HashAlgorithmId = HashAlgorithmId(AlgorithmSHA512)  // TPM_ALG_SHA512
+	HashAlgorithmSM3_256 HashAlgorithmId = HashAlgorithmId(AlgorithmSM3_256) // TPM_ALG_SM3_256
 )
 
 const (
-	SymAlgorithmAES      = SymAlgorithmId(AlgorithmAES)
-	SymAlgorithmXOR      = SymAlgorithmId(AlgorithmXOR)
-	SymAlgorithmNull     = SymAlgorithmId(AlgorithmNull)
-	SymAlgorithmSM4      = SymAlgorithmId(AlgorithmSM4)
-	SymAlgorithmCamellia = SymAlgorithmId(AlgorithmCamellia)
+	SymAlgorithmAES      SymAlgorithmId = SymAlgorithmId(AlgorithmAES)      // TPM_ALG_AES
+	SymAlgorithmXOR      SymAlgorithmId = SymAlgorithmId(AlgorithmXOR)      // TPM_ALG_XOR
+	SymAlgorithmNull     SymAlgorithmId = SymAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
+	SymAlgorithmSM4      SymAlgorithmId = SymAlgorithmId(AlgorithmSM4)      // TPM_ALG_SM4
+	SymAlgorithmCamellia SymAlgorithmId = SymAlgorithmId(AlgorithmCamellia) // TPM_ALG_CAMELLIA
 )
 
 const (
-	SymObjectAlgorithmAES      = SymObjectAlgorithmId(AlgorithmAES)
-	SymObjectAlgorithmNull     = SymObjectAlgorithmId(AlgorithmNull)
-	SymObjectAlgorithmSM4      = SymObjectAlgorithmId(AlgorithmSM4)
-	SymObjectAlgorithmCamellia = SymObjectAlgorithmId(AlgorithmCamellia)
+	SymObjectAlgorithmAES      SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmAES)      // TPM_ALG_AES
+	SymObjectAlgorithmNull     SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
+	SymObjectAlgorithmSM4      SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmSM4)      // TPM_ALG_SM4
+	SymObjectAlgorithmCamellia SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmCamellia) // TPM_ALG_CAMELLIA
 )
 
 const (
-	SymModeNull = SymModeId(AlgorithmNull)
-	SymModeCTR  = SymModeId(AlgorithmCTR)
-	SymModeOFB  = SymModeId(AlgorithmOFB)
-	SymModeCBC  = SymModeId(AlgorithmCBC)
-	SymModeCFB  = SymModeId(AlgorithmCFB)
-	SymModeECB  = SymModeId(AlgorithmECB)
+	SymModeNull SymModeId = SymModeId(AlgorithmNull) // TPM_ALG_NULL
+	SymModeCTR  SymModeId = SymModeId(AlgorithmCTR)  // TPM_ALG_CTR
+	SymModeOFB  SymModeId = SymModeId(AlgorithmOFB)  // TPM_ALG_OFB
+	SymModeCBC  SymModeId = SymModeId(AlgorithmCBC)  // TPM_ALG_CBC
+	SymModeCFB  SymModeId = SymModeId(AlgorithmCFB)  // TPM_ALG_CFB
+	SymModeECB  SymModeId = SymModeId(AlgorithmECB)  // TPM_ALG_ECB
 )
 
 const (
-	KDFAlgorithmMGF1           = KDFAlgorithmId(AlgorithmMGF1)
-	KDFAlgorithmNull           = KDFAlgorithmId(AlgorithmNull)
-	KDFAlgorithmKDF1_SP800_56A = KDFAlgorithmId(AlgorithmKDF1_SP800_56A)
-	KDFAlgorithmKDF2           = KDFAlgorithmId(AlgorithmKDF2)
-	KDFAlgorithmKDF1_SP800_108 = KDFAlgorithmId(AlgorithmKDF1_SP800_108)
+	KDFAlgorithmMGF1           KDFAlgorithmId = KDFAlgorithmId(AlgorithmMGF1)           // TPM_ALG_MGF1
+	KDFAlgorithmNull           KDFAlgorithmId = KDFAlgorithmId(AlgorithmNull)           // TPM_ALG_NULL
+	KDFAlgorithmKDF1_SP800_56A KDFAlgorithmId = KDFAlgorithmId(AlgorithmKDF1_SP800_56A) // TPM_ALG_KDF1_SP800_56A
+	KDFAlgorithmKDF2           KDFAlgorithmId = KDFAlgorithmId(AlgorithmKDF2)           // TPM_ALG_KDF2
+	KDFAlgorithmKDF1_SP800_108 KDFAlgorithmId = KDFAlgorithmId(AlgorithmKDF1_SP800_108) // TPM_ALG_KDF1_SP800_108
 )
 
 const (
-	SigSchemeAlgHMAC      = SigSchemeId(AlgorithmHMAC)
-	SigSchemeAlgNull      = SigSchemeId(AlgorithmNull)
-	SigSchemeAlgRSASSA    = SigSchemeId(AlgorithmRSASSA)
-	SigSchemeAlgRSAPSS    = SigSchemeId(AlgorithmRSAPSS)
-	SigSchemeAlgECDSA     = SigSchemeId(AlgorithmECDSA)
-	SigSchemeAlgECDAA     = SigSchemeId(AlgorithmECDAA)
-	SigSchemeAlgSM2       = SigSchemeId(AlgorithmSM2)
-	SigSchemeAlgECSCHNORR = SigSchemeId(AlgorithmECSCHNORR)
+	SigSchemeAlgHMAC      SigSchemeId = SigSchemeId(AlgorithmHMAC)      // TPM_ALG_HMAC
+	SigSchemeAlgNull      SigSchemeId = SigSchemeId(AlgorithmNull)      // TPM_ALG_NULL
+	SigSchemeAlgRSASSA    SigSchemeId = SigSchemeId(AlgorithmRSASSA)    // TPM_ALG_RSASSA
+	SigSchemeAlgRSAPSS    SigSchemeId = SigSchemeId(AlgorithmRSAPSS)    // TPM_ALG_RSAPSS
+	SigSchemeAlgECDSA     SigSchemeId = SigSchemeId(AlgorithmECDSA)     // TPM_ALG_ECDSA
+	SigSchemeAlgECDAA     SigSchemeId = SigSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
+	SigSchemeAlgSM2       SigSchemeId = SigSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
+	SigSchemeAlgECSCHNORR SigSchemeId = SigSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
 )
 
 const (
-	KeyedHashSchemeHMAC = KeyedHashSchemeId(AlgorithmHMAC)
-	KeyedHashSchemeXOR  = KeyedHashSchemeId(AlgorithmXOR)
-	KeyedHashSchemeNull = KeyedHashSchemeId(AlgorithmNull)
+	KeyedHashSchemeHMAC KeyedHashSchemeId = KeyedHashSchemeId(AlgorithmHMAC) // TPM_ALG_HMAC
+	KeyedHashSchemeXOR  KeyedHashSchemeId = KeyedHashSchemeId(AlgorithmXOR)  // TPM_ALG_XOR
+	KeyedHashSchemeNull KeyedHashSchemeId = KeyedHashSchemeId(AlgorithmNull) // TPM_ALG_NULL
 )
 
 const (
-	AsymSchemeNull      = AsymSchemeId(AlgorithmNull)
-	AsymSchemeRSASSA    = AsymSchemeId(AlgorithmRSASSA)
-	AsymSchemeRSAES     = AsymSchemeId(AlgorithmRSAES)
-	AsymSchemeRSAPSS    = AsymSchemeId(AlgorithmRSAPSS)
-	AsymSchemeOAEP      = AsymSchemeId(AlgorithmOAEP)
-	AsymSchemeECDSA     = AsymSchemeId(AlgorithmECDSA)
-	AsymSchemeECDH      = AsymSchemeId(AlgorithmECDH)
-	AsymSchemeECDAA     = AsymSchemeId(AlgorithmECDAA)
-	AsymSchemeSM2       = AsymSchemeId(AlgorithmSM2)
-	AsymSchemeECSCHNORR = AsymSchemeId(AlgorithmECSCHNORR)
-	AsymSchemeECMQV     = AsymSchemeId(AlgorithmECMQV)
+	AsymSchemeNull      AsymSchemeId = AsymSchemeId(AlgorithmNull)      // TPM_ALG_NULL
+	AsymSchemeRSASSA    AsymSchemeId = AsymSchemeId(AlgorithmRSASSA)    // TPM_ALG_RSASSA
+	AsymSchemeRSAES     AsymSchemeId = AsymSchemeId(AlgorithmRSAES)     // TPM_ALG_RSAES
+	AsymSchemeRSAPSS    AsymSchemeId = AsymSchemeId(AlgorithmRSAPSS)    // TPM_ALG_RSAPSS
+	AsymSchemeOAEP      AsymSchemeId = AsymSchemeId(AlgorithmOAEP)      // TPM_ALG_OAEP
+	AsymSchemeECDSA     AsymSchemeId = AsymSchemeId(AlgorithmECDSA)     // TPM_ALG_ECDSA
+	AsymSchemeECDH      AsymSchemeId = AsymSchemeId(AlgorithmECDH)      // TPM_ALG_ECDH
+	AsymSchemeECDAA     AsymSchemeId = AsymSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
+	AsymSchemeSM2       AsymSchemeId = AsymSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
+	AsymSchemeECSCHNORR AsymSchemeId = AsymSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+	AsymSchemeECMQV     AsymSchemeId = AsymSchemeId(AlgorithmECMQV)     // TPM_ALG_ECMQV
 )
 
 const (
-	RSASchemeNull   = RSASchemeId(AlgorithmNull)
-	RSASchemeRSASSA = RSASchemeId(AlgorithmRSASSA)
-	RSASchemeRSAES  = RSASchemeId(AlgorithmRSAES)
-	RSASchemeRSAPSS = RSASchemeId(AlgorithmRSAPSS)
-	RSASchemeOAEP   = RSASchemeId(AlgorithmOAEP)
+	RSASchemeNull   RSASchemeId = RSASchemeId(AlgorithmNull)   // TPM_ALG_NULL
+	RSASchemeRSASSA RSASchemeId = RSASchemeId(AlgorithmRSASSA) // TPM_ALG_RSASSA
+	RSASchemeRSAES  RSASchemeId = RSASchemeId(AlgorithmRSAES)  // TPM_ALG_RSAES
+	RSASchemeRSAPSS RSASchemeId = RSASchemeId(AlgorithmRSAPSS) // TPM_ALG_RSAPSS
+	RSASchemeOAEP   RSASchemeId = RSASchemeId(AlgorithmOAEP)   // TPM_ALG_OAEP
 )
 
 const (
-	ECCSchemeNull      = ECCSchemeId(AlgorithmNull)
-	ECCSchemeECDSA     = ECCSchemeId(AlgorithmECDSA)
-	ECCSchemeECDH      = ECCSchemeId(AlgorithmECDH)
-	ECCSchemeECDAA     = ECCSchemeId(AlgorithmECDAA)
-	ECCSchemeSM2       = ECCSchemeId(AlgorithmSM2)
-	ECCSchemeECSCHNORR = ECCSchemeId(AlgorithmECSCHNORR)
-	ECCSchemeECMQV     = ECCSchemeId(AlgorithmECMQV)
+	ECCSchemeNull      ECCSchemeId = ECCSchemeId(AlgorithmNull)      // TPM_ALG_NULL
+	ECCSchemeECDSA     ECCSchemeId = ECCSchemeId(AlgorithmECDSA)     // TPM_ALG_ECDSA
+	ECCSchemeECDH      ECCSchemeId = ECCSchemeId(AlgorithmECDH)      // TPM_ALG_ECDH
+	ECCSchemeECDAA     ECCSchemeId = ECCSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
+	ECCSchemeSM2       ECCSchemeId = ECCSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
+	ECCSchemeECSCHNORR ECCSchemeId = ECCSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+	ECCSchemeECMQV     ECCSchemeId = ECCSchemeId(AlgorithmECMQV)     // TPM_ALG_ECMQV
 )
 
 const (
-	ObjectTypeRSA       = ObjectTypeId(AlgorithmRSA)
-	ObjectTypeKeyedHash = ObjectTypeId(AlgorithmKeyedHash)
-	ObjectTypeECC       = ObjectTypeId(AlgorithmECC)
-	ObjectTypeSymCipher = ObjectTypeId(AlgorithmSymCipher)
+	ObjectTypeRSA       ObjectTypeId = ObjectTypeId(AlgorithmRSA)       // TPM_ALG_RSA
+	ObjectTypeKeyedHash ObjectTypeId = ObjectTypeId(AlgorithmKeyedHash) // TPM_ALG_KEYEDHASH
+	ObjectTypeECC       ObjectTypeId = ObjectTypeId(AlgorithmECC)       // TPM_ALG_ECC
+	ObjectTypeSymCipher ObjectTypeId = ObjectTypeId(AlgorithmSymCipher) // TPM_ALG_SYMCIPHER
 )
 
 const (
