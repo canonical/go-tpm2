@@ -243,7 +243,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 		}
 	}
 
-	for remaining > 0 {
+	for {
 		s := remaining
 		if s > t.maxNVBufferSize {
 			s = t.maxNVBufferSize
@@ -259,6 +259,10 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 
 		total += s
 		remaining -= s
+
+		if remaining == 0 {
+			break
+		}
 	}
 
 	return nil
@@ -493,7 +497,7 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 	total := uint16(0)
 	remaining := size
 
-	for remaining > 0 {
+	for {
 		s := remaining
 		if s > t.maxNVBufferSize {
 			s = t.maxNVBufferSize
@@ -512,6 +516,10 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 		copy(data[total:], tmpData)
 		total += s
 		remaining -= s
+
+		if remaining == 0 {
+			break
+		}
 	}
 
 	return data, nil

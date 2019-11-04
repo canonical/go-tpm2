@@ -202,6 +202,42 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 	})
 }
 
+func TestNVWriteZeroSized(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	pub := NVPublic{
+		Index:   Handle(0x0181ffff),
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+		Size:    0}
+	if err := tpm.NVDefineSpace(HandleOwner, nil, &pub, nil); err != nil {
+		t.Fatalf("NVDefineSpace failed: %v", err)
+	}
+	rc, err := tpm.WrapHandle(pub.Index)
+	if err != nil {
+		t.Fatalf("WrapHandle failed: %v", err)
+	}
+	defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+
+	if err := tpm.NVWrite(rc, rc, nil, 0, nil); err != nil {
+		t.Fatalf("NVWrite failed: %v", err)
+	}
+
+	pub2, name, err := tpm.NVReadPublic(rc)
+	if err != nil {
+		t.Fatalf("NVReadPublic failed: %v", err)
+	}
+
+	if pub2.Attrs&AttrNVWritten == 0 {
+		t.Errorf("Unexpected attributes")
+	}
+
+	if !bytes.Equal(name, rc.Name()) {
+		t.Errorf("Name of NV resource context should have been refreshed")
+	}
+}
+
 func TestNVReadAndWrite(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
