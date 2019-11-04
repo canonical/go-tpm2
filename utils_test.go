@@ -115,8 +115,7 @@ func TestTrialPolicySigned(t *testing.T) {
 				t.Fatalf("Sign failed: %v", err)
 			}
 
-			if _, _, err := tpm.PolicySigned(key, sessionContext, false, nil, data.policyRef, 0,
-				signature); err != nil {
+			if _, _, err := tpm.PolicySigned(key, sessionContext, false, nil, data.policyRef, 0, signature); err != nil {
 				t.Fatalf("PolicySigned failed: %v", err)
 			}
 
@@ -124,7 +123,7 @@ func TestTrialPolicySigned(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ComputeAuthPolicy failed: %v", err)
 			}
-			trial.PolicySigned(key, data.policyRef)
+			trial.PolicySigned(key.Name(), data.policyRef)
 
 			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
@@ -179,7 +178,7 @@ func TestTrialPolicySecret(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ComputeAuthPolicy failed: %v", err)
 			}
-			trial.PolicySecret(primary, data.policyRef)
+			trial.PolicySecret(primary.Name(), data.policyRef)
 
 			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
@@ -400,7 +399,7 @@ func TestTrialPolicyNV(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ComputeAuthPolicy failed: %v", err)
 			}
-			trial.PolicyNV(index, data.operandB, data.offset, data.operation)
+			trial.PolicyNV(index.Name(), data.operandB, data.offset, data.operation)
 
 			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {

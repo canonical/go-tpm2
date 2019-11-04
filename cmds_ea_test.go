@@ -109,7 +109,7 @@ func TestPolicySigned(t *testing.T) {
 			}
 
 			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-			trial.PolicySigned(key, data.policyRef)
+			trial.PolicySigned(key.Name(), data.policyRef)
 
 			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
@@ -171,7 +171,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 
 		trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-		trial.PolicySecret(primary, policyRef)
+		trial.PolicySecret(primary.Name(), policyRef)
 
 		if !bytes.Equal(trial.GetDigest(), policyDigest) {
 			t.Errorf("Unexpected digest")
@@ -201,7 +201,7 @@ func TestPolicySecret(t *testing.T) {
 	})
 	t.Run("WithExpiration", func(t *testing.T) {
 		trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-		trial.PolicySecret(primary, nil)
+		trial.PolicySecret(primary.Name(), nil)
 
 		secret := []byte("secret data")
 		template := Public{
@@ -238,7 +238,7 @@ func TestPolicySecret(t *testing.T) {
 	})
 	t.Run("WithCpHash", func(t *testing.T) {
 		trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-		trial.PolicySecret(primary, nil)
+		trial.PolicySecret(primary.Name(), nil)
 
 		secret1 := []byte("secret data1")
 		secret2 := []byte("secret data2")
@@ -840,7 +840,7 @@ func TestPolicyNV(t *testing.T) {
 			data.prepare(t, index, auth)
 
 			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-			trial.PolicyNV(index, data.operandB, data.offset, data.operation)
+			trial.PolicyNV(index.Name(), data.operandB, data.offset, data.operation)
 
 			authPolicy := trial.GetDigest()
 

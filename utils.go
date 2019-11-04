@@ -139,12 +139,12 @@ func (p *TrialAuthPolicy) GetDigest() Digest {
 	return p.digest
 }
 
-func (p *TrialAuthPolicy) PolicySigned(authObject ResourceContext, policyRef Nonce) {
-	p.policyUpdate(CommandPolicySigned, authObject.Name(), policyRef)
+func (p *TrialAuthPolicy) PolicySigned(authName Name, policyRef Nonce) {
+	p.policyUpdate(CommandPolicySigned, authName, policyRef)
 }
 
-func (p *TrialAuthPolicy) PolicySecret(authObject ResourceContext, policyRef Nonce) {
-	p.policyUpdate(CommandPolicySecret, authObject.Name(), policyRef)
+func (p *TrialAuthPolicy) PolicySecret(authName Name, policyRef Nonce) {
+	p.policyUpdate(CommandPolicySecret, authName, policyRef)
 }
 
 func (p *TrialAuthPolicy) PolicyOR(pHashList DigestList) {
@@ -169,7 +169,7 @@ func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) {
 	h.commit()
 }
 
-func (p *TrialAuthPolicy) PolicyNV(nvIndex ResourceContext, operandB Operand, offset uint16,
+func (p *TrialAuthPolicy) PolicyNV(nvIndexName Name, operandB Operand, offset uint16,
 	operation ArithmeticOp) {
 	h1 := cryptConstructHash(p.alg)
 	h1.Write(operandB)
@@ -180,7 +180,7 @@ func (p *TrialAuthPolicy) PolicyNV(nvIndex ResourceContext, operandB Operand, of
 
 	h2 := p.beginExtend(CommandPolicyNV)
 	h2.Write(args)
-	h2.Write(nvIndex.Name())
+	h2.Write(nvIndexName)
 	h2.commit()
 }
 
