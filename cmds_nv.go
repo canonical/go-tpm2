@@ -161,7 +161,8 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 	return nil
 }
 
-func (t *TPMContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPublic, Name, error) {
+// NVReadPublic executes the TPM2_NV_ReadPublic command to read the public area of the NV index associated with nvIndex.
+func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error) {
 	var nvPublic nvPublicSized
 	var nvName Name
 	if err := t.RunCommand(CommandNVReadPublic, sessions,
@@ -177,15 +178,6 @@ func (t *TPMContext) nvReadPublic(nvIndex Handle, sessions ...*Session) (*NVPubl
 		return nil, nil, &InvalidResponseError{CommandNVReadPublic, "name and public area don't match"}
 	}
 	return nvPublic.Ptr, nvName, nil
-}
-
-// NVReadPublic executes the TPM2_NV_ReadPublic command to read the public area of the NV index associated with nvIndex.
-func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session) (*NVPublic, Name, error) {
-	if err := t.checkResourceContextParam(nvIndex); err != nil {
-		return nil, nil, fmt.Errorf("invalid resource context for nvIndex: %v", err)
-	}
-
-	return t.nvReadPublic(nvIndex.Handle(), sessions...)
 }
 
 // NVWriteRaw executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.

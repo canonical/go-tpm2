@@ -157,7 +157,7 @@ func makeIncompleteSessionContext(t *TPMContext, handle Handle) (ResourceContext
 }
 
 func makeNVIndexContext(t *TPMContext, handle Handle) (ResourceContext, error) {
-	pub, name, err := t.nvReadPublic(handle)
+	pub, name, err := t.NVReadPublic(permanentContext(handle))
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func makeNVIndexContext(t *TPMContext, handle Handle) (ResourceContext, error) {
 }
 
 func makeObjectContext(t *TPMContext, handle Handle) (ResourceContext, error) {
-	pub, name, _, err := t.readPublic(handle)
+	pub, name, _, err := t.ReadPublic(permanentContext(handle))
 	if err != nil {
 		return nil, err
 	}

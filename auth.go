@@ -320,10 +320,15 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 		// used instead).
 		s.associatedContext = permanentContext(i.Handle)
 	case []*Session:
+		addedOne := false
 		for _, s := range i {
 			if s == nil {
+				if !addedOne {
+					continue
+				}
 				return nil, errors.New("nil session parameter")
 			}
+			addedOne = true
 			var err error
 			params, err = t.validateAndAppendSessionParam(params, s)
 			if err != nil {

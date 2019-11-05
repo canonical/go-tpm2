@@ -288,12 +288,17 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	return objectContext, name, nil
 }
 
-func (t *TPMContext) readPublic(objectHandle Handle, sessions ...*Session) (*Public, Name, Name, error) {
+// ReadPublic executes the TPM2_ReadPublic command to read the public area of the object associated with objectContext.
+//
+// If objectContext corresponds to a sequence object, a *TPMError with an error code of ErrorSequence will be returned.
+//
+// On success, the public part of the object is returned, along with the object's name and qualified name.
+func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
 	var outPublic publicSized
 	var name Name
 	var qualifiedName Name
 	if err := t.RunCommand(CommandReadPublic, sessions,
-		objectHandle, Separator,
+		objectContext, Separator,
 		Separator,
 		Separator,
 		&outPublic, &name, &qualifiedName); err != nil {
@@ -305,19 +310,6 @@ func (t *TPMContext) readPublic(objectHandle Handle, sessions ...*Session) (*Pub
 		return nil, nil, nil, &InvalidResponseError{CommandReadPublic, "name and public area don't match"}
 	}
 	return outPublic.Ptr, name, qualifiedName, nil
-}
-
-// ReadPublic executes the TPM2_ReadPublic command to read the public area of the object associated with objectContext.
-//
-// If objectContext corresponds to a sequence object, a *TPMError with an error code of ErrorSequence will be returned.
-//
-// On success, the public part of the object is returned, along with the object's name and qualified name.
-func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
-	if err := t.checkResourceContextParam(objectContext); err != nil {
-		return nil, nil, nil, fmt.Errorf("invalid resource context for objectContext: %v", err)
-	}
-
-	return t.readPublic(objectContext.Handle(), sessions...)
 }
 
 // ActivateCredential executes the TPM2_ActivateCredential command to associate a certificate with the object associated with

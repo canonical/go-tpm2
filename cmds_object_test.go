@@ -271,19 +271,39 @@ func TestReadPublic(t *testing.T) {
 	}
 	defer flushContext(t, tpm, objectContext)
 
-	public, name2, qualifiedName, err := tpm.ReadPublic(objectContext)
-	if err != nil {
-		t.Fatalf("ReadPublic failed: %v", err)
+	run := func(t *testing.T, session *Session) {
+		public, name2, qualifiedName, err := tpm.ReadPublic(objectContext, session)
+		if err != nil {
+			t.Fatalf("ReadPublic failed: %v", err)
+		}
+
+		verifyPublicAgainstTemplate(t, &template, public)
+
+		if !bytes.Equal(name1, name2) {
+			t.Errorf("ReadPublic returned an unexpected name")
+		}
+		if qualifiedName.Algorithm() != HashAlgorithmSHA256 {
+			t.Errorf("ReadPublic returned a qualifiedName of the wrong algorithm")
+		}
 	}
 
-	verifyPublicAgainstTemplate(t, &template, public)
+	t.Run("NoSession", func(t *testing.T) {
+		run(t, nil)
+	})
 
-	if !bytes.Equal(name1, name2) {
-		t.Errorf("ReadPublic returned an unexpected name")
-	}
-	if qualifiedName.Algorithm() != HashAlgorithmSHA256 {
-		t.Errorf("ReadPublic returned a qualifiedName of the wrong algorithm")
-	}
+	t.Run("ResponseEncrypt", func(t *testing.T) {
+		symmetric := SymDef{
+			Algorithm: SymAlgorithmAES,
+			KeyBits:   SymKeyBitsU{uint16(128)},
+			Mode:      SymModeU{SymModeCFB}}
+		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &symmetric, HashAlgorithmSHA256, nil)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionContext)
+
+		run(t, &Session{Context: sessionContext, Attrs: AttrResponseEncrypt})
+	})
 }
 
 func TestLoadExternal(t *testing.T) {
