@@ -389,7 +389,7 @@ type TaggedHashList []TaggedHash
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
 
-func (l PCRSelectionList) Subtract(r PCRSelectionList) (PCRSelectionList, error) {
+func (l PCRSelectionList) subtract(r PCRSelectionList) (PCRSelectionList, error) {
 	if len(l) != len(r) {
 		return nil, errors.New("incorrect number of PCRSelections")
 	}
@@ -415,7 +415,7 @@ func (l PCRSelectionList) Subtract(r PCRSelectionList) (PCRSelectionList, error)
 	return o, nil
 }
 
-func (l PCRSelectionList) IsEmpty() bool {
+func (l PCRSelectionList) isEmpty() bool {
 	for _, s := range l {
 		if len(s.Select) > 0 {
 			return false
