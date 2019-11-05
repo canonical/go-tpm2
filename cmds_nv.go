@@ -189,6 +189,8 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 }
 
 // NVWriteRaw executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
+// If the length of the data is greater than the maximum supported by the TPM in a single command, a partial write will be performed
+// and the number of bytes written will be returned.
 //
 // The command requires authorization, defined by the state of the AttrNVPPWrite, AttrNVOwnerWrite, AttrNVAuthWrite and
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
@@ -216,15 +218,21 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 // code of ErrorNVRange will be returned.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuth interface{}, sessions ...*Session) (uint16, error) {
+	t.initNVMaxBufferSize()
+
+	if uint16(len(data)) > t.maxNVBufferSize {
+		data = data[0:t.maxNVBufferSize]
+	}
+
 	if err := t.RunCommand(CommandNVWrite, sessions,
 		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
 		data, offset); err != nil {
-		return err
+		return 0, err
 	}
 
 	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
-	return nil
+	return uint16(len(data)), nil
 }
 
 // NVWrite executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
@@ -291,17 +299,13 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 	}
 
 	for {
-		s := remaining
-		if s > t.maxNVBufferSize {
-			s = t.maxNVBufferSize
-		}
-
-		if err := t.NVWriteRaw(authContext, nvIndex, data[total:total+s], offset+total, authContextAuth, sessions...); err != nil {
+		n, err := t.NVWriteRaw(authContext, nvIndex, data[total:], offset+total, authContextAuth, sessions...)
+		if err != nil {
 			return err
 		}
 
-		total += s
-		remaining -= s
+		total += n
+		remaining -= n
 
 		if remaining == 0 {
 			break
@@ -500,7 +504,8 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 }
 
 // NVReadRaw executes the TPM2_NV_Read command to read the contents of the NV index associated with nvIndex. The amount of data to read,
-// and the offset within the index are defined by the size and offset parameters.
+// and the offset within the index are defined by the size and offset parameters. If the amount of data requested is greater than the
+// maximum supported by the TPM in a single command, a partial read will be performed.
 //
 // The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead and AttrNVPolicyRead
 // attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
@@ -531,6 +536,12 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 //
 // On successful completion, the requested data will be returned.
 func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{}, sessions ...*Session) (MaxNVBuffer, error) {
+	t.initNVMaxBufferSize()
+
+	if size > t.maxNVBufferSize {
+		size = t.maxNVBufferSize
+	}
+
 	var data MaxNVBuffer
 
 	if err := t.RunCommand(CommandNVRead, sessions,
@@ -562,7 +573,8 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 //
 // If the requested data can not be read in a single command, this function will re-execute the TPM2_NV_Read command until all data
 // is read. As a consequence, any *Session instances provided should have the AttrContinueSession attribute defined. If the requested
-// data cannot be read in a single command, then authContextAuth should not correspond to a policy session.
+// data cannot be read in a single command, then authContextAuth should not correspond to a policy session. If a policy session is
+// required, use TPMContext.NVReadRaw instead.
 //
 // If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
@@ -580,26 +592,20 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 //
 // On successful completion, the requested data will be returned.
 func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{}, sessions ...*Session) (MaxNVBuffer, error) {
-	t.initNVMaxBufferSize()
-
 	data := make(MaxNVBuffer, size)
 	total := uint16(0)
 	remaining := size
 
 	for {
-		s := remaining
-		if s > t.maxNVBufferSize {
-			s = t.maxNVBufferSize
-		}
-
-		tmpData, err := t.NVReadRaw(authContext, nvIndex, s, offset+total, authContextAuth, sessions...)
+		tmpData, err := t.NVReadRaw(authContext, nvIndex, remaining, offset+total, authContextAuth, sessions...)
 		if err != nil {
 			return nil, err
 		}
 
 		copy(data[total:], tmpData)
-		total += s
-		remaining -= s
+		n := uint16(len(tmpData))
+		total += n
+		remaining -= n
 
 		if remaining == 0 {
 			break
