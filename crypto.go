@@ -128,7 +128,7 @@ func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, s
 	outKey := buf.Bytes()
 
 	if sizeInBits%8 != 0 {
-		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
+		outKey[0] &= ((1 << uint(sizeInBits % 8)) - 1)
 	}
 	if counterInOut != nil {
 		*counterInOut = counter
@@ -163,7 +163,7 @@ func cryptKDFe(hashAlg HashAlgorithmId, z, label, partyUInfo, partyVInfo []byte,
 	outKey := buf.Bytes()
 
 	if sizeInBits%8 != 0 {
-		outKey[0] &= ((1 << (sizeInBits % 8)) - 1)
+		outKey[0] &= ((1 << uint(sizeInBits % 8)) - 1)
 	}
 	return outKey
 }
