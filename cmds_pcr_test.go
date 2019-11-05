@@ -272,11 +272,17 @@ func TestPCRRead(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
+			var empty struct{}
+			expected := make(map[HashAlgorithmId]map[int]struct{})
 			for _, selection := range data.selection {
+				if _, ok := expected[selection.Hash]; !ok {
+					expected[selection.Hash] = make(map[int]struct{})
+				}
 				if _, ok := digests[selection.Hash]; !ok {
 					t.Fatalf("No digests for algorithm %v", selection.Hash)
 				}
 				for _, i := range selection.Select {
+					expected[selection.Hash][i] = empty
 					if _, ok := digests[selection.Hash][i]; !ok {
 						t.Fatalf("No digest for PCR%d, algorithm %v", i, selection.Hash)
 					}
@@ -285,6 +291,39 @@ func TestPCRRead(t *testing.T) {
 					}
 				}
 			}
+			for k, v := range digests {
+				if _, ok := expected[k]; !ok {
+					t.Errorf("Digest for unexpected algorithm %v returned", k)
+				}
+				for i, _ := range v {
+					if _, ok := expected[k][i]; !ok {
+						t.Errorf("Digest for unexpected index %d, algorithm %v returned", i, k)
+					}
+				}
+			}
 		})
 	}
+
+	t.Run("Empty", func(t *testing.T) {
+		pcrUpdateCounter, pcrValues, err := tpm.PCRRead(nil)
+		if err != nil {
+			t.Fatalf("PCRRead failed: %v", err)
+		}
+		if len(pcrValues) > 0 {
+			t.Errorf("Unexpected digests returned")
+		}
+
+		if err := tpm.PCRExtend(7, TaggedHashList{TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: make(Digest, 32)}}, nil); err != nil {
+			t.Fatalf("PCRExtend failed: %v", err)
+		}
+
+		pcrUpdateCounter2, _, err := tpm.PCRRead(nil)
+		if err != nil {
+			t.Fatalf("PCRRead failed: %v", err)
+		}
+
+		if pcrUpdateCounter2 != pcrUpdateCounter+1 {
+			t.Errorf("Unexpected pcrUpdateCounter")
+		}
+	})
 }

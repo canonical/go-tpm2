@@ -6,6 +6,7 @@ package tpm2
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -387,6 +388,41 @@ type TaggedHashList []TaggedHash
 
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
+
+func (l PCRSelectionList) Subtract(r PCRSelectionList) (PCRSelectionList, error) {
+	if len(l) != len(r) {
+		return nil, errors.New("incorrect number of PCRSelections")
+	}
+
+	var o PCRSelectionList
+	for i, sl := range l {
+		if r[i].Hash != sl.Hash {
+			return nil, errors.New("PCRSelection has unexpected algorithm")
+		}
+		so := PCRSelection{Hash: sl.Hash}
+	Loop:
+		for _, sli := range sl.Select {
+			for _, sri := range r[i].Select {
+				if sri == sli {
+					continue Loop
+				}
+			}
+			so.Select = append(so.Select, sli)
+		}
+		o = append(o, so)
+	}
+
+	return o, nil
+}
+
+func (l PCRSelectionList) IsEmpty() bool {
+	for _, s := range l {
+		if len(s.Select) > 0 {
+			return false
+		}
+	}
+	return true
+}
 
 // AlgorithmPropertyList is a slice of AlgorithmProperty values, and corresponds to the TPML_ALG_PROPERTY type.
 type AlgorithmPropertyList []AlgorithmProperty

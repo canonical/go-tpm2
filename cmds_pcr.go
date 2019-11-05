@@ -7,7 +7,6 @@ package tpm2
 // Section 22 - Integrity Collection (PCR)
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -19,41 +18,6 @@ func (v PCRValues) EnsureBank(alg HashAlgorithmId) {
 	if _, ok := v[alg]; !ok {
 		v[alg] = make(map[int]Digest)
 	}
-}
-
-func (l PCRSelectionList) subtract(r PCRSelectionList) (PCRSelectionList, error) {
-	if len(l) != len(r) {
-		return nil, errors.New("incorrect number of PCRSelections")
-	}
-
-	var o PCRSelectionList
-	for i, sl := range l {
-		if r[i].Hash != sl.Hash {
-			return nil, errors.New("PCRSelection has unexpected algorithm")
-		}
-		so := PCRSelection{Hash: sl.Hash}
-	Loop:
-		for _, sli := range sl.Select {
-			for _, sri := range r[i].Select {
-				if sri == sli {
-					continue Loop
-				}
-			}
-			so.Select = append(so.Select, sli)
-		}
-		o = append(o, so)
-	}
-
-	return o, nil
-}
-
-func (l PCRSelectionList) empty() bool {
-	for _, s := range l {
-		if len(s.Select) > 0 {
-			return false
-		}
-	}
-	return true
 }
 
 // PCRExtend executes the TPM2_PCR_Extend command to extend the PCR associated with the pcrHandle parameter with the tagged digests
@@ -93,6 +57,28 @@ func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth i
 	return digests, nil
 }
 
+// PCRReadRaw executes the TPM2_PCR_Read command to return the values of the PCRs defined in the pcrSelectionIn parameter.
+//
+// On success, the current value of pcrUpdateCounter is returned along with a PCRSelectionList corresponding to the returned
+// PCR values and the requested values. As the underlying command may not be able to read all of the requested PCRs in a single
+// transaction, the returned PCRSelectionList and DigestList may be a subset of those requested. In this case, it is possible to
+// use PCRSelectionList.Subtract to obtain a selection of outstanding PCRs.
+func (t *TPMContext) PCRReadRaw(pcrSelectionIn PCRSelectionList, sessions ...*Session) (uint32, PCRSelectionList, DigestList, error) {
+	var pcrUpdateCounter uint32
+	var pcrSelectionOut PCRSelectionList
+	var pcrValues DigestList
+
+	if err := t.RunCommand(CommandPCRRead, sessions,
+		Separator,
+		pcrSelectionIn, Separator,
+		Separator,
+		&pcrUpdateCounter, &pcrSelectionOut, &pcrValues); err != nil {
+		return 0, nil, nil, err
+	}
+
+	return pcrUpdateCounter, pcrSelectionOut, pcrValues, nil
+}
+
 // PCRRead executes the TPM2_PCR_Read command to return the values of the PCRs defined in the pcrSelectionIn parameter. The
 // underlying command may not be able to read all of the specified PCRs in a single transaction, so this function will
 // re-execute the TPM2_PCR_Read command until all requested values have been read. As a consequence, any *Session instances
@@ -111,30 +97,17 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Sessi
 	pcrValues := make(PCRValues)
 
 	for i := 0; ; i++ {
-		var updateCounter uint32
-		var pcrSelectionOut PCRSelectionList
-		var values DigestList
-
-		if err := t.RunCommand(CommandPCRRead, sessions,
-			Separator,
-			remaining, Separator,
-			Separator,
-			&updateCounter, &pcrSelectionOut, &values); err != nil {
+		updateCounter, pcrSelectionOut, values, err := t.PCRReadRaw(remaining, sessions...)
+		if err != nil {
 			return 0, nil, err
 		}
 
 		if i == 0 {
 			pcrUpdateCounter = updateCounter
 		} else if updateCounter != pcrUpdateCounter {
-			return 0, nil, &InvalidResponseError{CommandPCRRead, fmt.Sprintf("TPM responded with the wrong pcrUpdateCounter value: got %d, "+
-				"expected %d", updateCounter, pcrUpdateCounter)}
-		}
-
-		if len(values) == 0 {
-			if !pcrSelectionOut.empty() {
-				return 0, nil, makeInvalidParamError("pcrSelectionIn", "unimplemented PCRs specified")
-			}
-			break
+			return 0, nil, &InvalidResponseError{CommandPCRRead, "PCR update counter changed between commands"}
+		} else if len(values) == 0 && pcrSelectionOut.IsEmpty() {
+			return 0, nil, makeInvalidParamError("pcrSelectionIn", "unimplemented PCRs specified")
 		}
 
 		for _, s := range pcrSelectionOut {
@@ -154,13 +127,12 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Sessi
 			return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM returned too many digests"}
 		}
 
-		var err error
-		remaining, err = remaining.subtract(pcrSelectionOut)
+		remaining, err = remaining.Subtract(pcrSelectionOut)
 		if err != nil {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, fmt.Sprintf("cannot determine outstanding PCR selection from selection returned "+
 				"from TPM: %v", err)}
 		}
-		if remaining.empty() {
+		if remaining.IsEmpty() {
 			break
 		}
 	}

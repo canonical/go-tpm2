@@ -188,6 +188,45 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 	return t.nvReadPublic(nvIndex.Handle(), sessions...)
 }
 
+// NVWriteRaw executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
+//
+// The command requires authorization, defined by the state of the AttrNVPPWrite, AttrNVOwnerWrite, AttrNVAuthWrite and
+// AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
+// attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
+// can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
+// If the resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
+// ErrorNVAuthorization will be returned.
+//
+// If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
+// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
+// digest that matches the authorization policy for the index.
+//
+// If the index has the AttrNVWriteLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
+//
+// If the type of the index is NVTypeCounter, NVTypeBits or NVTypeExtend, a *TPMError error with an error code fo ErrorAttributes
+// will be returned.
+//
+// If the value of offset is outside of the bounds of the index, a *TPMParameterError error with an error code of ErrorValue will be
+// returned for parameter index 2.
+//
+// If the length of the data and the specified offset would result in a write outside of the bounds of the index, or if the index
+// has the AttrNVWriteAll attribute set and the size of the data doesn't match the size of the index, a *TPMError error with an error
+// code of ErrorNVRange will be returned.
+//
+// On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
+func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuth interface{}, sessions ...*Session) error {
+	if err := t.RunCommand(CommandNVWrite, sessions,
+		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+		data, offset); err != nil {
+		return err
+	}
+
+	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
+	return nil
+}
+
 // NVWrite executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
 //
 // The command requires authorization, defined by the state of the AttrNVPPWrite, AttrNVOwnerWrite, AttrNVAuthWrite and
@@ -208,7 +247,9 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 // be returned if the write will require more than one command execution and there are sessions without the AttrContinueSession
 // attribute defined. If authContextAuth is a *Session instance that references a bound session and this is the first write to this
 // index, the first write will break the session binding. In this case, the AuthValue field should be set to the authorization value
-// of the resource associated with authContext to avoid a partial write when the write is split across multiple commands.
+// of the resource associated with authContext to avoid a partial write when the write is split across multiple commands. A policy
+// session can not be used for authContextAuth if the write is to be split across multiple commands - in this case,
+// TPMContext.NVWriteRaw must be used instead.
 //
 // If the index has the AttrNVWriteLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
@@ -231,8 +272,14 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 
 	if remaining > t.maxNVBufferSize {
 		session, ok := authContextAuth.(*Session)
-		if ok && session.Attrs&AttrContinueSession == 0 {
-			return makeInvalidParamError("authContextAuth", "the AttrContinueSession attribute is required for a split write")
+		if ok {
+			if session.Attrs&AttrContinueSession == 0 {
+				return makeInvalidParamError("authContextAuth", "the AttrContinueSession attribute is required for a split write")
+			}
+			sessionContext, ok := session.Context.(*sessionContext)
+			if ok && sessionContext.sessionType == SessionTypePolicy {
+				return makeInvalidParamError("authContextAuth", "a policy session can not be used for a split write - use NVWriteRaw instead")
+			}
 		}
 
 		for i, s := range sessions {
@@ -249,13 +296,9 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 			s = t.maxNVBufferSize
 		}
 
-		if err := t.RunCommand(CommandNVWrite, sessions,
-			ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
-			data[total:total+s], offset+total); err != nil {
+		if err := t.NVWriteRaw(authContext, nvIndex, data[total:total+s], offset+total, authContextAuth, sessions...); err != nil {
 			return err
 		}
-
-		nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
 
 		total += s
 		remaining -= s
@@ -456,6 +499,51 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 	return nil
 }
 
+// NVReadRaw executes the TPM2_NV_Read command to read the contents of the NV index associated with nvIndex. The amount of data to read,
+// and the offset within the index are defined by the size and offset parameters.
+//
+// The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead and AttrNVPolicyRead
+// attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
+// authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute, authorization can be
+// satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied
+// with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth. If the
+// resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
+// ErrorNVAuthorization will be returned.
+//
+// If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
+// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
+// digest that matches the authorization policy for the index.
+//
+// If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
+//
+// If the index has not been initialized (ie, the AttrNVWritten attribute is not set), a *TPMError error with an error code of
+// ErrorNVUninitialized will be returned.
+//
+// If the value of size is too large, a *TPMParameterError error with an error code of ErrorValue will be returned for parameter
+// index 1.
+//
+// If the value of offset falls outside of the bounds of the index, a *TPMParameterError error with an error code of ErrorValue will
+// be returned for parameter index 2.
+//
+// If the data selection falls outside of the bounds of the index, a *TPMError error with an error code of ErrorNVRange will be
+// returned.
+//
+// On successful completion, the requested data will be returned.
+func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{}, sessions ...*Session) (MaxNVBuffer, error) {
+	var data MaxNVBuffer
+
+	if err := t.RunCommand(CommandNVRead, sessions,
+		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+		size, offset, Separator,
+		Separator,
+		&data); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
 // NVRead executes the TPM2_NV_Read command to read the contents of the NV index associated with nvIndex. The amount of data to read,
 // and the offset within the index are defined by the size and offset parameters.
 //
@@ -473,7 +561,8 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 // digest that matches the authorization policy for the index.
 //
 // If the requested data can not be read in a single command, this function will re-execute the TPM2_NV_Read command until all data
-// is read. As a consequence, any *Session instances provided should have the AttrContinueSession attribute defined.
+// is read. As a consequence, any *Session instances provided should have the AttrContinueSession attribute defined. If the requested
+// data cannot be read in a single command, then authContextAuth should not correspond to a policy session.
 //
 // If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
@@ -503,13 +592,8 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 			s = t.maxNVBufferSize
 		}
 
-		var tmpData MaxNVBuffer
-
-		if err := t.RunCommand(CommandNVRead, sessions,
-			ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
-			s, offset+total, Separator,
-			Separator,
-			&tmpData); err != nil {
+		tmpData, err := t.NVReadRaw(authContext, nvIndex, s, offset+total, authContextAuth, sessions...)
+		if err != nil {
 			return nil, err
 		}
 

@@ -533,7 +533,7 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			res, err := data.x.subtract(data.y)
+			res, err := data.x.Subtract(data.y)
 			if data.err == "" {
 				if err != nil {
 					t.Fatalf("subtract failed: %v", err)
