@@ -206,6 +206,22 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 	return data.Data.AuthPolicies(), nil
 }
 
+// TPMManufacturer corresponds to the TPM manufacturer and is returned when querying the value PropertyManufacturer with
+// TPMContext.GetCapabilityTPMProperties
+type TPMManufacturer uint32
+
+// GetManufacturer is a helper function that wraps around TPMContext.GetCapability in order to obtain the ID of the TPM manufacturer.
+func (t *TPMContext) GetManufacturer(sessions ...*Session) (TPMManufacturer, error) {
+	props, err := t.GetCapabilityTPMProperties(PropertyManufacturer, 1, sessions...)
+	if err != nil {
+		return 0, err
+	}
+	if len(props) == 0 {
+		return 0, nil
+	}
+	return TPMManufacturer(props[0].Value), nil
+}
+
 // TestParms executes the TPM2_TestParms command to check if the specified combination of algorithm parameters is supported.
 func (t *TPMContext) TestParms(parameters *PublicParams, sessions ...*Session) error {
 	return t.RunCommand(CommandTestParms, sessions, Separator, parameters)

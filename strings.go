@@ -27,6 +27,64 @@ func makeDefaultFormatter(s fmt.State, f rune) string {
 	return builder.String()
 }
 
+func (m TPMManufacturer) String() string {
+	switch m {
+	case 0x414D4400:
+		return "AMD"
+	case 0x41544D4C:
+		return "Atmel"
+	case 0x4252434D:
+		return "Broadcom"
+	case 0x48504500:
+		return "HPE"
+	case 0x49424d00:
+		return "IBM"
+	case 0x49465800:
+		return "Infineon"
+	case 0x494E5443:
+		return "Intel"
+	case 0x4C454E00:
+		return "Lenovo"
+	case 0x4D534654:
+		return "Microsoft"
+	case 0x4E534D20:
+		return "National Semiconductor"
+	case 0x4E545A00:
+		return "Nationz"
+	case 0x4E544300:
+		return "Nuvoton Technology"
+	case 0x51434F4D:
+		return "Qualcomm"
+	case 0x534D5343:
+		return "SMSC"
+	case 0x53544D20:
+		return "ST Microelectronics"
+	case 0x534D534E:
+		return "Samsung"
+	case 0x534E5300:
+		return "Sinosun"
+	case 0x54584E00:
+		return "Texas Instruments"
+	case 0x57454300:
+		return "Winbond"
+	case 0x524F4343:
+		return "Fuzhou Rockchip"
+	case 0x474F4F47:
+		return "Google"
+	default:
+		return fmt.Sprintf("0x%08x", uint32(m))
+	}
+}
+
+func (m TPMManufacturer) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v':
+		fmt.Fprintf(s, "%s", m.String())
+	default:
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint32(m))
+	}
+}
+
 func (c CommandCode) String() string {
 	switch c {
 	case CommandNVUndefineSpaceSpecial:

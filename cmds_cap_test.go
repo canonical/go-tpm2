@@ -5,6 +5,7 @@
 package tpm2
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -202,6 +203,23 @@ func TestGetCapabilityPCRProperties(t *testing.T) {
 
 	if len(data) == 0 {
 		t.Errorf("TPM property list is empty")
+	}
+}
+
+func TestGetManufacturer(t *testing.T) {
+	tpm, _ := openTPMSimulatorForTesting(t)
+	defer closeTPM(t, tpm)
+
+	id, err := tpm.GetManufacturer()
+	if err != nil {
+		t.Fatalf("GetManufacturer failed: %v", err)
+	}
+
+	m := fmt.Sprintf("%s", id)
+	switch m {
+	case "IBM", "Microsoft":
+	default:
+		t.Errorf("Unexpected manufacturer: %v", id)
 	}
 }
 
