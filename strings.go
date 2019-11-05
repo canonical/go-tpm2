@@ -29,47 +29,47 @@ func makeDefaultFormatter(s fmt.State, f rune) string {
 
 func (m TPMManufacturer) String() string {
 	switch m {
-	case 0x414D4400:
+	case TPMManufacturerAMD:
 		return "AMD"
-	case 0x41544D4C:
+	case TPMManufacturerATML:
 		return "Atmel"
-	case 0x4252434D:
+	case TPMManufacturerBRCM:
 		return "Broadcom"
-	case 0x48504500:
+	case TPMManufacturerHPE:
 		return "HPE"
-	case 0x49424d00:
+	case TPMManufacturerIBM:
 		return "IBM"
-	case 0x49465800:
+	case TPMManufacturerIFX:
 		return "Infineon"
-	case 0x494E5443:
+	case TPMManufacturerINTC:
 		return "Intel"
-	case 0x4C454E00:
+	case TPMManufacturerLEN:
 		return "Lenovo"
-	case 0x4D534654:
+	case TPMManufacturerMSFT:
 		return "Microsoft"
-	case 0x4E534D20:
+	case TPMManufacturerNSM:
 		return "National Semiconductor"
-	case 0x4E545A00:
+	case TPMManufacturerNTZ:
 		return "Nationz"
-	case 0x4E544300:
+	case TPMManufacturerNTC:
 		return "Nuvoton Technology"
-	case 0x51434F4D:
+	case TPMManufacturerQCOM:
 		return "Qualcomm"
-	case 0x534D5343:
+	case TPMManufacturerSMSC:
 		return "SMSC"
-	case 0x53544D20:
+	case TPMManufacturerSTM:
 		return "ST Microelectronics"
-	case 0x534D534E:
+	case TPMManufacturerSMSN:
 		return "Samsung"
-	case 0x534E5300:
+	case TPMManufacturerSNS:
 		return "Sinosun"
-	case 0x54584E00:
+	case TPMManufacturerTXN:
 		return "Texas Instruments"
-	case 0x57454300:
+	case TPMManufacturerWEC:
 		return "Winbond"
-	case 0x524F4343:
+	case TPMManufacturerROCC:
 		return "Fuzhou Rockchip"
-	case 0x474F4F47:
+	case TPMManufacturerGOOG:
 		return "Google"
 	default:
 		return fmt.Sprintf("0x%08x", uint32(m))

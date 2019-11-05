@@ -14,6 +14,30 @@ const (
 )
 
 const (
+	TPMManufacturerAMD  TPMManufacturer = 0x414D4400 // AMD
+	TPMManufacturerATML TPMManufacturer = 0x41544D4C // Atmel
+	TPMManufacturerBRCM TPMManufacturer = 0x4252434D // Broadcom
+	TPMManufacturerHPE  TPMManufacturer = 0x48504500 // HPE
+	TPMManufacturerIBM  TPMManufacturer = 0x49424d00 // IBM
+	TPMManufacturerIFX  TPMManufacturer = 0x49465800 // Infineon
+	TPMManufacturerINTC TPMManufacturer = 0x494E5443 // Intel
+	TPMManufacturerLEN  TPMManufacturer = 0x4C454E00 // Lenovo
+	TPMManufacturerMSFT TPMManufacturer = 0x4D534654 // Microsoft
+	TPMManufacturerNSM  TPMManufacturer = 0x4E534D20 // National Semiconductor
+	TPMManufacturerNTZ  TPMManufacturer = 0x4E545A00 // Nationz
+	TPMManufacturerNTC  TPMManufacturer = 0x4E544300 // Nuvoton Technology
+	TPMManufacturerQCOM TPMManufacturer = 0x51434F4D // Qualcomm
+	TPMManufacturerSMSC TPMManufacturer = 0x534D5343 // SMSC
+	TPMManufacturerSTM  TPMManufacturer = 0x53544D20 // ST Microelectronics
+	TPMManufacturerSMSN TPMManufacturer = 0x534D534E // Samsung
+	TPMManufacturerSNS  TPMManufacturer = 0x534E5300 // Sinosun
+	TPMManufacturerTXN  TPMManufacturer = 0x54584E00 // Texas Instruments
+	TPMManufacturerWEC  TPMManufacturer = 0x57454300 // Winbond
+	TPMManufacturerROCC TPMManufacturer = 0x524F4343 // Fuzhou Rockchip
+	TPMManufacturerGOOG TPMManufacturer = 0x474F4F47 // Google
+)
+
+const (
 	OpEq         ArithmeticOp = 0x0000 // TPM_EO_EQ
 	OpNeq        ArithmeticOp = 0x0001 // TPM_EO_NEQ
 	OpSignedGT   ArithmeticOp = 0x0002 // TPM_EO_SIGNED_GT
