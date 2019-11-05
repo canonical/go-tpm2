@@ -6,7 +6,6 @@ package tpm2
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/elliptic"
@@ -21,47 +20,12 @@ import (
 
 var (
 	defaultRSAExponent = 65537
-
-	knownDigests = map[HashAlgorithmId]crypto.Hash{
-		HashAlgorithmSHA1:   crypto.SHA1,
-		HashAlgorithmSHA256: crypto.SHA256,
-		HashAlgorithmSHA384: crypto.SHA384,
-		HashAlgorithmSHA512: crypto.SHA512}
 )
 
-func cryptGetHash(alg HashAlgorithmId) crypto.Hash {
-	h, ok := knownDigests[alg]
-	if !ok {
-		panic(fmt.Sprintf("unknown hash algorithm %v", alg))
-	}
-	return h
-}
-
-func cryptGetHashConstructor(alg HashAlgorithmId) func() hash.Hash {
-	h, ok := knownDigests[alg]
-	if !ok {
-		panic(fmt.Sprintf("unknown hash algorithm %v", alg))
-	}
+func getHashConstructor(alg HashAlgorithmId) func() hash.Hash {
 	return func() hash.Hash {
-		return h.New()
+		return alg.NewHash()
 	}
-}
-
-func cryptConstructHash(alg HashAlgorithmId) hash.Hash {
-	return cryptGetHashConstructor(alg)()
-}
-
-func cryptIsKnownDigest(alg HashAlgorithmId) bool {
-	_, isKnown := knownDigests[alg]
-	return isKnown
-}
-
-func cryptGetDigestSize(alg HashAlgorithmId) uint {
-	h, ok := knownDigests[alg]
-	if !ok {
-		panic(fmt.Sprintf("nknown hash algorithm %v", alg))
-	}
-	return uint(h.Size())
 }
 
 func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
@@ -80,7 +44,7 @@ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 
 func cryptComputeCpHash(hashAlg HashAlgorithmId, commandCode CommandCode, commandHandles []Name,
 	cpBytes []byte) []byte {
-	hash := cryptConstructHash(hashAlg)
+	hash := hashAlg.NewHash()
 
 	binary.Write(hash, binary.BigEndian, commandCode)
 	for _, name := range commandHandles {
@@ -92,7 +56,7 @@ func cryptComputeCpHash(hashAlg HashAlgorithmId, commandCode CommandCode, comman
 }
 
 func cryptComputeRpHash(hashAlg HashAlgorithmId, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) []byte {
-	hash := cryptConstructHash(hashAlg)
+	hash := hashAlg.NewHash()
 
 	binary.Write(hash, binary.BigEndian, responseCode)
 	binary.Write(hash, binary.BigEndian, commandCode)
@@ -103,7 +67,7 @@ func cryptComputeRpHash(hashAlg HashAlgorithmId, responseCode ResponseCode, comm
 
 func computeSessionHMAC(alg HashAlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce,
 	attrs sessionAttrs) []byte {
-	hmac := hmac.New(cryptGetHashConstructor(alg), key)
+	hmac := hmac.New(getHashConstructor(alg), key)
 
 	hmac.Write(pHash)
 	hmac.Write(nonceNewer)
@@ -124,17 +88,17 @@ func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte
 	return computeSessionHMAC(context.hashAlg, key, rpHash, context.nonceTPM, context.nonceCaller, nil, nil, attrs)
 }
 
-func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, sizeInBits uint, counterInOut *uint32, once bool) []byte {
-	digestSize := cryptGetDigestSize(hashAlg)
+func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, sizeInBits int, counterInOut *int, once bool) []byte {
+	digestSize := hashAlg.Size()
 	if once && sizeInBits&7 > 0 {
 		panic("sizeInBits must be a multiple of 8 when called with once == true")
 	}
 
-	var counter uint32 = 0
+	counter := 0
 	if counterInOut != nil {
 		counter = *counterInOut
 	}
-	var nbytes uint
+	var nbytes int
 	if once {
 		nbytes = digestSize
 	} else {
@@ -149,9 +113,9 @@ func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, s
 			digestSize = nbytes
 		}
 
-		h := hmac.New(cryptGetHashConstructor(hashAlg), key)
+		h := hmac.New(getHashConstructor(hashAlg), key)
 
-		binary.Write(h, binary.BigEndian, counter)
+		binary.Write(h, binary.BigEndian, uint32(counter))
 		h.Write(label)
 		h.Write([]byte{0})
 		h.Write(contextU)
@@ -172,10 +136,10 @@ func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, s
 	return outKey
 }
 
-func cryptKDFe(hashAlg HashAlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits uint) []byte {
-	digestSize := cryptGetDigestSize(hashAlg)
+func cryptKDFe(hashAlg HashAlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits int) []byte {
+	digestSize := hashAlg.Size()
 
-	var counter uint32 = 0
+	counter := 0
 	buf := new(bytes.Buffer)
 
 	for bytes := (sizeInBits + 7) / 8; bytes > 0; bytes -= digestSize {
@@ -184,9 +148,9 @@ func cryptKDFe(hashAlg HashAlgorithmId, z, label, partyUInfo, partyVInfo []byte,
 		}
 		counter++
 
-		h := cryptConstructHash(hashAlg)
+		h := hashAlg.NewHash()
 
-		binary.Write(h, binary.BigEndian, counter)
+		binary.Write(h, binary.BigEndian, uint32(counter))
 		h.Write(z)
 		h.Write(label)
 		h.Write([]byte{0})
@@ -234,10 +198,10 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 		if schemeHashAlg == HashAlgorithmNull {
 			schemeHashAlg = public.NameAlg
 		}
-		if !cryptIsKnownDigest(schemeHashAlg) {
+		if !schemeHashAlg.Available() {
 			return nil, fmt.Errorf("unknown scheme hash algorithm: %v", schemeHashAlg)
 		}
-		hash := cryptConstructHash(schemeHashAlg)
+		hash := schemeHashAlg.NewHash()
 		labelCopy := make([]byte, len(label)+1)
 		copy(labelCopy, label)
 		return rsa.EncryptOAEP(hash, rand.Reader, pubKey, data, labelCopy)
@@ -275,10 +239,10 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 }
 
 func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
-	if !cryptIsKnownDigest(public.NameAlg) {
+	if !public.NameAlg.Available() {
 		return nil, nil, fmt.Errorf("cannot determine size of unknown nameAlg %v", public.NameAlg)
 	}
-	digestSize := cryptGetDigestSize(public.NameAlg)
+	digestSize := public.NameAlg.Size()
 
 	switch public.Type {
 	case ObjectTypeRSA:
@@ -305,23 +269,23 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 }
 
 func cryptXORObfuscation(hashAlg HashAlgorithmId, key []byte, contextU, contextV Nonce, data []byte) error {
-	if !cryptIsKnownDigest(hashAlg) {
+	if !hashAlg.Available() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", hashAlg)
 	}
-	digestSize := cryptGetDigestSize(hashAlg)
+	digestSize := hashAlg.Size()
 
-	var counter uint32 = 0
-	datasize := uint(len(data))
-	remaining := int(datasize)
+	counter := 0
+	datasize := len(data)
+	remaining := datasize
 
-	for ; remaining > 0; remaining -= int(digestSize) {
+	for ; remaining > 0; remaining -= digestSize {
 		mask := cryptKDFa(hashAlg, key, []byte("XOR"), contextU, contextV, datasize*8, &counter, true)
 		lim := remaining
-		if int(digestSize) < remaining {
-			lim = int(digestSize)
+		if digestSize < remaining {
+			lim = digestSize
 		}
 		for i := 0; i < lim; i++ {
-			data[int(datasize)-remaining+i] ^= mask[i]
+			data[datasize-remaining+i] ^= mask[i]
 		}
 	}
 

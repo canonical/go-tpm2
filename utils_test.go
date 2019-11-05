@@ -202,7 +202,7 @@ func TestTrialPolicyOR(t *testing.T) {
 			if _, exists := digests[a]; !exists {
 				digests[a] = make(DigestList, 0)
 			}
-			h := cryptConstructHash(a)
+			h := a.NewHash()
 			h.Write([]byte(d))
 			digests[a] = append(digests[a], h.Sum(nil))
 		}
@@ -265,7 +265,7 @@ func TestTrialPolicyPCR(t *testing.T) {
 
 	digests := make(map[HashAlgorithmId]Digest)
 	for _, a := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
-		h := cryptConstructHash(a)
+		h := a.NewHash()
 		h.Write([]byte("foo"))
 		digests[a] = h.Sum(nil)
 	}

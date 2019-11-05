@@ -116,7 +116,6 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 
 func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest,
 	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
-	nameAlgSize := cryptGetDigestSize(template.NameAlg)
 	var parentQualifiedName Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -131,7 +130,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	if !reflect.DeepEqual(creationData.PCRSelect, creationPCR) {
 		t.Errorf("creation data has invalid pcrSelect")
 	}
-	if len(creationData.PCRDigest) != int(nameAlgSize) {
+	if len(creationData.PCRDigest) != template.NameAlg.Size() {
 		t.Errorf("creation data has a pcrDigest of the wrong length (got %d)", len(creationData.PCRDigest))
 	}
 	if creationData.ParentNameAlg != AlgorithmId(parent.Name().Algorithm()) {
@@ -147,7 +146,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 		t.Errorf("creation data has the wrong outsideInfo (got %x)", creationData.OutsideInfo)
 	}
 
-	hasher := cryptConstructHash(template.NameAlg)
+	hasher := template.NameAlg.NewHash()
 	if err := MarshalToWriter(hasher, creationData); err != nil {
 		t.Fatalf("Failed to marshal creation data: %v", err)
 	}
@@ -192,18 +191,18 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 		switch signature.SigAlg {
 		case SigSchemeAlgRSASSA:
 			sig := (*SignatureRSA)(signature.Signature.RSASSA())
-			if !cryptIsKnownDigest(sig.Hash) {
+			if !sig.Hash.Available() {
 				t.Fatalf("Signature has unknown digest")
 			}
-			if err := rsa.VerifyPKCS1v15(&pubKey, cryptGetHash(sig.Hash), digest, sig.Sig); err != nil {
+			if err := rsa.VerifyPKCS1v15(&pubKey, sig.Hash.GetHash(), digest, sig.Sig); err != nil {
 				t.Errorf("Signature is invalid")
 			}
 		case SigSchemeAlgRSAPSS:
 			sig := (*SignatureRSA)(signature.Signature.RSAPSS())
-			if !cryptIsKnownDigest(sig.Hash) {
+			if !sig.Hash.Available() {
 				t.Fatalf("Signature has unknown digest")
 			}
-			if err := rsa.VerifyPSS(&pubKey, cryptGetHash(sig.Hash), digest, sig.Sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}); err != nil {
+			if err := rsa.VerifyPSS(&pubKey, sig.Hash.GetHash(), digest, sig.Sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}); err != nil {
 				t.Errorf("Signature is invalid")
 			}
 		default:

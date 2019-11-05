@@ -111,11 +111,11 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		if symmetric.Mode.Sym() != SymModeCFB {
 			return nil, fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
 		}
-		if !cryptIsKnownDigest(context.hashAlg) {
+		if !context.hashAlg.Available() {
 			return nil, fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
 		}
 		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceCaller, context.nonceTPM,
-			uint(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
+			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
@@ -156,11 +156,11 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 		if symmetric.Mode.Sym() != SymModeCFB {
 			return fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
 		}
-		if !cryptIsKnownDigest(context.hashAlg) {
+		if !context.hashAlg.Available() {
 			return fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
 		}
 		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceTPM, context.nonceCaller,
-			uint(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
+			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]

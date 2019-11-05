@@ -58,10 +58,10 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 // ComputePCRDigest computes a digest using the specified algorithm from the provided set of PCR values and the provided PCR
 // selection. It is most useful for computing an input to TPMContext.PolicyPCR, and validating quotes and creation data.
 func ComputePCRDigest(alg HashAlgorithmId, pcrs PCRSelectionList, values PCRValues) (Digest, error) {
-	if !cryptIsKnownDigest(alg) {
+	if !alg.Available() {
 		return nil, fmt.Errorf("unknown digest algorithm %v", alg)
 	}
-	h := cryptConstructHash(alg)
+	h := alg.NewHash()
 
 	for _, s := range pcrs {
 		if _, ok := values[s.Hash]; !ok {
@@ -105,14 +105,14 @@ type TrialAuthPolicy struct {
 
 // ComputeAuthPolicy creates a new context for computing an authorization policy digest.
 func ComputeAuthPolicy(alg HashAlgorithmId) (*TrialAuthPolicy, error) {
-	if !cryptIsKnownDigest(alg) {
+	if !alg.Available() {
 		return nil, errors.New("invalid algorithm")
 	}
-	return &TrialAuthPolicy{alg: alg, digest: make(Digest, cryptGetDigestSize(alg))}, nil
+	return &TrialAuthPolicy{alg: alg, digest: make(Digest, alg.Size())}, nil
 }
 
 func (p *TrialAuthPolicy) beginExtend(commandCode CommandCode) *trialAuthPolicyExtendContext {
-	h := cryptConstructHash(p.alg)
+	h := p.alg.NewHash()
 	h.Write(p.digest)
 	binary.Write(h, binary.BigEndian, commandCode)
 	return &trialAuthPolicyExtendContext{t: p, h: h}
@@ -123,7 +123,7 @@ func (p *TrialAuthPolicy) policyUpdate(commandCode CommandCode, arg2 Name, arg3 
 	h1.Write(arg2)
 	h1.commit()
 
-	h2 := cryptConstructHash(p.alg)
+	h2 := p.alg.NewHash()
 	h2.Write(p.digest)
 	h2.Write(arg3)
 
@@ -171,7 +171,7 @@ func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) {
 
 func (p *TrialAuthPolicy) PolicyNV(nvIndexName Name, operandB Operand, offset uint16,
 	operation ArithmeticOp) {
-	h1 := cryptConstructHash(p.alg)
+	h1 := p.alg.NewHash()
 	h1.Write(operandB)
 	binary.Write(h1, binary.BigEndian, offset)
 	binary.Write(h1, binary.BigEndian, operation)

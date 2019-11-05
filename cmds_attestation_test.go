@@ -68,7 +68,7 @@ func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceCo
 			t.Errorf("Unexpected signature algorithm")
 		}
 	} else {
-		h := cryptConstructHash(hash)
+		h := hash.NewHash()
 		h.Write(attest)
 		digest := h.Sum(nil)
 

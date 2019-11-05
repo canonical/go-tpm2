@@ -83,7 +83,7 @@ func TestXORObfuscation(t *testing.T) {
 			key := make([]byte, data.keyLength)
 			rand.Read(key)
 
-			digestSize := cryptGetDigestSize(data.alg)
+			digestSize := data.alg.Size()
 
 			contextU := make([]byte, digestSize)
 			rand.Read(contextU)

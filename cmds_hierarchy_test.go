@@ -28,8 +28,8 @@ func TestCreatePrimary(t *testing.T) {
 		verifyCreationData(t, tpm, creationData, creationHash, template, outsideInfo, creationPCR, h)
 		verifyCreationTicket(t, creationTicket, hierarchy)
 
-		nameAlgSize := cryptGetDigestSize(template.NameAlg)
-		if len(name) != int(nameAlgSize)+2 {
+		nameAlgSize := template.NameAlg.Size()
+		if len(name) != nameAlgSize+2 {
 			t.Errorf("CreatePrimary returned a name of the wrong length %d", len(name))
 		}
 

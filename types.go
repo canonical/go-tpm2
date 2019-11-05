@@ -5,9 +5,11 @@
 package tpm2
 
 import (
+	"crypto"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"reflect"
 	"unsafe"
@@ -111,6 +113,38 @@ func (a CommandAttributes) NumberOfCommandHandles() int {
 // HashAlgorithmId corresponds to the TPMI_ALG_HASH type
 type HashAlgorithmId AlgorithmId
 
+// GetHash returns the equivalent crypto.Hash value for this algorithm.
+func (a HashAlgorithmId) GetHash() crypto.Hash {
+	switch a {
+	case HashAlgorithmSHA1:
+		return crypto.SHA1
+	case HashAlgorithmSHA256:
+		return crypto.SHA256
+	case HashAlgorithmSHA384:
+		return crypto.SHA384
+	case HashAlgorithmSHA512:
+		return crypto.SHA512
+	default:
+		return 0
+	}
+}
+
+// Available determines if a hash.Hash implementation for this algorithm is available.
+func (a HashAlgorithmId) Available() bool {
+	return a.GetHash().Available()
+}
+
+// NewHash constructs a new hash.Hash implementation for this algorithm. It will panic if HashAlgorithmId.Available
+// returns false.
+func (a HashAlgorithmId) NewHash() hash.Hash {
+	return a.GetHash().New()
+}
+
+// Size returns the size of the algorithm. It will panic if HashAlgorithmId.Available returns false.
+func (a HashAlgorithmId) Size() int {
+	return a.GetHash().Size()
+}
+
 // SymAlgorithmId corresponds to the TPMI_ALG_SYM type
 type SymAlgorithmId AlgorithmId
 
@@ -145,12 +179,11 @@ func (p *TaggedHash) Marshal(buf io.Writer) error {
 	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
-	if !cryptIsKnownDigest(p.HashAlg) {
+	if !p.HashAlg.Available() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
-	size := cryptGetDigestSize(p.HashAlg)
 
-	if int(size) != len(p.Digest) {
+	if p.HashAlg.Size() != len(p.Digest) {
 		return fmt.Errorf("invalid digest size %d", len(p.Digest))
 	}
 
@@ -164,12 +197,11 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
-	if !cryptIsKnownDigest(p.HashAlg) {
+	if !p.HashAlg.Available() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
-	size := cryptGetDigestSize(p.HashAlg)
 
-	p.Digest = make(Digest, size)
+	p.Digest = make(Digest, p.HashAlg.Size())
 	if _, err := io.ReadFull(buf, p.Digest); err != nil {
 		return xerrors.Errorf("cannot read digest: %w", err)
 	}
@@ -230,11 +262,10 @@ func (n Name) Algorithm() HashAlgorithmId {
 		return HashAlgorithmNull
 	}
 	a := HashAlgorithmId(binary.BigEndian.Uint16(n))
-	if !cryptIsKnownDigest(a) {
+	if !a.Available() {
 		return HashAlgorithmNull
 	}
-	size := cryptGetDigestSize(a)
-	if int(size) != len(n)-binary.Size(HashAlgorithmId(0)) {
+	if a.Size() != len(n)-binary.Size(HashAlgorithmId(0)) {
 		return HashAlgorithmNull
 	}
 	return a
@@ -1458,10 +1489,10 @@ type Public struct {
 
 // Name computes the name of this object
 func (p *Public) Name() (Name, error) {
-	if !cryptIsKnownDigest(p.NameAlg) {
+	if !p.NameAlg.Available() {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
-	hasher := cryptConstructHash(p.NameAlg)
+	hasher := p.NameAlg.NewHash()
 	if err := MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
@@ -1511,10 +1542,10 @@ type PublicDerived struct {
 
 // Name computes the name of this object
 func (p *PublicDerived) Name() (Name, error) {
-	if !cryptIsKnownDigest(p.NameAlg) {
+	if !p.NameAlg.Available() {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
-	hasher := cryptConstructHash(p.NameAlg)
+	hasher := p.NameAlg.NewHash()
 	if err := MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
@@ -1654,10 +1685,10 @@ type NVPublic struct {
 
 // Name computes the name of this NV index
 func (p *NVPublic) Name() (Name, error) {
-	if !cryptIsKnownDigest(p.NameAlg) {
+	if !p.NameAlg.Available() {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
-	hasher := cryptConstructHash(p.NameAlg)
+	hasher := p.NameAlg.NewHash()
 	if err := MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}

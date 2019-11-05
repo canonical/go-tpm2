@@ -75,10 +75,10 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}
-	if !cryptIsKnownDigest(authHash) {
+	if !authHash.Available() {
 		return nil, makeInvalidParamError("authHash", fmt.Sprintf("unsupported digest algorithm %v", authHash))
 	}
-	digestSize := cryptGetDigestSize(authHash)
+	digestSize := authHash.Size()
 
 	var salt []byte
 	var encryptedSalt EncryptedSecret

@@ -166,7 +166,7 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 		if context.SavedHandle.Type() != HandleTypeHMACSession && context.SavedHandle.Type() != HandleTypePolicySession {
 			return nil, errors.New("cannot load context: inconsistent attributes")
 		}
-		if !cryptIsKnownDigest(d.Data.Data.(*sessionContextData).HashAlg) {
+		if !d.Data.Data.(*sessionContextData).HashAlg.Available() {
 			return nil, fmt.Errorf("cannot load context: invalid session hash algorithm %v", d.Data.Data.(*sessionContextData).HashAlg)
 		}
 	default:
