@@ -23,8 +23,12 @@ func (e ResourceUnavailableError) Error() string {
 // InvalidResponseError is returned from any TPMContext method that executes a TPM command if the TPM's response is invalid. An
 // invalid response could be one that is shorter than the response header, one with an invalid responseSize field, a payload that is
 // shorter than the responseSize field indicates, a payload that unmarshals incorrectly because of an invalid union selector value,
-// or an invalid response authorization. Any sessions used in the command that caused this error should be considered invalid and
-// should be flushed from the TPM.
+// or an invalid response authorization.
+//
+// Any sessions used in the command that caused this error should be considered invalid and should be flushed from the TPM.
+//
+// If any method that executes a command which allocates objects on the TPM returns this error, it is possible that these objects
+// exist on the TPM.
 type InvalidResponseError struct {
 	Command CommandCode
 	msg     string

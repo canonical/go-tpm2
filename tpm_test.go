@@ -477,9 +477,10 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 	}
 }
 
-type mockContext struct {}
+type mockContext struct{}
+
 func (*mockContext) Handle() Handle { return HandleNull }
-func (*mockContext) Name() Name { return nil }
+func (*mockContext) Name() Name     { return nil }
 
 func TestSession(t *testing.T) {
 	auth1 := []byte("foo")
