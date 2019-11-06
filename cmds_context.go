@@ -88,20 +88,22 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
 //
 // On successful completion, it returns a Context instance that can be passed to TPMContext.ContextLoad. Note that this function
 // wraps the context data returned from the TPM with some host-side state associated with the resource, so that it can be restored
-// fully in TPMContext.ContextLoad. If saveContext corresponds to a session, then TPM2_ContextSave also flushes resources associated
-// with the session from the TPM (it becomes an active session rather than a loaded session). In this case, saveContext is marked as
-// not loaded and can not be used for any authorizations.
+// fully in TPMContext.ContextLoad. If saveContext corresponds to a session, the host-side state that is added to the returned context
+// blob includes the session key.
 //
-// If saveContext corresponds to a session, the host-side state that is added to the returned context blob includes the session key.
+// If saveContext corresponds to a session, then TPM2_ContextSave also removes resources associated with the session from the TPM
+// (it becomes a saved session rather than a loaded session). In this case, saveContext is marked as not loaded and can only be used
+// as an argument to TPMContext.FlushContext until it is loaded again via TPMContext.ContextLoad.
 //
 // If saveContext corresponds to a session and no more contexts can be saved, a *TPMError error will be returned with an error code
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
 // WarningContextGap will be returned.
 func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) {
-	if sc, isSession := saveContext.(*sessionContext); isSession {
-		if sc.flags&sessionContextFull == 0 {
-			return nil, errors.New("cannot context save a session with an incomplete ResourceContext")
-		}
+	if err := t.checkResourceContextParam(saveContext); err != nil {
+		return nil, makeInvalidParamError("saveContext", fmt.Sprintf("invalid resource context: %v", err))
+	}
+	if sc, isSession := saveContext.(*sessionContext); isSession && !sc.usable {
+		return nil, makeInvalidParamError("saveContext", "unusable session ResourceContext")
 	}
 
 	var context Context
@@ -117,7 +119,7 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 	context.Blob = wrapContextBlob(context.Blob, saveContext)
 
 	if sc, isSession := saveContext.(*sessionContext); isSession {
-		sc.flags &= ^sessionContextLoaded
+		sc.usable = false
 	}
 
 	return &context, nil
@@ -146,7 +148,10 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 // If there are no more slots available for objects or loaded sessions, a *TPMWarning error with a warning code of either
 // WarningSessionMemory or WarningObjectMemory will be returned.
 //
-// On successful completion, it returns a ResourceContext which corresponds to the resource loaded in to the TPM.
+// On successful completion, it returns a ResourceContext which corresponds to the resource loaded in to the TPM. If the context
+// corresponds to an object, this will always be a new ResourceContext. If context corresponds to a session, then the returned
+// ResourceContext will be newly created unless there is still an active ResourceContext for that saved session, in which case the
+// existing ResourceContext will be marked as loaded and returned instead.
 func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 	if context == nil {
 		return nil, makeInvalidParamError("context", "nil value")
@@ -154,20 +159,56 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 
 	var d resourceContextData
 	if _, err := UnmarshalFromBytes(context.Blob, &d); err != nil {
-		return nil, fmt.Errorf("cannot unmarshal context data blob: %v", err)
+		return nil, fmt.Errorf("cannot load context: cannot unmarshal data blob: %v", err)
 	}
 
 	switch d.ContextType {
 	case contextTypeObject:
 		if context.SavedHandle.Type() != HandleTypeTransient {
-			return nil, errors.New("cannot load context: inconsistent attributes")
+			return nil, errors.New("cannot load context: inconsistent handle type")
+		}
+		dd := d.Data.Data.(*objectContextData)
+		if !dd.Public.compareName(dd.Name) {
+			return nil, errors.New("cannot load context for object: public area and name don't match")
 		}
 	case contextTypeSession:
-		if context.SavedHandle.Type() != HandleTypeHMACSession && context.SavedHandle.Type() != HandleTypePolicySession {
-			return nil, errors.New("cannot load context: inconsistent attributes")
+		switch context.SavedHandle.Type() {
+		case HandleTypeHMACSession, HandleTypePolicySession:
+		default:
+			return nil, errors.New("cannot load context: inconsistent handle type")
 		}
-		if !d.Data.Data.(*sessionContextData).HashAlg.Available() {
-			return nil, fmt.Errorf("cannot load context: invalid session hash algorithm %v", d.Data.Data.(*sessionContextData).HashAlg)
+		dd := d.Data.Data.(*sessionContextData)
+		if !dd.HashAlg.Available() {
+			return nil, fmt.Errorf("cannot load context for session: invalid hash algorithm %v", dd.HashAlg)
+		}
+		switch dd.SessionType {
+		case SessionTypeHMAC, SessionTypePolicy, SessionTypeTrial:
+		default:
+			return nil, fmt.Errorf("cannot load context for session: invalid type %v", dd.SessionType)
+		}
+		if dd.PolicyHMACType > policyHMACTypeMax {
+			return nil, errors.New("cannot load context for session: invalid value")
+		}
+		if (dd.IsBound && len(dd.BoundEntity) == 0) || (!dd.IsBound && len(dd.BoundEntity) > 0) {
+			return nil, errors.New("cannot load context for session: inconsistent properties")
+		}
+		digestSize := dd.HashAlg.Size()
+		if len(dd.SessionKey) != digestSize && len(dd.SessionKey) != 0 {
+			return nil, errors.New("cannot load context for session: unexpected session key size")
+		}
+		if len(dd.NonceCaller) != digestSize || len(dd.NonceTPM) != digestSize {
+			return nil, errors.New("cannot load context for session: unexpected nonce size")
+		}
+		switch dd.Symmetric.Algorithm {
+		case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull, SymAlgorithmSM4, SymAlgorithmCamellia:
+		default:
+			return nil, fmt.Errorf("cannot load context for session: invalid symmetric algorithm %v", dd.Symmetric.Algorithm)
+		}
+		switch dd.Symmetric.Algorithm {
+		case SymAlgorithmAES, SymAlgorithmSM4, SymAlgorithmCamellia:
+			if dd.Symmetric.Mode.Sym() != SymModeCFB {
+				return nil, fmt.Errorf("cannot load context for session: invalid symmetric mode %v", dd.Symmetric.Mode.Sym())
+			}
 		}
 	default:
 		return nil, errors.New("cannot load context: inconsistent attributes")
@@ -192,23 +233,27 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 
 	switch d.ContextType {
 	case contextTypeObject:
+		if loadedHandle.Type() != HandleTypeTransient {
+			return nil, &InvalidResponseError{CommandContextLoad,
+				fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", loadedHandle)}
+		}
+
 		dd := d.Data.Data.(*objectContextData)
 		rc = &objectContext{handle: loadedHandle, public: Public(*dd.Public), name: dd.Name}
-		t.addResourceContext(rc)
 	case contextTypeSession:
-		dd := d.Data.Data.(*sessionContextData)
-		r, exists := t.resources[normalizeHandleForMap(loadedHandle)]
-		var sc *sessionContext
-		if !exists {
-			sc = &sessionContext{handle: loadedHandle}
-			rc = sc
-			t.addResourceContext(rc)
-		} else {
-			sc = r.(*sessionContext)
-			sc.handle = loadedHandle
-			rc = r
+		if loadedHandle != context.SavedHandle {
+			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}
 		}
-		sc.flags = sessionContextFull | sessionContextLoaded
+		var sc *sessionContext
+		if rc, exists := t.resources[normalizeHandleForMap(loadedHandle)]; exists {
+			sc = rc.(*sessionContext)
+		} else {
+			sc = &sessionContext{handle: loadedHandle}
+		}
+
+		dd := d.Data.Data.(*sessionContextData)
+		sc.handle = loadedHandle
+		sc.usable = true
 		sc.hashAlg = dd.HashAlg
 		sc.sessionType = dd.SessionType
 		sc.policyHMACType = dd.PolicyHMACType
@@ -218,7 +263,10 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 		sc.nonceCaller = dd.NonceCaller
 		sc.nonceTPM = dd.NonceTPM
 		sc.symmetric = dd.Symmetric
+
+		rc = sc
 	}
+	t.addResourceContext(rc)
 
 	return rc, nil
 }

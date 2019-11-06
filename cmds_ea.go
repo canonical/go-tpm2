@@ -56,9 +56,6 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 	if !isSession {
 		return nil, nil, errors.New("invalid resource context for policySession: not a session context")
 	}
-	if sessionContext.flags&sessionContextFull == 0 {
-		return nil, nil, errors.New("invalid resource context for policySession: not complete")
-	}
 
 	var nonceTPM Nonce
 	if includeNonceTPM {
@@ -109,9 +106,6 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 	sessionContext, isSession := policySession.(*sessionContext)
 	if !isSession {
 		return nil, nil, errors.New("invalid resource context for policySession: not a session context")
-	}
-	if sessionContext.flags&sessionContextFull == 0 {
-		return nil, nil, errors.New("invalid resource context for policySession: not complete")
 	}
 
 	var timeout Timeout
@@ -291,9 +285,6 @@ func (t *TPMContext) PolicyAuthValue(policySession ResourceContext, sessions ...
 	if !isSessionContext {
 		return errors.New("invalid resource context for policySession: not a session context")
 	}
-	if sc.flags&sessionContextFull == 0 {
-		return errors.New("invalid resource context for policySession: not complete")
-	}
 
 	if err := t.RunCommand(CommandPolicyAuthValue, sessions, policySession); err != nil {
 		return err
@@ -319,9 +310,6 @@ func (t *TPMContext) PolicyPassword(policySession ResourceContext, sessions ...*
 	sc, isSessionContext := policySession.(*sessionContext)
 	if !isSessionContext {
 		return errors.New("invalid resource context for policySession: not a session context")
-	}
-	if sc.flags&sessionContextFull == 0 {
-		return errors.New("invalid resource context for policySession: not complete")
 	}
 
 	if err := t.RunCommand(CommandPolicyPassword, sessions, policySession); err != nil {

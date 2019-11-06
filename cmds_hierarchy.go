@@ -117,6 +117,15 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
+	if objectHandle.Type() != HandleTypeTransient {
+		return nil, nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
+			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+	}
+	if outPublic.Ptr == nil || !outPublic.Ptr.compareName(name) {
+		return nil, nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
+			"name and public area returned from TPM are not consistent"}
+	}
+
 	objectContext := &objectContext{handle: objectHandle, name: name}
 	outPublic.Ptr.copyTo(&objectContext.public)
 	t.addResourceContext(objectContext)

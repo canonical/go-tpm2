@@ -22,6 +22,8 @@ const (
 	policyHMACTypeNoAuth policyHMACType = iota
 	policyHMACTypeAuth
 	policyHMACTypePassword
+
+	policyHMACTypeMax = policyHMACTypePassword
 )
 
 const (
@@ -119,10 +121,6 @@ func computeBindName(name Name, auth Auth) Name {
 		j++
 	}
 	return r
-}
-
-func (c *sessionContext) isUsable() bool {
-	return c.flags&(sessionContextFull|sessionContextLoaded) == sessionContextFull|sessionContextLoaded
 }
 
 func (s *Session) computeSessionHMACKey() []byte {
@@ -350,7 +348,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 		if !isSessionContext {
 			return nil, errors.New("invalid resource context for session: not a session context")
 		}
-		if !sc.isUsable() {
+		if !sc.usable {
 			return nil, errors.New("invalid resource context for session: not complete and loaded")
 		}
 	}

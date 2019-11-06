@@ -125,9 +125,16 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		return nil, err
 	}
 
+	switch sessionHandle.Type() {
+	case HandleTypeHMACSession, HandleTypePolicySession:
+	default:
+		return nil, &InvalidResponseError{CommandStartAuthSession,
+			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", sessionHandle)}
+	}
+
 	sessionContext := &sessionContext{
 		handle:         sessionHandle,
-		flags:          sessionContextFull | sessionContextLoaded,
+		usable:         true,
 		hashAlg:        authHash,
 		sessionType:    sessionType,
 		policyHMACType: policyHMACTypeNoAuth,

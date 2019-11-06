@@ -14,7 +14,9 @@ import (
 // ResourceContext corresponds to a resource that resides on the TPM. Implementations of ResourceContext maintain some host-side
 // state in order to be able to participate in HMAC sessions and session-based parameter encryption. ResourceContext instances are
 // tracked by the TPMContext that created them (when the corresponding TPM resource is created or loaded), and are invalidated when
-// the resource is flushed from the TPM. Once invalidated, they can no longer be used.
+// the resource is flushed from the TPM. They may also be invalidated if the TPM indicates it has allocated a resource with the
+// same handle as an existing ResourceContext - these stale ResourceContext instances may occur when working with sessions or
+// persistent resources via a resource manager. Once invalidated, they can no longer be used.
 type ResourceContext interface {
 	// Handle returns the handle of the resource on the TPM. If the resource has been flushed from the TPM,
 	// this will return HandleNull
@@ -108,7 +110,7 @@ const (
 
 type sessionContext struct {
 	handle         Handle
-	flags          sessionContextFlags
+	usable         bool
 	hashAlg        HashAlgorithmId
 	sessionType    SessionType
 	policyHMACType policyHMACType
@@ -145,7 +147,7 @@ func makeIncompleteSessionContext(t *TPMContext, handle Handle) (ResourceContext
 		return nil, err
 	}
 	if len(h) > 0 && h[0] == handle {
-		return &sessionContext{handle: handle, flags: sessionContextLoaded}, nil
+		return &sessionContext{handle: handle}, nil
 	}
 	h, err = t.GetCapabilityHandles(hr|(Handle(HandleTypeSavedSession)<<24), 1)
 	if err != nil {
@@ -192,7 +194,7 @@ func normalizeHandleForMap(handle Handle) Handle {
 
 func (t *TPMContext) evictResourceContext(rc ResourceContext) {
 	if _, isPermanent := rc.(permanentContext); isPermanent {
-		panic("Attempting to evict a permanent resource context")
+		return
 	}
 	if err := t.checkResourceContextParam(rc); err != nil {
 		panic(fmt.Sprintf("Attempting to evict an invalid resource context: %v", err))
@@ -209,8 +211,8 @@ func (t *TPMContext) addResourceContext(rc ResourceContext) {
 		panic("Attempting to add a closed resource context")
 	}
 	handle := normalizeHandleForMap(rc.Handle())
-	if _, exists := t.resources[handle]; exists {
-		panic(fmt.Sprintf("Resource object for handle 0x%08x already exists", rc.Handle()))
+	if existing, exists := t.resources[handle]; exists && existing != rc {
+		t.evictResourceContext(existing)
 	}
 	t.resources[handle] = rc
 }
@@ -233,23 +235,24 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 }
 
 // WrapHandle creates and returns a ResourceContext for the specified handle. TPMContext will maintain a reference to the returned
-// ResourceContext until it is flushed from the TPM. If the TPMContext is already tracking a ResourceContext for the specified
-// handle, it returns the existing ResourceContext.
+// ResourceContext until it is flushed from the TPM or if the TPM indicates that it has created a new resource with the same handle -
+// these stale ResourceContext instances may occur when working with sessions and persistent resources via a resource manager. If the
+// TPMContext is already tracking an active ResourceContext for the specified handle, it returns the existing ResourceContext.
 //
-// If the handle references a NV index or an object, it will execute some TPM commands to initialize state that is maintained on the
-// host side. An error will be returned if this fails. It will return a ResourceUnavailableError error if the specified handle
-// references a NV index or object that is currently unavailable.
+// If the handle references a NV index or an object, it will execute a command to read the public area from the TPM in order to
+// initialize state that is maintained on the host side. It will return a ResourceUnavailableError error if the specified handle
+// references a NV index or object that is currently unavailable. It should be noted that this command is executed without any
+// sessions and therefore does not benefit from any integrity protections other than a consistency cross-check that is performed on
+// the returned data to make sure that the name and public area match. Applications should consider the implications of this during
+// subsequent use of the ResourceContext.
 //
-// If the handle references a session, it will execute some commands to determine if the session exists on the TPM and whether it is
-// saved or loaded. If the session is saved then the returned ResourceContext will return a Handle with a HandleType of
+// If the handle references a session, it will execute some commands to determine if the session exists on the TPM, either as a
+// saved or loaded session. If the session is saved then the returned ResourceContext will return a Handle with a HandleType of
 // HandleTypeHMACSession regardless of the HandleType of the supplied handle. Regardless of whether the session is saved or loaded,
-// the returned ResourceContext will not be complete and the session associated with it cannot be used in any command. If the session
-// is a saved session and the session is loaded again via TPMContext.ContextLoad, then the ResourceContext will be complete and the
-// session associated with it can be used as normal. It will return a ResourceUnavailableError error if no session with the specified
-// handle exists.
+// the returned ResourceContext will not be complete and the session associated with it cannot be used in any command other than
+// TPMContext.FlushContext. It will return a ResourceUnavailableError error if no session with the specified handle exists.
 //
-// It will return an error if handle references a PCR index or a session. It is not possible to create a ResourceContext for a
-// session that is not started by TPMContext.StartAuthSession.
+// It will return an error if handle references a PCR index or a session.
 //
 // It always succeeds if the specified handle references a permanent resource.
 func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {

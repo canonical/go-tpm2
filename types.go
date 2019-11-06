@@ -5,6 +5,7 @@
 package tpm2
 
 import (
+	"bytes"
 	"crypto"
 	"encoding/binary"
 	"errors"
@@ -1513,6 +1514,14 @@ func (p *Public) copyTo(dest *Public) error {
 		return err
 	}
 	return nil
+}
+
+func (p *Public) compareName(name Name) bool {
+	n, err := p.Name()
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(n, name)
 }
 
 func (p *Public) ToTemplate() (Template, error) {

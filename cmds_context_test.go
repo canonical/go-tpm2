@@ -67,7 +67,7 @@ func TestContextSave(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "cannot context save a session with an incomplete ResourceContext" {
+		if err.Error() != "invalid saveContext parameter: unusable session ResourceContext" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 	})

@@ -202,6 +202,13 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 		return nil, nil, err
 	}
 
+	if objectHandle.Type() != HandleTypeTransient {
+		return nil, nil, &InvalidResponseError{CommandLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+	}
+	if inPublic == nil || !inPublic.compareName(name) {
+		return nil, nil, &InvalidResponseError{CommandLoad, "name returned from TPM not consistent with loaded public area"}
+	}
+
 	objectContext := &objectContext{handle: objectHandle, name: name}
 	inPublic.copyTo(&objectContext.public)
 	t.addResourceContext(objectContext)
@@ -278,6 +285,14 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 		&objectHandle, Separator,
 		&name); err != nil {
 		return nil, nil, err
+	}
+
+	if objectHandle.Type() != HandleTypeTransient {
+		return nil, nil, &InvalidResponseError{CommandLoadExternal,
+			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+	}
+	if inPublic == nil || !inPublic.compareName(name) {
+		return nil, nil, &InvalidResponseError{CommandLoadExternal, "name returned from TPM not consistent with loaded public area"}
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
@@ -573,6 +588,14 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		&objectHandle, Separator,
 		&outPrivate, &outPublic, &name); err != nil {
 		return nil, nil, nil, nil, err
+	}
+
+	if objectHandle.Type() != HandleTypeTransient {
+		return nil, nil, nil, nil, &InvalidResponseError{CommandCreateLoaded,
+			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+	}
+	if outPublic.Ptr == nil || !outPublic.Ptr.compareName(name) {
+		return nil, nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
