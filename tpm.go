@@ -113,6 +113,22 @@ type Session struct {
 	includeAuthValue bool
 }
 
+func (s *Session) WithAuthValue(authValue []byte) *Session {
+	return &Session{Context: s.Context, AuthValue: authValue, Attrs: s.Attrs}
+}
+
+func (s *Session) WithAttrs(attrs SessionAttributes) *Session {
+	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: attrs}
+}
+
+func (s *Session) AddAttrs(attrs SessionAttributes) *Session {
+	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: s.Attrs|attrs}
+}
+
+func (s *Session) RemoveAttrs(attrs SessionAttributes) *Session {
+	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: s.Attrs&^attrs}
+}
+
 // HandleWithAuth associates a Handle with an authorization, and is provided to TPMContext.RunCommand in the command handle area.
 //
 // Auth can be one of the following types:

@@ -477,6 +477,62 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 	}
 }
 
+type mockContext struct {}
+func (*mockContext) Handle() Handle { return HandleNull }
+func (*mockContext) Name() Name { return nil }
+
+func TestSession(t *testing.T) {
+	auth1 := []byte("foo")
+	auth2 := []byte("bar")
+
+	c := &mockContext{}
+	s := Session{Context: c, AuthValue: auth1, Attrs: AttrContinueSession}
+
+	s2 := s.WithAuthValue(auth2)
+	if s.Context != s2.Context {
+		t.Errorf("Wrong context")
+	}
+	if s.Attrs != s2.Attrs {
+		t.Errorf("Wrong attrs")
+	}
+	if !bytes.Equal(s2.AuthValue, auth2) {
+		t.Errorf("Wrong auth value")
+	}
+
+	s3 := s2.WithAttrs(AttrResponseEncrypt)
+	if s.Context != s3.Context {
+		t.Errorf("Wrong context")
+	}
+	if s3.Attrs != AttrResponseEncrypt {
+		t.Errorf("Wrong attrs")
+	}
+	if !bytes.Equal(s2.AuthValue, s3.AuthValue) {
+		t.Errorf("Wrong auth value")
+	}
+
+	s4 := s3.AddAttrs(AttrCommandEncrypt)
+	if s.Context != s4.Context {
+		t.Errorf("Wrong context")
+	}
+	if s4.Attrs != AttrResponseEncrypt|AttrCommandEncrypt {
+		t.Errorf("Wrong attrs")
+	}
+	if !bytes.Equal(s2.AuthValue, s4.AuthValue) {
+		t.Errorf("Wrong auth value")
+	}
+
+	s5 := s4.RemoveAttrs(AttrResponseEncrypt)
+	if s.Context != s5.Context {
+		t.Errorf("Wrong context")
+	}
+	if s5.Attrs != AttrCommandEncrypt {
+		t.Errorf("Wrong attrs")
+	}
+	if !bytes.Equal(s2.AuthValue, s5.AuthValue) {
+		t.Errorf("Wrong auth value")
+	}
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(func() int {
 		defer func() {
