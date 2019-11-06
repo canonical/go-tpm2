@@ -145,40 +145,21 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessio
 	}
 
 	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, authHandle)
-	if err != nil {
-		return err
-	}
 
-	authSession := ctx.sessionParams[0].session
-	if authSession != nil {
-		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
-		// with a HMAC generated with a key based on an empty auth value.
-		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
-	}
-
-	if err := t.processResponse(ctx); err != nil {
-		return err
-	}
-
-	getHandles := func(handleType HandleType, out map[Handle]struct{}) error {
+	getHandles := func(handleType HandleType, out map[Handle]struct{}) {
 		handles, err := t.GetCapabilityHandles(handleType.BaseHandle(), CapabilityMaxProperties)
 		if err != nil {
-			return fmt.Errorf("cannot fetch handles from TPM after clear: %v", err)
+			return
 		}
 		var empty struct{}
 		for _, handle := range handles {
 			out[handle] = empty
 		}
-		return nil
 	}
 
 	handles := make(map[Handle]struct{})
-	if err := getHandles(HandleTypeTransient, handles); err != nil {
-		return err
-	}
-	if err := getHandles(HandleTypePersistent, handles); err != nil {
-		return err
-	}
+	getHandles(HandleTypeTransient, handles)
+	getHandles(HandleTypePersistent, handles)
 
 	for _, rc := range t.resources {
 		switch c := rc.(type) {
@@ -197,7 +178,18 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessio
 		t.evictResourceContext(rc)
 	}
 
-	return nil
+	if err != nil {
+		return err
+	}
+
+	authSession := ctx.sessionParams[0].session
+	if authSession != nil {
+		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
+		// with a HMAC generated with a key based on an empty auth value.
+		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
+	}
+
+	return t.processResponse(ctx)
 }
 
 // ClearControl executes the TPM2_ClearControl command to enable or disable execution of the TPM2_Clear command (via the
