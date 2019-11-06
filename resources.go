@@ -5,6 +5,7 @@
 package tpm2
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -161,6 +162,11 @@ func makeNVIndexContext(t *TPMContext, handle Handle) (ResourceContext, error) {
 	if err != nil {
 		return nil, err
 	}
+	if n, err := pub.Name(); err != nil {
+		return nil, &InvalidResponseError{CommandNVReadPublic, fmt.Sprintf("cannot compute name of returned public area: %v", err)}
+	} else if !bytes.Equal(n, name) {
+		return nil, &InvalidResponseError{CommandNVReadPublic, "name and public area don't match"}
+	}
 	return &nvIndexContext{handle: handle, public: *pub, name: name}, nil
 }
 
@@ -168,6 +174,11 @@ func makeObjectContext(t *TPMContext, handle Handle) (ResourceContext, error) {
 	pub, name, _, err := t.ReadPublic(permanentContext(handle))
 	if err != nil {
 		return nil, err
+	}
+	if n, err := pub.Name(); err != nil {
+		return nil, &InvalidResponseError{CommandReadPublic, fmt.Sprintf("cannot compute name of returned public area: %v", err)}
+	} else if !bytes.Equal(n, name) {
+		return nil, &InvalidResponseError{CommandReadPublic, "name and public area don't match"}
 	}
 	return &objectContext{handle: handle, public: *pub, name: name}, nil
 }

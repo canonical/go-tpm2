@@ -7,7 +7,6 @@ package tpm2
 // Section 31 - Non-volatile Storage
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -171,11 +170,6 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 		Separator,
 		&nvPublic, &nvName); err != nil {
 		return nil, nil, err
-	}
-	if n, err := nvPublic.Ptr.Name(); err != nil {
-		return nil, nil, &InvalidResponseError{CommandNVReadPublic, fmt.Sprintf("cannot compute name of returned public area: %v", err)}
-	} else if !bytes.Equal(n, nvName) {
-		return nil, nil, &InvalidResponseError{CommandNVReadPublic, "name and public area don't match"}
 	}
 	return nvPublic.Ptr, nvName, nil
 }
