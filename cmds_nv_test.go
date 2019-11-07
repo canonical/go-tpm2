@@ -200,6 +200,22 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 
 		run(t, context, &Session{Context: sessionContext})
 	})
+
+	// NVUndefineSpaceSpecial is currently the only API that accepts only a *Session parameter as an authorization, rather than
+	// accepting any type as an empty interface. Test that passing nil in here results in sane behaviour (we should emit a
+	// password auth session wth an empty value rather than a policy auth session)
+	t.Run("MissingPolicySession", func(t *testing.T) {
+		context := define(t)
+		defer verifyNVSpaceUndefined(t, tpm, context, HandlePlatform, nil)
+		err := tpm.NVUndefineSpaceSpecial(context, HandlePlatform, nil, nil)
+		if err == nil {
+			t.Fatalf("Expected an error")
+		}
+		if e, ok := err.(*TPMError); !ok || e.Code != ErrorAuthType {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		run(t, context, nil)
+	})
 }
 
 func TestNVWriteZeroSized(t *testing.T) {
