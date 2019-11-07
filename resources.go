@@ -102,13 +102,6 @@ func (r *nvIndexContext) clearAttr(a NVAttributes) {
 	r.name = name
 }
 
-type sessionContextFlags int
-
-const (
-	sessionContextFull sessionContextFlags = 1 << iota
-	sessionContextLoaded
-)
-
 type sessionContext struct {
 	handle         Handle
 	usable         bool
