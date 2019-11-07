@@ -247,8 +247,8 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("EvictControl should return a nil handle when evicting a persistent object")
 		}
 
-		if outContext.Handle() != HandleNull {
-			t.Errorf("EvictControl should set the persistent context's handle to NULL")
+		if outContext.Handle() != HandleUnassigned {
+			t.Errorf("EvictControl should set the persistent context's handle to %v", HandleUnassigned)
 		}
 
 		_, err = tpm.WrapHandle(persist)
@@ -314,8 +314,8 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("FlushContext didn't flush the transient handle")
 	}
 
-	if context.Handle() != HandleNull {
-		t.Errorf("FlushContext should set the context's handle to NULL")
+	if context.Handle() != HandleUnassigned {
+		t.Errorf("FlushContext should set the context's handle to %v", HandleUnassigned)
 	}
 
 	_, err = tpm.WrapHandle(h)

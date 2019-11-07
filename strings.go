@@ -452,6 +452,8 @@ func (h Handle) String() string {
 		return "TPM_RH_OWNER"
 	case HandleNull:
 		return "TPM_RH_NULL"
+	case HandleUnassigned:
+		return "TPM_RH_UNASSIGNED"
 	case HandlePW:
 		return "TPM_RS_PW"
 	case HandleLockout:

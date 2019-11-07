@@ -28,7 +28,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			if err := tpm.NVUndefineSpace(HandleOwner, rc, ownerAuth); err != nil {
 				t.Errorf("NVUndefineSpace failed: %v", err)
 			}
-			if rc.Handle() != HandleNull {
+			if rc.Handle() != HandleUnassigned {
 				t.Errorf("Context should be invalid after NVUndefineSpace")
 			}
 		}()

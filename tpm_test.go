@@ -83,7 +83,7 @@ func undefineNVSpace(t *testing.T, tpm *TPMContext, context ResourceContext, aut
 
 func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle,
 	auth interface{}) {
-	if context.Handle() == HandleNull {
+	if context.Handle() == HandleUnassigned {
 		return
 	}
 	t.Errorf("Context is still live")
@@ -388,7 +388,7 @@ func evictPersistentObject(t *testing.T, tpm *TPMContext, auth Handle, context R
 }
 
 func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
-	if context.Handle() == HandleNull {
+	if context.Handle() == HandleUnassigned {
 		return
 	}
 	t.Errorf("Context is still live")
@@ -404,7 +404,7 @@ func flushContext(t *testing.T, tpm *TPMContext, context ResourceContext) {
 
 // Fail the test if the resource context hasn't been invalidated. Will attempt to flush a valid resource context.
 func verifyContextFlushed(t *testing.T, tpm *TPMContext, context ResourceContext) {
-	if context.Handle() == HandleNull {
+	if context.Handle() == HandleUnassigned {
 		return
 	}
 	t.Errorf("Context is still live")

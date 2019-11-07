@@ -18,8 +18,9 @@ import (
 // same handle as an existing ResourceContext - these stale ResourceContext instances may occur when working with sessions or
 // persistent resources via a resource manager. Once invalidated, they can no longer be used.
 type ResourceContext interface {
-	// Handle returns the handle of the resource on the TPM. If the resource has been flushed from the TPM,
-	// this will return HandleNull
+	// Handle returns the handle of the resource on the TPM. If the resource has been invalidated because it has been flushed from
+	// the TPM or the TPM indicated that this resource context is stale by allocating another resource with the same handle, this will
+	// return HandleUnassigned
 	Handle() Handle
 	Name() Name // The name of the resource
 }
@@ -62,7 +63,7 @@ func (r *objectContext) Name() Name {
 }
 
 func (r *objectContext) invalidate() {
-	r.handle = HandleNull
+	r.handle = HandleUnassigned
 	r.public = Public{}
 	r.name = make(Name, binary.Size(r.handle))
 	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
@@ -83,7 +84,7 @@ func (r *nvIndexContext) Name() Name {
 }
 
 func (r *nvIndexContext) invalidate() {
-	r.handle = HandleNull
+	r.handle = HandleUnassigned
 	r.public = NVPublic{}
 	r.name = make(Name, binary.Size(r.handle))
 	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
@@ -133,7 +134,7 @@ func (r *sessionContext) Name() Name {
 }
 
 func (r *sessionContext) invalidate() {
-	r.handle = HandleNull
+	r.handle = HandleUnassigned
 }
 
 func (r *sessionContext) NonceTPM() Nonce {
@@ -207,7 +208,7 @@ func (t *TPMContext) addResourceContext(rc ResourceContext) {
 	if _, isPermanent := rc.(permanentContext); isPermanent {
 		return
 	}
-	if rc.Handle() == HandleNull {
+	if rc.Handle() == HandleUnassigned {
 		panic("Attempting to add a closed resource context")
 	}
 	handle := normalizeHandleForMap(rc.Handle())
@@ -224,7 +225,7 @@ func (t *TPMContext) checkResourceContextParam(rc ResourceContext) error {
 	if _, isPermanent := rc.(permanentContext); isPermanent {
 		return nil
 	}
-	if rc.Handle() == HandleNull {
+	if rc.Handle() == HandleUnassigned {
 		return errors.New("resource has been closed")
 	}
 	erc, exists := t.resources[normalizeHandleForMap(rc.Handle())]

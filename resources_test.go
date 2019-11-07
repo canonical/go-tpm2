@@ -46,7 +46,7 @@ func TestWrapHandle(t *testing.T) {
 
 	closeTPM(t, tpm)
 	closed = true
-	if primary.Handle() != HandleNull || persistentPrimary.Handle() != HandleNull || sessionContext.Handle() != HandleNull {
+	if primary.Handle() != HandleUnassigned || persistentPrimary.Handle() != HandleUnassigned || sessionContext.Handle() != HandleUnassigned {
 		t.Fatalf("Expected resource contexts to be invalid")
 	}
 
