@@ -6,11 +6,6 @@ package tpm2
 
 // Section 23 - Enhanced Authorization (EA) Commands
 
-import (
-	"errors"
-	"fmt"
-)
-
 // PolicySigned executes the TPM2_PolicySigned command to include a signed authorization in a policy. The command binds a policy to
 // the signing key associated with authContext.
 //
@@ -48,13 +43,9 @@ import (
 // authContext and the value of policyRef. If expiration is less than zero, a timeout value and corresponding *TkAuth ticket will be
 // returned if policySession does not correspond to a trial session.
 func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout, *TkAuth, error) {
-	if err := t.checkResourceContextParam(policySession); err != nil {
-		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
-	}
-
 	sessionContext, isSession := policySession.(*sessionContext)
 	if !isSession {
-		return nil, nil, errors.New("invalid resource context for policySession: not a session context")
+		return nil, nil, makeInvalidParamError("policySession", "not a session context")
 	}
 
 	var nonceTPM Nonce
@@ -99,13 +90,9 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 // is less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a
 // trial session.
 func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error) {
-	if err := t.checkResourceContextParam(policySession); err != nil {
-		return nil, nil, fmt.Errorf("invalid resource context for policySession: %v", err)
-	}
-
 	sessionContext, isSession := policySession.(*sessionContext)
 	if !isSession {
-		return nil, nil, errors.New("invalid resource context for policySession: not a session context")
+		return nil, nil, makeInvalidParamError("policySession", "not a session context")
 	}
 
 	var timeout Timeout
@@ -277,13 +264,9 @@ func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code Comma
 // When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
 // must be set to the authorization value of the entity being authorized.
 func (t *TPMContext) PolicyAuthValue(policySession ResourceContext, sessions ...*Session) error {
-	if err := t.checkResourceContextParam(policySession); err != nil {
-		return fmt.Errorf("invalid resource context for policySession: %v", err)
-	}
-
 	sc, isSessionContext := policySession.(*sessionContext)
 	if !isSessionContext {
-		return errors.New("invalid resource context for policySession: not a session context")
+		return makeInvalidParamError("policySession", "not a session context")
 	}
 
 	if err := t.RunCommand(CommandPolicyAuthValue, sessions, policySession); err != nil {
@@ -303,13 +286,9 @@ func (t *TPMContext) PolicyAuthValue(policySession ResourceContext, sessions ...
 // When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
 // must be set to the authorization value of the entity being authorized.
 func (t *TPMContext) PolicyPassword(policySession ResourceContext, sessions ...*Session) error {
-	if err := t.checkResourceContextParam(policySession); err != nil {
-		return fmt.Errorf("invalid resource context for policySession: %v", err)
-	}
-
 	sc, isSessionContext := policySession.(*sessionContext)
 	if !isSessionContext {
-		return errors.New("invalid resource context for policySession: not a session context")
+		return makeInvalidParamError("policySession", "not a session context")
 	}
 
 	if err := t.RunCommand(CommandPolicyPassword, sessions, policySession); err != nil {

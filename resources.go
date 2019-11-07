@@ -301,7 +301,7 @@ func (t *TPMContext) WrapHandle(handle Handle) (ResourceContext, error) {
 // ResourceContext for the corresponding TPM resource in the future will return a newly created ResourceContext.
 func (t *TPMContext) ForgetResource(context ResourceContext) error {
 	if err := t.checkResourceContextParam(context); err != nil {
-		return err
+		return makeInvalidParamError("context", fmt.Sprintf("%v", err))
 	}
 
 	switch context.Handle().Type() {

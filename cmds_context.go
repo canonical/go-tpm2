@@ -99,9 +99,6 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
 // WarningContextGap will be returned.
 func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) {
-	if err := t.checkResourceContextParam(saveContext); err != nil {
-		return nil, makeInvalidParamError("saveContext", fmt.Sprintf("invalid resource context: %v", err))
-	}
 	if sc, isSession := saveContext.(*sessionContext); isSession && !sc.usable {
 		return nil, makeInvalidParamError("saveContext", "unusable session ResourceContext")
 	}
@@ -279,7 +276,7 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 // possible to restore that session with TPMContext.ContextLoad, even if it was previously saved with TPMContext.ContextSave.
 func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 	if err := t.checkResourceContextParam(flushContext); err != nil {
-		return fmt.Errorf("invalid resource context for flushContext: %v", err)
+		return makeInvalidParamError("flushContext", fmt.Sprintf("%v", err))
 	}
 
 	if err := t.RunCommand(CommandFlushContext, nil,

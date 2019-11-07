@@ -30,9 +30,6 @@ package tpm2
 // On successful, it returns an attestation structure detailing the name of the object associated with objectContext. If signContext
 // is not nil, the attestation structure will be signed by the associated key and returned too.
 func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, objectContextAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
-	if signContext == nil {
-		signContext = permanentContext(HandleNull)
-	}
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -79,9 +76,6 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 // If successful, it returns an attestation structure. If signContext is not nil, the attestation structure will be signed by the
 // associated key and returned too.
 func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
-	if signContext == nil {
-		signContext = permanentContext(HandleNull)
-	}
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -120,9 +114,6 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 // On successful, it returns an attestation structure containing the hash of the PCRs selected by the pcrs parameter. If signContext
 // is not nil, the attestation structure will be signed by the associated key and returned too.
 func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
-	if signContext == nil {
-		signContext = permanentContext(HandleNull)
-	}
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -172,9 +163,6 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 // On successful, it returns an attestation structure detailing the current values of time and clock. If signContext is not nil, the
 // attestation structure will be signed by the associated key and returned too.
 func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
-	if signContext == nil {
-		signContext = permanentContext(HandleNull)
-	}
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}

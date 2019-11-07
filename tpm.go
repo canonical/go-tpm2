@@ -260,11 +260,17 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 	for i, resource := range resources {
 		switch r := resource.(type) {
 		case ResourceContext:
+			if err := t.checkResourceContextParam(r); err != nil {
+				return nil, fmt.Errorf("cannot process ResourceContext for command %s at index %d: %v", commandCode, i, err)
+			}
 			handles = append(handles, r.Handle())
 			handleNames = append(handleNames, r.Name())
 		case Handle:
 			handles = append(handles, r)
 			handleNames = append(handleNames, permanentContext(r).Name())
+		case nil:
+			handles = append(handles, HandleNull)
+			handleNames = append(handleNames, permanentContext(HandleNull).Name())
 		default:
 			return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)",
 				commandCode, i, reflect.TypeOf(resource))
@@ -407,9 +413,10 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 // Command handles are provided as Handle or ResourceContext types if they do not require an authorization. For command handles that
 // require an authorization, they are provided using the HandleWithAuth type (for a Handle) or the ResourceWithAuth type (for a
 // ResourceContext). Both HandleWithAuth and ResourceWithAuth reference the corresponding authorization. If a ResourceContext
-// references a non-permanent handle and is not tracked by this TPMContext, then this function will return an error. The Handle
-// type must only be used for permanent resources - if the Handle type is used to reference non-permanent resources, then computation
-// of the resource name will be incorrect and the correct name is required for the correct computation of session HMACs.
+// references a non-permanent handle and is not tracked by this TPMContext, then this function will return an error. Providing a nil
+// value will automatically by converted to a handle with the value of HandleNull. The Handle type must only be used for permanent
+// resources - if the Handle type is used to reference non-permanent resources, then computation of the resource name will be
+// incorrect and the correct name is required for the correct computation of session HMACs.
 //
 // Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
 //

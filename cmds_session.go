@@ -83,28 +83,31 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var salt []byte
 	var encryptedSalt EncryptedSecret
 
+	tpmKeyHandle := HandleNull
+	bindHandle := HandleNull
+
 	if tpmKey != nil {
 		object, isObject := tpmKey.(*objectContext)
 		if !isObject {
 			return nil, errors.New("invalid resource context for tpmKey: not an object")
 		}
 
+		tpmKeyHandle = tpmKey.Handle()
+
 		var err error
 		encryptedSalt, salt, err = cryptComputeEncryptedSalt(&object.public)
 		if err != nil {
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
-	} else {
-		tpmKey = permanentContext(HandleNull)
 	}
 
-	if bind == nil {
-		bind = permanentContext(HandleNull)
+	if bind != nil {
+		bindHandle = bind.Handle()
 	}
 
 	var isBound bool = false
 	var boundEntity Name
-	if bind.Handle() != HandleNull && sessionType == SessionTypeHMAC {
+	if bindHandle != HandleNull && sessionType == SessionTypeHMAC {
 		boundEntity = computeBindName(bind.Name(), authValue)
 		isBound = true
 	}
@@ -144,7 +147,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		nonceTPM:       nonceTPM,
 		symmetric:      symmetric}
 
-	if tpmKey.Handle() != HandleNull || bind.Handle() != HandleNull {
+	if tpmKeyHandle != HandleNull || bindHandle != HandleNull {
 		key := make([]byte, len(authValue)+len(salt))
 		copy(key, authValue)
 		copy(key[len(authValue):], salt)
