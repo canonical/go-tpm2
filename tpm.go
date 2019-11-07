@@ -164,7 +164,8 @@ type ResourceWithAuth struct {
 // TPMContext is the main entry point by which commands are executed on a TPM device using this package. It communicates with the
 // underlying device via a transmission interface, which is an implementation of io.ReadWriteCloser provided to NewTPMContext.
 //
-// TPMContext maintains some host-side state of TPM resources that are loaded and created by this API.
+// TPMContext maintains some host-side state of TPM resources that are loaded and created by this API, in the form of ResourceContext
+// objects that correspond to a TPM resource.
 //
 // Methods that execute commands on the TPM will return errors where the TPM responds with them. These are in the form of *TPMError,
 // *TPMWarning, *TPMHandleError, *TPMSessionError, *TPMParameterError and *TPMVendorError types.
@@ -172,7 +173,8 @@ type ResourceWithAuth struct {
 // Many methods that execute commands on the TPM require Handle or ResourceContext arguments that correspond to resources on the TPM.
 // Where those require authorization, the method also requires a corresponding authorization argument, the type of which is the empty
 // interface (in most cases). Valid types for these authorization arguments are:
-//  * string, []byte, or nil for plaintext password authorization.
+//  * string, []byte, or nil for plaintext password authorization, where an authorization value is transmitted in cleartext to the
+//    TPM.
 //  * *Session for session based authorization (HMAC or policy).
 //
 // Some methods also accept a variable number of optional *Session arguments - these are for sessions that don't provide authorization
@@ -251,50 +253,35 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams []*sessionParam, params ...interface{}) (*cmdContext, error) {
-	commandHandles := make([]interface{}, 0, len(params))
-	commandHandleNames := make([]Name, 0, len(params))
-	commandParams := make([]interface{}, 0, len(params))
+func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams []*sessionParam, resources, params []interface{}) (*cmdContext, error) {
+	handles := make([]interface{}, 0, len(resources))
+	handleNames := make([]Name, 0, len(resources))
 
-	sentinels := 0
-	for _, param := range params {
-		if param == Separator {
-			sentinels++
-			continue
-		}
-
-		switch sentinels {
-		case 0:
-			switch p := param.(type) {
-			case ResourceContext:
-				if err := t.checkResourceContextParam(p); err != nil {
-					return nil, fmt.Errorf("cannot process ResourceContext for command %s at index %d: %v", commandCode, len(commandHandles), err)
-				}
-				commandHandles = append(commandHandles, p.Handle())
-				commandHandleNames = append(commandHandleNames, p.Name())
-			case Handle:
-				commandHandles = append(commandHandles, p)
-				commandHandleNames = append(commandHandleNames, permanentContext(p).Name())
-			default:
-				return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)", commandCode,
-					len(commandHandles), reflect.TypeOf(param))
-			}
-		case 1:
-			commandParams = append(commandParams, param)
+	for i, resource := range resources {
+		switch r := resource.(type) {
+		case ResourceContext:
+			handles = append(handles, r.Handle())
+			handleNames = append(handleNames, r.Name())
+		case Handle:
+			handles = append(handles, r)
+			handleNames = append(handleNames, permanentContext(r).Name())
+		default:
+			return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)",
+				commandCode, i, reflect.TypeOf(resource))
 		}
 	}
 
-	if hasDecryptSession(sessionParams) && len(commandParams) > 0 && !isParamEncryptable(commandParams[0]) {
+	if hasDecryptSession(sessionParams) && len(params) > 0 && !isParamEncryptable(params[0]) {
 		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
 	}
 
 	cBytes := new(bytes.Buffer)
 
-	if err := MarshalToWriter(cBytes, commandHandles...); err != nil {
+	if err := MarshalToWriter(cBytes, handles...); err != nil {
 		return nil, wrapMarshallingError(commandCode, "command handles", err)
 	}
 
-	cpBytes, err := MarshalToBytes(commandParams...)
+	cpBytes, err := MarshalToBytes(params...)
 	if err != nil {
 		return nil, wrapMarshallingError(commandCode, "command parameters", err)
 	}
@@ -302,7 +289,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 	tag := TagNoSessions
 	if len(sessionParams) > 0 {
 		tag = TagSessions
-		authArea, err := buildCommandAuthArea(t, sessionParams, commandCode, commandHandleNames, cpBytes)
+		authArea, err := buildCommandAuthArea(t, sessionParams, commandCode, handleNames, cpBytes)
 		if err != nil {
 			return nil, fmt.Errorf("cannot build command auth area for command %s: %v", commandCode, err)
 		}
@@ -347,34 +334,19 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		responseBytes: responseBytes}, nil
 }
 
-func (t *TPMContext) processResponse(context *cmdContext, params ...interface{}) error {
-	responseHandles := make([]interface{}, 0, len(params))
-	responseParams := make([]interface{}, 0, len(params))
-
-	sentinels := 0
-	for _, param := range params {
-		if param == Separator {
-			sentinels++
-			continue
-		}
-
-		switch sentinels {
-		case 0:
-			_, isHandle := param.(*Handle)
-			if !isHandle {
-				return fmt.Errorf("cannot process response handle parameter for command %s at index %d: invalid type (%s)", context.commandCode,
-					len(responseHandles), reflect.TypeOf(param))
-			}
-			responseHandles = append(responseHandles, param)
-		case 1:
-			responseParams = append(responseParams, param)
+func (t *TPMContext) processResponse(context *cmdContext, handles, params []interface{}) error {
+	for i, handle := range handles {
+		_, isHandle := handle.(*Handle)
+		if !isHandle {
+			return fmt.Errorf("cannot process response handle parameter for command %s at index %d: invalid type (%s)",
+				context.commandCode, i, reflect.TypeOf(handle))
 		}
 	}
 
 	buf := bytes.NewReader(context.responseBytes)
 
-	if len(responseHandles) > 0 {
-		if err := UnmarshalFromReader(buf, responseHandles...); err != nil {
+	if len(handles) > 0 {
+		if err := UnmarshalFromReader(buf, handles...); err != nil {
 			return handleUnmarshallingError(context, "response handles", err)
 		}
 	}
@@ -409,8 +381,8 @@ func (t *TPMContext) processResponse(context *cmdContext, params ...interface{})
 		rpBuf = bytes.NewReader(rpBytes)
 	}
 
-	if len(responseParams) > 0 {
-		if err := UnmarshalFromReader(rpBuf, responseParams...); err != nil {
+	if len(params) > 0 {
+		if err := UnmarshalFromReader(rpBuf, params...); err != nil {
 			return handleUnmarshallingError(context, "response parameters", err)
 		}
 	}
@@ -456,51 +428,44 @@ func (t *TPMContext) processResponse(context *cmdContext, params ...interface{})
 // In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
 // this function will also return an error if the TPM responds with any ResponseCode other than Success.
 func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, params ...interface{}) error {
-	commandArgs := make([]interface{}, 0, len(params))
-	responseArgs := make([]interface{}, 0, len(params))
-	sessionParams := make([]*sessionParam, 0, len(params))
+	commandHandles := make([]interface{}, 0, len(params))
+	commandParams := make([]interface{}, 0, len(params))
+	responseHandles := make([]interface{}, 0, len(params))
+	responseParams := make([]interface{}, 0, len(params))
+	sessionParams := make([]*sessionParam, 0, 3)
 
 	sentinels := 0
 	for _, param := range params {
+		if param == Separator {
+			sentinels++
+			continue
+		}
+
 		switch sentinels {
 		case 0:
 			var err error
 			var typeName string
 			switch p := param.(type) {
 			case HandleWithAuth:
-				commandArgs = append(commandArgs, p.Handle)
+				commandHandles = append(commandHandles, p.Handle)
 				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, p)
 				typeName = "HandleWithAuth"
 			case ResourceWithAuth:
-				commandArgs = append(commandArgs, p.Context)
+				commandHandles = append(commandHandles, p.Context)
 				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, p)
 				typeName = "ResourceWithAuth"
 			default:
-				commandArgs = append(commandArgs, param)
+				commandHandles = append(commandHandles, param)
 			}
 			if err != nil {
-				return fmt.Errorf("cannot process %s for command %s at index %d: %v", typeName, commandCode, len(commandArgs), err)
-			}
-			if param == Separator {
-				sentinels++
+				return fmt.Errorf("cannot process %s for command %s at index %d: %v", typeName, commandCode, len(commandHandles), err)
 			}
 		case 1:
-			if param == Separator {
-				sentinels++
-			} else {
-				commandArgs = append(commandArgs, param)
-			}
+			commandParams = append(commandParams, param)
 		case 2:
-			responseArgs = append(responseArgs, param)
-			if param == Separator {
-				sentinels++
-			}
+			responseHandles = append(responseHandles, param)
 		case 3:
-			if param == Separator {
-				sentinels++
-			} else {
-				responseArgs = append(responseArgs, param)
-			}
+			responseParams = append(responseParams, param)
 		}
 	}
 
@@ -509,12 +474,12 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 		return fmt.Errorf("cannot process non-auth *Session parameters for command %s: %v", commandCode, err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(commandCode, sessionParams, commandArgs...)
+	ctx, err := t.runCommandWithoutProcessingResponse(commandCode, sessionParams, commandHandles, commandParams)
 	if err != nil {
 		return err
 	}
 
-	return t.processResponse(ctx, responseArgs...)
+	return t.processResponse(ctx, responseHandles, responseParams)
 }
 
 // SetMaxSubmissions sets the maximum number of times that RunCommand will attempt to submit a command before failing with an error.

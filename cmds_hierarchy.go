@@ -153,7 +153,7 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessio
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, authHandle)
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, []interface{}{authHandle}, nil)
 
 	getHandles := func(handleType HandleType, out map[Handle]struct{}) {
 		handles, err := t.GetCapabilityHandles(handleType.BaseHandle(), CapabilityMaxProperties)
@@ -198,7 +198,7 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessio
 		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
 	}
 
-	return t.processResponse(ctx)
+	return t.processResponse(ctx, nil, nil)
 }
 
 // ClearControl executes the TPM2_ClearControl command to enable or disable execution of the TPM2_Clear command (via the
@@ -238,9 +238,7 @@ func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s,
-		authHandle, Separator,
-		newAuth)
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s, []interface{}{authHandle}, []interface{}{newAuth})
 	if err != nil {
 		return err
 	}
@@ -252,5 +250,5 @@ func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHa
 		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
 	}
 
-	return t.processResponse(ctx)
+	return t.processResponse(ctx, nil, nil)
 }

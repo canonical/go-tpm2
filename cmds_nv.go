@@ -139,7 +139,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVUndefineSpaceSpecial, s, nvIndex, platform)
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVUndefineSpaceSpecial, s, []interface{}{nvIndex, platform}, nil)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
 	}
 
-	if err := t.processResponse(ctx); err != nil {
+	if err := t.processResponse(ctx, nil, nil); err != nil {
 		return err
 	}
 
@@ -729,9 +729,7 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVChangeAuth, s,
-		nvIndex, Separator,
-		newAuth)
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVChangeAuth, s, []interface{}{nvIndex}, []interface{}{newAuth})
 	if err != nil {
 		return err
 	}
@@ -744,7 +742,7 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
 	}
 
-	return t.processResponse(ctx)
+	return t.processResponse(ctx, nil, nil)
 }
 
 // func (t *TPMContext) NVCertify(signContext, authContext, nvIndex ResourceContext, qualifyingData Data,
