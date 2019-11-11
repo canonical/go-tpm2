@@ -11,7 +11,7 @@ import (
 
 func makeDefaultFormatter(s fmt.State, f rune) string {
 	var builder bytes.Buffer
-	builder.WriteString("%%")
+	builder.WriteString("%")
 	for _, flag := range [...]int{'+', '-', '#', ' ', '0'} {
 		if s.Flag(flag) {
 			fmt.Fprintf(&builder, "%c", flag)
@@ -23,7 +23,7 @@ func makeDefaultFormatter(s fmt.State, f rune) string {
 	if prec, ok := s.Precision(); ok {
 		fmt.Fprintf(&builder, ".%d", prec)
 	}
-	fmt.Fprintf(&builder, "%c", f)
+	builder.WriteRune(f)
 	return builder.String()
 }
 
