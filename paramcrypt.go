@@ -85,7 +85,11 @@ func computeSessionValue(context *sessionContext, authValue []byte, isAuth bool)
 
 func computeEncryptNonce(sessions []*sessionParam) Nonce {
 	session, _, i := findEncryptSession(sessions)
-	if session == nil || i == 0 {
+	if session == nil || i == 0 || sessions[0].associatedContext == nil {
+		return nil
+	}
+	decSession, _, di := findDecryptSession(sessions)
+	if decSession != nil && di == i {
 		return nil
 	}
 
@@ -130,7 +134,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		return nil, fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
-	if index == 0 {
+	if index == 0 || sessions[0].associatedContext == nil {
 		return nil, nil
 	}
 

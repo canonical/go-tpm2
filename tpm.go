@@ -277,7 +277,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		}
 	}
 
-	if hasDecryptSession(sessionParams) && len(params) > 0 && !isParamEncryptable(params[0]) {
+	if hasDecryptSession(sessionParams) && (len(params) == 0 || !isParamEncryptable(params[0])) {
 		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
 	}
 
