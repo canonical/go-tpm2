@@ -101,7 +101,7 @@ type CommandAttributes uint32
 
 // CommandCode returns the command code that a set of attributes belongs to.
 func (a CommandAttributes) CommandCode() CommandCode {
-	return CommandCode(a & 0xffff)
+	return CommandCode(a & (AttrV | 0xffff))
 }
 
 // NumberOfCommandHandles returns the number of command handles for the command that a set of attributes belong to.
