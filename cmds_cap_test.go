@@ -87,6 +87,47 @@ func TestGetCapabilityCommands(t *testing.T) {
 	if len(data) == 0 {
 		t.Errorf("command attribute list is empty")
 	}
+
+	count := 0
+	expected := 12
+
+	for _, attr := range data {
+		var a CommandAttributes
+		switch attr.CommandCode() {
+		case CommandEvictControl:
+			a = AttrNV | 0x2<<25
+		case CommandNVUndefineSpace:
+			a = AttrNV | 0x2<<25
+		case CommandClear:
+			a = AttrNV | AttrExtensive | 0x1<<25
+		case CommandDictionaryAttackLockReset:
+			a = AttrNV | 0x1<<25
+		case CommandStartup:
+			a = AttrNV
+		case CommandCertify:
+			a = 0x2 << 25
+		case CommandLoad:
+			a = 0x1<<25 | AttrRHandle
+		case CommandContextSave:
+			a = 0x1 << 25
+		case CommandStartAuthSession:
+			a = 0x2<<25 | AttrRHandle
+		case CommandGetCapability:
+		case CommandPCRRead:
+		case CommandPolicyPCR:
+			a = 0x1 << 25
+		default:
+			continue
+		}
+		a |= CommandAttributes(attr.CommandCode())
+		if a != attr {
+			t.Errorf("Unexpected attributes for command %v (got 0x%08x, expected 0x%08x)", attr.CommandCode(), attr, a)
+		}
+		count++
+	}
+	if count < expected {
+		t.Errorf("GetCapability didn't return attributes for all of the commands expected")
+	}
 }
 
 func TestGetCapabilityHandles(t *testing.T) {
