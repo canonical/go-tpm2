@@ -86,10 +86,10 @@ func attrsFromSession(session *Session) sessionAttrs {
 		attrs |= attrContinueSession
 	}
 	if session.Attrs&AttrAuditExclusive > 0 {
-		attrs |= attrAuditExclusive
+		attrs |= (attrAuditExclusive | attrAudit)
 	}
 	if session.Attrs&AttrAuditReset > 0 {
-		attrs |= attrAuditReset
+		attrs |= (attrAuditReset | attrAudit)
 	}
 	if session.Attrs&AttrCommandEncrypt > 0 {
 		attrs |= attrDecrypt

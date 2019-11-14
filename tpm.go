@@ -86,15 +86,15 @@ const (
 	// session will be invalidated.
 	AttrContinueSession SessionAttributes = 1 << iota
 
-	// AttrAuditExclusive is used with AttrAudit and specifies that the command should only be executed if the session is exclusive
-	// at the start of the command. A session becomes exclusive when it is used for auditing for the first time, or if the AttrAuditReset
-	// attribute is provided. A session will remain exclusive until the TPM executes any command where the exclusive session isn't used
-	// for auditing, if that command allows for audit sessions to be provided.
+	// AttrAuditExclusive indicates that the session should be used for auditing and that the command should only be executed if the
+	// session is exclusive at the start of the command. A session becomes exclusive when it is used for auditing for the first time,
+	// or if the AttrAuditReset attribute is provided. A session will remain exclusive until the TPM executes any command where the
+	// exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
 	AttrAuditExclusive
 
-	// AttrAuditReset is used with AttrAudit and specifies that the audit digest of the session should be reset and the session should
-	// become exclusive. A session will remain exclusive until the TPM executes any command where the exclusive session isn't used for
-	// auditing, if that command allows for audit sessions to be provided.
+	// AttrAuditReset indicates that the session should be used for auditing and that the audit digest of the session should be reset.
+	// The session will subsequently become exclusive. A session will remain exclusive until the TPM executes any command where the
+	// exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
 	AttrAuditReset
 
 	// AttrCommandEncrypt specifies that the session should be used for encryption of the first command parameter before being sent
