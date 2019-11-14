@@ -85,11 +85,20 @@ func attrsFromSession(session *Session) sessionAttrs {
 	if session.Attrs&AttrContinueSession > 0 {
 		attrs |= attrContinueSession
 	}
+	if session.Attrs&AttrAuditExclusive > 0 {
+		attrs |= attrAuditExclusive
+	}
+	if session.Attrs&AttrAuditReset > 0 {
+		attrs |= attrAuditReset
+	}
 	if session.Attrs&AttrCommandEncrypt > 0 {
 		attrs |= attrDecrypt
 	}
 	if session.Attrs&AttrResponseEncrypt > 0 {
 		attrs |= attrEncrypt
+	}
+	if session.Attrs&AttrAudit > 0 {
+		attrs |= attrAudit
 	}
 	return attrs
 }
@@ -198,15 +207,15 @@ func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandC
 
 func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Session, associatedContext ResourceContext,
 	commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
-	sessionContext := session.Context.(*sessionContext)
-	sessionContext.nonceTPM = resp.Nonce
+	sc := session.Context.(*sessionContext)
+	sc.nonceTPM = resp.Nonce
+	sc.exclusive = resp.SessionAttrs&attrAuditExclusive > 0
 
 	if resp.SessionAttrs&attrContinueSession == 0 {
-		tpm.evictResourceContext(sessionContext)
+		tpm.evictResourceContext(sc)
 	}
 
-	if sessionContext.sessionType == SessionTypePolicy &&
-		sessionContext.policyHMACType == policyHMACTypePassword {
+	if sc.sessionType == SessionTypePolicy && sc.policyHMACType == policyHMACTypePassword {
 		if len(resp.HMAC) != 0 {
 			return errors.New("non-zero length HMAC for policy session with PolicyPassword assertion")
 		}
@@ -218,8 +227,8 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Ses
 		return nil
 	}
 
-	rpHash := cryptComputeRpHash(sessionContext.hashAlg, responseCode, commandCode, rpBytes)
-	hmac := cryptComputeSessionResponseHMAC(sessionContext, key, rpHash, resp.SessionAttrs)
+	rpHash := cryptComputeRpHash(sc.hashAlg, responseCode, commandCode, rpBytes)
+	hmac := cryptComputeSessionResponseHMAC(sc, key, rpHash, resp.SessionAttrs)
 
 	if !bytes.Equal(hmac, resp.HMAC) {
 		return errors.New("incorrect HMAC")

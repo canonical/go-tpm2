@@ -18,6 +18,7 @@ type objectContextData struct {
 }
 
 type sessionContextData struct {
+	Exclusive      bool
 	HashAlg        HashAlgorithmId
 	SessionType    SessionType
 	PolicyHMACType policyHMACType
@@ -64,6 +65,7 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
 	case *sessionContext:
 		d.ContextType = contextTypeSession
 		d.Data.Data = &sessionContextData{
+			Exclusive:      c.exclusive,
 			HashAlg:        c.hashAlg,
 			SessionType:    c.sessionType,
 			PolicyHMACType: c.policyHMACType,
@@ -251,6 +253,7 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 		dd := d.Data.Data.(*sessionContextData)
 		sc.handle = loadedHandle
 		sc.usable = true
+		sc.exclusive = dd.Exclusive && sc == t.exclusiveSession
 		sc.hashAlg = dd.HashAlg
 		sc.sessionType = dd.SessionType
 		sc.policyHMACType = dd.PolicyHMACType

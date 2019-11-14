@@ -132,14 +132,88 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 	return quoted, &signature, nil
 }
 
-// func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContext,
-//	sessionContext ResourceContext, qualifyingData Data, inScheme *SigScheme, sessions ...*Session) (AttestRaw,
-//	*Signature, error) {
-// }
+// GetSessionAuditDigest executes the TPM2_GetSessionAuditDigest to obtain the current digest of the audit session corresponding to
+// sessionContext.
+//
+// The privacyAdminHandle argument must be HandleEndorsement. This command requires authorization with the user auth role for
+// privacyAdminHandle, provided via privacyAdminHandleAuth.
+//
+// If signContext is not nil, the returned attestation will be signed by the key associated with it. This command requires
+// authorization with the user auth role for signContext, provided via signContextAuth.
+//
+// If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
+// code of ErrorKey will be returned for handle index 2.
+//
+// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
+// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
+// returned for parameter index 2.
+//
+// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
+// ErrorScheme will be returned for parameter index 2.
+//
+// On success, it returns an attestation structure detailing the current audit digest for sessionContext. If signContext is not nil,
+// the attestation structure will be signed by the associated key and returned too.
+func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+	if inScheme == nil {
+		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
+	}
 
-// func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext ResourceContext,
-//	qualifyingData Data, inScheme *SigScheme, sessions ...*Session) (AttestRaw, *Signature, error) {
-// }
+	var auditInfo AttestRaw
+	var signature Signature
+
+	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
+		HandleWithAuth{Handle: privacyAdminHandle, Auth: privacyAdminHandleAuth}, ResourceWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		qualifyingData, inScheme, Separator,
+		Separator,
+		&auditInfo, &signature); err != nil {
+		return nil, nil, err
+	}
+
+	return auditInfo, &signature, nil
+}
+
+// GetCommandAuditDigest executes the TPM2_GetCommandAuditDigest command to obtain the current command audit digest, the current
+// audit digest algorithm and a digest of the list of commands being audited.
+//
+// The privacyHandle argument must be HandleEndorsement. This command requires authorization with the user auth role for
+// privacyHandle, provided via privacyHandleAuth.
+//
+// If signContext is not nil, the returned attestation will be signed by the key associated with it. This command requires
+// authorization with the user auth role for signContext, provided via signContextAuth.
+//
+// If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
+// code of ErrorKey will be returned for handle index 2.
+//
+// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
+// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
+// returned for parameter index 2.
+//
+// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
+// ErrorScheme will be returned for parameter index 2.
+//
+// On success, it returns an attestation structure detailing the current command audit digest, digest algorithm and a digest of the
+// list of commands being audited. If signContext is not nil, the attestation structure will be signed by the associated key and
+// returned too.
+func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+	if inScheme == nil {
+		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
+	}
+
+	var auditInfo AttestRaw
+	var signature Signature
+
+	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
+		HandleWithAuth{Handle: privacyHandle, Auth: privacyHandleAuth}, ResourceWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		qualifyingData, inScheme, Separator,
+		Separator,
+		&auditInfo, &signature); err != nil {
+		return nil, nil, err
+	}
+
+	return auditInfo, &signature, nil
+}
 
 // GetTime executes the TPM2_GetTime command in order to obtain the current values of time and clock.
 //
@@ -160,7 +234,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 // it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
 // ErrorScheme will be returned for parameter index 2.
 //
-// On successful, it returns an attestation structure detailing the current values of time and clock. If signContext is not nil, the
+// On success, it returns an attestation structure detailing the current values of time and clock. If signContext is not nil, the
 // attestation structure will be signed by the associated key and returned too.
 func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {

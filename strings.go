@@ -105,6 +105,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_CreatePrimary"
 	case CommandNVGlobalWriteLock:
 		return "TPM_CC_NV_GlobalWriteLock"
+	case CommandGetCommandAuditDigest:
+		return "TPM_CC_GetCommandAuditDigest"
 	case CommandNVIncrement:
 		return "TPM_CC_NV_Increment"
 	case CommandNVSetBits:
@@ -123,6 +125,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_NV_ChangeAuth"
 	case CommandPCREvent:
 		return "TPM_CC_PCR_Event"
+	case CommandSetCommandCodeAuditStatus:
+		return "TPM_CC_SetCommandCodeAuditStatus"
 	case CommandIncrementalSelfTest:
 		return "TPM_CC_IncrementalSelfTest"
 	case CommandSelfTest:
@@ -143,6 +147,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_CertifyCreation"
 	case CommandGetTime:
 		return "TPM_CC_GetTime"
+	case CommandGetSessionAuditDigest:
+		return "TPM_CC_GetSessionAuditDigest"
 	case CommandNVRead:
 		return "TPM_CC_NV_Read"
 	case CommandNVReadLock:

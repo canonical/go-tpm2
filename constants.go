@@ -85,6 +85,7 @@ const (
 	CommandNVDefineSpace              CommandCode = 0x0000012A // TPM_CC_NV_DefineSpace
 	CommandCreatePrimary              CommandCode = 0x00000131 // TPM_CC_CreatePrimary
 	CommandNVGlobalWriteLock          CommandCode = 0x00000132 // TPM_CC_NV_GlobalWriteLock
+	CommandGetCommandAuditDigest      CommandCode = 0x00000133 // TPM_CC_GetCommandAuditDigest
 	CommandNVIncrement                CommandCode = 0x00000134 // TPM_CC_NV_Increment
 	CommandNVSetBits                  CommandCode = 0x00000135 // TPM_CC_NV_SetBits
 	CommandNVExtend                   CommandCode = 0x00000136 // TPM_CC_NV_Extend
@@ -94,6 +95,7 @@ const (
 	CommandDictionaryAttackParameters CommandCode = 0x0000013A // TPM_CC_DictionaryAttackParameters
 	CommandNVChangeAuth               CommandCode = 0x0000013B // TPM_CC_NV_ChangeAuth
 	CommandPCREvent                   CommandCode = 0x0000013C // TPM_CC_PCR_Event
+	CommandSetCommandCodeAuditStatus  CommandCode = 0x00000140 // TPM_CC_SetCommandCodeAuditStatus
 	CommandIncrementalSelfTest        CommandCode = 0x00000142 // TPM_CC_IncrementalSelfTest
 	CommandSelfTest                   CommandCode = 0x00000143 // TPM_CC_SelfTest
 	CommandStartup                    CommandCode = 0x00000144 // TPM_CC_Startup
@@ -104,6 +106,7 @@ const (
 	CommandPolicyNV                   CommandCode = 0x00000149 // TPM_CC_PolicyNV
 	CommandCertifyCreation            CommandCode = 0x0000014A // TPM_CC_CertifyCreation
 	CommandGetTime                    CommandCode = 0x0000014C // TPM_CC_GetTime
+	CommandGetSessionAuditDigest      CommandCode = 0x0000014D // TPM_CC_GetSessionAuditDigest
 	CommandNVRead                     CommandCode = 0x0000014E // TPM_CC_NV_Read
 	CommandNVReadLock                 CommandCode = 0x0000014F // TPM_CC_NV_ReadLock
 	CommandObjectChangeAuth           CommandCode = 0x00000150 // TPM_CC_ObjectChangeAuth

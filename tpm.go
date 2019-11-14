@@ -32,6 +32,21 @@ func handleUnmarshallingError(context *cmdContext, scope string, err error) erro
 	return fmt.Errorf("cannot unmarshal %s for command %s: %v", scope, context.commandCode, err)
 }
 
+func isSessionAllowed(commandCode CommandCode) bool {
+	switch commandCode {
+	case CommandStartup:
+		return false
+	case CommandContextLoad:
+		return false
+	case CommandContextSave:
+		return false
+	case CommandFlushContext:
+		return false
+	default:
+		return true
+	}
+}
+
 type responseAuthAreaRawSlice struct {
 	Data []authResponse `tpm2:"raw"`
 }
@@ -71,6 +86,17 @@ const (
 	// session will be invalidated.
 	AttrContinueSession SessionAttributes = 1 << iota
 
+	// AttrAuditExclusive is used with AttrAudit and specifies that the command should only be executed if the session is exclusive
+	// at the start of the command. A session becomes exclusive when it is used for auditing for the first time, or if the AttrAuditReset
+	// attribute is provided. A session will remain exclusive until the TPM executes any command where the exclusive session isn't used
+	// for auditing, if that command allows for audit sessions to be provided.
+	AttrAuditExclusive
+
+	// AttrAuditReset is used with AttrAudit and specifies that the audit digest of the session should be reset and the session should
+	// become exclusive. A session will remain exclusive until the TPM executes any command where the exclusive session isn't used for
+	// auditing, if that command allows for audit sessions to be provided.
+	AttrAuditReset
+
 	// AttrCommandEncrypt specifies that the session should be used for encryption of the first command parameter before being sent
 	// from the host to the TPM. This can only be used for parameters that have types corresponding to TPM2B prefixed TCG types,
 	// and requires a session that was configured with a valid symmetric algorithm via the symmetric argument of
@@ -82,6 +108,11 @@ const (
 	// requires a session that was configured with a valid symmetric algorithm via the symmetric argument of TPMContext.StartAuthSession.
 	// This package automatically decrypts the received encrypted response parameter.
 	AttrResponseEncrypt
+
+	// AttrAudit indicates that the session should be used for auditing. If this is the first time that the session is used for auditing,
+	// then this attribute will result in the session becoming exclusive. A session will remain exclusive until the TPM executes any
+	// command where the exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
+	AttrAudit
 )
 
 // Session wraps a session ResourceContext with some additional parameters that define how a command should use the session.
@@ -181,10 +212,11 @@ type ResourceWithAuth struct {
 // for a corresponding TPM resource. These sessions may be used for session based parameter encryption or (in the future) command
 // auditing.
 type TPMContext struct {
-	tcti            io.ReadWriteCloser
-	resources       map[Handle]ResourceContext
-	maxSubmissions  uint
-	maxNVBufferSize uint16
+	tcti             io.ReadWriteCloser
+	resources        map[Handle]ResourceContext
+	maxSubmissions   uint
+	maxNVBufferSize  uint16
+	exclusiveSession ResourceContext
 }
 
 // Close invalidates all non-permanent ResourceContext instances tracked by this TPMContext and then calls Close on the
@@ -385,6 +417,23 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		}
 
 		rpBuf = bytes.NewReader(rpBytes)
+	}
+
+	var exclusive ResourceContext
+	for _, s := range context.sessionParams {
+		if s.session == nil {
+			continue
+		}
+		if s.session.Context.(*sessionContext).exclusive {
+			exclusive = s.session.Context
+			break
+		}
+	}
+	if exclusive != t.exclusiveSession && (exclusive != nil || isSessionAllowed(context.commandCode)) {
+		if t.exclusiveSession != nil {
+			t.exclusiveSession.(*sessionContext).exclusive = false
+		}
+		t.exclusiveSession = exclusive
 	}
 
 	if len(params) > 0 {
