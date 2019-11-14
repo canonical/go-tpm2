@@ -209,7 +209,8 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Ses
 	commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
 	sc := session.Context.(*sessionContext)
 	sc.nonceTPM = resp.Nonce
-	sc.exclusive = resp.SessionAttrs&attrAuditExclusive > 0
+	sc.isAudit = resp.SessionAttrs&attrAudit > 0
+	sc.isExclusive = resp.SessionAttrs&attrAuditExclusive > 0
 
 	if resp.SessionAttrs&attrContinueSession == 0 {
 		tpm.evictResourceContext(sc)

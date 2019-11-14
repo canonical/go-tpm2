@@ -424,14 +424,14 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		if s.session == nil {
 			continue
 		}
-		if s.session.Context.(*sessionContext).exclusive {
+		if s.session.Context.(*sessionContext).isExclusive {
 			exclusive = s.session.Context
 			break
 		}
 	}
 	if exclusive != t.exclusiveSession && (exclusive != nil || isSessionAllowed(context.commandCode)) {
 		if t.exclusiveSession != nil {
-			t.exclusiveSession.(*sessionContext).exclusive = false
+			t.exclusiveSession.(*sessionContext).isExclusive = false
 		}
 		t.exclusiveSession = exclusive
 	}

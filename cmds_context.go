@@ -18,7 +18,8 @@ type objectContextData struct {
 }
 
 type sessionContextData struct {
-	Exclusive      bool
+	IsAudit        bool
+	IsExclusive    bool
 	HashAlg        HashAlgorithmId
 	SessionType    SessionType
 	PolicyHMACType policyHMACType
@@ -65,7 +66,8 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
 	case *sessionContext:
 		d.ContextType = contextTypeSession
 		d.Data.Data = &sessionContextData{
-			Exclusive:      c.exclusive,
+			IsAudit:        c.isAudit,
+			IsExclusive:    c.isExclusive,
 			HashAlg:        c.hashAlg,
 			SessionType:    c.sessionType,
 			PolicyHMACType: c.policyHMACType,
@@ -177,6 +179,9 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 			return nil, errors.New("cannot load context: inconsistent handle type")
 		}
 		dd := d.Data.Data.(*sessionContextData)
+		if !dd.IsAudit && dd.IsExclusive {
+			return nil, fmt.Errorf("cannot load context for session: inconsistent audit attributes")
+		}
 		if !dd.HashAlg.Available() {
 			return nil, fmt.Errorf("cannot load context for session: invalid hash algorithm %v", dd.HashAlg)
 		}
@@ -253,7 +258,8 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 		dd := d.Data.Data.(*sessionContextData)
 		sc.handle = loadedHandle
 		sc.usable = true
-		sc.exclusive = dd.Exclusive && sc == t.exclusiveSession
+		sc.isAudit = dd.IsAudit
+		sc.isExclusive = dd.IsExclusive && sc == t.exclusiveSession
 		sc.hashAlg = dd.HashAlg
 		sc.sessionType = dd.SessionType
 		sc.policyHMACType = dd.PolicyHMACType

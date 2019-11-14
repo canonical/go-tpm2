@@ -25,9 +25,10 @@ type ResourceContext interface {
 	Name() Name // The name of the resource
 }
 
-// SessionContext corresponds to a session that resides on the TPM.
+// SessionContext corresponds to a session that resides on the TPM, and is implemented by session ResourceContext instances.
 type SessionContext interface {
 	NonceTPM() Nonce   // The most recent TPM nonce value
+	IsAudit() bool     // Whether the session has been used for audit
 	IsExclusive() bool // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
 }
 
@@ -107,7 +108,8 @@ func (r *nvIndexContext) clearAttr(a NVAttributes) {
 type sessionContext struct {
 	handle         Handle
 	usable         bool
-	exclusive      bool
+	isAudit        bool
+	isExclusive    bool
 	hashAlg        HashAlgorithmId
 	sessionType    SessionType
 	policyHMACType policyHMACType
@@ -137,8 +139,12 @@ func (r *sessionContext) NonceTPM() Nonce {
 	return r.nonceTPM
 }
 
+func (r *sessionContext) IsAudit() bool {
+	return r.isAudit
+}
+
 func (r *sessionContext) IsExclusive() bool {
-	return r.exclusive
+	return r.isExclusive
 }
 
 func makeIncompleteSessionContext(t *TPMContext, handle Handle) (ResourceContext, error) {
