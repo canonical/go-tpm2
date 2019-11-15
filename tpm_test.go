@@ -426,12 +426,6 @@ func openTPMSimulatorForTesting(t *testing.T) (*TPMContext, *TctiMssim) {
 	}
 
 	tpm, _ := NewTPMContext(tcti)
-	if err := tpm.Startup(StartupClear); err != nil {
-		if e, ok := err.(*TPMError); !ok || e.Code != ErrorInitialize {
-			t.Fatalf("Startup failed: %v", err)
-		}
-	}
-
 	return tpm, tcti
 }
 
@@ -535,7 +529,28 @@ func TestSession(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	flag.Parse()
 	os.Exit(func() int {
+		err := func() error {
+			if !*useMssim {
+				return nil
+			}
+
+			tcti, err := OpenMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+			if err != nil {
+				return fmt.Errorf("cannot open mssim connection: %v", err)
+			}
+
+			tpm, _ := NewTPMContext(tcti)
+			defer tpm.Close()
+
+			return tpm.Startup(StartupClear)
+		}()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Simulator startup failed: %v\n", err)
+			return 1
+		}
+
 		defer func() {
 			if !*useMssim {
 				return
@@ -551,6 +566,7 @@ func TestMain(m *testing.M) {
 			}
 			tcti.Close()
 		}()
+
 		return m.Run()
 	}())
 }
