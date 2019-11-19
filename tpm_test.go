@@ -461,11 +461,6 @@ func openTPMForTesting(t *testing.T) *TPMContext {
 }
 
 func closeTPM(t *testing.T, tpm *TPMContext) {
-	if *useMssim {
-		if err := tpm.Shutdown(StartupClear); err != nil {
-			t.Errorf("Shutdown failed: %v", err)
-		}
-	}
 	if err := tpm.Close(); err != nil {
 		t.Errorf("Close failed: %v", err)
 	}
@@ -561,10 +556,15 @@ func TestMain(m *testing.M) {
 				fmt.Fprintf(os.Stderr, "Failed to open mssim connection: %v\n", err)
 				return
 			}
+
+			tpm, _ := NewTPMContext(tcti)
+			if err := tpm.Shutdown(StartupClear); err != nil {
+				fmt.Fprintf(os.Stderr, "TPM simulator shutdown failed: %v\n", err)
+			}
 			if err := tcti.Stop(); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to stop TPM simulator: %v\n", err)
 			}
-			tcti.Close()
+			tpm.Close()
 		}()
 
 		return m.Run()
