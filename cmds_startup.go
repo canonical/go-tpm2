@@ -23,10 +23,13 @@ package tpm2
 //
 // A call to this will evict all ResourceContext objects associated with this TPMContext, whether the actual command succeeds or not.
 func (t *TPMContext) Startup(startupType StartupType) error {
+	if err := t.RunCommand(CommandStartup, nil, Separator, startupType); err != nil {
+		return err
+	}
 	for _, rc := range t.resources {
 		t.evictResourceContext(rc)
 	}
-	return t.RunCommand(CommandStartup, nil, Separator, startupType)
+	return nil
 }
 
 // Shutdown executes the TPM2_Shutdown command with the specified StartupType, and is used to prepare the TPM for a power cycle.
