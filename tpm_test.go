@@ -526,24 +526,21 @@ func TestSession(t *testing.T) {
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(func() int {
-		err := func() error {
-			if !*useMssim {
-				return nil
-			}
-
+		if *useMssim {
 			tcti, err := OpenMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
 			if err != nil {
-				return fmt.Errorf("cannot open mssim connection: %v", err)
+				fmt.Fprintf(os.Stderr, "Failed to open mssim connection: %v", err)
+				return 1
 			}
 
 			tpm, _ := NewTPMContext(tcti)
-			defer tpm.Close()
-
-			return tpm.Startup(StartupClear)
-		}()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Simulator startup failed: %v\n", err)
-			return 1
+			if err := func() error {
+				defer tpm.Close()
+				return tpm.Startup(StartupClear)
+			}(); err != nil {
+				fmt.Fprintf(os.Stderr, "Simulator startup failed: %v\n", err)
+				return 1
+			}
 		}
 
 		defer func() {
