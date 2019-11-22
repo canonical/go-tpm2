@@ -58,7 +58,7 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 // ComputePCRDigest computes a digest using the specified algorithm from the provided set of PCR values and the provided PCR
 // selection. It is most useful for computing an input to TPMContext.PolicyPCR, and validating quotes and creation data.
 func ComputePCRDigest(alg HashAlgorithmId, pcrs PCRSelectionList, values PCRValues) (Digest, error) {
-	if !alg.Available() {
+	if !alg.Supported() {
 		return nil, fmt.Errorf("unknown digest algorithm %v", alg)
 	}
 	h := alg.NewHash()
@@ -105,7 +105,7 @@ type TrialAuthPolicy struct {
 
 // ComputeAuthPolicy creates a new context for computing an authorization policy digest.
 func ComputeAuthPolicy(alg HashAlgorithmId) (*TrialAuthPolicy, error) {
-	if !alg.Available() {
+	if !alg.Supported() {
 		return nil, errors.New("invalid algorithm")
 	}
 	return &TrialAuthPolicy{alg: alg, digest: make(Digest, alg.Size())}, nil

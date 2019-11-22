@@ -198,7 +198,7 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 		if schemeHashAlg == HashAlgorithmNull {
 			schemeHashAlg = public.NameAlg
 		}
-		if !schemeHashAlg.Available() {
+		if !schemeHashAlg.Supported() {
 			return nil, fmt.Errorf("unknown scheme hash algorithm: %v", schemeHashAlg)
 		}
 		hash := schemeHashAlg.NewHash()
@@ -239,7 +239,7 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 }
 
 func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
-	if !public.NameAlg.Available() {
+	if !public.NameAlg.Supported() {
 		return nil, nil, fmt.Errorf("cannot determine size of unknown nameAlg %v", public.NameAlg)
 	}
 	digestSize := public.NameAlg.Size()
@@ -269,7 +269,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 }
 
 func cryptXORObfuscation(hashAlg HashAlgorithmId, key []byte, contextU, contextV Nonce, data []byte) error {
-	if !hashAlg.Available() {
+	if !hashAlg.Supported() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", hashAlg)
 	}
 	digestSize := hashAlg.Size()

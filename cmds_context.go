@@ -182,7 +182,7 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 		if !dd.IsAudit && dd.IsExclusive {
 			return nil, fmt.Errorf("cannot load context for session: inconsistent audit attributes")
 		}
-		if !dd.HashAlg.Available() {
+		if !dd.HashAlg.Supported() {
 			return nil, fmt.Errorf("cannot load context for session: invalid hash algorithm %v", dd.HashAlg)
 		}
 		switch dd.SessionType {

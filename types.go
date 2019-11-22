@@ -7,6 +7,9 @@ package tpm2
 import (
 	"bytes"
 	"crypto"
+	_ "crypto/sha1"
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -130,18 +133,18 @@ func (a HashAlgorithmId) GetHash() crypto.Hash {
 	}
 }
 
-// Available determines if a hash.Hash implementation for this algorithm is available.
-func (a HashAlgorithmId) Available() bool {
-	return a.GetHash().Available()
+// Supported determines if the TPM digest algorithm has an equivalent go crypto.Hash.
+func (a HashAlgorithmId) Supported() bool {
+	return a.GetHash() != crypto.Hash(0)
 }
 
-// NewHash constructs a new hash.Hash implementation for this algorithm. It will panic if HashAlgorithmId.Available
+// NewHash constructs a new hash.Hash implementation for this algorithm. It will panic if HashAlgorithmId.Supported
 // returns false.
 func (a HashAlgorithmId) NewHash() hash.Hash {
 	return a.GetHash().New()
 }
 
-// Size returns the size of the algorithm. It will panic if HashAlgorithmId.Available returns false.
+// Size returns the size of the algorithm. It will panic if HashAlgorithmId.Supported returns false.
 func (a HashAlgorithmId) Size() int {
 	return a.GetHash().Size()
 }
@@ -180,7 +183,7 @@ func (p *TaggedHash) Marshal(buf io.Writer) error {
 	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
-	if !p.HashAlg.Available() {
+	if !p.HashAlg.Supported() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
@@ -198,7 +201,7 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
-	if !p.HashAlg.Available() {
+	if !p.HashAlg.Supported() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
@@ -263,7 +266,7 @@ func (n Name) Algorithm() HashAlgorithmId {
 		return HashAlgorithmNull
 	}
 	a := HashAlgorithmId(binary.BigEndian.Uint16(n))
-	if !a.Available() {
+	if !a.Supported() {
 		return HashAlgorithmNull
 	}
 	if a.Size() != len(n)-binary.Size(HashAlgorithmId(0)) {
@@ -1490,7 +1493,7 @@ type Public struct {
 
 // Name computes the name of this object
 func (p *Public) Name() (Name, error) {
-	if !p.NameAlg.Available() {
+	if !p.NameAlg.Supported() {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
@@ -1551,7 +1554,7 @@ type PublicDerived struct {
 
 // Name computes the name of this object
 func (p *PublicDerived) Name() (Name, error) {
-	if !p.NameAlg.Available() {
+	if !p.NameAlg.Supported() {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
@@ -1694,7 +1697,7 @@ type NVPublic struct {
 
 // Name computes the name of this NV index
 func (p *NVPublic) Name() (Name, error) {
-	if !p.NameAlg.Available() {
+	if !p.NameAlg.Supported() {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
