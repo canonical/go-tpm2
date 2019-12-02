@@ -613,28 +613,136 @@ func TestPolicyCommandCode(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-	trial.PolicyCommandCode(CommandUnseal)
+	for _, data := range []struct {
+		desc string
+		code CommandCode
+	}{
+		{
+			desc: "1",
+			code: CommandUnseal,
+		},
+		{
+			desc: "2",
+			code: CommandNVChangeAuth,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
+			trial.PolicyCommandCode(data.code)
 
-	authPolicy := trial.GetDigest()
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
+			if err := tpm.PolicyCommandCode(sessionContext, data.code); err != nil {
+				t.Fatalf("PolicyPassword failed: %v", err)
+			}
+
+			digest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest, trial.GetDigest()) {
+				t.Errorf("Unexpected session digest")
+			}
+		})
 	}
-	defer flushContext(t, tpm, sessionContext)
+}
 
-	if err := tpm.PolicyCommandCode(sessionContext, CommandUnseal); err != nil {
-		t.Fatalf("PolicyPassword failed: %v", err)
+func TestPolicyCpHash(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	for _, data := range []struct {
+		desc string
+		data []byte
+	}{
+		{
+			desc: "1",
+			data: []byte("foo"),
+		},
+		{
+			desc: "2",
+			data: []byte("bar"),
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			h := crypto.SHA256.New()
+			h.Write(data.data)
+			cpHashA := h.Sum(nil)
+
+			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
+			trial.PolicyCpHash(cpHashA)
+
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyCpHash(sessionContext, cpHashA); err != nil {
+				t.Fatalf("PolicyCpHash failed: %v", err)
+			}
+
+			digest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest, trial.GetDigest()) {
+				t.Errorf("Unexpected session digest")
+			}
+		})
 	}
+}
 
-	digest, err := tpm.PolicyGetDigest(sessionContext)
-	if err != nil {
-		t.Fatalf("PolicyGetDigest failed: %v", err)
-	}
+func TestPolicyNameHash(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
 
-	if !bytes.Equal(digest, authPolicy) {
-		t.Errorf("Unexpected session digest")
+	for _, data := range []struct {
+		desc string
+		data []byte
+	}{
+		{
+			desc: "1",
+			data: []byte("foo"),
+		},
+		{
+			desc: "2",
+			data: []byte("bar"),
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			h := crypto.SHA256.New()
+			h.Write(data.data)
+			nameHash := h.Sum(nil)
+
+			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
+			trial.PolicyNameHash(nameHash)
+
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyNameHash(sessionContext, nameHash); err != nil {
+				t.Fatalf("PolicyNameHash failed: %v", err)
+			}
+
+			digest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest, trial.GetDigest()) {
+				t.Errorf("Unexpected session digest")
+			}
+		})
 	}
 }
 

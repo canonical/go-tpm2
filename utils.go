@@ -190,6 +190,18 @@ func (p *TrialAuthPolicy) PolicyCommandCode(code CommandCode) {
 	h.commit()
 }
 
+func (p *TrialAuthPolicy) PolicyCpHash(cpHashA Digest) {
+	h := p.beginExtend(CommandPolicyCpHash)
+	h.Write(cpHashA)
+	h.commit()
+}
+
+func (p *TrialAuthPolicy) PolicyNameHash(nameHash Digest) {
+	h := p.beginExtend(CommandPolicyNameHash)
+	h.Write(nameHash)
+	h.commit()
+}
+
 func (p *TrialAuthPolicy) PolicyAuthorize(policyRef Nonce, keySign Name) {
 	p.policyUpdate(CommandPolicyAuthorize, keySign, policyRef)
 }

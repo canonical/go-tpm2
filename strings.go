@@ -189,6 +189,10 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicyAuthValue"
 	case CommandPolicyCommandCode:
 		return "TPM_CC_PolicyCommandCode"
+	case CommandPolicyCpHash:
+		return "TPM_CC_PolicyCpHash"
+	case CommandPolicyNameHash:
+		return "TPM_CC_PolicyNameHash"
 	case CommandPolicyOR:
 		return "TPM_CC_PolicyOR"
 	case CommandPolicyTicket:

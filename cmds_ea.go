@@ -18,13 +18,16 @@ package tpm2
 // with policySession in the command. In this case, the nonce value must be included in the digest that is signed by the authorizing
 // entity.
 //
-// The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
-// parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
-// recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
-// already has a command parameter digest defined, a *TPMError error with an error code of ErrorCpHash will be returned if cpHashA
-// does not match the digest already recorded on the session context. If policySession does not correspond to a trial session and the
-// length of cpHashA does not match the digest algorithm for the session, a *TPMParameterError error with an error code of ErrorSize
-// will be returned for parameter index 2.
+// The cpHashA parameter allows the session to be bound to a specific command and set of command parameters by providing a command
+// parameter digest. Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session. If
+// provided, the cpHashA value must be included in the digest that is signed by the authorizing entity.
+//
+// If policySession does not correspond to a trial session, a *TPMError error with an error code of ErrorCpHash will be returned if
+// the session context already has a command parameter digest recorded on it and cpHashA does not match it, or if the session context
+// has a name digest or template digest recorded on it.
+//
+// If policySession does not correspond to a trial session and the length of cpHashA does not match the digest algorithm for the
+// session, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 2.
 //
 // If the expiration parameter is not 0, it sets a timeout based on the absolute value of expiration in seconds since the start of
 // the session by which the authorization will expire. If the session associated with policySession is not a trial session and
@@ -40,7 +43,9 @@ package tpm2
 // error code of ErrorSignature will be returned for parameter index 5.
 //
 // On successful completion, the policy digest of the session associated with policySession will be extended to include the name of
-// authContext and the value of policyRef. If expiration is less than zero, a timeout value and corresponding *TkAuth ticket will be
+// authContext and the value of policyRef. If provided, the value of cpHashA will be recorded on the session context to restrict the
+// session's usage. If expiration is non-zero, the expiration time of the session context will be updated unless it already has an
+// expiration time that is earlier. If expiration is less than zero, a timeout value and corresponding *TkAuth ticket will be
 // returned if policySession does not correspond to a trial session.
 func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout, *TkAuth, error) {
 	sessionContext, isSession := policySession.(*sessionContext)
@@ -72,13 +77,16 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 // authContextAuth. If authContextAuth corresponds a policy session, and that session does not include a TPM2_PolicyPassword or
 // TPM2_PolicyAuthValue assertion, a *TPMSessionError error with an error code of ErrorMode will be returned for session index 1.
 //
-// The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
-// parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
-// recorded on the session context associated with policySession. If policySession does not correspond to a trial session and it
-// already has a command parameter digest defined, a *TPMError error with an error code of ErrorCpHash will be returned if cpHashA
-// does not match the digest already recorded on the session context. If policySession does not correspond to a trial session and the
-// length of cpHashA does not match the digest algorithm for the session, a *TPMParameterError error with an error code of ErrorSize
-// will be returned for parameter index 2.
+// The cpHashA parameter allows the session to be bound to a specific command and set of command parameters by providing a command
+// parameter digest. Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session. If
+// provided, the cpHashA value must be included in the digest that is signed by the authorizing entity.
+//
+// If policySession does not correspond to a trial session, a *TPMError error with an error code of ErrorCpHash will be returned if
+// the session context already has a command parameter digest recorded on it and cpHashA does not match it, or if the session context
+// has a name digest or template digest recorded on it.
+//
+// If policySession does not correspond to a trial session and the length of cpHashA does not match the digest algorithm for the
+// session, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 2.
 //
 // If the expiration parameter is not 0, it sets a timeout based on the absolute value of expiration in seconds since the start of
 // the session by which the authorization will expire. If the session associated with policySession is not a trial session and
@@ -86,9 +94,11 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 // *TPMParameterError error with an error code of ErrorExpired will be returned for parameter index 4.
 //
 // On successful completion, knowledge of the authorization value associated with authContext is proven. The policy digest of the
-// session associated with policySession will be extended to include the name of authContext and the value of policyRef. If expiration
-// is less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a
-// trial session.
+// session associated with olicySession will be extended to include the name of authContext and the value of policyRef. If provided,
+// the value of cpHashA will be recorded on the session context to restrict the session's usage. If expiration is non-zero, the
+// expiration time of the session context will be updated unless it already has an expiration time that is earlier. If expiration is
+// less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a trial
+// session.
 func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error) {
 	sessionContext, isSession := policySession.(*sessionContext)
 	if !isSession {
@@ -119,24 +129,19 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 // If the size of timeout is not the expected size, a *TPMParameterError with an error code of ErrorSize will be returned for
 // parameter index 1.
 //
-// The cpHashA parameter allows the policy to be bound to a specific command and set of command parameters by providing a command
-// parameter digest. Command parameter digests can be computed using ComputeCpHash. On successful completion, the value of cpHashA is
-// recorded on the session context associated with policySession. If the session context associated with policySession already has a
-// command parameter digest defined, a *TPMError error with an error code of ErrorCpHash will be returned if cpHashA does not match
-// the digest already recorded on the session context. If the length of cpHashA does not match the digest algorithm for the session,
-// a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 2.
-//
-// The timeout, cpHashA and policyRef arguments must match the values passed to the command that originally produced the ticket. If
-// the command that produced the ticket was TPMContext.PolicySecret, authName must correspond to the name of the entity of which
-// knowledge of the authorization value was proven. If the command that produced the ticket was TPMContext.PolicySigned, authName
-// must correspond to the name of the key that produced the signed authorization.
+// The cpHashA and policyRef arguments must match the values passed to the command that originally produced the ticket. If the command
+// that produced the ticket was TPMContext.PolicySecret, authName must correspond to the name of the entity of which knowledge of the
+// authorization value was proven. If the command that produced the ticket was TPMContext.PolicySigned, authName must correspond to
+// the name of the key that produced the signed authorization.
 //
 // If the ticket is invalid, a *TPMParameterError error with an error code of ErrorTicket will be returned for parameter index 5. If
 // the ticket corresponds to an authorization that has expired, a *TPMParameterError error with an error code of ErrorExpired will
 // be returned for parameter index 1.
 //
 // On successful verification of the ticket, the policy digest of the session context associated with policySession will be extended
-// with the same values that the command that produced the ticket would extend it with.
+// with the same values that the command that produced the ticket would extend it with. If provided, the value of cpHashA will be
+// recorded on the session context to restrict the session's usage. The expiration time of the session context will be updated with
+// the value of timeout, unless it already has an expiration time that is earlier.
 func (t *TPMContext) PolicyTicket(policySession ResourceContext, timeout Timeout, cpHashA Digest, policyRef Nonce, authName Name, ticket *TkAuth, sessions ...*Session) error {
 	return t.RunCommand(CommandPolicyTicket, sessions,
 		policySession, Separator,
@@ -240,12 +245,41 @@ func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code Comma
 // func (t *TPMContext) PolicyPhysicalPresence(policySession ResourceContext) error {
 // }
 
-// func (t *TPMContext) PolicyCpHash(policySession ResourceContext, cpHashA Digest, sessions ...*Session) error {
-// }
+// PolicyCpHash executes the TPM2_PolicyCpHash command to bind a policy to a specific command and set of command parameters.
+//
+// TPMContext.PolicySigned, TPMContext.PolicySecret and TPMContext.PolicyTicket allow an authorizing entity to execute an arbitrary
+// command as the cpHashA parameter is not included in the session's policy digest. TPMContext.PolicyCommandCode allows the policy
+// to be limited to a specific command. This command allows the policy to be limited further to a specific command set of command
+// parameters.
+//
+// Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session.
+//
+// If the size of cpHashA is inconsistent with the digest algorithm for the session, a *TPMParameterError error with an error code
+// of ErrorSize will be returned.
+//
+// If the session associated with policySession already has a command parameter digest defined, a *TPMError error with an error
+// code of ErrorCpHash will be returned if cpHashA does not match the digest already recorded on the session context.
+//
+// On successful completion, the policy digest of the session context associated with policySession will be extended to include the
+// value of cpHashA, and the value of cpHashA will be recorded on the session context.
+func (t *TPMContext) PolicyCpHash(policySession ResourceContext, cpHashA Digest, sessions ...*Session) error {
+	return t.RunCommand(CommandPolicyCpHash, sessions, policySession, Separator, cpHashA)
+}
 
-// func (t *TPMContext) PolicyNameHash(policySession ResourceContext, nameHash Digest,
-//	sessions ...*Session) error {
-// }
+// PolicyNameHash executes the TPM2_PolicyNameHash command to bind a policy to a specific set of TPM entities, without being bound
+// to the parameters of the command.
+//
+// If the size of nameHash is inconsistent with the digest algorithm for the session, a *TPMParameterError error with an error code
+// of ErrorSize will be returned.
+//
+// If the session associated with policySession already has a name hash defined, a *TPMError error with an error code of ErrorCpHash
+// will be returned if nameHash does not match the digest already recorded on the session context.
+//
+// On successful completion, the policy digest of the session context associated with policySession will be extended to include the
+// value of nameHash, and the value of nameHash will be recorded on the session context.
+func (t *TPMContext) PolicyNameHash(policySession ResourceContext, nameHash Digest, sessions ...*Session) error {
+	return t.RunCommand(CommandPolicyNameHash, sessions, policySession, Separator, nameHash)
+}
 
 // func (t *TPMContext) PolicyDuplicationSelect(policySession ResourceContext, objectName, newParentName Name,
 //	includeObject bool, sessions ...*Session) error {

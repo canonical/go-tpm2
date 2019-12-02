@@ -127,6 +127,8 @@ const (
 	CommandPolicyAuthorize            CommandCode = 0x0000016A // TPM_CC_PolicyAuthorize
 	CommandPolicyAuthValue            CommandCode = 0x0000016B // TPM_CC_PolicyAuthValue
 	CommandPolicyCommandCode          CommandCode = 0x0000016C // TPM_CC_PolicyCommandCode
+	CommandPolicyCpHash               CommandCode = 0x0000016E // TPM_CC_PolicyCpHash
+	CommandPolicyNameHash             CommandCode = 0x00000170 // TPM_CC_PolicyNameHash
 	CommandPolicyOR                   CommandCode = 0x00000171 // TPM_CC_PolicyOR
 	CommandPolicyTicket               CommandCode = 0x00000172 // TPM_CC_PolicyTicket
 	CommandReadPublic                 CommandCode = 0x00000173 // TPM_CC_ReadPublic
