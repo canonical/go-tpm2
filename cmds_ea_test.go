@@ -6,7 +6,9 @@ package tpm2
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/binary"
 	"testing"
@@ -17,11 +19,27 @@ func TestPolicySigned(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	primary := createRSASrkForTesting(t, tpm, nil)
-	defer flushContext(t, tpm, primary)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
 
-	key := createAndLoadRSAPSSKeyForTesting(t, tpm, primary)
-	defer flushContext(t, tpm, key)
+	keyPublic := Public{
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+		Params: PublicParamsU{
+			&RSAParams{
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+				Scheme:    RSAScheme{Scheme: RSASchemeNull},
+				KeyBits:   2048,
+				Exponent:  uint32(key.PublicKey.E)}},
+		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+	keyContext, keyName, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
+	if err != nil {
+		t.Fatalf("LoadExternal failed: %v", err)
+	}
+	defer flushContext(t, tpm, keyContext)
 
 	testHash := make([]byte, 32)
 	rand.Read(testHash)
@@ -74,13 +92,17 @@ func TestPolicySigned(t *testing.T) {
 
 			aHash := h.Sum(nil)
 
-			signature, err := tpm.Sign(key, aHash, nil, nil, nil)
+			s, err := rsa.SignPSS(rand.Reader, key, crypto.SHA256, aHash, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash})
 			if err != nil {
-				t.Fatalf("Sign failed: %v", err)
+				t.Fatalf("Signing failed: %v", err)
 			}
 
+			signature := Signature{
+				SigAlg:    SigSchemeAlgRSAPSS,
+				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+
 			timeout, policyTicket, err :=
-				tpm.PolicySigned(key, sessionContext, data.includeNonceTPM, data.cpHashA, data.policyRef, data.expiration, signature)
+				tpm.PolicySigned(keyContext, sessionContext, data.includeNonceTPM, data.cpHashA, data.policyRef, data.expiration, &signature)
 			if err != nil {
 				t.Fatalf("PolicySigned failed: %v", err)
 			}
@@ -109,7 +131,7 @@ func TestPolicySigned(t *testing.T) {
 			}
 
 			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-			trial.PolicySigned(key.Name(), data.policyRef)
+			trial.PolicySigned(keyName, data.policyRef)
 
 			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
