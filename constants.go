@@ -124,6 +124,7 @@ const (
 	CommandLoadExternal               CommandCode = 0x00000167 // TPM_CC_LoadExternal
 	CommandMakeCredential             CommandCode = 0x00000168 // TPM_CC_MakeCredential
 	CommandNVReadPublic               CommandCode = 0x00000169 // TPM_CC_NV_ReadPublic
+	CommandPolicyAuthorize            CommandCode = 0x0000016A // TPM_CC_PolicyAuthorize
 	CommandPolicyAuthValue            CommandCode = 0x0000016B // TPM_CC_PolicyAuthValue
 	CommandPolicyCommandCode          CommandCode = 0x0000016C // TPM_CC_PolicyCommandCode
 	CommandPolicyOR                   CommandCode = 0x00000171 // TPM_CC_PolicyOR

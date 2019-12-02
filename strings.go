@@ -183,6 +183,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_MakeCredential"
 	case CommandNVReadPublic:
 		return "TPM_CC_NV_ReadPublic"
+	case CommandPolicyAuthorize:
+		return "TPM_CC_PolicyAuthorize"
 	case CommandPolicyAuthValue:
 		return "TPM_CC_PolicyAuthValue"
 	case CommandPolicyCommandCode:

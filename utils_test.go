@@ -467,6 +467,73 @@ func TestTrialPolicyCommandCode(t *testing.T) {
 	}
 }
 
+func TestTrialPolicyAuthorize(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	var keySignSHA1 Name
+	var keySignSHA256 Name
+
+	h := HashAlgorithmSHA1.NewHash()
+	h.Write([]byte("foo"))
+	keySignSHA1, _ = MarshalToBytes(HashAlgorithmSHA1, RawBytes(h.Sum(nil)))
+
+	h = HashAlgorithmSHA256.NewHash()
+	h.Write([]byte("foo"))
+	keySignSHA256, _ = MarshalToBytes(HashAlgorithmSHA256, RawBytes(h.Sum(nil)))
+
+	for _, data := range []struct {
+		desc      string
+		alg       HashAlgorithmId
+		policyRef Nonce
+		keySign   Name
+	}{
+		{
+			desc:    "SHA256",
+			alg:     HashAlgorithmSHA256,
+			keySign: keySignSHA256,
+		},
+		{
+			desc:    "SHA1",
+			alg:     HashAlgorithmSHA1,
+			keySign: keySignSHA1,
+		},
+		{
+			desc:      "WithPolicyRef",
+			alg:       HashAlgorithmSHA256,
+			policyRef: Nonce("bar"),
+			keySign:   keySignSHA256,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyAuthorize(sessionContext, make(Digest, data.alg.Size()), data.policyRef, data.keySign, nil); err != nil {
+				t.Fatalf("PolicyAuthorize failed: %v", err)
+			}
+
+			trial, err := ComputeAuthPolicy(data.alg)
+			if err != nil {
+				t.Fatalf("ComputeAuthPolicy failed: %v", err)
+			}
+			trial.PolicyAuthorize(data.policyRef, data.keySign)
+
+			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(tpmDigest, trial.GetDigest()) {
+				t.Errorf("Unexpected digest")
+			}
+		})
+	}
+}
+
 func TestTrialPolicyAuthValue(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)

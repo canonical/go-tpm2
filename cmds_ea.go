@@ -10,7 +10,7 @@ package tpm2
 // the signing key associated with authContext.
 //
 // An authorizing entity signs a digest of authorization qualifiers with the key associated with authContext. The digest is computed as:
-//   digest := H{nonceTPM||expiration||cpHashA||policyRef}
+//   digest := H(nonceTPM||expiration||cpHashA||policyRef)
 // ... where H is the digest algorithm associated with the auth parameter. Where there are no restrictions, the digest is computed
 // from 4 zero bytes, which corresponds to an expiration time of zero. The signature is provided via the auth parameter.
 //
@@ -251,9 +251,38 @@ func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code Comma
 //	includeObject bool, sessions ...*Session) error {
 // }
 
-// func (t *TPMContext) PolicyAuthorize(policySession ResourceContext, approvedPolicy Digest, policyRef Nonce,
-//	keySign Name, checkTicket *TkVerified, sessions ...*Session) error {
-// }
+// PolicyAuthorize executes the TPM2_PolicyAuthorize command, which allows policies to change. The command allows an authorizing
+// entity to sign a new policy that can be used in an existing policy. The authorizing party signs a digest that is computed as
+// follows:
+//   digest := H(approvedPolicy||policyRef)
+// ... where H is the name algorithm of the key used to sign the digest.
+//
+// The signature is then verified by TPMContext.VerifySignature, which provides a ticket that is used by this function.
+//
+// If the name algorithm of the signing key is not supported, a *TPMParameterError error with an error code of ErrorHash will be
+// returned for parameter index 3.
+//
+// If the length of keySign does not match the length of the name algorithm, a *TPMParameterError error with an error code of
+// ErrorSize will be returned for parameter index 3.
+//
+// If policySession is not associated with a trial session, the current digest of the session associated with policySession will be
+// compared with approvedPolicy. If they don't match, then a *TPMParameterError error with an error code of ErrorValue will be
+// returned for parameter index 1.
+//
+// If policySession is not associated with a trial session and checkTicket is invalid, a *TPMParameterError error with an error
+// code of ErrorValue will be returned for parameter index 4.
+//
+// On successful completion, the policy digest of the session context associated with policySession is cleared, and then extended to
+// include the value of keySign and policyRef.
+func (t *TPMContext) PolicyAuthorize(policySession ResourceContext, approvedPolicy Digest, policyRef Nonce, keySign Name, checkTicket *TkVerified, sessions ...*Session) error {
+	if checkTicket == nil {
+		checkTicket = &TkVerified{Tag: TagVerified, Hierarchy: HandleNull}
+	}
+
+	return t.RunCommand(CommandPolicyAuthorize, sessions,
+		policySession, Separator,
+		approvedPolicy, policyRef, keySign, checkTicket)
+}
 
 // PolicyAuthValue executes the TPM2_PolicyAuthValue command to bind the policy to the authorization value of the entity on which the
 // authorization is used. On successful completion, the policy digest of the session context associated with policySession will be

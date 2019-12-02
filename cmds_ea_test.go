@@ -638,6 +638,116 @@ func TestPolicyCommandCode(t *testing.T) {
 	}
 }
 
+func TestPolicyAuthorize(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	keyPublic := Public{
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+		Params: PublicParamsU{
+			&RSAParams{
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+				Scheme:    RSAScheme{Scheme: RSASchemeNull},
+				KeyBits:   2048,
+				Exponent:  uint32(key.PublicKey.E)}},
+		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+	keyContext, keyName, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
+	if err != nil {
+		t.Fatalf("LoadExternal failed: %v", err)
+	}
+	defer flushContext(t, tpm, keyContext)
+
+	for _, data := range []struct {
+		desc        string
+		policyRef   Nonce
+		commandCode CommandCode
+	}{
+		{
+			desc:        "1",
+			commandCode: CommandNVChangeAuth,
+		},
+		{
+			desc:        "2",
+			commandCode: CommandObjectChangeAuth,
+		},
+		{
+			desc:        "3",
+			commandCode: CommandNVChangeAuth,
+			policyRef:   Nonce("bar"),
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			staticTrial, err := ComputeAuthPolicy(HashAlgorithmSHA256)
+			if err != nil {
+				t.Fatalf("ComputeAuthPolicy failed: %v", err)
+			}
+			staticTrial.PolicyAuthorize(data.policyRef, keyName)
+
+			dynamicTrial, err := ComputeAuthPolicy(HashAlgorithmSHA256)
+			if err != nil {
+				t.Fatalf("ComputeAuthPolicy failed: %v", err)
+			}
+			dynamicTrial.PolicyCommandCode(data.commandCode)
+			dynamicTrial.PolicyAuthValue()
+
+			approvedPolicy := dynamicTrial.GetDigest()
+
+			h := HashAlgorithmSHA256.NewHash()
+			h.Write(approvedPolicy)
+			h.Write(data.policyRef)
+
+			aHash := h.Sum(nil)
+
+			s, err := rsa.SignPSS(rand.Reader, key, crypto.SHA256, aHash, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash})
+			if err != nil {
+				t.Fatalf("Signing failed: %v", err)
+			}
+
+			signature := Signature{
+				SigAlg:    SigSchemeAlgRSAPSS,
+				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+
+			checkTicket, err := tpm.VerifySignature(keyContext, aHash, &signature)
+			if err != nil {
+				t.Fatalf("VerifySignature failed: %v", err)
+			}
+
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyCommandCode(sessionContext, data.commandCode); err != nil {
+				t.Fatalf("PolicyCommandCode failed: %v", err)
+			}
+			if err := tpm.PolicyAuthValue(sessionContext); err != nil {
+				t.Fatalf("PolicyAuthValue failed: %v", err)
+			}
+
+			if err := tpm.PolicyAuthorize(sessionContext, approvedPolicy, data.policyRef, keyName, checkTicket); err != nil {
+				t.Errorf("PolicyAuthorize failed: %v", err)
+			}
+
+			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(policyDigest, staticTrial.GetDigest()) {
+				t.Errorf("Unexpected policy digest")
+			}
+		})
+	}
+}
+
 func TestPolicyAuthValue(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)

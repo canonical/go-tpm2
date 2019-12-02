@@ -190,6 +190,10 @@ func (p *TrialAuthPolicy) PolicyCommandCode(code CommandCode) {
 	h.commit()
 }
 
+func (p *TrialAuthPolicy) PolicyAuthorize(policyRef Nonce, keySign Name) {
+	p.policyUpdate(CommandPolicyAuthorize, keySign, policyRef)
+}
+
 func (p *TrialAuthPolicy) PolicyAuthValue() {
 	p.beginExtend(CommandPolicyAuthValue).commit()
 }
