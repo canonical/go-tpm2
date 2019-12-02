@@ -125,6 +125,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_NV_ChangeAuth"
 	case CommandPCREvent:
 		return "TPM_CC_PCR_Event"
+	case CommandPCRReset:
+		return "TPM_CC_PCR_Reset"
 	case CommandSetCommandCodeAuditStatus:
 		return "TPM_CC_SetCommandCodeAuditStatus"
 	case CommandIncrementalSelfTest:

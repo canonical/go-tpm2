@@ -95,6 +95,7 @@ const (
 	CommandDictionaryAttackParameters CommandCode = 0x0000013A // TPM_CC_DictionaryAttackParameters
 	CommandNVChangeAuth               CommandCode = 0x0000013B // TPM_CC_NV_ChangeAuth
 	CommandPCREvent                   CommandCode = 0x0000013C // TPM_CC_PCR_Event
+	CommandPCRReset                   CommandCode = 0x0000013D // TPM_CC_PCR_Reset
 	CommandSetCommandCodeAuditStatus  CommandCode = 0x00000140 // TPM_CC_SetCommandCodeAuditStatus
 	CommandIncrementalSelfTest        CommandCode = 0x00000142 // TPM_CC_IncrementalSelfTest
 	CommandSelfTest                   CommandCode = 0x00000143 // TPM_CC_SelfTest

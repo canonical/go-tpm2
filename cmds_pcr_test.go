@@ -327,3 +327,49 @@ func TestPCRRead(t *testing.T) {
 		}
 	})
 }
+
+func TestPCRReset(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	for _, data := range []struct {
+		desc string
+		pcr  int
+	}{
+		{
+			desc: "16",
+			pcr:  16,
+		},
+		{
+			desc: "23",
+			pcr:  23,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			if _, err := tpm.PCREvent(Handle(data.pcr), []byte("foo"), nil); err != nil {
+				t.Fatalf("PCREvent failed: %v", err)
+			}
+			zeroDigest := make(Digest, HashAlgorithmSHA256.Size())
+			selection := PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{data.pcr}}}
+			_, v, err := tpm.PCRRead(selection)
+			if err != nil {
+				t.Fatalf("PCRRead failed: %v", err)
+			}
+			if bytes.Equal(zeroDigest, v[HashAlgorithmSHA256][data.pcr]) {
+				t.Fatalf("PCR has unexpected initial value")
+			}
+
+			if err := tpm.PCRReset(Handle(data.pcr), nil); err != nil {
+				t.Errorf("PCRReset failed: %v", err)
+			}
+
+			_, v, err = tpm.PCRRead(selection)
+			if err != nil {
+				t.Fatalf("PCRRead failed: %v", err)
+			}
+			if !bytes.Equal(zeroDigest, v[HashAlgorithmSHA256][data.pcr]) {
+				t.Fatalf("PCR was not reset")
+			}
+		})
+	}
+}

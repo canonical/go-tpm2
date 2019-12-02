@@ -125,3 +125,12 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Sessi
 
 	return pcrUpdateCounter, pcrValues, nil
 }
+
+// PCRReset executes the TPM2_PCR_Reset command to reset the PCR associated with pcrHandle in all banks. This command requires
+// authorization with the user auth role, provided via pcrHandleAuth.
+//
+// If the PCR associated with pcrHandle can not be reset from the current locality, a *TPMError error with an error code of
+// ErrorLocality will be returned.
+func (t *TPMContext) PCRReset(pcrHandle Handle, pcrHandleAuth interface{}, sessions ...*Session) error {
+	return t.RunCommand(CommandPCRReset, sessions, HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth})
+}
