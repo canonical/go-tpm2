@@ -1,6 +1,6 @@
 # go-tpm2
 
-[![Build Status](https://travis-ci.org/chrisccoulson/go-tpm2.svg?branch=master)](https://travis-ci.org/chrisccoulson/go-tpm2)
+[![Build Status](https://travis-ci.org/chrisccoulson/go-tpm2.svg?branch=master)](https://travis-ci.org/chrisccoulson/go-tpm2) [![GoDoc](https://godoc.org/github.com/chrisccoulson/go-tpm2?status.svg)](https://godoc.org/github.com/chrisccoulson/go-tpm2)
 
 This repository contains a go library for interacting with TPM 2.0 devices. Some currently supported features are:
 
@@ -38,9 +38,7 @@ The current support status for each command group is detailed below.
  Capability Commands | Full |
  Non-Volatile Storage | Partial | All commands are supported except for TPM2_NV_Certify
  Vendor Specific | None |
- 
- [![GoDoc](https://godoc.org/github.com/chrisccoulson/go-tpm2?status.svg)](https://godoc.org/github.com/chrisccoulson/go-tpm2)
- 
+  
  ## Relevant links
   - [TPM 2.0 Library Specification](https://trustedcomputinggroup.org/resource/tpm-library-specification/)
   - [IBM's Software TPM 2.0](https://sourceforge.net/projects/ibmswtpm2/)
