@@ -147,6 +147,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicyNV"
 	case CommandCertifyCreation:
 		return "TPM_CC_CertifyCreation"
+	case CommandDuplicate:
+		return "TPM_CC_Duplicate"
 	case CommandGetTime:
 		return "TPM_CC_GetTime"
 	case CommandGetSessionAuditDigest:
@@ -161,6 +163,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicySecret"
 	case CommandCreate:
 		return "TPM_CC_Create"
+	case CommandImport:
+		return "TPM_CC_Import"
 	case CommandLoad:
 		return "TPM_CC_Load"
 	case CommandQuote:

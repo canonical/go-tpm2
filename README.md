@@ -18,7 +18,7 @@ The current support status for each command group is detailed below.
  Testing | Full |
  Session Commands | Full |
  Object Commands | Full |
- Duplication Commands | None |
+ Duplication Commands | Partial | TPM2_Duplicate and TPM2_Import are supported
  Asymmetric Primitives | None |
  Symmetric Primitives | None |
  Random Number Generator | Full |
