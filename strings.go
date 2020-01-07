@@ -223,6 +223,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_ReadClock"
 	case CommandPCRExtend:
 		return "TPM_CC_PCR_Extend"
+	case CommandPolicyDuplicationSelect:
+		return "TPM_CC_PolicyDuplicationSelect"
 	case CommandPolicyGetDigest:
 		return "TPM_CC_PolicyGetDigest"
 	case CommandTestParms:

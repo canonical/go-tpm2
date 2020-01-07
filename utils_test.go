@@ -567,6 +567,68 @@ func TestTrialPolicyNameHash(t *testing.T) {
 	}
 }
 
+func TestTrialPolicyDuplicationSelect(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	for _, data := range []struct {
+		desc          string
+		alg           HashAlgorithmId
+		includeObject bool
+	}{
+		{
+			desc:          "SHA256",
+			alg:           HashAlgorithmSHA256,
+			includeObject: true,
+		},
+		{
+			desc:          "NoIncludeObject",
+			alg:           HashAlgorithmSHA256,
+			includeObject: false,
+		},
+		{
+			desc:          "SHA1",
+			alg:           HashAlgorithmSHA1,
+			includeObject: true,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			h := data.alg.NewHash()
+			h.Write([]byte("12345"))
+			objectName := h.Sum(nil)
+
+			h = data.alg.NewHash()
+			h.Write([]byte("67890"))
+			newParentName := h.Sum(nil)
+
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyDuplicationSelect(sessionContext, objectName, newParentName, data.includeObject); err != nil {
+				t.Fatalf("PolicyDuplicationSelect failed: %v", err)
+			}
+
+			trial, err := ComputeAuthPolicy(data.alg)
+			if err != nil {
+				t.Fatalf("ComputeAuthPolicy failed: %v", err)
+			}
+			trial.PolicyDuplicationSelect(objectName, newParentName, data.includeObject)
+
+			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(tpmDigest, trial.GetDigest()) {
+				t.Errorf("Unexpected digest")
+			}
+		})
+	}
+}
+
 func TestTrialPolicyAuthorize(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)

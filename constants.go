@@ -144,6 +144,7 @@ const (
 	CommandPolicyRestart              CommandCode = 0x00000180 // TPM_CC_PolicyRestart
 	CommandReadClock                  CommandCode = 0x00000181 // TPM_CC_ReadClock
 	CommandPCRExtend                  CommandCode = 0x00000182 // TPM_CC_PCR_Extend
+	CommandPolicyDuplicationSelect    CommandCode = 0x00000188 // TPM_CC_PolicyDuplicationSelect
 	CommandPolicyGetDigest            CommandCode = 0x00000189 // TPM_CC_PolicyGetDigest
 	CommandTestParms                  CommandCode = 0x0000018A // TPM_CC_TestParms
 	CommandPolicyPassword             CommandCode = 0x0000018C // TPM_CC_PolicyPassword

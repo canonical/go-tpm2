@@ -12,7 +12,8 @@ package tpm2
 // An authorizing entity signs a digest of authorization qualifiers with the key associated with authContext. The digest is computed as:
 //   digest := H(nonceTPM||expiration||cpHashA||policyRef)
 // ... where H is the digest algorithm associated with the auth parameter. Where there are no restrictions, the digest is computed
-// from 4 zero bytes, which corresponds to an expiration time of zero. The signature is provided via the auth parameter.
+// from 4 zero bytes, which corresponds to an expiration time of zero. The authorization qualifiers must match the arguments passed
+// to this command. The signature is provided via the auth parameter.
 //
 // If includeNonceTPM is set to true, this function includes the most recently received TPM nonce value for the session associated
 // with policySession in the command. In this case, the nonce value must be included in the digest that is signed by the authorizing
@@ -23,8 +24,8 @@ package tpm2
 // provided, the cpHashA value must be included in the digest that is signed by the authorizing entity.
 //
 // If policySession does not correspond to a trial session, a *TPMError error with an error code of ErrorCpHash will be returned if
-// the session context already has a command parameter digest recorded on it and cpHashA does not match it, or if the session context
-// has a name digest or template digest recorded on it.
+// the session context already has a command parameter digest, name digest or template digest recorded on it and cpHashA does not
+// match it.
 //
 // If policySession does not correspond to a trial session and the length of cpHashA does not match the digest algorithm for the
 // session, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 2.
@@ -82,8 +83,8 @@ func (t *TPMContext) PolicySigned(authContext, policySession ResourceContext, in
 // provided, the cpHashA value must be included in the digest that is signed by the authorizing entity.
 //
 // If policySession does not correspond to a trial session, a *TPMError error with an error code of ErrorCpHash will be returned if
-// the session context already has a command parameter digest recorded on it and cpHashA does not match it, or if the session context
-// has a name digest or template digest recorded on it.
+// the session context already has a command parameter digest, name digest or template digest recorded on it and cpHashA does not
+// match it.
 //
 // If policySession does not correspond to a trial session and the length of cpHashA does not match the digest algorithm for the
 // session, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 2.
@@ -128,6 +129,9 @@ func (t *TPMContext) PolicySecret(authContext, policySession ResourceContext, cp
 //
 // If the size of timeout is not the expected size, a *TPMParameterError with an error code of ErrorSize will be returned for
 // parameter index 1.
+//
+// A *TPMError error with an error code of ErrorCpHash will be returned if the session context already has a command parameter digest,
+// name digest or template digest recorded on it and cpHashA does not match it.
 //
 // The cpHashA and policyRef arguments must match the values passed to the command that originally produced the ticket. If the command
 // that produced the ticket was TPMContext.PolicySecret, authName must correspond to the name of the entity of which knowledge of the
@@ -179,7 +183,7 @@ func (t *TPMContext) PolicyPCR(policySession ResourceContext, pcrDigest Digest, 
 		pcrDigest, pcrs)
 }
 
-// func (t *TPMContext) PolicyLocality(policySession ResourceContext, loclity Locality) error {
+// func (t *TPMContext) PolicyLocality(policySession ResourceContext, locality Locality, sessions ...*Session) error {
 // }
 
 // PolicyNV executes the TPM2_PolicyNV command to gate a policy based on the contents of the NV index associated with nvIndex. The
@@ -223,26 +227,26 @@ func (t *TPMContext) PolicyNV(authContext, nvIndex, policySession ResourceContex
 		operandB, offset, operation)
 }
 
-// func (t *TPMContext) PolicyCounterTimer(policySession ResourceContext, operandB Operand, offset uint16,
-//	operation ArithmeticOp, sessions ...*Session) error {
+// func (t *TPMContext) PolicyCounterTimer(policySession ResourceContext, operandB Operand, offset uint16, operation ArithmeticOp, sessions ...*Session) error {
 // }
 
 // PolicyCommandCode executes the TPM2_PolicyCommandCode command to indicate that an authorization should be limited to a specific
 // command.
 //
 // If the command code is not implemented, a *TPMParameterError error with an error code of ErrorPolicyCC will be returned. If
-// this method has already been called for this session with a different command code, a *TPMParameterError with an error code of
-// ErrorValue will be returned.
+// the session associated with policySession has already been limited to a different command code, a *TPMParameterError error with
+// an error code of ErrorValue will be returned.
 //
 // On successful completion, the policy digest of the session context associated with policySession will be extended to
-// include the value of the specified command code, and the command code will be recorded on the session context.
+// include the value of the specified command code, and the command code will be recorded on the session context to limit usage of
+// the session.
 func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code CommandCode, sessions ...*Session) error {
 	return t.RunCommand(CommandPolicyCommandCode, sessions,
 		policySession, Separator,
 		code)
 }
 
-// func (t *TPMContext) PolicyPhysicalPresence(policySession ResourceContext) error {
+// func (t *TPMContext) PolicyPhysicalPresence(policySession ResourceContext, sessions ...*Session) error {
 // }
 
 // PolicyCpHash executes the TPM2_PolicyCpHash command to bind a policy to a specific command and set of command parameters.
@@ -257,11 +261,13 @@ func (t *TPMContext) PolicyCommandCode(policySession ResourceContext, code Comma
 // If the size of cpHashA is inconsistent with the digest algorithm for the session, a *TPMParameterError error with an error code
 // of ErrorSize will be returned.
 //
-// If the session associated with policySession already has a command parameter digest defined, a *TPMError error with an error
-// code of ErrorCpHash will be returned if cpHashA does not match the digest already recorded on the session context.
+// If the session associated with policySession already has a command parameter digest, name digest or template digest defined, a
+// *TPMError error with an error code of ErrorCpHash will be returned if cpHashA does not match the digest already recorded on the
+// session context.
 //
 // On successful completion, the policy digest of the session context associated with policySession will be extended to include the
-// value of cpHashA, and the value of cpHashA will be recorded on the session context.
+// value of cpHashA, and the value of cpHashA will be recorded on the session context to limit usage of the session to the specific
+// command and set of command parameters.
 func (t *TPMContext) PolicyCpHash(policySession ResourceContext, cpHashA Digest, sessions ...*Session) error {
 	return t.RunCommand(CommandPolicyCpHash, sessions, policySession, Separator, cpHashA)
 }
@@ -272,18 +278,36 @@ func (t *TPMContext) PolicyCpHash(policySession ResourceContext, cpHashA Digest,
 // If the size of nameHash is inconsistent with the digest algorithm for the session, a *TPMParameterError error with an error code
 // of ErrorSize will be returned.
 //
-// If the session associated with policySession already has a name hash defined, a *TPMError error with an error code of ErrorCpHash
-// will be returned if nameHash does not match the digest already recorded on the session context.
+// If the session associated with policySession already has a name digest, command parameter digest or template digest defined, a
+// *TPMError error with an error code of ErrorCpHash will be returned.
 //
 // On successful completion, the policy digest of the session context associated with policySession will be extended to include the
-// value of nameHash, and the value of nameHash will be recorded on the session context.
+// value of nameHash, and the value of nameHash will be recorded on the session context to limit usage of the session to the specific
+// set of TPM entities.
 func (t *TPMContext) PolicyNameHash(policySession ResourceContext, nameHash Digest, sessions ...*Session) error {
 	return t.RunCommand(CommandPolicyNameHash, sessions, policySession, Separator, nameHash)
 }
 
-// func (t *TPMContext) PolicyDuplicationSelect(policySession ResourceContext, objectName, newParentName Name,
-//	includeObject bool, sessions ...*Session) error {
-// }
+// PolicyDuplicationSelect executes the TPM2_PolicyDuplicationSelect command to allow the policy to be restricted to duplication
+// and to allow duplication to a specific new parent. The objectName argument corresponds to the name of the object to be duplicated.
+// The newParentName argument corresponds to the name of the new parent object.
+//
+// If the session associated with policySession already has a command parameter digest, name digest or template digest defined, a
+// *TPMError error with an error code of ErrorCpHash will be returned.
+//
+// If the session associated with policySession has already been limited to a specific command code, a *TPMError error with an error
+// code of ErrorCommandCode will be returned.
+//
+// On successful completion, the policy digest of the session context associated with policySession will be extended to include the
+// value of newParentName and includeObject. If includeObject is true, the policy digest of the session will be extended to also
+// include the value of objectName. A digest of objectName and newParentName will be recorded as the name hash on the session context
+// to limit usage of the session to those entities, and the CommandDuplicate command code will be recorded to limit usage of the
+// session to TPMContext.Duplicate.
+func (t *TPMContext) PolicyDuplicationSelect(policySession ResourceContext, objectName, newParentName Name, includeObject bool, sessions ...*Session) error {
+	return t.RunCommand(CommandPolicyDuplicationSelect, sessions,
+		policySession, Separator,
+		objectName, newParentName, includeObject)
+}
 
 // PolicyAuthorize executes the TPM2_PolicyAuthorize command, which allows policies to change. The command allows an authorizing
 // entity to sign a new policy that can be used in an existing policy. The authorizing party signs a digest that is computed as
@@ -378,12 +402,11 @@ func (t *TPMContext) PolicyGetDigest(policySession ResourceContext, sessions ...
 	return policyDigest, nil
 }
 
-// func (t *TPMContext) PolicyNvWritten(policySession ResourceContext, writtenSet bool) error {
+// func (t *TPMContext) PolicyNvWritten(policySession ResourceContext, writtenSet bool, sessions ...*Session) error {
 // }
 
-// func (t *TPMContext) PolicyTemplate(policySession ResourceContext, templateHash Digest,
-//	sessions ...*Session) error {
+// func (t *TPMContext) PolicyTemplate(policySession ResourceContext, templateHash Digest, sessions ...*Session) error {
 // }
 
-// func (t *TPMContext) PolicyAuthorizeNV(authHandle, nvIndex, policySession ResourceContext) error {
+// func (t *TPMContext) PolicyAuthorizeNV(authContext, nvIndex, policySession ResourceContext, authContextAuth interface{}, sessions ...*Session) error {
 // }

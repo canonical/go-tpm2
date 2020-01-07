@@ -182,13 +182,10 @@ type ResourceWithAuth struct {
 }
 
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
-// Section 13 - Duplication Commands
 // Section 14 - Asymmetric Primitives
 // Section 15 - Symmetric Primitives
 // Section 17 - Hash/HMAC/Event Sequences
 // Section 19 - Ephemeral EC Keys
-// Section 20 - Signing and Signature Verification
-// Section 21 - Command Audit
 // Section 26 - Miscellaneous Management Functions
 // Section 27 - Field Upgrade
 

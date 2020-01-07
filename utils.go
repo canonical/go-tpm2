@@ -169,8 +169,7 @@ func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) {
 	h.commit()
 }
 
-func (p *TrialAuthPolicy) PolicyNV(nvIndexName Name, operandB Operand, offset uint16,
-	operation ArithmeticOp) {
+func (p *TrialAuthPolicy) PolicyNV(nvIndexName Name, operandB Operand, offset uint16, operation ArithmeticOp) {
 	h1 := p.alg.NewHash()
 	h1.Write(operandB)
 	binary.Write(h1, binary.BigEndian, offset)
@@ -199,6 +198,16 @@ func (p *TrialAuthPolicy) PolicyCpHash(cpHashA Digest) {
 func (p *TrialAuthPolicy) PolicyNameHash(nameHash Digest) {
 	h := p.beginExtend(CommandPolicyNameHash)
 	h.Write(nameHash)
+	h.commit()
+}
+
+func (p *TrialAuthPolicy) PolicyDuplicationSelect(objectName, newParentName Name, includeObject bool) {
+	h := p.beginExtend(CommandPolicyDuplicationSelect)
+	if includeObject {
+		h.Write(objectName)
+	}
+	h.Write(newParentName)
+	binary.Write(h, binary.BigEndian, includeObject)
 	h.commit()
 }
 
