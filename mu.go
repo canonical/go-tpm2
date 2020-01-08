@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
 	"strings"
 
@@ -154,6 +155,9 @@ func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	if err := marshalPtr(tmpBuf, s, beginSizedStructCtx(ctx)); err != nil {
 		return xerrors.Errorf("cannot marshal pointer to struct to temporary buffer: %w", err)
 	}
+	if tmpBuf.Len() > math.MaxUint16 {
+		return errors.New("sized structure length greater than 2^16-1")
+	}
 	if err := binary.Write(buf, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
 		return xerrors.Errorf("cannot write size of struct: %w", err)
 	}
@@ -245,6 +249,10 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 		// Shortcut for byte slices
 		if slice.Type() != rawBytesType && !ctx.options.raw {
 			// Sized buffer
+			if slice.Len() > math.MaxUint16 {
+				return errors.New("sized buffer length greater than 2^16-1")
+			}
+
 			if err := binary.Write(buf, binary.BigEndian, uint16(slice.Len())); err != nil {
 				return xerrors.Errorf("cannot write size of sized buffer: %w", err)
 			}
@@ -254,6 +262,10 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 			return xerrors.Errorf("cannot write byte slice contents: %w", err)
 		}
 		return nil
+	}
+
+	if slice.Len() > math.MaxUint32 {
+		return errors.New("slice length greater than 2^32-1")
 	}
 
 	if !ctx.options.raw {
