@@ -33,7 +33,7 @@ type SessionContext interface {
 	IsExclusive() bool // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
 }
 
-type resourceContextPrivate interface {
+type handleContextPrivate interface {
 	invalidate()
 }
 
@@ -208,7 +208,7 @@ func (t *TPMContext) evictHandleContext(rc HandleContext) {
 		panic(fmt.Sprintf("Attempting to evict an invalid resource context: %v", err))
 	}
 	delete(t.resources, normalizeHandleForMap(rc.Handle()))
-	rc.(resourceContextPrivate).invalidate()
+	rc.(handleContextPrivate).invalidate()
 }
 
 func (t *TPMContext) addHandleContext(rc HandleContext) {
