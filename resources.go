@@ -256,20 +256,12 @@ func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
 // handle - these stale HandleContext instances may occur when working with sessions and persistent resources via a resource manager.
 // If the TPMContext is already tracking an active HandleContext for the specified handle, it returns the existing HandleContext.
 //
-// If the handle references a NV index or an object, it will execute a command to read the public area from the TPM in order to
-// initialize state that is maintained on the host side. It will return a ResourceUnavailableError error if the specified handle
-// references a NV index or object that is currently unavailable. It should be noted that this command is executed without any
-// sessions and therefore does not benefit from any integrity protections other than a consistency cross-check that is performed on
-// the returned data to make sure that the name and public area match. Applications should consider the implications of this during
-// subsequent use of the HandleContext.
-//
-// If the handle references a session, it will execute some commands to determine if the session exists on the TPM, either as a
-// saved or loaded session. If the session is saved then the returned HandleContext will return a Handle with a HandleType of
-// HandleTypeHMACSession regardless of the HandleType of the supplied handle. Regardless of whether the session is saved or loaded,
-// the returned HandleContext will not be complete and the session associated with it cannot be used in any command other than
-// TPMContext.FlushContext. It will return a ResourceUnavailableError error if no session with the specified handle exists.
-//
-// It will return an error if handle references a PCR index or a session.
+// If a new HandleContext has to be created and the handle references a NV index or an object, it will execute a command to read the
+// public area from the TPM in order to initialize state that is maintained on the host side. It will return a ResourceUnavailableError
+// error if the specified handle references a NV index or object that is currently unavailable. It should be noted that this command is
+// executed without any sessions and therefore does not benefit from any integrity protections other than a consistency cross-check
+// that is performed on the returned data to make sure that the name and public area match. Applications should consider the
+// implications of this during subsequent use of the HandleContext.
 //
 // It always succeeds if the specified handle references a permanent resource.
 func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
@@ -281,8 +273,8 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 	var err error
 
 	switch handle.Type() {
-	case HandleTypePCR:
-		err = errors.New("cannot wrap a PCR handle")
+	case HandleTypePCR, HandleTypePermanent:
+		rc = &permanentContext{handle}
 	case HandleTypeNVIndex:
 		rc, err = makeNVIndexContext(t, handle)
 	case HandleTypeHMACSession, HandleTypePolicySession:
@@ -290,8 +282,6 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 		if rc == nil {
 			return nil, ResourceUnavailableError{handle}
 		}
-	case HandleTypePermanent:
-		rc = &permanentContext{handle}
 	case HandleTypeTransient, HandleTypePersistent:
 		rc, err = makeObjectContext(t, handle)
 	}
@@ -350,12 +340,6 @@ func (t *TPMContext) ForgetResource(context HandleContext) error {
 		return makeInvalidParamError("context", fmt.Sprintf("%v", err))
 	}
 
-	switch context.Handle().Type() {
-	case HandleTypePCR:
-		panic("Got context for a PCR index, which shouldn't happen")
-	}
-
 	t.evictHandleContext(context)
-
 	return nil
 }
