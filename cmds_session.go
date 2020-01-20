@@ -71,7 +71,7 @@ import (
 // code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
 // warning code of WarningSessionMemory will be returned. If there are no more session handles available, a *TPMwarning error with
 // a warning code of WarningSessionHandles will be returned.
-func (t *TPMContext) StartAuthSession(tpmKey, bind HandleContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, authValue []byte, sessions ...*Session) (HandleContext, error) {
+func (t *TPMContext) StartAuthSession(tpmKey, bind HandleContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, authValue []byte, sessions ...*Session) (SessionContext, error) {
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}

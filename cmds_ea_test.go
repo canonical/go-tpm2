@@ -84,7 +84,7 @@ func TestPolicySigned(t *testing.T) {
 
 			h := sha256.New()
 			if data.includeNonceTPM {
-				h.Write(sessionContext.(SessionContext).NonceTPM())
+				h.Write(sessionContext.NonceTPM())
 			}
 			binary.Write(h, binary.BigEndian, data.expiration)
 			h.Write(data.cpHashA)
@@ -422,7 +422,7 @@ func TestPolicyTicketFromSigned(t *testing.T) {
 			defer flushContext(t, tpm, sessionContext1)
 
 			h := sha256.New()
-			h.Write(sessionContext1.(SessionContext).NonceTPM())
+			h.Write(sessionContext1.NonceTPM())
 			binary.Write(h, binary.BigEndian, int32(-60))
 			h.Write(data.cpHashA)
 			h.Write(data.policyRef)

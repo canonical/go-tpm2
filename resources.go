@@ -14,8 +14,8 @@ import (
 // HandleContext corresponds to an entity that resides on the TPM. Implementations of HandleContext maintain some host-side
 // state in order to be able to participate in HMAC sessions and session-based parameter encryption. HandleContext instances are
 // tracked by the TPMContext that created them (when the corresponding TPM entity is created or loaded), and are invalidated when
-// the entity is flushed from the TPM. They may also be invalidated if the TPM indicates it has allocated an entity with the
-// same handle as an existing HandleContext - these stale HandleContext instances may occur when working with sessions or
+// the entity is flushed or evicted from the TPM. They may also be invalidated if the TPM indicates it has allocated an entity with
+// the same handle as an existing HandleContext - these stale HandleContext instances may occur when working with sessions or
 // persistent resources via a resource manager. Once invalidated, they can no longer be used.
 type HandleContext interface {
 	// Handle returns the handle of the corresponding entity on the TPM. If the HandleContext has been invalidated because the
@@ -25,8 +25,9 @@ type HandleContext interface {
 	Name() Name // The name of the entity
 }
 
-// SessionContext corresponds to a session that resides on the TPM, and is implemented by session HandleContext instances.
+// SessionContext corresponds to a session that resides on the TPM.
 type SessionContext interface {
+	HandleContext
 	NonceTPM() Nonce   // The most recent TPM nonce value
 	IsAudit() bool     // Whether the session has been used for audit
 	IsExclusive() bool // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
@@ -242,9 +243,9 @@ func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
 }
 
 // WrapHandle creates and returns a HandleContext for the specified handle. TPMContext will maintain a reference to the returned
-// HandleContext until it is flushed from the TPM or if the TPM indicates that it has created a new resource with the same handle -
-// these stale HandleContext instances may occur when working with sessions and persistent resources via a resource manager. If the
-// TPMContext is already tracking an active HandleContext for the specified handle, it returns the existing HandleContext.
+// HandleContext until it is flushed or evicted from the TPM or if the TPM indicates that it has created a new resource with the same
+// handle - these stale HandleContext instances may occur when working with sessions and persistent resources via a resource manager.
+// If the TPMContext is already tracking an active HandleContext for the specified handle, it returns the existing HandleContext.
 //
 // If the handle references a NV index or an object, it will execute a command to read the public area from the TPM in order to
 // initialize state that is maintained on the host side. It will return a ResourceUnavailableError error if the specified handle
@@ -303,6 +304,29 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 	t.addHandleContext(rc)
 
 	return rc, nil
+}
+
+// WrapSessionHandle creates and returns a SessionContext for the specified handle. TPMContext will maintain a reference to the
+// returned SessionContext until it is flushed from the TPM or if the TPM indicates that it has created a new session with the same
+// handle - these stale SessionContext instances may occur when working with sessions via a resource manager. If the TPMContext is
+// already tracking an active SessionContext for the specified handle, it returns the existing SessionContext.
+//
+// If a new SessionContext has to be created, this command will execute some commands to determine if the session exists on the TPM,
+// either as a saved or loaded session. If the session is saved then the returned SessionContext will return a Handle with a HandleType
+// of HandleTypeHMACSession regardless of the HandleType of the supplied handle. Regardless of whether the session is saved or loaded,
+// the returned SessionContext will not be complete and the session associated with it cannot be used in any command other than
+// TPMContext.FlushContext. It will return a ResourceUnavailableError error if no session with the specified handle exists.
+func (t *TPMContext) WrapSessionHandle(handle Handle) (SessionContext, error) {
+	switch handle.Type() {
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		rc, err := t.WrapHandle(handle)
+		if err != nil {
+			return nil, err
+		}
+		return rc.(SessionContext), nil
+	default:
+		return nil, errors.New("invalid handle type")
+	}
 }
 
 // ForgetResource tells the TPMContext to drop its reference to the specified HandleContext without flushing the corresponding

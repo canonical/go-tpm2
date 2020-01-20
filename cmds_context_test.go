@@ -58,7 +58,7 @@ func TestContextSave(t *testing.T) {
 		sessionHandle := sessionContext.Handle()
 		tpm.ForgetResource(sessionContext)
 
-		sessionContext, err = tpm.WrapHandle(sessionHandle)
+		sessionContext, err = tpm.WrapSessionHandle(sessionHandle)
 		if err != nil {
 			t.Fatalf("WrapHandle failed: %v", err)
 		}

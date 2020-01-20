@@ -77,7 +77,7 @@ func TestWrapHandle(t *testing.T) {
 	}
 	defer evictPersistentObject(t, tpm, HandleOwner, persistentPrimary)
 
-	sessionContext, err = tpm.WrapHandle(sessionHandle)
+	sessionContext, err = tpm.WrapSessionHandle(sessionHandle)
 	if err != nil {
 		t.Errorf("WrapHandle failed with a loaded session: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestWrapHandle(t *testing.T) {
 	}
 	defer flushContext(t, tpm, sessionContext)
 
-	savedSessionContext, err = tpm.WrapHandle(savedSessionHandle)
+	savedSessionContext, err = tpm.WrapSessionHandle(savedSessionHandle)
 	if err != nil {
 		t.Errorf("WrapHandle failed with a saved session: %v", err)
 	}
