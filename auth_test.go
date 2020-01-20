@@ -22,8 +22,8 @@ func TestHMACSessions(t *testing.T) {
 
 	for _, data := range []struct {
 		desc         string
-		tpmKey       ResourceContext
-		bind         ResourceContext
+		tpmKey       HandleContext
+		bind         HandleContext
 		bindAuth     []byte
 		sessionAuth  []byte
 		sessionAttrs SessionAttributes
@@ -115,7 +115,7 @@ func TestHMACSessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
-				if err.Error() != "cannot process ResourceWithAuth for command TPM_CC_Create at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process HandleContextWithAuth for command TPM_CC_Create at index 1: invalid resource context for session: "+
 					"resource has been closed" {
 					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 				}
@@ -153,8 +153,8 @@ func TestPolicySessions(t *testing.T) {
 
 	for _, data := range []struct {
 		desc         string
-		tpmKey       ResourceContext
-		bind         ResourceContext
+		tpmKey       HandleContext
+		bind         HandleContext
 		bindAuth     []byte
 		sessionAuth  []byte
 		sessionAttrs SessionAttributes
@@ -240,7 +240,7 @@ func TestPolicySessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent usage of the session should fail")
 				}
-				if err.Error() != "cannot process ResourceWithAuth for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process HandleContextWithAuth for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
 					"resource has been closed" {
 					t.Errorf("Unexpected error: %v", err)
 				}

@@ -28,11 +28,11 @@ func (e ResourceUnavailableError) Error() string {
 // Any sessions used in the command that caused this error should be considered invalid.
 //
 // If any function that executes a command which allocates objects on the TPM returns this error, it is possible that these objects
-// were allocated and now exist on the TPM without a corresponding ResourceContext being created or any knowledge of the handle of
+// were allocated and now exist on the TPM without a corresponding HandleContext being created or any knowledge of the handle of
 // the object created.
 //
 // If any function that executes a command which removes objects from the TPM returns this error, it is possible that these objects
-// were removed from the TPM. Any associated ResourceContexts should be considered stale after this error.
+// were removed from the TPM. Any associated HandleContexts should be considered stale after this error.
 type InvalidResponseError struct {
 	Command CommandCode
 	msg     string

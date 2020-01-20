@@ -171,7 +171,7 @@ const (
 	// authorization type is expected to be a policy session, but another authorization type has been provided.
 	ErrorAuthType ErrorCode = 0x24
 
-	// ErrorAuthMissing corresponds to TPM_RC_AUTH_MISSING and is returned for a command that accepts a ResourceContext or Handle
+	// ErrorAuthMissing corresponds to TPM_RC_AUTH_MISSING and is returned for a command that accepts a HandleContext or Handle
 	// argument that requires authorization, but no authorization session has been provided in the command payload.
 	ErrorAuthMissing ErrorCode = 0x25
 
@@ -250,7 +250,7 @@ const (
 	ErrorValue ErrorCode = errorCode1Start + 0x04 // TPM_RC_VALUE
 
 	// ErrorHierarchy corresponds to TPM_RC_HIERARCHY and is returned as a *TPMHandleError error for any command that accepts a
-	// ResourceContext or Handle argument if that argument corresponds to a hierarchy on the TPM that has been disabled.
+	// HandleContext or Handle argument if that argument corresponds to a hierarchy on the TPM that has been disabled.
 	ErrorHierarchy ErrorCode = errorCode1Start + 0x05
 
 	ErrorKeySize ErrorCode = errorCode1Start + 0x07 // TPM_RC_KEY_SIZE

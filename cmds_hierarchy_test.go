@@ -13,7 +13,7 @@ func TestCreatePrimary(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, hierarchy Handle, sensitive *SensitiveCreate, template *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public) {
+		creationPCR PCRSelectionList, session interface{}) (HandleContext, *Public) {
 		objectContext, outPublic, creationData, creationHash, creationTicket, name, err :=
 			tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
@@ -258,8 +258,8 @@ func TestClear(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, auth interface{}) {
-		var persistentObjects []ResourceContext // Objects that persist across Clear
-		var transientObjects []ResourceContext  // Objects that are evicted by Clar
+		var persistentObjects []HandleContext // Objects that persist across Clear
+		var transientObjects []HandleContext  // Objects that are evicted by Clar
 
 		// Create platform primary key (should persist across Clear)
 		template := Public{
@@ -432,7 +432,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	}
 
 	run2 := func(t *testing.T, hierarchy Handle, session interface{},
-		createPrimary func(*testing.T, *TPMContext, interface{}) ResourceContext) {
+		createPrimary func(*testing.T, *TPMContext, interface{}) HandleContext) {
 		primary := createPrimary(t, tpm, session)
 		flushContext(t, tpm, primary)
 
@@ -441,7 +441,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 	}
 
-	createSrk := func(t *testing.T, tpm *TPMContext, session interface{}) ResourceContext {
+	createSrk := func(t *testing.T, tpm *TPMContext, session interface{}) HandleContext {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -461,7 +461,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 		return objectContext
 	}
-	createEk := func(t *testing.T, tpm *TPMContext, session interface{}) ResourceContext {
+	createEk := func(t *testing.T, tpm *TPMContext, session interface{}) HandleContext {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,

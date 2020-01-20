@@ -24,8 +24,8 @@ func TestStartAuthSession(t *testing.T) {
 
 	for _, data := range []struct {
 		desc        string
-		tpmKey      ResourceContext
-		bind        ResourceContext
+		tpmKey      HandleContext
+		bind        HandleContext
 		sessionType SessionType
 		alg         HashAlgorithmId
 		bindAuth    []byte

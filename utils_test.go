@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-type mockResourceContext struct {
+type mockHandleContext struct {
 	name Name
 }
 
-func (c *mockResourceContext) Name() Name {
+func (c *mockHandleContext) Name() Name {
 	return c.name
 }
-func (c *mockResourceContext) Handle() Handle {
+func (c *mockHandleContext) Handle() Handle {
 	return HandleNull
 }
 
@@ -22,7 +22,7 @@ func TestComputeCpHash(t *testing.T) {
 	h := sha256.New()
 	h.Write([]byte("foo"))
 	name, _ := MarshalToBytes(HashAlgorithmSHA256, RawBytes(h.Sum(nil)))
-	rc := &mockResourceContext{name}
+	rc := &mockHandleContext{name}
 
 	for _, data := range []struct {
 		desc     string

@@ -74,7 +74,7 @@ func TestDuplicate(t *testing.T) {
 	}
 	defer flushContext(t, tpm, parent)
 
-	run := func(t *testing.T, newParentContext ResourceContext, encryptionKeyIn Data, symmetricAlg *SymDefObject) (Data, Private, EncryptedSecret) {
+	run := func(t *testing.T, newParentContext HandleContext, encryptionKeyIn Data, symmetricAlg *SymDefObject) (Data, Private, EncryptedSecret) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)

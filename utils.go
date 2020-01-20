@@ -16,7 +16,7 @@ import (
 // ComputeCpHash computes a command parameter digest from the specified command code and provided command parameters, using the
 // digest algorithm specified by hashAlg. The params argument corresponds to the handle and parameters area of a command (in that
 // order), separated by the Separator sentinel value. Handle arguments must be represented by either the Handle type or
-// ResourceContext type.
+// HandleContext type.
 //
 // The number of command handles and number / type of command parameters can be determined by looking in part 3 of the TPM 2.0
 // Library Specification for the specific command.
@@ -35,10 +35,10 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 		switch p := param.(type) {
 		case Handle:
 			handles = append(handles, permanentContext(p).Name())
-		case ResourceContext:
+		case HandleContext:
 			handles = append(handles, p.Name())
 		default:
-			return nil, makeInvalidParamError("params", "parameter in handle area is not a Handle or ResourceContext")
+			return nil, makeInvalidParamError("params", "parameter in handle area is not a Handle or HandleContext")
 		}
 	}
 

@@ -12,7 +12,7 @@ import (
 )
 
 // StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session. On successful completion, it will
-// return a ResourceContext that corresponds to the new session. The session can be used in subsequent commands by passing it as the
+// return a HandleContext that corresponds to the new session. The session can be used in subsequent commands by passing it as the
 // Context field of a Session struct instance to a command that accepts a session.
 //
 // The type of session is defined by the sessionType parameter. If sessionType is SessionTypeHMAC or SessionTypePolicy, then the
@@ -71,7 +71,7 @@ import (
 // code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
 // warning code of WarningSessionMemory will be returned. If there are no more session handles available, a *TPMwarning error with
 // a warning code of WarningSessionHandles will be returned.
-func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, authValue []byte, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) StartAuthSession(tpmKey, bind HandleContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, authValue []byte, sessions ...*Session) (HandleContext, error) {
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}
@@ -155,12 +155,12 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		sessionContext.sessionKey = cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8, nil, false)
 	}
 
-	t.addResourceContext(sessionContext)
+	t.addHandleContext(sessionContext)
 	return sessionContext, nil
 }
 
 // PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to reset the policy
 // authorization session to its initial state.
-func (t *TPMContext) PolicyRestart(sessionContext ResourceContext, sessions ...*Session) error {
+func (t *TPMContext) PolicyRestart(sessionContext HandleContext, sessions ...*Session) error {
 	return t.RunCommand(CommandPolicyRestart, sessions, sessionContext)
 }

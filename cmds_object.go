@@ -108,7 +108,7 @@ import (
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
 // can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
 // method.
-func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{}, sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
+func (t *TPMContext) Create(parentContext HandleContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{}, sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -120,7 +120,7 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	var creationTicket TkCreation
 
 	if err := t.RunCommand(CommandCreate, sessions,
-		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		HandleContextWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
 		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
 		Separator,
 		&outPrivate, &outPublic, &creationData, &creationHash, &creationTicket); err != nil {
@@ -189,13 +189,13 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 // If the loaded object is a storage parent and the size of the seed value in the sensitive area isn't sufficient for the selected
 // name algorithm, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
-func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error) {
+// On success, a HandleContext corresponding to the newly loaded transient object will be returned.
+func (t *TPMContext) Load(parentContext HandleContext, inPrivate Private, inPublic *Public, parentContextAuth interface{}, sessions ...*Session) (HandleContext, Name, error) {
 	var objectHandle Handle
 	var name Name
 
 	if err := t.RunCommand(CommandLoad, sessions,
-		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		HandleContextWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
 		inPrivate, publicSized{inPublic}, Separator,
 		&objectHandle, Separator,
 		&name); err != nil {
@@ -211,7 +211,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
 	inPublic.copyTo(&objectContext.public)
-	t.addResourceContext(objectContext)
+	t.addHandleContext(objectContext)
 
 	return objectContext, name, nil
 }
@@ -274,8 +274,8 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 // If the digest in the Unique field of inPublic is inconsistent with the value of the sensitive data and the seed value, a
 // *TPMError with an error code of ErrorBinding will be returned.
 //
-// On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
-func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...*Session) (ResourceContext, Name, error) {
+// On success, a HandleContext corresponding to the newly loaded transient object will be returned.
+func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...*Session) (HandleContext, Name, error) {
 	var objectHandle Handle
 	var name Name
 
@@ -297,7 +297,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
 	inPublic.copyTo(&objectContext.public)
-	t.addResourceContext(objectContext)
+	t.addHandleContext(objectContext)
 
 	return objectContext, name, nil
 }
@@ -307,7 +307,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 // If objectContext corresponds to a sequence object, a *TPMError with an error code of ErrorSequence will be returned.
 //
 // On success, the public part of the object is returned, along with the object's name and qualified name.
-func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
+func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...*Session) (*Public, Name, Name, error) {
 	var outPublic publicSized
 	var name Name
 	var qualifiedName Name
@@ -353,10 +353,10 @@ func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Sess
 //
 // On success, the decrypted credential is returned. This is typically used to decrypt a certificate associated with activateContext,
 // which was issued by a certificate authority.
-func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest, error) {
+func (t *TPMContext) ActivateCredential(activateContext, keyContext HandleContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest, error) {
 	var certInfo Digest
 	if err := t.RunCommand(CommandActivateCredential, sessions,
-		ResourceWithAuth{Context: activateContext, Auth: activateContextAuth}, ResourceWithAuth{Context: keyContext, Auth: keyContextAuth}, Separator,
+		HandleContextWithAuth{Context: activateContext, Auth: activateContextAuth}, HandleContextWithAuth{Context: keyContext, Auth: keyContextAuth}, Separator,
 		credentialBlob, secret, Separator,
 		Separator,
 		&certInfo); err != nil {
@@ -397,7 +397,7 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceCont
 // protected certificate, the encrypted credential blob and the encrypted seed to the requesting party. The seed and credential values
 // can only be recovered on the TPM associated with the endorsement certificate that the requesting party provided if the object
 // associated with objectName is resident on it.
-func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
+func (t *TPMContext) MakeCredential(context HandleContext, credential Digest, objectName Name, sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
 	var credentialBlob IDObjectRaw
 	var secret EncryptedSecret
 	if err := t.RunCommand(CommandMakeCredential, sessions,
@@ -418,11 +418,11 @@ func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, 
 // attributes set, a *TPMHandlerError error with an error code of ErrorAttributes will be returned.
 //
 // On success, the object's sensitive data is returned in decrypted form.
-func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuth interface{}, sessions ...*Session) (SensitiveData, error) {
+func (t *TPMContext) Unseal(itemContext HandleContext, itemContextAuth interface{}, sessions ...*Session) (SensitiveData, error) {
 	var outData SensitiveData
 
 	if err := t.RunCommand(CommandUnseal, sessions,
-		ResourceWithAuth{Context: itemContext, Auth: itemContextAuth}, Separator,
+		HandleContextWithAuth{Context: itemContext, Auth: itemContextAuth}, Separator,
 		Separator,
 		Separator,
 		&outData); err != nil {
@@ -449,11 +449,11 @@ func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuth interfa
 //
 // On success, this returns a new private area for the object associated with objectContext. This function does not make any changes
 // to the version of the object that is currently loaded in to the TPM.
-func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth, objectContextAuth interface{}, sessions ...*Session) (Private, error) {
+func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext HandleContext, newAuth Auth, objectContextAuth interface{}, sessions ...*Session) (Private, error) {
 	var outPrivate Private
 
 	if err := t.RunCommand(CommandObjectChangeAuth, sessions,
-		ResourceWithAuth{Context: objectContext, Auth: objectContextAuth}, parentContext, Separator,
+		HandleContextWithAuth{Context: objectContext, Auth: objectContextAuth}, parentContext, Separator,
 		newAuth, Separator,
 		Separator,
 		&outPrivate); err != nil {
@@ -557,13 +557,13 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest algorithm
 // selected by the specified scheme.
 //
-// On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM, along with the
+// On success, a HandleContext instance will be returned that corresponds to the newly created object on the TPM, along with the
 // private and public parts. If the Type field of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public
 // object will have a Unique field that is the digest of the sensitive data and the value of the object's seed in the sensitive area,
 // computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned
 // *Public object will have a Unique field containing details about the public part of the key, computed from the private part of the
 // key.
-func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
+func (t *TPMContext) CreateLoaded(parentContext HandleContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuth interface{}, sessions ...*Session) (HandleContext, Private, *Public, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -583,7 +583,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	var name Name
 
 	if err := t.RunCommand(CommandCreateLoaded, sessions,
-		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		HandleContextWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
 		sensitiveCreateSized{inSensitive}, inTemplate, Separator,
 		&objectHandle, Separator,
 		&outPrivate, &outPublic, &name); err != nil {
@@ -600,7 +600,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
 	outPublic.Ptr.copyTo(&objectContext.public)
-	t.addResourceContext(objectContext)
+	t.addHandleContext(objectContext)
 
 	return objectContext, outPrivate, outPublic.Ptr, name, nil
 }

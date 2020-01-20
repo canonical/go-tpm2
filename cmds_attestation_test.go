@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag StructTag, signContext ResourceContext, signHierarchy Handle, qualifyingData Data) *Attest {
+func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag StructTag, signContext HandleContext, signHierarchy Handle, qualifyingData Data) *Attest {
 	if attestRaw == nil {
 		t.Fatalf("attestation is empty")
 	}
@@ -59,7 +59,7 @@ func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag Struct
 	return attest
 }
 
-func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceContext, attest AttestRaw, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
+func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext HandleContext, attest AttestRaw, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
 	if signature == nil {
 		t.Fatalf("nil signature")
 	}
@@ -92,13 +92,13 @@ func TestCertify(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
+	prepare := func(t *testing.T, auth Auth) HandleContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, objectContext, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, objectContextAuth, signContextAuth interface{}) {
+	run := func(t *testing.T, objectContext, signContext HandleContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, objectContextAuth, signContextAuth interface{}) {
 		certifyInfo, signature, err := tpm.Certify(objectContext, signContext, qualifyingData, inScheme, objectContextAuth, signContextAuth)
 		if err != nil {
 			t.Fatalf("Certify failed: %v", err)
@@ -236,13 +236,13 @@ func TestCertifyCreation(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
+	prepare := func(t *testing.T, auth Auth) HandleContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuth interface{}) {
+	run := func(t *testing.T, signContext HandleContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuth interface{}) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -400,13 +400,13 @@ func TestQuote(t *testing.T) {
 		}
 	}
 
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
+	prepare := func(t *testing.T, auth Auth) HandleContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuth interface{}) {
+	run := func(t *testing.T, signContext HandleContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuth interface{}) {
 		quoted, signature, err := tpm.Quote(signContext, qualifyingData, inScheme, pcrs, signContextAuth)
 		if err != nil {
 			t.Fatalf("Quote failed: %v", err)
@@ -517,13 +517,13 @@ func TestGetTime(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
+	prepare := func(t *testing.T, auth Auth) HandleContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}) {
+	run := func(t *testing.T, signContext HandleContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}) {
 		timeInfo, signature, err := tpm.GetTime(HandleEndorsement, signContext, qualifyingData, inScheme, privacyAdminHandleAuth, signContextAuth)
 		if err != nil {
 			t.Fatalf("GetTime failed: %v", err)

@@ -18,7 +18,7 @@ func TestCreate(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, parent ResourceContext, hierarchy Handle, sensitive *SensitiveCreate, template *Public, outsideInfo Data,
+	run := func(t *testing.T, parent HandleContext, hierarchy Handle, sensitive *SensitiveCreate, template *Public, outsideInfo Data,
 		creationPCR PCRSelectionList, session interface{}) (*Public, Private) {
 		outPrivate, outPublic, creationData, creationHash, creationTicket, err :=
 			tpm.Create(parent, sensitive, template, outsideInfo, creationPCR, session)
@@ -182,7 +182,7 @@ func TestLoad(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, parent ResourceContext, session interface{}) {
+	run := func(t *testing.T, parent HandleContext, session interface{}) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -439,7 +439,7 @@ func TestUnseal(t *testing.T) {
 	secret := []byte("sensitive data")
 
 	create := func(t *testing.T, authPolicy Digest, authValue Auth,
-		extraAttrs ObjectAttributes) ResourceContext {
+		extraAttrs ObjectAttributes) HandleContext {
 		template := Public{
 			Type:       ObjectTypeKeyedHash,
 			NameAlg:    HashAlgorithmSHA256,
@@ -461,7 +461,7 @@ func TestUnseal(t *testing.T) {
 		return objectContext
 	}
 
-	run := func(t *testing.T, handle ResourceContext, session interface{}) {
+	run := func(t *testing.T, handle HandleContext, session interface{}) {
 		sensitiveData, err := tpm.Unseal(handle, session)
 		if err != nil {
 			t.Fatalf("Unseal failed: %v", err)
@@ -513,7 +513,7 @@ func TestObjectChangeAuth(t *testing.T) {
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
 
-	create := func(t *testing.T, userAuth Auth) (ResourceContext, *Public) {
+	create := func(t *testing.T, userAuth Auth) (HandleContext, *Public) {
 		sensitive := SensitiveCreate{Data: []byte("sensitive data"), UserAuth: userAuth}
 		template := Public{
 			Type:    ObjectTypeKeyedHash,
@@ -534,7 +534,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		return objectContext, outPublic
 	}
 
-	run := func(t *testing.T, context ResourceContext, pub *Public, authValue Auth, session interface{}) {
+	run := func(t *testing.T, context HandleContext, pub *Public, authValue Auth, session interface{}) {
 		priv, err := tpm.ObjectChangeAuth(context, primary, authValue, session)
 		if err != nil {
 			t.Fatalf("ObjectChangeAuth failed: %v", err)
@@ -639,7 +639,7 @@ func TestActivateCredential(t *testing.T) {
 
 	credentialIn := []byte("secret credential")
 
-	run := func(t *testing.T, ak ResourceContext, auth interface{}) {
+	run := func(t *testing.T, ak HandleContext, auth interface{}) {
 		credentialBlob, secret, err := tpm.MakeCredential(ek, credentialIn, ak.Name())
 		if err != nil {
 			t.Fatalf("MakeCredential failed: %v", err)

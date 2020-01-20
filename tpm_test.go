@@ -75,13 +75,13 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 }
 
 // Undefine a NV index set by a test. Fails the test if it doesn't succeed.
-func undefineNVSpace(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle, auth interface{}) {
+func undefineNVSpace(t *testing.T, tpm *TPMContext, context HandleContext, authHandle Handle, auth interface{}) {
 	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
 }
 
-func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle,
+func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context HandleContext, authHandle Handle,
 	auth interface{}) {
 	if context.Handle() == HandleUnassigned {
 		return
@@ -115,7 +115,7 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 }
 
 func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest,
-	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
+	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent HandleContext) {
 	var parentQualifiedName Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -225,7 +225,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 	}
 }
 
-func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
+func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) HandleContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
@@ -248,7 +248,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	return objectHandle
 }
 
-func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
+func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) HandleContext {
 	template := Public{
 		Type:    ObjectTypeECC,
 		NameAlg: HashAlgorithmSHA256,
@@ -270,7 +270,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	return objectHandle
 }
 
-func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
+func createRSAEkForTesting(t *testing.T, tpm *TPMContext) HandleContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
@@ -293,7 +293,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	return objectHandle
 }
 
-func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext, userAuth Auth) ResourceContext {
+func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContext, userAuth Auth) HandleContext {
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
@@ -336,7 +336,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 	return akContext
 }
 
-func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent ResourceContext) ResourceContext {
+func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent HandleContext) HandleContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
@@ -365,8 +365,8 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 
 // Persist a transient object for testing. If the persistent handle is already in use, it tries to evict the
 // existing resource first. Fatal if persisting the transient object fails.
-func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transient ResourceContext,
-	persist Handle) ResourceContext {
+func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transient HandleContext,
+	persist Handle) HandleContext {
 	if context, err := tpm.WrapHandle(persist); err == nil {
 		_, err := tpm.EvictControl(auth, context, persist, nil)
 		if err != nil {
@@ -381,13 +381,13 @@ func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transie
 }
 
 // Evict a persistent object. Fails the test if the resource context is valid but the eviction doesn't succeed.
-func evictPersistentObject(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
+func evictPersistentObject(t *testing.T, tpm *TPMContext, auth Handle, context HandleContext) {
 	if _, err := tpm.EvictControl(auth, context, context.Handle(), nil); err != nil {
 		t.Errorf("EvictControl failed: %v", err)
 	}
 }
 
-func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
+func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth Handle, context HandleContext) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}
@@ -396,14 +396,14 @@ func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth Handle, c
 }
 
 // Flush a resource context. Fails the test if the resource context is valid but the flush doesn't succeed.
-func flushContext(t *testing.T, tpm *TPMContext, context ResourceContext) {
+func flushContext(t *testing.T, tpm *TPMContext, context HandleContext) {
 	if err := tpm.FlushContext(context); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 }
 
 // Fail the test if the resource context hasn't been invalidated. Will attempt to flush a valid resource context.
-func verifyContextFlushed(t *testing.T, tpm *TPMContext, context ResourceContext) {
+func verifyContextFlushed(t *testing.T, tpm *TPMContext, context HandleContext) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}

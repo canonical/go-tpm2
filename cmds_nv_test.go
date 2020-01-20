@@ -131,7 +131,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 
 	authPolicy = h.Sum(nil)
 
-	define := func(t *testing.T) ResourceContext {
+	define := func(t *testing.T) HandleContext {
 		pub := NVPublic{
 			Index:      0x0141ffff,
 			NameAlg:    HashAlgorithmSHA256,
@@ -150,7 +150,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 		return context
 	}
 
-	run := func(t *testing.T, context ResourceContext, platformAuth interface{}) {
+	run := func(t *testing.T, context HandleContext, platformAuth interface{}) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -269,7 +269,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 		Size:    1600}
 
-	define := func(t *testing.T, pub *NVPublic, authValue Auth) ResourceContext {
+	define := func(t *testing.T, pub *NVPublic, authValue Auth) HandleContext {
 		if err := tpm.NVDefineSpace(HandleOwner, authValue, pub, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
@@ -282,7 +282,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		return rc
 	}
 
-	runWrite := func(t *testing.T, rc ResourceContext, data MaxNVBuffer, offset uint16, auth interface{}) {
+	runWrite := func(t *testing.T, rc HandleContext, data MaxNVBuffer, offset uint16, auth interface{}) {
 		if err := tpm.NVWrite(rc, rc, data, offset, auth); err != nil {
 			t.Fatalf("NVWrite failed: %v", err)
 		}
@@ -300,7 +300,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		}
 	}
 
-	runRead := func(t *testing.T, rc ResourceContext, pub *NVPublic, data MaxNVBuffer, offset uint16, auth interface{}) {
+	runRead := func(t *testing.T, rc HandleContext, pub *NVPublic, data MaxNVBuffer, offset uint16, auth interface{}) {
 		d, err := tpm.NVRead(rc, rc, uint16(len(data)), offset, auth)
 		if err != nil {
 			t.Fatalf("NVRead failed: %v", err)
@@ -412,7 +412,7 @@ func TestNVIncrement(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
+	define := func(t *testing.T, authValue Auth) HandleContext {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
@@ -431,7 +431,7 @@ func TestNVIncrement(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, authInc interface{}) {
+	run := func(t *testing.T, rc HandleContext, authInc interface{}) {
 		if err := tpm.NVIncrement(rc, rc, authInc); err != nil {
 			t.Fatalf("NVIncrement failed: %v", err)
 		}
@@ -476,7 +476,7 @@ func TestNVReadCounter(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
+	define := func(t *testing.T, authValue Auth) HandleContext {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
@@ -495,7 +495,7 @@ func TestNVReadCounter(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, authInc interface{}) {
+	run := func(t *testing.T, rc HandleContext, authInc interface{}) {
 		if err := tpm.NVIncrement(rc, rc, authInc); err != nil {
 			t.Fatalf("NVIncrement failed: %v", err)
 		}
@@ -546,7 +546,7 @@ func TestNVExtend(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
+	define := func(t *testing.T, authValue Auth) HandleContext {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
@@ -565,7 +565,7 @@ func TestNVExtend(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, data []byte, auth interface{}) {
+	run := func(t *testing.T, rc HandleContext, data []byte, auth interface{}) {
 		h := sha256.New()
 		h.Write(data)
 		dataH := h.Sum(nil)
@@ -627,7 +627,7 @@ func TestNVSetBits(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
+	define := func(t *testing.T, authValue Auth) HandleContext {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
@@ -646,7 +646,7 @@ func TestNVSetBits(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, bits []uint64, auth interface{}) {
+	run := func(t *testing.T, rc HandleContext, bits []uint64, auth interface{}) {
 		var expected uint64
 		for _, b := range bits {
 			if err := tpm.NVSetBits(rc, rc, b, auth); err != nil {
@@ -704,7 +704,7 @@ func TestNVWriteLock(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
+	define := func(t *testing.T, authValue Auth) HandleContext {
 		pub := NVPublic{
 			Index:   Handle(0x0181fff0),
 			NameAlg: HashAlgorithmSHA256,
@@ -723,7 +723,7 @@ func TestNVWriteLock(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, auth interface{}) {
+	run := func(t *testing.T, rc HandleContext, auth interface{}) {
 		if err := tpm.NVWriteLock(rc, rc, auth); err != nil {
 			t.Fatalf("NVWriteLock failed: %v", err)
 		}
@@ -768,7 +768,7 @@ func TestNVReadLock(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
+	define := func(t *testing.T, authValue Auth) HandleContext {
 		pub := NVPublic{
 			Index:   Handle(0x0181fff0),
 			NameAlg: HashAlgorithmSHA256,
@@ -787,7 +787,7 @@ func TestNVReadLock(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, auth interface{}) {
+	run := func(t *testing.T, rc HandleContext, auth interface{}) {
 		if err := tpm.NVReadLock(rc, rc, auth); err != nil {
 			t.Fatalf("NVWriteLock failed: %v", err)
 		}
@@ -833,7 +833,7 @@ func TestNVGlobalLock(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, auth interface{}) {
-		var rcs []ResourceContext
+		var rcs []HandleContext
 		for _, data := range []NVPublic{
 			{
 				Index:   Handle(0x0181fff0),
@@ -914,7 +914,7 @@ func TestNVChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	executePolicy := func(context ResourceContext) {
+	executePolicy := func(context HandleContext) {
 		if err := tpm.PolicyCommandCode(context, CommandNVChangeAuth); err != nil {
 			t.Fatalf("PolicyCommandCode failed: %v", err)
 		}
@@ -940,7 +940,7 @@ func TestNVChangeAuth(t *testing.T) {
 
 	for _, data := range []struct {
 		desc   string
-		tpmKey ResourceContext
+		tpmKey HandleContext
 	}{
 		{
 			desc: "Unsalted",

@@ -14,7 +14,7 @@ func TestContextSave(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, rc ResourceContext, savedHandle, hierarchy Handle) {
+	run := func(t *testing.T, rc HandleContext, savedHandle, hierarchy Handle) {
 		context, err := tpm.ContextSave(rc)
 		if err != nil {
 			t.Fatalf("ContextSave failed: %v", err)
@@ -67,7 +67,7 @@ func TestContextSave(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "invalid saveContext parameter: unusable session ResourceContext" {
+		if err.Error() != "invalid saveContext parameter: unusable session HandleContext" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 	})
@@ -106,7 +106,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 	})
 
-	runSessionTest := func(t *testing.T, forget bool, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg HashAlgorithmId) {
+	runSessionTest := func(t *testing.T, forget bool, tpmKey, bind HandleContext, sessionType SessionType, hashAlg HashAlgorithmId) {
 		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -151,7 +151,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		defer flushContext(t, tpm, restoredSc)
 
 		if !forget && restoredSc != sc {
-			t.Errorf("Expected the same ResourceContext back")
+			t.Errorf("Expected the same HandleContext back")
 		}
 
 		if restoredSc.Handle() != data.handle {
@@ -218,7 +218,7 @@ func TestEvictControl(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuth interface{}) {
+	run := func(t *testing.T, transient HandleContext, persist Handle, authAuth interface{}) {
 		if handle, err := tpm.WrapHandle(persist); err == nil {
 			_, err := tpm.EvictControl(HandleOwner, handle, persist, authAuth)
 			if err != nil {

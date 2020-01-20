@@ -45,7 +45,7 @@ package tpm2
 // duplication wrapper (if newParentContext was provided). If newParentContext was provided, the seed used to generate the symmetric
 // key and the HMAC key for the outer duplication wrapper is encrypted using the methods defined by newParentContext and returned as
 // an EncryptedSecret.
-func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, encryptionKeyIn Data, symmetricAlg *SymDefObject, objectContextAuth *Session, sessions ...*Session) (Data, Private, EncryptedSecret, error) {
+func (t *TPMContext) Duplicate(objectContext, newParentContext HandleContext, encryptionKeyIn Data, symmetricAlg *SymDefObject, objectContextAuth *Session, sessions ...*Session) (Data, Private, EncryptedSecret, error) {
 	if symmetricAlg == nil {
 		symmetricAlg = &SymDefObject{Algorithm: SymObjectAlgorithmNull}
 	}
@@ -55,7 +55,7 @@ func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, 
 	var outSymSeed EncryptedSecret
 
 	if err := t.RunCommand(CommandDuplicate, sessions,
-		ResourceWithAuth{Context: objectContext, Auth: objectContextAuth}, newParentContext, Separator,
+		HandleContextWithAuth{Context: objectContext, Auth: objectContextAuth}, newParentContext, Separator,
 		encryptionKeyIn, symmetricAlg, Separator,
 		Separator,
 		&encryptionKeyOut, &duplicate, &outSymSeed); err != nil {
@@ -65,7 +65,7 @@ func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, 
 	return encryptionKeyOut, duplicate, outSymSeed, nil
 }
 
-// func (t *TPMContext) Rewrap(oldParent, newParent ResourceContext, inDuplicate Private, name Name, inSymSeed EncryptedSecret, oldParentAuth interface{}, sessions ...*Session) (Private, EncryptedSecret, error) {
+// func (t *TPMContext) Rewrap(oldParent, newParent HandleContext, inDuplicate Private, name Name, inSymSeed EncryptedSecret, oldParentAuth interface{}, sessions ...*Session) (Private, EncryptedSecret, error) {
 // }
 
 // Import executes the TPM2_Import command in order to encrypt the sensitive area of the object associated with the objectPublic and
@@ -127,7 +127,7 @@ func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, 
 //
 // On success, a new private area encrypted with the symmetric algorithm defined by the object associated with parentContext is
 // returned.
-func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, objectPublic *Public, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuth interface{}, sessions ...*Session) (Private, error) {
+func (t *TPMContext) Import(parentContext HandleContext, encryptionKey Data, objectPublic *Public, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuth interface{}, sessions ...*Session) (Private, error) {
 	if symmetricAlg == nil {
 		symmetricAlg = &SymDefObject{Algorithm: SymObjectAlgorithmNull}
 	}
@@ -135,7 +135,7 @@ func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, o
 	var outPrivate Private
 
 	if err := t.RunCommand(CommandImport, sessions,
-		ResourceWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		HandleContextWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
 		encryptionKey, publicSized{objectPublic}, duplicate, inSymSeed, symmetricAlg, Separator,
 		Separator,
 		&outPrivate); err != nil {

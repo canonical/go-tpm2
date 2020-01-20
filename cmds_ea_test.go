@@ -152,7 +152,7 @@ func TestPolicySecret(t *testing.T) {
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)
 
-	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32, useSession func(ResourceContext), auth interface{}) {
+	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32, useSession func(HandleContext), auth interface{}) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -245,7 +245,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext)
 
-		useSession := func(sessionContext ResourceContext) {
+		useSession := func(sessionContext HandleContext) {
 			time.Sleep(2 * time.Second)
 			_, err := tpm.Unseal(objectContext, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
@@ -300,7 +300,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("ComputeCpHash failed: %v", err)
 		}
 
-		useSession := func(sessionContext ResourceContext) {
+		useSession := func(sessionContext HandleContext) {
 			_, err := tpm.Unseal(objectContext1, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
@@ -951,8 +951,8 @@ func TestPolicyAuthValue(t *testing.T) {
 
 	for _, data := range []struct {
 		desc     string
-		tpmKey   ResourceContext
-		bind     ResourceContext
+		tpmKey   HandleContext
+		bind     HandleContext
 		bindAuth []byte
 	}{
 		{
@@ -1074,7 +1074,7 @@ func TestPolicyNV(t *testing.T) {
 	for _, data := range []struct {
 		desc      string
 		pub       NVPublic
-		prepare   func(*testing.T, ResourceContext, interface{})
+		prepare   func(*testing.T, HandleContext, interface{})
 		operandB  Operand
 		offset    uint16
 		operation ArithmeticOp
@@ -1086,7 +1086,7 @@ func TestPolicyNV(t *testing.T) {
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
-			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
+			prepare: func(t *testing.T, index HandleContext, auth interface{}) {
 				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, auth); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
@@ -1102,7 +1102,7 @@ func TestPolicyNV(t *testing.T) {
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
-			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
+			prepare: func(t *testing.T, index HandleContext, auth interface{}) {
 				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, auth); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
@@ -1118,7 +1118,7 @@ func TestPolicyNV(t *testing.T) {
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
-			prepare: func(t *testing.T, index ResourceContext, auth interface{}) {
+			prepare: func(t *testing.T, index HandleContext, auth interface{}) {
 				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4, auth); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
@@ -1128,7 +1128,7 @@ func TestPolicyNV(t *testing.T) {
 			operation: OpEq,
 		},
 	} {
-		createIndex := func(t *testing.T, authValue Auth) ResourceContext {
+		createIndex := func(t *testing.T, authValue Auth) HandleContext {
 			if err := tpm.NVDefineSpace(HandleOwner, authValue, &data.pub, nil); err != nil {
 				t.Fatalf("NVDefineSpace failed: %v", err)
 			}
@@ -1139,7 +1139,7 @@ func TestPolicyNV(t *testing.T) {
 			return index
 		}
 
-		run := func(t *testing.T, index ResourceContext, auth interface{}) {
+		run := func(t *testing.T, index HandleContext, auth interface{}) {
 			data.prepare(t, index, auth)
 
 			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)

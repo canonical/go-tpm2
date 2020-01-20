@@ -21,7 +21,7 @@ func TestSign(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		create := func(t *testing.T, scheme *RSAScheme, authValue []byte) (ResourceContext, *Public) {
+		create := func(t *testing.T, scheme *RSAScheme, authValue []byte) (HandleContext, *Public) {
 			template := Public{
 				Type:    ObjectTypeRSA,
 				NameAlg: HashAlgorithmSHA256,
@@ -45,7 +45,7 @@ func TestSign(t *testing.T) {
 			return context, pub
 		}
 
-		sign := func(t *testing.T, key ResourceContext, digest Digest, inScheme *SigScheme, auth interface{}) *Signature {
+		sign := func(t *testing.T, key HandleContext, digest Digest, inScheme *SigScheme, auth interface{}) *Signature {
 			signature, err := tpm.Sign(key, digest, inScheme, nil, auth)
 			if err != nil {
 				t.Fatalf("Sign failed: %v", err)

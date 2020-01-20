@@ -21,13 +21,13 @@ package tpm2
 // If called with startupType == StartupState, a *TPMError error with an error code of ErrorNVUninitialized will be returned if the
 // saved state cannot be recovered. In this case, the function must be called with startupType == StartupClear.
 //
-// A call to this will evict all ResourceContext objects associated with this TPMContext, whether the actual command succeeds or not.
+// A call to this will evict all HandleContext objects associated with this TPMContext, whether the actual command succeeds or not.
 func (t *TPMContext) Startup(startupType StartupType) error {
 	if err := t.RunCommand(CommandStartup, nil, Separator, startupType); err != nil {
 		return err
 	}
 	for _, rc := range t.resources {
-		t.evictResourceContext(rc)
+		t.evictHandleContext(rc)
 	}
 	return nil
 }

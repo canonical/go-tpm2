@@ -36,7 +36,7 @@ const (
 )
 
 type sessionParam struct {
-	associatedContext ResourceContext
+	associatedContext HandleContext
 	session           *Session // For any session that isn't a password session
 	authValue         []byte   // For a password session, this is the auth value
 }
@@ -141,7 +141,7 @@ func (s *Session) computeSessionHMACKey() []byte {
 	return key
 }
 
-func (s *Session) updateIncludeAuthValueInHMACKey(associatedContext ResourceContext) {
+func (s *Session) updateIncludeAuthValueInHMACKey(associatedContext HandleContext) {
 	sc := s.Context.(*sessionContext)
 	switch sc.sessionType {
 	case SessionTypeHMAC:
@@ -166,7 +166,7 @@ func (s *Session) copyWithNewAuthIfRequired(newAuth []byte) *Session {
 	return &Session{Context: s.Context, AuthValue: newAuth, Attrs: s.Attrs, includeAuthValue: true}
 }
 
-func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContext ResourceContext, commandCode CommandCode,
+func buildCommandSessionAuth(tpm *TPMContext, session *Session, associatedContext HandleContext, commandCode CommandCode,
 	commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) *authCommand {
 	sessionContext := session.Context.(*sessionContext)
 
@@ -205,7 +205,7 @@ func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandC
 		encryptNonce)
 }
 
-func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Session, associatedContext ResourceContext,
+func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Session, associatedContext HandleContext,
 	commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
 	sc := session.Context.(*sessionContext)
 	sc.nonceTPM = resp.Nonce
@@ -213,7 +213,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, session *Ses
 	sc.isExclusive = resp.SessionAttrs&attrAuditExclusive > 0
 
 	if resp.SessionAttrs&attrContinueSession == 0 {
-		tpm.evictResourceContext(sc)
+		tpm.evictHandleContext(sc)
 	}
 
 	if sc.sessionType == SessionTypePolicy && sc.policyHMACType == policyHMACTypePassword {
@@ -311,7 +311,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 	var s *sessionParam
 
 	switch i := in.(type) {
-	case ResourceWithAuth:
+	case HandleContextWithAuth:
 		s = makeSessionParamFromAuth(i.Auth)
 		if s == nil {
 			return nil, fmt.Errorf("invalid auth parameter type (%s)", reflect.TypeOf(i.Auth))
@@ -324,7 +324,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 		}
 		// Wrap the handle in permanentContext here. Handles that only represent permanent resources are
 		// the only use case for supporting passing Handles to RunCommand. Consider it a bug to pass a
-		// Handle that represents anything other than a permanent resource (ResourceContext should be
+		// Handle that represents anything other than a permanent resource (HandleContext should be
 		// used instead).
 		s.associatedContext = permanentContext(i.Handle)
 	case []*Session:
@@ -351,7 +351,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 	}
 
 	if s.session != nil {
-		if err := t.checkResourceContextParam(s.session.Context); err != nil {
+		if err := t.checkHandleContextParam(s.session.Context); err != nil {
 			return nil, fmt.Errorf("invalid resource context for session: %v", err)
 		}
 		sc, isSessionContext := s.session.Context.(*sessionContext)

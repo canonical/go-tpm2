@@ -55,7 +55,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 				t.Run(data2.desc, func(t *testing.T) {
 					secret := []byte("sensitive data")
 
-					run1 := func(t *testing.T, auth interface{}) ResourceContext {
+					run1 := func(t *testing.T, auth interface{}) HandleContext {
 						sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, nil)
 						if err != nil {
 							t.Fatalf("StartAuthSession failed: %v", err)
@@ -92,7 +92,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 						return objectContext
 					}
 
-					run2 := func(t *testing.T, object ResourceContext, auth interface{}) {
+					run2 := func(t *testing.T, object HandleContext, auth interface{}) {
 						sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, nil)
 						if err != nil {
 							t.Fatalf("StartAuthSession failed: %v", err)
@@ -275,7 +275,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 				t.Run(data2.desc, func(t *testing.T) {
 					secret := []byte("sensitive data")
 
-					run1 := func(t *testing.T, auth interface{}) ResourceContext {
+					run1 := func(t *testing.T, auth interface{}) HandleContext {
 						sessionContext1, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, nil)
 						if err != nil {
 							t.Fatalf("StartAuthSession failed: %v", err)
@@ -319,7 +319,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 						return objectContext
 					}
 
-					run2 := func(t *testing.T, object ResourceContext, auth interface{}) {
+					run2 := func(t *testing.T, object HandleContext, auth interface{}) {
 						sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256, nil)
 						if err != nil {
 							t.Fatalf("StartAuthSession failed: %v", err)

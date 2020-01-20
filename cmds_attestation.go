@@ -29,7 +29,7 @@ package tpm2
 //
 // On successful, it returns an attestation structure detailing the name of the object associated with objectContext. If signContext
 // is not nil, the attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, objectContextAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) Certify(objectContext, signContext HandleContext, qualifyingData Data, inScheme *SigScheme, objectContextAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -38,7 +38,7 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 	var signature Signature
 
 	if err := t.RunCommand(CommandCertify, sessions,
-		ResourceWithAuth{Context: objectContext, Auth: objectContextAuth}, ResourceWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleContextWithAuth{Context: objectContext, Auth: objectContextAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, Separator,
 		Separator,
 		&certifyInfo, &signature); err != nil {
@@ -75,7 +75,7 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 //
 // If successful, it returns an attestation structure. If signContext is not nil, the attestation structure will be signed by the
 // associated key and returned too.
-func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) CertifyCreation(signContext, objectContext HandleContext, qualifyingData Data, creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -84,7 +84,7 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 	var signature Signature
 
 	if err := t.RunCommand(CommandCertifyCreation, sessions,
-		ResourceWithAuth{Context: signContext, Auth: signContextAuth}, objectContext, Separator,
+		HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, objectContext, Separator,
 		qualifyingData, creationHash, inScheme, creationTicket, Separator,
 		Separator,
 		&certifyInfo, &signature); err != nil {
@@ -113,7 +113,7 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 //
 // On successful, it returns an attestation structure containing the hash of the PCRs selected by the pcrs parameter. If signContext
 // is not nil, the attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) Quote(signContext HandleContext, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -122,7 +122,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 	var signature Signature
 
 	if err := t.RunCommand(CommandQuote, sessions,
-		ResourceWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, pcrs, Separator,
 		Separator,
 		&quoted, &signature); err != nil {
@@ -154,7 +154,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 //
 // On success, it returns an attestation structure detailing the current audit digest for sessionContext. If signContext is not nil,
 // the attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -163,7 +163,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContex
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
-		HandleWithAuth{Handle: privacyAdminHandle, Auth: privacyAdminHandleAuth}, ResourceWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleWithAuth{Handle: privacyAdminHandle, Auth: privacyAdminHandleAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, Separator,
 		Separator,
 		&auditInfo, &signature); err != nil {
@@ -196,7 +196,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContex
 // On success, it returns an attestation structure detailing the current command audit digest, digest algorithm and a digest of the
 // list of commands being audited. If signContext is not nil, the attestation structure will be signed by the associated key and
 // returned too.
-func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -205,7 +205,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext Res
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
-		HandleWithAuth{Handle: privacyHandle, Auth: privacyHandleAuth}, ResourceWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleWithAuth{Handle: privacyHandle, Auth: privacyHandleAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, Separator,
 		Separator,
 		&auditInfo, &signature); err != nil {
@@ -236,7 +236,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext Res
 //
 // On success, it returns an attestation structure detailing the current values of time and clock. If signContext is not nil, the
 // attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -245,7 +245,7 @@ func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext ResourceCont
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetTime, sessions,
-		HandleWithAuth{Handle: privacyAdminHandle, Auth: privacyAdminHandleAuth}, ResourceWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleWithAuth{Handle: privacyAdminHandle, Auth: privacyAdminHandleAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, Separator,
 		Separator,
 		&timeInfo, &signature); err != nil {
