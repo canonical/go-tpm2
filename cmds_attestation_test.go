@@ -395,7 +395,8 @@ func TestQuote(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	for i := 0; i < 8; i++ {
-		if _, err := tpm.PCREvent(Handle(i), Event(fmt.Sprintf("event%d", i)), nil); err != nil {
+		pcr, _ := tpm.WrapHandle(Handle(i))
+		if _, err := tpm.PCREvent(pcr, Event(fmt.Sprintf("event%d", i)), nil); err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
 	}

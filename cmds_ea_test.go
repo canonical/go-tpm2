@@ -529,7 +529,8 @@ func TestPolicyPCR(t *testing.T) {
 			data:  []byte("1234"),
 		},
 	} {
-		_, err := tpm.PCREvent(Handle(data.index), data.data, nil)
+		pcr, _ := tpm.WrapHandle(Handle(data.index))
+		_, err := tpm.PCREvent(pcr, data.data, nil)
 		if err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}

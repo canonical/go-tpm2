@@ -326,7 +326,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 		// the only use case for supporting passing Handles to RunCommand. Consider it a bug to pass a
 		// Handle that represents anything other than a permanent resource (HandleContext should be
 		// used instead).
-		if i.Handle.Type() != HandleTypePermanent && i.Handle.Type() != HandleTypePCR {
+		if i.Handle.Type() != HandleTypePermanent {
 			return nil, errors.New("invalid handle type")
 		}
 		rc, _ := t.WrapHandle(i.Handle)

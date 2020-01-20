@@ -20,35 +20,35 @@ func (v PCRValues) EnsureBank(alg HashAlgorithmId) {
 	}
 }
 
-// PCRExtend executes the TPM2_PCR_Extend command to extend the PCR associated with the pcrHandle parameter with the tagged digests
+// PCRExtend executes the TPM2_PCR_Extend command to extend the PCR associated with the pcrContext parameter with the tagged digests
 // provided via the digests argument. If will iterate over the digests and extend the PCR with each one for the PCR bank associated
 // with the algorithm for each digest.
 //
-// If pcrHandle is HandleNull, this function will do nothing. The command requires authorization with the user auth role for
-// pcrHandle, provided via pcrHandleAuth.
+// If pcrContext is nil, this function will do nothing. The command requires authorization with the user auth role for pcrContext,
+// provided via pcrContextAuth.
 //
-// If the PCR associated with pcrHandle can not be extended from the current locality, a *TPMError error with an error code of
+// If the PCR associated with pcrContext can not be extended from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
-func (t *TPMContext) PCRExtend(pcrHandle Handle, digests TaggedHashList, pcrHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) PCRExtend(pcrContext HandleContext, digests TaggedHashList, pcrContextAuth interface{}, sessions ...*Session) error {
 	return t.RunCommand(CommandPCRExtend, sessions,
-		HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth}, Separator,
+		HandleContextWithAuth{Context: pcrContext, Auth: pcrContextAuth}, Separator,
 		digests)
 }
 
-// PCREvent executes the TPM2_PCR_Event command to extend the PCR associated with the pcrHandle parameter with a digest of the
+// PCREvent executes the TPM2_PCR_Event command to extend the PCR associated with the pcrContext parameter with a digest of the
 // provided eventData, hashed with the algorithm for each supported PCR bank.
 //
-// If pcrHandle is HandleNull, this function will do nothing. The command requires authorization with the user auth role for
-// pcrHandle, provided via pcrHandleAuth.
+// If pcrContext is nil, this function will do nothing. The command requires authorization with the user auth role for pcrContext,
+// provided via pcrContextAuth.
 //
-// If the PCR associated with pcrHandle can not be extended from the current locality, a *TPMError error with an error code of
+// If the PCR associated with pcrContext can not be extended from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
 //
-// On success, this function will return a list of tagged digests that the PCR associated with pcrHandle was extended with.
-func (t *TPMContext) PCREvent(pcrHandle Handle, eventData Event, pcrHandleAuth interface{}, sessions ...*Session) (TaggedHashList, error) {
+// On success, this function will return a list of tagged digests that the PCR associated with pcrContext was extended with.
+func (t *TPMContext) PCREvent(pcrContext HandleContext, eventData Event, pcrContextAuth interface{}, sessions ...*Session) (TaggedHashList, error) {
 	var digests TaggedHashList
 	if err := t.RunCommand(CommandPCREvent, sessions,
-		HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth}, Separator,
+		HandleContextWithAuth{Context: pcrContext, Auth: pcrContextAuth}, Separator,
 		eventData, Separator,
 		Separator,
 		&digests); err != nil {
@@ -126,11 +126,11 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Sessi
 	return pcrUpdateCounter, pcrValues, nil
 }
 
-// PCRReset executes the TPM2_PCR_Reset command to reset the PCR associated with pcrHandle in all banks. This command requires
-// authorization with the user auth role, provided via pcrHandleAuth.
+// PCRReset executes the TPM2_PCR_Reset command to reset the PCR associated with pcrContext in all banks. This command requires
+// authorization with the user auth role for pcrContext, provided via pcrContextAuth.
 //
-// If the PCR associated with pcrHandle can not be reset from the current locality, a *TPMError error with an error code of
+// If the PCR associated with pcrContext can not be reset from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
-func (t *TPMContext) PCRReset(pcrHandle Handle, pcrHandleAuth interface{}, sessions ...*Session) error {
-	return t.RunCommand(CommandPCRReset, sessions, HandleWithAuth{Handle: pcrHandle, Auth: pcrHandleAuth})
+func (t *TPMContext) PCRReset(pcrContext HandleContext, pcrContextAuth interface{}, sessions ...*Session) error {
+	return t.RunCommand(CommandPCRReset, sessions, HandleContextWithAuth{Context: pcrContext, Auth: pcrContextAuth})
 }
