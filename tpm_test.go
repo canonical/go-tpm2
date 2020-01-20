@@ -32,7 +32,8 @@ var (
 
 // Set the hierarchy auth to testAuth. Fatal on failure
 func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy Handle) {
-	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
+	h, _ := tpm.WrapHandle(hierarchy)
+	if err := tpm.HierarchyChangeAuth(h, Auth(testAuth), nil); err != nil {
 		t.Fatalf("HierarchyChangeAuth failed: %v", err)
 	}
 }
@@ -49,11 +50,12 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 			return
 		}
 	}
-	if err := tpm.HierarchyChangeAuth(hierarchy, nil, testAuth); err != nil {
+	h, _ := tpm.WrapHandle(hierarchy)
+	if err := tpm.HierarchyChangeAuth(h, nil, testAuth); err != nil {
 		switch hierarchy {
 		case HandleLockout:
 		case HandlePlatform:
-			if err := tpm.HierarchyChangeAuth(HandlePlatform, nil, nil); err == nil {
+			if err := tpm.HierarchyChangeAuth(h, nil, nil); err == nil {
 				return
 			}
 		default:
@@ -240,7 +242,8 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Handle
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
+	owner, _ := tpm.WrapHandle(HandleOwner)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(owner, &sensitiveCreate, &template, nil,
 		nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
@@ -263,7 +266,8 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Handle
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil, nil, nil)
+	owner, _ := tpm.WrapHandle(HandleOwner)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(owner, &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -286,7 +290,8 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) HandleContext {
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleEndorsement, nil, &template, nil, nil, nil)
+	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(endorsement, nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}

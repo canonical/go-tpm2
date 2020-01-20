@@ -40,11 +40,12 @@ func TestContextSave(t *testing.T) {
 		defer flushContext(t, tpm, sessionContext)
 		run(t, sessionContext, sessionContext.Handle(), HandleNull)
 		// Make sure that ContextSave marked the session context as not loaded, and that we get the expected error if we attempt to use it
-		err = tpm.Clear(HandleLockout, &Session{Context: sessionContext})
+		lockout, _ := tpm.WrapHandle(HandleLockout)
+		err = tpm.Clear(lockout, &Session{Context: sessionContext})
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "error whilst processing handle with authorization for authHandle: invalid resource context for session: not "+
+		if err.Error() != "error whilst processing handle with authorization for authContext: invalid resource context for session: not "+
 			"complete and loaded" {
 			t.Errorf("Unexpected error: %v", err)
 		}

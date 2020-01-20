@@ -257,7 +257,8 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(owner, nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -372,7 +373,8 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectHandle, _, _, creationHash, creationTicket, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		objectHandle, _, _, creationHash, creationTicket, _, err := tpm.CreatePrimary(owner, nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
