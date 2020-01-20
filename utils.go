@@ -34,7 +34,7 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 		i++
 		switch p := param.(type) {
 		case Handle:
-			handles = append(handles, permanentContext(p).Name())
+			handles = append(handles, untrackedContext(p).Name())
 		case HandleContext:
 			handles = append(handles, p.Name())
 		default:

@@ -182,6 +182,8 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessio
 			}
 		case *sessionContext:
 			continue
+		case *permanentContext:
+			continue
 		}
 
 		t.evictHandleContext(rc)

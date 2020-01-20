@@ -296,10 +296,10 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			handleNames = append(handleNames, r.Name())
 		case Handle:
 			handles = append(handles, r)
-			handleNames = append(handleNames, permanentContext(r).Name())
+			handleNames = append(handleNames, untrackedContext(r).Name())
 		case nil:
 			handles = append(handles, HandleNull)
-			handleNames = append(handleNames, permanentContext(HandleNull).Name())
+			handleNames = append(handleNames, untrackedContext(HandleNull).Name())
 		default:
 			return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)",
 				commandCode, i, reflect.TypeOf(resource))

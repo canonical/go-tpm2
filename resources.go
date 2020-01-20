@@ -37,19 +37,34 @@ type handleContextPrivate interface {
 	invalidate()
 }
 
-type permanentContext Handle
+type untrackedContext Handle
 
-func (r permanentContext) Handle() Handle {
+func (r untrackedContext) Handle() Handle {
 	return Handle(r)
 }
 
-func (r permanentContext) Name() Name {
+func (r untrackedContext) Name() Name {
 	name := make(Name, binary.Size(r))
 	binary.BigEndian.PutUint32(name, uint32(r))
 	return name
 }
 
-func (r permanentContext) invalidate() {
+type permanentContext struct {
+	handle Handle
+}
+
+func (r *permanentContext) Handle() Handle {
+	return r.handle
+}
+
+func (r *permanentContext) Name() Name {
+	name := make(Name, binary.Size(r.handle))
+	binary.BigEndian.PutUint32(name, uint32(r.handle))
+	return name
+}
+
+func (r *permanentContext) invalidate() {
+	r.handle = HandleUnassigned
 }
 
 type objectContext struct {
@@ -168,7 +183,7 @@ func makeIncompleteSessionContext(t *TPMContext, handle Handle) (HandleContext, 
 }
 
 func makeNVIndexContext(t *TPMContext, handle Handle) (HandleContext, error) {
-	pub, name, err := t.NVReadPublic(permanentContext(handle))
+	pub, name, err := t.NVReadPublic(untrackedContext(handle))
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +196,7 @@ func makeNVIndexContext(t *TPMContext, handle Handle) (HandleContext, error) {
 }
 
 func makeObjectContext(t *TPMContext, handle Handle) (HandleContext, error) {
-	pub, name, _, err := t.ReadPublic(permanentContext(handle))
+	pub, name, _, err := t.ReadPublic(untrackedContext(handle))
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +216,6 @@ func normalizeHandleForMap(handle Handle) Handle {
 }
 
 func (t *TPMContext) evictHandleContext(rc HandleContext) {
-	if _, isPermanent := rc.(permanentContext); isPermanent {
-		return
-	}
 	if err := t.checkHandleContextParam(rc); err != nil {
 		panic(fmt.Sprintf("Attempting to evict an invalid resource context: %v", err))
 	}
@@ -212,9 +224,6 @@ func (t *TPMContext) evictHandleContext(rc HandleContext) {
 }
 
 func (t *TPMContext) addHandleContext(rc HandleContext) {
-	if _, isPermanent := rc.(permanentContext); isPermanent {
-		return
-	}
 	if rc.Handle() == HandleUnassigned {
 		panic("Attempting to add a closed resource context")
 	}
@@ -229,7 +238,7 @@ func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
 	if rc == nil {
 		return errors.New("nil value")
 	}
-	if _, isPermanent := rc.(permanentContext); isPermanent {
+	if _, isUntracked := rc.(untrackedContext); isUntracked {
 		return nil
 	}
 	if rc.Handle() == HandleUnassigned {
@@ -282,7 +291,7 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 			return nil, ResourceUnavailableError{handle}
 		}
 	case HandleTypePermanent:
-		rc = permanentContext(handle)
+		rc = &permanentContext{handle}
 	case HandleTypeTransient, HandleTypePersistent:
 		rc, err = makeObjectContext(t, handle)
 	}
@@ -344,10 +353,6 @@ func (t *TPMContext) ForgetResource(context HandleContext) error {
 	switch context.Handle().Type() {
 	case HandleTypePCR:
 		panic("Got context for a PCR index, which shouldn't happen")
-	case HandleTypePermanent:
-		// Permanent resources aren't tracked by TPMContext, and permanentContext is just a typedef of
-		// Handle anyway. Just do nothing in this case
-		return nil
 	}
 
 	t.evictHandleContext(context)
