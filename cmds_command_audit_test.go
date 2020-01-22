@@ -63,13 +63,14 @@ Next:
 	}
 
 	defer func() {
-		if err := tpm.SetCommandCodeAuditStatus(HandleOwner, initialAlgorithm, nil, nil, nil); err != nil {
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		if err := tpm.SetCommandCodeAuditStatus(owner, initialAlgorithm, nil, nil, nil); err != nil {
 			t.Errorf("Cannot restore command audit algorithm: %v", err)
 		}
-		if err := tpm.SetCommandCodeAuditStatus(HandleOwner, HashAlgorithmNull, nil, allCommands, nil); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, nil, allCommands, nil); err != nil {
 			t.Errorf("Cannot clear command audit commands: %v", err)
 		}
-		if err := tpm.SetCommandCodeAuditStatus(HandleOwner, HashAlgorithmNull, initialCommands, nil, nil); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, initialCommands, nil, nil); err != nil {
 			t.Errorf("Cannot restore command audit commands: %v", err)
 		}
 	}()
@@ -91,7 +92,8 @@ Next:
 			}
 		}
 
-		if err := tpm.SetCommandCodeAuditStatus(HandleOwner, alg, nil, nil, auth); err != nil {
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, nil, auth); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
@@ -122,7 +124,7 @@ Next:
 			}
 		}
 
-		if err := tpm.SetCommandCodeAuditStatus(HandleOwner, HashAlgorithmNull, commands, nil, auth); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, commands, nil, auth); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
@@ -131,13 +133,13 @@ Next:
 		expectedCommands = append(expectedCommands, commands...)
 		checkAuditCommands(expectedCommands)
 
-		if err := tpm.SetCommandCodeAuditStatus(HandleOwner, alg, nil, commands, auth); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, commands, auth); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
 		checkAuditCommands(initialCommands)
 
-		if err := tpm.SetCommandCodeAuditStatus(HandleOwner, initialAlgorithm, nil, nil, auth); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, initialAlgorithm, nil, nil, auth); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
