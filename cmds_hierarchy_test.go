@@ -261,6 +261,10 @@ func TestClear(t *testing.T) {
 		var persistentObjects []HandleContext // Objects that persist across Clear
 		var transientObjects []HandleContext  // Objects that are evicted by Clar
 
+		// Create a context for a permanent resource (should persist across Clear)
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		persistentObjects = append(persistentObjects, owner)
+
 		// Create platform primary key (should persist across Clear)
 		template := Public{
 			Type:    ObjectTypeRSA,
@@ -290,22 +294,18 @@ func TestClear(t *testing.T) {
 		transientObjects = append(transientObjects, ownerPrimary)
 
 		// Persist storage primary key (should be evicted by Clear)
-		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary, Handle(0x8100ffff))
-		defer verifyPersistentObjectEvicted(t, tpm, HandleOwner, ownerPrimaryPersist)
+		ownerPrimaryPersist := persistObjectForTesting(t, tpm, owner, ownerPrimary, Handle(0x8100ffff))
+		defer verifyPersistentObjectEvicted(t, tpm, owner, ownerPrimaryPersist)
 		transientObjects = append(transientObjects, ownerPrimaryPersist)
 
 		// Persist platform primary key (should persist across Clear)
-		platformPrimaryPersist := persistObjectForTesting(t, tpm, HandlePlatform, platformPrimary, Handle(0x8180ffff))
-		defer evictPersistentObject(t, tpm, HandlePlatform, platformPrimaryPersist)
+		platformPrimaryPersist := persistObjectForTesting(t, tpm, platform, platformPrimary, Handle(0x8180ffff))
+		defer evictPersistentObject(t, tpm, platform, platformPrimaryPersist)
 		persistentObjects = append(persistentObjects, platformPrimaryPersist)
 
 		// Set endorsement hierarchy auth value (should be reset by Clear)
 		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
 		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
-
-		// Create a context for a permanent resource (should persist across Clear)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		persistentObjects = append(persistentObjects, owner)
 
 		// Create a session (should persist across Clear)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)

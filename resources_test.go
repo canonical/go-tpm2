@@ -23,8 +23,9 @@ func TestWrapHandle(t *testing.T) {
 	primaryHandle := primary.Handle()
 
 	persistentHandle := Handle(0x81000008)
-	persistentPrimary := persistObjectForTesting(t, tpm, HandleOwner, primary, persistentHandle)
-	defer verifyPersistentObjectEvicted(t, tpm, HandleOwner, persistentPrimary)
+	owner, _ := tpm.WrapHandle(HandleOwner)
+	persistentPrimary := persistObjectForTesting(t, tpm, owner, primary, persistentHandle)
+	defer verifyPersistentObjectEvicted(t, tpm, owner, persistentPrimary)
 
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
@@ -75,7 +76,10 @@ func TestWrapHandle(t *testing.T) {
 	if persistentPrimary.Handle() != persistentHandle {
 		t.Errorf("WrapHandle returned an invalid context for a live persistent object")
 	}
-	defer evictPersistentObject(t, tpm, HandleOwner, persistentPrimary)
+	defer func() {
+		owner, _ := tpm.WrapHandle(HandleOwner)
+		evictPersistentObject(t, tpm, owner, persistentPrimary)
+	}()
 
 	sessionContext, err = tpm.WrapSessionHandle(sessionHandle)
 	if err != nil {

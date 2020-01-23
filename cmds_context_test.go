@@ -220,14 +220,15 @@ func TestEvictControl(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, transient HandleContext, persist Handle, authAuth interface{}) {
+		owner, _ := tpm.WrapHandle(HandleOwner)
 		if handle, err := tpm.WrapHandle(persist); err == nil {
-			_, err := tpm.EvictControl(HandleOwner, handle, persist, authAuth)
+			_, err := tpm.EvictControl(owner, handle, persist, authAuth)
 			if err != nil {
 				t.Logf("EvictControl failed whilst trying to remove a handle at the start of the test: %v", err)
 			}
 		}
 
-		outContext, err := tpm.EvictControl(HandleOwner, transient, persist, authAuth)
+		outContext, err := tpm.EvictControl(owner, transient, persist, authAuth)
 		if err != nil {
 			t.Fatalf("EvictControl failed: %v", err)
 		}
@@ -240,7 +241,7 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("outContext has the wrong name")
 		}
 
-		outContext2, err := tpm.EvictControl(HandleOwner, outContext, outContext.Handle(), authAuth)
+		outContext2, err := tpm.EvictControl(owner, outContext, outContext.Handle(), authAuth)
 		if err != nil {
 			t.Errorf("EvictControl failed: %v", err)
 		}
