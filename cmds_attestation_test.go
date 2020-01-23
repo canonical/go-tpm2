@@ -527,7 +527,8 @@ func TestGetTime(t *testing.T) {
 	}
 
 	run := func(t *testing.T, signContext HandleContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}) {
-		timeInfo, signature, err := tpm.GetTime(HandleEndorsement, signContext, qualifyingData, inScheme, privacyAdminHandleAuth, signContextAuth)
+		endorsement, _ := tpm.WrapHandle(HandleEndorsement)
+		timeInfo, signature, err := tpm.GetTime(endorsement, signContext, qualifyingData, inScheme, privacyAdminHandleAuth, signContextAuth)
 		if err != nil {
 			t.Fatalf("GetTime failed: %v", err)
 		}

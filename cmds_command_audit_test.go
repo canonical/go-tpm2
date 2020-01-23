@@ -26,7 +26,8 @@ func TestSetCommandCodeAuditStatus(t *testing.T) {
 		t.Fatalf("GetCapability failed: %v", err)
 	}
 
-	attest, _, err := tpm.GetCommandAuditDigest(HandleEndorsement, nil, nil, nil, nil, nil)
+	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
+	attest, _, err := tpm.GetCommandAuditDigest(endorsement, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("GetCommandAuditDigest failed: %v", err)
 	}
@@ -77,7 +78,7 @@ Next:
 
 	run := func(t *testing.T, auth interface{}) {
 		checkAuditDigest := func(alg HashAlgorithmId) {
-			attest, _, err = tpm.GetCommandAuditDigest(HandleEndorsement, nil, nil, nil, nil, nil)
+			attest, _, err = tpm.GetCommandAuditDigest(endorsement, nil, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("GetCommandAuditDigest failed: %v", err)
 			}

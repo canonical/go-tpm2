@@ -135,8 +135,8 @@ func (t *TPMContext) Quote(signContext HandleContext, qualifyingData Data, inSch
 // GetSessionAuditDigest executes the TPM2_GetSessionAuditDigest to obtain the current digest of the audit session corresponding to
 // sessionContext.
 //
-// The privacyAdminHandle argument must be HandleEndorsement. This command requires authorization with the user auth role for
-// privacyAdminHandle, provided via privacyAdminHandleAuth.
+// The privacyAdminContext argument must be a HandleContext that corresponds to HandleEndorsement. This command requires authorization
+// with the user auth role for privacyAdminContext, provided via privacyAdminContextAuth.
 //
 // If signContext is not nil, the returned attestation will be signed by the key associated with it. This command requires
 // authorization with the user auth role for signContext, provided via signContextAuth.
@@ -154,7 +154,7 @@ func (t *TPMContext) Quote(signContext HandleContext, qualifyingData Data, inSch
 //
 // On success, it returns an attestation structure detailing the current audit digest for sessionContext. If signContext is not nil,
 // the attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContext, sessionContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext, sessionContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyAdminContextAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -163,7 +163,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContex
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
-		HandleWithAuth{Handle: privacyAdminHandle, Auth: privacyAdminHandleAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleContextWithAuth{Context: privacyAdminContext, Auth: privacyAdminContextAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, Separator,
 		Separator,
 		&auditInfo, &signature); err != nil {
@@ -176,8 +176,8 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContex
 // GetCommandAuditDigest executes the TPM2_GetCommandAuditDigest command to obtain the current command audit digest, the current
 // audit digest algorithm and a digest of the list of commands being audited.
 //
-// The privacyHandle argument must be HandleEndorsement. This command requires authorization with the user auth role for
-// privacyHandle, provided via privacyHandleAuth.
+// The privacyContext argument must be a resorce context corresponding to HandleEndorsement. This command requires authorization with
+// the user auth role for privacyContext, provided via privacyContextAuth.
 //
 // If signContext is not nil, the returned attestation will be signed by the key associated with it. This command requires
 // authorization with the user auth role for signContext, provided via signContextAuth.
@@ -196,7 +196,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminHandle Handle, signContex
 // On success, it returns an attestation structure detailing the current command audit digest, digest algorithm and a digest of the
 // list of commands being audited. If signContext is not nil, the attestation structure will be signed by the associated key and
 // returned too.
-func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyContextAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -205,7 +205,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext Han
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
-		HandleWithAuth{Handle: privacyHandle, Auth: privacyHandleAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleContextWithAuth{Context: privacyContext, Auth: privacyContextAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, Separator,
 		Separator,
 		&auditInfo, &signature); err != nil {
@@ -217,8 +217,8 @@ func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext Han
 
 // GetTime executes the TPM2_GetTime command in order to obtain the current values of time and clock.
 //
-// The privacyAdminHandle argument must be HandleEndorsement. The command requires authorization with the user auth role for
-// privacyAdminHandle, provided via privacyAdminHandleAuth.
+// The privacyAdminContext argument must be a HandleContext that corresponds to HandleEndorsement. The command requires authorization
+// with the user auth role for privacyAdminContext, provided via privacyAdminContextAuth.
 //
 // If signContext is not nil, the returned attestation will be signed by the key associated with it. This command requires
 // authorization with the user auth role for signContext, provided via signContextAuth.
@@ -236,7 +236,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyHandle Handle, signContext Han
 //
 // On success, it returns an attestation structure detailing the current values of time and clock. If signContext is not nil, the
 // attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetTime(privacyAdminContext, signContext HandleContext, qualifyingData Data, inScheme *SigScheme, privacyAdminContextAuth, signContextAuth interface{}, sessions ...*Session) (AttestRaw, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -245,7 +245,7 @@ func (t *TPMContext) GetTime(privacyAdminHandle Handle, signContext HandleContex
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetTime, sessions,
-		HandleWithAuth{Handle: privacyAdminHandle, Auth: privacyAdminHandleAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
+		HandleContextWithAuth{Context: privacyAdminContext, Auth: privacyAdminContextAuth}, HandleContextWithAuth{Context: signContext, Auth: signContextAuth}, Separator,
 		qualifyingData, inScheme, Separator,
 		Separator,
 		&timeInfo, &signature); err != nil {
