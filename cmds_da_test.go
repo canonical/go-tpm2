@@ -45,12 +45,13 @@ func TestDictionaryAttackParameters(t *testing.T) {
 			PropertyLockoutInterval: 7200,
 			PropertyLockoutRecovery: 86400}
 
-		if err := tpm.DictionaryAttackParameters(HandleLockout, params[PropertyMaxAuthFail],
+		lockout, _ := tpm.WrapHandle(HandleLockout)
+		if err := tpm.DictionaryAttackParameters(lockout, params[PropertyMaxAuthFail],
 			params[PropertyLockoutInterval], params[PropertyLockoutRecovery], auth); err != nil {
 			t.Fatalf("DictionaryAttackParameters failed: %v", err)
 		}
 		defer func() {
-			if err := tpm.DictionaryAttackParameters(HandleLockout, origMaxTries, origRecoveryTime,
+			if err := tpm.DictionaryAttackParameters(lockout, origMaxTries, origRecoveryTime,
 				origLockoutRecovery, auth); err != nil {
 				t.Errorf("Failed to reset dictionary attack parameters: %v", err)
 			}
@@ -132,12 +133,13 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	defer flushContext(t, tpm, context)
 
 	origMaxTries, origRecoveryTime, origLockoutRecovery := getDictionaryAttackParams(t, tpm)
-	if err := tpm.DictionaryAttackParameters(HandleLockout, 2, origRecoveryTime, origLockoutRecovery,
+	lockout, _ := tpm.WrapHandle(HandleLockout)
+	if err := tpm.DictionaryAttackParameters(lockout, 2, origRecoveryTime, origLockoutRecovery,
 		nil); err != nil {
 		t.Fatalf("DictionaryAttackParameters failed: %v", err)
 	}
 	defer func() {
-		if err := tpm.DictionaryAttackParameters(HandleLockout, origMaxTries, origRecoveryTime,
+		if err := tpm.DictionaryAttackParameters(lockout, origMaxTries, origRecoveryTime,
 			origLockoutRecovery, nil); err != nil {
 			t.Errorf("Failed to reset dictionary attack parameters: %v", err)
 		}
@@ -171,7 +173,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 
-		if err := tpm.DictionaryAttackLockReset(HandleLockout, auth); err != nil {
+		if err := tpm.DictionaryAttackLockReset(lockout, auth); err != nil {
 			t.Errorf("DictionaryAttackLockReset failed: %v", err)
 		}
 

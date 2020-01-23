@@ -6,14 +6,14 @@ package tpm2
 
 // Section 25 - Dictionary Attack Functions
 
-// DictionaryAttackLockReset executes the TPM2_DictionaryAttackLockReset command to cancel the effect of a TPM lockout. The lockHandle
-// parameter must always be HandleLockout. The command requires authorization with the user auth role for lockHandle, provided via
-// lockHandleAuth.
+// DictionaryAttackLockReset executes the TPM2_DictionaryAttackLockReset command to cancel the effect of a TPM lockout. The lockContext
+// parameter must always be a HandleContext corresponding to HandleLockout. The command requires authorization with the user auth role for
+// lockContext, provided via lockContextAuth.
 //
 // On successful completion, the lockout counter will be reset to zero.
-func (t *TPMContext) DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) DictionaryAttackLockReset(lockContext HandleContext, lockContextAuth interface{}, sessions ...*Session) error {
 	return t.RunCommand(CommandDictionaryAttackLockReset, sessions,
-		HandleWithAuth{Handle: lockHandle, Auth: lockHandleAuth})
+		HandleContextWithAuth{Context: lockContext, Auth: lockContextAuth})
 }
 
 // DictionaryAttackParameters executes the TPM2_DictionaryAttackParameters command to change the dictionary attack lockout settings.
@@ -25,10 +25,10 @@ func (t *TPMContext) DictionaryAttackLockReset(lockHandle Handle, lockHandleAuth
 // again after a TPM reset, restart or resume. The newRecoveryTime and lockoutRecovery parameters are measured against powered on time
 // rather than clock time.
 //
-// The lockHandle parameter must be HandleLockout. The command requires authorization with the user auth role for lockHandle, provided
-// via lockHandleAuth.
-func (t *TPMContext) DictionaryAttackParameters(lockHandle Handle, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockHandleAuth interface{}, sessions ...*Session) error {
+// The lockContext parameter must be a HandleContext corresponding to HandleLockout. The command requires authorization with the user
+// auth role for lockContext, provided via lockContextAuth.
+func (t *TPMContext) DictionaryAttackParameters(lockContext HandleContext, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockContextAuth interface{}, sessions ...*Session) error {
 	return t.RunCommand(CommandDictionaryAttackParameters, sessions,
-		HandleWithAuth{Handle: lockHandle, Auth: lockHandleAuth}, Separator,
+		HandleContextWithAuth{Context: lockContext, Auth: lockContextAuth}, Separator,
 		newMaxTries, newRecoveryTime, lockoutRecovery)
 }
