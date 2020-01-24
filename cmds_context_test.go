@@ -56,7 +56,7 @@ func TestContextSave(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 		sessionHandle := sessionContext.Handle()
-		tpm.ForgetResource(sessionContext)
+		tpm.ForgetHandleContext(sessionContext)
 
 		sessionContext, err = tpm.WrapSessionHandle(sessionHandle)
 		if err != nil {
@@ -142,7 +142,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 			t.Fatalf("ContextSave failed: %v", err)
 		}
 		if forget {
-			tpm.ForgetResource(sc)
+			tpm.ForgetHandleContext(sc)
 		}
 		restoredSc, err := tpm.ContextLoad(context)
 		if err != nil {

@@ -388,14 +388,14 @@ func (t *TPMContext) PCRHandleContext(pcr int) HandleContext {
 	return t.GetOrCreatePermanentContext(h)
 }
 
-// ForgetResource tells the TPMContext to drop its reference to the specified HandleContext without flushing the corresponding
+// ForgetHandleContext tells the TPMContext to drop its reference to the specified HandleContext without flushing the corresponding
 // resources from the TPM.
 //
 // An error will be returned if the specified context has been invalidated, or if it is being tracked by another TPMContext instance.
 //
 // On succesful completion, the specified HandleContext will be invalidated and can no longer be used. APIs that return a
 // HandleContext for the corresponding TPM resource in the future will return a newly created HandleContext.
-func (t *TPMContext) ForgetResource(context HandleContext) error {
+func (t *TPMContext) ForgetHandleContext(context HandleContext) error {
 	if err := t.checkHandleContextParam(context); err != nil {
 		return makeInvalidParamError("context", fmt.Sprintf("%v", err))
 	}
