@@ -1072,6 +1072,8 @@ func TestPolicyNV(t *testing.T) {
 	fortyUint32 := make(Operand, 4)
 	binary.BigEndian.PutUint32(fortyUint32, 40)
 
+	owner, _ := tpm.WrapHandle(HandleOwner)
+
 	for _, data := range []struct {
 		desc      string
 		pub       NVPublic
@@ -1130,7 +1132,7 @@ func TestPolicyNV(t *testing.T) {
 		},
 	} {
 		createIndex := func(t *testing.T, authValue Auth) HandleContext {
-			if err := tpm.NVDefineSpace(HandleOwner, authValue, &data.pub, nil); err != nil {
+			if err := tpm.NVDefineSpace(owner, authValue, &data.pub, nil); err != nil {
 				t.Fatalf("NVDefineSpace failed: %v", err)
 			}
 			index, err := tpm.WrapHandle(data.pub.Index)
@@ -1170,19 +1172,19 @@ func TestPolicyNV(t *testing.T) {
 
 		t.Run(data.desc+"/NoAuth", func(t *testing.T) {
 			index := createIndex(t, nil)
-			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+			defer undefineNVSpace(t, tpm, index, owner, nil)
 			run(t, index, nil)
 		})
 
 		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
-			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+			defer undefineNVSpace(t, tpm, index, owner, nil)
 			run(t, index, testAuth)
 		})
 
 		t.Run(data.desc+"/UseSessionAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
-			defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+			defer undefineNVSpace(t, tpm, index, owner, nil)
 
 			// Don't use a bound session as the name of index changes when it is written to for the first time
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)

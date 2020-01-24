@@ -33,8 +33,8 @@ func (t *TPMContext) initNVMaxBufferSize() {
 //
 // The auth parameter specifies an authorization value for the NV index.
 //
-// The authHandle parameter specifies the hierarchy used for authorization, and should be HandlePlatform or HandleOwner. The command
-// requires authorization with the user auth role for the specified hierarchy, provided via authHandleAuth.
+// The authContext parameter specifies the hierarchy used for authorization, and should correspond to HandlePlatform or HandleOwner.
+// The command requires authorization with the user auth role for the specified hierarchy, provided via authContextAuth.
 //
 // If the Attrs field of publicInfo has AttrNVPolicyDelete set but TPM2_NV_UndefineSpaceSpecial isn't supported, or the Attrs field
 // defines a type that is unsupported, a *TPMParameterError error with an error code of ErrorAttributes will be returned for parameter
@@ -47,8 +47,8 @@ func (t *TPMContext) initNVMaxBufferSize() {
 // If the length of auth is greater than the name algorithm selected by the NameAlg field of the publicInfo parameter, a
 // *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// If authHandle specifies HandlePlatform but the AttrPhEnableNV attribute is clear, a *TPMHandleError error with an error code of
-// ErrorHierarchy will be returned.
+// If authContext corresponds to HandlePlatform but the AttrPhEnableNV attribute is clear, a *TPMHandleError error with an error code
+// of ErrorHierarchy will be returned.
 //
 // If the type indicated by the Attrs field of publicInfo isn't supported by the TPM, a *TPMParameterError error with an error code of
 // ErrorAttributes will be returned for parameter index 2.
@@ -75,12 +75,12 @@ func (t *TPMContext) initNVMaxBufferSize() {
 // If the Attrs field of publicInfo has AttrNVClearStClear set, a *TPMParameterError error with an error code of ErrorAttributes will
 // be returned for parameter index 2 if AttrNVWriteDefine is set.
 //
-// If authHandle specifies HandlePlatform, then the Attrs field of publicInfo must have the AttrNVPlatformCreate attribute set. If
-// authHandle specifies HandleOwner, then the AttrNVPlatformCreate attributes must be clear, else a *TPMHandleError error with an
-// error code of ErrorAttributes will be returned.
+// If authContext corresponds to HandlePlatform, then the Attrs field of publicInfo must have the AttrNVPlatformCreate attribute set.
+// If authContext corresponds to HandleOwner, then the AttrNVPlatformCreate attributes must be clear, else a *TPMHandleError error
+// with an error code of ErrorAttributes will be returned.
 //
 // If the Attrs field of publicInfo has the AttrNVPolicyDelete attribute set, then HandlePlatform must be used for authorization via
-// authHandle, else a *TPMParameterError error with an error code of ErrorAttributes will be returned for parameter index 2.
+// authContext, else a *TPMParameterError error with an error code of ErrorAttributes will be returned for parameter index 2.
 //
 // If an index is already defined at the location specified by the Index field of publicInfo, a *TPMError error with an error code of
 // ErrorNVDefined will be returned.
@@ -89,9 +89,9 @@ func (t *TPMContext) initNVMaxBufferSize() {
 //
 // On successful completion, the NV index will be defined and a HandleContext can be created for it using the TPMContext.WrapHandle
 // function, specifying the value of the Index field of publicInfo as the handle.
-func (t *TPMContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVPublic, authHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVDefineSpace(authContext HandleContext, auth Auth, publicInfo *NVPublic, authContextAuth interface{}, sessions ...*Session) error {
 	return t.RunCommand(CommandNVDefineSpace, sessions,
-		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator,
+		HandleContextWithAuth{Context: authContext, Auth: authContextAuth}, Separator,
 		auth, nvPublicSized{publicInfo})
 }
 
@@ -99,16 +99,16 @@ func (t *TPMContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVP
 // used by it. If the index has the AttrNVPolicyDelete attribute set, then a *TPMHandleError error with an error code of
 // ErrorAttributes will be returned for handle index 2.
 //
-// The authHandle parameter specifies the hierarchy used for authorization and should be either HandlePlatform or HandleOwner. The
-// command requires authorization with the user auth role for the specified hierarchy, provided via authHandleAuth.
+// The authContext parameter specifies the hierarchy used for authorization and should correspond to either HandlePlatform or
+// HandleOwner. The command requires authorization with the user auth role for the specified hierarchy, provided via authContextAuth.
 //
-// If authHandle is HandleOwner and the NV index has the AttrNVPlatformCreate attribute set, then a *TPMError error with an error code
-// of ErrorNVAuthorization will be returned.
+// If authContext corresponds to HandleOwner and the NV index has the AttrNVPlatformCreate attribute set, then a *TPMError error with
+// an error code of ErrorNVAuthorization will be returned.
 //
 // On successful completion, nvIndex will be invalidated.
-func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex HandleContext, authHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVUndefineSpace(authContext, nvIndex HandleContext, authContextAuth interface{}, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVUndefineSpace, sessions,
-		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, nvIndex); err != nil {
+		HandleContextWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
 		return err
 	}
 
@@ -124,13 +124,13 @@ func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex HandleContext, a
 // hierarchy, provided via platformAuth. The command requires authorization with the admin role for nvIndex, provided via nvIndexAuth.
 //
 // On successful completion, nvIndex will be invalidated.
-func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex HandleContext, platform Handle, nvIndexAuth *Session, platformAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform HandleContext, nvIndexAuth *Session, platformAuth interface{}, sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendSessionParam(s, HandleContextWithAuth{Context: nvIndex, Auth: nvIndexAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: platform, Auth: platformAuth})
+	s, err = t.validateAndAppendSessionParam(s, HandleContextWithAuth{Context: platform, Auth: platformAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
 	}
@@ -464,15 +464,15 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex HandleContext, authContext
 // NVGlobalWriteLock executes the TPM2_NV_GlobalWriteLock command to inhibit further writes for all NV indexes that have the
 // AttrNVGlobalLock attribute set.
 //
-// The authHandle parameter specifies a hierarchy, and should be either HandlePlatform or HandleOwner. The command requires the user
-// auth role for authHandle, provided via authHandleAuth.
+// The authContext parameter specifies a hierarchy, and should correspond to either HandlePlatform or HandleOwner. The command
+// requires the user auth role for authContext, provided via authContextAuth.
 //
 // On successful completion, the AttrNVWriteLocked attribute will be set for all NV indexes that have the AttrNVGlobalLock attribute
 // set. If an index also has the AttrNVWriteDefine attribute set, this will permanently inhibit further writes unless AttrNVWritten
 // is clear.
-func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVGlobalWriteLock(authContext HandleContext, authContextAuth interface{}, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVGlobalWriteLock, sessions,
-		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}); err != nil {
+		HandleContextWithAuth{Context: authContext, Auth: authContextAuth}); err != nil {
 		return err
 	}
 

@@ -332,19 +332,21 @@ func TestTrialPolicyNV(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
+	owner, _ := tpm.WrapHandle(HandleOwner)
+
 	nvPub := NVPublic{
 		Index:   0x0181ffff,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 		Size:    64}
-	if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub, nil); err != nil {
+	if err := tpm.NVDefineSpace(owner, nil, &nvPub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
 	index, err := tpm.WrapHandle(nvPub.Index)
 	if err != nil {
 		t.Fatalf("WrapHandle failed: %v", err)
 	}
-	defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+	defer undefineNVSpace(t, tpm, index, owner, nil)
 
 	twentyFiveUint64 := make(Operand, 8)
 	binary.BigEndian.PutUint64(twentyFiveUint64, 25)

@@ -77,14 +77,13 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 }
 
 // Undefine a NV index set by a test. Fails the test if it doesn't succeed.
-func undefineNVSpace(t *testing.T, tpm *TPMContext, context HandleContext, authHandle Handle, auth interface{}) {
+func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle HandleContext, auth interface{}) {
 	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
 }
 
-func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context HandleContext, authHandle Handle,
-	auth interface{}) {
+func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context, authHandle HandleContext, auth interface{}) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}

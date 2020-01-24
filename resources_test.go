@@ -113,7 +113,8 @@ func TestWrapHandle(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 		Size:    8}
-	if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub, nil); err != nil {
+	owner, _ = tpm.WrapHandle(HandleOwner)
+	if err := tpm.NVDefineSpace(owner, nil, &nvPub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
 	index, err := tpm.WrapHandle(nvPub.Index)
@@ -126,7 +127,7 @@ func TestWrapHandle(t *testing.T) {
 	if index.Handle() != nvPub.Index {
 		t.Errorf("WrapHandle returned an invalid context for a live NV index")
 	}
-	defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+	defer undefineNVSpace(t, tpm, index, owner, nil)
 
 	_, err = tpm.WrapHandle(primaryHandle + 1)
 	if err == nil {

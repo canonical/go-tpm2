@@ -321,11 +321,11 @@ func TestClear(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 			Size:    8}
-		if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub1, nil); err != nil {
+		if err := tpm.NVDefineSpace(owner, nil, &nvPub1, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 		nv1, _ := tpm.WrapHandle(nvPub1.Index)
-		defer verifyNVSpaceUndefined(t, tpm, nv1, HandleOwner, nil)
+		defer verifyNVSpaceUndefined(t, tpm, nv1, owner, nil)
 		transientObjects = append(transientObjects, nv1)
 
 		// Define an NV index in the platform hierarchy (should persist across Clear)
@@ -334,11 +334,11 @@ func TestClear(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead|AttrNVPlatformCreate, NVTypeOrdinary),
 			Size:    8}
-		if err := tpm.NVDefineSpace(HandlePlatform, nil, &nvPub2, nil); err != nil {
+		if err := tpm.NVDefineSpace(platform, nil, &nvPub2, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 		nv2, _ := tpm.WrapHandle(nvPub2.Index)
-		defer undefineNVSpace(t, tpm, nv2, HandlePlatform, nil)
+		defer undefineNVSpace(t, tpm, nv2, platform, nil)
 		persistentObjects = append(persistentObjects, nv2)
 
 		var transientHandles []Handle
