@@ -27,6 +27,10 @@ func (t *TPMContext) Startup(startupType StartupType) error {
 		return err
 	}
 	for _, rc := range t.resources {
+		switch rc.Handle().Type() {
+		case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypePersistent:
+			continue
+		}
 		t.evictHandleContext(rc)
 	}
 	return nil
