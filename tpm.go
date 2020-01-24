@@ -284,9 +284,6 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			}
 			handles = append(handles, r.Handle())
 			handleNames = append(handleNames, r.Name())
-		case Handle:
-			handles = append(handles, r)
-			handleNames = append(handleNames, untrackedContext(r).Name())
 		case nil:
 			handles = append(handles, HandleNull)
 			handleNames = append(handleNames, untrackedContext(HandleNull).Name())
