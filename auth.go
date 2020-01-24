@@ -317,20 +317,6 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in in
 			return nil, fmt.Errorf("invalid auth parameter type (%s)", reflect.TypeOf(i.Auth))
 		}
 		s.associatedContext = i.Context
-	case HandleWithAuth:
-		s = makeSessionParamFromAuth(i.Auth)
-		if s == nil {
-			return nil, fmt.Errorf("invalid auth parameter type (%s)", reflect.TypeOf(i.Auth))
-		}
-		// Wrap the handle in permanentContext here. Handles that only represent permanent resources are
-		// the only use case for supporting passing Handles to RunCommand. Consider it a bug to pass a
-		// Handle that represents anything other than a permanent resource (HandleContext should be
-		// used instead).
-		if i.Handle.Type() != HandleTypePermanent {
-			return nil, errors.New("invalid handle type")
-		}
-		rc, _ := t.WrapHandle(i.Handle)
-		s.associatedContext = rc
 	case []*Session:
 		addedOne := false
 		for _, s := range i {

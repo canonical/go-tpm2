@@ -160,16 +160,6 @@ func (s *Session) RemoveAttrs(attrs SessionAttributes) *Session {
 	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: s.Attrs &^ attrs}
 }
 
-// HandleWithAuth associates a Handle with an authorization, and is provided to TPMContext.RunCommand in the command handle area.
-//
-// Auth can be one of the following types:
-//  * string, []byte, or nil for plaintext password authorization.
-//  * *Session for session based authorization (HMAC or policy).
-type HandleWithAuth struct {
-	Handle Handle
-	Auth   interface{}
-}
-
 // HandleContextWithAuth associates a HandleContext with an authorization, and is provided to TPMContext.RunCommand in the command handle
 // area.
 //
@@ -456,13 +446,10 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 // handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Separator
 // sentinel value.
 //
-// Command handles are provided as Handle or HandleContext types if they do not require an authorization. For command handles that
-// require an authorization, they are provided using the HandleWithAuth type (for a Handle) or the HandleContextWithAuth type (for a
-// HandleContext). Both HandleWithAuth and HandleContextWithAuth reference the corresponding authorization. If a HandleContext
-// references a non-permanent handle and is not tracked by this TPMContext, then this function will return an error. Providing a nil
-// value will automatically by converted to a handle with the value of HandleNull. The Handle type must only be used for permanent
-// resources - if the Handle type is used to reference non-permanent resources, then computation of the resource name will be
-// incorrect and the correct name is required for the correct computation of session HMACs.
+// Command handles are provided as HandleContext types if they do not require an authorization. For command handles that require an
+// authorization, they are provided using the HandleContextWithAuth type, which references the corresponding authorization. If a
+// HandleContext is not tracked by this TPMContext, then this function will return an error. Providing a nil value will automatically
+// be converted to a handle with the value of HandleNull.
 //
 // Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
 //
@@ -496,22 +483,16 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 
 		switch sentinels {
 		case 0:
-			var err error
-			var typeName string
 			switch p := param.(type) {
-			case HandleWithAuth:
-				commandHandles = append(commandHandles, p.Handle)
-				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, p)
-				typeName = "HandleWithAuth"
 			case HandleContextWithAuth:
 				commandHandles = append(commandHandles, p.Context)
+				var err error
 				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, p)
-				typeName = "HandleContextWithAuth"
+				if err != nil {
+					return fmt.Errorf("cannot process HandleContextWithAuth for command %s at index %d: %v", commandCode, len(commandHandles), err)
+				}
 			default:
 				commandHandles = append(commandHandles, param)
-			}
-			if err != nil {
-				return fmt.Errorf("cannot process %s for command %s at index %d: %v", typeName, commandCode, len(commandHandles), err)
 			}
 		case 1:
 			commandParams = append(commandParams, param)
