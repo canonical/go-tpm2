@@ -20,8 +20,6 @@ func TestStartAuthSession(t *testing.T) {
 	primaryECC := createECCSrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primaryECC)
 
-	owner, _ := tpm.WrapHandle(HandleOwner)
-
 	for _, data := range []struct {
 		desc        string
 		tpmKey      HandleContext
@@ -113,7 +111,7 @@ func TestStartAuthSession(t *testing.T) {
 		},
 		{
 			desc:        "HMACUnboundSaltedInvalidKey",
-			tpmKey:      owner,
+			tpmKey:      tpm.OwnerHandleContext(),
 			sessionType: SessionTypeHMAC,
 			alg:         HashAlgorithmSHA256,
 			errMsg:      "invalid resource context for tpmKey: not an object",

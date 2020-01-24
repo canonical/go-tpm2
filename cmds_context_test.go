@@ -40,8 +40,7 @@ func TestContextSave(t *testing.T) {
 		defer flushContext(t, tpm, sessionContext)
 		run(t, sessionContext, sessionContext.Handle(), HandleNull)
 		// Make sure that ContextSave marked the session context as not loaded, and that we get the expected error if we attempt to use it
-		lockout, _ := tpm.WrapHandle(HandleLockout)
-		err = tpm.Clear(lockout, &Session{Context: sessionContext})
+		err = tpm.Clear(tpm.LockoutHandleContext(), &Session{Context: sessionContext})
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
@@ -193,8 +192,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 	t.Run("Session1", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		runSessionTest(t, false, primary, owner, SessionTypeHMAC, HashAlgorithmSHA256)
+		runSessionTest(t, false, primary, tpm.OwnerHandleContext(), SessionTypeHMAC, HashAlgorithmSHA256)
 	})
 	t.Run("Session2", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
@@ -210,8 +208,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 	t.Run("Session5", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		runSessionTest(t, true, primary, owner, SessionTypeHMAC, HashAlgorithmSHA256)
+		runSessionTest(t, true, primary, tpm.OwnerHandleContext(), SessionTypeHMAC, HashAlgorithmSHA256)
 	})
 }
 
@@ -220,7 +217,7 @@ func TestEvictControl(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, transient HandleContext, persist Handle, authAuth interface{}) {
-		owner, _ := tpm.WrapHandle(HandleOwner)
+		owner := tpm.OwnerHandleContext()
 		if handle, err := tpm.WrapHandle(persist); err == nil {
 			_, err := tpm.EvictControl(owner, handle, persist, authAuth)
 			if err != nil {
@@ -270,17 +267,16 @@ func TestEvictControl(t *testing.T) {
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 		run(t, context, Handle(0x8100fff0), testAuth)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

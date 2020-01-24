@@ -31,9 +31,8 @@ var (
 )
 
 // Set the hierarchy auth to testAuth. Fatal on failure
-func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy Handle) {
-	h, _ := tpm.WrapHandle(hierarchy)
-	if err := tpm.HierarchyChangeAuth(h, Auth(testAuth), nil); err != nil {
+func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy HandleContext) {
+	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
 		t.Fatalf("HierarchyChangeAuth failed: %v", err)
 	}
 }
@@ -41,8 +40,8 @@ func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 // Reset the hierarchy auth from testAuth to nil. Will succeed if HierarchyChangeAuth succeeds, or if it fails
 // because the hierarchy auth has already been reset by another action in the test. Otherwise it causes the test
 // to fail.
-func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
-	if hierarchy == HandleLockout {
+func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy HandleContext) {
+	if hierarchy.Handle() == HandleLockout {
 		// Lockout auth is DA protected, so don't attempt to reset if it has already been done by the test
 		if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
 			t.Errorf("GetCapability failed: %v", err)
@@ -50,17 +49,16 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
 			return
 		}
 	}
-	h, _ := tpm.WrapHandle(hierarchy)
-	if err := tpm.HierarchyChangeAuth(h, nil, testAuth); err != nil {
-		switch hierarchy {
+	if err := tpm.HierarchyChangeAuth(hierarchy, nil, testAuth); err != nil {
+		switch hierarchy.Handle() {
 		case HandleLockout:
 		case HandlePlatform:
-			if err := tpm.HierarchyChangeAuth(h, nil, nil); err == nil {
+			if err := tpm.HierarchyChangeAuth(hierarchy, nil, nil); err == nil {
 				return
 			}
 		default:
 			var attr PermanentAttributes
-			switch hierarchy {
+			switch hierarchy.Handle() {
 			case HandleOwner:
 				attr = AttrOwnerAuthSet
 			case HandleEndorsement:
@@ -115,8 +113,7 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 	}
 }
 
-func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest,
-	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent HandleContext) {
+func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent HandleContext) {
 	var parentQualifiedName Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -157,11 +154,11 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	}
 }
 
-func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Handle) {
+func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy HandleContext) {
 	if creationTicket.Tag != TagCreation {
 		t.Errorf("creation ticket has the wrong tag")
 	}
-	if creationTicket.Hierarchy != hierarchy {
+	if creationTicket.Hierarchy != hierarchy.Handle() {
 		t.Errorf("creation ticket has the wrong hierarchy (got 0x%08x)", creationTicket.Hierarchy)
 	}
 }
@@ -241,8 +238,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Handle
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	owner, _ := tpm.WrapHandle(HandleOwner)
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(owner, &sensitiveCreate, &template, nil,
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil,
 		nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
@@ -265,8 +261,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Handle
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	owner, _ := tpm.WrapHandle(HandleOwner)
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(owner, &sensitiveCreate, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -289,8 +284,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) HandleContext {
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(endorsement, nil, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -304,7 +298,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContex
 	}
 	defer flushContext(t, tpm, sessionContext)
 
-	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
+	endorsement := tpm.EndorsementHandleContext()
 	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
 	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {

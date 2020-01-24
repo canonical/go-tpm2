@@ -45,14 +45,11 @@ func TestDictionaryAttackParameters(t *testing.T) {
 			PropertyLockoutInterval: 7200,
 			PropertyLockoutRecovery: 86400}
 
-		lockout, _ := tpm.WrapHandle(HandleLockout)
-		if err := tpm.DictionaryAttackParameters(lockout, params[PropertyMaxAuthFail],
-			params[PropertyLockoutInterval], params[PropertyLockoutRecovery], auth); err != nil {
+		if err := tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), params[PropertyMaxAuthFail], params[PropertyLockoutInterval], params[PropertyLockoutRecovery], auth); err != nil {
 			t.Fatalf("DictionaryAttackParameters failed: %v", err)
 		}
 		defer func() {
-			if err := tpm.DictionaryAttackParameters(lockout, origMaxTries, origRecoveryTime,
-				origLockoutRecovery, auth); err != nil {
+			if err := tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), origMaxTries, origRecoveryTime, origLockoutRecovery, auth); err != nil {
 				t.Errorf("Failed to reset dictionary attack parameters: %v", err)
 			}
 		}()
@@ -85,15 +82,14 @@ func TestDictionaryAttackParameters(t *testing.T) {
 		run(t, nil)
 	})
 	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		defer resetHierarchyAuth(t, tpm, HandleLockout)
+		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
 		run(t, testAuth)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		defer resetHierarchyAuth(t, tpm, HandleLockout)
-		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, HashAlgorithmSHA256,
+		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256,
 			testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -133,14 +129,11 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	defer flushContext(t, tpm, context)
 
 	origMaxTries, origRecoveryTime, origLockoutRecovery := getDictionaryAttackParams(t, tpm)
-	lockout, _ := tpm.WrapHandle(HandleLockout)
-	if err := tpm.DictionaryAttackParameters(lockout, 2, origRecoveryTime, origLockoutRecovery,
-		nil); err != nil {
+	if err := tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), 2, origRecoveryTime, origLockoutRecovery, nil); err != nil {
 		t.Fatalf("DictionaryAttackParameters failed: %v", err)
 	}
 	defer func() {
-		if err := tpm.DictionaryAttackParameters(lockout, origMaxTries, origRecoveryTime,
-			origLockoutRecovery, nil); err != nil {
+		if err := tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), origMaxTries, origRecoveryTime, origLockoutRecovery, nil); err != nil {
 			t.Errorf("Failed to reset dictionary attack parameters: %v", err)
 		}
 	}()
@@ -173,7 +166,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 
-		if err := tpm.DictionaryAttackLockReset(lockout, auth); err != nil {
+		if err := tpm.DictionaryAttackLockReset(tpm.LockoutHandleContext(), auth); err != nil {
 			t.Errorf("DictionaryAttackLockReset failed: %v", err)
 		}
 
@@ -199,16 +192,14 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		run(t, nil)
 	})
 	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		defer resetHierarchyAuth(t, tpm, HandleLockout)
+		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
 		run(t, testAuth)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		defer resetHierarchyAuth(t, tpm, HandleLockout)
-		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, HashAlgorithmSHA256,
-			testAuth)
+		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

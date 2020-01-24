@@ -12,7 +12,7 @@ func TestHMACSessions(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	owner, _ := tpm.WrapHandle(HandleOwner)
+	owner := tpm.OwnerHandleContext()
 
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)

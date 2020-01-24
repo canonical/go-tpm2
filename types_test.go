@@ -432,7 +432,7 @@ func TestNVPublicName(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	owner, _ := tpm.WrapHandle(HandleOwner)
+	owner := tpm.OwnerHandleContext()
 
 	pub := NVPublic{
 		Index:   Handle(0x0181ffff),

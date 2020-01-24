@@ -257,8 +257,7 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(owner, nil, &template, nil, nil, nil)
+		objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -373,8 +372,7 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		objectHandle, _, _, creationHash, creationTicket, _, err := tpm.CreatePrimary(owner, nil, &template, nil, nil, nil)
+		objectHandle, _, _, creationHash, creationTicket, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -397,8 +395,7 @@ func TestQuote(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	for i := 0; i < 8; i++ {
-		pcr, _ := tpm.WrapHandle(Handle(i))
-		if _, err := tpm.PCREvent(pcr, Event(fmt.Sprintf("event%d", i)), nil); err != nil {
+		if _, err := tpm.PCREvent(tpm.PCRHandleContext(i), Event(fmt.Sprintf("event%d", i)), nil); err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
 	}
@@ -527,8 +524,7 @@ func TestGetTime(t *testing.T) {
 	}
 
 	run := func(t *testing.T, signContext HandleContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}) {
-		endorsement, _ := tpm.WrapHandle(HandleEndorsement)
-		timeInfo, signature, err := tpm.GetTime(endorsement, signContext, qualifyingData, inScheme, privacyAdminHandleAuth, signContextAuth)
+		timeInfo, signature, err := tpm.GetTime(tpm.EndorsementHandleContext(), signContext, qualifyingData, inScheme, privacyAdminHandleAuth, signContextAuth)
 		if err != nil {
 			t.Fatalf("GetTime failed: %v", err)
 		}
@@ -639,8 +635,8 @@ func TestGetTime(t *testing.T) {
 		ak := prepare(t, nil)
 		defer flushContext(t, tpm, ak)
 
-		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
-		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
+		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
 		run(t, ak, HandleEndorsement, nil, nil, testAuth, nil)
 	})
@@ -649,8 +645,8 @@ func TestGetTime(t *testing.T) {
 		ak := prepare(t, nil)
 		defer flushContext(t, tpm, ak)
 
-		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
-		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
+		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 		if err != nil {

@@ -529,8 +529,7 @@ func TestPolicyPCR(t *testing.T) {
 			data:  []byte("1234"),
 		},
 	} {
-		pcr, _ := tpm.WrapHandle(Handle(data.index))
-		_, err := tpm.PCREvent(pcr, data.data, nil)
+		_, err := tpm.PCREvent(tpm.PCRHandleContext(data.index), data.data, nil)
 		if err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
@@ -1072,7 +1071,7 @@ func TestPolicyNV(t *testing.T) {
 	fortyUint32 := make(Operand, 4)
 	binary.BigEndian.PutUint32(fortyUint32, 40)
 
-	owner, _ := tpm.WrapHandle(HandleOwner)
+	owner := tpm.OwnerHandleContext()
 
 	for _, data := range []struct {
 		desc      string

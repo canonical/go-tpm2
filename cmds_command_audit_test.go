@@ -26,8 +26,7 @@ func TestSetCommandCodeAuditStatus(t *testing.T) {
 		t.Fatalf("GetCapability failed: %v", err)
 	}
 
-	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
-	attest, _, err := tpm.GetCommandAuditDigest(endorsement, nil, nil, nil, nil, nil)
+	attest, _, err := tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("GetCommandAuditDigest failed: %v", err)
 	}
@@ -64,7 +63,7 @@ Next:
 	}
 
 	defer func() {
-		owner, _ := tpm.WrapHandle(HandleOwner)
+		owner := tpm.OwnerHandleContext()
 		if err := tpm.SetCommandCodeAuditStatus(owner, initialAlgorithm, nil, nil, nil); err != nil {
 			t.Errorf("Cannot restore command audit algorithm: %v", err)
 		}
@@ -78,7 +77,7 @@ Next:
 
 	run := func(t *testing.T, auth interface{}) {
 		checkAuditDigest := func(alg HashAlgorithmId) {
-			attest, _, err = tpm.GetCommandAuditDigest(endorsement, nil, nil, nil, nil, nil)
+			attest, _, err = tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("GetCommandAuditDigest failed: %v", err)
 			}
@@ -93,8 +92,7 @@ Next:
 			}
 		}
 
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, nil, auth); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(tpm.OwnerHandleContext(), alg, nil, nil, auth); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
@@ -125,6 +123,7 @@ Next:
 			}
 		}
 
+		owner := tpm.OwnerHandleContext()
 		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, commands, nil, auth); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
@@ -152,17 +151,16 @@ Next:
 	})
 
 	t.Run("WithPasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 		run(t, testAuth)
 	})
 
 	t.Run("WithSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

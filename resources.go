@@ -273,8 +273,6 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 	var err error
 
 	switch handle.Type() {
-	case HandleTypePCR, HandleTypePermanent:
-		rc = &permanentContext{handle}
 	case HandleTypeNVIndex:
 		rc, err = makeNVIndexContext(t, handle)
 	case HandleTypeHMACSession, HandleTypePolicySession:
@@ -284,6 +282,8 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 		}
 	case HandleTypeTransient, HandleTypePersistent:
 		rc, err = makeObjectContext(t, handle)
+	default:
+		panic("invalid handle type")
 	}
 
 	if err != nil {
@@ -326,6 +326,66 @@ func (t *TPMContext) WrapSessionHandle(handle Handle) (SessionContext, error) {
 	default:
 		return nil, errors.New("invalid handle type")
 	}
+}
+
+// GetOrCreatePermanentContext creates a new HandleContext for the specified permanent handle or PCR handle, or returns the existing
+// one if the TPMContext already has a reference to one.
+//
+// This function will panic if handle does not correspond to a permanent or PCR handle.
+func (t *TPMContext) GetOrCreatePermanentContext(handle Handle) HandleContext {
+	switch handle.Type() {
+	case HandleTypePermanent, HandleTypePCR:
+	default:
+		panic("invalid handle type")
+	}
+
+	if rc, exists := t.resources[handle]; exists {
+		return rc
+	}
+
+	rc := &permanentContext{handle}
+	t.addHandleContext(rc)
+	return rc
+}
+
+// OwnerHandleContext returns the HandleContext corresponding to the owner hiearchy.
+func (t *TPMContext) OwnerHandleContext() HandleContext {
+	return t.GetOrCreatePermanentContext(HandleOwner)
+}
+
+// NulHandleContext returns the HandleContext corresponding to the null hiearchy.
+func (t *TPMContext) NullHandleContext() HandleContext {
+	return t.GetOrCreatePermanentContext(HandleNull)
+}
+
+// LockoutHandleContext returns the HandleContext corresponding to the lockout hiearchy.
+func (t *TPMContext) LockoutHandleContext() HandleContext {
+	return t.GetOrCreatePermanentContext(HandleLockout)
+}
+
+// EndorsementHandleContext returns the HandleContext corresponding to the endorsement hiearchy.
+func (t *TPMContext) EndorsementHandleContext() HandleContext {
+	return t.GetOrCreatePermanentContext(HandleEndorsement)
+}
+
+// PlatformHandleContext returns the HandleContext corresponding to the platform hiearchy.
+func (t *TPMContext) PlatformHandleContext() HandleContext {
+	return t.GetOrCreatePermanentContext(HandlePlatform)
+}
+
+// PlatformNVHandleContext returns the HandleContext corresponding to the platform hiearchy.
+func (t *TPMContext) PlatformNVHandleContext() HandleContext {
+	return t.GetOrCreatePermanentContext(HandlePlatformNV)
+}
+
+// PCRHandleContext returns the HandleContext corresponding to the PCR at the specified index. It will panic if pcr is not a valid
+// PCR index.
+func (t *TPMContext) PCRHandleContext(pcr int) HandleContext {
+	h := Handle(pcr)
+	if h.Type() != HandleTypePCR {
+		panic("invalid PCR index")
+	}
+	return t.GetOrCreatePermanentContext(h)
 }
 
 // ForgetResource tells the TPMContext to drop its reference to the specified HandleContext without flushing the corresponding

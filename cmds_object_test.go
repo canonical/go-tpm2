@@ -18,10 +18,8 @@ func TestCreate(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, parent HandleContext, hierarchy Handle, sensitive *SensitiveCreate, template *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, session interface{}) (*Public, Private) {
-		outPrivate, outPublic, creationData, creationHash, creationTicket, err :=
-			tpm.Create(parent, sensitive, template, outsideInfo, creationPCR, session)
+	run := func(t *testing.T, parent, hierarchy HandleContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (*Public, Private) {
+		outPrivate, outPublic, creationData, creationHash, creationTicket, err := tpm.Create(parent, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
@@ -55,7 +53,7 @@ func TestCreate(t *testing.T) {
 			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
 			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
-		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, creationPCR, nil)
+		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
@@ -74,7 +72,7 @@ func TestCreate(t *testing.T) {
 					CurveID:   ECCCurveNIST_P256,
 					KDF:       KDFScheme{Scheme: KDFAlgorithmNull}}}}
 
-		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, nil)
+		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
 			t.Errorf("CreatePrimary returned object with invalid ECC coords")
 		}
@@ -99,7 +97,7 @@ func TestCreate(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		pub, priv := run(t, primary, HandleOwner, &sensitive, &template, Data{}, PCRSelectionList{}, nil)
+		pub, priv := run(t, primary, tpm.OwnerHandleContext(), &sensitive, &template, Data{}, PCRSelectionList{}, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)
 
 		handle, _, err := tpm.Load(primary, priv, pub, nil)
@@ -108,7 +106,7 @@ func TestCreate(t *testing.T) {
 		}
 		defer flushContext(t, tpm, handle)
 
-		run(t, handle, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, testAuth)
+		run(t, handle, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, testAuth)
 	})
 
 	t.Run("WithOutsideInfo", func(t *testing.T) {
@@ -127,7 +125,7 @@ func TestCreate(t *testing.T) {
 					Exponent:  0}}}
 		outsideInfo := Data("foo")
 
-		pub, _ := run(t, primary, HandleOwner, nil, &template, outsideInfo, PCRSelectionList{}, nil)
+		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, outsideInfo, PCRSelectionList{}, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
@@ -146,7 +144,7 @@ func TestCreate(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, testAuth)
+		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, testAuth)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
@@ -173,7 +171,7 @@ func TestCreate(t *testing.T) {
 
 		session := Session{Context: sessionContext, AuthValue: testAuth}
 
-		pub, _ := run(t, primary, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
+		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, &session)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 }
@@ -650,8 +648,7 @@ func TestActivateCredential(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		endorsement, _ := tpm.WrapHandle(HandleEndorsement)
-		if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
+		if _, _, err := tpm.PolicySecret(tpm.EndorsementHandleContext(), sessionContext, nil, nil, 0, nil); err != nil {
 			t.Fatalf("PolicySecret failed: %v", err)
 		}
 

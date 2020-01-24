@@ -23,9 +23,8 @@ func TestWrapHandle(t *testing.T) {
 	primaryHandle := primary.Handle()
 
 	persistentHandle := Handle(0x81000008)
-	owner, _ := tpm.WrapHandle(HandleOwner)
-	persistentPrimary := persistObjectForTesting(t, tpm, owner, primary, persistentHandle)
-	defer verifyPersistentObjectEvicted(t, tpm, owner, persistentPrimary)
+	persistentPrimary := persistObjectForTesting(t, tpm, tpm.OwnerHandleContext(), primary, persistentHandle)
+	defer verifyPersistentObjectEvicted(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
 
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
 	if err != nil {
@@ -76,10 +75,7 @@ func TestWrapHandle(t *testing.T) {
 	if persistentPrimary.Handle() != persistentHandle {
 		t.Errorf("WrapHandle returned an invalid context for a live persistent object")
 	}
-	defer func() {
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		evictPersistentObject(t, tpm, owner, persistentPrimary)
-	}()
+	defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
 
 	sessionContext, err = tpm.WrapSessionHandle(sessionHandle)
 	if err != nil {
@@ -113,8 +109,7 @@ func TestWrapHandle(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 		Size:    8}
-	owner, _ = tpm.WrapHandle(HandleOwner)
-	if err := tpm.NVDefineSpace(owner, nil, &nvPub, nil); err != nil {
+	if err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &nvPub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
 	index, err := tpm.WrapHandle(nvPub.Index)
@@ -127,7 +122,7 @@ func TestWrapHandle(t *testing.T) {
 	if index.Handle() != nvPub.Index {
 		t.Errorf("WrapHandle returned an invalid context for a live NV index")
 	}
-	defer undefineNVSpace(t, tpm, index, owner, nil)
+	defer undefineNVSpace(t, tpm, index, tpm.OwnerHandleContext(), nil)
 
 	_, err = tpm.WrapHandle(primaryHandle + 1)
 	if err == nil {
