@@ -35,46 +35,12 @@ func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy ResourceCo
 	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
 		t.Fatalf("HierarchyChangeAuth failed: %v", err)
 	}
-	hierarchy.SetAuthValue(testAuth) // TODO: Remove once HierarchyChangeAuth is updated
 }
 
-// Reset the hierarchy auth from testAuth to nil. Will succeed if HierarchyChangeAuth succeeds, or if it fails
-// because the hierarchy auth has already been reset by another action in the test. Otherwise it causes the test
-// to fail.
+// Reset the hierarchy auth to nil.
 func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy ResourceContext) {
-	if hierarchy.Handle() == HandleLockout {
-		// Lockout auth is DA protected, so don't attempt to reset if it has already been done by the test
-		if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
-			t.Errorf("GetCapability failed: %v", err)
-		} else if PermanentAttributes(props[0].Value)&AttrLockoutAuthSet == 0 {
-			return
-		}
-	}
-	if err := tpm.HierarchyChangeAuth(hierarchy, nil, testAuth); err != nil {
-		switch hierarchy.Handle() {
-		case HandleLockout:
-		case HandlePlatform:
-			if err := tpm.HierarchyChangeAuth(hierarchy, nil, nil); err == nil {
-				hierarchy.SetAuthValue(nil) // TODO: Remove once HierarchyChangeAuth is updated
-				return
-			}
-		default:
-			var attr PermanentAttributes
-			switch hierarchy.Handle() {
-			case HandleOwner:
-				attr = AttrOwnerAuthSet
-			case HandleEndorsement:
-				attr = AttrEndorsementAuthSet
-			}
-			if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
-				t.Errorf("GetCapability failed: %v", err)
-			} else if PermanentAttributes(props[0].Value)&attr == 0 {
-				return
-			}
-		}
+	if err := tpm.HierarchyChangeAuth(hierarchy, nil, nil); err != nil {
 		t.Errorf("HierarchyChangeAuth failed: %v", err)
-	} else {
-		hierarchy.SetAuthValue(nil) // TODO: Remove once HierarchyChangeAuth is updated
 	}
 }
 

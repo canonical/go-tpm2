@@ -224,16 +224,18 @@ func (t *TPMContext) ClearControl(authContext HandleContext, disable bool, authC
 }
 
 // HierarchyChangeAuth executes the TPM2_HierarchyChangeAuth command to change the authorization value for the hierarchy associated
-// with the authContext parameter. The command requires authorization with the user auth role for authContext, provided via
-// authContextAuth.
+// with the authContext parameter. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession.
 //
 // If the value of newAuth is longer than the context integrity digest algorithm for the TPM, a *TPMParameterError error with an
 // error code of ErrorSize will be returned.
 //
-// On successful completion, the authorization value for the hierarchy associated with authContext will be set to the value of newAuth.
-func (t *TPMContext) HierarchyChangeAuth(authContext HandleContext, newAuth Auth, authContextAuth interface{}, sessions ...*Session) error {
+// On successful completion, the authorization value of the hierarchy associated with authContext will be set to the value of
+// newAuth, and authContext will be updated to reflect this - it isn't necessary to update authContext with
+// ResourceContext.SetAuthValue.
+func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Auth, authContextAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendAuthSessionParamLegacy(s, HandleContextWithAuth{Context: authContext, Auth: authContextAuth})
+	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
 	}
@@ -247,12 +249,9 @@ func (t *TPMContext) HierarchyChangeAuth(authContext HandleContext, newAuth Auth
 		return err
 	}
 
-	authSession := ctx.sessionParams[0].session
-	if authSession != nil {
-		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
-		// with a HMAC generated with a key that includes newAuth instead.
-		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
-	}
+	// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond with a HMAC generated with a key
+	// that includes newAuth instead.
+	authContext.SetAuthValue(newAuth)
 
 	return t.processResponse(ctx, nil, nil)
 }

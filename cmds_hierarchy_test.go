@@ -421,13 +421,13 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run1 := func(t *testing.T, hierarchy HandleContext, session interface{}) {
+	run1 := func(t *testing.T, hierarchy ResourceContext, session *Session) {
 		if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), session); err != nil {
 			t.Fatalf("HierarchyChangeAuth failed: %v", err)
 		}
 	}
 
-	run2 := func(t *testing.T, hierarchy HandleContext, session interface{}, createPrimary func(*testing.T, *TPMContext, interface{}) HandleContext) {
+	run2 := func(t *testing.T, hierarchy ResourceContext, session *Session, createPrimary func(*testing.T, *TPMContext, *Session) ResourceContext) {
 		primary := createPrimary(t, tpm, session)
 		flushContext(t, tpm, primary)
 
@@ -436,7 +436,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 	}
 
-	createSrk := func(t *testing.T, tpm *TPMContext, session interface{}) HandleContext {
+	createSrk := func(t *testing.T, tpm *TPMContext, session *Session) ResourceContext {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -450,13 +450,20 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, session)
+		// FIXME: Remove this once CreatePrimary is updated to use ResourceContext
+		var auth interface{}
+		if session == nil {
+			auth = testAuth
+		} else {
+			auth = session.WithAuthValue(testAuth)
+		}
+		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, auth)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
 		return objectContext
 	}
-	createEk := func(t *testing.T, tpm *TPMContext, session interface{}) HandleContext {
+	createEk := func(t *testing.T, tpm *TPMContext, session *Session) ResourceContext {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -472,7 +479,14 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, session)
+		// FIXME: Remove this once CreatePrimary is updated to use ResourceContext
+		var auth interface{}
+		if session == nil {
+			auth = testAuth
+		} else {
+			auth = session.WithAuthValue(testAuth)
+		}
+		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, auth)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -483,14 +497,14 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		run1(t, tpm.OwnerHandleContext(), nil)
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		run2(t, tpm.OwnerHandleContext(), testAuth, createSrk)
+		run2(t, tpm.OwnerHandleContext(), nil, createSrk)
 	})
 
 	t.Run("EndorsementWithPW", func(t *testing.T) {
 		run1(t, tpm.EndorsementHandleContext(), nil)
 		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
-		run2(t, tpm.EndorsementHandleContext(), testAuth, createEk)
+		run2(t, tpm.EndorsementHandleContext(), nil, createEk)
 	})
 
 	t.Run("OwnerWithBoundHMACSession", func(t *testing.T) {
@@ -505,7 +519,6 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		run1(t, tpm.OwnerHandleContext(), &session)
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		session.AuthValue = testAuth
 		run2(t, tpm.OwnerHandleContext(), &session, createSrk)
 	})
 
@@ -521,7 +534,6 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		run1(t, tpm.OwnerHandleContext(), &session)
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		session.AuthValue = testAuth
 		run2(t, tpm.OwnerHandleContext(), &session, createSrk)
 	})
 
@@ -543,7 +555,6 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		run1(t, tpm.OwnerHandleContext(), &session)
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		session.AuthValue = testAuth
 		run2(t, tpm.OwnerHandleContext(), &session, createSrk)
 	})
 }
