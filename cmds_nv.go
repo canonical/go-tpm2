@@ -713,16 +713,19 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex HandleContext, authContextA
 }
 
 // NVChangeAuth executes the TPM2_NV_ChangeAuth command to change the authorization value for the NV index associated with nvIndex,
-// setting it to the new value defined by newAuth. The command requires the admin auth role for nvIndex, provided via nvIndexAuth.
+// setting it to the new value defined by newAuth. The command requires the admin auth role for nvIndex, with the session provided
+// via nvIndexAuthSession.
 //
 // If the size of newAuth is greater than the name algorithm for the index, a *TPMParameterError error with an error code of ErrorSize
 // will be returned.
-func (t *TPMContext) NVChangeAuth(nvIndex HandleContext, newAuth Auth, nvIndexAuth *Session, sessions ...*Session) error {
+//
+// On successful completion, the authorization value of the NV index associated with nvIndex will be set to the value of newAuth,
+// and nvIndex will be updated to reflect this - it isn't necessary to update nvIndex with ResourceContext.SetAuthValue.
+func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendAuthSessionParamLegacy(s, HandleContextWithAuth{Context: nvIndex, Auth: nvIndexAuth})
+	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
 	if err != nil {
-		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v",
-			err)
+		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
 	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
@@ -734,13 +737,9 @@ func (t *TPMContext) NVChangeAuth(nvIndex HandleContext, newAuth Auth, nvIndexAu
 		return err
 	}
 
-	// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key
-	// derived from newAuth. If the session is bound, the TPM will respond with a HMAC generated from the
-	// original key
-	authSession := ctx.sessionParams[0].session
-	if authSession != nil {
-		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
-	}
+	// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key derived from newAuth. If the
+	// session is bound, the TPM will respond with a HMAC generated from the original key
+	nvIndex.SetAuthValue(newAuth)
 
 	return t.processResponse(ctx, nil, nil)
 }

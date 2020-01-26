@@ -1009,7 +1009,6 @@ func TestNVChangeAuth(t *testing.T) {
 
 			executePolicy(sessionContext)
 
-			session.AuthValue = testAuth
 			if err := tpm.NVChangeAuth(rc, nil, &session); err != nil {
 				t.Errorf("NVChangeAuth failed: %v", err)
 			}
