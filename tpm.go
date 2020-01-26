@@ -117,7 +117,7 @@ const (
 
 // Session wraps a session HandleContext with some additional parameters that define how a command should use the session.
 type Session struct {
-	Context HandleContext // A HandleContext that corresponds to a loaded session on the TPM
+	Context SessionContext // A context for a session loaded on the TPM
 
 	// AuthValue is the authorization value of the resource that the session is being used to provide an authorisation for. For HMAC
 	// sessions, AuthValue will be included in the HMAC key if the session associated with Context is not bound, or the session is

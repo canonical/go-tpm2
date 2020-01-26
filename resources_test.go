@@ -26,34 +26,16 @@ func TestWrapHandle(t *testing.T) {
 	persistentPrimary := persistObjectForTesting(t, tpm, tpm.OwnerHandleContext(), primary, persistentHandle)
 	defer verifyPersistentObjectEvicted(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer verifyContextFlushed(t, tpm, sessionContext)
-	sessionHandle := sessionContext.Handle()
-
-	savedSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer verifyContextFlushed(t, tpm, savedSessionContext)
-	savedSessionHandle := savedSessionContext.Handle()
-
-	if _, err := tpm.ContextSave(savedSessionContext); err != nil {
-		t.Fatalf("ContextSave failed: %v", err)
-	}
-
 	closeTPM(t, tpm)
 	closed = true
-	if primary.Handle() != HandleUnassigned || persistentPrimary.Handle() != HandleUnassigned || sessionContext.Handle() != HandleUnassigned {
+	if primary.Handle() != HandleUnassigned || persistentPrimary.Handle() != HandleUnassigned {
 		t.Fatalf("Expected resource contexts to be invalid")
 	}
 
 	tpm = openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	primary, err = tpm.WrapHandle(primaryHandle)
+	primary, err := tpm.WrapHandle(primaryHandle)
 	if err != nil {
 		t.Errorf("WrapHandle failed with a live transient object: %v", err)
 	}
@@ -76,33 +58,6 @@ func TestWrapHandle(t *testing.T) {
 		t.Errorf("WrapHandle returned an invalid context for a live persistent object")
 	}
 	defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
-
-	sessionContext, err = tpm.WrapSessionHandle(sessionHandle)
-	if err != nil {
-		t.Errorf("WrapHandle failed with a loaded session: %v", err)
-	}
-	if sessionContext == nil {
-		t.Fatalf("WrapHandle returned a nil pointer for a loaded session")
-	}
-	if sessionContext.Handle() != sessionHandle {
-		t.Errorf("WrapHandle returned an invalid context for a loaded session")
-	}
-	defer flushContext(t, tpm, sessionContext)
-
-	savedSessionContext, err = tpm.WrapSessionHandle(savedSessionHandle)
-	if err != nil {
-		t.Errorf("WrapHandle failed with a saved session: %v", err)
-	}
-	if savedSessionContext == nil {
-		t.Fatalf("WrapHandle returned a nil pointer for a saved session")
-	}
-	if savedSessionContext.Handle().Type() != HandleTypeHMACSession {
-		t.Errorf("WrapHandle returned a context with an invalid handle type for a saved session")
-	}
-	if savedSessionContext.Handle()&0x00ffffff != savedSessionHandle&0x00ffffff {
-		t.Errorf("WrapHandle returned an invalid context for a saved session")
-	}
-	defer flushContext(t, tpm, savedSessionContext)
 
 	nvPub := NVPublic{
 		Index:   0x018100ff,
@@ -145,4 +100,82 @@ func TestWrapHandle(t *testing.T) {
 	if e, ok := err.(ResourceUnavailableError); !ok || e.Handle != nvPub.Index+1 {
 		t.Errorf("WrapHandle returned an unexpected error for a dead NV index: %v", err)
 	}
+}
+
+func TestGetOrCreateSessionContext(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	closed := false
+	defer func() {
+		if closed {
+			return
+		}
+		closeTPM(t, tpm)
+	}()
+
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer verifyContextFlushed(t, tpm, sessionContext)
+	sessionHandle := sessionContext.Handle()
+
+	if rc, err := tpm.GetOrCreateSessionContext(sessionHandle); err != nil {
+		t.Errorf("GetOrCreateSessionContext failed: %v", err)
+	} else if rc != sessionContext {
+		t.Errorf("GetOrCreateSessionContext returned the wrong context")
+	}
+
+	savedSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer verifyContextFlushed(t, tpm, savedSessionContext)
+	savedSessionHandle := savedSessionContext.Handle()
+
+	if _, err := tpm.ContextSave(savedSessionContext); err != nil {
+		t.Fatalf("ContextSave failed: %v", err)
+	}
+
+	if rc, err := tpm.GetOrCreateSessionContext(savedSessionHandle); err != nil {
+		t.Errorf("GetOrCreateSessionContext failed: %v", err)
+	} else if rc != savedSessionContext {
+		t.Errorf("GetOrCreateSessionContext returned the wrong context")
+	}
+
+	closeTPM(t, tpm)
+	closed = true
+	if sessionContext.Handle() != HandleUnassigned || savedSessionContext.Handle() != HandleUnassigned {
+		t.Fatalf("Expected session contexts to be invalid")
+	}
+
+	tpm = openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	sessionContext, err = tpm.GetOrCreateSessionContext(sessionHandle)
+	if err != nil {
+		t.Errorf("GetOrCreateSessionContext failed with a loaded session: %v", err)
+	}
+	if sessionContext == nil {
+		t.Fatalf("GetOrCreateSessionContext returned a nil pointer for a loaded session")
+	}
+	if sessionContext.Handle() != sessionHandle {
+		t.Errorf("GetOrCreateSessionContext returned an invalid context for a loaded session")
+	}
+	defer flushContext(t, tpm, sessionContext)
+
+	savedSessionContext, err = tpm.GetOrCreateSessionContext(savedSessionHandle)
+	if err != nil {
+		t.Errorf("GetOrCreateSessionContext failed with a saved session: %v", err)
+	}
+	if savedSessionContext == nil {
+		t.Fatalf("GetOrCreateSessionContext returned a nil pointer for a saved session")
+	}
+	if savedSessionContext.Handle().Type() != HandleTypeHMACSession {
+		t.Errorf("GetOrCreateSessionContext returned a context with an invalid handle type for a saved session")
+	}
+	if savedSessionContext.Handle()&0x00ffffff != savedSessionHandle&0x00ffffff {
+		t.Errorf("GetOrCreateSessionContext returned an invalid context for a saved session")
+	}
+	defer flushContext(t, tpm, savedSessionContext)
+
 }

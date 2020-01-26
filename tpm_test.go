@@ -463,16 +463,19 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 	}
 }
 
-type mockContext struct{}
+type mockSessionContext struct{}
 
-func (*mockContext) Handle() Handle { return HandleNull }
-func (*mockContext) Name() Name     { return nil }
+func (*mockSessionContext) Handle() Handle    { return HandleNull }
+func (*mockSessionContext) Name() Name        { return nil }
+func (*mockSessionContext) NonceTPM() Nonce   { return nil }
+func (*mockSessionContext) IsAudit() bool     { return false }
+func (*mockSessionContext) IsExclusive() bool { return false }
 
 func TestSession(t *testing.T) {
 	auth1 := []byte("foo")
 	auth2 := []byte("bar")
 
-	c := &mockContext{}
+	c := &mockSessionContext{}
 	s := Session{Context: c, AuthValue: auth1, Attrs: AttrContinueSession}
 
 	s2 := s.WithAuthValue(auth2)

@@ -933,7 +933,7 @@ func TestNVChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	executePolicy := func(context HandleContext) {
+	executePolicy := func(context SessionContext) {
 		if err := tpm.PolicyCommandCode(context, CommandNVChangeAuth); err != nil {
 			t.Fatalf("PolicyCommandCode failed: %v", err)
 		}

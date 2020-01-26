@@ -163,7 +163,7 @@ func (r *sessionContext) IsExclusive() bool {
 	return r.isExclusive
 }
 
-func makeIncompleteSessionContext(t *TPMContext, handle Handle) (HandleContext, error) {
+func makeIncompleteSessionContext(t *TPMContext, handle Handle) (SessionContext, error) {
 	hr := handle & 0x00ffffff
 	h, err := t.GetCapabilityHandles(hr|(Handle(HandleTypeLoadedSession)<<24), 1)
 	if err != nil {
@@ -275,11 +275,6 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 	switch handle.Type() {
 	case HandleTypeNVIndex:
 		rc, err = makeNVIndexContext(t, handle)
-	case HandleTypeHMACSession, HandleTypePolicySession:
-		rc, err = makeIncompleteSessionContext(t, handle)
-		if rc == nil {
-			return nil, ResourceUnavailableError{handle}
-		}
 	case HandleTypeTransient, HandleTypePersistent:
 		rc, err = makeObjectContext(t, handle)
 	default:
@@ -305,47 +300,53 @@ func (t *TPMContext) WrapHandle(handle Handle) (HandleContext, error) {
 	return rc, nil
 }
 
-// WrapSessionHandle creates and returns a SessionContext for the specified handle. TPMContext will maintain a reference to the
-// returned SessionContext until it is flushed from the TPM or if the TPM indicates that it has created a new session with the same
-// handle - these stale SessionContext instances may occur when working with sessions via a resource manager. If the TPMContext is
-// already tracking an active SessionContext for the specified handle, it returns the existing SessionContext.
+// GetOrCreateSessionContext creates and returns a new SessionContext for the specified handle, or returns the existing one if the
+// TPMContext already has a reference to one. TPMContext will maintain a reference to the returned SessionContext until it is flushed
+// from the TPM or if the TPM indicates that it has created a new session with the same handle - these stale SessionContext instances
+// may occur when working with sessions via a resource manager.
 //
 // If a new SessionContext has to be created, this command will execute some commands to determine if the session exists on the TPM,
 // either as a saved or loaded session. If the session is saved then the returned SessionContext will return a Handle with a HandleType
 // of HandleTypeHMACSession regardless of the HandleType of the supplied handle. Regardless of whether the session is saved or loaded,
 // the returned SessionContext will not be complete and the session associated with it cannot be used in any command other than
 // TPMContext.FlushContext. It will return a ResourceUnavailableError error if no session with the specified handle exists.
-func (t *TPMContext) WrapSessionHandle(handle Handle) (SessionContext, error) {
+func (t *TPMContext) GetOrCreateSessionContext(handle Handle) (SessionContext, error) {
 	switch handle.Type() {
 	case HandleTypeHMACSession, HandleTypePolicySession:
-		rc, err := t.WrapHandle(handle)
+		if rc, exists := t.resources[normalizeHandleForMap(handle)]; exists {
+			return rc.(SessionContext), nil
+		}
+		rc, err := makeIncompleteSessionContext(t, handle)
 		if err != nil {
 			return nil, err
 		}
-		return rc.(SessionContext), nil
+		if rc == nil {
+			return nil, ResourceUnavailableError{handle}
+		}
+		t.addHandleContext(rc)
+		return rc, nil
 	default:
-		return nil, errors.New("invalid handle type")
+		panic("invalid handle type")
 	}
 }
 
-// GetOrCreatePermanentContext creates a new HandleContext for the specified permanent handle or PCR handle, or returns the existing
-// one if the TPMContext already has a reference to one.
+// GetOrCreatePermanentContext creates and returns a new HandleContext for the specified permanent handle or PCR handle, or returns
+// the existing one if the TPMContext already has a reference to one.
 //
 // This function will panic if handle does not correspond to a permanent or PCR handle.
 func (t *TPMContext) GetOrCreatePermanentContext(handle Handle) HandleContext {
 	switch handle.Type() {
 	case HandleTypePermanent, HandleTypePCR:
+		if rc, exists := t.resources[normalizeHandleForMap(handle)]; exists {
+			return rc
+		}
+
+		rc := &permanentContext{handle}
+		t.addHandleContext(rc)
+		return rc
 	default:
 		panic("invalid handle type")
 	}
-
-	if rc, exists := t.resources[handle]; exists {
-		return rc
-	}
-
-	rc := &permanentContext{handle}
-	t.addHandleContext(rc)
-	return rc
 }
 
 // OwnerHandleContext returns the HandleContext corresponding to the owner hiearchy.

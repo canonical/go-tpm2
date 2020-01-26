@@ -152,7 +152,7 @@ func TestPolicySecret(t *testing.T) {
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)
 
-	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32, useSession func(HandleContext), auth interface{}) {
+	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32, useSession func(SessionContext), auth interface{}) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -245,7 +245,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext)
 
-		useSession := func(sessionContext HandleContext) {
+		useSession := func(sessionContext SessionContext) {
 			time.Sleep(2 * time.Second)
 			_, err := tpm.Unseal(objectContext, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
@@ -300,7 +300,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("ComputeCpHash failed: %v", err)
 		}
 
-		useSession := func(sessionContext HandleContext) {
+		useSession := func(sessionContext SessionContext) {
 			_, err := tpm.Unseal(objectContext1, &Session{Context: sessionContext, Attrs: AttrContinueSession})
 			if err == nil {
 				t.Fatalf("Unseal should have failed")
