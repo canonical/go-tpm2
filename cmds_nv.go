@@ -87,8 +87,8 @@ func (t *TPMContext) initNVMaxBufferSize() {
 //
 // If there is insufficient space for the index, a *TPMError error with an error code of ErrorNVSpace will be returned.
 //
-// On successful completion, the NV index will be defined and a HandleContext can be created for it using the TPMContext.WrapHandle
-// function, specifying the value of the Index field of publicInfo as the handle.
+// On successful completion, the NV index will be defined and a HandleContext can be created for it using the
+// TPMContext.GetOrCreateResourceContext function, specifying the value of the Index field of publicInfo as the handle.
 func (t *TPMContext) NVDefineSpace(authContext HandleContext, auth Auth, publicInfo *NVPublic, authContextAuth interface{}, sessions ...*Session) error {
 	return t.RunCommand(CommandNVDefineSpace, sessions,
 		HandleContextWithAuth{Context: authContext, Auth: authContextAuth}, Separator,

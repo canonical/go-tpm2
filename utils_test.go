@@ -342,9 +342,9 @@ func TestTrialPolicyNV(t *testing.T) {
 	if err := tpm.NVDefineSpace(owner, nil, &nvPub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	index, err := tpm.WrapHandle(nvPub.Index)
+	index, err := tpm.GetOrCreateResourceContext(nvPub.Index)
 	if err != nil {
-		t.Fatalf("WrapHandle failed: %v", err)
+		t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 	}
 	defer undefineNVSpace(t, tpm, index, owner, nil)
 

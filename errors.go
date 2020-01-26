@@ -9,9 +9,9 @@ import (
 	"fmt"
 )
 
-// ResourceUnavailableError is returned from TPMContext.WrapHandle if it is called with a handle that does not correspond to a
-// resource that is available on the TPM. This could be because the resource doesn't exist on the TPM, or it lives within a
-// hierarchy that is disabled.
+// ResourceUnavailableError is returned from TPMContext.GetOrCreateResourceContext or TPMContext.GetOrCreateSessionContext if it is
+// called with a handle that does not correspond to a resource that is available on the TPM. This could be because the resource
+// doesn't exist on the TPM, or it lives within a hierarchy that is disabled.
 type ResourceUnavailableError struct {
 	Handle Handle
 }

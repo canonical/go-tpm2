@@ -1134,9 +1134,9 @@ func TestPolicyNV(t *testing.T) {
 			if err := tpm.NVDefineSpace(owner, authValue, &data.pub, nil); err != nil {
 				t.Fatalf("NVDefineSpace failed: %v", err)
 			}
-			index, err := tpm.WrapHandle(data.pub.Index)
+			index, err := tpm.GetOrCreateResourceContext(data.pub.Index)
 			if err != nil {
-				t.Fatalf("WrapHandle failed: %v", err)
+				t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 			}
 			return index
 		}

@@ -60,7 +60,7 @@ func TestContextSave(t *testing.T) {
 
 		sessionContext, err = tpm.GetOrCreateSessionContext(sessionHandle)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
 		_, err = tpm.ContextSave(sessionContext)
@@ -218,7 +218,7 @@ func TestEvictControl(t *testing.T) {
 
 	run := func(t *testing.T, transient HandleContext, persist Handle, authAuth interface{}) {
 		owner := tpm.OwnerHandleContext()
-		if handle, err := tpm.WrapHandle(persist); err == nil {
+		if handle, err := tpm.GetOrCreateResourceContext(persist); err == nil {
 			_, err := tpm.EvictControl(owner, handle, persist, authAuth)
 			if err != nil {
 				t.Logf("EvictControl failed whilst trying to remove a handle at the start of the test: %v", err)
@@ -250,12 +250,12 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("EvictControl should set the persistent context's handle to %v", HandleUnassigned)
 		}
 
-		_, err = tpm.WrapHandle(persist)
+		_, err = tpm.GetOrCreateResourceContext(persist)
 		if err == nil {
-			t.Fatalf("WrapHandle on an evicted resource should fail")
+			t.Fatalf("GetOrCreateResourceContext on an evicted resource should fail")
 		}
 		if _, ok := err.(ResourceUnavailableError); !ok {
-			t.Errorf("WrapHandle returned an unexpected error: %v", err)
+			t.Errorf("GetOrCreateResourceContext returned an unexpected error: %v", err)
 		}
 	}
 
@@ -316,11 +316,11 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("FlushContext should set the context's handle to %v", HandleUnassigned)
 	}
 
-	_, err = tpm.WrapHandle(h)
+	_, err = tpm.GetOrCreateResourceContext(h)
 	if err == nil {
-		t.Fatalf("WrapHandle on a flushed resource should fail")
+		t.Fatalf("GetOrCreateResourceContext on a flushed resource should fail")
 	}
 	if _, ok := err.(ResourceUnavailableError); !ok {
-		t.Fatalf("WrapHandle on a flushed resource should fail")
+		t.Fatalf("GetOrCreateResourceContext on a flushed resource should fail")
 	}
 }

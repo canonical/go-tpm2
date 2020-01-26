@@ -23,9 +23,9 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 		defer func() {
-			rc, err := tpm.WrapHandle(publicInfo.Index)
+			rc, err := tpm.GetOrCreateResourceContext(publicInfo.Index)
 			if err != nil {
-				t.Fatalf("WrapHandle failed: %v", err)
+				t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 			}
 			if err := tpm.NVUndefineSpace(owner, rc, ownerAuth); err != nil {
 				t.Errorf("NVUndefineSpace failed: %v", err)
@@ -35,7 +35,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			}
 		}()
 
-		nvContext, err := tpm.WrapHandle(publicInfo.Index)
+		nvContext, err := tpm.GetOrCreateResourceContext(publicInfo.Index)
 		if err != nil {
 			t.Fatalf("Failed to create context for newly created NV index: %v", err)
 		}
@@ -103,7 +103,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 		if err := tpm.NVDefineSpace(owner, testAuth, &pub, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
 			t.Fatalf("Failed to create context for newly created NV index: %v", err)
 		}
@@ -145,9 +145,9 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		context, err := tpm.WrapHandle(pub.Index)
+		context, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return context
@@ -234,9 +234,9 @@ func TestNVWriteZeroSized(t *testing.T) {
 	if err := tpm.NVDefineSpace(owner, nil, &pub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	rc, err := tpm.WrapHandle(pub.Index)
+	rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 	if err != nil {
-		t.Fatalf("WrapHandle failed: %v", err)
+		t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 	}
 	defer undefineNVSpace(t, tpm, rc, owner, nil)
 
@@ -280,9 +280,9 @@ func TestNVReadAndWrite(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return rc
@@ -431,9 +431,9 @@ func TestNVIncrement(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return rc
@@ -497,9 +497,9 @@ func TestNVReadCounter(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return rc
@@ -569,9 +569,9 @@ func TestNVExtend(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return rc
@@ -652,9 +652,9 @@ func TestNVSetBits(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return rc
@@ -731,9 +731,9 @@ func TestNVWriteLock(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return rc
@@ -797,9 +797,9 @@ func TestNVReadLock(t *testing.T) {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
 
-		rc, err := tpm.WrapHandle(pub.Index)
+		rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 
 		return rc
@@ -879,9 +879,9 @@ func TestNVGlobalLock(t *testing.T) {
 			if err := tpm.NVDefineSpace(owner, nil, &data, auth); err != nil {
 				t.Fatalf("NVDefineSpace failed: %v", err)
 			}
-			rc, err := tpm.WrapHandle(data.Index)
+			rc, err := tpm.GetOrCreateResourceContext(data.Index)
 			if err != nil {
-				t.Fatalf("WrapHandle failed: %v", err)
+				t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 			}
 			defer undefineNVSpace(t, tpm, rc, owner, auth)
 			rcs = append(rcs, rc)
@@ -984,9 +984,9 @@ func TestNVChangeAuth(t *testing.T) {
 			if err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil); err != nil {
 				t.Fatalf("NVDefineSpace failed: %v", err)
 			}
-			rc, err := tpm.WrapHandle(pub.Index)
+			rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 			if err != nil {
-				t.Fatalf("WrapHandle failed: %v", err)
+				t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 			}
 			defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext(), nil)
 

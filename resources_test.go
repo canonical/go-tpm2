@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestWrapHandle(t *testing.T) {
+func TestGetOrCreateResourceContext(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	closed := false
 	defer func() {
@@ -35,27 +35,27 @@ func TestWrapHandle(t *testing.T) {
 	tpm = openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	primary, err := tpm.WrapHandle(primaryHandle)
+	primary, err := tpm.GetOrCreateResourceContext(primaryHandle)
 	if err != nil {
-		t.Errorf("WrapHandle failed with a live transient object: %v", err)
+		t.Errorf("GetOrCreateResourceContext failed with a live transient object: %v", err)
 	}
 	if primary == nil {
-		t.Fatalf("WrapHandle returned a nil pointer for a live transient object")
+		t.Fatalf("GetOrCreateResourceContext returned a nil pointer for a live transient object")
 	}
 	if primary.Handle() != primaryHandle {
-		t.Errorf("WrapHandle returned an invalid context for a live transient object")
+		t.Errorf("GetOrCreateResourceContext returned an invalid context for a live transient object")
 	}
 	defer flushContext(t, tpm, primary)
 
-	persistentPrimary, err = tpm.WrapHandle(persistentHandle)
+	persistentPrimary, err = tpm.GetOrCreateResourceContext(persistentHandle)
 	if err != nil {
-		t.Errorf("WrapHandle failed with a live persistent object: %v", err)
+		t.Errorf("GetOrCreateResourceContext failed with a live persistent object: %v", err)
 	}
 	if persistentPrimary == nil {
-		t.Fatalf("WrapHandle returned a nil pointer for a live persistent object")
+		t.Fatalf("GetOrCreateResourceContext returned a nil pointer for a live persistent object")
 	}
 	if persistentPrimary.Handle() != persistentHandle {
-		t.Errorf("WrapHandle returned an invalid context for a live persistent object")
+		t.Errorf("GetOrCreateResourceContext returned an invalid context for a live persistent object")
 	}
 	defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
 
@@ -67,38 +67,38 @@ func TestWrapHandle(t *testing.T) {
 	if err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &nvPub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	index, err := tpm.WrapHandle(nvPub.Index)
+	index, err := tpm.GetOrCreateResourceContext(nvPub.Index)
 	if err != nil {
-		t.Errorf("WrapHandle failed with a live NV index: %v", err)
+		t.Errorf("GetOrCreateResourceContext failed with a live NV index: %v", err)
 	}
 	if index == nil {
-		t.Fatalf("WrapHandle returned a nil pointer for a live NV index")
+		t.Fatalf("GetOrCreateResourceContext returned a nil pointer for a live NV index")
 	}
 	if index.Handle() != nvPub.Index {
-		t.Errorf("WrapHandle returned an invalid context for a live NV index")
+		t.Errorf("GetOrCreateResourceContext returned an invalid context for a live NV index")
 	}
 	defer undefineNVSpace(t, tpm, index, tpm.OwnerHandleContext(), nil)
 
-	_, err = tpm.WrapHandle(primaryHandle + 1)
+	_, err = tpm.GetOrCreateResourceContext(primaryHandle + 1)
 	if err == nil {
-		t.Fatalf("WrapHandle should return an error for a dead transient object")
+		t.Fatalf("GetOrCreateResourceContext should return an error for a dead transient object")
 	}
 	if e, ok := err.(ResourceUnavailableError); !ok || e.Handle != primaryHandle+1 {
-		t.Errorf("WrapHandle returned an unexpected error for a dead transient object: %v", err)
+		t.Errorf("GetOrCreateResourceContext returned an unexpected error for a dead transient object: %v", err)
 	}
-	_, err = tpm.WrapHandle(persistentHandle + 1)
+	_, err = tpm.GetOrCreateResourceContext(persistentHandle + 1)
 	if err == nil {
-		t.Fatalf("WrapHandle should return an error for a dead persistent object")
+		t.Fatalf("GetOrCreateResourceContext should return an error for a dead persistent object")
 	}
 	if e, ok := err.(ResourceUnavailableError); !ok || e.Handle != persistentHandle+1 {
-		t.Errorf("WrapHandle returned an unexpected error for a dead persistent object: %v", err)
+		t.Errorf("GetOrCreateResourceContext returned an unexpected error for a dead persistent object: %v", err)
 	}
-	_, err = tpm.WrapHandle(nvPub.Index + 1)
+	_, err = tpm.GetOrCreateResourceContext(nvPub.Index + 1)
 	if err == nil {
-		t.Fatalf("WrapHandle should return an error for a dead NV index")
+		t.Fatalf("GetOrCreateResourceContext should return an error for a dead NV index")
 	}
 	if e, ok := err.(ResourceUnavailableError); !ok || e.Handle != nvPub.Index+1 {
-		t.Errorf("WrapHandle returned an unexpected error for a dead NV index: %v", err)
+		t.Errorf("GetOrCreateResourceContext returned an unexpected error for a dead NV index: %v", err)
 	}
 }
 

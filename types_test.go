@@ -442,9 +442,9 @@ func TestNVPublicName(t *testing.T) {
 	if err := tpm.NVDefineSpace(owner, nil, &pub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	rc, err := tpm.WrapHandle(pub.Index)
+	rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 	if err != nil {
-		t.Fatalf("WrapHandle failed: %v", err)
+		t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 	}
 	defer undefineNVSpace(t, tpm, rc, owner, nil)
 

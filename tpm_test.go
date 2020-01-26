@@ -364,7 +364,7 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Hand
 // Persist a transient object for testing. If the persistent handle is already in use, it tries to evict the
 // existing resource first. Fatal if persisting the transient object fails.
 func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth, transient HandleContext, persist Handle) HandleContext {
-	if context, err := tpm.WrapHandle(persist); err == nil {
+	if context, err := tpm.GetOrCreateResourceContext(persist); err == nil {
 		_, err := tpm.EvictControl(auth, context, persist, nil)
 		if err != nil {
 			t.Logf("EvictControl failed whilst trying to remove a persistent handle that has previously been leaked: %v", err)

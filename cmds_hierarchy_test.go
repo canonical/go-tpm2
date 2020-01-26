@@ -320,7 +320,7 @@ func TestClear(t *testing.T) {
 		if err := tpm.NVDefineSpace(owner, nil, &nvPub1, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		nv1, _ := tpm.WrapHandle(nvPub1.Index)
+		nv1, _ := tpm.GetOrCreateResourceContext(nvPub1.Index)
 		defer verifyNVSpaceUndefined(t, tpm, nv1, owner, nil)
 		transientObjects = append(transientObjects, nv1)
 
@@ -333,7 +333,7 @@ func TestClear(t *testing.T) {
 		if err := tpm.NVDefineSpace(platform, nil, &nvPub2, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		nv2, _ := tpm.WrapHandle(nvPub2.Index)
+		nv2, _ := tpm.GetOrCreateResourceContext(nvPub2.Index)
 		defer undefineNVSpace(t, tpm, nv2, platform, nil)
 		persistentObjects = append(persistentObjects, nv2)
 
