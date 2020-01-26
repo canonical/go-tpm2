@@ -86,7 +86,7 @@ import (
 // code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest algorithm
 // selected by the specified scheme.
 //
-// On success, a HandleContext instance will be returned that corresponds to the newly created object on the TPM. If the Type field
+// On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM. If the Type field
 // of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object will have a Unique field that is the digest
 // of the sensitive data and the value of the object's seed in the sensitive area, computed using the object's name algorithm. If
 // the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned *Public object will have a Unique field containing
@@ -96,7 +96,7 @@ import (
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
 // can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
 // method.
-func (t *TPMContext) CreatePrimary(primaryObject HandleContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}, sessions ...*Session) (HandleContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
+func (t *TPMContext) CreatePrimary(primaryObject HandleContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}

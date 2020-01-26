@@ -323,9 +323,9 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 // If a persistent object already exists at the specified handle, a *TPMError error with an error code of ErrorNVDefined will be
 // returned.
 //
-// On successful completion of persisting a transient object, it returns a HandleContext that corresponds to the persistent object.
-// On successful completion of evicting a persistent object, it returns a nil HandleContext, and object will be invalidated.
-func (t *TPMContext) EvictControl(auth, object HandleContext, persistentHandle Handle, authAuth interface{}, sessions ...*Session) (HandleContext, error) {
+// On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
+// On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
+func (t *TPMContext) EvictControl(auth, object HandleContext, persistentHandle Handle, authAuth interface{}, sessions ...*Session) (ResourceContext, error) {
 	if err := t.RunCommand(CommandEvictControl, sessions,
 		HandleContextWithAuth{Context: auth, Auth: authAuth}, object, Separator,
 		persistentHandle); err != nil {

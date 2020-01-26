@@ -189,8 +189,8 @@ func (t *TPMContext) Create(parentContext HandleContext, inSensitive *SensitiveC
 // If the loaded object is a storage parent and the size of the seed value in the sensitive area isn't sufficient for the selected
 // name algorithm, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// On success, a HandleContext corresponding to the newly loaded transient object will be returned.
-func (t *TPMContext) Load(parentContext HandleContext, inPrivate Private, inPublic *Public, parentContextAuth interface{}, sessions ...*Session) (HandleContext, Name, error) {
+// On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
+func (t *TPMContext) Load(parentContext HandleContext, inPrivate Private, inPublic *Public, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error) {
 	var objectHandle Handle
 	var name Name
 
@@ -274,8 +274,8 @@ func (t *TPMContext) Load(parentContext HandleContext, inPrivate Private, inPubl
 // If the digest in the Unique field of inPublic is inconsistent with the value of the sensitive data and the seed value, a
 // *TPMError with an error code of ErrorBinding will be returned.
 //
-// On success, a HandleContext corresponding to the newly loaded transient object will be returned.
-func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...*Session) (HandleContext, Name, error) {
+// On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
+func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...*Session) (ResourceContext, Name, error) {
 	var objectHandle Handle
 	var name Name
 
@@ -557,13 +557,13 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext HandleContext
 // code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest algorithm
 // selected by the specified scheme.
 //
-// On success, a HandleContext instance will be returned that corresponds to the newly created object on the TPM, along with the
+// On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM, along with the
 // private and public parts. If the Type field of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public
 // object will have a Unique field that is the digest of the sensitive data and the value of the object's seed in the sensitive area,
 // computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned
 // *Public object will have a Unique field containing details about the public part of the key, computed from the private part of the
 // key.
-func (t *TPMContext) CreateLoaded(parentContext HandleContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuth interface{}, sessions ...*Session) (HandleContext, Private, *Public, Name, error) {
+func (t *TPMContext) CreateLoaded(parentContext HandleContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
