@@ -171,6 +171,13 @@ type HandleContextWithAuth struct {
 	Auth    interface{}
 }
 
+// ResourceContextWithAuth associates a ResourceContext with a session for authorization, and is provided to TPMContext.RunCommand in
+// the command handle area.
+type ResourceContextWithSession struct {
+	Context ResourceContext
+	Session *Session
+}
+
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
 // Section 14 - Asymmetric Primitives
 // Section 15 - Symmetric Primitives
@@ -484,9 +491,16 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 			case HandleContextWithAuth:
 				commandHandles = append(commandHandles, p.Context)
 				var err error
-				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, p)
+				sessionParams, err = t.validateAndAppendAuthSessionParamLegacy(sessionParams, p)
 				if err != nil {
 					return fmt.Errorf("cannot process HandleContextWithAuth for command %s at index %d: %v", commandCode, len(commandHandles), err)
+				}
+			case ResourceContextWithSession:
+				commandHandles = append(commandHandles, p.Context)
+				var err error
+				sessionParams, err = t.validateAndAppendAuthSessionParam(sessionParams, p)
+				if err != nil {
+					return fmt.Errorf("cannot process ResourceContextWithSession for command %s at index %d: %v", commandCode, len(commandHandles), err)
 				}
 			default:
 				commandHandles = append(commandHandles, param)
@@ -500,7 +514,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 		}
 	}
 
-	sessionParams, err := t.validateAndAppendSessionParam(sessionParams, sessions)
+	sessionParams, err := t.validateAndAppendExtraSessionParams(sessionParams, sessions)
 	if err != nil {
 		return fmt.Errorf("cannot process non-auth *Session parameters for command %s: %v", commandCode, err)
 	}

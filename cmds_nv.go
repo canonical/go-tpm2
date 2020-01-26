@@ -126,15 +126,15 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex HandleContext, authCon
 // On successful completion, nvIndex will be invalidated.
 func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform HandleContext, nvIndexAuth *Session, platformAuth interface{}, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, HandleContextWithAuth{Context: nvIndex, Auth: nvIndexAuth})
+	s, err := t.validateAndAppendAuthSessionParamLegacy(s, HandleContextWithAuth{Context: nvIndex, Auth: nvIndexAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, HandleContextWithAuth{Context: platform, Auth: platformAuth})
+	s, err = t.validateAndAppendAuthSessionParamLegacy(s, HandleContextWithAuth{Context: platform, Auth: platformAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
@@ -719,12 +719,12 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex HandleContext, authContextA
 // will be returned.
 func (t *TPMContext) NVChangeAuth(nvIndex HandleContext, newAuth Auth, nvIndexAuth *Session, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, HandleContextWithAuth{Context: nvIndex, Auth: nvIndexAuth})
+	s, err := t.validateAndAppendAuthSessionParamLegacy(s, HandleContextWithAuth{Context: nvIndex, Auth: nvIndexAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v",
 			err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}

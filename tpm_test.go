@@ -31,16 +31,17 @@ var (
 )
 
 // Set the hierarchy auth to testAuth. Fatal on failure
-func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy HandleContext) {
+func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy ResourceContext) {
 	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
 		t.Fatalf("HierarchyChangeAuth failed: %v", err)
 	}
+	hierarchy.SetAuthValue(testAuth) // TODO: Remove once HierarchyChangeAuth is updated
 }
 
 // Reset the hierarchy auth from testAuth to nil. Will succeed if HierarchyChangeAuth succeeds, or if it fails
 // because the hierarchy auth has already been reset by another action in the test. Otherwise it causes the test
 // to fail.
-func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy HandleContext) {
+func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy ResourceContext) {
 	if hierarchy.Handle() == HandleLockout {
 		// Lockout auth is DA protected, so don't attempt to reset if it has already been done by the test
 		if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
@@ -54,6 +55,7 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy HandleContext) 
 		case HandleLockout:
 		case HandlePlatform:
 			if err := tpm.HierarchyChangeAuth(hierarchy, nil, nil); err == nil {
+				hierarchy.SetAuthValue(nil) // TODO: Remove once HierarchyChangeAuth is updated
 				return
 			}
 		default:
@@ -71,6 +73,8 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy HandleContext) 
 			}
 		}
 		t.Errorf("HierarchyChangeAuth failed: %v", err)
+	} else {
+		hierarchy.SetAuthValue(nil) // TODO: Remove once HierarchyChangeAuth is updated
 	}
 }
 

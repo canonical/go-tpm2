@@ -27,9 +27,10 @@ type HandleContext interface {
 
 type handleContextPrivate interface {
 	invalidate()
+	getAuthValue() []byte
 }
 
-// SessionContext corresponds to a session that resides on the TPM.
+// SessionContext is a HandleContext that corresponds to a session on the TPM.
 type SessionContext interface {
 	HandleContext
 	NonceTPM() Nonce   // The most recent TPM nonce value
@@ -37,9 +38,10 @@ type SessionContext interface {
 	IsExclusive() bool // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
 }
 
-// ResourceContext corresponds to a non-session entity that resides on the TPM.
+// ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
 type ResourceContext interface {
 	HandleContext
+	SetAuthValue([]byte) // Set the authorization value that will be used when authorization is required for this resource
 }
 
 type untrackedContext Handle
@@ -55,7 +57,8 @@ func (r untrackedContext) Name() Name {
 }
 
 type permanentContext struct {
-	handle Handle
+	handle    Handle
+	authValue []byte
 }
 
 func (r *permanentContext) Handle() Handle {
@@ -68,14 +71,23 @@ func (r *permanentContext) Name() Name {
 	return name
 }
 
+func (r *permanentContext) SetAuthValue(value []byte) {
+	r.authValue = value
+}
+
 func (r *permanentContext) invalidate() {
 	r.handle = HandleUnassigned
 }
 
+func (r *permanentContext) getAuthValue() []byte {
+	return r.authValue
+}
+
 type objectContext struct {
-	handle Handle
-	public Public
-	name   Name
+	handle    Handle
+	public    Public
+	name      Name
+	authValue []byte
 }
 
 func (r *objectContext) Handle() Handle {
@@ -86,6 +98,10 @@ func (r *objectContext) Name() Name {
 	return r.name
 }
 
+func (r *objectContext) SetAuthValue(value []byte) {
+	r.authValue = value
+}
+
 func (r *objectContext) invalidate() {
 	r.handle = HandleUnassigned
 	r.public = Public{}
@@ -93,10 +109,15 @@ func (r *objectContext) invalidate() {
 	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
 }
 
+func (r *objectContext) getAuthValue() []byte {
+	return r.authValue
+}
+
 type nvIndexContext struct {
-	handle Handle
-	public NVPublic
-	name   Name
+	handle    Handle
+	public    NVPublic
+	name      Name
+	authValue []byte
 }
 
 func (r *nvIndexContext) Handle() Handle {
@@ -107,11 +128,19 @@ func (r *nvIndexContext) Name() Name {
 	return r.name
 }
 
+func (r *nvIndexContext) SetAuthValue(value []byte) {
+	r.authValue = value
+}
+
 func (r *nvIndexContext) invalidate() {
 	r.handle = HandleUnassigned
 	r.public = NVPublic{}
 	r.name = make(Name, binary.Size(r.handle))
 	binary.BigEndian.PutUint32(r.name, uint32(r.handle))
+}
+
+func (r *nvIndexContext) getAuthValue() []byte {
+	return r.authValue
 }
 
 func (r *nvIndexContext) setAttr(a NVAttributes) {
@@ -154,6 +183,10 @@ func (r *sessionContext) Name() Name {
 
 func (r *sessionContext) invalidate() {
 	r.handle = HandleUnassigned
+}
+
+func (r *sessionContext) getAuthValue() []byte {
+	panic("not implemented for session contexts")
 }
 
 func (r *sessionContext) NonceTPM() Nonce {
@@ -278,7 +311,7 @@ func (t *TPMContext) GetOrCreateResourceContext(handle Handle) (ResourceContext,
 		return t.GetOrCreatePermanentContext(handle), nil
 	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
 		if rc, exists := t.resources[normalizeHandleForMap(handle)]; exists {
-			return rc, nil
+			return rc.(ResourceContext), nil
 		}
 
 		var rc ResourceContext
@@ -350,10 +383,10 @@ func (t *TPMContext) GetOrCreatePermanentContext(handle Handle) ResourceContext 
 	switch handle.Type() {
 	case HandleTypePermanent, HandleTypePCR:
 		if rc, exists := t.resources[normalizeHandleForMap(handle)]; exists {
-			return rc
+			return rc.(ResourceContext)
 		}
 
-		rc := &permanentContext{handle}
+		rc := &permanentContext{handle: handle}
 		t.addHandleContext(rc)
 		return rc
 	default:

@@ -145,11 +145,11 @@ func (t *TPMContext) CreatePrimary(primaryObject HandleContext, inSensitive *Sen
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
 func (t *TPMContext) Clear(authContext HandleContext, authContextAuth interface{}, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, HandleContextWithAuth{Context: authContext, Auth: authContextAuth})
+	s, err := t.validateAndAppendAuthSessionParamLegacy(s, HandleContextWithAuth{Context: authContext, Auth: authContextAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for authContext: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
@@ -233,11 +233,11 @@ func (t *TPMContext) ClearControl(authContext HandleContext, disable bool, authC
 // On successful completion, the authorization value for the hierarchy associated with authContext will be set to the value of newAuth.
 func (t *TPMContext) HierarchyChangeAuth(authContext HandleContext, newAuth Auth, authContextAuth interface{}, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, HandleContextWithAuth{Context: authContext, Auth: authContextAuth})
+	s, err := t.validateAndAppendAuthSessionParamLegacy(s, HandleContextWithAuth{Context: authContext, Auth: authContextAuth})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
