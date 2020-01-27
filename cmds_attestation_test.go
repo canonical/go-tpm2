@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag StructTag, signContext HandleContext, signHierarchy Handle, qualifyingData Data) *Attest {
+func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag StructTag, signContext ResourceContext, signHierarchy Handle, qualifyingData Data) *Attest {
 	if attestRaw == nil {
 		t.Fatalf("attestation is empty")
 	}
@@ -59,7 +59,7 @@ func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag Struct
 	return attest
 }
 
-func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext HandleContext, attest AttestRaw, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
+func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceContext, attest AttestRaw, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
 	if signature == nil {
 		t.Fatalf("nil signature")
 	}

@@ -234,12 +234,12 @@ func TestPolicySecret(t *testing.T) {
 			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
 
-		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, testAuth)
+		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -273,23 +273,23 @@ func TestPolicySecret(t *testing.T) {
 		sensitive1 := SensitiveCreate{Data: secret1}
 		sensitive2 := SensitiveCreate{Data: secret2}
 
-		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive1, &template, nil, nil, testAuth)
+		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive1, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext1, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+		objectContext1, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
 		defer flushContext(t, tpm, objectContext1)
 
-		outPrivate, outPublic, _, _, _, err = tpm.Create(primary, &sensitive2, &template, nil, nil, testAuth)
+		outPrivate, outPublic, _, _, _, err = tpm.Create(primary, &sensitive2, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext2, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+		objectContext2, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -1029,6 +1029,7 @@ func TestPolicyPassword(t *testing.T) {
 		t.Fatalf("Load failed: %v", err)
 	}
 	defer flushContext(t, tpm, objectContext)
+	objectContext.SetAuthValue(testAuth)
 
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 	if err != nil {
@@ -1049,7 +1050,7 @@ func TestPolicyPassword(t *testing.T) {
 		t.Errorf("Unexpected session digest")
 	}
 
-	if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext, AuthValue: testAuth}); err != nil {
+	if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext}); err != nil {
 		t.Errorf("Unseal failed: %v", err)
 	}
 }

@@ -304,12 +304,12 @@ func TestImport(t *testing.T) {
 	copy(objectSensitive.AuthValue, []byte("foo"))
 
 	// FIXME: Remove auth parameter once Load is using ResourceContext
-	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, auth interface{}, parentContextAuthSession *Session) {
+	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession *Session) {
 		priv, err := tpm.Import(primary, encryptionKey, &objectPublic, duplicate, inSymSeed, symmetricAlg, parentContextAuthSession)
 		if err != nil {
 			t.Fatalf("Import failed: %v", err)
 		}
-		object, _, err := tpm.Load(primary, priv, &objectPublic, auth)
+		object, _, err := tpm.Load(primary, priv, &objectPublic, parentContextAuthSession)
 		if err != nil {
 			t.Errorf("Load failed: %v", err)
 		}
@@ -318,7 +318,7 @@ func TestImport(t *testing.T) {
 
 	t.Run("NoWrappers", func(t *testing.T) {
 		duplicate, _ := MarshalToBytes(sensitiveSized{&objectSensitive})
-		run(t, nil, duplicate, nil, nil, testAuth, nil)
+		run(t, nil, duplicate, nil, nil, nil)
 	})
 
 	t.Run("InnerWrapper", func(t *testing.T) {
@@ -346,7 +346,7 @@ func TestImport(t *testing.T) {
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   SymKeyBitsU{Data: uint16(128)},
 			Mode:      SymModeU{Data: SymModeCFB}}
-		run(t, encryptionKey, encSensitive, nil, &symmetricAlg, testAuth, nil)
+		run(t, encryptionKey, encSensitive, nil, &symmetricAlg, nil)
 	})
 
 	t.Run("OuterWrapper", func(t *testing.T) {
@@ -388,7 +388,7 @@ func TestImport(t *testing.T) {
 			t.Fatalf("EncryptOAEP failed: %v", err)
 		}
 
-		run(t, nil, duplicate, encSeed, nil, testAuth, nil)
+		run(t, nil, duplicate, encSeed, nil, nil)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
@@ -402,6 +402,6 @@ func TestImport(t *testing.T) {
 
 		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
-		run(t, nil, duplicate, nil, nil, &session, &session)
+		run(t, nil, duplicate, nil, nil, &session)
 	})
 }

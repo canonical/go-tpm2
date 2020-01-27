@@ -60,6 +60,16 @@ func (r untrackedContext) Name() Name {
 	return name
 }
 
+func (r untrackedContext) SetAuthValue([]byte) {
+}
+
+func (r untrackedContext) invalidate() {
+}
+
+func (r untrackedContext) getAuthValue() []byte {
+	return nil
+}
+
 type permanentContext struct {
 	handle    Handle
 	authValue []byte

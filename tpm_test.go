@@ -83,7 +83,7 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 	}
 }
 
-func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent HandleContext) {
+func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
 	var parentQualifiedName Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -237,7 +237,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	return objectHandle
 }
 
-func createRSAEkForTesting(t *testing.T, tpm *TPMContext) HandleContext {
+func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
@@ -260,7 +260,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) HandleContext {
 	return objectHandle
 }
 
-func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContext, userAuth Auth) ResourceContext {
+func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext, userAuth Auth) ResourceContext {
 	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
@@ -304,7 +304,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContex
 	return akContext
 }
 
-func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent HandleContext) ResourceContext {
+func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent ResourceContext) ResourceContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,

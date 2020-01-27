@@ -13,7 +13,8 @@ import (
 // Create executes the TPM2_Create command to create a new ordinary object as a child of the storage parent associated with
 // parentContext.
 //
-// The command requires authorization with the user auth role for parentContext, provided via parentContextAuth.
+// The command requires authorization with the user auth role for parentContext, with session based authorization provided via
+// parentContextAuthSession.
 //
 // A template for the object is provided via the inPublic parameter. The Type field of inPublic defines the algorithm for the object.
 // The NameAlg field defines the digest algorithm for computing the name of the object. The Attrs field defines the attributes of
@@ -108,7 +109,7 @@ import (
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
 // can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
 // method.
-func (t *TPMContext) Create(parentContext HandleContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, parentContextAuth interface{}, sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
+func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, parentContextAuthSession *Session, sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -120,7 +121,7 @@ func (t *TPMContext) Create(parentContext HandleContext, inSensitive *SensitiveC
 	var creationTicket TkCreation
 
 	if err := t.RunCommand(CommandCreate, sessions,
-		HandleContextWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Separator,
 		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
 		Separator,
 		&outPrivate, &outPublic, &creationData, &creationHash, &creationTicket); err != nil {
@@ -133,7 +134,7 @@ func (t *TPMContext) Create(parentContext HandleContext, inSensitive *SensitiveC
 // Load executes the TPM2_Load command in order to load both the public and private parts of an object in to the TPM.
 //
 // The parentContext parameter corresponds to the parent key. The command requires authorization with the user auth role for
-// parentContext, provided via parentContextAuth.
+// parentContext, with session based authorization provided via parentContextAuthSession.
 //
 // The object to load is specified by providing the inPrivate and inPublic arguments.
 //
@@ -189,13 +190,15 @@ func (t *TPMContext) Create(parentContext HandleContext, inSensitive *SensitiveC
 // If the loaded object is a storage parent and the size of the seed value in the sensitive area isn't sufficient for the selected
 // name algorithm, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
-func (t *TPMContext) Load(parentContext HandleContext, inPrivate Private, inPublic *Public, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Name, error) {
+// On success, a ResourceContext corresponding to the newly loaded transient object will be returned. If the ResourceContext is
+// subsequently used in authorization roles that require knowledge of the corresponding resources's authorization value, the
+// authorization value will need to be provided by calling ResourceContext.SetAuthValue.
+func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, Name, error) {
 	var objectHandle Handle
 	var name Name
 
 	if err := t.RunCommand(CommandLoad, sessions,
-		HandleContextWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Separator,
 		inPrivate, publicSized{inPublic}, Separator,
 		&objectHandle, Separator,
 		&name); err != nil {
@@ -307,7 +310,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 // If objectContext corresponds to a sequence object, a *TPMError with an error code of ErrorSequence will be returned.
 //
 // On success, the public part of the object is returned, along with the object's name and qualified name.
-func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...*Session) (*Public, Name, Name, error) {
+func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
 	var outPublic publicSized
 	var name Name
 	var qualifiedName Name
@@ -327,7 +330,7 @@ func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...*Sessio
 // The activateContext parameter corresponds to an object to which credentialBlob is to be associated. It would typically be an
 // attestation key, and the issusing certificate authority would have validated that this object has the expected properties of an
 // attestation key (it is a restricted, non-duplicable signing key) before issuing the credential. Authorization with the admin role
-// is required for activateContext, provided via activateContextAuth.
+// is required for activateContext, with session based authorization provided via activateContextAuthSession.
 //
 // The credentialBlob is an encrypted and integrity protected credential issued by a certificate authority. It is encrypted with a key
 // derived from a seed generated by the certificate authority, and the name of the object associated with activateContext. It is
@@ -337,7 +340,7 @@ func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...*Sessio
 // The keyContext parameter corresponds to an asymmetric restricted decrypt that was used to encrypt the seed value, which is provided
 // via the secret parameter in encrypted form. It is typically an endorsement key, and the issuing certificate authority would have
 // verified that it is a valid endorsement key by verifying the associated endorsement certificate. Authorization with the user auth
-// role is required for keyContext, provided via keyContextAuth.
+// role is required for keyContext, with session based authorization provided via keyContextAuthSession.
 //
 // If keyContext does not correspond to an asymmetric restricted decrypt key, a *TPMHandleError error with an error code of ErrorType
 // is returned for handle index 2.
@@ -353,10 +356,10 @@ func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...*Sessio
 //
 // On success, the decrypted credential is returned. This is typically used to decrypt a certificate associated with activateContext,
 // which was issued by a certificate authority.
-func (t *TPMContext) ActivateCredential(activateContext, keyContext HandleContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuth, keyContextAuth interface{}, sessions ...*Session) (Digest, error) {
+func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession *Session, sessions ...*Session) (Digest, error) {
 	var certInfo Digest
 	if err := t.RunCommand(CommandActivateCredential, sessions,
-		HandleContextWithAuth{Context: activateContext, Auth: activateContextAuth}, HandleContextWithAuth{Context: keyContext, Auth: keyContextAuth}, Separator,
+		ResourceContextWithSession{Context: activateContext, Session: activateContextAuthSession}, ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Separator,
 		credentialBlob, secret, Separator,
 		Separator,
 		&certInfo); err != nil {
@@ -397,7 +400,7 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext HandleContex
 // protected certificate, the encrypted credential blob and the encrypted seed to the requesting party. The seed and credential values
 // can only be recovered on the TPM associated with the endorsement certificate that the requesting party provided if the object
 // associated with objectName is resident on it.
-func (t *TPMContext) MakeCredential(context HandleContext, credential Digest, objectName Name, sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
+func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
 	var credentialBlob IDObjectRaw
 	var secret EncryptedSecret
 	if err := t.RunCommand(CommandMakeCredential, sessions,
@@ -411,18 +414,19 @@ func (t *TPMContext) MakeCredential(context HandleContext, credential Digest, ob
 }
 
 // Unseal executes the TPM2_Unseal command to decrypt the sealed data object associated with itemContext and retrieve its sensitive
-// data. The command requires authorization with the user auth role for itemContext, provided via itemContextAuth.
+// data. The command requires authorization with the user auth role for itemContext, with session based authorization provided via
+// itemContextAuthSession.
 //
 // If the type of object associated with itemContext is not AlgorithmKeyedHash, a *TPMHandleError error with an error code of
 // ErrorType will be returned. If the object associated with itemContext has either the AttrDecrypt, AttrSign or AttrRestricted
 // attributes set, a *TPMHandlerError error with an error code of ErrorAttributes will be returned.
 //
 // On success, the object's sensitive data is returned in decrypted form.
-func (t *TPMContext) Unseal(itemContext HandleContext, itemContextAuth interface{}, sessions ...*Session) (SensitiveData, error) {
+func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession *Session, sessions ...*Session) (SensitiveData, error) {
 	var outData SensitiveData
 
 	if err := t.RunCommand(CommandUnseal, sessions,
-		HandleContextWithAuth{Context: itemContext, Auth: itemContextAuth}, Separator,
+		ResourceContextWithSession{Context: itemContext, Session: itemContextAuthSession}, Separator,
 		Separator,
 		Separator,
 		&outData); err != nil {
@@ -433,7 +437,8 @@ func (t *TPMContext) Unseal(itemContext HandleContext, itemContextAuth interface
 }
 
 // ObjectChangeAuth executes the TPM2_ObjectChangeAuth to change the authorization value of the object associated with objectContext.
-// This command requires authorization with the admin role for objectContext, provided via objectContextAuth.
+// This command requires authorization with the admin role for objectContext, with sessio based authorization provided via
+// objectContextAuthSession.
 //
 // The new authorization value is provided via newAuth. The parentContext parameter must correspond to the parent object for
 // objectContext. No authorization is required for parentContext.
@@ -449,11 +454,11 @@ func (t *TPMContext) Unseal(itemContext HandleContext, itemContextAuth interface
 //
 // On success, this returns a new private area for the object associated with objectContext. This function does not make any changes
 // to the version of the object that is currently loaded in to the TPM.
-func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext HandleContext, newAuth Auth, objectContextAuth interface{}, sessions ...*Session) (Private, error) {
+func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth, objectContextAuthSession *Session, sessions ...*Session) (Private, error) {
 	var outPrivate Private
 
 	if err := t.RunCommand(CommandObjectChangeAuth, sessions,
-		HandleContextWithAuth{Context: objectContext, Auth: objectContextAuth}, parentContext, Separator,
+		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, parentContext, Separator,
 		newAuth, Separator,
 		Separator,
 		&outPrivate); err != nil {
@@ -467,7 +472,8 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext HandleContext
 // object, parentContext should correspond to a hierarchy. To create a new ordinary object, parentContext should correspond to a
 // storage parent. To create a new derived object, parentContext should correspond to a derivation parent.
 //
-// The command requires authorization with the user auth role for parentContext.
+// The command requires authorization with the user auth role for parentContext, with session based authorization provided via
+// parentContextAuthSession.
 //
 // A template for the object is provided via the inPublic parameter. The Type field of inPublic defines the algorithm for the object.
 // The NameAlg field defines the digest algorithm for computing the name of the object. The Attrs field defines the attributes of
@@ -558,12 +564,14 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext HandleContext
 // selected by the specified scheme.
 //
 // On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM, along with the
-// private and public parts. If the Type field of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public
-// object will have a Unique field that is the digest of the sensitive data and the value of the object's seed in the sensitive area,
+// private and public parts.  It will not be necessary to call ResourceContext.SetAuthValue on the returned ResourceContext - this
+// function sets the correct authorization value so that it can be used in authorization roles that require knowledge of the
+// authorization value. If the Type field of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object
+// will have a Unique field that is the digest of the sensitive data and the value of the object's seed in the sensitive area,
 // computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned
 // *Public object will have a Unique field containing details about the public part of the key, computed from the private part of the
 // key.
-func (t *TPMContext) CreateLoaded(parentContext HandleContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuth interface{}, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
+func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -583,7 +591,7 @@ func (t *TPMContext) CreateLoaded(parentContext HandleContext, inSensitive *Sens
 	var name Name
 
 	if err := t.RunCommand(CommandCreateLoaded, sessions,
-		HandleContextWithAuth{Context: parentContext, Auth: parentContextAuth}, Separator,
+		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Separator,
 		sensitiveCreateSized{inSensitive}, inTemplate, Separator,
 		&objectHandle, Separator,
 		&outPrivate, &outPublic, &name); err != nil {
@@ -598,7 +606,7 @@ func (t *TPMContext) CreateLoaded(parentContext HandleContext, inSensitive *Sens
 		return nil, nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
-	objectContext := &objectContext{handle: objectHandle, name: name}
+	objectContext := &objectContext{handle: objectHandle, name: name, authValue: inSensitive.UserAuth}
 	outPublic.Ptr.copyTo(&objectContext.public)
 	t.addHandleContext(objectContext)
 

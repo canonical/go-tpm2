@@ -138,6 +138,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	}()
 
 	run := func(t *testing.T, authSession *Session) {
+		context.SetAuthValue(nil)
 	Loop:
 		for i := 0; i < 3; i++ {
 			_, err := tpm.ObjectChangeAuth(context, primary, nil, nil)
@@ -157,7 +158,8 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		_, err := tpm.ObjectChangeAuth(context, primary, nil, testAuth)
+		context.SetAuthValue(testAuth)
+		_, err := tpm.ObjectChangeAuth(context, primary, nil, nil)
 		if err == nil {
 			t.Fatalf("ObjectChangeAuth should have failed")
 		}
@@ -181,7 +183,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Errorf("DictionaryAttackLockReset should have reset TPM_PT_LOCKOUT_COUNTER")
 		}
 
-		_, err = tpm.ObjectChangeAuth(context, primary, nil, testAuth)
+		_, err = tpm.ObjectChangeAuth(context, primary, nil, nil)
 		if err != nil {
 			t.Errorf("ObjectChangeAuth failed: %v", err)
 		}

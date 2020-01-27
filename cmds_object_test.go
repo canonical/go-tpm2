@@ -18,7 +18,7 @@ func TestCreate(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, parent, hierarchy HandleContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (*Public, Private) {
+	run := func(t *testing.T, parent, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session *Session) (*Public, Private) {
 		outPrivate, outPublic, creationData, creationHash, creationTicket, err := tpm.Create(parent, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
@@ -105,8 +105,9 @@ func TestCreate(t *testing.T) {
 			t.Fatalf("Load failed: %v", err)
 		}
 		defer flushContext(t, tpm, handle)
+		handle.SetAuthValue(testAuth)
 
-		run(t, handle, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, testAuth)
+		run(t, handle, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 	})
 
 	t.Run("WithOutsideInfo", func(t *testing.T) {
@@ -144,7 +145,7 @@ func TestCreate(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, testAuth)
+		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
@@ -169,7 +170,7 @@ func TestCreate(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, AuthValue: testAuth}
+		session := Session{Context: sessionContext}
 
 		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, &session)
 		verifyRSAAgainstTemplate(t, pub, &template)
@@ -180,7 +181,7 @@ func TestLoad(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, parent HandleContext, session interface{}) {
+	run := func(t *testing.T, parent ResourceContext, session *Session) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -222,7 +223,7 @@ func TestLoad(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
-		run(t, primary, testAuth)
+		run(t, primary, nil)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
@@ -235,7 +236,7 @@ func TestLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth}
+		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
 		run(t, primary, &session)
 	})
@@ -451,7 +452,7 @@ func TestUnseal(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, "")
+		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -459,7 +460,7 @@ func TestUnseal(t *testing.T) {
 		return objectContext
 	}
 
-	run := func(t *testing.T, handle HandleContext, session interface{}) {
+	run := func(t *testing.T, handle ResourceContext, session *Session) {
 		sensitiveData, err := tpm.Unseal(handle, session)
 		if err != nil {
 			t.Fatalf("Unseal failed: %v", err)
@@ -478,7 +479,7 @@ func TestUnseal(t *testing.T) {
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
-		run(t, handle, testAuth)
+		run(t, handle, nil)
 	})
 
 	t.Run("UseHMACSessionAuth", func(t *testing.T) {
@@ -489,7 +490,7 @@ func TestUnseal(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, handle, &Session{Context: sessionContext, AuthValue: testAuth})
+		run(t, handle, &Session{Context: sessionContext})
 	})
 
 	t.Run("UsePolicySessionAuth", func(t *testing.T) {
@@ -533,7 +534,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		return objectContext, outPublic
 	}
 
-	run := func(t *testing.T, context HandleContext, pub *Public, authValue Auth, session interface{}) {
+	run := func(t *testing.T, context ResourceContext, pub *Public, authValue Auth, session *Session) {
 		priv, err := tpm.ObjectChangeAuth(context, primary, authValue, session)
 		if err != nil {
 			t.Fatalf("ObjectChangeAuth failed: %v", err)
@@ -544,8 +545,9 @@ func TestObjectChangeAuth(t *testing.T) {
 			t.Fatalf("Load failed: %v", err)
 		}
 		defer flushContext(t, tpm, newContext)
+		newContext.SetAuthValue(authValue)
 
-		_, err = tpm.Unseal(newContext, []byte(authValue))
+		_, err = tpm.Unseal(newContext, nil)
 		if err != nil {
 			t.Errorf("Unseal failed: %v", err)
 		}
@@ -560,7 +562,7 @@ func TestObjectChangeAuth(t *testing.T) {
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		context, pub := create(t, Auth(testAuth))
 		defer flushContext(t, tpm, context)
-		run(t, context, pub, Auth("1234"), testAuth)
+		run(t, context, pub, Auth("1234"), nil)
 	})
 
 	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
@@ -571,7 +573,7 @@ func TestObjectChangeAuth(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, AuthValue: testAuth}
+		session := Session{Context: sessionContext}
 		run(t, context, pub, Auth("foo"), &session)
 	})
 
@@ -583,7 +585,7 @@ func TestObjectChangeAuth(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, context, pub, Auth("foo"), &Session{Context: sessionContext, AuthValue: testAuth})
+		run(t, context, pub, Auth("foo"), &Session{Context: sessionContext})
 	})
 }
 
@@ -638,7 +640,7 @@ func TestActivateCredential(t *testing.T) {
 
 	credentialIn := []byte("secret credential")
 
-	run := func(t *testing.T, ak HandleContext, auth interface{}) {
+	run := func(t *testing.T, ak ResourceContext, authSession *Session) {
 		credentialBlob, secret, err := tpm.MakeCredential(ek, credentialIn, ak.Name())
 		if err != nil {
 			t.Fatalf("MakeCredential failed: %v", err)
@@ -653,7 +655,7 @@ func TestActivateCredential(t *testing.T) {
 			t.Fatalf("PolicySecret failed: %v", err)
 		}
 
-		credentialOut, err := tpm.ActivateCredential(ak, ek, credentialBlob, secret, auth, &Session{Context: sessionContext})
+		credentialOut, err := tpm.ActivateCredential(ak, ek, credentialBlob, secret, authSession, &Session{Context: sessionContext})
 		if err != nil {
 			t.Fatalf("ActivateCredential failed: %v", err)
 		}
@@ -671,7 +673,7 @@ func TestActivateCredential(t *testing.T) {
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)
 		defer flushContext(t, tpm, ak)
-		run(t, ak, testAuth)
+		run(t, ak, nil)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		ak := createAndLoadRSAAkForTesting(t, tpm, ek, testAuth)

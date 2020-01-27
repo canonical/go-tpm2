@@ -137,7 +137,7 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		_, _, _, _, _, err := tpm.Create(objectContext, nil, &childTemplate, nil, nil, testAuth)
+		_, _, _, _, _, err := tpm.Create(objectContext, nil, &childTemplate, nil, nil, nil)
 		if err != nil {
 			t.Errorf("Use of authorization on primary key failed: %v", err)
 		}

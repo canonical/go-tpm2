@@ -111,7 +111,7 @@ func TestHMACSessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
-				if err.Error() != "cannot process HandleContextWithAuth for command TPM_CC_Create at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Create at index 1: invalid resource context for session: "+
 					"resource has been closed" {
 					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 				}
@@ -137,11 +137,11 @@ func TestPolicySessions(t *testing.T) {
 		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, testAuth)
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
-	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestPolicySessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent usage of the session should fail")
 				}
-				if err.Error() != "cannot process HandleContextWithAuth for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
 					"resource has been closed" {
 					t.Errorf("Unexpected error: %v", err)
 				}
