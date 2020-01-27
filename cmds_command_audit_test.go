@@ -75,7 +75,7 @@ Next:
 		}
 	}()
 
-	run := func(t *testing.T, auth interface{}) {
+	run := func(t *testing.T, authAuthSession *Session) {
 		checkAuditDigest := func(alg HashAlgorithmId) {
 			attest, _, err = tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 			if err != nil {
@@ -92,7 +92,8 @@ Next:
 			}
 		}
 
-		if err := tpm.SetCommandCodeAuditStatus(tpm.OwnerHandleContext(), alg, nil, nil, auth); err != nil {
+		owner := tpm.OwnerHandleContext()
+		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, nil, authAuthSession); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
@@ -123,8 +124,7 @@ Next:
 			}
 		}
 
-		owner := tpm.OwnerHandleContext()
-		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, commands, nil, auth); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, commands, nil, authAuthSession); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
@@ -133,13 +133,13 @@ Next:
 		expectedCommands = append(expectedCommands, commands...)
 		checkAuditCommands(expectedCommands)
 
-		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, commands, auth); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, commands, authAuthSession); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
 		checkAuditCommands(initialCommands)
 
-		if err := tpm.SetCommandCodeAuditStatus(owner, initialAlgorithm, nil, nil, auth); err != nil {
+		if err := tpm.SetCommandCodeAuditStatus(owner, initialAlgorithm, nil, nil, authAuthSession); err != nil {
 			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
 		}
 
@@ -153,7 +153,7 @@ Next:
 	t.Run("WithPasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-		run(t, testAuth)
+		run(t, nil)
 	})
 
 	t.Run("WithSessionAuth", func(t *testing.T) {
