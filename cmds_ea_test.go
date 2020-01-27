@@ -1076,7 +1076,7 @@ func TestPolicyNV(t *testing.T) {
 	for _, data := range []struct {
 		desc      string
 		pub       NVPublic
-		prepare   func(*testing.T, HandleContext, interface{})
+		prepare   func(*testing.T, ResourceContext, *Session)
 		operandB  Operand
 		offset    uint16
 		operation ArithmeticOp
@@ -1088,8 +1088,8 @@ func TestPolicyNV(t *testing.T) {
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
-			prepare: func(t *testing.T, index HandleContext, auth interface{}) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, auth); err != nil {
+			prepare: func(t *testing.T, index ResourceContext, authSession *Session) {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, authSession); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -1104,8 +1104,8 @@ func TestPolicyNV(t *testing.T) {
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
-			prepare: func(t *testing.T, index HandleContext, auth interface{}) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, auth); err != nil {
+			prepare: func(t *testing.T, index ResourceContext, authSession *Session) {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, authSession); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -1120,8 +1120,8 @@ func TestPolicyNV(t *testing.T) {
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 				Size:    8},
-			prepare: func(t *testing.T, index HandleContext, auth interface{}) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4, auth); err != nil {
+			prepare: func(t *testing.T, index ResourceContext, authSession *Session) {
+				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4, authSession); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -1143,8 +1143,8 @@ func TestPolicyNV(t *testing.T) {
 		}
 
 		// FIXME: Remove auth parameter once NV functions are converted to ResourceContext
-		run := func(t *testing.T, index ResourceContext, auth interface{}, authSession *Session) {
-			data.prepare(t, index, auth)
+		run := func(t *testing.T, index ResourceContext, authSession *Session) {
+			data.prepare(t, index, authSession)
 
 			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyNV(index.Name(), data.operandB, data.offset, data.operation)
@@ -1174,13 +1174,13 @@ func TestPolicyNV(t *testing.T) {
 		t.Run(data.desc+"/NoAuth", func(t *testing.T) {
 			index := createIndex(t, nil)
 			defer undefineNVSpace(t, tpm, index, owner, nil)
-			run(t, index, nil, nil)
+			run(t, index, nil)
 		})
 
 		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
 			defer undefineNVSpace(t, tpm, index, owner, nil)
-			run(t, index, testAuth, nil)
+			run(t, index, nil)
 		})
 
 		t.Run(data.desc+"/UseSessionAuth", func(t *testing.T) {
@@ -1195,7 +1195,7 @@ func TestPolicyNV(t *testing.T) {
 			defer flushContext(t, tpm, sessionContext)
 
 			session := &Session{Context: sessionContext, Attrs: AttrContinueSession}
-			run(t, index, testAuth, session)
+			run(t, index, session)
 		})
 	}
 }

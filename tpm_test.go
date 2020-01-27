@@ -45,18 +45,18 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy ResourceContext
 }
 
 // Undefine a NV index set by a test. Fails the test if it doesn't succeed.
-func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle HandleContext, auth interface{}) {
-	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
+func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession *Session) {
+	if err := tpm.NVUndefineSpace(authHandle, context, authSession); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
 }
 
-func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context, authHandle HandleContext, auth interface{}) {
+func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession *Session) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}
 	t.Errorf("Context is still live")
-	undefineNVSpace(t, tpm, context, authHandle, auth)
+	undefineNVSpace(t, tpm, context, authHandle, authSession)
 }
 
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
