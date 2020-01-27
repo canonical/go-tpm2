@@ -993,7 +993,7 @@ func TestPolicyAuthValue(t *testing.T) {
 				t.Errorf("Unexpected session digest")
 			}
 
-			if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext, AuthValue: testAuth}); err != nil {
+			if _, err := tpm.Unseal(objectContext, &Session{Context: sessionContext}); err != nil {
 				t.Errorf("Unseal failed: %v", err)
 			}
 		})

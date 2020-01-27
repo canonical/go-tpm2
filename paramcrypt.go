@@ -77,12 +77,8 @@ func computeSessionValue(session *sessionParam) []byte {
 	var key []byte
 	key = append(key, session.session.Context.(*sessionContext).sessionKey...)
 	if session.isAuth {
-		if session.associatedContextIsResource {
-			if session.associatedContext != nil {
-				key = append(key, session.associatedContext.(handleContextPrivate).getAuthValue()...)
-			}
-		} else {
-			key = append(key, session.session.AuthValue...)
+		if session.associatedContext != nil {
+			key = append(key, session.associatedContext.(handleContextPrivate).getAuthValue()...)
 		}
 	}
 	return key

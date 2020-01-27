@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 
 	"golang.org/x/xerrors"
 )
@@ -36,12 +35,9 @@ const (
 )
 
 type sessionParam struct {
-	isAuth            bool          // Whether this parameter is used for authorization
-	associatedContext HandleContext // The resource associated with an authorization - can be nil (TODO: Convert to ResourceContext once all APIs are converted)
-	session           *Session      // The session instance used for this session parameter - will be nil for a password authorization
-	authValue         []byte        // For a password session, this is the auth value (TODO: Delete once all APIs are converted to ResourceContext)
-
-	associatedContextIsResource bool // TODO: Delete once all APIs are converted to ResourceContext
+	isAuth            bool            // Whether this parameter is used for authorization
+	associatedContext ResourceContext // The resource associated with an authorization - can be nil
+	session           *Session        // The session instance used for this session parameter - will be nil for a password authorization
 }
 
 type authCommand struct {
@@ -135,14 +131,10 @@ func computeBindName(name Name, auth Auth) Name {
 	return r
 }
 
-func (s *Session) computeSessionHMACKey(associatedContext HandleContext, associatedContextIsResource bool) []byte {
+func (s *Session) computeSessionHMACKey(associatedContext HandleContext) []byte {
 	var authValue []byte
-	if associatedContextIsResource {
-		if associatedContext != nil {
-			authValue = associatedContext.(handleContextPrivate).getAuthValue()
-		}
-	} else {
-		authValue = s.AuthValue
+	if associatedContext != nil {
+		authValue = associatedContext.(handleContextPrivate).getAuthValue()
 	}
 	var key []byte
 	key = append(key, s.Context.(*sessionContext).sessionKey...)
@@ -152,7 +144,7 @@ func (s *Session) computeSessionHMACKey(associatedContext HandleContext, associa
 	return key
 }
 
-func (s *Session) updateIncludeAuthValueInHMACKey(isAuth bool, associatedContext HandleContext, associatedContextIsResource bool) {
+func (s *Session) updateIncludeAuthValueInHMACKey(isAuth bool, associatedContext ResourceContext) {
 	sc := s.Context.(*sessionContext)
 	switch sc.sessionType {
 	case SessionTypeHMAC:
@@ -166,23 +158,12 @@ func (s *Session) updateIncludeAuthValueInHMACKey(isAuth bool, associatedContext
 			if associatedContext == nil {
 				associatedContext = untrackedContext(HandleNull)
 			}
-			if associatedContextIsResource {
-				bindName = computeBindName(associatedContext.Name(), associatedContext.(handleContextPrivate).getAuthValue())
-			} else {
-				bindName = computeBindName(associatedContext.Name(), s.AuthValue)
-			}
+			bindName = computeBindName(associatedContext.Name(), associatedContext.(handleContextPrivate).getAuthValue())
 			s.includeAuthValue = !bytes.Equal(bindName, sc.boundEntity)
 		}
 	case SessionTypePolicy:
 		s.includeAuthValue = sc.policyHMACType == policyHMACTypeAuth
 	}
-}
-
-func (s *Session) copyWithNewAuthIfRequired(newAuth []byte) *Session {
-	if !s.includeAuthValue {
-		return s
-	}
-	return &Session{Context: s.Context, AuthValue: newAuth, Attrs: s.Attrs, includeAuthValue: true}
 }
 
 func buildCommandSessionAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) *authCommand {
@@ -194,16 +175,12 @@ func buildCommandSessionAuth(tpm *TPMContext, param *sessionParam, commandCode C
 	if sessionContext.sessionType == SessionTypePolicy && sessionContext.policyHMACType == policyHMACTypePassword {
 		// Policy session that contains a TPM2_PolicyPassword assertion. The HMAC is just the authorization value
 		// of the resource being authorized.
-		if param.associatedContextIsResource {
-			if param.associatedContext != nil {
-				hmac = param.associatedContext.(handleContextPrivate).getAuthValue()
-			}
-		} else {
-			hmac = param.session.AuthValue
+		if param.associatedContext != nil {
+			hmac = param.associatedContext.(handleContextPrivate).getAuthValue()
 		}
 	} else {
-		param.session.updateIncludeAuthValueInHMACKey(param.isAuth, param.associatedContext, param.associatedContextIsResource)
-		key := param.session.computeSessionHMACKey(param.associatedContext, param.associatedContextIsResource)
+		param.session.updateIncludeAuthValueInHMACKey(param.isAuth, param.associatedContext)
+		key := param.session.computeSessionHMACKey(param.associatedContext)
 		if len(key) > 0 {
 			cpHash := cryptComputeCpHash(sessionContext.hashAlg, commandCode, commandHandles, cpBytes)
 			hmac = cryptComputeSessionCommandHMAC(sessionContext, key, cpHash, decryptNonce, encryptNonce, attrs)
@@ -224,15 +201,11 @@ func buildCommandPasswordAuth(authValue Auth) *authCommand {
 func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) *authCommand {
 	if param.session == nil {
 		// Cleartext password session
-		if param.associatedContextIsResource {
-			var authValue []byte
-			if param.associatedContext != nil {
-				authValue = param.associatedContext.(handleContextPrivate).getAuthValue()
-			}
-			return buildCommandPasswordAuth(Auth(authValue))
-		} else {
-			return buildCommandPasswordAuth(Auth(param.authValue))
+		var authValue []byte
+		if param.associatedContext != nil {
+			authValue = param.associatedContext.(handleContextPrivate).getAuthValue()
 		}
+		return buildCommandPasswordAuth(Auth(authValue))
 	}
 	// HMAC or policy session
 	return buildCommandSessionAuth(tpm, param, commandCode, commandHandles, cpBytes, decryptNonce, encryptNonce)
@@ -255,7 +228,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, param *sessi
 		return nil
 	}
 
-	key := param.session.computeSessionHMACKey(param.associatedContext, param.associatedContextIsResource)
+	key := param.session.computeSessionHMACKey(param.associatedContext)
 	if len(key) == 0 && len(resp.HMAC) == 0 {
 		return nil
 	}
@@ -336,28 +309,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in *s
 }
 
 func (t *TPMContext) validateAndAppendAuthSessionParam(params []*sessionParam, in ResourceContextWithSession) ([]*sessionParam, error) {
-	s := &sessionParam{isAuth: true, associatedContext: in.Context, session: in.Session, associatedContextIsResource: true}
-	return t.validateAndAppendSessionParam(params, s)
-}
-
-func (t *TPMContext) validateAndAppendAuthSessionParamLegacy(params []*sessionParam, in HandleContextWithAuth) ([]*sessionParam, error) {
-	var s *sessionParam
-	switch a := in.Auth.(type) {
-	case string:
-		s = &sessionParam{authValue: []byte(a)}
-	case []byte:
-		s = &sessionParam{authValue: a}
-	case nil:
-		s = &sessionParam{}
-	case *Session:
-		s = &sessionParam{session: a}
-	default:
-		return nil, fmt.Errorf("invalid auth parameter type (%s)", reflect.TypeOf(in.Auth))
-	}
-
-	s.isAuth = true
-	s.associatedContext = in.Context
-
+	s := &sessionParam{isAuth: true, associatedContext: in.Context, session: in.Session}
 	return t.validateAndAppendSessionParam(params, s)
 }
 

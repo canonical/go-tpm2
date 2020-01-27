@@ -24,45 +24,33 @@ func TestHMACSessions(t *testing.T) {
 		desc         string
 		tpmKey       ResourceContext
 		bind         ResourceContext
-		sessionAuth  []byte
 		sessionAttrs SessionAttributes
 	}{
 		{
 			desc:         "UnboundUnsalted",
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
-			desc:         "BoundUnsalted1",
-			bind:         primary,
-			sessionAuth:  testAuth,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsalted2",
+			desc:         "BoundUnsalted",
 			bind:         primary,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsaltedUsedOnNonBoundResource",
 			bind:         owner,
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
-			desc:        "UnboundUnsaltedUncontinued",
-			sessionAuth: testAuth,
+			desc: "UnboundUnsaltedUncontinued",
 		},
 		{
 			desc:         "UnboundSaltedRSA",
 			tpmKey:       primary,
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "UnboundSaltedECC",
 			tpmKey:       primaryECC,
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
@@ -96,7 +84,7 @@ func TestHMACSessions(t *testing.T) {
 						KeyBits:   2048,
 						Exponent:  0}}}
 
-			session := &Session{Context: sessionContext, AuthValue: data.sessionAuth, Attrs: data.sessionAttrs}
+			session := &Session{Context: sessionContext, Attrs: data.sessionAttrs}
 			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)
@@ -153,7 +141,6 @@ func TestPolicySessions(t *testing.T) {
 		desc         string
 		tpmKey       ResourceContext
 		bind         ResourceContext
-		sessionAuth  []byte
 		sessionAttrs SessionAttributes
 	}{
 		{
@@ -169,31 +156,13 @@ func TestPolicySessions(t *testing.T) {
 			desc: "UnboundUnsaltedUncontinued",
 		},
 		{
-			desc:         "BoundUnsalted1",
-			bind:         objectContext,
-			sessionAuth:  testAuth,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsalted2",
+			desc:         "BoundUnsalted",
 			bind:         objectContext,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
-			desc:         "BoundUnsalted3",
-			bind:         objectContext,
-			sessionAuth:  dummyAuth,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsaltedUsedOnNonBoundResource1",
+			desc:         "BoundUnsaltedUsedOnNonBoundResource",
 			bind:         primary,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsaltedUsedOnNonBoundResource2",
-			bind:         primary,
-			sessionAuth:  dummyAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
@@ -216,7 +185,7 @@ func TestPolicySessions(t *testing.T) {
 				}
 			}()
 
-			session := Session{Context: sessionContext, Attrs: data.sessionAttrs, AuthValue: data.sessionAuth}
+			session := Session{Context: sessionContext, Attrs: data.sessionAttrs}
 			_, err = tpm.Unseal(objectContext, &session)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)

@@ -176,7 +176,7 @@ func TestCreatePrimary(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, AuthValue: testAuth}
+		session := Session{Context: sessionContext}
 
 		template := Public{
 			Type:    ObjectTypeRSA,

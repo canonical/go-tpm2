@@ -117,58 +117,22 @@ const (
 
 // Session wraps a session HandleContext with some additional parameters that define how a command should use the session.
 type Session struct {
-	Context SessionContext // A context for a session loaded on the TPM
-
-	// AuthValue is the authorization value of the resource that the session is being used to provide an authorisation for. For HMAC
-	// sessions, AuthValue will be included in the HMAC key if the session associated with Context is not bound, or the session is
-	// used to provide authorization for a resource to which it isn't bound. In this case, AuthValue must match the authorization
-	// value of the resource that this session is being used to provide authorization for. If the resource that this session is
-	// being used to provide authorization for is the one that is bound to the session, then AuthValue can be omitted. If it is
-	// provided, then it must match the authorization value of the resource to which the session is bound.
-	//
-	// For policy sessions, AuthValue is not included in the HMAC key unless the TPMContext.PolicyAuthValue function has been called
-	// on the session associated with Context. If Context corresponds to a policy session and TPMContext.PolicyPassword has been
-	// executed on it, the value of AuthValue will be included in cleartext in the HMAC field of the generated command authorization.
-	// In both of these cases, AuthValue must match the authorization value of the resource for which the session is being used to
-	// provide authorization for.
-	//
-	// If the Attrs field has the AttrCommandEncrypt or AttrResponseEncrypt flags set and the session is also being used to provide
-	// authorization, then the authorization value of the resource for which the session is providing authorization is included in
-	// the derivation of the symmetric key. In this case, AuthValue must match the authorization value of the resource for which this
-	// session is providing authorization and cannot be omitted, even if the session is bound to the resource for which it is providing
-	// an authorization.
-	AuthValue []byte
-
-	Attrs SessionAttributes // Session usage attributes
+	Context SessionContext    // A context for a session loaded on the TPM
+	Attrs   SessionAttributes // Session usage attributes
 
 	includeAuthValue bool
 }
 
-func (s *Session) WithAuthValue(authValue []byte) *Session {
-	return &Session{Context: s.Context, AuthValue: authValue, Attrs: s.Attrs}
-}
-
 func (s *Session) WithAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: attrs}
+	return &Session{Context: s.Context, Attrs: attrs}
 }
 
 func (s *Session) AddAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: s.Attrs | attrs}
+	return &Session{Context: s.Context, Attrs: s.Attrs | attrs}
 }
 
 func (s *Session) RemoveAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: s.Attrs &^ attrs}
-}
-
-// HandleContextWithAuth associates a HandleContext with an authorization, and is provided to TPMContext.RunCommand in the command handle
-// area.
-//
-// Auth can be one of the following types:
-//  * string, []byte, or nil for plaintext password authorization.
-//  * *Session for session based authorization (HMAC or policy).
-type HandleContextWithAuth struct {
-	Context HandleContext
-	Auth    interface{}
+	return &Session{Context: s.Context, Attrs: s.Attrs &^ attrs}
 }
 
 // ResourceContextWithAuth associates a ResourceContext with a session for authorization, and is provided to TPMContext.RunCommand in
@@ -488,13 +452,6 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 		switch sentinels {
 		case 0:
 			switch p := param.(type) {
-			case HandleContextWithAuth:
-				commandHandles = append(commandHandles, p.Context)
-				var err error
-				sessionParams, err = t.validateAndAppendAuthSessionParamLegacy(sessionParams, p)
-				if err != nil {
-					return fmt.Errorf("cannot process HandleContextWithAuth for command %s at index %d: %v", commandCode, len(commandHandles), err)
-				}
 			case ResourceContextWithSession:
 				commandHandles = append(commandHandles, p.Context)
 				var err error

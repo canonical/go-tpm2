@@ -442,54 +442,31 @@ func (*mockSessionContext) IsAudit() bool     { return false }
 func (*mockSessionContext) IsExclusive() bool { return false }
 
 func TestSession(t *testing.T) {
-	auth1 := []byte("foo")
-	auth2 := []byte("bar")
-
 	c := &mockSessionContext{}
-	s := Session{Context: c, AuthValue: auth1, Attrs: AttrContinueSession}
+	s := Session{Context: c, Attrs: AttrContinueSession}
 
-	s2 := s.WithAuthValue(auth2)
-	if s.Context != s2.Context {
+	s2 := s.WithAttrs(AttrResponseEncrypt)
+	if s2.Context != s.Context {
 		t.Errorf("Wrong context")
 	}
-	if s.Attrs != s2.Attrs {
+	if s2.Attrs != AttrResponseEncrypt {
 		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, auth2) {
-		t.Errorf("Wrong auth value")
 	}
 
-	s3 := s2.WithAttrs(AttrResponseEncrypt)
-	if s.Context != s3.Context {
+	s3 := s2.AddAttrs(AttrCommandEncrypt)
+	if s3.Context != s.Context {
 		t.Errorf("Wrong context")
 	}
-	if s3.Attrs != AttrResponseEncrypt {
+	if s3.Attrs != AttrResponseEncrypt|AttrCommandEncrypt {
 		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, s3.AuthValue) {
-		t.Errorf("Wrong auth value")
 	}
 
-	s4 := s3.AddAttrs(AttrCommandEncrypt)
-	if s.Context != s4.Context {
+	s4 := s3.RemoveAttrs(AttrResponseEncrypt)
+	if s4.Context != s.Context {
 		t.Errorf("Wrong context")
 	}
-	if s4.Attrs != AttrResponseEncrypt|AttrCommandEncrypt {
+	if s4.Attrs != AttrCommandEncrypt {
 		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, s4.AuthValue) {
-		t.Errorf("Wrong auth value")
-	}
-
-	s5 := s4.RemoveAttrs(AttrResponseEncrypt)
-	if s.Context != s5.Context {
-		t.Errorf("Wrong context")
-	}
-	if s5.Attrs != AttrCommandEncrypt {
-		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, s5.AuthValue) {
-		t.Errorf("Wrong auth value")
 	}
 }
 
