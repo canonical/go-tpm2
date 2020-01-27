@@ -75,7 +75,7 @@ func TestDuplicate(t *testing.T) {
 	defer flushContext(t, tpm, parent)
 
 	run := func(t *testing.T, newParentContext HandleContext, encryptionKeyIn Data, symmetricAlg *SymDefObject) (Data, Private, EncryptedSecret) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -393,7 +393,7 @@ func TestImport(t *testing.T) {
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		duplicate, _ := MarshalToBytes(sensitiveSized{&objectSensitive})
 
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

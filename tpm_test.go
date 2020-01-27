@@ -193,7 +193,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 	}
 }
 
-func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) HandleContext {
+func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
@@ -208,15 +208,15 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Handle
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil,
-		nil, nil)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
+	objectHandle.SetAuthValue(userAuth) // FIXME: Remove once CreatePrimary is updated to use ResourceContext
 	return objectHandle
 }
 
-func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) HandleContext {
+func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) ResourceContext {
 	template := Public{
 		Type:    ObjectTypeECC,
 		NameAlg: HashAlgorithmSHA256,
@@ -235,6 +235,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Handle
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
+	objectHandle.SetAuthValue(userAuth) // FIXME: Remove once CreatePrimary is updated to use ResourceContext
 	return objectHandle
 }
 
@@ -261,8 +262,8 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) HandleContext {
 	return objectHandle
 }
 
-func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContext, userAuth Auth) HandleContext {
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContext, userAuth Auth) ResourceContext {
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -301,6 +302,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContex
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
+	akContext.SetAuthValue(userAuth)
 	return akContext
 }
 

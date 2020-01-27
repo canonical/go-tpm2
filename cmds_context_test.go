@@ -33,7 +33,7 @@ func TestContextSave(t *testing.T) {
 		run(t, rc, Handle(0x80000000), HandleOwner)
 	})
 	t.Run("Session", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -50,7 +50,7 @@ func TestContextSave(t *testing.T) {
 		}
 	})
 	t.Run("IncompleteSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -106,8 +106,8 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 	})
 
-	runSessionTest := func(t *testing.T, forget bool, tpmKey, bind HandleContext, sessionType SessionType, hashAlg HashAlgorithmId) {
-		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
+	runSessionTest := func(t *testing.T, forget bool, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg HashAlgorithmId) {
+		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -276,7 +276,7 @@ func TestEvictControl(t *testing.T) {
 		defer flushContext(t, tpm, context)
 		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

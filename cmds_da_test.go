@@ -89,7 +89,7 @@ func TestDictionaryAttackParameters(t *testing.T) {
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -198,7 +198,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

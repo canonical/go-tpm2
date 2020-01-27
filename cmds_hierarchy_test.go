@@ -170,7 +170,7 @@ func TestCreatePrimary(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -301,10 +301,16 @@ func TestClear(t *testing.T) {
 
 		// Set endorsement hierarchy auth value (should be reset by Clear)
 		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
+		ehAuthReset := false // FIXME: Remove once Clear is updated to reset the EH context auth value
+		defer func() {
+			if ehAuthReset {
+				return
+			}
+			resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
+		}()
 
 		// Create a session (should persist across Clear)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -347,6 +353,8 @@ func TestClear(t *testing.T) {
 			t.Fatalf("Clear failed: %v", err)
 		}
 
+		tpm.EndorsementHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
+
 		// Verify that handles that should have been flushed have been
 		for _, h := range transientHandles {
 			handles, err := tpm.GetCapabilityHandles(h, 1)
@@ -384,6 +392,8 @@ func TestClear(t *testing.T) {
 		}
 		if PermanentAttributes(props[0].Value)&AttrEndorsementAuthSet > 0 {
 			t.Errorf("Clear did not clear the EH auth")
+		} else {
+			ehAuthReset = true
 		}
 	}
 
@@ -392,28 +402,52 @@ func TestClear(t *testing.T) {
 	})
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		lockoutAuthReset := false // FIXME: Remove once Clear is updated to reset the LH context auth value
+		defer func() {
+			if lockoutAuthReset {
+				tpm.LockoutHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
+				return
+			}
+			resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		}()
 		run(t, testAuth)
+		lockoutAuthReset = true
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		lockoutAuthReset := false // FIXME: Remove once Clear is updated to reset the LH context auth value
+		defer func() {
+			if lockoutAuthReset {
+				tpm.LockoutHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
+				return
+			}
+			resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		}()
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
+		lockoutAuthReset = true
 	})
 	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		lockoutAuthReset := false // FIXME: Remove once Clear is updated to reset the LH context auth value
+		defer func() {
+			if lockoutAuthReset {
+				tpm.LockoutHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
+				return
+			}
+			resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		}()
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
+		lockoutAuthReset = true
 	})
 }
 
@@ -508,7 +542,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	})
 
 	t.Run("OwnerWithBoundHMACSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -523,7 +557,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	})
 
 	t.Run("OwnerWithUnboundHMACSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -544,7 +578,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}

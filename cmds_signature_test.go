@@ -21,7 +21,7 @@ func TestSign(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		create := func(t *testing.T, scheme *RSAScheme, authValue []byte) (HandleContext, *Public) {
+		create := func(t *testing.T, scheme *RSAScheme, authValue []byte) (ResourceContext, *Public) {
 			template := Public{
 				Type:    ObjectTypeRSA,
 				NameAlg: HashAlgorithmSHA256,
@@ -42,6 +42,8 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
 			}
+			context.SetAuthValue(authValue)
+
 			return context, pub
 		}
 
@@ -146,7 +148,7 @@ func TestSign(t *testing.T) {
 			h.Write(msg)
 			digest := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

@@ -22,9 +22,8 @@ func TestHMACSessions(t *testing.T) {
 
 	for _, data := range []struct {
 		desc         string
-		tpmKey       HandleContext
-		bind         HandleContext
-		bindAuth     []byte
+		tpmKey       ResourceContext
+		bind         ResourceContext
 		sessionAuth  []byte
 		sessionAttrs SessionAttributes
 	}{
@@ -36,14 +35,12 @@ func TestHMACSessions(t *testing.T) {
 		{
 			desc:         "BoundUnsalted1",
 			bind:         primary,
-			bindAuth:     testAuth,
 			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsalted2",
 			bind:         primary,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
@@ -72,12 +69,11 @@ func TestHMACSessions(t *testing.T) {
 			desc:         "BoundSaltedRSA",
 			tpmKey:       primary,
 			bind:         primary,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, HashAlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -151,11 +147,12 @@ func TestPolicySessions(t *testing.T) {
 	}
 	defer flushContext(t, tpm, objectContext)
 
+	objectContext.SetAuthValue(testAuth)
+
 	for _, data := range []struct {
 		desc         string
-		tpmKey       HandleContext
-		bind         HandleContext
-		bindAuth     []byte
+		tpmKey       ResourceContext
+		bind         ResourceContext
 		sessionAuth  []byte
 		sessionAttrs SessionAttributes
 	}{
@@ -174,33 +171,28 @@ func TestPolicySessions(t *testing.T) {
 		{
 			desc:         "BoundUnsalted1",
 			bind:         objectContext,
-			bindAuth:     testAuth,
 			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsalted2",
 			bind:         objectContext,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsalted3",
 			bind:         objectContext,
-			bindAuth:     testAuth,
 			sessionAuth:  dummyAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsaltedUsedOnNonBoundResource1",
 			bind:         primary,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsaltedUsedOnNonBoundResource2",
 			bind:         primary,
-			bindAuth:     testAuth,
 			sessionAuth:  dummyAuth,
 			sessionAttrs: AttrContinueSession,
 		},
@@ -208,12 +200,11 @@ func TestPolicySessions(t *testing.T) {
 			desc:         "BoundSalted",
 			tpmKey:       primary,
 			bind:         objectContext,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

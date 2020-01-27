@@ -112,7 +112,7 @@ func TestGetOrCreateSessionContext(t *testing.T) {
 		closeTPM(t, tpm)
 	}()
 
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestGetOrCreateSessionContext(t *testing.T) {
 		t.Errorf("GetOrCreateSessionContext returned the wrong context")
 	}
 
-	savedSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+	savedSessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}

@@ -33,11 +33,11 @@ import (
 // If tpmkey is provided but decryption of the salt fails on the TPM, a *TPMParameterError error with an error code of ErrorValue or
 // ErrorKey may be returned for parameter index 2.
 //
-// If bind is specified, then the auhorization value for the corresponding resource must be provided in authValue. This will
-// contribute to the session key derivation. The created session will be bound to the resource associated with bind. If bind
-// corresponds to a transient object and only the public part of the object is loaded, or if bind corresponds to a NV index with
-// a type of NVTypePinPass or NVTypePinFail, a *TPMHandleError error with an error code of ErrorHandle will be returned for handle
-// index 2.
+// If bind is specified, then the auhorization value for the corresponding resource must be known, by calling
+// ResourceContext.SetAuthValue on bind before calling this function - the authorization value will contribute to the session key
+// derivation. The created session will be bound to the resource associated with bind. If bind corresponds to a transient object and
+// only the public part of the object is loaded, or if bind corresponds to a NV index with a type of NVTypePinPass or NVTypePinFail,
+// a *TPMHandleError error with an error code of ErrorHandle will be returned for handle index 2.
 //
 // If a session key is computed, this will be used (along with the value of the AuthValue field of the Session struct that
 // references the session in some circumstances) to derive a HMAC key for generating command and response HMACs. If both tpmKey and
@@ -71,7 +71,7 @@ import (
 // code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
 // warning code of WarningSessionMemory will be returned. If there are no more session handles available, a *TPMwarning error with
 // a warning code of WarningSessionHandles will be returned.
-func (t *TPMContext) StartAuthSession(tpmKey, bind HandleContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, authValue []byte, sessions ...*Session) (SessionContext, error) {
+func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, sessions ...*Session) (SessionContext, error) {
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}
@@ -82,10 +82,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind HandleContext, sessionType Se
 
 	var salt []byte
 	var encryptedSalt EncryptedSecret
-
 	tpmKeyHandle := HandleNull
-	bindHandle := HandleNull
-
 	if tpmKey != nil {
 		object, isObject := tpmKey.(*objectContext)
 		if !isObject {
@@ -101,8 +98,11 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind HandleContext, sessionType Se
 		}
 	}
 
+	var authValue []byte
+	bindHandle := HandleNull
 	if bind != nil {
 		bindHandle = bind.Handle()
+		authValue = bind.(handleContextPrivate).getAuthValue()
 	}
 
 	var isBound bool = false

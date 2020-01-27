@@ -99,7 +99,7 @@ func TestTrialPolicySigned(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -164,7 +164,7 @@ func TestTrialPolicySecret(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -230,7 +230,7 @@ func TestTrialPolicyOR(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -300,7 +300,7 @@ func TestTrialPolicyPCR(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -387,7 +387,7 @@ func TestTrialPolicyNV(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -441,7 +441,7 @@ func TestTrialPolicyCommandCode(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -491,7 +491,7 @@ func TestTrialPolicyCpHash(t *testing.T) {
 			h.Write([]byte("12345"))
 			cpHashA := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -541,7 +541,7 @@ func TestTrialPolicyNameHash(t *testing.T) {
 			h.Write([]byte("12345"))
 			nameHash := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -603,7 +603,7 @@ func TestTrialPolicyDuplicationSelect(t *testing.T) {
 			h.Write([]byte("67890"))
 			newParentName := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -670,7 +670,7 @@ func TestTrialPolicyAuthorize(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -716,7 +716,7 @@ func TestTrialPolicyAuthValue(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -762,7 +762,7 @@ func TestTrialPolicyPassword(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

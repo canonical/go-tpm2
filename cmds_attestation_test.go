@@ -92,7 +92,7 @@ func TestCertify(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	prepare := func(t *testing.T, auth Auth) HandleContext {
+	prepare := func(t *testing.T, auth Auth) ResourceContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
@@ -199,7 +199,7 @@ func TestCertify(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -222,7 +222,7 @@ func TestCertify(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -236,7 +236,7 @@ func TestCertifyCreation(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	prepare := func(t *testing.T, auth Auth) HandleContext {
+	prepare := func(t *testing.T, auth Auth) ResourceContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
@@ -348,7 +348,7 @@ func TestCertifyCreation(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -400,7 +400,7 @@ func TestQuote(t *testing.T) {
 		}
 	}
 
-	prepare := func(t *testing.T, auth Auth) HandleContext {
+	prepare := func(t *testing.T, auth Auth) ResourceContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
@@ -501,7 +501,7 @@ func TestQuote(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -517,7 +517,7 @@ func TestGetTime(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	prepare := func(t *testing.T, auth Auth) HandleContext {
+	prepare := func(t *testing.T, auth Auth) ResourceContext {
 		ek := createRSAEkForTesting(t, tpm)
 		defer flushContext(t, tpm, ek)
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
@@ -622,7 +622,7 @@ func TestGetTime(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -648,7 +648,7 @@ func TestGetTime(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
