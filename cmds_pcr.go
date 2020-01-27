@@ -25,13 +25,13 @@ func (v PCRValues) EnsureBank(alg HashAlgorithmId) {
 // with the algorithm for each digest.
 //
 // If pcrContext is nil, this function will do nothing. The command requires authorization with the user auth role for pcrContext,
-// provided via pcrContextAuth.
+// with session based authorization provided via pcrContextAuthSession.
 //
 // If the PCR associated with pcrContext can not be extended from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
-func (t *TPMContext) PCRExtend(pcrContext HandleContext, digests TaggedHashList, pcrContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashList, pcrContextAuthSession *Session, sessions ...*Session) error {
 	return t.RunCommand(CommandPCRExtend, sessions,
-		HandleContextWithAuth{Context: pcrContext, Auth: pcrContextAuth}, Separator,
+		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Separator,
 		digests)
 }
 
@@ -39,16 +39,16 @@ func (t *TPMContext) PCRExtend(pcrContext HandleContext, digests TaggedHashList,
 // provided eventData, hashed with the algorithm for each supported PCR bank.
 //
 // If pcrContext is nil, this function will do nothing. The command requires authorization with the user auth role for pcrContext,
-// provided via pcrContextAuth.
+// with session based authorization provided via pcrContextAuthSession.
 //
 // If the PCR associated with pcrContext can not be extended from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
 //
 // On success, this function will return a list of tagged digests that the PCR associated with pcrContext was extended with.
-func (t *TPMContext) PCREvent(pcrContext HandleContext, eventData Event, pcrContextAuth interface{}, sessions ...*Session) (TaggedHashList, error) {
+func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession *Session, sessions ...*Session) (TaggedHashList, error) {
 	var digests TaggedHashList
 	if err := t.RunCommand(CommandPCREvent, sessions,
-		HandleContextWithAuth{Context: pcrContext, Auth: pcrContextAuth}, Separator,
+		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Separator,
 		eventData, Separator,
 		Separator,
 		&digests); err != nil {
@@ -127,10 +127,10 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Sessi
 }
 
 // PCRReset executes the TPM2_PCR_Reset command to reset the PCR associated with pcrContext in all banks. This command requires
-// authorization with the user auth role for pcrContext, provided via pcrContextAuth.
+// authorization with the user auth role for pcrContext, with session based authorization provided via pcrContextAuthSession.
 //
 // If the PCR associated with pcrContext can not be reset from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
-func (t *TPMContext) PCRReset(pcrContext HandleContext, pcrContextAuth interface{}, sessions ...*Session) error {
-	return t.RunCommand(CommandPCRReset, sessions, HandleContextWithAuth{Context: pcrContext, Auth: pcrContextAuth})
+func (t *TPMContext) PCRReset(pcrContext ResourceContext, pcrContextAuthSession *Session, sessions ...*Session) error {
+	return t.RunCommand(CommandPCRReset, sessions, ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession})
 }
