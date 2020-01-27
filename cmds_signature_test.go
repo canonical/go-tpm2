@@ -42,11 +42,13 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
 			}
+			context.SetAuthValue(authValue)
+
 			return context, pub
 		}
 
-		sign := func(t *testing.T, key ResourceContext, digest Digest, inScheme *SigScheme, auth interface{}) *Signature {
-			signature, err := tpm.Sign(key, digest, inScheme, nil, auth)
+		sign := func(t *testing.T, key ResourceContext, digest Digest, inScheme *SigScheme, authSession *Session) *Signature {
+			signature, err := tpm.Sign(key, digest, inScheme, nil, authSession)
 			if err != nil {
 				t.Fatalf("Sign failed: %v", err)
 			}
@@ -131,7 +133,7 @@ func TestSign(t *testing.T) {
 			h.Write(msg)
 			digest := h.Sum(nil)
 
-			signature := sign(t, key, digest, nil, testAuth)
+			signature := sign(t, key, digest, nil, nil)
 			verify(t, pub, digest, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 		})
 
@@ -146,7 +148,7 @@ func TestSign(t *testing.T) {
 			h.Write(msg)
 			digest := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+			sessionContext, err := tpm.StartAuthSession(nil, key, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

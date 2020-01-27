@@ -55,5 +55,24 @@ The marshalling code parses the "tpm2" tag on struct fields, the value of which 
     * raw - used when the field is a slice, to indicate that it should be marshalled and unmarshalled without a length (if it
     represents a list) or size (if it represents a sized buffer) field. The slice must be pre-allocated to the correct length by the
     caller during unmarshalling.
+
+Authorization types
+
+Some TPM resources require authorization in order to use them in some commands. There are 3 main types of authorization supported by
+this package:
+
+* Cleartext password: A cleartext authorization value is sent to the TPM by calling ResourceContext.SetAuthValue and supplying the
+ResourceContext to a function requiring authorization. Authorization succeeds if the correct value is sent.
+
+* HMAC session: Knowledge of an authorization value is demonstrated by calling ResourceContext.SetAuthValue and supplying the ResourceContext
+to a function requiring authorization, along with a session with the type SessionTypeHMAC. Authorization succeeds if the computed HMAC
+matches that expected by the TPM.
+
+* Policy session: A ResourceContext is supplied to a function requiring authorization along with a session with the type
+SessionTypePolicy, containing a record of and the result of a sequence of assertions. Authorization succeeds if the conditions
+required by the resource's authorization policy are satisfied.
+
+The type of authorizations permitted for a resource is dependent on the authorization role (user, admin or duplication), the type of
+resource and the resource's attributes.
 */
 package tpm2

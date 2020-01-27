@@ -57,7 +57,7 @@ func TestPCRExtend(t *testing.T) {
 				hashList = append(hashList, TaggedHash{HashAlg: alg, Digest: hasher.Sum(nil)})
 			}
 
-			if err := tpm.PCRExtend(Handle(data.index), hashList, nil); err != nil {
+			if err := tpm.PCRExtend(tpm.PCRHandleContext(data.index), hashList, nil); err != nil {
 				t.Fatalf("PCRExtend failed: %v", err)
 			}
 
@@ -121,7 +121,7 @@ func TestPCREvent(t *testing.T) {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
 
-			digests, err := tpm.PCREvent(Handle(data.index), data.data, nil)
+			digests, err := tpm.PCREvent(tpm.PCRHandleContext(data.index), data.data, nil)
 			if err != nil {
 				t.Fatalf("PCREvent failed: %v", err)
 			}
@@ -205,7 +205,7 @@ func TestPCRRead(t *testing.T) {
 			data:  []byte("5678"),
 		},
 	} {
-		_, err := tpm.PCREvent(Handle(data.index), data.data, nil)
+		_, err := tpm.PCREvent(tpm.PCRHandleContext(data.index), data.data, nil)
 		if err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
@@ -313,7 +313,7 @@ func TestPCRRead(t *testing.T) {
 			t.Errorf("Unexpected digests returned")
 		}
 
-		if err := tpm.PCRExtend(7, TaggedHashList{TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: make(Digest, 32)}}, nil); err != nil {
+		if err := tpm.PCRExtend(tpm.PCRHandleContext(7), TaggedHashList{TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: make(Digest, 32)}}, nil); err != nil {
 			t.Fatalf("PCRExtend failed: %v", err)
 		}
 
@@ -346,7 +346,8 @@ func TestPCRReset(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			if _, err := tpm.PCREvent(Handle(data.pcr), []byte("foo"), nil); err != nil {
+			pcr := tpm.PCRHandleContext(data.pcr)
+			if _, err := tpm.PCREvent(pcr, []byte("foo"), nil); err != nil {
 				t.Fatalf("PCREvent failed: %v", err)
 			}
 			zeroDigest := make(Digest, HashAlgorithmSHA256.Size())
@@ -359,7 +360,7 @@ func TestPCRReset(t *testing.T) {
 				t.Fatalf("PCR has unexpected initial value")
 			}
 
-			if err := tpm.PCRReset(Handle(data.pcr), nil); err != nil {
+			if err := tpm.PCRReset(pcr, nil); err != nil {
 				t.Errorf("PCRReset failed: %v", err)
 			}
 

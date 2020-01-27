@@ -432,19 +432,21 @@ func TestNVPublicName(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
+	owner := tpm.OwnerHandleContext()
+
 	pub := NVPublic{
 		Index:   Handle(0x0181ffff),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 		Size:    64}
-	if err := tpm.NVDefineSpace(HandleOwner, nil, &pub, nil); err != nil {
+	if err := tpm.NVDefineSpace(owner, nil, &pub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	rc, err := tpm.WrapHandle(pub.Index)
+	rc, err := tpm.GetOrCreateResourceContext(pub.Index)
 	if err != nil {
-		t.Fatalf("WrapHandle failed: %v", err)
+		t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 	}
-	defer undefineNVSpace(t, tpm, rc, HandleOwner, nil)
+	defer undefineNVSpace(t, tpm, rc, owner, nil)
 
 	name, err := pub.Name()
 	if err != nil {

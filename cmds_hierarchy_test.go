@@ -12,10 +12,8 @@ func TestCreatePrimary(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, hierarchy Handle, sensitive *SensitiveCreate, template *Public, outsideInfo Data,
-		creationPCR PCRSelectionList, session interface{}) (ResourceContext, *Public) {
-		objectContext, outPublic, creationData, creationHash, creationTicket, name, err :=
-			tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
+	run := func(t *testing.T, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session *Session) (ResourceContext, *Public) {
+		objectContext, outPublic, creationData, creationHash, creationTicket, name, err := tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -24,8 +22,7 @@ func TestCreatePrimary(t *testing.T) {
 			t.Errorf("CreatePrimary returned an invalid handle 0x%08x", objectContext.Handle())
 		}
 		verifyPublicAgainstTemplate(t, outPublic, template)
-		h, _ := tpm.WrapHandle(hierarchy)
-		verifyCreationData(t, tpm, creationData, creationHash, template, outsideInfo, creationPCR, h)
+		verifyCreationData(t, tpm, creationData, creationHash, template, outsideInfo, creationPCR, hierarchy)
 		verifyCreationTicket(t, creationTicket, hierarchy)
 
 		nameAlgSize := template.NameAlg.Size()
@@ -54,7 +51,7 @@ func TestCreatePrimary(t *testing.T) {
 			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
 			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
-		objectContext, pub := run(t, HandleOwner, nil, &template, Data{}, creationPCR, nil)
+		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
@@ -77,7 +74,7 @@ func TestCreatePrimary(t *testing.T) {
 			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
 			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
-		objectContext, pub := run(t, HandleOwner, nil, &template, Data{}, creationPCR, nil)
+		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
 		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
 			t.Errorf("CreatePrimary returned object with invalid ECC coords")
@@ -101,7 +98,7 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectContext, pub := run(t, HandleEndorsement, nil, &template, Data{}, PCRSelectionList{}, nil)
+		objectContext, pub := run(t, tpm.EndorsementHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
@@ -125,7 +122,7 @@ func TestCreatePrimary(t *testing.T) {
 			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
 			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
-		objectContext, pub := run(t, HandleOwner, &sensitive, &template, Data{}, creationPCR, nil)
+		objectContext, pub := run(t, tpm.OwnerHandleContext(), &sensitive, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 
@@ -140,15 +137,15 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
-		_, _, _, _, _, err := tpm.Create(objectContext, nil, &childTemplate, nil, nil, testAuth)
+		_, _, _, _, _, err := tpm.Create(objectContext, nil, &childTemplate, nil, nil, nil)
 		if err != nil {
 			t.Errorf("Use of authorization on primary key failed: %v", err)
 		}
 	})
 
 	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
 		template := Public{
 			Type:    ObjectTypeRSA,
@@ -164,23 +161,22 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectContext, pub := run(t, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, testAuth)
+		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, AuthValue: testAuth}
+		session := Session{Context: sessionContext}
 
 		template := Public{
 			Type:    ObjectTypeRSA,
@@ -196,7 +192,7 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectContext, pub := run(t, HandleOwner, nil, &template, Data{}, PCRSelectionList{}, &session)
+		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, &session)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
@@ -220,7 +216,7 @@ func TestCreatePrimary(t *testing.T) {
 			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 		data := Data("foo")
 
-		objectContext, pub := run(t, HandleOwner, nil, &template, data, creationPCR, nil)
+		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, data, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
@@ -240,7 +236,7 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		_, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
+		_, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err == nil {
 			t.Fatalf("CreatePrimary should fail with an invalid template")
 		}
@@ -257,9 +253,13 @@ func TestClear(t *testing.T) {
 	tpm, _ := openTPMSimulatorForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, auth interface{}) {
-		var persistentObjects []ResourceContext // Objects that persist across Clear
-		var transientObjects []ResourceContext  // Objects that are evicted by Clar
+	run := func(t *testing.T, authSession *Session) {
+		var persistentObjects []HandleContext // Objects that persist across Clear
+		var transientObjects []HandleContext  // Objects that are evicted by Clar
+
+		// Create a context for a permanent resource (should persist across Clear)
+		owner := tpm.OwnerHandleContext()
+		persistentObjects = append(persistentObjects, owner)
 
 		// Create platform primary key (should persist across Clear)
 		template := Public{
@@ -275,7 +275,8 @@ func TestClear(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		platformPrimary, _, _, _, _, _, err := tpm.CreatePrimary(HandlePlatform, nil, &template, nil, nil,
+		platform := tpm.PlatformHandleContext()
+		platformPrimary, _, _, _, _, _, err := tpm.CreatePrimary(platform, nil, &template, nil, nil,
 			nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
@@ -289,25 +290,21 @@ func TestClear(t *testing.T) {
 		transientObjects = append(transientObjects, ownerPrimary)
 
 		// Persist storage primary key (should be evicted by Clear)
-		ownerPrimaryPersist := persistObjectForTesting(t, tpm, HandleOwner, ownerPrimary, Handle(0x8100ffff))
-		defer verifyPersistentObjectEvicted(t, tpm, HandleOwner, ownerPrimaryPersist)
+		ownerPrimaryPersist := persistObjectForTesting(t, tpm, owner, ownerPrimary, Handle(0x8100ffff))
+		defer verifyPersistentObjectEvicted(t, tpm, owner, ownerPrimaryPersist)
 		transientObjects = append(transientObjects, ownerPrimaryPersist)
 
 		// Persist platform primary key (should persist across Clear)
-		platformPrimaryPersist := persistObjectForTesting(t, tpm, HandlePlatform, platformPrimary, Handle(0x8180ffff))
-		defer evictPersistentObject(t, tpm, HandlePlatform, platformPrimaryPersist)
+		platformPrimaryPersist := persistObjectForTesting(t, tpm, platform, platformPrimary, Handle(0x8180ffff))
+		defer evictPersistentObject(t, tpm, platform, platformPrimaryPersist)
 		persistentObjects = append(persistentObjects, platformPrimaryPersist)
 
 		// Set endorsement hierarchy auth value (should be reset by Clear)
-		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
-		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
-
-		// Create a context for a permanent resource (should persist across Clear)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		persistentObjects = append(persistentObjects, owner)
+		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
 		// Create a session (should persist across Clear)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -320,11 +317,11 @@ func TestClear(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 			Size:    8}
-		if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub1, nil); err != nil {
+		if err := tpm.NVDefineSpace(owner, nil, &nvPub1, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		nv1, _ := tpm.WrapHandle(nvPub1.Index)
-		defer verifyNVSpaceUndefined(t, tpm, nv1, HandleOwner, nil)
+		nv1, _ := tpm.GetOrCreateResourceContext(nvPub1.Index)
+		defer verifyNVSpaceUndefined(t, tpm, nv1, owner, nil)
 		transientObjects = append(transientObjects, nv1)
 
 		// Define an NV index in the platform hierarchy (should persist across Clear)
@@ -333,11 +330,11 @@ func TestClear(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead|AttrNVPlatformCreate, NVTypeOrdinary),
 			Size:    8}
-		if err := tpm.NVDefineSpace(HandlePlatform, nil, &nvPub2, nil); err != nil {
+		if err := tpm.NVDefineSpace(platform, nil, &nvPub2, nil); err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		nv2, _ := tpm.WrapHandle(nvPub2.Index)
-		defer undefineNVSpace(t, tpm, nv2, HandlePlatform, nil)
+		nv2, _ := tpm.GetOrCreateResourceContext(nvPub2.Index)
+		defer undefineNVSpace(t, tpm, nv2, platform, nil)
 		persistentObjects = append(persistentObjects, nv2)
 
 		var transientHandles []Handle
@@ -346,7 +343,7 @@ func TestClear(t *testing.T) {
 		}
 
 		// Perform the clear
-		if err := tpm.Clear(HandleLockout, auth); err != nil {
+		if err := tpm.Clear(tpm.LockoutHandleContext(), authSession); err != nil {
 			t.Fatalf("Clear failed: %v", err)
 		}
 
@@ -394,30 +391,29 @@ func TestClear(t *testing.T) {
 		run(t, nil)
 	})
 	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		defer resetHierarchyAuth(t, tpm, HandleLockout)
-		run(t, testAuth)
+		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		run(t, nil)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		defer resetHierarchyAuth(t, tpm, HandleLockout)
-		lockout, _ := tpm.WrapHandle(HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, lockout, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
+		run(t, &Session{Context: sessionContext})
 	})
 	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, HandleLockout)
-		defer resetHierarchyAuth(t, tpm, HandleLockout)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
+		run(t, &Session{Context: sessionContext})
 	})
 }
 
@@ -425,14 +421,13 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run1 := func(t *testing.T, hierarchy Handle, session interface{}) {
+	run1 := func(t *testing.T, hierarchy ResourceContext, session *Session) {
 		if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), session); err != nil {
 			t.Fatalf("HierarchyChangeAuth failed: %v", err)
 		}
 	}
 
-	run2 := func(t *testing.T, hierarchy Handle, session interface{},
-		createPrimary func(*testing.T, *TPMContext, interface{}) ResourceContext) {
+	run2 := func(t *testing.T, hierarchy ResourceContext, session *Session, createPrimary func(*testing.T, *TPMContext, *Session) ResourceContext) {
 		primary := createPrimary(t, tpm, session)
 		flushContext(t, tpm, primary)
 
@@ -441,7 +436,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		}
 	}
 
-	createSrk := func(t *testing.T, tpm *TPMContext, session interface{}) ResourceContext {
+	createSrk := func(t *testing.T, tpm *TPMContext, session *Session) ResourceContext {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -455,13 +450,13 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, session)
+		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
 		return objectContext
 	}
-	createEk := func(t *testing.T, tpm *TPMContext, session interface{}) ResourceContext {
+	createEk := func(t *testing.T, tpm *TPMContext, session *Session) ResourceContext {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -477,8 +472,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(HandleEndorsement, nil, &template, nil, nil,
-			session)
+		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -486,22 +480,21 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	}
 
 	t.Run("OwnerWithPW", func(t *testing.T) {
-		run1(t, HandleOwner, nil)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		run1(t, tpm.OwnerHandleContext(), nil)
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		run2(t, HandleOwner, testAuth, createSrk)
+		run2(t, tpm.OwnerHandleContext(), nil, createSrk)
 	})
 
 	t.Run("EndorsementWithPW", func(t *testing.T) {
-		run1(t, HandleEndorsement, nil)
-		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
+		run1(t, tpm.EndorsementHandleContext(), nil)
+		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
-		run2(t, HandleEndorsement, testAuth, createEk)
+		run2(t, tpm.EndorsementHandleContext(), nil, createEk)
 	})
 
 	t.Run("OwnerWithBoundHMACSession", func(t *testing.T) {
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -509,15 +502,14 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
-		run1(t, HandleOwner, &session)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		run1(t, tpm.OwnerHandleContext(), &session)
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		session.AuthValue = testAuth
-		run2(t, HandleOwner, &session, createSrk)
+		run2(t, tpm.OwnerHandleContext(), &session, createSrk)
 	})
 
 	t.Run("OwnerWithUnboundHMACSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -525,11 +517,10 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
-		run1(t, HandleOwner, &session)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		run1(t, tpm.OwnerHandleContext(), &session)
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		session.AuthValue = testAuth
-		run2(t, HandleOwner, &session, createSrk)
+		run2(t, tpm.OwnerHandleContext(), &session, createSrk)
 	})
 
 	t.Run("OwnerWithUnboundHMACSession2", func(t *testing.T) {
@@ -539,7 +530,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -547,10 +538,9 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
-		run1(t, HandleOwner, &session)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
+		run1(t, tpm.OwnerHandleContext(), &session)
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
 
-		session.AuthValue = testAuth
-		run2(t, HandleOwner, &session, createSrk)
+		run2(t, tpm.OwnerHandleContext(), &session, createSrk)
 	})
 }

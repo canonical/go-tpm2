@@ -9,8 +9,8 @@ package tpm2
 // SetCommandCodeAuditStatus executes the TPM2_SetCommandCodeAuditStatus command to allow the privacy administrator or platform to
 // change the audit status of a command, or change the digest algorithm used for command auditing (but not both at the same time).
 //
-// The auth parameter should be either HandlePlatform or HandleOwner. This command requires authorization of auth with the user
-// auth, provided via authAuth.
+// The auth parameter should be a ResourceContext corresponding to either HandlePlatform or HandleOwner. This command requires
+// authorization of auth with the user auth role, with session based authorization provided via authAuthSession.
 //
 // The auditAlg argument specifies the digest algorithm for command auditing. The setList argument is used to specify which commands
 // should be added to the list of commands to be audited. The clearList argument is used to specify which commands should be removed
@@ -18,8 +18,8 @@ package tpm2
 //
 // If auditAlg is not HashAlgorithmNull or the current audit digest algorith, and the length of setList or clearList is greater than
 // zero, a *TPMParameterError error with an error code of ErrorValue will be returned for parameter index 1.
-func (t *TPMContext) SetCommandCodeAuditStatus(auth Handle, auditAlg HashAlgorithmId, setList, clearList CommandCodeList, authAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) SetCommandCodeAuditStatus(auth ResourceContext, auditAlg HashAlgorithmId, setList, clearList CommandCodeList, authAuthSession *Session, sessions ...*Session) error {
 	return t.RunCommand(CommandSetCommandCodeAuditStatus, sessions,
-		HandleWithAuth{Handle: auth, Auth: authAuth}, Separator,
+		ResourceContextWithSession{Context: auth, Session: authAuthSession}, Separator,
 		auditAlg, setList, clearList)
 }

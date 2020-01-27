@@ -20,8 +20,6 @@ func TestStartAuthSession(t *testing.T) {
 	primaryECC := createECCSrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primaryECC)
 
-	owner, _ := tpm.WrapHandle(HandleOwner)
-
 	for _, data := range []struct {
 		desc        string
 		tpmKey      ResourceContext
@@ -113,14 +111,14 @@ func TestStartAuthSession(t *testing.T) {
 		},
 		{
 			desc:        "HMACUnboundSaltedInvalidKey",
-			tpmKey:      owner,
+			tpmKey:      tpm.OwnerHandleContext(),
 			sessionType: SessionTypeHMAC,
 			alg:         HashAlgorithmSHA256,
 			errMsg:      "invalid resource context for tpmKey: not an object",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sc, err := tpm.StartAuthSession(data.tpmKey, data.bind, data.sessionType, nil, data.alg, data.bindAuth)
+			sc, err := tpm.StartAuthSession(data.tpmKey, data.bind, data.sessionType, nil, data.alg)
 			if data.errMsg == "" {
 				if err != nil {
 					t.Fatalf("StartAuthSession returned an error: %v", err)
@@ -182,7 +180,7 @@ func TestPolicyRestart(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer tpm.Close()
 
-	sc, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+	sc, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}

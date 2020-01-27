@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-type mockResourceContext struct {
+type mockHandleContext struct {
 	name Name
 }
 
-func (c *mockResourceContext) Name() Name {
+func (c *mockHandleContext) Name() Name {
 	return c.name
 }
-func (c *mockResourceContext) Handle() Handle {
+func (c *mockHandleContext) Handle() Handle {
 	return HandleNull
 }
 
@@ -22,7 +22,7 @@ func TestComputeCpHash(t *testing.T) {
 	h := sha256.New()
 	h.Write([]byte("foo"))
 	name, _ := MarshalToBytes(HashAlgorithmSHA256, RawBytes(h.Sum(nil)))
-	rc := &mockResourceContext{name}
+	rc := &mockHandleContext{name}
 
 	for _, data := range []struct {
 		desc     string
@@ -99,7 +99,7 @@ func TestTrialPolicySigned(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -164,7 +164,7 @@ func TestTrialPolicySecret(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -230,7 +230,7 @@ func TestTrialPolicyOR(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -300,7 +300,7 @@ func TestTrialPolicyPCR(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -332,19 +332,21 @@ func TestTrialPolicyNV(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
+	owner := tpm.OwnerHandleContext()
+
 	nvPub := NVPublic{
 		Index:   0x0181ffff,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 		Size:    64}
-	if err := tpm.NVDefineSpace(HandleOwner, nil, &nvPub, nil); err != nil {
+	if err := tpm.NVDefineSpace(owner, nil, &nvPub, nil); err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	index, err := tpm.WrapHandle(nvPub.Index)
+	index, err := tpm.GetOrCreateResourceContext(nvPub.Index)
 	if err != nil {
-		t.Fatalf("WrapHandle failed: %v", err)
+		t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 	}
-	defer undefineNVSpace(t, tpm, index, HandleOwner, nil)
+	defer undefineNVSpace(t, tpm, index, owner, nil)
 
 	twentyFiveUint64 := make(Operand, 8)
 	binary.BigEndian.PutUint64(twentyFiveUint64, 25)
@@ -385,7 +387,7 @@ func TestTrialPolicyNV(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -439,7 +441,7 @@ func TestTrialPolicyCommandCode(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -489,7 +491,7 @@ func TestTrialPolicyCpHash(t *testing.T) {
 			h.Write([]byte("12345"))
 			cpHashA := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -539,7 +541,7 @@ func TestTrialPolicyNameHash(t *testing.T) {
 			h.Write([]byte("12345"))
 			nameHash := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -601,7 +603,7 @@ func TestTrialPolicyDuplicationSelect(t *testing.T) {
 			h.Write([]byte("67890"))
 			newParentName := h.Sum(nil)
 
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -668,7 +670,7 @@ func TestTrialPolicyAuthorize(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -714,7 +716,7 @@ func TestTrialPolicyAuthValue(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -760,7 +762,7 @@ func TestTrialPolicyPassword(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg, nil)
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}

@@ -12,7 +12,7 @@ func TestHMACSessions(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	owner, _ := tpm.WrapHandle(HandleOwner)
+	owner := tpm.OwnerHandleContext()
 
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
 	defer flushContext(t, tpm, primary)
@@ -24,60 +24,44 @@ func TestHMACSessions(t *testing.T) {
 		desc         string
 		tpmKey       ResourceContext
 		bind         ResourceContext
-		bindAuth     []byte
-		sessionAuth  []byte
 		sessionAttrs SessionAttributes
 	}{
 		{
 			desc:         "UnboundUnsalted",
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
-			desc:         "BoundUnsalted1",
+			desc:         "BoundUnsalted",
 			bind:         primary,
-			bindAuth:     testAuth,
-			sessionAuth:  testAuth,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsalted2",
-			bind:         primary,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundUnsaltedUsedOnNonBoundResource",
 			bind:         owner,
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
-			desc:        "UnboundUnsaltedUncontinued",
-			sessionAuth: testAuth,
+			desc: "UnboundUnsaltedUncontinued",
 		},
 		{
 			desc:         "UnboundSaltedRSA",
 			tpmKey:       primary,
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "UnboundSaltedECC",
 			tpmKey:       primaryECC,
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundSaltedRSA",
 			tpmKey:       primary,
 			bind:         primary,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, HashAlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -100,7 +84,7 @@ func TestHMACSessions(t *testing.T) {
 						KeyBits:   2048,
 						Exponent:  0}}}
 
-			session := &Session{Context: sessionContext, AuthValue: data.sessionAuth, Attrs: data.sessionAttrs}
+			session := &Session{Context: sessionContext, Attrs: data.sessionAttrs}
 			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)
@@ -115,7 +99,7 @@ func TestHMACSessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
-				if err.Error() != "cannot process ResourceWithAuth for command TPM_CC_Create at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Create at index 1: invalid resource context for session: "+
 					"resource has been closed" {
 					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 				}
@@ -141,22 +125,22 @@ func TestPolicySessions(t *testing.T) {
 		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
-	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, testAuth)
+	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
-	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, testAuth)
+	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 	defer flushContext(t, tpm, objectContext)
 
+	objectContext.SetAuthValue(testAuth)
+
 	for _, data := range []struct {
 		desc         string
 		tpmKey       ResourceContext
 		bind         ResourceContext
-		bindAuth     []byte
-		sessionAuth  []byte
 		sessionAttrs SessionAttributes
 	}{
 		{
@@ -172,48 +156,24 @@ func TestPolicySessions(t *testing.T) {
 			desc: "UnboundUnsaltedUncontinued",
 		},
 		{
-			desc:         "BoundUnsalted1",
+			desc:         "BoundUnsalted",
 			bind:         objectContext,
-			bindAuth:     testAuth,
-			sessionAuth:  testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
-			desc:         "BoundUnsalted2",
-			bind:         objectContext,
-			bindAuth:     testAuth,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsalted3",
-			bind:         objectContext,
-			bindAuth:     testAuth,
-			sessionAuth:  dummyAuth,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsaltedUsedOnNonBoundResource1",
+			desc:         "BoundUnsaltedUsedOnNonBoundResource",
 			bind:         primary,
-			bindAuth:     testAuth,
-			sessionAttrs: AttrContinueSession,
-		},
-		{
-			desc:         "BoundUnsaltedUsedOnNonBoundResource2",
-			bind:         primary,
-			bindAuth:     testAuth,
-			sessionAuth:  dummyAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 		{
 			desc:         "BoundSalted",
 			tpmKey:       primary,
 			bind:         objectContext,
-			bindAuth:     testAuth,
 			sessionAttrs: AttrContinueSession,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256, data.bindAuth)
+			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
@@ -225,7 +185,7 @@ func TestPolicySessions(t *testing.T) {
 				}
 			}()
 
-			session := Session{Context: sessionContext, Attrs: data.sessionAttrs, AuthValue: data.sessionAuth}
+			session := Session{Context: sessionContext, Attrs: data.sessionAttrs}
 			_, err = tpm.Unseal(objectContext, &session)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)
@@ -240,7 +200,7 @@ func TestPolicySessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent usage of the session should fail")
 				}
-				if err.Error() != "cannot process ResourceWithAuth for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
 					"resource has been closed" {
 					t.Errorf("Unexpected error: %v", err)
 				}

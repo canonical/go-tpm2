@@ -33,8 +33,9 @@ func (t *TPMContext) initNVMaxBufferSize() {
 //
 // The auth parameter specifies an authorization value for the NV index.
 //
-// The authHandle parameter specifies the hierarchy used for authorization, and should be HandlePlatform or HandleOwner. The command
-// requires authorization with the user auth role for the specified hierarchy, provided via authHandleAuth.
+// The authContext parameter specifies the hierarchy used for authorization, and should correspond to HandlePlatform or HandleOwner.
+// The command requires authorization with the user auth role for the specified hierarchy, with session based authorization provided
+// via authContextAuthSession.
 //
 // If the Attrs field of publicInfo has AttrNVPolicyDelete set but TPM2_NV_UndefineSpaceSpecial isn't supported, or the Attrs field
 // defines a type that is unsupported, a *TPMParameterError error with an error code of ErrorAttributes will be returned for parameter
@@ -47,8 +48,8 @@ func (t *TPMContext) initNVMaxBufferSize() {
 // If the length of auth is greater than the name algorithm selected by the NameAlg field of the publicInfo parameter, a
 // *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// If authHandle specifies HandlePlatform but the AttrPhEnableNV attribute is clear, a *TPMHandleError error with an error code of
-// ErrorHierarchy will be returned.
+// If authContext corresponds to HandlePlatform but the AttrPhEnableNV attribute is clear, a *TPMHandleError error with an error code
+// of ErrorHierarchy will be returned.
 //
 // If the type indicated by the Attrs field of publicInfo isn't supported by the TPM, a *TPMParameterError error with an error code of
 // ErrorAttributes will be returned for parameter index 2.
@@ -75,23 +76,23 @@ func (t *TPMContext) initNVMaxBufferSize() {
 // If the Attrs field of publicInfo has AttrNVClearStClear set, a *TPMParameterError error with an error code of ErrorAttributes will
 // be returned for parameter index 2 if AttrNVWriteDefine is set.
 //
-// If authHandle specifies HandlePlatform, then the Attrs field of publicInfo must have the AttrNVPlatformCreate attribute set. If
-// authHandle specifies HandleOwner, then the AttrNVPlatformCreate attributes must be clear, else a *TPMHandleError error with an
-// error code of ErrorAttributes will be returned.
+// If authContext corresponds to HandlePlatform, then the Attrs field of publicInfo must have the AttrNVPlatformCreate attribute set.
+// If authContext corresponds to HandleOwner, then the AttrNVPlatformCreate attributes must be clear, else a *TPMHandleError error
+// with an error code of ErrorAttributes will be returned.
 //
 // If the Attrs field of publicInfo has the AttrNVPolicyDelete attribute set, then HandlePlatform must be used for authorization via
-// authHandle, else a *TPMParameterError error with an error code of ErrorAttributes will be returned for parameter index 2.
+// authContext, else a *TPMParameterError error with an error code of ErrorAttributes will be returned for parameter index 2.
 //
 // If an index is already defined at the location specified by the Index field of publicInfo, a *TPMError error with an error code of
 // ErrorNVDefined will be returned.
 //
 // If there is insufficient space for the index, a *TPMError error with an error code of ErrorNVSpace will be returned.
 //
-// On successful completion, the NV index will be defined and a ResourceContext can be created for it using the TPMContext.WrapHandle
-// function, specifying the value of the Index field of publicInfo as the handle.
-func (t *TPMContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVPublic, authHandleAuth interface{}, sessions ...*Session) error {
+// On successful completion, the NV index will be defined and a HandleContext can be created for it using the
+// TPMContext.GetOrCreateResourceContext function, specifying the value of the Index field of publicInfo as the handle.
+func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession *Session, sessions ...*Session) error {
 	return t.RunCommand(CommandNVDefineSpace, sessions,
-		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Separator,
 		auth, nvPublicSized{publicInfo})
 }
 
@@ -99,42 +100,44 @@ func (t *TPMContext) NVDefineSpace(authHandle Handle, auth Auth, publicInfo *NVP
 // used by it. If the index has the AttrNVPolicyDelete attribute set, then a *TPMHandleError error with an error code of
 // ErrorAttributes will be returned for handle index 2.
 //
-// The authHandle parameter specifies the hierarchy used for authorization and should be either HandlePlatform or HandleOwner. The
-// command requires authorization with the user auth role for the specified hierarchy, provided via authHandleAuth.
+// The authContext parameter specifies the hierarchy used for authorization and should correspond to either HandlePlatform or
+// HandleOwner. The command requires authorization with the user auth role for the specified hierarchy, with session based
+// authorization provided via authContextAuthSession.
 //
-// If authHandle is HandleOwner and the NV index has the AttrNVPlatformCreate attribute set, then a *TPMError error with an error code
-// of ErrorNVAuthorization will be returned.
+// If authContext corresponds to HandleOwner and the NV index has the AttrNVPlatformCreate attribute set, then a *TPMError error with
+// an error code of ErrorNVAuthorization will be returned.
 //
 // On successful completion, nvIndex will be invalidated.
-func (t *TPMContext) NVUndefineSpace(authHandle Handle, nvIndex ResourceContext, authHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVUndefineSpace, sessions,
-		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, nvIndex); err != nil {
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
 		return err
 	}
 
-	t.evictResourceContext(nvIndex)
+	t.evictHandleContext(nvIndex)
 	return nil
 }
 
-// NVUndefineSpace executes the TPM2_NV_UndefineSpaceSpecial command to remove the NV index associated with nvIndex, and free the
-// resources used by it. If the NV index does not have the AttrNVPolicyDelete attribute set, then a *TPMHandleError error with an
+// NVUndefineSpaceSpecial executes the TPM2_NV_UndefineSpaceSpecial command to remove the NV index associated with nvIndex, and free
+// the resources used by it. If the NV index does not have the AttrNVPolicyDelete attribute set, then a *TPMHandleError error with an
 // error code of ErrorAttributes will be returned for handle index 1.
 //
-// The platform parameter must be HandlePlatform. The command requires authorization with the user auth role for the platform
-// hierarchy, provided via platformAuth. The command requires authorization with the admin role for nvIndex, provided via nvIndexAuth.
+// The platform parameter must correspond to HandlePlatform. The command requires authorization with the user auth role for the
+// platform hierarchy, with session based authorization provided via platformAuthSession. The command requires authorization with the
+// admin role for nvIndex, with the session provided via nvIndexAuthSession.
 //
 // On successful completion, nvIndex will be invalidated.
-func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Handle, nvIndexAuth *Session, platformAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, nvIndexAuthSession, platformAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
+	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
 	if err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: platform, Auth: platformAuth})
+	s, err = t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: platform, Session: platformAuthSession})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
@@ -144,19 +147,15 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex ResourceContext, platform Ha
 		return err
 	}
 
-	authSession := ctx.sessionParams[0].session
-	if authSession != nil {
-		// If the HMAC key for this command includes the auth value for authHandle (eg,
-		// if the PolicyAuthValue assertion was executed), the TPM will respond with a HMAC
-		// generated with a key based on an empty auth value.
-		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
-	}
+	// If the HMAC key for this command includes the authorization value for nvIndex (eg, because the PolicyAuthValue assertion was
+	// executed), the TPM will respond with a HMAC generated with a key based on an empty auth value.
+	nvIndex.SetAuthValue(nil)
 
 	if err := t.processResponse(ctx, nil, nil); err != nil {
 		return err
 	}
 
-	t.evictResourceContext(nvIndex)
+	t.evictHandleContext(nvIndex)
 	return nil
 }
 
@@ -182,12 +181,12 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
 // attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
 // can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
-// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
-// If the resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this
+// access, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -204,7 +203,7 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...*Session)
 // code of ErrorNVRange will be returned.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuth interface{}, sessions ...*Session) (uint16, error) {
+func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuthSession *Session, sessions ...*Session) (uint16, error) {
 	t.initNVMaxBufferSize()
 
 	if uint16(len(data)) > t.maxNVBufferSize {
@@ -212,7 +211,7 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 	}
 
 	if err := t.RunCommand(CommandNVWrite, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
 		data, offset); err != nil {
 		return 0, err
 	}
@@ -227,12 +226,12 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
 // attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
 // can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
-// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
-// If the resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this
+// access, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -258,21 +257,19 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 // code of ErrorNVRange will be returned.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuthSession *Session, sessions ...*Session) error {
 	t.initNVMaxBufferSize()
 
 	remaining := uint16(len(data))
 	total := uint16(0)
 
 	if remaining > t.maxNVBufferSize {
-		session, ok := authContextAuth.(*Session)
-		if ok {
-			if session.Attrs&AttrContinueSession == 0 {
-				return makeInvalidParamError("authContextAuth", "the AttrContinueSession attribute is required for a split write")
+		if authContextAuthSession != nil {
+			if authContextAuthSession.Attrs&AttrContinueSession == 0 {
+				return makeInvalidParamError("authContextAuthSession", "the AttrContinueSession attribute is required for a split write")
 			}
-			sessionContext, ok := session.Context.(*sessionContext)
-			if ok && sessionContext.sessionType == SessionTypePolicy {
-				return makeInvalidParamError("authContextAuth", "a policy session can not be used for a split write - use NVWriteRaw instead")
+			if authContextAuthSession.Context != nil && authContextAuthSession.Context.(*sessionContext).sessionType == SessionTypePolicy {
+				return makeInvalidParamError("authContextAuthSession", "a policy session can not be used for a split write - use NVWriteRaw instead")
 			}
 		}
 
@@ -285,7 +282,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 	}
 
 	for {
-		n, err := t.NVWriteRaw(authContext, nvIndex, data[total:], offset+total, authContextAuth, sessions...)
+		n, err := t.NVWriteRaw(authContext, nvIndex, data[total:], offset+total, authContextAuthSession, sessions...)
 		if err != nil {
 			return err
 		}
@@ -308,19 +305,19 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
 // attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
 // can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
-// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
-// If the resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this
+// access, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
 // If the index has the AttrNVWriteLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext, params *NVPinCounterParams, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext, params *NVPinCounterParams, authContextAuthSession *Session, sessions ...*Session) error {
 	context, isNv := nvIndex.(*nvIndexContext)
 	if !isNv {
 		return errors.New("nvIndex does not correspond to a NV index")
@@ -332,7 +329,7 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal PIN counter parameters: %v", err))
 	}
-	return t.NVWrite(authContext, nvIndex, data, 0, authContextAuth, sessions...)
+	return t.NVWrite(authContext, nvIndex, data, 0, authContextAuthSession, sessions...)
 }
 
 // NVIncrement executes the TPM2_NV_Increment command to increment the counter associated with nvIndex.
@@ -341,12 +338,12 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
 // attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
 // can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
-// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
-// If the resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this
+// access, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -356,9 +353,9 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 // handle index 2.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVIncrement, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
 		return err
 	}
 
@@ -373,12 +370,12 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
 // attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
 // can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
-// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
-// If the resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this
+// access, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -388,9 +385,9 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 // handle index 2.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuthSession *Session, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVExtend, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
 		data); err != nil {
 		return err
 	}
@@ -405,12 +402,12 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
 // attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
 // can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
-// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
-// If the resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this
+// access, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -420,9 +417,9 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 // handle index 2.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuthSession *Session, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVSetBits, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
 		bits); err != nil {
 		return err
 	}
@@ -437,12 +434,12 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
 // attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerWrite attribute, authorization
 // can be satisfied with HandleOwner. If the NV index has the AttrNVAuthWrite or AttrNVPolicyWrite attribute, authorization can be
-// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth.
-// If the resource associated with authContext is not permitted to authorize this command, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this
+// command, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthWrite attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyWrite attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -451,9 +448,9 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 //
 // On successful completion, the AttrNVWriteLocked attribute will be set. It will be cleared again (and writes will be reenabled) on
 // the next TPM reset or TPM restart unless the index has the AttrNVWriteDefine attribute set and AttrNVWritten attribute is set.
-func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVWriteLock, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
 		return err
 	}
 
@@ -464,15 +461,15 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 // NVGlobalWriteLock executes the TPM2_NV_GlobalWriteLock command to inhibit further writes for all NV indexes that have the
 // AttrNVGlobalLock attribute set.
 //
-// The authHandle parameter specifies a hierarchy, and should be either HandlePlatform or HandleOwner. The command requires the user
-// auth role for authHandle, provided via authHandleAuth.
+// The authContext parameter specifies a hierarchy, and should correspond to either HandlePlatform or HandleOwner. The command
+// requires the user auth role for authContext, with session based authorization provided via authContextAuthSession.
 //
 // On successful completion, the AttrNVWriteLocked attribute will be set for all NV indexes that have the AttrNVGlobalLock attribute
 // set. If an index also has the AttrNVWriteDefine attribute set, this will permanently inhibit further writes unless AttrNVWritten
 // is clear.
-func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVGlobalWriteLock, sessions,
-		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}); err != nil {
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}); err != nil {
 		return err
 	}
 
@@ -497,12 +494,12 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 // attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
 // authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute, authorization can be
 // satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied
-// with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth. If the
-// resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// with nvIndex. The command requires authorization with the user auth role for authContext, with session based authorization provided
+// via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this access, a *TPMError
+// error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -521,7 +518,7 @@ func (t *TPMContext) NVGlobalWriteLock(authHandle Handle, authHandleAuth interfa
 // returned.
 //
 // On successful completion, the requested data will be returned.
-func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{}, sessions ...*Session) (MaxNVBuffer, error) {
+func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession *Session, sessions ...*Session) (MaxNVBuffer, error) {
 	t.initNVMaxBufferSize()
 
 	if size > t.maxNVBufferSize {
@@ -531,7 +528,7 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 	var data MaxNVBuffer
 
 	if err := t.RunCommand(CommandNVRead, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
 		size, offset, Separator,
 		Separator,
 		&data); err != nil {
@@ -548,12 +545,12 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 // attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
 // authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute, authorization can be
 // satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied
-// with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth. If the
-// resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// with nvIndex. The command requires authorization with the user auth role for authContext, with session based authorization provided
+// via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this access, a *TPMError
+// error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -577,13 +574,13 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 // returned.
 //
 // On successful completion, the requested data will be returned.
-func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuth interface{}, sessions ...*Session) (MaxNVBuffer, error) {
+func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession *Session, sessions ...*Session) (MaxNVBuffer, error) {
 	data := make(MaxNVBuffer, size)
 	total := uint16(0)
 	remaining := size
 
 	for {
-		tmpData, err := t.NVReadRaw(authContext, nvIndex, remaining, offset+total, authContextAuth, sessions...)
+		tmpData, err := t.NVReadRaw(authContext, nvIndex, remaining, offset+total, authContextAuthSession, sessions...)
 		if err != nil {
 			return nil, err
 		}
@@ -608,12 +605,12 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 // attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
 // authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute, authorization can be
 // satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied
-// with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth. If the
-// resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// with nvIndex. The command requires authorization with the user auth role for authContext, with session based authorization provided
+// via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this access, a *TPMError
+// error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -623,7 +620,7 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 // ErrorNVUninitialized will be returned.
 //
 // On successful completion, the current counter value will be returned.
-func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) (uint64, error) {
+func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authContextAuthSession *Session, sessions ...*Session) (uint64, error) {
 	context, isNv := nvIndex.(*nvIndexContext)
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
@@ -631,7 +628,7 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 	if context.public.Attrs.Type() != NVTypeCounter {
 		return 0, errors.New("nvIndex does not correspond to a counter")
 	}
-	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuth, sessions...)
+	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
 	if err != nil {
 		return 0, err
 	}
@@ -648,12 +645,12 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 // attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
 // authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute, authorization can be
 // satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied
-// with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth. If the
-// resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// with nvIndex. The command requires authorization with the user auth role for authContext, with session based authorization provided
+// via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this access, a *TPMError
+// error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -663,7 +660,7 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 // ErrorNVUninitialized will be returned.
 //
 // On successful completion, the current PIN count and limit will be returned.
-func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) (*NVPinCounterParams, error) {
+func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext, authContextAuthSession *Session, sessions ...*Session) (*NVPinCounterParams, error) {
 	context, isNv := nvIndex.(*nvIndexContext)
 	if !isNv {
 		return nil, errors.New("nvIndex does not correspond to a NV index")
@@ -671,7 +668,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 	if context.public.Attrs.Type() != NVTypePinPass && context.public.Attrs.Type() != NVTypePinFail {
 		return nil, errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
-	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuth, sessions...)
+	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
 	if err != nil {
 		return nil, err
 	}
@@ -688,12 +685,12 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 // attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
 // authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute, authorization can be
 // satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied
-// with nvIndex. The command requires authorization with the user auth role for authContext, provided via authContextAuth. If the
-// resource associated with authContext is not permitted to authorize this access, a *TPMError error with an error code of
-// ErrorNVAuthorization will be returned.
+// with nvIndex. The command requires authorization with the user auth role for authContext, with session based authorization provided
+// via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this access, a *TPMError
+// error with an error code of ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -702,9 +699,9 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 //
 // On successful completion, the AttrNVReadLocked attribute will be set. It will be cleared again (and reads will be reenabled) on
 // the next TPM reset or TPM restart.
-func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
 	if err := t.RunCommand(CommandNVReadLock, sessions,
-		ResourceWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex); err != nil {
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
 		return err
 	}
 
@@ -713,18 +710,22 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 }
 
 // NVChangeAuth executes the TPM2_NV_ChangeAuth command to change the authorization value for the NV index associated with nvIndex,
-// setting it to the new value defined by newAuth. The command requires the admin auth role for nvIndex, provided via nvIndexAuth.
+// setting it to the new value defined by newAuth. The command requires the admin auth role for nvIndex, with the session provided
+// via nvIndexAuthSession.
 //
 // If the size of newAuth is greater than the name algorithm for the index, a *TPMParameterError error with an error code of ErrorSize
 // will be returned.
-func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuth *Session, sessions ...*Session) error {
+//
+// On successful completion, the authorization value of the NV index associated with nvIndex will be set to the value of newAuth,
+// and nvIndex will be updated to reflect this - it isn't necessary to update nvIndex with ResourceContext.SetAuthValue in order to
+// use it in authorization roles that require knowledge of the authorization value for the index.
+func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, ResourceWithAuth{Context: nvIndex, Auth: nvIndexAuth})
+	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
 	if err != nil {
-		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v",
-			err)
+		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
@@ -734,18 +735,14 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 		return err
 	}
 
-	// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key
-	// derived from newAuth. If the session is bound, the TPM will respond with a HMAC generated from the
-	// original key
-	authSession := ctx.sessionParams[0].session
-	if authSession != nil {
-		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
-	}
+	// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key derived from newAuth. If the
+	// session is bound, the TPM will respond with a HMAC generated from the original key
+	nvIndex.SetAuthValue(newAuth)
 
 	return t.processResponse(ctx, nil, nil)
 }
 
-// func (t *TPMContext) NVCertify(signContext, authContext, nvIndex ResourceContext, qualifyingData Data,
+// func (t *TPMContext) NVCertify(signContext, authContext, nvIndex HandleContext, qualifyingData Data,
 //	inScheme *SigScheme, size, offset uint16, signContextAuth, authContextAuth interface{},
 //	sessions ...*Session) (AttestRaw, *Signature, error) {
 // }

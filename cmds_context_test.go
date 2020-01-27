@@ -14,7 +14,7 @@ func TestContextSave(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, rc ResourceContext, savedHandle, hierarchy Handle) {
+	run := func(t *testing.T, rc HandleContext, savedHandle, hierarchy Handle) {
 		context, err := tpm.ContextSave(rc)
 		if err != nil {
 			t.Fatalf("ContextSave failed: %v", err)
@@ -33,41 +33,41 @@ func TestContextSave(t *testing.T) {
 		run(t, rc, Handle(0x80000000), HandleOwner)
 	})
 	t.Run("Session", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
 		run(t, sessionContext, sessionContext.Handle(), HandleNull)
 		// Make sure that ContextSave marked the session context as not loaded, and that we get the expected error if we attempt to use it
-		err = tpm.Clear(HandleLockout, &Session{Context: sessionContext})
+		err = tpm.Clear(tpm.LockoutHandleContext(), &Session{Context: sessionContext})
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "error whilst processing handle with authorization for authHandle: invalid resource context for session: not "+
+		if err.Error() != "error whilst processing handle with authorization for authContext: invalid resource context for session: not "+
 			"complete and loaded" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 	})
 	t.Run("IncompleteSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 		sessionHandle := sessionContext.Handle()
-		tpm.ForgetResource(sessionContext)
+		tpm.ForgetHandleContext(sessionContext)
 
-		sessionContext, err = tpm.WrapHandle(sessionHandle)
+		sessionContext, err = tpm.GetOrCreateSessionContext(sessionHandle)
 		if err != nil {
-			t.Fatalf("WrapHandle failed: %v", err)
+			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
 		_, err = tpm.ContextSave(sessionContext)
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "invalid saveContext parameter: unusable session ResourceContext" {
+		if err.Error() != "invalid saveContext parameter: unusable session HandleContext" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 	})
@@ -107,7 +107,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 	})
 
 	runSessionTest := func(t *testing.T, forget bool, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg HashAlgorithmId) {
-		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg, nil)
+		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -142,7 +142,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 			t.Fatalf("ContextSave failed: %v", err)
 		}
 		if forget {
-			tpm.ForgetResource(sc)
+			tpm.ForgetHandleContext(sc)
 		}
 		restoredSc, err := tpm.ContextLoad(context)
 		if err != nil {
@@ -151,7 +151,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		defer flushContext(t, tpm, restoredSc)
 
 		if !forget && restoredSc != sc {
-			t.Errorf("Expected the same ResourceContext back")
+			t.Errorf("Expected the same HandleContext back")
 		}
 
 		if restoredSc.Handle() != data.handle {
@@ -192,8 +192,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 	t.Run("Session1", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		runSessionTest(t, false, primary, owner, SessionTypeHMAC, HashAlgorithmSHA256)
+		runSessionTest(t, false, primary, tpm.OwnerHandleContext(), SessionTypeHMAC, HashAlgorithmSHA256)
 	})
 	t.Run("Session2", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
@@ -209,8 +208,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 	t.Run("Session5", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		runSessionTest(t, true, primary, owner, SessionTypeHMAC, HashAlgorithmSHA256)
+		runSessionTest(t, true, primary, tpm.OwnerHandleContext(), SessionTypeHMAC, HashAlgorithmSHA256)
 	})
 }
 
@@ -218,15 +216,16 @@ func TestEvictControl(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuth interface{}) {
-		if handle, err := tpm.WrapHandle(persist); err == nil {
-			_, err := tpm.EvictControl(HandleOwner, handle, persist, authAuth)
+	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession *Session) {
+		owner := tpm.OwnerHandleContext()
+		if handle, err := tpm.GetOrCreateResourceContext(persist); err == nil {
+			_, err := tpm.EvictControl(owner, handle, persist, authAuthSession)
 			if err != nil {
 				t.Logf("EvictControl failed whilst trying to remove a handle at the start of the test: %v", err)
 			}
 		}
 
-		outContext, err := tpm.EvictControl(HandleOwner, transient, persist, authAuth)
+		outContext, err := tpm.EvictControl(owner, transient, persist, authAuthSession)
 		if err != nil {
 			t.Fatalf("EvictControl failed: %v", err)
 		}
@@ -239,7 +238,7 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("outContext has the wrong name")
 		}
 
-		outContext2, err := tpm.EvictControl(HandleOwner, outContext, outContext.Handle(), authAuth)
+		outContext2, err := tpm.EvictControl(owner, outContext, outContext.Handle(), authAuthSession)
 		if err != nil {
 			t.Errorf("EvictControl failed: %v", err)
 		}
@@ -251,12 +250,12 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("EvictControl should set the persistent context's handle to %v", HandleUnassigned)
 		}
 
-		_, err = tpm.WrapHandle(persist)
+		_, err = tpm.GetOrCreateResourceContext(persist)
 		if err == nil {
-			t.Fatalf("WrapHandle on an evicted resource should fail")
+			t.Fatalf("GetOrCreateResourceContext on an evicted resource should fail")
 		}
 		if _, ok := err.(ResourceUnavailableError); !ok {
-			t.Errorf("WrapHandle returned an unexpected error: %v", err)
+			t.Errorf("GetOrCreateResourceContext returned an unexpected error: %v", err)
 		}
 	}
 
@@ -268,22 +267,21 @@ func TestEvictControl(t *testing.T) {
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
-		run(t, context, Handle(0x8100fff0), testAuth)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
+		run(t, context, Handle(0x8100fff0), nil)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, context)
-		setHierarchyAuthForTest(t, tpm, HandleOwner)
-		defer resetHierarchyAuth(t, tpm, HandleOwner)
-		owner, _ := tpm.WrapHandle(HandleOwner)
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, context, Handle(0x8100ff00), &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
+		run(t, context, Handle(0x8100ff00), &Session{Context: sessionContext, Attrs: AttrContinueSession})
 	})
 }
 
@@ -318,11 +316,11 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("FlushContext should set the context's handle to %v", HandleUnassigned)
 	}
 
-	_, err = tpm.WrapHandle(h)
+	_, err = tpm.GetOrCreateResourceContext(h)
 	if err == nil {
-		t.Fatalf("WrapHandle on a flushed resource should fail")
+		t.Fatalf("GetOrCreateResourceContext on a flushed resource should fail")
 	}
 	if _, ok := err.(ResourceUnavailableError); !ok {
-		t.Fatalf("WrapHandle on a flushed resource should fail")
+		t.Fatalf("GetOrCreateResourceContext on a flushed resource should fail")
 	}
 }

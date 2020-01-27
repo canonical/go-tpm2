@@ -31,63 +31,32 @@ var (
 )
 
 // Set the hierarchy auth to testAuth. Fatal on failure
-func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy Handle) {
+func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy ResourceContext) {
 	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {
 		t.Fatalf("HierarchyChangeAuth failed: %v", err)
 	}
 }
 
-// Reset the hierarchy auth from testAuth to nil. Will succeed if HierarchyChangeAuth succeeds, or if it fails
-// because the hierarchy auth has already been reset by another action in the test. Otherwise it causes the test
-// to fail.
-func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy Handle) {
-	if hierarchy == HandleLockout {
-		// Lockout auth is DA protected, so don't attempt to reset if it has already been done by the test
-		if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
-			t.Errorf("GetCapability failed: %v", err)
-		} else if PermanentAttributes(props[0].Value)&AttrLockoutAuthSet == 0 {
-			return
-		}
-	}
-	if err := tpm.HierarchyChangeAuth(hierarchy, nil, testAuth); err != nil {
-		switch hierarchy {
-		case HandleLockout:
-		case HandlePlatform:
-			if err := tpm.HierarchyChangeAuth(HandlePlatform, nil, nil); err == nil {
-				return
-			}
-		default:
-			var attr PermanentAttributes
-			switch hierarchy {
-			case HandleOwner:
-				attr = AttrOwnerAuthSet
-			case HandleEndorsement:
-				attr = AttrEndorsementAuthSet
-			}
-			if props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1); err != nil {
-				t.Errorf("GetCapability failed: %v", err)
-			} else if PermanentAttributes(props[0].Value)&attr == 0 {
-				return
-			}
-		}
+// Reset the hierarchy auth to nil.
+func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy ResourceContext) {
+	if err := tpm.HierarchyChangeAuth(hierarchy, nil, nil); err != nil {
 		t.Errorf("HierarchyChangeAuth failed: %v", err)
 	}
 }
 
 // Undefine a NV index set by a test. Fails the test if it doesn't succeed.
-func undefineNVSpace(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle, auth interface{}) {
-	if err := tpm.NVUndefineSpace(authHandle, context, auth); err != nil {
+func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession *Session) {
+	if err := tpm.NVUndefineSpace(authHandle, context, authSession); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
 }
 
-func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context ResourceContext, authHandle Handle,
-	auth interface{}) {
+func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession *Session) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}
 	t.Errorf("Context is still live")
-	undefineNVSpace(t, tpm, context, authHandle, auth)
+	undefineNVSpace(t, tpm, context, authHandle, authSession)
 }
 
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
@@ -114,8 +83,7 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 	}
 }
 
-func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest,
-	template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
+func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
 	var parentQualifiedName Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -156,11 +124,11 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	}
 }
 
-func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy Handle) {
+func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy HandleContext) {
 	if creationTicket.Tag != TagCreation {
 		t.Errorf("creation ticket has the wrong tag")
 	}
-	if creationTicket.Hierarchy != hierarchy {
+	if creationTicket.Hierarchy != hierarchy.Handle() {
 		t.Errorf("creation ticket has the wrong hierarchy (got 0x%08x)", creationTicket.Hierarchy)
 	}
 }
@@ -240,8 +208,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil,
-		nil, nil)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -263,7 +230,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleOwner, &sensitiveCreate, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -286,7 +253,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(HandleEndorsement, nil, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -294,13 +261,13 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 }
 
 func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext, userAuth Auth) ResourceContext {
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256, nil)
+	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
 	defer flushContext(t, tpm, sessionContext)
 
-	endorsement, _ := tpm.WrapHandle(HandleEndorsement)
+	endorsement := tpm.EndorsementHandleContext()
 	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
 
 	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
@@ -333,6 +300,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
+	akContext.SetAuthValue(userAuth)
 	return akContext
 }
 
@@ -365,9 +333,8 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 
 // Persist a transient object for testing. If the persistent handle is already in use, it tries to evict the
 // existing resource first. Fatal if persisting the transient object fails.
-func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transient ResourceContext,
-	persist Handle) ResourceContext {
-	if context, err := tpm.WrapHandle(persist); err == nil {
+func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth, transient ResourceContext, persist Handle) ResourceContext {
+	if context, err := tpm.GetOrCreateResourceContext(persist); err == nil {
 		_, err := tpm.EvictControl(auth, context, persist, nil)
 		if err != nil {
 			t.Logf("EvictControl failed whilst trying to remove a persistent handle that has previously been leaked: %v", err)
@@ -381,13 +348,13 @@ func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth Handle, transie
 }
 
 // Evict a persistent object. Fails the test if the resource context is valid but the eviction doesn't succeed.
-func evictPersistentObject(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
+func evictPersistentObject(t *testing.T, tpm *TPMContext, auth, context ResourceContext) {
 	if _, err := tpm.EvictControl(auth, context, context.Handle(), nil); err != nil {
 		t.Errorf("EvictControl failed: %v", err)
 	}
 }
 
-func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth Handle, context ResourceContext) {
+func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth, context ResourceContext) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}
@@ -396,14 +363,14 @@ func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth Handle, c
 }
 
 // Flush a resource context. Fails the test if the resource context is valid but the flush doesn't succeed.
-func flushContext(t *testing.T, tpm *TPMContext, context ResourceContext) {
+func flushContext(t *testing.T, tpm *TPMContext, context HandleContext) {
 	if err := tpm.FlushContext(context); err != nil {
 		t.Errorf("FlushContext failed: %v", err)
 	}
 }
 
 // Fail the test if the resource context hasn't been invalidated. Will attempt to flush a valid resource context.
-func verifyContextFlushed(t *testing.T, tpm *TPMContext, context ResourceContext) {
+func verifyContextFlushed(t *testing.T, tpm *TPMContext, context HandleContext) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}
@@ -466,60 +433,40 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 	}
 }
 
-type mockContext struct{}
+type mockSessionContext struct{}
 
-func (*mockContext) Handle() Handle { return HandleNull }
-func (*mockContext) Name() Name     { return nil }
+func (*mockSessionContext) Handle() Handle    { return HandleNull }
+func (*mockSessionContext) Name() Name        { return nil }
+func (*mockSessionContext) NonceTPM() Nonce   { return nil }
+func (*mockSessionContext) IsAudit() bool     { return false }
+func (*mockSessionContext) IsExclusive() bool { return false }
 
 func TestSession(t *testing.T) {
-	auth1 := []byte("foo")
-	auth2 := []byte("bar")
+	c := &mockSessionContext{}
+	s := Session{Context: c, Attrs: AttrContinueSession}
 
-	c := &mockContext{}
-	s := Session{Context: c, AuthValue: auth1, Attrs: AttrContinueSession}
-
-	s2 := s.WithAuthValue(auth2)
-	if s.Context != s2.Context {
+	s2 := s.WithAttrs(AttrResponseEncrypt)
+	if s2.Context != s.Context {
 		t.Errorf("Wrong context")
 	}
-	if s.Attrs != s2.Attrs {
+	if s2.Attrs != AttrResponseEncrypt {
 		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, auth2) {
-		t.Errorf("Wrong auth value")
 	}
 
-	s3 := s2.WithAttrs(AttrResponseEncrypt)
-	if s.Context != s3.Context {
+	s3 := s2.AddAttrs(AttrCommandEncrypt)
+	if s3.Context != s.Context {
 		t.Errorf("Wrong context")
 	}
-	if s3.Attrs != AttrResponseEncrypt {
+	if s3.Attrs != AttrResponseEncrypt|AttrCommandEncrypt {
 		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, s3.AuthValue) {
-		t.Errorf("Wrong auth value")
 	}
 
-	s4 := s3.AddAttrs(AttrCommandEncrypt)
-	if s.Context != s4.Context {
+	s4 := s3.RemoveAttrs(AttrResponseEncrypt)
+	if s4.Context != s.Context {
 		t.Errorf("Wrong context")
 	}
-	if s4.Attrs != AttrResponseEncrypt|AttrCommandEncrypt {
+	if s4.Attrs != AttrCommandEncrypt {
 		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, s4.AuthValue) {
-		t.Errorf("Wrong auth value")
-	}
-
-	s5 := s4.RemoveAttrs(AttrResponseEncrypt)
-	if s.Context != s5.Context {
-		t.Errorf("Wrong context")
-	}
-	if s5.Attrs != AttrCommandEncrypt {
-		t.Errorf("Wrong attrs")
-	}
-	if !bytes.Equal(s2.AuthValue, s5.AuthValue) {
-		t.Errorf("Wrong auth value")
 	}
 }
 

@@ -32,7 +32,7 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 }
 
 // Sign executes the TPM2_Sign command to sign the provided digest with the key associated with keyContext. The function requires
-// authorization with the user auth role for keyContext, provided via keyContextAuth.
+// authorization with the user auth role for keyContext, with session based authorization provided via keyContextAuthSession.
 //
 // If the object associated with keyContext is not a signing key, a *TPMHandleError error with an error code of ErrorKey will be
 // returned.
@@ -55,7 +55,7 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 // then validation may be nil. If validation is not nil and doesn't correspond to a valid ticket, or it is nil and the key associated
 // with keyContext has the AttrRestricted attribute set, a *TPMParameterError error with an error code of ErrorTicket will be returned
 // for parameter index 3.
-func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *SigScheme, validation *TkHashcheck, keyContextAuth interface{}, sessions ...*Session) (*Signature, error) {
+func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *SigScheme, validation *TkHashcheck, keyContextAuthSession *Session, sessions ...*Session) (*Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
@@ -66,7 +66,7 @@ func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *S
 	var signature Signature
 
 	if err := t.RunCommand(CommandSign, sessions,
-		ResourceWithAuth{Context: keyContext, Auth: keyContextAuth}, Separator,
+		ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Separator,
 		digest, inScheme, validation, Separator,
 		Separator,
 		&signature); err != nil {

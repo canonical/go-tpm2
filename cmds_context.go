@@ -56,7 +56,7 @@ type resourceContextData struct {
 	TPMBlob     ContextData
 }
 
-func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
+func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 	d := resourceContextData{TPMBlob: tpmBlob}
 
 	switch c := context.(type) {
@@ -102,9 +102,9 @@ func wrapContextBlob(tpmBlob ContextData, context ResourceContext) ContextData {
 // If saveContext corresponds to a session and no more contexts can be saved, a *TPMError error will be returned with an error code
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
 // WarningContextGap will be returned.
-func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) {
+func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 	if sc, isSession := saveContext.(*sessionContext); isSession && !sc.usable {
-		return nil, makeInvalidParamError("saveContext", "unusable session ResourceContext")
+		return nil, makeInvalidParamError("saveContext", "unusable session HandleContext")
 	}
 
 	var context Context
@@ -149,11 +149,11 @@ func (t *TPMContext) ContextSave(saveContext ResourceContext) (*Context, error) 
 // If there are no more slots available for objects or loaded sessions, a *TPMWarning error with a warning code of either
 // WarningSessionMemory or WarningObjectMemory will be returned.
 //
-// On successful completion, it returns a ResourceContext which corresponds to the resource loaded in to the TPM. If the context
-// corresponds to an object, this will always be a new ResourceContext. If context corresponds to a session, then the returned
-// ResourceContext will be newly created unless there is still an active ResourceContext for that saved session, in which case the
-// existing ResourceContext will be marked as loaded and returned instead.
-func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
+// On successful completion, it returns a HandleContext which corresponds to the resource loaded in to the TPM. If the context
+// corresponds to an object, this will always be a new HandleContext. If context corresponds to a session, then the returned
+// HandleContext will be newly created unless there is still an active HandleContext for that saved session, in which case the
+// existing HandleContext will be marked as loaded and returned instead.
+func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 	if context == nil {
 		return nil, makeInvalidParamError("context", "nil value")
 	}
@@ -233,7 +233,7 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 		return nil, err
 	}
 
-	var rc ResourceContext
+	var rc HandleContext
 
 	switch d.ContextType {
 	case contextTypeObject:
@@ -272,7 +272,7 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 
 		rc = sc
 	}
-	t.addResourceContext(rc)
+	t.addHandleContext(rc)
 
 	return rc, nil
 }
@@ -283,8 +283,8 @@ func (t *TPMContext) ContextLoad(context *Context) (ResourceContext, error) {
 //
 // On successful completion, flushContext is invalidated. If flushContext corresponded to a session, then it will no longer be
 // possible to restore that session with TPMContext.ContextLoad, even if it was previously saved with TPMContext.ContextSave.
-func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
-	if err := t.checkResourceContextParam(flushContext); err != nil {
+func (t *TPMContext) FlushContext(flushContext HandleContext) error {
+	if err := t.checkHandleContextParam(flushContext); err != nil {
 		return makeInvalidParamError("flushContext", fmt.Sprintf("%v", err))
 	}
 
@@ -294,7 +294,7 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 		return err
 	}
 
-	t.evictResourceContext(flushContext)
+	t.evictHandleContext(flushContext)
 	return nil
 }
 
@@ -303,11 +303,12 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 // resource associated with object should be persisted. To evict a persistent object, object should correspond to the
 // persistent object and persistentHandle should be the handle associated with that resource.
 //
-// The auth handle specifies a hierarchy - it should be HandlePlatform for objects within the platform hierarchy, or HandleOwner for
-// objects within the storage or endorsement hierarchies. If auth is HandlePlatform but object corresponds to an object outside
-// of the platform hierarchy, or auth is HandleOwner but object corresponds to an object inside of the platform hierarchy, a
-// *TPMHandleError error with an error code of ErrorHierarchy will be returned for handle index 2. The auth handle requires
-// authorization with the user auth role, provided via authAuth.
+// The auth parameter should be a ResourceContext that corresponds to a hierarchy - it should be HandlePlatform for objects within
+// the platform hierarchy, or HandleOwner for objects within the storage or endorsement hierarchies. If auth is a ResourceContext
+// corresponding to HandlePlatform but object corresponds to an object outside of the platform hierarchy, or auth is a ResourceContext
+// corresponding to HandleOwner but object corresponds to an object inside of the platform hierarchy, a *TPMHandleError error with
+// an error code of ErrorHierarchy will be returned for handle index 2. The auth handle requires authorization with the user auth
+// role, with session based authorization provided via authAuthSession.
 //
 // If object corresponds to a transient object that only has a public part loaded, or which has the AttrStClear attribute set,
 // then a *TPMHandleError error with an error code of ErrorAttributes will be returned for handle index 2.
@@ -324,22 +325,22 @@ func (t *TPMContext) FlushContext(flushContext ResourceContext) error {
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
-func (t *TPMContext) EvictControl(auth Handle, object ResourceContext, persistentHandle Handle, authAuth interface{}, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession *Session, sessions ...*Session) (ResourceContext, error) {
 	if err := t.RunCommand(CommandEvictControl, sessions,
-		HandleWithAuth{Handle: auth, Auth: authAuth}, object, Separator,
+		ResourceContextWithSession{Context: auth, Session: authAuthSession}, object, Separator,
 		persistentHandle); err != nil {
 		return nil, err
 	}
 
 	if object.Handle() == persistentHandle {
-		t.evictResourceContext(object)
+		t.evictHandleContext(object)
 		return nil, nil
 	}
 
 	public := &object.(*objectContext).public
 	objectContext := &objectContext{handle: persistentHandle, name: object.Name()}
 	public.copyTo(&objectContext.public)
-	t.addResourceContext(objectContext)
+	t.addHandleContext(objectContext)
 
 	return objectContext, nil
 }

@@ -11,30 +11,29 @@ import (
 	"reflect"
 )
 
-func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*Session, bool, int) {
+func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*sessionParam, int) {
 	for i, session := range sessions {
 		if session.session == nil {
 			continue
 		}
 		if session.session.Attrs&attr > 0 {
-			isAuth := session.associatedContext != nil
-			return session.session, isAuth, i
+			return session, i
 		}
 	}
 
-	return nil, false, 0
+	return nil, 0
 }
 
-func findDecryptSession(sessions []*sessionParam) (*Session, bool, int) {
+func findDecryptSession(sessions []*sessionParam) (*sessionParam, int) {
 	return findSessionWithAttr(AttrCommandEncrypt, sessions)
 }
 
-func findEncryptSession(sessions []*sessionParam) (*Session, bool, int) {
+func findEncryptSession(sessions []*sessionParam) (*sessionParam, int) {
 	return findSessionWithAttr(AttrResponseEncrypt, sessions)
 }
 
 func hasDecryptSession(sessions []*sessionParam) bool {
-	s, _, _ := findDecryptSession(sessions)
+	s, _ := findDecryptSession(sessions)
 	return s != nil
 }
 
@@ -74,36 +73,36 @@ func isParamEncryptable(param interface{}) bool {
 	return isSizedStructParam(v) || isSizedBuffer(v.Type())
 }
 
-func computeSessionValue(context *sessionContext, authValue []byte, isAuth bool) []byte {
+func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
-	key = append(key, context.sessionKey...)
-	if isAuth {
-		key = append(key, authValue...)
+	key = append(key, s.session.Context.(*sessionContext).sessionKey...)
+	if s.associatedContext != nil {
+		key = append(key, s.associatedContext.(handleContextPrivate).getAuthValue()...)
 	}
 	return key
 }
 
 func computeEncryptNonce(sessions []*sessionParam) Nonce {
-	session, _, i := findEncryptSession(sessions)
-	if session == nil || i == 0 || sessions[0].associatedContext == nil {
+	session, i := findEncryptSession(sessions)
+	if session == nil || i == 0 || !sessions[0].isAuth {
 		return nil
 	}
-	decSession, _, di := findDecryptSession(sessions)
+	decSession, di := findDecryptSession(sessions)
 	if decSession != nil && di == i {
 		return nil
 	}
 
-	return session.Context.(*sessionContext).nonceTPM
+	return session.session.Context.(*sessionContext).nonceTPM
 }
 
 func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, error) {
-	session, isAuth, index := findDecryptSession(sessions)
+	session, index := findDecryptSession(sessions)
 	if session == nil {
 		return nil, nil
 	}
 
-	context := session.Context.(*sessionContext)
-	sessionValue := computeSessionValue(context, session.AuthValue, isAuth)
+	context := session.session.Context.(*sessionContext)
+	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
 	data := cpBytes[2 : size+2]
@@ -134,7 +133,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		return nil, fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
-	if index == 0 || sessions[0].associatedContext == nil {
+	if index == 0 || !sessions[0].isAuth {
 		return nil, nil
 	}
 
@@ -142,13 +141,13 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 }
 
 func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
-	session, isAuth, _ := findEncryptSession(sessions)
+	session, _ := findEncryptSession(sessions)
 	if session == nil {
 		return nil
 	}
 
-	context := session.Context.(*sessionContext)
-	sessionValue := computeSessionValue(context, session.AuthValue, isAuth)
+	context := session.session.Context.(*sessionContext)
+	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)
 	data := rpBytes[2 : size+2]

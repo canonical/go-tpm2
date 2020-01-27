@@ -98,8 +98,8 @@ func TestCertify(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, objectContext, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, objectContextAuth, signContextAuth interface{}) {
-		certifyInfo, signature, err := tpm.Certify(objectContext, signContext, qualifyingData, inScheme, objectContextAuth, signContextAuth)
+	run := func(t *testing.T, objectContext, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, objectContextAuthSession, signContextAuthSession *Session) {
+		certifyInfo, signature, err := tpm.Certify(objectContext, signContext, qualifyingData, inScheme, objectContextAuthSession, signContextAuthSession)
 		if err != nil {
 			t.Fatalf("Certify failed: %v", err)
 		}
@@ -190,7 +190,7 @@ func TestCertify(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		run(t, primary, ak, HandleEndorsement, nil, nil, nil, testAuth)
+		run(t, primary, ak, HandleEndorsement, nil, nil, nil, nil)
 	})
 
 	t.Run("UseSessionAuthForKey", func(t *testing.T) {
@@ -199,7 +199,7 @@ func TestCertify(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -213,7 +213,7 @@ func TestCertify(t *testing.T) {
 		defer flushContext(t, tpm, ak)
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
-		run(t, primary, ak, HandleEndorsement, nil, nil, testAuth, nil)
+		run(t, primary, ak, HandleEndorsement, nil, nil, nil, nil)
 	})
 
 	t.Run("UseSessionAuthForObject", func(t *testing.T) {
@@ -222,7 +222,7 @@ func TestCertify(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, testAuth)
 		defer flushContext(t, tpm, primary)
 
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -242,7 +242,7 @@ func TestCertifyCreation(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuth interface{}) {
+	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuthSession *Session) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -257,14 +257,14 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
+		objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
 		defer flushContext(t, tpm, objectHandle)
 
 		certifyInfo, signature, err :=
-			tpm.CertifyCreation(signContext, objectHandle, qualifyingData, creationHash, inScheme, creationTicket, signContextAuth)
+			tpm.CertifyCreation(signContext, objectHandle, qualifyingData, creationHash, inScheme, creationTicket, signContextAuthSession)
 		if err != nil {
 			t.Fatalf("CertifyCreation failed: %v", err)
 		}
@@ -341,14 +341,14 @@ func TestCertifyCreation(t *testing.T) {
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, nil, nil, testAuth)
+		run(t, ak, HandleEndorsement, nil, nil, nil)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -372,7 +372,7 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectHandle, _, _, creationHash, creationTicket, _, err := tpm.CreatePrimary(HandleOwner, nil, &template, nil, nil, nil)
+		objectHandle, _, _, creationHash, creationTicket, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -395,7 +395,7 @@ func TestQuote(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	for i := 0; i < 8; i++ {
-		if _, err := tpm.PCREvent(Handle(i), Event(fmt.Sprintf("event%d", i)), nil); err != nil {
+		if _, err := tpm.PCREvent(tpm.PCRHandleContext(i), Event(fmt.Sprintf("event%d", i)), nil); err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
 	}
@@ -406,8 +406,8 @@ func TestQuote(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuth interface{}) {
-		quoted, signature, err := tpm.Quote(signContext, qualifyingData, inScheme, pcrs, signContextAuth)
+	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuthSession *Session) {
+		quoted, signature, err := tpm.Quote(signContext, qualifyingData, inScheme, pcrs, signContextAuthSession)
 		if err != nil {
 			t.Fatalf("Quote failed: %v", err)
 		}
@@ -494,14 +494,14 @@ func TestQuote(t *testing.T) {
 
 		pcrs := PCRSelectionList{
 			PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{1, 7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, testAuth)
+		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -523,8 +523,8 @@ func TestGetTime(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuth, signContextAuth interface{}) {
-		timeInfo, signature, err := tpm.GetTime(HandleEndorsement, signContext, qualifyingData, inScheme, privacyAdminHandleAuth, signContextAuth)
+	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuthSession, signContextAuthSession *Session) {
+		timeInfo, signature, err := tpm.GetTime(tpm.EndorsementHandleContext(), signContext, qualifyingData, inScheme, privacyAdminHandleAuthSession, signContextAuthSession)
 		if err != nil {
 			t.Fatalf("GetTime failed: %v", err)
 		}
@@ -615,14 +615,14 @@ func TestGetTime(t *testing.T) {
 	t.Run("UsePasswordAuthForKey", func(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, nil, nil, nil, testAuth)
+		run(t, ak, HandleEndorsement, nil, nil, nil, nil)
 	})
 
 	t.Run("UseSessionAuthForKey", func(t *testing.T) {
 		ak := prepare(t, testAuth)
 		defer flushContext(t, tpm, ak)
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256, testAuth)
+		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -635,25 +635,25 @@ func TestGetTime(t *testing.T) {
 		ak := prepare(t, nil)
 		defer flushContext(t, tpm, ak)
 
-		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
-		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
+		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
-		run(t, ak, HandleEndorsement, nil, nil, testAuth, nil)
+		run(t, ak, HandleEndorsement, nil, nil, nil, nil)
 	})
 
 	t.Run("UseSessionAuthForPrivacyAdmin", func(t *testing.T) {
 		ak := prepare(t, nil)
 		defer flushContext(t, tpm, ak)
 
-		setHierarchyAuthForTest(t, tpm, HandleEndorsement)
-		defer resetHierarchyAuth(t, tpm, HandleEndorsement)
+		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256, nil)
+		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		run(t, ak, HandleEndorsement, nil, nil, &Session{Context: sessionContext, AuthValue: testAuth}, nil)
+		run(t, ak, HandleEndorsement, nil, nil, &Session{Context: sessionContext}, nil)
 	})
 }

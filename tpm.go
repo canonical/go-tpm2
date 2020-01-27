@@ -82,7 +82,7 @@ type SessionAttributes int
 
 const (
 	// AttrContinueSession specifies that the session should not be flushed from the TPM after it is used. If a session is used without
-	// this flag, it will be flushed from the TPM after the command completes. In this case, the ResourceContext associated with the
+	// this flag, it will be flushed from the TPM after the command completes. In this case, the HandleContext associated with the
 	// session will be invalidated.
 	AttrContinueSession SessionAttributes = 1 << iota
 
@@ -115,70 +115,29 @@ const (
 	AttrAudit
 )
 
-// Session wraps a session ResourceContext with some additional parameters that define how a command should use the session.
+// Session wraps a SessionContext with some attributes that define how a command should use the session.
 type Session struct {
-	Context ResourceContext // A ResourceContext that corresponds to a loaded session on the TPM
-
-	// AuthValue is the authorization value of the resource that the session is being used to provide an authorisation for. For HMAC
-	// sessions, AuthValue will be included in the HMAC key if the session associated with Context is not bound, or the session is
-	// used to provide authorization for a resource to which it isn't bound. In this case, AuthValue must match the authorization
-	// value of the resource that this session is being used to provide authorization for. If the resource that this session is
-	// being used to provide authorization for is the one that is bound to the session, then AuthValue can be omitted. If it is
-	// provided, then it must match the authorization value of the resource to which the session is bound.
-	//
-	// For policy sessions, AuthValue is not included in the HMAC key unless the TPMContext.PolicyAuthValue function has been called
-	// on the session associated with Context. If Context corresponds to a policy session and TPMContext.PolicyPassword has been
-	// executed on it, the value of AuthValue will be included in cleartext in the HMAC field of the generated command authorization.
-	// In both of these cases, AuthValue must match the authorization value of the resource for which the session is being used to
-	// provide authorization for.
-	//
-	// If the Attrs field has the AttrCommandEncrypt or AttrResponseEncrypt flags set and the session is also being used to provide
-	// authorization, then the authorization value of the resource for which the session is providing authorization is included in
-	// the derivation of the symmetric key. In this case, AuthValue must match the authorization value of the resource for which this
-	// session is providing authorization and cannot be omitted, even if the session is bound to the resource for which it is providing
-	// an authorization.
-	AuthValue []byte
-
-	Attrs SessionAttributes // Session usage attributes
-
-	includeAuthValue bool
-}
-
-func (s *Session) WithAuthValue(authValue []byte) *Session {
-	return &Session{Context: s.Context, AuthValue: authValue, Attrs: s.Attrs}
+	Context SessionContext    // A context for a session loaded on the TPM
+	Attrs   SessionAttributes // Session usage attributes
 }
 
 func (s *Session) WithAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: attrs}
+	return &Session{Context: s.Context, Attrs: attrs}
 }
 
 func (s *Session) AddAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: s.Attrs | attrs}
+	return &Session{Context: s.Context, Attrs: s.Attrs | attrs}
 }
 
 func (s *Session) RemoveAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, AuthValue: s.AuthValue, Attrs: s.Attrs &^ attrs}
+	return &Session{Context: s.Context, Attrs: s.Attrs &^ attrs}
 }
 
-// HandleWithAuth associates a Handle with an authorization, and is provided to TPMContext.RunCommand in the command handle area.
-//
-// Auth can be one of the following types:
-//  * string, []byte, or nil for plaintext password authorization.
-//  * *Session for session based authorization (HMAC or policy).
-type HandleWithAuth struct {
-	Handle Handle
-	Auth   interface{}
-}
-
-// ResourceWithAuth associates a ResourceContext with an authorization, and is provided to TPMContext.RunCommand in the command handle
-// area.
-//
-// Auth can be one of the following types:
-//  * string, []byte, or nil for plaintext password authorization.
-//  * *Session for session based authorization (HMAC or policy).
-type ResourceWithAuth struct {
+// ResourceContextWithAuth associates a ResourceContext with a session for authorization, and is provided to TPMContext.RunCommand in
+// the command handle area for any handles that require an authorization.
+type ResourceContextWithSession struct {
 	Context ResourceContext
-	Auth    interface{}
+	Session *Session
 }
 
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
@@ -192,35 +151,28 @@ type ResourceWithAuth struct {
 // TPMContext is the main entry point by which commands are executed on a TPM device using this package. It communicates with the
 // underlying device via a transmission interface, which is an implementation of io.ReadWriteCloser provided to NewTPMContext.
 //
-// TPMContext maintains some host-side state of TPM resources that are loaded and created by this API, in the form of ResourceContext
-// objects that correspond to a TPM resource.
+// TPMContext maintains some host-side state of TPM entities that are loaded and created by this API, in the form of HandleContext
+// objects that correspond to a TPM entity. There are 2 main types of HandleContext - SessionContext for sessions, and ResourceContext
+// for non-session entities (such as NV indices, objects or permanent handles).
 //
 // Methods that execute commands on the TPM will return errors where the TPM responds with them. These are in the form of *TPMError,
 // *TPMWarning, *TPMHandleError, *TPMSessionError, *TPMParameterError and *TPMVendorError types.
 //
-// Many methods that execute commands on the TPM require Handle or ResourceContext arguments that correspond to resources on the TPM.
-// Where those require authorization, the method also requires a corresponding authorization argument, the type of which is the empty
-// interface (in most cases). Valid types for these authorization arguments are:
-//  * string, []byte, or nil for plaintext password authorization, where an authorization value is transmitted in cleartext to the
-//    TPM.
-//  * *Session for session based authorization (HMAC or policy).
-//
 // Some methods also accept a variable number of optional *Session arguments - these are for sessions that don't provide authorization
-// for a corresponding TPM resource. These sessions may be used for session based parameter encryption or (in the future) command
+// for a corresponding TPM resource. These sessions may be used for the purposes of session based parameter encryption or command
 // auditing.
 type TPMContext struct {
 	tcti             io.ReadWriteCloser
-	resources        map[Handle]ResourceContext
+	resources        map[Handle]HandleContext
 	maxSubmissions   uint
 	maxNVBufferSize  uint16
-	exclusiveSession ResourceContext
+	exclusiveSession HandleContext
 }
 
-// Close invalidates all non-permanent ResourceContext instances tracked by this TPMContext and then calls Close on the
-// transmission interface.
+// Close invalidates all HandleContext instances tracked by this TPMContext and then calls Close on the transmission interface.
 func (t *TPMContext) Close() error {
 	for _, rc := range t.resources {
-		t.evictResourceContext(rc)
+		t.evictHandleContext(rc)
 	}
 
 	if err := t.tcti.Close(); err != nil {
@@ -288,18 +240,15 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 
 	for i, resource := range resources {
 		switch r := resource.(type) {
-		case ResourceContext:
-			if err := t.checkResourceContextParam(r); err != nil {
-				return nil, fmt.Errorf("cannot process ResourceContext for command %s at index %d: %v", commandCode, i, err)
+		case HandleContext:
+			if err := t.checkHandleContextParam(r); err != nil {
+				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", commandCode, i, err)
 			}
 			handles = append(handles, r.Handle())
 			handleNames = append(handleNames, r.Name())
-		case Handle:
-			handles = append(handles, r)
-			handleNames = append(handleNames, permanentContext(r).Name())
 		case nil:
 			handles = append(handles, HandleNull)
-			handleNames = append(handleNames, permanentContext(HandleNull).Name())
+			handleNames = append(handleNames, untrackedContext(HandleNull).Name())
 		default:
 			return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)",
 				commandCode, i, reflect.TypeOf(resource))
@@ -416,7 +365,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		rpBuf = bytes.NewReader(rpBytes)
 	}
 
-	var exclusive ResourceContext
+	var exclusive HandleContext
 	for _, s := range context.sessionParams {
 		if s.session == nil {
 			continue
@@ -456,13 +405,11 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 // handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Separator
 // sentinel value.
 //
-// Command handles are provided as Handle or ResourceContext types if they do not require an authorization. For command handles that
-// require an authorization, they are provided using the HandleWithAuth type (for a Handle) or the ResourceWithAuth type (for a
-// ResourceContext). Both HandleWithAuth and ResourceWithAuth reference the corresponding authorization. If a ResourceContext
-// references a non-permanent handle and is not tracked by this TPMContext, then this function will return an error. Providing a nil
-// value will automatically by converted to a handle with the value of HandleNull. The Handle type must only be used for permanent
-// resources - if the Handle type is used to reference non-permanent resources, then computation of the resource name will be
-// incorrect and the correct name is required for the correct computation of session HMACs.
+// Command handles are provided as HandleContext types if they do not require an authorization. For command handles that require an
+// authorization, they are provided using the ResourceContextWithSession type. This links the ResourceContext to an optional
+// authorization session. If the authorization value of the TPM entity is required as part of the authorization, this will be obtained
+// from the supplied ResourceContext. If a HandleContext is not tracked by this TPMContext, then this function will return an error.
+// A nil value will automatically be converted to a handle with the value of HandleNull.
 //
 // Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
 //
@@ -475,7 +422,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 // resubmit the command a finite number of times before returning an error. The maximum number of retries can be set via
 // TPMContext.SetMaxSubmissions.
 //
-// The caller can provide additional sessions that aren't associated with a handle (and therefore not used for authorization) via
+// The caller can provide additional sessions that aren't associated with a TPM entity (and therefore not used for authorization) via
 // the sessions parameter, for the purposes of command auditing or session based parameter encryption.
 //
 // In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
@@ -496,22 +443,16 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 
 		switch sentinels {
 		case 0:
-			var err error
-			var typeName string
 			switch p := param.(type) {
-			case HandleWithAuth:
-				commandHandles = append(commandHandles, p.Handle)
-				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, p)
-				typeName = "HandleWithAuth"
-			case ResourceWithAuth:
+			case ResourceContextWithSession:
 				commandHandles = append(commandHandles, p.Context)
-				sessionParams, err = t.validateAndAppendSessionParam(sessionParams, p)
-				typeName = "ResourceWithAuth"
+				var err error
+				sessionParams, err = t.validateAndAppendAuthSessionParam(sessionParams, p)
+				if err != nil {
+					return fmt.Errorf("cannot process ResourceContextWithSession for command %s at index %d: %v", commandCode, len(commandHandles), err)
+				}
 			default:
 				commandHandles = append(commandHandles, param)
-			}
-			if err != nil {
-				return fmt.Errorf("cannot process %s for command %s at index %d: %v", typeName, commandCode, len(commandHandles), err)
 			}
 		case 1:
 			commandParams = append(commandParams, param)
@@ -522,7 +463,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 		}
 	}
 
-	sessionParams, err := t.validateAndAppendSessionParam(sessionParams, sessions)
+	sessionParams, err := t.validateAndAppendExtraSessionParams(sessionParams, sessions)
 	if err != nil {
 		return fmt.Errorf("cannot process non-auth *Session parameters for command %s: %v", commandCode, err)
 	}
@@ -544,7 +485,7 @@ func (t *TPMContext) SetMaxSubmissions(max uint) {
 func newTpmContext(tcti io.ReadWriteCloser) *TPMContext {
 	r := new(TPMContext)
 	r.tcti = tcti
-	r.resources = make(map[Handle]ResourceContext)
+	r.resources = make(map[Handle]HandleContext)
 	r.maxSubmissions = 5
 
 	return r

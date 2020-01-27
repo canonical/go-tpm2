@@ -14,7 +14,7 @@ import (
 // primaryObject.
 //
 // The primaryObject parameter should correspond to a hierarchy. The command requires authorization with the user auth role for
-// primaryObject, provided via primaryObjectAuth.
+// primaryObject, with session based authorization provided via primaryObjectAuthSession.
 //
 // A template for the object is provided via the inPublic parameter. The Type field of inPublic defines the algorithm for the object.
 // The NameAlg field defines the digest algorithm for computing the name of the object. The Attrs field defines the attributes of
@@ -86,17 +86,19 @@ import (
 // code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest algorithm
 // selected by the specified scheme.
 //
-// On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM. If the Type field
-// of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object will have a Unique field that is the digest
-// of the sensitive data and the value of the object's seed in the sensitive area, computed using the object's name algorithm. If
-// the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned *Public object will have a Unique field containing
-// details about the public part of the key, computed from the private part of the key.
+// On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM. It will not be
+// necessary to call ResourceContext.SetAuthValue on it - this function sets the correct authorization value so that it can be used in
+// subsequent commands that require knowledge of the authorization value. If the Type field of inPublic is AlgorithmKeyedHash or
+// AlgorithmSymCipher, then the returned *Public object will have a Unique field that is the digest of the sensitive data and the value
+// of the object's seed in the sensitive area, computed using the object's name algorithm. If the Type field of inPublic is
+// AlgorithmECC or AlgorithmRSA, then the returned *Public object will have a Unique field containing details about the public part of
+// the key, computed from the private part of the key.
 //
 // The returned *CreationData will contain a digest computed from the values of PCRs selected by the creationPCR parameter at creation
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
 // can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
 // method.
-func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuth interface{}, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
+func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuthSession *Session, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -110,7 +112,7 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 	var name Name
 
 	if err := t.RunCommand(CommandCreatePrimary, sessions,
-		HandleWithAuth{Handle: primaryObject, Auth: primaryObjectAuth}, Separator,
+		ResourceContextWithSession{Context: primaryObject, Session: primaryObjectAuthSession}, Separator,
 		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
 		&objectHandle, Separator,
 		&outPublic, &creationData, &creationHash, &creationTicket, &name); err != nil {
@@ -126,34 +128,38 @@ func (t *TPMContext) CreatePrimary(primaryObject Handle, inSensitive *SensitiveC
 			"name and public area returned from TPM are not consistent"}
 	}
 
-	objectContext := &objectContext{handle: objectHandle, name: name}
+	objectContext := &objectContext{handle: objectHandle, name: name, authValue: inSensitive.UserAuth}
 	outPublic.Ptr.copyTo(&objectContext.public)
-	t.addResourceContext(objectContext)
+	t.addHandleContext(objectContext)
 
 	return objectContext, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, name, nil
 }
 
 // Clear executes the TPM2_Clear command to remove all context associated with the current owner. The command requires knowledge of
-// the authorization value for either the platform or lockout hierarchy. The hierarchy is specified by passing either HandlePlatform
-// or HandleLockout to authHandle. The command requires the user auth role for authHandle, provided via authHandleAuth.
+// the authorization value for either the platform or lockout hierarchy. The hierarchy is specified by passing a ResourceContext
+// corresponding to either HandlePlatform or HandleLockout to authContext. The command requires authorization with the user auth
+// role for authContext, with session based authorization provided via authContextAuthSession.
 //
 // On successful completion, as well as the TPM having performed the operations associated with the TPM2_Clear command, this function
 // will invalidate all ResourceContext instances of NV indices associated with the current owner, and all transient and persistent
-// objects that reside in the storage and endorsement hierarchies.
+// objects that reside in the storage and endorsement hierarchies. The authorization values for ResourceContext instances
+// corresponding to HandleOwner, HandleEndorsement and HandleLockout will be cleared - it isn't necessary to update them with
+// ResourceContext.SetAuthValue in order to use them in subsequent commands that require knowledge of the authorization values for
+// those permanent resources.
 //
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
-func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
+	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
 	if err != nil {
-		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
+		return fmt.Errorf("error whilst processing handle with authorization for authContext: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, []interface{}{authHandle}, nil)
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, []interface{}{authContext}, nil)
 
 	getHandles := func(handleType HandleType, out map[Handle]struct{}) {
 		handles, err := t.GetCapabilityHandles(handleType.BaseHandle(), CapabilityMaxProperties)
@@ -182,20 +188,19 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessio
 			}
 		case *sessionContext:
 			continue
+		case *permanentContext:
+			switch c.Handle() {
+			case HandleOwner, HandleEndorsement, HandleLockout:
+				c.authValue = nil
+			}
+			continue
 		}
 
-		t.evictResourceContext(rc)
+		t.evictHandleContext(rc)
 	}
 
 	if err != nil {
 		return err
-	}
-
-	authSession := ctx.sessionParams[0].session
-	if authSession != nil {
-		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
-		// with a HMAC generated with a key based on an empty auth value.
-		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(nil)
 	}
 
 	return t.processResponse(ctx, nil, nil)
@@ -205,50 +210,52 @@ func (t *TPMContext) Clear(authHandle Handle, authHandleAuth interface{}, sessio
 // TPMContext.Clear function).
 //
 // If disable is true, then this command will disable the execution of TPM2_Clear. In this case, the command requires knowledge of
-// the authorization value for the platform or lockout hierarchy. The hierarchy is specified via the authHandle parameter by
-// setting it to either HandlePlatform or HandleLockout.
+// the authorization value for the platform or lockout hierarchy. The hierarchy is specified via the authContext parameter by
+// passing a ResourceContext corresponding to either HandlePlatform or HandleLockout.
 //
 // If disable is false, then this command will enable execution of TPM2_Clear. In this case, the command requires knowledge of the
-// authorization value for the platform hierarchy, and authHandle must be set to HandlePlatform. If authHandle is set to HandleOwner,
-// a *TPMError error with an error code of ErrorAuthFail will be returned.
+// authorization value for the platform hierarchy, and authContext must be a ResourceContext corresponding to HandlePlatform. If
+// authContext is a HandleContext corresponding to HandleOwner, a *TPMError error with an error code of ErrorAuthFail will be
+// returned.
 //
-// The command requires the authorization with the user auth role for authHandle, provided via authHandleAuth.
-func (t *TPMContext) ClearControl(authHandle Handle, disable bool, authHandleAuth interface{}, sessions ...*Session) error {
+// The command requires the authorization with the user auth role for authContext, with session based authorization provided via
+// authContextAuthSession.
+func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, authContextAuthSession *Session, sessions ...*Session) error {
 	return t.RunCommand(CommandClearControl, sessions,
-		HandleWithAuth{Handle: authHandle, Auth: authHandleAuth}, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Separator,
 		disable)
 }
 
 // HierarchyChangeAuth executes the TPM2_HierarchyChangeAuth command to change the authorization value for the hierarchy associated
-// with the authHandle parameter. The command requires authorization with the user auth role for authHandle, provided via
-// authHandleAuth.
+// with the authContext parameter. The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession.
 //
 // If the value of newAuth is longer than the context integrity digest algorithm for the TPM, a *TPMParameterError error with an
 // error code of ErrorSize will be returned.
 //
-// On successful completion, the authorization value for the hierarchy associated with authHandle will be set to the value of newAuth.
-func (t *TPMContext) HierarchyChangeAuth(authHandle Handle, newAuth Auth, authHandleAuth interface{}, sessions ...*Session) error {
+// On successful completion, the authorization value of the hierarchy associated with authContext will be set to the value of
+// newAuth, and authContext will be updated to reflect this - it isn't necessary to update authContext with
+// ResourceContext.SetAuthValue in order to use it in subsequent commands that require knowledge of the authorization value for the
+// resource.
+func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Auth, authContextAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
-	s, err := t.validateAndAppendSessionParam(s, HandleWithAuth{Handle: authHandle, Auth: authHandleAuth})
+	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
 	}
-	s, err = t.validateAndAppendSessionParam(s, sessions)
+	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s, []interface{}{authHandle}, []interface{}{newAuth})
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s, []interface{}{authContext}, []interface{}{newAuth})
 	if err != nil {
 		return err
 	}
 
-	authSession := ctx.sessionParams[0].session
-	if authSession != nil {
-		// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond
-		// with a HMAC generated with a key that includes newAuth instead.
-		ctx.sessionParams[0].session = authSession.copyWithNewAuthIfRequired(newAuth)
-	}
+	// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond with a HMAC generated with a key
+	// that includes newAuth instead.
+	authContext.SetAuthValue(newAuth)
 
 	return t.processResponse(ctx, nil, nil)
 }
