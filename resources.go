@@ -41,7 +41,11 @@ type SessionContext interface {
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
 type ResourceContext interface {
 	HandleContext
-	SetAuthValue([]byte) // Set the authorization value that will be used when authorization is required for this resource
+
+	// SetAuthValue sets the authorization value that will be used in authorization roles where knowledge of the authorization
+	// value is required. Functions that create resources on the TPM and return a ResourceContext will set this automatically,
+	// else it will need to be set manually.
+	SetAuthValue([]byte)
 }
 
 type untrackedContext Handle

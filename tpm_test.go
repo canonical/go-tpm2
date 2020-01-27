@@ -212,7 +212,6 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
-	objectHandle.SetAuthValue(userAuth) // FIXME: Remove once CreatePrimary is updated to use ResourceContext
 	return objectHandle
 }
 
@@ -235,7 +234,6 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
-	objectHandle.SetAuthValue(userAuth) // FIXME: Remove once CreatePrimary is updated to use ResourceContext
 	return objectHandle
 }
 

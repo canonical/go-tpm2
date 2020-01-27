@@ -720,7 +720,8 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex HandleContext, authContextA
 // will be returned.
 //
 // On successful completion, the authorization value of the NV index associated with nvIndex will be set to the value of newAuth,
-// and nvIndex will be updated to reflect this - it isn't necessary to update nvIndex with ResourceContext.SetAuthValue.
+// and nvIndex will be updated to reflect this - it isn't necessary to update nvIndex with ResourceContext.SetAuthValue in order to
+// use it in authorization roles that require knowledge of the authorization value for the index.
 func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})

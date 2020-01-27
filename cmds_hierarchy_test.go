@@ -12,7 +12,7 @@ func TestCreatePrimary(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, hierarchy HandleContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session interface{}) (HandleContext, *Public) {
+	run := func(t *testing.T, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session *Session) (ResourceContext, *Public) {
 		objectContext, outPublic, creationData, creationHash, creationTicket, name, err := tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
@@ -161,7 +161,7 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, testAuth)
+		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
 	})
@@ -253,7 +253,7 @@ func TestClear(t *testing.T) {
 	tpm, _ := openTPMSimulatorForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, auth interface{}) {
+	run := func(t *testing.T, authSession *Session) {
 		var persistentObjects []HandleContext // Objects that persist across Clear
 		var transientObjects []HandleContext  // Objects that are evicted by Clar
 
@@ -301,13 +301,7 @@ func TestClear(t *testing.T) {
 
 		// Set endorsement hierarchy auth value (should be reset by Clear)
 		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
-		ehAuthReset := false // FIXME: Remove once Clear is updated to reset the EH context auth value
-		defer func() {
-			if ehAuthReset {
-				return
-			}
-			resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
-		}()
+		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
 		// Create a session (should persist across Clear)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
@@ -349,11 +343,9 @@ func TestClear(t *testing.T) {
 		}
 
 		// Perform the clear
-		if err := tpm.Clear(tpm.LockoutHandleContext(), auth); err != nil {
+		if err := tpm.Clear(tpm.LockoutHandleContext(), authSession); err != nil {
 			t.Fatalf("Clear failed: %v", err)
 		}
-
-		tpm.EndorsementHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
 
 		// Verify that handles that should have been flushed have been
 		for _, h := range transientHandles {
@@ -392,8 +384,6 @@ func TestClear(t *testing.T) {
 		}
 		if PermanentAttributes(props[0].Value)&AttrEndorsementAuthSet > 0 {
 			t.Errorf("Clear did not clear the EH auth")
-		} else {
-			ehAuthReset = true
 		}
 	}
 
@@ -402,52 +392,28 @@ func TestClear(t *testing.T) {
 	})
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		lockoutAuthReset := false // FIXME: Remove once Clear is updated to reset the LH context auth value
-		defer func() {
-			if lockoutAuthReset {
-				tpm.LockoutHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
-				return
-			}
-			resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		}()
-		run(t, testAuth)
-		lockoutAuthReset = true
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
+		run(t, nil)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		lockoutAuthReset := false // FIXME: Remove once Clear is updated to reset the LH context auth value
-		defer func() {
-			if lockoutAuthReset {
-				tpm.LockoutHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
-				return
-			}
-			resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		}()
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
 		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
-		lockoutAuthReset = true
+		run(t, &Session{Context: sessionContext})
 	})
 	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
 		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		lockoutAuthReset := false // FIXME: Remove once Clear is updated to reset the LH context auth value
-		defer func() {
-			if lockoutAuthReset {
-				tpm.LockoutHandleContext().SetAuthValue(nil) // FIXME: Remove once Clear is updated to do this
-				return
-			}
-			resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		}()
+		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, AuthValue: testAuth})
-		lockoutAuthReset = true
+		run(t, &Session{Context: sessionContext})
 	})
 }
 
@@ -484,14 +450,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		// FIXME: Remove this once CreatePrimary is updated to use ResourceContext
-		var auth interface{}
-		if session == nil {
-			auth = testAuth
-		} else {
-			auth = session.WithAuthValue(testAuth)
-		}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, auth)
+		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -513,14 +472,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		// FIXME: Remove this once CreatePrimary is updated to use ResourceContext
-		var auth interface{}
-		if session == nil {
-			auth = testAuth
-		} else {
-			auth = session.WithAuthValue(testAuth)
-		}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, auth)
+		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
