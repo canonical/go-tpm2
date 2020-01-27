@@ -73,13 +73,11 @@ func isParamEncryptable(param interface{}) bool {
 	return isSizedStructParam(v) || isSizedBuffer(v.Type())
 }
 
-func computeSessionValue(session *sessionParam) []byte {
+func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
-	key = append(key, session.session.Context.(*sessionContext).sessionKey...)
-	if session.isAuth {
-		if session.associatedContext != nil {
-			key = append(key, session.associatedContext.(handleContextPrivate).getAuthValue()...)
-		}
+	key = append(key, s.session.Context.(*sessionContext).sessionKey...)
+	if s.associatedContext != nil {
+		key = append(key, s.associatedContext.(handleContextPrivate).getAuthValue()...)
 	}
 	return key
 }
@@ -104,7 +102,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 	}
 
 	context := session.session.Context.(*sessionContext)
-	sessionValue := computeSessionValue(session)
+	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
 	data := cpBytes[2 : size+2]
@@ -149,7 +147,7 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 	}
 
 	context := session.session.Context.(*sessionContext)
-	sessionValue := computeSessionValue(session)
+	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)
 	data := rpBytes[2 : size+2]

@@ -119,8 +119,6 @@ const (
 type Session struct {
 	Context SessionContext    // A context for a session loaded on the TPM
 	Attrs   SessionAttributes // Session usage attributes
-
-	includeAuthValue bool
 }
 
 func (s *Session) WithAttrs(attrs SessionAttributes) *Session {
