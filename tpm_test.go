@@ -306,7 +306,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek HandleContex
 	return akContext
 }
 
-func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent HandleContext) HandleContext {
+func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent HandleContext) ResourceContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,

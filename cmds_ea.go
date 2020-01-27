@@ -48,7 +48,7 @@ package tpm2
 // session's usage. If expiration is non-zero, the expiration time of the session context will be updated unless it already has an
 // expiration time that is earlier. If expiration is less than zero, a timeout value and corresponding *TkAuth ticket will be
 // returned if policySession does not correspond to a trial session.
-func (t *TPMContext) PolicySigned(authContext HandleContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout, *TkAuth, error) {
+func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout, *TkAuth, error) {
 	var nonceTPM Nonce
 	if includeNonceTPM {
 		nonceTPM = policySession.NonceTPM()
@@ -69,9 +69,10 @@ func (t *TPMContext) PolicySigned(authContext HandleContext, policySession Sessi
 }
 
 // PolicySecret executes the TPM2_PolicySecret command to include a secret-based authorization to the policy session associated
-// with policySession. The command requires authorization with the user auth role for authContext, which is provided via
-// authContextAuth. If authContextAuth corresponds a policy session, and that session does not include a TPM2_PolicyPassword or
-// TPM2_PolicyAuthValue assertion, a *TPMSessionError error with an error code of ErrorMode will be returned for session index 1.
+// with policySession. The command requires authorization with the user auth role for authContext, with session based authorization
+// provided via authContextAuthSession. If authContextAuthSession corresponds a policy session, and that session does not include a
+// TPM2_PolicyPassword or TPM2_PolicyAuthValue assertion, a *TPMSessionError error with an error code of ErrorMode will be returned
+// for session index 1.
 //
 // The cpHashA parameter allows the session to be bound to a specific command and set of command parameters by providing a command
 // parameter digest. Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session. If
@@ -95,12 +96,12 @@ func (t *TPMContext) PolicySigned(authContext HandleContext, policySession Sessi
 // expiration time of the session context will be updated unless it already has an expiration time that is earlier. If expiration is
 // less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a trial
 // session.
-func (t *TPMContext) PolicySecret(authContext HandleContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuth interface{}, sessions ...*Session) (Timeout, *TkAuth, error) {
+func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession *Session, sessions ...*Session) (Timeout, *TkAuth, error) {
 	var timeout Timeout
 	var policyTicket TkAuth
 
 	if err := t.RunCommand(CommandPolicySecret, sessions,
-		HandleContextWithAuth{Context: authContext, Auth: authContextAuth}, policySession, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, policySession, Separator,
 		policySession.NonceTPM(), cpHashA, policyRef, expiration, Separator,
 		Separator,
 		&timeout, &policyTicket); err != nil {
@@ -184,12 +185,13 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 // and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext. If the NV index has the
 // AttrNVPPRead attribute, authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute,
 // authorization can be satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute,
-// authorization can be satisfied with nvIndex. The command requires authorization with the user auth role for authContext, provided
-// via authContextAuth. If the resource associated with authContext is not permitted to authorize this access and policySession does
-// not correspond to a trial session, a *TPMError error with an error code of ErrorNVAuthorization will be returned.
+// authorization can be satisfied with nvIndex. The command requires authorization with the user auth role for authContext, with
+// session based authorization provided via authContextAuthSession. If the resource associated with authContext is not permitted to
+// authorize this access and policySession does not correspond to a trial session, a *TPMError error with an error code of
+// ErrorNVAuthorization will be returned.
 //
 // If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
-// supplying the authorization value for the index (either directly or using a HMAC session). If nvIndex is being used for
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
 // authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
 // digest that matches the authorization policy for the index.
 //
@@ -211,9 +213,9 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 //
 // On successful completion, the policy digest of the session context associated with policySession is extended to include the values
 // of operandB, offset, operation and the name of nvIndex.
-func (t *TPMContext) PolicyNV(authContext, nvIndex HandleContext, policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, authContextAuth interface{}, sessions ...*Session) error {
+func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, authContextAuthSession *Session, sessions ...*Session) error {
 	return t.RunCommand(CommandPolicyNV, sessions,
-		HandleContextWithAuth{Context: authContext, Auth: authContextAuth}, nvIndex, policySession, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, policySession, Separator,
 		operandB, offset, operation)
 }
 
