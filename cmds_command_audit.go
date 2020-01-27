@@ -10,7 +10,7 @@ package tpm2
 // change the audit status of a command, or change the digest algorithm used for command auditing (but not both at the same time).
 //
 // The auth parameter should be a ResourceContext corresponding to either HandlePlatform or HandleOwner. This command requires
-// authorization of auth with the user role, with session based authorization provided via authAuthSession.
+// authorization of auth with the user auth role, with session based authorization provided via authAuthSession.
 //
 // The auditAlg argument specifies the digest algorithm for command auditing. The setList argument is used to specify which commands
 // should be added to the list of commands to be audited. The clearList argument is used to specify which commands should be removed

@@ -216,16 +216,16 @@ func TestEvictControl(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, transient HandleContext, persist Handle, authAuth interface{}) {
+	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession *Session) {
 		owner := tpm.OwnerHandleContext()
 		if handle, err := tpm.GetOrCreateResourceContext(persist); err == nil {
-			_, err := tpm.EvictControl(owner, handle, persist, authAuth)
+			_, err := tpm.EvictControl(owner, handle, persist, authAuthSession)
 			if err != nil {
 				t.Logf("EvictControl failed whilst trying to remove a handle at the start of the test: %v", err)
 			}
 		}
 
-		outContext, err := tpm.EvictControl(owner, transient, persist, authAuth)
+		outContext, err := tpm.EvictControl(owner, transient, persist, authAuthSession)
 		if err != nil {
 			t.Fatalf("EvictControl failed: %v", err)
 		}
@@ -238,7 +238,7 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("outContext has the wrong name")
 		}
 
-		outContext2, err := tpm.EvictControl(owner, outContext, outContext.Handle(), authAuth)
+		outContext2, err := tpm.EvictControl(owner, outContext, outContext.Handle(), authAuthSession)
 		if err != nil {
 			t.Errorf("EvictControl failed: %v", err)
 		}
@@ -269,7 +269,7 @@ func TestEvictControl(t *testing.T) {
 		defer flushContext(t, tpm, context)
 		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-		run(t, context, Handle(0x8100fff0), testAuth)
+		run(t, context, Handle(0x8100fff0), nil)
 	})
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		context := createRSASrkForTesting(t, tpm, nil)
@@ -281,7 +281,7 @@ func TestEvictControl(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, context, Handle(0x8100ff00), &Session{Context: sessionContext, Attrs: AttrContinueSession, AuthValue: testAuth})
+		run(t, context, Handle(0x8100ff00), &Session{Context: sessionContext, Attrs: AttrContinueSession})
 	})
 }
 

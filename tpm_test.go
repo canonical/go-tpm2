@@ -335,7 +335,7 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Hand
 
 // Persist a transient object for testing. If the persistent handle is already in use, it tries to evict the
 // existing resource first. Fatal if persisting the transient object fails.
-func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth, transient HandleContext, persist Handle) HandleContext {
+func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth, transient ResourceContext, persist Handle) ResourceContext {
 	if context, err := tpm.GetOrCreateResourceContext(persist); err == nil {
 		_, err := tpm.EvictControl(auth, context, persist, nil)
 		if err != nil {
@@ -350,13 +350,13 @@ func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth, transient Hand
 }
 
 // Evict a persistent object. Fails the test if the resource context is valid but the eviction doesn't succeed.
-func evictPersistentObject(t *testing.T, tpm *TPMContext, auth, context HandleContext) {
+func evictPersistentObject(t *testing.T, tpm *TPMContext, auth, context ResourceContext) {
 	if _, err := tpm.EvictControl(auth, context, context.Handle(), nil); err != nil {
 		t.Errorf("EvictControl failed: %v", err)
 	}
 }
 
-func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth, context HandleContext) {
+func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth, context ResourceContext) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}

@@ -303,12 +303,12 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 // resource associated with object should be persisted. To evict a persistent object, object should correspond to the
 // persistent object and persistentHandle should be the handle associated with that resource.
 //
-// The auth parameter should be a HandleContext that corresponds to a hierarchy - it should be HandlePlatform for objects within
-// the platform hierarchy, or HandleOwner for objects within the storage or endorsement hierarchies. If auth is a HandleContext
-// corresponding to HandlePlatform but object corresponds to an object outside of the platform hierarchy, or auth is a HandleContext
+// The auth parameter should be a ResourceContext that corresponds to a hierarchy - it should be HandlePlatform for objects within
+// the platform hierarchy, or HandleOwner for objects within the storage or endorsement hierarchies. If auth is a ResourceContext
+// corresponding to HandlePlatform but object corresponds to an object outside of the platform hierarchy, or auth is a ResourceContext
 // corresponding to HandleOwner but object corresponds to an object inside of the platform hierarchy, a *TPMHandleError error with
 // an error code of ErrorHierarchy will be returned for handle index 2. The auth handle requires authorization with the user auth
-// role, provided via authAuth.
+// role, with session based authorization provided via authAuthSession.
 //
 // If object corresponds to a transient object that only has a public part loaded, or which has the AttrStClear attribute set,
 // then a *TPMHandleError error with an error code of ErrorAttributes will be returned for handle index 2.
@@ -325,9 +325,9 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
-func (t *TPMContext) EvictControl(auth, object HandleContext, persistentHandle Handle, authAuth interface{}, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession *Session, sessions ...*Session) (ResourceContext, error) {
 	if err := t.RunCommand(CommandEvictControl, sessions,
-		HandleContextWithAuth{Context: auth, Auth: authAuth}, object, Separator,
+		ResourceContextWithSession{Context: auth, Session: authAuthSession}, object, Separator,
 		persistentHandle); err != nil {
 		return nil, err
 	}
