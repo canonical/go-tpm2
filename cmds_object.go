@@ -190,9 +190,9 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 // If the loaded object is a storage parent and the size of the seed value in the sensitive area isn't sufficient for the selected
 // name algorithm, a *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// On success, a ResourceContext corresponding to the newly loaded transient object will be returned. If the ResourceContext is
-// subsequently used in authorization roles that require knowledge of the corresponding resources's authorization value, the
-// authorization value will need to be provided by calling ResourceContext.SetAuthValue.
+// On success, a ResourceContext corresponding to the newly loaded transient object will be returned. If subsequent use of the
+// returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be provided
+// by calling ResourceContext.SetAuthValue.
 func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, Name, error) {
 	var objectHandle Handle
 	var name Name
@@ -565,7 +565,7 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 //
 // On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM, along with the
 // private and public parts.  It will not be necessary to call ResourceContext.SetAuthValue on the returned ResourceContext - this
-// function sets the correct authorization value so that it can be used in authorization roles that require knowledge of the
+// function sets the correct authorization value so that it can be used in subsequent commands that require knowledge of the
 // authorization value. If the Type field of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object
 // will have a Unique field that is the digest of the sensitive data and the value of the object's seed in the sensitive area,
 // computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned

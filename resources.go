@@ -304,7 +304,7 @@ func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
 }
 
 // GetOrCreateResourceContext creates and returns a new ResourceContext for the specified handle, or returns the existing one if the
-// TPMContext already has a reference to one. TPMContext will maintain a reference to the returned SessionContext until it is flushed
+// TPMContext already has a reference to one. TPMContext will maintain a reference to the returned ResourceContext until it is flushed
 // or evicted from the TPM or if the TPM indicates that it has created a new resource with the same handle - these stale
 // ResourceContext instances may occur when working with persistent resources via a resource manager.
 //
@@ -319,6 +319,9 @@ func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
 //
 // This function will panic if handle doesn't correspond to a PCR handle, permanent handle, NV index, transient object or persistent
 // object.
+//
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
+// this should be provided by calling ResourceContext.SetAuthValue.
 func (t *TPMContext) GetOrCreateResourceContext(handle Handle) (ResourceContext, error) {
 	switch handle.Type() {
 	case HandleTypePCR, HandleTypePermanent:
@@ -393,6 +396,9 @@ func (t *TPMContext) GetOrCreateSessionContext(handle Handle) (SessionContext, e
 // the existing one if the TPMContext already has a reference to one.
 //
 // This function will panic if handle does not correspond to a permanent or PCR handle.
+//
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
+// this should be provided by calling ResourceContext.SetAuthValue.
 func (t *TPMContext) GetOrCreatePermanentContext(handle Handle) ResourceContext {
 	switch handle.Type() {
 	case HandleTypePermanent, HandleTypePCR:

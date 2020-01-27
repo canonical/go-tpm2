@@ -88,7 +88,7 @@ import (
 //
 // On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM. It will not be
 // necessary to call ResourceContext.SetAuthValue on it - this function sets the correct authorization value so that it can be used in
-// authorization roles that require knowledge of the authorization value. If the Type field of inPublic is AlgorithmKeyedHash or
+// subsequent commands that require knowledge of the authorization value. If the Type field of inPublic is AlgorithmKeyedHash or
 // AlgorithmSymCipher, then the returned *Public object will have a Unique field that is the digest of the sensitive data and the value
 // of the object's seed in the sensitive area, computed using the object's name algorithm. If the Type field of inPublic is
 // AlgorithmECC or AlgorithmRSA, then the returned *Public object will have a Unique field containing details about the public part of
@@ -144,7 +144,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 // will invalidate all ResourceContext instances of NV indices associated with the current owner, and all transient and persistent
 // objects that reside in the storage and endorsement hierarchies. The authorization values for ResourceContext instances
 // corresponding to HandleOwner, HandleEndorsement and HandleLockout will be cleared - it isn't necessary to update them with
-// ResourceContext.SetAuthValue in order to use them in authorization roles that require knowledge of the authorization values for
+// ResourceContext.SetAuthValue in order to use them in subsequent commands that require knowledge of the authorization values for
 // those permanent resources.
 //
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
@@ -235,7 +235,7 @@ func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, aut
 //
 // On successful completion, the authorization value of the hierarchy associated with authContext will be set to the value of
 // newAuth, and authContext will be updated to reflect this - it isn't necessary to update authContext with
-// ResourceContext.SetAuthValue in order to use it in authorization roles that require knowledge of the authorization value for the
+// ResourceContext.SetAuthValue in order to use it in subsequent commands that require knowledge of the authorization value for the
 // resource.
 func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Auth, authContextAuthSession *Session, sessions ...*Session) error {
 	var s []*sessionParam
