@@ -268,8 +268,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 			if authContextAuthSession.Attrs&AttrContinueSession == 0 {
 				return makeInvalidParamError("authContextAuthSession", "the AttrContinueSession attribute is required for a split write")
 			}
-			sessionContext, ok := authContextAuthSession.Context.(*sessionContext)
-			if ok && sessionContext.sessionType == SessionTypePolicy {
+			if authContextAuthSession.Context != nil && authContextAuthSession.Context.(*sessionContext).sessionType == SessionTypePolicy {
 				return makeInvalidParamError("authContextAuthSession", "a policy session can not be used for a split write - use NVWriteRaw instead")
 			}
 		}
