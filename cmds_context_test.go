@@ -85,24 +85,40 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ContextSave failed: %v", err)
 		}
-		restoredRc, err := tpm.ContextLoad(context)
+		restored, err := tpm.ContextLoad(context)
 		if err != nil {
 			t.Fatalf("ContextLoad failed: %v", err)
 		}
-		defer flushContext(t, tpm, restoredRc)
+		defer flushContext(t, tpm, restored)
 
-		if restoredRc.Handle().Type() != HandleTypeTransient {
-			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredRc.Handle())
+		if _, ok := restored.(ResourceContext); !ok {
+			t.Fatalf("ContextLoad returned the wrong type of HandleContext")
 		}
-
-		rcImpl := rc.(*objectContext)
-		restoredRcImpl := restoredRc.(*objectContext)
-
-		if !reflect.DeepEqual(rcImpl.public, restoredRcImpl.public) {
+		if restored.Handle().Type() != HandleTypeTransient {
+			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restored.Handle())
+		}
+		if restored.Handle() == rc.Handle() {
+			t.Errorf("ContextLoad returned a context with an unexpected handle")
+		}
+		if !bytes.Equal(restored.Name(), rc.Name()) {
+			t.Errorf("Restored context has the wrong name")
+		}
+		if !reflect.DeepEqual(rc.(*objectContext).public, restored.(*objectContext).public) {
 			t.Errorf("Restored context has the wrong public data")
 		}
-		if !bytes.Equal(rcImpl.name, restoredRcImpl.name) {
-			t.Errorf("Restored context has the wrong name")
+		if !bytes.Equal(restored.(*objectContext).authValue, rc.(*objectContext).authValue) {
+			t.Errorf("Restored context has the wrong authorization value")
+		}
+
+		pub, name, _, err := tpm.ReadPublic(restored.(ResourceContext))
+		if err != nil {
+			t.Fatalf("ReadPublic failed: %v", err)
+		}
+		if !bytes.Equal(name, rc.Name()) {
+			t.Errorf("Restored object has the wrong name")
+		}
+		if !reflect.DeepEqual(*pub, rc.(*objectContext).public) {
+			t.Errorf("Restored object has the wrong public area")
 		}
 	})
 
@@ -144,47 +160,49 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if forget {
 			tpm.ForgetHandleContext(sc)
 		}
-		restoredSc, err := tpm.ContextLoad(context)
+		restored, err := tpm.ContextLoad(context)
 		if err != nil {
 			t.Fatalf("ContextLoad failed: %v", err)
 		}
-		defer flushContext(t, tpm, restoredSc)
+		defer flushContext(t, tpm, restored)
 
-		if !forget && restoredSc != sc {
+		if !forget && restored != sc {
 			t.Errorf("Expected the same HandleContext back")
 		}
 
-		if restoredSc.Handle() != data.handle {
-			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restoredSc.Handle())
+		if _, ok := restored.(SessionContext); !ok {
+			t.Fatalf("ContextLoad returned the wrong type of HandleContext")
+		}
+		if restored.Handle() != data.handle {
+			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restored.Handle())
 		}
 
-		scImpl = restoredSc.(*sessionContext)
-
-		if scImpl.hashAlg != data.hashAlg {
+		restoredImpl := restored.(*sessionContext)
+		if restoredImpl.hashAlg != data.hashAlg {
 			t.Errorf("Restored context has the wrong hash algorithm")
 		}
-		if scImpl.sessionType != data.sessionType {
+		if restoredImpl.sessionType != data.sessionType {
 			t.Errorf("Restored context has the wrong session type")
 		}
-		if scImpl.policyHMACType != data.policyHMACType {
+		if restoredImpl.policyHMACType != data.policyHMACType {
 			t.Errorf("Restored context has the wrong policy HMAC type")
 		}
-		if scImpl.isBound != data.isBound {
+		if restoredImpl.isBound != data.isBound {
 			t.Errorf("Restored context has the wrong bind status")
 		}
-		if !bytes.Equal(scImpl.boundEntity, data.boundEntity) {
+		if !bytes.Equal(restoredImpl.boundEntity, data.boundEntity) {
 			t.Errorf("Restored context has the wrong bound resource entity")
 		}
-		if !bytes.Equal(scImpl.sessionKey, data.sessionKey) {
+		if !bytes.Equal(restoredImpl.sessionKey, data.sessionKey) {
 			t.Errorf("Restored context has the wrong session key")
 		}
-		if !bytes.Equal(scImpl.nonceCaller, data.nonceCaller) {
+		if !bytes.Equal(restoredImpl.nonceCaller, data.nonceCaller) {
 			t.Errorf("Restored context has the wrong nonceCaller")
 		}
-		if !bytes.Equal(scImpl.nonceTPM, data.nonceTPM) {
+		if !bytes.Equal(restoredImpl.nonceTPM, data.nonceTPM) {
 			t.Errorf("Restored context has the wrong nonceTPM")
 		}
-		if !reflect.DeepEqual(scImpl.symmetric, data.symmetric) {
+		if !reflect.DeepEqual(restoredImpl.symmetric, data.symmetric) {
 			t.Errorf("Restored context has the wrong symmetric")
 		}
 	}

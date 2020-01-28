@@ -16,8 +16,9 @@ import (
 )
 
 type objectContextData struct {
-	Public *Public `tpm2:"sized"`
-	Name   Name
+	Public    *Public `tpm2:"sized"`
+	Name      Name
+	AuthValue []byte
 }
 
 type sessionContextData struct {
@@ -65,7 +66,7 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 	switch c := context.(type) {
 	case *objectContext:
 		d.ContextType = contextTypeObject
-		d.Data.Data = &objectContextData{Public: &c.public, Name: c.name}
+		d.Data.Data = &objectContextData{Public: &c.public, Name: c.name, AuthValue: c.authValue}
 	case *sessionContext:
 		d.ContextType = contextTypeSession
 		d.Data.Data = &sessionContextData{
@@ -105,7 +106,8 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 // On successful completion, it returns a Context instance that can be passed to TPMContext.ContextLoad. Note that this function
 // wraps the context data returned from the TPM with some host-side state associated with the resource, so that it can be restored
 // fully in TPMContext.ContextLoad. If saveContext corresponds to a session, the host-side state that is added to the returned context
-// blob includes the session key.
+// blob includes the session key. If saveContext corresponds to a transient object, the host-side state that is added to the returned
+// context includes the authorization value provided via ResourceContext.SetAuthValue.
 //
 // If saveContext corresponds to a session, then TPM2_ContextSave also removes resources associated with the session from the TPM
 // (it becomes a saved session rather than a loaded session). In this case, saveContext is marked as not loaded and can only be used
@@ -162,9 +164,9 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 // WarningSessionMemory or WarningObjectMemory will be returned.
 //
 // On successful completion, it returns a HandleContext which corresponds to the resource loaded in to the TPM. If the context
-// corresponds to an object, this will always be a new HandleContext. If context corresponds to a session, then the returned
-// HandleContext will be newly created unless there is still an active HandleContext for that saved session, in which case the
-// existing HandleContext will be marked as loaded and returned instead.
+// corresponds to an object, this will always be a new ResourceContext. If context corresponds to a session, then the returned
+// SessionContext will be newly created unless there is still an active SessionContext for that saved session, in which case the
+// existing SessionContext will be marked as loaded and returned instead.
 func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 	if context == nil {
 		return nil, makeInvalidParamError("context", "nil value")
@@ -272,7 +274,7 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		}
 
 		dd := d.Data.Data.(*objectContextData)
-		rc = &objectContext{handle: loadedHandle, public: Public(*dd.Public), name: dd.Name}
+		rc = &objectContext{handle: loadedHandle, public: Public(*dd.Public), name: dd.Name, authValue: dd.AuthValue}
 	case contextTypeSession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}
