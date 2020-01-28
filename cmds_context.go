@@ -18,7 +18,6 @@ import (
 type objectContextData struct {
 	Public    *Public `tpm2:"sized"`
 	Name      Name
-	AuthValue []byte
 }
 
 type sessionContextData struct {
@@ -66,7 +65,7 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 	switch c := context.(type) {
 	case *objectContext:
 		d.ContextType = contextTypeObject
-		d.Data.Data = &objectContextData{Public: &c.public, Name: c.name, AuthValue: c.authValue}
+		d.Data.Data = &objectContextData{Public: &c.public, Name: c.name}
 	case *sessionContext:
 		d.ContextType = contextTypeSession
 		d.Data.Data = &sessionContextData{
@@ -106,8 +105,7 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 // On successful completion, it returns a Context instance that can be passed to TPMContext.ContextLoad. Note that this function
 // wraps the context data returned from the TPM with some host-side state associated with the resource, so that it can be restored
 // fully in TPMContext.ContextLoad. If saveContext corresponds to a session, the host-side state that is added to the returned context
-// blob includes the session key. If saveContext corresponds to a transient object, the host-side state that is added to the returned
-// context includes the authorization value provided via ResourceContext.SetAuthValue.
+// blob includes the session key.
 //
 // If saveContext corresponds to a session, then TPM2_ContextSave also removes resources associated with the session from the TPM
 // (it becomes a saved session rather than a loaded session). In this case, saveContext is marked as not loaded and can only be used
@@ -274,7 +272,7 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		}
 
 		dd := d.Data.Data.(*objectContextData)
-		rc = &objectContext{handle: loadedHandle, public: Public(*dd.Public), name: dd.Name, authValue: dd.AuthValue}
+		rc = &objectContext{handle: loadedHandle, public: Public(*dd.Public), name: dd.Name}
 	case contextTypeSession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}

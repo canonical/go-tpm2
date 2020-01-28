@@ -106,9 +106,6 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !reflect.DeepEqual(rc.(*objectContext).public, restored.(*objectContext).public) {
 			t.Errorf("Restored context has the wrong public data")
 		}
-		if !bytes.Equal(restored.(*objectContext).authValue, rc.(*objectContext).authValue) {
-			t.Errorf("Restored context has the wrong authorization value")
-		}
 
 		pub, name, _, err := tpm.ReadPublic(restored.(ResourceContext))
 		if err != nil {
