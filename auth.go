@@ -135,7 +135,7 @@ func computeBindName(name Name, auth Auth) Name {
 func (s *sessionParam) computeSessionHMACKey() []byte {
 	var authValue []byte
 	if s.associatedContext != nil {
-		authValue = s.associatedContext.(handleContextPrivate).getAuthValue()
+		authValue = s.associatedContext.(resourceContextPrivate).getAuthValue()
 	}
 	var key []byte
 	key = append(key, s.session.Context.(*sessionContext).sessionKey...)
@@ -155,7 +155,7 @@ func buildCommandSessionAuth(tpm *TPMContext, param *sessionParam, commandCode C
 		// Policy session that contains a TPM2_PolicyPassword assertion. The HMAC is just the authorization value
 		// of the resource being authorized.
 		if param.associatedContext != nil {
-			hmac = param.associatedContext.(handleContextPrivate).getAuthValue()
+			hmac = param.associatedContext.(resourceContextPrivate).getAuthValue()
 		}
 	} else {
 		key := param.computeSessionHMACKey()
@@ -181,7 +181,7 @@ func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandC
 		// Cleartext password session
 		var authValue []byte
 		if param.associatedContext != nil {
-			authValue = param.associatedContext.(handleContextPrivate).getAuthValue()
+			authValue = param.associatedContext.(resourceContextPrivate).getAuthValue()
 		}
 		return buildCommandPasswordAuth(Auth(authValue))
 	}
@@ -293,7 +293,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in *s
 				if associatedContext == nil {
 					associatedContext = untrackedContext(HandleNull)
 				}
-				bindName := computeBindName(associatedContext.Name(), associatedContext.(handleContextPrivate).getAuthValue())
+				bindName := computeBindName(associatedContext.Name(), associatedContext.(resourceContextPrivate).getAuthValue())
 				in.includeAuthValue = !bytes.Equal(bindName, sc.boundEntity)
 			}
 		case SessionTypePolicy:

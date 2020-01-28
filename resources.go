@@ -27,7 +27,6 @@ type HandleContext interface {
 
 type handleContextPrivate interface {
 	invalidate()
-	getAuthValue() []byte
 }
 
 // SessionContext is a HandleContext that corresponds to a session on the TPM.
@@ -48,6 +47,10 @@ type ResourceContext interface {
 	SetAuthValue([]byte)
 }
 
+type resourceContextPrivate interface {
+	getAuthValue() []byte
+}
+
 type untrackedContext Handle
 
 func (r untrackedContext) Handle() Handle {
@@ -64,10 +67,6 @@ func (r untrackedContext) SetAuthValue([]byte) {
 }
 
 func (r untrackedContext) invalidate() {
-}
-
-func (r untrackedContext) getAuthValue() []byte {
-	return nil
 }
 
 type permanentContext struct {
@@ -197,10 +196,6 @@ func (r *sessionContext) Name() Name {
 
 func (r *sessionContext) invalidate() {
 	r.handle = HandleUnassigned
-}
-
-func (r *sessionContext) getAuthValue() []byte {
-	panic("not implemented for session contexts")
 }
 
 func (r *sessionContext) NonceTPM() Nonce {

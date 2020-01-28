@@ -102,7 +102,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	bindHandle := HandleNull
 	if bind != nil {
 		bindHandle = bind.Handle()
-		authValue = bind.(handleContextPrivate).getAuthValue()
+		authValue = bind.(resourceContextPrivate).getAuthValue()
 	}
 
 	var isBound bool = false
