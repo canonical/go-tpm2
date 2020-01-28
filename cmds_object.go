@@ -606,8 +606,10 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		return nil, nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
-	objectContext := &objectContext{handle: objectHandle, name: name, authValue: inSensitive.UserAuth}
+	objectContext := &objectContext{handle: objectHandle, name: name}
 	outPublic.Ptr.copyTo(&objectContext.public)
+	objectContext.authValue = make([]byte, len(inSensitive.UserAuth))
+	copy(objectContext.authValue, inSensitive.UserAuth)
 	t.addHandleContext(objectContext)
 
 	return objectContext, outPrivate, outPublic.Ptr, name, nil
