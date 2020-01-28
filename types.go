@@ -1711,6 +1711,18 @@ func (p *NVPublic) Name() (Name, error) {
 	return name, nil
 }
 
+func (p *NVPublic) copyTo(dest *NVPublic) error {
+	b, err := MarshalToBytes(p)
+	if err != nil {
+		return err
+	}
+	_, err = UnmarshalFromBytes(b, dest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 type nvPublicSized struct {
 	Ptr *NVPublic `tpm2:"sized"`
 }

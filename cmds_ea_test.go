@@ -1131,14 +1131,10 @@ func TestPolicyNV(t *testing.T) {
 		},
 	} {
 		createIndex := func(t *testing.T, authValue Auth) ResourceContext {
-			if err := tpm.NVDefineSpace(owner, authValue, &data.pub, nil); err != nil {
+			index, err := tpm.NVDefineSpace(owner, authValue, &data.pub, nil)
+			if err != nil {
 				t.Fatalf("NVDefineSpace failed: %v", err)
 			}
-			index, err := tpm.GetOrCreateResourceContext(data.pub.Index)
-			if err != nil {
-				t.Fatalf("GetOrCreateResourceContext failed: %v", err)
-			}
-			index.SetAuthValue(authValue)
 			return index
 		}
 

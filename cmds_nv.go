@@ -88,12 +88,31 @@ func (t *TPMContext) initNVMaxBufferSize() {
 //
 // If there is insufficient space for the index, a *TPMError error with an error code of ErrorNVSpace will be returned.
 //
-// On successful completion, the NV index will be defined and a HandleContext can be created for it using the
-// TPMContext.GetOrCreateResourceContext function, specifying the value of the Index field of publicInfo as the handle.
-func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession *Session, sessions ...*Session) error {
-	return t.RunCommand(CommandNVDefineSpace, sessions,
+// On successful completion, the NV index will be defined and a ResourceContext corresponding to the new NV index will be returned.
+// It will not be necessary to call ResourceContext.SetAuthValue on the returned ResourceContext - this function sets the correct
+// authorization value so that it can be used in subsequent commands that require knowledge of it.
+func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession *Session, sessions ...*Session) (ResourceContext, error) {
+	if publicInfo == nil {
+		return nil, makeInvalidParamError("publicInfo", "nil value")
+	}
+	name, err := publicInfo.Name()
+	if err != nil {
+		return nil, fmt.Errorf("cannot compute name from public info: %v", err)
+	}
+
+	if err := t.RunCommand(CommandNVDefineSpace, sessions,
 		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Separator,
-		auth, nvPublicSized{publicInfo})
+		auth, nvPublicSized{publicInfo}); err != nil {
+		return nil, err
+	}
+
+	nvIndexContext := &nvIndexContext{handle: publicInfo.Index, name: name}
+	publicInfo.copyTo(&nvIndexContext.public)
+	nvIndexContext.authValue = make([]byte, len(auth))
+	copy(nvIndexContext.authValue, auth)
+	t.addHandleContext(nvIndexContext)
+
+	return nvIndexContext, nil
 }
 
 // NVUndefineSpace executes the TPM2_NV_UndefineSpace command to remove the NV index associated with nvIndex, and free the resources

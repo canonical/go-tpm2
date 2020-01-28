@@ -339,12 +339,9 @@ func TestTrialPolicyNV(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
 		Size:    64}
-	if err := tpm.NVDefineSpace(owner, nil, &nvPub, nil); err != nil {
-		t.Fatalf("NVDefineSpace failed: %v", err)
-	}
-	index, err := tpm.GetOrCreateResourceContext(nvPub.Index)
+	index, err := tpm.NVDefineSpace(owner, nil, &nvPub, nil)
 	if err != nil {
-		t.Fatalf("GetOrCreateResourceContext failed: %v", err)
+		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
 	defer undefineNVSpace(t, tpm, index, owner, nil)
 

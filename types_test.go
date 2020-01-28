@@ -439,12 +439,9 @@ func TestNVPublicName(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
 		Size:    64}
-	if err := tpm.NVDefineSpace(owner, nil, &pub, nil); err != nil {
-		t.Fatalf("NVDefineSpace failed: %v", err)
-	}
-	rc, err := tpm.GetOrCreateResourceContext(pub.Index)
+	rc, err := tpm.NVDefineSpace(owner, nil, &pub, nil)
 	if err != nil {
-		t.Fatalf("GetOrCreateResourceContext failed: %v", err)
+		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
 	defer undefineNVSpace(t, tpm, rc, owner, nil)
 

@@ -26,16 +26,27 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	persistentPrimary := persistObjectForTesting(t, tpm, tpm.OwnerHandleContext(), primary, persistentHandle)
 	defer verifyPersistentObjectEvicted(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
 
+	nvPub := NVPublic{
+		Index:   0x018100ff,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+		Size:    8}
+	index, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &nvPub, nil)
+	if err != nil {
+		t.Fatalf("NVDefineSpace failed: %v", err)
+	}
+
 	closeTPM(t, tpm)
 	closed = true
-	if primary.Handle() != HandleUnassigned || persistentPrimary.Handle() != HandleUnassigned {
+
+	if primary.Handle() != HandleUnassigned || persistentPrimary.Handle() != HandleUnassigned || index.Handle() != HandleUnassigned {
 		t.Fatalf("Expected resource contexts to be invalid")
 	}
 
 	tpm = openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	primary, err := tpm.GetOrCreateResourceContext(primaryHandle)
+	primary, err = tpm.GetOrCreateResourceContext(primaryHandle)
 	if err != nil {
 		t.Errorf("GetOrCreateResourceContext failed with a live transient object: %v", err)
 	}
@@ -59,15 +70,7 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	}
 	defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
 
-	nvPub := NVPublic{
-		Index:   0x018100ff,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
-		Size:    8}
-	if err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &nvPub, nil); err != nil {
-		t.Fatalf("NVDefineSpace failed: %v", err)
-	}
-	index, err := tpm.GetOrCreateResourceContext(nvPub.Index)
+	index, err = tpm.GetOrCreateResourceContext(nvPub.Index)
 	if err != nil {
 		t.Errorf("GetOrCreateResourceContext failed with a live NV index: %v", err)
 	}
