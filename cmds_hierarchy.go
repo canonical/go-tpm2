@@ -98,7 +98,7 @@ import (
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
 // can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
 // method.
-func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuthSession *Session, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, Name, error) {
+func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuthSession *Session, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -116,15 +116,15 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
 		&objectHandle, Separator,
 		&outPublic, &creationData, &creationHash, &creationTicket, &name); err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	if objectHandle.Type() != HandleTypeTransient {
-		return nil, nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
+		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if outPublic.Ptr == nil || !outPublic.Ptr.compareName(name) {
-		return nil, nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
+		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			"name and public area returned from TPM are not consistent"}
 	}
 
@@ -134,7 +134,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	copy(objectContext.authValue, inSensitive.UserAuth)
 	t.addHandleContext(objectContext)
 
-	return objectContext, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, name, nil
+	return objectContext, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
 }
 
 // Clear executes the TPM2_Clear command to remove all context associated with the current owner. The command requires knowledge of

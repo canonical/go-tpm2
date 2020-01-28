@@ -121,7 +121,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	context, _, err := tpm.Load(primary, priv, pub, nil)
+	context, err := tpm.Load(primary, priv, pub, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}

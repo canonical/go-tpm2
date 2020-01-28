@@ -35,7 +35,7 @@ func TestPolicySigned(t *testing.T) {
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
 		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
-	keyContext, keyName, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
+	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestPolicySigned(t *testing.T) {
 			}
 
 			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
-			trial.PolicySigned(keyName, data.policyRef)
+			trial.PolicySigned(keyContext.Name(), data.policyRef)
 
 			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
@@ -239,7 +239,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+		objectContext, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -278,7 +278,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext1, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+		objectContext1, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -289,7 +289,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext2, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+		objectContext2, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -829,7 +829,7 @@ func TestPolicyAuthorize(t *testing.T) {
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
 		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
-	keyContext, keyName, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
+	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
 	}
@@ -859,7 +859,7 @@ func TestPolicyAuthorize(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ComputeAuthPolicy failed: %v", err)
 			}
-			staticTrial.PolicyAuthorize(data.policyRef, keyName)
+			staticTrial.PolicyAuthorize(data.policyRef, keyContext.Name())
 
 			dynamicTrial, err := ComputeAuthPolicy(HashAlgorithmSHA256)
 			if err != nil {
@@ -903,7 +903,7 @@ func TestPolicyAuthorize(t *testing.T) {
 				t.Fatalf("PolicyAuthValue failed: %v", err)
 			}
 
-			if err := tpm.PolicyAuthorize(sessionContext, approvedPolicy, data.policyRef, keyName, checkTicket); err != nil {
+			if err := tpm.PolicyAuthorize(sessionContext, approvedPolicy, data.policyRef, keyContext.Name(), checkTicket); err != nil {
 				t.Errorf("PolicyAuthorize failed: %v", err)
 			}
 
@@ -943,7 +943,7 @@ func TestPolicyAuthValue(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+	objectContext, err := tpm.Load(primary, outPrivate, outPublic, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -1024,7 +1024,7 @@ func TestPolicyPassword(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+	objectContext, err := tpm.Load(primary, outPrivate, outPublic, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}

@@ -208,7 +208,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -230,7 +230,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -253,7 +253,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
-	objectHandle, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
+	objectHandle, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
 	}
@@ -296,7 +296,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 		t.Fatalf("PolicySecret failed: %v", err)
 	}
 
-	akContext, _, err := tpm.Load(ek, priv, pub, &session)
+	akContext, err := tpm.Load(ek, priv, pub, &session)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -323,7 +323,7 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	key, _, err := tpm.Load(parent, priv, pub, nil)
+	key, err := tpm.Load(parent, priv, pub, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}

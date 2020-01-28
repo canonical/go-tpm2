@@ -165,7 +165,7 @@ func TestCertify(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		key, _, err := tpm.Load(primary, priv, pub, nil)
+		key, err := tpm.Load(primary, priv, pub, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -257,7 +257,7 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectHandle, _, _, creationHash, creationTicket, name, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+		objectHandle, _, _, creationHash, creationTicket, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -271,7 +271,7 @@ func TestCertifyCreation(t *testing.T) {
 
 		attest := verifyAttest(t, tpm, certifyInfo, TagAttestCreation, signContext, signHierarchy, qualifyingData)
 
-		if !bytes.Equal(attest.Attested.Creation().ObjectName, name) {
+		if !bytes.Equal(attest.Attested.Creation().ObjectName, objectHandle.Name()) {
 			t.Errorf("certifyInfo has the wrong objectName")
 		}
 		if !bytes.Equal(attest.Attested.Creation().CreationHash, creationHash) {
@@ -320,7 +320,7 @@ func TestCertifyCreation(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		key, _, err := tpm.Load(primary, priv, pub, nil)
+		key, err := tpm.Load(primary, priv, pub, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -372,7 +372,7 @@ func TestCertifyCreation(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		objectHandle, _, _, creationHash, creationTicket, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+		objectHandle, _, _, creationHash, creationTicket, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -465,7 +465,7 @@ func TestQuote(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		key, _, err := tpm.Load(primary, priv, pub, nil)
+		key, err := tpm.Load(primary, priv, pub, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -594,7 +594,7 @@ func TestGetTime(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		key, _, err := tpm.Load(primary, priv, pub, nil)
+		key, err := tpm.Load(primary, priv, pub, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}

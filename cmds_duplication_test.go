@@ -43,7 +43,7 @@ func TestDuplicate(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	object, _, err := tpm.Load(primary, priv, pub, nil)
+	object, err := tpm.Load(primary, priv, pub, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestDuplicate(t *testing.T) {
 				KeyBits:  2048,
 				Exponent: uint32(key.PublicKey.E)}},
 		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
-	parent, _, err := tpm.LoadExternal(nil, &parentTemplate, HandleOwner)
+	parent, err := tpm.LoadExternal(nil, &parentTemplate, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestImport(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Import failed: %v", err)
 		}
-		object, _, err := tpm.Load(primary, priv, &objectPublic, parentContextAuthSession)
+		object, err := tpm.Load(primary, priv, &objectPublic, parentContextAuthSession)
 		if err != nil {
 			t.Errorf("Load failed: %v", err)
 		}

@@ -13,7 +13,7 @@ func TestCreatePrimary(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session *Session) (ResourceContext, *Public) {
-		objectContext, outPublic, creationData, creationHash, creationTicket, name, err := tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
+		objectContext, outPublic, creationData, creationHash, creationTicket, err := tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -26,8 +26,8 @@ func TestCreatePrimary(t *testing.T) {
 		verifyCreationTicket(t, creationTicket, hierarchy)
 
 		nameAlgSize := template.NameAlg.Size()
-		if len(name) != nameAlgSize+2 {
-			t.Errorf("CreatePrimary returned a name of the wrong length %d", len(name))
+		if len(objectContext.Name()) != nameAlgSize+2 {
+			t.Errorf("CreatePrimary returned a name of the wrong length %d", len(objectContext.Name()))
 		}
 
 		return objectContext, outPublic
@@ -236,7 +236,7 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 
-		_, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+		_, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err == nil {
 			t.Fatalf("CreatePrimary should fail with an invalid template")
 		}
@@ -276,7 +276,7 @@ func TestClear(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 		platform := tpm.PlatformHandleContext()
-		platformPrimary, _, _, _, _, _, err := tpm.CreatePrimary(platform, nil, &template, nil, nil,
+		platformPrimary, _, _, _, _, err := tpm.CreatePrimary(platform, nil, &template, nil, nil,
 			nil)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
@@ -450,7 +450,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, session)
+		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
@@ -472,7 +472,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, session)
+		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, session)
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}

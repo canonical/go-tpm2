@@ -193,7 +193,7 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 // On success, a ResourceContext corresponding to the newly loaded transient object will be returned. If subsequent use of the
 // returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be provided
 // by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, Name, error) {
+func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, error) {
 	var objectHandle Handle
 	var name Name
 
@@ -202,21 +202,21 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 		inPrivate, publicSized{inPublic}, Separator,
 		&objectHandle, Separator,
 		&name); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if objectHandle.Type() != HandleTypeTransient {
-		return nil, nil, &InvalidResponseError{CommandLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+		return nil, &InvalidResponseError{CommandLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if inPublic == nil || !inPublic.compareName(name) {
-		return nil, nil, &InvalidResponseError{CommandLoad, "name returned from TPM not consistent with loaded public area"}
+		return nil, &InvalidResponseError{CommandLoad, "name returned from TPM not consistent with loaded public area"}
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
 	inPublic.copyTo(&objectContext.public)
 	t.addHandleContext(objectContext)
 
-	return objectContext, name, nil
+	return objectContext, nil
 }
 
 // LoadExternal executes the TPM2_LoadExternal command in order to load an object that is not a protected object in to the TPM.
@@ -278,7 +278,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 // *TPMError with an error code of ErrorBinding will be returned.
 //
 // On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
-func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...*Session) (ResourceContext, Name, error) {
+func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...*Session) (ResourceContext, error) {
 	var objectHandle Handle
 	var name Name
 
@@ -287,22 +287,22 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 		sensitiveSized{inPrivate}, publicSized{inPublic}, hierarchy, Separator,
 		&objectHandle, Separator,
 		&name); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if objectHandle.Type() != HandleTypeTransient {
-		return nil, nil, &InvalidResponseError{CommandLoadExternal,
+		return nil, &InvalidResponseError{CommandLoadExternal,
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if inPublic == nil || !inPublic.compareName(name) {
-		return nil, nil, &InvalidResponseError{CommandLoadExternal, "name returned from TPM not consistent with loaded public area"}
+		return nil, &InvalidResponseError{CommandLoadExternal, "name returned from TPM not consistent with loaded public area"}
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
 	inPublic.copyTo(&objectContext.public)
 	t.addHandleContext(objectContext)
 
-	return objectContext, name, nil
+	return objectContext, nil
 }
 
 // ReadPublic executes the TPM2_ReadPublic command to read the public area of the object associated with objectContext.
@@ -571,18 +571,18 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned
 // *Public object will have a Unique field containing details about the public part of the key, computed from the private part of the
 // key.
-func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, Private, *Public, Name, error) {
+func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, Private, *Public, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
 
 	if inPublic == nil {
-		return nil, nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
+		return nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
 	}
 
 	inTemplate, err := inPublic.ToTemplate()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("cannot marshal public template: %v", err)
+		return nil, nil, nil, fmt.Errorf("cannot marshal public template: %v", err)
 	}
 
 	var objectHandle Handle
@@ -595,15 +595,15 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		sensitiveCreateSized{inSensitive}, inTemplate, Separator,
 		&objectHandle, Separator,
 		&outPrivate, &outPublic, &name); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if objectHandle.Type() != HandleTypeTransient {
-		return nil, nil, nil, nil, &InvalidResponseError{CommandCreateLoaded,
+		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded,
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if outPublic.Ptr == nil || !outPublic.Ptr.compareName(name) {
-		return nil, nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
+		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
 	objectContext := &objectContext{handle: objectHandle, name: name}
@@ -612,5 +612,5 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	copy(objectContext.authValue, inSensitive.UserAuth)
 	t.addHandleContext(objectContext)
 
-	return objectContext, outPrivate, outPublic.Ptr, name, nil
+	return objectContext, outPrivate, outPublic.Ptr, nil
 }

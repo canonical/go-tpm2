@@ -38,7 +38,7 @@ func TestSign(t *testing.T) {
 				t.Fatalf("Create failed: %v", err)
 			}
 
-			context, _, err := tpm.Load(primary, priv, pub, nil)
+			context, err := tpm.Load(primary, priv, pub, nil)
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
 			}
@@ -180,7 +180,7 @@ func TestSign(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		key, _, err := tpm.Load(primary, priv, pub, nil)
+		key, err := tpm.Load(primary, priv, pub, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -231,7 +231,7 @@ func TestVerifySignature(t *testing.T) {
 					Exponent:  uint32(key.PublicKey.E)}},
 			Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
 
-		context, _, err := tpm.LoadExternal(nil, &public, HandleOwner)
+		context, err := tpm.LoadExternal(nil, &public, HandleOwner)
 		if err != nil {
 			t.Fatalf("LoadExternal failed: %v", err)
 		}

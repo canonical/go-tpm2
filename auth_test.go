@@ -129,7 +129,7 @@ func TestPolicySessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
-	objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+	objectContext, err := tpm.Load(primary, outPrivate, outPublic, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}

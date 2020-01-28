@@ -76,7 +76,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 							t.Fatalf("Create failed: %v", err)
 						}
 
-						objectContext, name, err := tpm.Load(primary, outPrivate, outPublic, authSession, &session)
+						objectContext, err := tpm.Load(primary, outPrivate, outPublic, authSession, &session)
 						if err != nil {
 							t.Fatalf("Load failed: %v", err)
 						}
@@ -86,7 +86,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 						if err != nil {
 							t.Fatalf("Cannot compute name: %v", err)
 						}
-						if !bytes.Equal(name, expectedName) {
+						if !bytes.Equal(objectContext.Name(), expectedName) {
 							t.Errorf("Unexpected name")
 						}
 
@@ -203,7 +203,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 						t.Fatalf("Create failed: %v", err)
 					}
 
-					objectContext, name, err := tpm.Load(primary, outPrivate, outPublic, &session)
+					objectContext, err := tpm.Load(primary, outPrivate, outPublic, &session)
 					if err != nil {
 						t.Fatalf("Load failed: %v", err)
 					}
@@ -214,7 +214,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Cannot compute name: %v", err)
 					}
-					if !bytes.Equal(name, expectedName) {
+					if !bytes.Equal(objectContext.Name(), expectedName) {
 						t.Errorf("Unexpected name")
 					}
 
@@ -305,7 +305,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 							t.Fatalf("Create failed: %v", err)
 						}
 
-						objectContext, name, err := tpm.Load(primary, outPrivate, outPublic, authSession, &session1, &session2)
+						objectContext, err := tpm.Load(primary, outPrivate, outPublic, authSession, &session1, &session2)
 						if err != nil {
 							t.Fatalf("Load failed: %v", err)
 						}
@@ -315,7 +315,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 						if err != nil {
 							t.Fatalf("Cannot compute name: %v", err)
 						}
-						if !bytes.Equal(name, expectedName) {
+						if !bytes.Equal(objectContext.Name(), expectedName) {
 							t.Errorf("Unexpected name")
 						}
 

@@ -100,7 +100,7 @@ func TestCreate(t *testing.T) {
 		pub, priv := run(t, primary, tpm.OwnerHandleContext(), &sensitive, &template, Data{}, PCRSelectionList{}, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)
 
-		handle, _, err := tpm.Load(primary, priv, pub, nil)
+		handle, err := tpm.Load(primary, priv, pub, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -198,7 +198,7 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext, name, err := tpm.Load(parent, outPrivate, outPublic, session)
+		objectContext, err := tpm.Load(parent, outPrivate, outPublic, session)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -207,8 +207,8 @@ func TestLoad(t *testing.T) {
 		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("Create returned an invalid handle 0x%08x", objectContext.Handle())
 		}
-		if name.Algorithm() != HashAlgorithmSHA256 {
-			t.Errorf("Create returned a name with the wrong algorithm %v", name.Algorithm())
+		if objectContext.Name().Algorithm() != HashAlgorithmSHA256 {
+			t.Errorf("Create returned a name with the wrong algorithm %v", objectContext.Name().Algorithm())
 		}
 	}
 
@@ -264,21 +264,21 @@ func TestReadPublic(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	objectContext, name1, err := tpm.Load(primary, outPrivate, outPublic, nil)
+	objectContext, err := tpm.Load(primary, outPrivate, outPublic, nil)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 	defer flushContext(t, tpm, objectContext)
 
 	run := func(t *testing.T, session *Session) {
-		public, name2, qualifiedName, err := tpm.ReadPublic(objectContext, session)
+		public, name, qualifiedName, err := tpm.ReadPublic(objectContext, session)
 		if err != nil {
 			t.Fatalf("ReadPublic failed: %v", err)
 		}
 
 		verifyPublicAgainstTemplate(t, &template, public)
 
-		if !bytes.Equal(name1, name2) {
+		if !bytes.Equal(objectContext.Name(), name) {
 			t.Errorf("ReadPublic returned an unexpected name")
 		}
 		if qualifiedName.Algorithm() != HashAlgorithmSHA256 {
@@ -310,7 +310,7 @@ func TestLoadExternal(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, sensitive *Sensitive, template *Public, hierarchy Handle) {
-		objectContext, name, err := tpm.LoadExternal(sensitive, template, hierarchy)
+		objectContext, err := tpm.LoadExternal(sensitive, template, hierarchy)
 		if err != nil {
 			t.Fatalf("LoadExternal failed: %v", err)
 		}
@@ -325,7 +325,7 @@ func TestLoadExternal(t *testing.T) {
 			t.Fatalf("Cannot compute name: %v", err)
 		}
 
-		if !bytes.Equal(name, templateName) {
+		if !bytes.Equal(objectContext.Name(), templateName) {
 			t.Errorf("Unexpected name")
 		}
 	}
@@ -452,7 +452,7 @@ func TestUnseal(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+		objectContext, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -525,7 +525,7 @@ func TestObjectChangeAuth(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		objectContext, _, err := tpm.Load(primary, outPrivate, outPublic, nil)
+		objectContext, err := tpm.Load(primary, outPrivate, outPublic, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -540,7 +540,7 @@ func TestObjectChangeAuth(t *testing.T) {
 			t.Fatalf("ObjectChangeAuth failed: %v", err)
 		}
 
-		newContext, _, err := tpm.Load(primary, priv, pub, nil)
+		newContext, err := tpm.Load(primary, priv, pub, nil)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -604,7 +604,7 @@ func TestMakeCredential(t *testing.T) {
 		t.Fatalf("ReadPublic failed: %v", err)
 	}
 
-	ekPubCtx, _, err := tpm.LoadExternal(nil, ekPub, HandleEndorsement)
+	ekPubCtx, err := tpm.LoadExternal(nil, ekPub, HandleEndorsement)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
 	}
