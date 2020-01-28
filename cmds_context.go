@@ -7,6 +7,9 @@ package tpm2
 // Section 28 - Context Management
 
 import (
+	"bytes"
+	"crypto"
+	_ "crypto/sha256"
 	"errors"
 	"fmt"
 	"reflect"
@@ -83,6 +86,15 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal wrapped resource context data: %v", err))
 	}
+
+	h := crypto.SHA256.New()
+	h.Write(data)
+
+	data, err = MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
+	if err != nil {
+		panic(fmt.Sprintf("cannot marshal wrapped resource context data and checksum: %v", err))
+	}
+
 	return data
 }
 
@@ -158,8 +170,25 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		return nil, makeInvalidParamError("context", "nil value")
 	}
 
+	var integrityAlg HashAlgorithmId
+	var integrity []byte
+	var data []byte
+	if _, err := UnmarshalFromBytes(context.Blob, &integrityAlg, &integrity, &data); err != nil {
+		return nil, fmt.Errorf("cannot load context: cannot unpack checksum and data blob: %v", err)
+	}
+
+	if !integrityAlg.Supported() {
+		return nil, errors.New("cannot load context: invalid checksum algorithm")
+	}
+
+	h := integrityAlg.NewHash()
+	h.Write(data)
+	if !bytes.Equal(h.Sum(nil), integrity) {
+		return nil, errors.New("cannot load context: invalid checksum")
+	}
+
 	var d resourceContextData
-	if _, err := UnmarshalFromBytes(context.Blob, &d); err != nil {
+	if _, err := UnmarshalFromBytes(data, &d); err != nil {
 		return nil, fmt.Errorf("cannot load context: cannot unmarshal data blob: %v", err)
 	}
 
