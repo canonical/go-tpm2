@@ -40,7 +40,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			}
 		}()
 
-		nvPub := nvContext.(*nvIndexContext).public
+		nvPub := nvContext.(*nvIndexContext).d.Data.Data.(*NVPublic)
 
 		if nvPub.NameAlg != publicInfo.NameAlg {
 			t.Errorf("Unexpected nameAlg")

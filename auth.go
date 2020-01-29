@@ -109,9 +109,7 @@ func computeCallerNonces(params []*sessionParam) error {
 			continue
 		}
 
-		context := param.session.Context.(*sessionContext)
-
-		if err := cryptComputeNonce(context.nonceCaller); err != nil {
+		if err := cryptComputeNonce(param.session.Context.(*sessionContext).scData().NonceCaller); err != nil {
 			return fmt.Errorf("cannot compute new caller nonce: %v", err)
 		}
 	}
@@ -135,10 +133,10 @@ func computeBindName(name Name, auth Auth) Name {
 func (s *sessionParam) computeSessionHMACKey() []byte {
 	var authValue []byte
 	if s.associatedContext != nil {
-		authValue = s.associatedContext.(resourceContextPrivate).getAuthValue()
+		authValue = s.associatedContext.(resourceContextPrivate).authValue()
 	}
 	var key []byte
-	key = append(key, s.session.Context.(*sessionContext).sessionKey...)
+	key = append(key, s.session.Context.(*sessionContext).scData().SessionKey...)
 	if s.includeAuthValue {
 		key = append(key, authValue...)
 	}
@@ -146,28 +144,29 @@ func (s *sessionParam) computeSessionHMACKey() []byte {
 }
 
 func buildCommandSessionAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) *authCommand {
-	sessionContext := param.session.Context.(*sessionContext)
+	sc := param.session.Context.(*sessionContext)
+	scData := sc.scData()
 
 	attrs := attrsFromSession(param.session)
 	var hmac []byte
 
-	if sessionContext.sessionType == SessionTypePolicy && sessionContext.policyHMACType == policyHMACTypePassword {
+	if scData.SessionType == SessionTypePolicy && scData.PolicyHMACType == policyHMACTypePassword {
 		// Policy session that contains a TPM2_PolicyPassword assertion. The HMAC is just the authorization value
 		// of the resource being authorized.
 		if param.associatedContext != nil {
-			hmac = param.associatedContext.(resourceContextPrivate).getAuthValue()
+			hmac = param.associatedContext.(resourceContextPrivate).authValue()
 		}
 	} else {
 		key := param.computeSessionHMACKey()
 		if len(key) > 0 {
-			cpHash := cryptComputeCpHash(sessionContext.hashAlg, commandCode, commandHandles, cpBytes)
-			hmac = cryptComputeSessionCommandHMAC(sessionContext, key, cpHash, decryptNonce, encryptNonce, attrs)
+			cpHash := cryptComputeCpHash(scData.HashAlg, commandCode, commandHandles, cpBytes)
+			hmac = cryptComputeSessionCommandHMAC(sc, key, cpHash, decryptNonce, encryptNonce, attrs)
 		}
 	}
 
 	return &authCommand{
 		SessionHandle: param.session.Context.Handle(),
-		Nonce:         sessionContext.nonceCaller,
+		Nonce:         scData.NonceCaller,
 		SessionAttrs:  attrs,
 		HMAC:          hmac}
 }
@@ -181,7 +180,7 @@ func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandC
 		// Cleartext password session
 		var authValue []byte
 		if param.associatedContext != nil {
-			authValue = param.associatedContext.(resourceContextPrivate).getAuthValue()
+			authValue = param.associatedContext.(resourceContextPrivate).authValue()
 		}
 		return buildCommandPasswordAuth(Auth(authValue))
 	}
@@ -191,15 +190,16 @@ func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandC
 
 func processResponseSessionAuth(tpm *TPMContext, resp authResponse, param *sessionParam, commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
 	sc := param.session.Context.(*sessionContext)
-	sc.nonceTPM = resp.Nonce
-	sc.isAudit = resp.SessionAttrs&attrAudit > 0
-	sc.isExclusive = resp.SessionAttrs&attrAuditExclusive > 0
+	scData := sc.scData()
+	scData.NonceTPM = resp.Nonce
+	scData.IsAudit = resp.SessionAttrs&attrAudit > 0
+	scData.IsExclusive = resp.SessionAttrs&attrAuditExclusive > 0
 
 	if resp.SessionAttrs&attrContinueSession == 0 {
-		tpm.evictHandleContext(sc)
+		tpm.evictHandleContext(param.session.Context)
 	}
 
-	if sc.sessionType == SessionTypePolicy && sc.policyHMACType == policyHMACTypePassword {
+	if scData.SessionType == SessionTypePolicy && scData.PolicyHMACType == policyHMACTypePassword {
 		if len(resp.HMAC) != 0 {
 			return errors.New("non-zero length HMAC for policy session with PolicyPassword assertion")
 		}
@@ -211,7 +211,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, param *sessi
 		return nil
 	}
 
-	rpHash := cryptComputeRpHash(sc.hashAlg, responseCode, commandCode, rpBytes)
+	rpHash := cryptComputeRpHash(scData.HashAlg, responseCode, commandCode, rpBytes)
 	hmac := cryptComputeSessionResponseHMAC(sc, key, rpHash, resp.SessionAttrs)
 
 	if !bytes.Equal(hmac, resp.HMAC) {
@@ -278,26 +278,26 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in *s
 		if err := t.checkHandleContextParam(in.session.Context); err != nil {
 			return nil, fmt.Errorf("invalid resource context for session: %v", err)
 		}
-		sc := in.session.Context.(*sessionContext)
-		if !sc.usable {
+		scData := in.session.Context.(*sessionContext).scData()
+		if scData == nil {
 			return nil, errors.New("invalid resource context for session: not complete and loaded")
 		}
-		switch sc.sessionType {
+		switch scData.SessionType {
 		case SessionTypeHMAC:
 			switch {
 			case !isAuth:
-			case !sc.isBound:
+			case !scData.IsBound:
 				in.includeAuthValue = true
 			default:
 				associatedContext := in.associatedContext
 				if associatedContext == nil {
-					associatedContext = untrackedContext(HandleNull)
+					associatedContext = makeUntrackedContext(HandleNull)
 				}
-				bindName := computeBindName(associatedContext.Name(), associatedContext.(resourceContextPrivate).getAuthValue())
-				in.includeAuthValue = !bytes.Equal(bindName, sc.boundEntity)
+				bindName := computeBindName(associatedContext.Name(), associatedContext.(resourceContextPrivate).authValue())
+				in.includeAuthValue = !bytes.Equal(bindName, scData.BoundEntity)
 			}
 		case SessionTypePolicy:
-			in.includeAuthValue = sc.policyHMACType == policyHMACTypeAuth
+			in.includeAuthValue = scData.PolicyHMACType == policyHMACTypeAuth
 		}
 	}
 

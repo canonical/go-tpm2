@@ -106,13 +106,14 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 		return nil, err
 	}
 
-	nvIndexContext := &nvIndexContext{handle: publicInfo.Index, name: name}
-	publicInfo.copyTo(&nvIndexContext.public)
-	nvIndexContext.authValue = make([]byte, len(auth))
-	copy(nvIndexContext.authValue, auth)
-	t.addHandleContext(nvIndexContext)
+	public := &NVPublic{}
+	publicInfo.copyTo(public)
+	rc := makeNvIndexContext(publicInfo.Index, name, public)
+	rc.auth = make([]byte, len(auth))
+	copy(rc.auth, auth)
+	t.addHandleContext(rc)
 
-	return nvIndexContext, nil
+	return rc, nil
 }
 
 // NVUndefineSpace executes the TPM2_NV_UndefineSpace command to remove the NV index associated with nvIndex, and free the resources
@@ -287,7 +288,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 			if authContextAuthSession.Attrs&AttrContinueSession == 0 {
 				return makeInvalidParamError("authContextAuthSession", "the AttrContinueSession attribute is required for a split write")
 			}
-			if authContextAuthSession.Context != nil && authContextAuthSession.Context.(*sessionContext).sessionType == SessionTypePolicy {
+			if authContextAuthSession.Context != nil && authContextAuthSession.Context.(*sessionContext).scData().SessionType == SessionTypePolicy {
 				return makeInvalidParamError("authContextAuthSession", "a policy session can not be used for a split write - use NVWriteRaw instead")
 			}
 		}
@@ -341,7 +342,7 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 	if !isNv {
 		return errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.public.Attrs.Type() != NVTypePinPass && context.public.Attrs.Type() != NVTypePinFail {
+	if context.attrs().Type() != NVTypePinPass && context.attrs().Type() != NVTypePinFail {
 		return errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data, err := MarshalToBytes(params)
@@ -498,7 +499,7 @@ func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextA
 			continue
 		}
 
-		if nvRc.public.Attrs&AttrNVGlobalLock > 0 {
+		if nvRc.attrs()&AttrNVGlobalLock > 0 {
 			nvRc.setAttr(AttrNVWriteLocked)
 		}
 	}
@@ -644,7 +645,7 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.public.Attrs.Type() != NVTypeCounter {
+	if context.attrs().Type() != NVTypeCounter {
 		return 0, errors.New("nvIndex does not correspond to a counter")
 	}
 	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
@@ -684,7 +685,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 	if !isNv {
 		return nil, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.public.Attrs.Type() != NVTypePinPass && context.public.Attrs.Type() != NVTypePinFail {
+	if context.attrs().Type() != NVTypePinPass && context.attrs().Type() != NVTypePinFail {
 		return nil, errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)

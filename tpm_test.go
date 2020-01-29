@@ -11,6 +11,7 @@ import (
 	"crypto/rsa"
 	"flag"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"reflect"
@@ -435,11 +436,13 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 
 type mockSessionContext struct{}
 
-func (*mockSessionContext) Handle() Handle    { return HandleNull }
-func (*mockSessionContext) Name() Name        { return nil }
-func (*mockSessionContext) NonceTPM() Nonce   { return nil }
-func (*mockSessionContext) IsAudit() bool     { return false }
-func (*mockSessionContext) IsExclusive() bool { return false }
+func (*mockSessionContext) Handle() Handle                    { return HandleNull }
+func (*mockSessionContext) Name() Name                        { return nil }
+func (*mockSessionContext) SerializeToBytes() []byte          { return nil }
+func (*mockSessionContext) SerializeToWriter(io.Writer) error { return nil }
+func (*mockSessionContext) NonceTPM() Nonce                   { return nil }
+func (*mockSessionContext) IsAudit() bool                     { return false }
+func (*mockSessionContext) IsExclusive() bool                 { return false }
 
 func TestSession(t *testing.T) {
 	c := &mockSessionContext{}

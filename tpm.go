@@ -248,7 +248,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			handleNames = append(handleNames, r.Name())
 		case nil:
 			handles = append(handles, HandleNull)
-			handleNames = append(handleNames, untrackedContext(HandleNull).Name())
+			handleNames = append(handleNames, makeUntrackedContext(HandleNull).Name())
 		default:
 			return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)",
 				commandCode, i, reflect.TypeOf(resource))
@@ -370,14 +370,14 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		if s.session == nil {
 			continue
 		}
-		if s.session.Context.(*sessionContext).isExclusive {
+		if s.session.Context.(*sessionContext).scData().IsExclusive {
 			exclusive = s.session.Context
 			break
 		}
 	}
 	if exclusive != t.exclusiveSession && (exclusive != nil || isSessionAllowed(context.commandCode)) {
 		if t.exclusiveSession != nil {
-			t.exclusiveSession.(*sessionContext).isExclusive = false
+			t.exclusiveSession.(*sessionContext).scData().IsExclusive = false
 		}
 		t.exclusiveSession = exclusive
 	}

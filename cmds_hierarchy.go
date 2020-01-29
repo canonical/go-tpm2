@@ -128,13 +128,14 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 			"name and public area returned from TPM are not consistent"}
 	}
 
-	objectContext := &objectContext{handle: objectHandle, name: name}
-	outPublic.Ptr.copyTo(&objectContext.public)
-	objectContext.authValue = make([]byte, len(inSensitive.UserAuth))
-	copy(objectContext.authValue, inSensitive.UserAuth)
-	t.addHandleContext(objectContext)
+	public := &Public{}
+	outPublic.Ptr.copyTo(public)
+	rc := makeObjectContext(objectHandle, name, public)
+	rc.auth = make([]byte, len(inSensitive.UserAuth))
+	copy(rc.auth, inSensitive.UserAuth)
+	t.addHandleContext(rc)
 
-	return objectContext, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
+	return rc, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
 }
 
 // Clear executes the TPM2_Clear command to remove all context associated with the current owner. The command requires knowledge of
@@ -181,11 +182,11 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *
 	for _, rc := range t.resources {
 		switch c := rc.(type) {
 		case *objectContext:
-			if _, exists := handles[c.handle]; exists {
+			if _, exists := handles[c.Handle()]; exists {
 				continue
 			}
 		case *nvIndexContext:
-			if c.public.Attrs&AttrNVPlatformCreate > 0 {
+			if c.attrs()&AttrNVPlatformCreate > 0 {
 				continue
 			}
 		case *sessionContext:
@@ -193,7 +194,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *
 		case *permanentContext:
 			switch c.Handle() {
 			case HandleOwner, HandleEndorsement, HandleLockout:
-				c.authValue = nil
+				c.auth = nil
 			}
 			continue
 		}

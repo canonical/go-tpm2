@@ -347,7 +347,7 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...*
 		return err
 	}
 
-	policySession.(*sessionContext).policyHMACType = policyHMACTypeAuth
+	policySession.(*sessionContext).scData().PolicyHMACType = policyHMACTypeAuth
 	return nil
 }
 
@@ -364,7 +364,7 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...*S
 		return err
 	}
 
-	policySession.(*sessionContext).policyHMACType = policyHMACTypePassword
+	policySession.(*sessionContext).scData().PolicyHMACType = policyHMACTypePassword
 	return nil
 }
 

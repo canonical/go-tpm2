@@ -133,19 +133,20 @@ func TestStartAuthSession(t *testing.T) {
 				if !isSessionContext {
 					t.Fatalf("StartAuthSession didn't return a session context")
 				}
-				if context.hashAlg != data.alg {
-					t.Errorf("The returned session context has the wrong algorithm (got %v)", context.hashAlg)
+				scData := context.scData()
+				if scData.HashAlg != data.alg {
+					t.Errorf("The returned session context has the wrong algorithm (got %v)", scData.HashAlg)
 				}
 				if data.bind == nil || data.sessionType != SessionTypeHMAC {
-					if context.isBound {
+					if scData.IsBound {
 						t.Errorf("The returned session context should not be bound")
 					}
 				} else {
-					if !context.isBound {
+					if !scData.IsBound {
 						t.Errorf("The returned session context should be bound")
 					}
 					boundEntity := computeBindName(data.bind.Name(), data.bindAuth)
-					if !bytes.Equal(boundEntity, context.boundEntity) {
+					if !bytes.Equal(boundEntity, scData.BoundEntity) {
 						t.Errorf("The returned session context has the wrong bound resource")
 					}
 				}
@@ -154,15 +155,14 @@ func TestStartAuthSession(t *testing.T) {
 				if data.bind == nil && data.tpmKey == nil {
 					sessionKeySize = 0
 				}
-				if len(context.sessionKey) != sessionKeySize {
-					t.Errorf("The returned session key has the wrong length (got %d)", len(context.sessionKey))
+				if len(scData.SessionKey) != sessionKeySize {
+					t.Errorf("The returned session key has the wrong length (got %d)", len(scData.SessionKey))
 				}
-				if len(context.nonceCaller) != int(digestSize) {
-					t.Errorf("The returned caller nonce has the wrong length (got %d)", len(context.nonceCaller))
+				if len(scData.NonceCaller) != int(digestSize) {
+					t.Errorf("The returned caller nonce has the wrong length (got %d)", len(scData.NonceCaller))
 				}
-				if len(context.nonceTPM) != int(digestSize) {
-					t.Errorf("The returned TPM nonce has the wrong length (got %d)",
-						len(context.nonceTPM))
+				if len(scData.NonceTPM) != int(digestSize) {
+					t.Errorf("The returned TPM nonce has the wrong length (got %d)", len(scData.NonceTPM))
 				}
 			} else {
 				if err == nil {

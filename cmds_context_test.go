@@ -48,6 +48,15 @@ func TestContextSave(t *testing.T) {
 			"complete and loaded" {
 			t.Errorf("Unexpected error: %v", err)
 		}
+		handles, err := tpm.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
+		if err != nil {
+			t.Fatalf("GetCapability failed: %v", err)
+		}
+		for _, h := range handles {
+			if h == sessionContext.Handle() {
+				t.Errorf("Session is still loaded")
+			}
+		}
 	})
 	t.Run("IncompleteSession", func(t *testing.T) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
@@ -103,7 +112,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(restored.Name(), rc.Name()) {
 			t.Errorf("Restored context has the wrong name")
 		}
-		if !reflect.DeepEqual(rc.(*objectContext).public, restored.(*objectContext).public) {
+		if !reflect.DeepEqual(rc.(*objectContext).public(), restored.(*objectContext).public()) {
 			t.Errorf("Restored context has the wrong public data")
 		}
 
@@ -114,7 +123,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(name, rc.Name()) {
 			t.Errorf("Restored object has the wrong name")
 		}
-		if !reflect.DeepEqual(*pub, rc.(*objectContext).public) {
+		if !reflect.DeepEqual(pub, rc.(*objectContext).public()) {
 			t.Errorf("Restored object has the wrong public area")
 		}
 	})
@@ -126,9 +135,12 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sc)
 
-		scImpl := sc.(*sessionContext)
+		scData := sc.(*sessionContext).scData()
 		var data struct {
 			handle         Handle
+			name           Name
+			isAudit        bool
+			isExclusive    bool
 			hashAlg        HashAlgorithmId
 			sessionType    SessionType
 			policyHMACType policyHMACType
@@ -139,16 +151,19 @@ func TestContextSaveAndLoad(t *testing.T) {
 			nonceTPM       Nonce
 			symmetric      *SymDef
 		}
-		data.handle = scImpl.handle
-		data.hashAlg = scImpl.hashAlg
-		data.sessionType = scImpl.sessionType
-		data.policyHMACType = scImpl.policyHMACType
-		data.isBound = scImpl.isBound
-		data.boundEntity = scImpl.boundEntity
-		data.sessionKey = scImpl.sessionKey
-		data.nonceCaller = scImpl.nonceCaller
-		data.nonceTPM = scImpl.nonceTPM
-		data.symmetric = scImpl.symmetric
+		data.handle = sc.Handle()
+		data.name = sc.Name()
+		data.isAudit = scData.IsAudit
+		data.isExclusive = scData.IsExclusive
+		data.hashAlg = scData.HashAlg
+		data.sessionType = scData.SessionType
+		data.policyHMACType = scData.PolicyHMACType
+		data.isBound = scData.IsBound
+		data.boundEntity = scData.BoundEntity
+		data.sessionKey = scData.SessionKey
+		data.nonceCaller = scData.NonceCaller
+		data.nonceTPM = scData.NonceTPM
+		data.symmetric = scData.Symmetric
 
 		context, err := tpm.ContextSave(sc)
 		if err != nil {
@@ -173,34 +188,57 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if restored.Handle() != data.handle {
 			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restored.Handle())
 		}
+		if !bytes.Equal(restored.Name(), data.name) {
+			t.Errorf("ContextLoad returned a handle with the wrong name")
+		}
+		restoredData := restored.(*sessionContext).scData()
+		if restoredData.IsAudit != data.isAudit {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if restoredData.IsExclusive != data.isExclusive {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if restoredData.HashAlg != data.hashAlg {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if restoredData.SessionType != data.sessionType {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if restoredData.PolicyHMACType != data.policyHMACType {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if restoredData.IsBound != data.isBound {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if !bytes.Equal(restoredData.BoundEntity, data.boundEntity) {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if !bytes.Equal(restoredData.SessionKey, data.sessionKey) {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if !bytes.Equal(restoredData.NonceCaller, data.nonceCaller) {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if !bytes.Equal(restoredData.NonceTPM, data.nonceTPM) {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
+		if !reflect.DeepEqual(restoredData.Symmetric, data.symmetric) {
+			t.Errorf("ContextLoad returned a handle with the wrong session data")
+		}
 
-		restoredImpl := restored.(*sessionContext)
-		if restoredImpl.hashAlg != data.hashAlg {
-			t.Errorf("Restored context has the wrong hash algorithm")
+		handles, err := tpm.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
+		if err != nil {
+			t.Fatalf("GetCapability failed: %v", err)
 		}
-		if restoredImpl.sessionType != data.sessionType {
-			t.Errorf("Restored context has the wrong session type")
+		found := false
+		for _, h := range handles {
+			if h == restored.Handle() {
+				found = true
+				break
+			}
 		}
-		if restoredImpl.policyHMACType != data.policyHMACType {
-			t.Errorf("Restored context has the wrong policy HMAC type")
-		}
-		if restoredImpl.isBound != data.isBound {
-			t.Errorf("Restored context has the wrong bind status")
-		}
-		if !bytes.Equal(restoredImpl.boundEntity, data.boundEntity) {
-			t.Errorf("Restored context has the wrong bound resource entity")
-		}
-		if !bytes.Equal(restoredImpl.sessionKey, data.sessionKey) {
-			t.Errorf("Restored context has the wrong session key")
-		}
-		if !bytes.Equal(restoredImpl.nonceCaller, data.nonceCaller) {
-			t.Errorf("Restored context has the wrong nonceCaller")
-		}
-		if !bytes.Equal(restoredImpl.nonceTPM, data.nonceTPM) {
-			t.Errorf("Restored context has the wrong nonceTPM")
-		}
-		if !reflect.DeepEqual(restoredImpl.symmetric, data.symmetric) {
-			t.Errorf("Restored context has the wrong symmetric")
+		if !found {
+			t.Errorf("Session isn't loaded")
 		}
 	}
 

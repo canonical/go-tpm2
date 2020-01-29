@@ -5,6 +5,7 @@
 package tpm2
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -21,6 +22,7 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer verifyContextFlushed(t, tpm, primary)
 	primaryHandle := primary.Handle()
+	primaryName := primary.Name()
 
 	persistentHandle := Handle(0x81000008)
 	persistentPrimary := persistObjectForTesting(t, tpm, tpm.OwnerHandleContext(), primary, persistentHandle)
@@ -34,6 +36,23 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	index, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &nvPub, nil)
 	if err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
+	}
+	verifyNVSpaceUndefined(t, tpm, index, tpm.OwnerHandleContext(), nil)
+
+	if rc, err := tpm.GetOrCreateResourceContext(primaryHandle); err != nil {
+		t.Errorf("GetOrCreateResourceContext failed: %v", err)
+	} else if rc != primary {
+		t.Errorf("GetOrCreateResourceContext returned the wrong handle")
+	}
+	if rc, err := tpm.GetOrCreateResourceContext(persistentHandle); err != nil {
+		t.Errorf("GetOrCreateResourceContext failed: %v", err)
+	} else if rc != persistentPrimary {
+		t.Errorf("GetOrCreateResourceContext returned the wrong handle")
+	}
+	if rc, err := tpm.GetOrCreateResourceContext(nvPub.Index); err != nil {
+		t.Errorf("GetOrCreateResourceContext failed: %v", err)
+	} else if rc != index {
+		t.Errorf("GetOrCreateResourceContext returned the wrong handle")
 	}
 
 	closeTPM(t, tpm)
@@ -56,6 +75,9 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	if primary.Handle() != primaryHandle {
 		t.Errorf("GetOrCreateResourceContext returned an invalid context for a live transient object")
 	}
+	if !bytes.Equal(primary.Name(), primaryName) {
+		t.Errorf("GetOrCreateResourceContext returned a context with the wrong name for a live transient object")
+	}
 	defer flushContext(t, tpm, primary)
 
 	persistentPrimary, err = tpm.GetOrCreateResourceContext(persistentHandle)
@@ -68,6 +90,9 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	if persistentPrimary.Handle() != persistentHandle {
 		t.Errorf("GetOrCreateResourceContext returned an invalid context for a live persistent object")
 	}
+	if !bytes.Equal(persistentPrimary.Name(), primaryName) {
+		t.Errorf("GetOrCreateResourceContext returned a context with the wrong name for a live persistent object")
+	}
 	defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
 
 	index, err = tpm.GetOrCreateResourceContext(nvPub.Index)
@@ -79,6 +104,10 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	}
 	if index.Handle() != nvPub.Index {
 		t.Errorf("GetOrCreateResourceContext returned an invalid context for a live NV index")
+	}
+	nvName, _ := nvPub.Name()
+	if !bytes.Equal(index.Name(), nvName) {
+		t.Errorf("GetOrCreateResourceContext returned a context with the wrong name for a live NV index")
 	}
 	defer undefineNVSpace(t, tpm, index, tpm.OwnerHandleContext(), nil)
 
@@ -180,5 +209,103 @@ func TestGetOrCreateSessionContext(t *testing.T) {
 		t.Errorf("GetOrCreateSessionContext returned an invalid context for a saved session")
 	}
 	defer flushContext(t, tpm, savedSessionContext)
+}
 
+func TestCreateHandleContextFromBytes(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	closed := false
+	defer func() {
+		if closed {
+			return
+		}
+		closeTPM(t, tpm)
+	}()
+
+	primary := createRSASrkForTesting(t, tpm, nil)
+	defer verifyContextFlushed(t, tpm, primary)
+	primaryHandle := primary.Handle()
+	primaryName := primary.Name()
+
+	persistentHandle := Handle(0x81000008)
+	persistentPrimary := persistObjectForTesting(t, tpm, tpm.OwnerHandleContext(), primary, persistentHandle)
+	defer verifyPersistentObjectEvicted(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
+
+	nvPub := NVPublic{
+		Index:   0x018100ff,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+		Size:    8}
+	index, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &nvPub, nil)
+	if err != nil {
+		t.Fatalf("NVDefineSpace failed: %v", err)
+	}
+	defer verifyNVSpaceUndefined(t, tpm, index, tpm.OwnerHandleContext(), nil)
+
+	primarySaved := primary.SerializeToBytes()
+	persistentPrimarySaved := persistentPrimary.SerializeToBytes()
+	indexSaved := index.SerializeToBytes()
+
+	closeTPM(t, tpm)
+	closed = true
+
+	tpm = openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	if rc, n, err := tpm.CreateHandleContextFromBytes(primarySaved); err != nil {
+		t.Errorf("CreateHandleContextFromBytes failed: %v", err)
+	} else if rc == nil {
+		t.Errorf("CreateHandleContextFromBytes returned a nil context")
+	} else if n != len(primarySaved) {
+		t.Errorf("CreateHandleContextFromBytes consumed the wrong number of bytes")
+	} else if _, ok := rc.(ResourceContext); !ok {
+		t.Errorf("CreateHandleContextFromBytes returned the wrong type")
+	} else {
+		primary = rc.(ResourceContext)
+	}
+	if primary.Handle() != primaryHandle {
+		t.Errorf("CreateHandleContextFromBytes returned an invalid context for a live transient object")
+	}
+	if !bytes.Equal(primary.Name(), primaryName) {
+		t.Errorf("CreateHandleContextFromBytes returned a context with the wrong name for a live transient object")
+	}
+	defer flushContext(t, tpm, primary)
+
+	if rc, n, err := tpm.CreateHandleContextFromBytes(persistentPrimarySaved); err != nil {
+		t.Errorf("CreateHandleContextFromBytes failed: %v", err)
+	} else if rc == nil {
+		t.Errorf("CreateHandleContextFromBytes returned a nil context")
+	} else if n != len(persistentPrimarySaved) {
+		t.Errorf("CreateHandleContextFromBytes consumed the wrong number of bytes")
+	} else if _, ok := rc.(ResourceContext); !ok {
+		t.Errorf("CreateHandleContextFromBytes returned the wrong type")
+	} else {
+		persistentPrimary = rc.(ResourceContext)
+	}
+	if persistentPrimary.Handle() != persistentHandle {
+		t.Errorf("CreateHandleContextFromBytes returned an invalid context for a persistent object")
+	}
+	if !bytes.Equal(persistentPrimary.Name(), primaryName) {
+		t.Errorf("CreateHandleContextFromBytes returned a context with the wrong name for a persistent object")
+	}
+	defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), persistentPrimary)
+
+	if rc, n, err := tpm.CreateHandleContextFromBytes(indexSaved); err != nil {
+		t.Errorf("CreateHandleContextFromBytes failed: %v", err)
+	} else if rc == nil {
+		t.Errorf("CreateHandleContextFromBytes returned a nil context")
+	} else if n != len(indexSaved) {
+		t.Errorf("CreateHandleContextFromBytes consumed the wrong number of bytes")
+	} else if _, ok := rc.(ResourceContext); !ok {
+		t.Errorf("CreateHandleContextFromBytes returned the wrong type")
+	} else {
+		index = rc.(ResourceContext)
+	}
+	if index.Handle() != nvPub.Index {
+		t.Errorf("CreateHandleContextFromBytes returned an invalid context for a NV index")
+	}
+	nvName, _ := nvPub.Name()
+	if !bytes.Equal(index.Name(), nvName) {
+		t.Errorf("CreateHandleContextFromBytes returned a context with the wrong name for a persistent object")
+	}
+	defer undefineNVSpace(t, tpm, index, tpm.OwnerHandleContext(), nil)
 }

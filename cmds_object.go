@@ -212,11 +212,12 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 		return nil, &InvalidResponseError{CommandLoad, "name returned from TPM not consistent with loaded public area"}
 	}
 
-	objectContext := &objectContext{handle: objectHandle, name: name}
-	inPublic.copyTo(&objectContext.public)
-	t.addHandleContext(objectContext)
+	public := &Public{}
+	inPublic.copyTo(public)
+	rc := makeObjectContext(objectHandle, name, public)
+	t.addHandleContext(rc)
 
-	return objectContext, nil
+	return rc, nil
 }
 
 // LoadExternal executes the TPM2_LoadExternal command in order to load an object that is not a protected object in to the TPM.
@@ -298,11 +299,12 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 		return nil, &InvalidResponseError{CommandLoadExternal, "name returned from TPM not consistent with loaded public area"}
 	}
 
-	objectContext := &objectContext{handle: objectHandle, name: name}
-	inPublic.copyTo(&objectContext.public)
-	t.addHandleContext(objectContext)
+	public := &Public{}
+	inPublic.copyTo(public)
+	rc := makeObjectContext(objectHandle, name, public)
+	t.addHandleContext(rc)
 
-	return objectContext, nil
+	return rc, nil
 }
 
 // ReadPublic executes the TPM2_ReadPublic command to read the public area of the object associated with objectContext.
@@ -606,11 +608,12 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
-	objectContext := &objectContext{handle: objectHandle, name: name}
-	outPublic.Ptr.copyTo(&objectContext.public)
-	objectContext.authValue = make([]byte, len(inSensitive.UserAuth))
-	copy(objectContext.authValue, inSensitive.UserAuth)
-	t.addHandleContext(objectContext)
+	public := &Public{}
+	outPublic.Ptr.copyTo(public)
+	rc := makeObjectContext(objectHandle, name, public)
+	rc.auth = make([]byte, len(inSensitive.UserAuth))
+	copy(rc.auth, inSensitive.UserAuth)
+	t.addHandleContext(rc)
 
-	return objectContext, outPrivate, outPublic.Ptr, nil
+	return rc, outPrivate, outPublic.Ptr, nil
 }

@@ -79,13 +79,14 @@ func computeSessionHMAC(alg HashAlgorithmId, key, pHash []byte, nonceNewer, nonc
 	return hmac.Sum(nil)
 }
 
-func cryptComputeSessionCommandHMAC(context *sessionContext, key, cpHash []byte, nonceDecrypt, nonceEncrypt Nonce,
-	attrs sessionAttrs) []byte {
-	return computeSessionHMAC(context.hashAlg, key, cpHash, context.nonceCaller, context.nonceTPM, nonceDecrypt, nonceEncrypt, attrs)
+func cryptComputeSessionCommandHMAC(context *sessionContext, key, cpHash []byte, nonceDecrypt, nonceEncrypt Nonce, attrs sessionAttrs) []byte {
+	scData := context.scData()
+	return computeSessionHMAC(scData.HashAlg, key, cpHash, scData.NonceCaller, scData.NonceTPM, nonceDecrypt, nonceEncrypt, attrs)
 }
 
 func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte, attrs sessionAttrs) []byte {
-	return computeSessionHMAC(context.hashAlg, key, rpHash, context.nonceTPM, context.nonceCaller, nil, nil, attrs)
+	scData := context.scData()
+	return computeSessionHMAC(scData.HashAlg, key, rpHash, scData.NonceTPM, scData.NonceCaller, nil, nil, attrs)
 }
 
 func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, sizeInBits int, counterInOut *int, once bool) []byte {

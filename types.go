@@ -1711,6 +1711,14 @@ func (p *NVPublic) Name() (Name, error) {
 	return name, nil
 }
 
+func (p *NVPublic) compareName(name Name) bool {
+	n, err := p.Name()
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(n, name)
+}
+
 func (p *NVPublic) copyTo(dest *NVPublic) error {
 	b, err := MarshalToBytes(p)
 	if err != nil {

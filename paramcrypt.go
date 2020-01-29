@@ -75,9 +75,9 @@ func isParamEncryptable(param interface{}) bool {
 
 func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
-	key = append(key, s.session.Context.(*sessionContext).sessionKey...)
+	key = append(key, s.session.Context.(*sessionContext).scData().SessionKey...)
 	if s.associatedContext != nil {
-		key = append(key, s.associatedContext.(resourceContextPrivate).getAuthValue()...)
+		key = append(key, s.associatedContext.(resourceContextPrivate).authValue()...)
 	}
 	return key
 }
@@ -92,7 +92,7 @@ func computeEncryptNonce(sessions []*sessionParam) Nonce {
 		return nil
 	}
 
-	return session.session.Context.(*sessionContext).nonceTPM
+	return session.session.Context.(*sessionContext).scData().NonceTPM
 }
 
 func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, error) {
@@ -101,23 +101,23 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		return nil, nil
 	}
 
-	context := session.session.Context.(*sessionContext)
+	scData := session.session.Context.(*sessionContext).scData()
 	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
 	data := cpBytes[2 : size+2]
 
-	symmetric := context.symmetric
+	symmetric := scData.Symmetric
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
 		if symmetric.Mode.Sym() != SymModeCFB {
 			return nil, fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
 		}
-		if !context.hashAlg.Supported() {
-			return nil, fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
+		if !scData.HashAlg.Supported() {
+			return nil, fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
 		}
-		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceCaller, context.nonceTPM,
+		k := cryptKDFa(scData.HashAlg, sessionValue, []byte("CFB"), scData.NonceCaller, scData.NonceTPM,
 			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
@@ -126,7 +126,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 			return nil, fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceCaller, context.nonceTPM, data); err != nil {
+		if err := cryptXORObfuscation(scData.HashAlg, sessionValue, scData.NonceCaller, scData.NonceTPM, data); err != nil {
 			return nil, fmt.Errorf("XOR parameter obfuscation failed: %v", err)
 		}
 	default:
@@ -137,7 +137,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		return nil, nil
 	}
 
-	return context.nonceTPM, nil
+	return scData.NonceTPM, nil
 }
 
 func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
@@ -146,23 +146,23 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 		return nil
 	}
 
-	context := session.session.Context.(*sessionContext)
+	scData := session.session.Context.(*sessionContext).scData()
 	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)
 	data := rpBytes[2 : size+2]
 
-	symmetric := context.symmetric
+	symmetric := scData.Symmetric
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
 		if symmetric.Mode.Sym() != SymModeCFB {
 			return fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
 		}
-		if !context.hashAlg.Supported() {
-			return fmt.Errorf("invalid digest algorithm: %v", context.hashAlg)
+		if !scData.HashAlg.Supported() {
+			return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
 		}
-		k := cryptKDFa(context.hashAlg, sessionValue, []byte("CFB"), context.nonceTPM, context.nonceCaller,
+		k := cryptKDFa(scData.HashAlg, sessionValue, []byte("CFB"), scData.NonceTPM, scData.NonceCaller,
 			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
@@ -171,7 +171,7 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		if err := cryptXORObfuscation(context.hashAlg, sessionValue, context.nonceTPM, context.nonceCaller, data); err != nil {
+		if err := cryptXORObfuscation(scData.HashAlg, sessionValue, scData.NonceTPM, scData.NonceCaller, data); err != nil {
 			return fmt.Errorf("XOR parameter obfuscation failed: %v", err)
 		}
 	default:

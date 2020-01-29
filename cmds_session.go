@@ -92,7 +92,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		tpmKeyHandle = tpmKey.Handle()
 
 		var err error
-		encryptedSalt, salt, err = cryptComputeEncryptedSalt(&object.public)
+		encryptedSalt, salt, err = cryptComputeEncryptedSalt(object.public())
 		if err != nil {
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
@@ -102,7 +102,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	bindHandle := HandleNull
 	if bind != nil {
 		bindHandle = bind.Handle()
-		authValue = bind.(resourceContextPrivate).getAuthValue()
+		authValue = bind.(resourceContextPrivate).authValue()
 	}
 
 	var isBound bool = false
@@ -135,28 +135,26 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", sessionHandle)}
 	}
 
-	sessionContext := &sessionContext{
-		handle:         sessionHandle,
-		usable:         true,
-		hashAlg:        authHash,
-		sessionType:    sessionType,
-		policyHMACType: policyHMACTypeNoAuth,
-		isBound:        isBound,
-		boundEntity:    boundEntity,
-		nonceCaller:    Nonce(nonceCaller),
-		nonceTPM:       nonceTPM,
-		symmetric:      symmetric}
+	rc := makeSessionContext(sessionHandle, &sessionContextData{
+		HashAlg:        authHash,
+		SessionType:    sessionType,
+		PolicyHMACType: policyHMACTypeNoAuth,
+		IsBound:        isBound,
+		BoundEntity:    boundEntity,
+		NonceCaller:    Nonce(nonceCaller),
+		NonceTPM:       nonceTPM,
+		Symmetric:      symmetric})
 
 	if tpmKeyHandle != HandleNull || bindHandle != HandleNull {
 		key := make([]byte, len(authValue)+len(salt))
 		copy(key, authValue)
 		copy(key[len(authValue):], salt)
 
-		sessionContext.sessionKey = cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8, nil, false)
+		rc.scData().SessionKey = cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8, nil, false)
 	}
 
-	t.addHandleContext(sessionContext)
-	return sessionContext, nil
+	t.addHandleContext(rc)
+	return rc, nil
 }
 
 // PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to reset the policy

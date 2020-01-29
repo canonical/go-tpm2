@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"io"
 	"testing"
 )
 
@@ -14,9 +15,9 @@ type mockHandleContext struct {
 func (c *mockHandleContext) Name() Name {
 	return c.name
 }
-func (c *mockHandleContext) Handle() Handle {
-	return HandleNull
-}
+func (c *mockHandleContext) Handle() Handle                    { return HandleNull }
+func (c *mockHandleContext) SerializeToBytes() []byte          { return nil }
+func (c *mockHandleContext) SerializeToWriter(io.Writer) error { return nil }
 
 func TestComputeCpHash(t *testing.T) {
 	h := sha256.New()

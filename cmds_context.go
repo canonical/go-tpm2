@@ -10,81 +10,15 @@ import (
 	"bytes"
 	"crypto"
 	_ "crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"reflect"
 )
-
-type objectContextData struct {
-	Public    *Public `tpm2:"sized"`
-	Name      Name
-}
-
-type sessionContextData struct {
-	IsAudit        bool
-	IsExclusive    bool
-	HashAlg        HashAlgorithmId
-	SessionType    SessionType
-	PolicyHMACType policyHMACType
-	IsBound        bool
-	BoundEntity    Name
-	SessionKey     Digest
-	NonceCaller    Nonce
-	NonceTPM       Nonce
-	Symmetric      *SymDef
-}
-
-type resourceContextDataU struct {
-	Data interface{}
-}
-
-func (d resourceContextDataU) Select(selector reflect.Value) (reflect.Type, error) {
-	switch selector.Interface().(uint8) {
-	case contextTypeObject:
-		return reflect.TypeOf((*objectContextData)(nil)), nil
-	case contextTypeSession:
-		return reflect.TypeOf((*sessionContextData)(nil)), nil
-	}
-	return nil, invalidSelectorError{selector}
-}
-
-const (
-	contextTypeObject uint8 = iota
-	contextTypeSession
-)
-
-type resourceContextData struct {
-	ContextType uint8
-	Data        resourceContextDataU `tpm2:"selector:ContextType"`
-	TPMBlob     ContextData
-}
 
 func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
-	d := resourceContextData{TPMBlob: tpmBlob}
-
-	switch c := context.(type) {
-	case *objectContext:
-		d.ContextType = contextTypeObject
-		d.Data.Data = &objectContextData{Public: &c.public, Name: c.name}
-	case *sessionContext:
-		d.ContextType = contextTypeSession
-		d.Data.Data = &sessionContextData{
-			IsAudit:        c.isAudit,
-			IsExclusive:    c.isExclusive,
-			HashAlg:        c.hashAlg,
-			SessionType:    c.sessionType,
-			PolicyHMACType: c.policyHMACType,
-			IsBound:        c.isBound,
-			BoundEntity:    c.boundEntity,
-			SessionKey:     c.sessionKey,
-			NonceCaller:    c.nonceCaller,
-			NonceTPM:       c.nonceTPM,
-			Symmetric:      c.symmetric}
-	}
-
-	data, err := MarshalToBytes(d)
+	data, err := MarshalToBytes(context.(handleContextPrivate).data(), tpmBlob)
 	if err != nil {
-		panic(fmt.Sprintf("cannot marshal wrapped resource context data: %v", err))
+		panic(fmt.Sprintf("cannot marshal resource context and TPM context data: %v", err))
 	}
 
 	h := crypto.SHA256.New()
@@ -92,7 +26,7 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 
 	data, err = MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
 	if err != nil {
-		panic(fmt.Sprintf("cannot marshal wrapped resource context data and checksum: %v", err))
+		panic(fmt.Sprintf("cannot marshal data blob and checksum: %v", err))
 	}
 
 	return data
@@ -115,8 +49,11 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
 // WarningContextGap will be returned.
 func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
-	if sc, isSession := saveContext.(*sessionContext); isSession && !sc.usable {
-		return nil, makeInvalidParamError("saveContext", "unusable session HandleContext")
+	switch c := saveContext.(type) {
+	case *sessionContext:
+		if c.scData() == nil {
+			return nil, makeInvalidParamError("saveContext", "unusable session HandleContext")
+		}
 	}
 
 	var context Context
@@ -131,8 +68,9 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 
 	context.Blob = wrapContextBlob(context.Blob, saveContext)
 
-	if sc, isSession := saveContext.(*sessionContext); isSession {
-		sc.usable = false
+	switch c := saveContext.(type) {
+	case *sessionContext:
+		c.d.Data.Data = (*sessionContextData)(nil)
 	}
 
 	return &context, nil
@@ -180,78 +118,32 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 	if !integrityAlg.Supported() {
 		return nil, errors.New("cannot load context: invalid checksum algorithm")
 	}
-
 	h := integrityAlg.NewHash()
 	h.Write(data)
 	if !bytes.Equal(h.Sum(nil), integrity) {
 		return nil, errors.New("cannot load context: invalid checksum")
 	}
 
-	var d resourceContextData
-	if _, err := UnmarshalFromBytes(data, &d); err != nil {
+	var hcData *handleContextData
+	var tpmBlob ContextData
+	if _, err := UnmarshalFromBytes(data, &hcData, &tpmBlob); err != nil {
 		return nil, fmt.Errorf("cannot load context: cannot unmarshal data blob: %v", err)
 	}
 
-	switch d.ContextType {
-	case contextTypeObject:
-		if context.SavedHandle.Type() != HandleTypeTransient {
-			return nil, errors.New("cannot load context: inconsistent handle type")
-		}
-		dd := d.Data.Data.(*objectContextData)
-		if !dd.Public.compareName(dd.Name) {
-			return nil, errors.New("cannot load context for object: public area and name don't match")
-		}
-	case contextTypeSession:
-		switch context.SavedHandle.Type() {
-		case HandleTypeHMACSession, HandleTypePolicySession:
-		default:
-			return nil, errors.New("cannot load context: inconsistent handle type")
-		}
-		dd := d.Data.Data.(*sessionContextData)
-		if !dd.IsAudit && dd.IsExclusive {
-			return nil, fmt.Errorf("cannot load context for session: inconsistent audit attributes")
-		}
-		if !dd.HashAlg.Supported() {
-			return nil, fmt.Errorf("cannot load context for session: invalid hash algorithm %v", dd.HashAlg)
-		}
-		switch dd.SessionType {
-		case SessionTypeHMAC, SessionTypePolicy, SessionTypeTrial:
-		default:
-			return nil, fmt.Errorf("cannot load context for session: invalid type %v", dd.SessionType)
-		}
-		if dd.PolicyHMACType > policyHMACTypeMax {
-			return nil, errors.New("cannot load context for session: invalid value")
-		}
-		if (dd.IsBound && len(dd.BoundEntity) == 0) || (!dd.IsBound && len(dd.BoundEntity) > 0) {
-			return nil, errors.New("cannot load context for session: inconsistent properties")
-		}
-		digestSize := dd.HashAlg.Size()
-		if len(dd.SessionKey) != digestSize && len(dd.SessionKey) != 0 {
-			return nil, errors.New("cannot load context for session: unexpected session key size")
-		}
-		if len(dd.NonceCaller) != digestSize || len(dd.NonceTPM) != digestSize {
-			return nil, errors.New("cannot load context for session: unexpected nonce size")
-		}
-		switch dd.Symmetric.Algorithm {
-		case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull, SymAlgorithmSM4, SymAlgorithmCamellia:
-		default:
-			return nil, fmt.Errorf("cannot load context for session: invalid symmetric algorithm %v", dd.Symmetric.Algorithm)
-		}
-		switch dd.Symmetric.Algorithm {
-		case SymAlgorithmAES, SymAlgorithmSM4, SymAlgorithmCamellia:
-			if dd.Symmetric.Mode.Sym() != SymModeCFB {
-				return nil, fmt.Errorf("cannot load context for session: invalid symmetric mode %v", dd.Symmetric.Mode.Sym())
-			}
-		}
+	switch hcData.Type {
+	case handleContextTypeObject, handleContextTypeSession:
 	default:
-		return nil, errors.New("cannot load context: inconsistent attributes")
+		return nil, errors.New("cannot load context: unexpected context type")
+	}
+	if err := hcData.checkConsistency(); err != nil {
+		return nil, fmt.Errorf("cannot load context: %v", err)
 	}
 
 	tpmContext := Context{
 		Sequence:    context.Sequence,
 		SavedHandle: context.SavedHandle,
 		Hierarchy:   context.Hierarchy,
-		Blob:        d.TPMBlob}
+		Blob:        tpmBlob}
 
 	var loadedHandle Handle
 
@@ -264,43 +156,30 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 
 	var rc HandleContext
 
-	switch d.ContextType {
-	case contextTypeObject:
+	switch hcData.Type {
+	case handleContextTypeObject:
 		if loadedHandle.Type() != HandleTypeTransient {
-			return nil, &InvalidResponseError{CommandContextLoad,
-				fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", loadedHandle)}
+			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", loadedHandle)}
 		}
-
-		dd := d.Data.Data.(*objectContextData)
-		rc = &objectContext{handle: loadedHandle, public: Public(*dd.Public), name: dd.Name}
-	case contextTypeSession:
+		rc = makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Data.(*Public))
+	case handleContextTypeSession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}
 		}
-		var sc *sessionContext
-		if rc, exists := t.resources[normalizeHandleForMap(loadedHandle)]; exists {
-			sc = rc.(*sessionContext)
+		if c, exists := t.resources[normalizeHandleForMap(loadedHandle)]; exists {
+			rc = c
+			rcData := rc.(handleContextPrivate).data()
+			rcData.Handle = loadedHandle
+			rcData.Name = make(Name, binary.Size(Handle(0)))
+			binary.BigEndian.PutUint32(rcData.Name, uint32(loadedHandle))
 		} else {
-			sc = &sessionContext{handle: loadedHandle}
+			rc = makeSessionContext(loadedHandle, nil)
 		}
-
-		dd := d.Data.Data.(*sessionContextData)
-		sc.handle = loadedHandle
-		sc.usable = true
-		sc.isAudit = dd.IsAudit
-		sc.isExclusive = dd.IsExclusive && sc == t.exclusiveSession
-		sc.hashAlg = dd.HashAlg
-		sc.sessionType = dd.SessionType
-		sc.policyHMACType = dd.PolicyHMACType
-		sc.isBound = dd.IsBound
-		sc.boundEntity = dd.BoundEntity
-		sc.sessionKey = dd.SessionKey
-		sc.nonceCaller = dd.NonceCaller
-		sc.nonceTPM = dd.NonceTPM
-		sc.symmetric = dd.Symmetric
-
-		rc = sc
+		scData := hcData.Data.Data.(*sessionContextData)
+		scData.IsExclusive = scData.IsExclusive && rc == t.exclusiveSession
+		rc.(handleContextPrivate).data().Data.Data = hcData.Data.Data.(*sessionContextData)
 	}
+
 	t.addHandleContext(rc)
 
 	return rc, nil
@@ -366,9 +245,9 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 		return nil, nil
 	}
 
-	public := &object.(*objectContext).public
-	objectContext := &objectContext{handle: persistentHandle, name: object.Name()}
-	public.copyTo(&objectContext.public)
+	public := &Public{}
+	object.(*objectContext).public().copyTo(public)
+	objectContext := makeObjectContext(persistentHandle, object.Name(), public)
 	t.addHandleContext(objectContext)
 
 	return objectContext, nil
