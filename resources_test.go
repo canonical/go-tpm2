@@ -37,7 +37,7 @@ func TestGetOrCreateResourceContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	verifyNVSpaceUndefined(t, tpm, index, tpm.OwnerHandleContext(), nil)
+	defer verifyNVSpaceUndefined(t, tpm, index, tpm.OwnerHandleContext(), nil)
 
 	if rc, err := tpm.GetOrCreateResourceContext(primaryHandle); err != nil {
 		t.Errorf("GetOrCreateResourceContext failed: %v", err)
