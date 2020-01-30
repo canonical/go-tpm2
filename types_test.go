@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"crypto/sha256"
 	"reflect"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestHandle(t *testing.T) {
@@ -91,7 +93,7 @@ func TestPublicIDUnion(t *testing.T) {
 			in: TestPublicIDUContainer{Alg: ObjectTypeId(AlgorithmNull),
 				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
-			err: "cannot unmarshal struct type tpm2.TestPublicIDUContainer: cannot unmarshal field Unique: cannot unmarshal struct type " +
+			err: "cannot unmarshal struct type tpm2_test.TestPublicIDUContainer: cannot unmarshal field Unique: cannot unmarshal struct type " +
 				"tpm2.PublicIDU: error unmarshalling union struct: cannot select union data type: invalid selector value: TPM_ALG_NULL",
 		},
 	} {
@@ -158,8 +160,9 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			desc: "InvalidSelector",
 			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
 			out:  []byte{0x00, 0x0b},
-			err: "cannot unmarshal struct type tpm2.TestSchemeKeyedHashUContainer: cannot unmarshal field Details: cannot unmarshal struct type " +
-				"tpm2.SchemeKeyedHashU: error unmarshalling union struct: cannot select union data type: invalid selector value: TPM_ALG_SHA256",
+			err: "cannot unmarshal struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot unmarshal field Details: cannot unmarshal " +
+				"struct type tpm2.SchemeKeyedHashU: error unmarshalling union struct: cannot select union data type: invalid selector value: " +
+				"TPM_ALG_SHA256",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -532,7 +535,7 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			res, err := data.x.subtract(data.y)
+			res, err := data.x.TestSubtract(data.y)
 			if data.err == "" {
 				if err != nil {
 					t.Fatalf("subtract failed: %v", err)

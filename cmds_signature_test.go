@@ -2,13 +2,15 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestSign(t *testing.T) {

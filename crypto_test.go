@@ -2,13 +2,15 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
 	"crypto/aes"
 	"crypto/rand"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestSymmetricAES(t *testing.T) {
@@ -38,11 +40,11 @@ func TestSymmetricAES(t *testing.T) {
 			var secret []byte
 			secret = append(secret, data.data...)
 
-			if err := cryptEncryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
+			if err := TestCryptEncryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
 				t.Fatalf("AES encryption failed: %v", err)
 			}
 
-			if err := cryptDecryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
+			if err := TestCryptDecryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
 				t.Fatalf("AES decryption failed: %v", err)
 			}
 
@@ -94,11 +96,11 @@ func TestXORObfuscation(t *testing.T) {
 			var secret []byte
 			secret = append(secret, data.data...)
 
-			if err := cryptXORObfuscation(data.alg, key, contextU, contextV, secret); err != nil {
+			if err := TestCryptXORObfuscation(data.alg, key, contextU, contextV, secret); err != nil {
 				t.Fatalf("XOR obfuscation failed: %v", err)
 			}
 
-			if err := cryptXORObfuscation(data.alg, key, contextU, contextV, secret); err != nil {
+			if err := TestCryptXORObfuscation(data.alg, key, contextU, contextV, secret); err != nil {
 				t.Fatalf("XOR obfuscation failed: %v", err)
 			}
 

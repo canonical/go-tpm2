@@ -2,12 +2,14 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestStartAuthSession(t *testing.T) {
@@ -129,11 +131,7 @@ func TestStartAuthSession(t *testing.T) {
 					t.Errorf("StartAuthSession returned a handle of the wrong type")
 				}
 
-				context, isSessionContext := sc.(*sessionContext)
-				if !isSessionContext {
-					t.Fatalf("StartAuthSession didn't return a session context")
-				}
-				scData := context.scData()
+				scData := sc.(TestSessionContext).GetScData()
 				if scData.HashAlg != data.alg {
 					t.Errorf("The returned session context has the wrong algorithm (got %v)", scData.HashAlg)
 				}
@@ -145,7 +143,7 @@ func TestStartAuthSession(t *testing.T) {
 					if !scData.IsBound {
 						t.Errorf("The returned session context should be bound")
 					}
-					boundEntity := computeBindName(data.bind.Name(), data.bindAuth)
+					boundEntity := TestComputeBindName(data.bind.Name(), data.bindAuth)
 					if !bytes.Equal(boundEntity, scData.BoundEntity) {
 						t.Errorf("The returned session context has the wrong bound resource")
 					}

@@ -2,10 +2,12 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func getDictionaryAttackParams(t *testing.T, tpm *TPMContext) (uint32, uint32, uint32) {

@@ -18,10 +18,6 @@ import (
 	"math/big"
 )
 
-var (
-	defaultRSAExponent = 65537
-)
-
 func getHashConstructor(alg HashAlgorithmId) func() hash.Hash {
 	return func() hash.Hash {
 		return alg.NewHash()
@@ -181,7 +177,7 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 
 	exp := int(public.Params.RSADetail().Exponent)
 	if exp == 0 {
-		exp = defaultRSAExponent
+		exp = DefaultRSAExponent
 	}
 	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA()), E: exp}
 

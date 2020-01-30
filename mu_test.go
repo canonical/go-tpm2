@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"io"
 	"reflect"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestMarshalBasic(t *testing.T) {
@@ -411,8 +413,8 @@ func TestUnmarshalNilRawBytes(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected UnmarshalFromBytes to fail")
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2.TestStructWithRawBytes: cannot unmarshal field B: cannot unmarshal slice type "+
-		"tpm2.RawBytes: nil raw byte slice" {
+	if err.Error() != "cannot unmarshal struct type tpm2_test.TestStructWithRawBytes: cannot unmarshal field B: cannot unmarshal slice "+
+		"type tpm2.RawBytes: nil raw byte slice" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -485,8 +487,8 @@ func TestUnmarshalZeroSizedStructToNonNilPointer(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should have failed")
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2.TestStructWithPointerSizedStruct: cannot unmarshal field S: cannot unmarshal "+
-		"sized type *tpm2.TestSizedStruct: struct is zero sized, but destination struct has been pre-allocated" {
+	if err.Error() != "cannot unmarshal struct type tpm2_test.TestStructWithPointerSizedStruct: cannot unmarshal field S: cannot "+
+		"unmarshal sized type *tpm2_test.TestSizedStruct: struct is zero sized, but destination struct has been pre-allocated" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
@@ -535,7 +537,7 @@ func (t TestUnion) Select(selector reflect.Value) (reflect.Type, error) {
 	case 4:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{Selector: selector}
 }
 
 type TestUnionContainer struct {
@@ -644,8 +646,8 @@ func TestMarshalUnionWithInvalidSelector(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should fail to marshal a union with an invalid selector value")
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2.TestUnionContainer: cannot unmarshal field Union: cannot unmarshal struct "+
-		"type tpm2.TestUnion: error unmarshalling union struct: cannot select union data type: invalid selector value: 259" {
+	if err.Error() != "cannot unmarshal struct type tpm2_test.TestUnionContainer: cannot unmarshal field Union: cannot unmarshal "+
+		"struct type tpm2_test.TestUnion: error unmarshalling union struct: cannot select union data type: invalid selector value: 259" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
@@ -656,8 +658,8 @@ func TestMarshalUnionWithIncorrectType(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshalToBytes should fail to marshal a union with the wrong data type")
 	}
-	if err.Error() != "cannot marshal struct type tpm2.TestUnionContainer: cannot marshal field Union: cannot marshal struct type "+
-		"tpm2.TestUnion: error marshalling union struct: data has incorrect type uint16 (expected tpm2.TestListUint32)" {
+	if err.Error() != "cannot marshal struct type tpm2_test.TestUnionContainer: cannot marshal field Union: cannot marshal struct type "+
+		"tpm2_test.TestUnion: error marshalling union struct: data has incorrect type uint16 (expected tpm2_test.TestListUint32)" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }
@@ -797,8 +799,8 @@ func TestMarshalStructWithCustomMarshallerFromContainer(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshalToBytes should fail to marshal when encountering a nil pointer to a type with a custom marshaller")
 	}
-	if err.Error() != "cannot marshal struct type tpm2.TestStructWithEmbeddedCustomMarshallerType: cannot marshal field B: cannot "+
-		"marshal nil pointer type *tpm2.TestStructWithCustomMarshaller with custom marshaller" {
+	if err.Error() != "cannot marshal struct type tpm2_test.TestStructWithEmbeddedCustomMarshallerType: cannot marshal field B: cannot "+
+		"marshal nil pointer type *tpm2_test.TestStructWithCustomMarshaller with custom marshaller" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }

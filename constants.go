@@ -9,6 +9,10 @@ import (
 )
 
 const (
+	DefaultRSAExponent = 65537
+)
+
+const (
 	StartupClear StartupType = iota
 	StartupState
 )

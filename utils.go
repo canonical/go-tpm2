@@ -224,3 +224,10 @@ func (p *TrialAuthPolicy) PolicyPassword() {
 	// Specification"
 	p.beginExtend(CommandPolicyAuthValue).commit()
 }
+
+func KDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, sizeInBits int) ([]byte, error) {
+	if !hashAlg.Supported() {
+		return nil, errors.New("invalid hash algorithm")
+	}
+	return cryptKDFa(hashAlg, key, label, contextU, contextV, sizeInBits, nil, false), nil
+}

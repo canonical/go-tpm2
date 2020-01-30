@@ -565,7 +565,7 @@ func (c CapabilitiesU) Select(selector reflect.Value) (reflect.Type, error) {
 	case CapabilityAuthPolicies:
 		return reflect.TypeOf(TaggedPolicyList(nil)), nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // CapabilityData corresponds to the TPMS_CAPABILITY_DATA type, and is returned by TPMContext.GetCapability.
@@ -672,7 +672,7 @@ func (a AttestU) Select(selector reflect.Value) (reflect.Type, error) {
 	case TagAttestCreation:
 		return reflect.TypeOf((*CreationInfo)(nil)), nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // Certify returns the underlying value as *CertifyInfo. It panics if the underlying type is not *CertifyInfo.
@@ -763,7 +763,7 @@ func (b SymKeyBitsU) Select(selector reflect.Value) (reflect.Type, error) {
 	case AlgorithmNull:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // Sym returns the underlying value as uint16. It panics if the underlying type is not uint16.
@@ -800,7 +800,7 @@ func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
 	case AlgorithmNull:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // Sym returns the underlying value as SymModeId. It panics if the underlying type is not SymModeId.
@@ -895,7 +895,7 @@ func (d SchemeKeyedHashU) Select(selector reflect.Value) (reflect.Type, error) {
 	case KeyedHashSchemeNull:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // HMAC returns the underlying value as *SchemeHMAC. It panics if the underlying type is not *SchemeHMAC.
@@ -958,7 +958,7 @@ func (s SigSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
 	case SigSchemeAlgNull:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not *SigSchemeRSASSA
@@ -1038,7 +1038,7 @@ func (s KDFSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
 	case KDFAlgorithmNull:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // MGF1 returns the underlying value as *SchemeMGF1. It panics if the underlying type is not *SchemeMGF1.
@@ -1119,7 +1119,7 @@ func (s AsymSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
 	case AsymSchemeNull:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // ECDH returns the underlying value as *KeySchemeECDH. It panics if the underlying type is not *KeySchemeECDH.
@@ -1275,7 +1275,7 @@ func (s SignatureU) Select(selector reflect.Value) (reflect.Type, error) {
 	case SigSchemeAlgNull:
 		return nil, nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // RSASSA returns the underlying value as *SignatureRSASSA. It panics if the underlying type is not *SignatureRSASSA.
@@ -1358,7 +1358,7 @@ func (p PublicIDU) Select(selector reflect.Value) (reflect.Type, error) {
 	case ObjectTypeSymCipher:
 		return reflect.TypeOf(Digest(nil)), nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // KeyedHash returns the underlying value as Digest. It panics if the underlying type is not Digest.
@@ -1439,7 +1439,7 @@ func (p PublicParamsU) Select(selector reflect.Value) (reflect.Type, error) {
 	case ObjectTypeSymCipher:
 		return reflect.TypeOf((*SymCipherParams)(nil)), nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // KeyedHashDetail returns the underlying value as *KeyedHashParams. It panics if the underlying type is not *KeyedHashParams.
@@ -1611,7 +1611,7 @@ func (s SensitiveCompositeU) Select(selector reflect.Value) (reflect.Type, error
 	case ObjectTypeSymCipher:
 		return reflect.TypeOf(SymKey(nil)), nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 // RSA returns the underlying value as PrivateKeyRSA. It panics if the underlying type is not PrivateKeyRSA.

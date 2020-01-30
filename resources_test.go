@@ -2,12 +2,14 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestGetOrCreateResourceContext(t *testing.T) {

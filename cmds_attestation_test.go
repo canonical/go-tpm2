@@ -2,13 +2,15 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag StructTag, signContext ResourceContext, signHierarchy Handle, qualifyingData Data) *Attest {

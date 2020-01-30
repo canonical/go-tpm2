@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestNVDefineAndUndefineSpace(t *testing.T) {
@@ -40,7 +42,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			}
 		}()
 
-		nvPub := nvContext.(*nvIndexContext).d.Data.Data.(*NVPublic)
+		nvPub := nvContext.(TestNVIndexResourceContext).GetPublic()
 
 		if nvPub.NameAlg != publicInfo.NameAlg {
 			t.Errorf("Unexpected nameAlg")

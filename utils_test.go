@@ -1,4 +1,4 @@
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"io"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 type mockHandleContext struct {

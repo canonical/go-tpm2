@@ -23,12 +23,12 @@ var (
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
-type invalidSelectorError struct {
-	selector interface{}
+type InvalidSelectorError struct {
+	Selector reflect.Value
 }
 
-func (e invalidSelectorError) Error() string {
-	return fmt.Sprintf("invalid selector value: %v", e.selector)
+func (e InvalidSelectorError) Error() string {
+	return fmt.Sprintf("invalid selector value: %v", e.Selector)
 }
 
 // CustomMarshaller is implemented by types that require custom marshalling and unmarshalling behaviour because they are non-standard

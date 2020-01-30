@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
@@ -16,6 +16,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 var useTpm = flag.Bool("use-tpm", false, "")
@@ -153,7 +155,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 	case ObjectTypeRSA:
 		exp := int(pub.Params.RSADetail().Exponent)
 		if exp == 0 {
-			exp = defaultRSAExponent
+			exp = DefaultRSAExponent
 		}
 		pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA()), E: exp}
 

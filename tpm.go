@@ -24,7 +24,7 @@ func wrapMarshallingError(commandCode CommandCode, context string, err error) er
 }
 
 func handleUnmarshallingError(context *cmdContext, scope string, err error) error {
-	var s invalidSelectorError
+	var s InvalidSelectorError
 	if xerrors.Is(err, io.EOF) || xerrors.Is(err, io.ErrUnexpectedEOF) || xerrors.As(err, &s) {
 		return &InvalidResponseError{context.commandCode, fmt.Sprintf("cannot unmarshal %s: %v", scope, err)}
 	}

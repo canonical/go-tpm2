@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
@@ -14,6 +14,8 @@ import (
 	"hash"
 	"math/big"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestDuplicate(t *testing.T) {
@@ -151,7 +153,7 @@ func TestDuplicate(t *testing.T) {
 		}
 		dupSensitive := duplicate[n:]
 
-		hmacKey := cryptKDFa(parentTemplate.NameAlg, seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8, nil, false)
+		hmacKey, _ := KDFa(parentTemplate.NameAlg, seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8)
 		h := hmac.New(func() hash.Hash { return parentTemplate.NameAlg.NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(object.Name())
@@ -159,7 +161,7 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected outer HMAC")
 		}
 
-		symKey := cryptKDFa(parentTemplate.NameAlg, seed, []byte("STORAGE"), object.Name(), nil, int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()), nil, false)
+		symKey, _ := KDFa(parentTemplate.NameAlg, seed, []byte("STORAGE"), object.Name(), nil, int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()))
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
 			t.Fatalf("NewCipher failed: %v", err)
@@ -274,6 +276,10 @@ func TestDuplicate(t *testing.T) {
 	})
 }
 
+type sensitiveSized struct {
+	Ptr *Sensitive `tpm2:"sized"`
+}
+
 func TestImport(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
@@ -361,7 +367,7 @@ func TestImport(t *testing.T) {
 		seed := make([]byte, primary.Name().Algorithm().Size())
 		rand.Read(seed)
 
-		symKey := cryptKDFa(primary.Name().Algorithm(), seed, []byte("STORAGE"), name, nil, int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()), nil, false)
+		symKey, _ := KDFa(primary.Name().Algorithm(), seed, []byte("STORAGE"), name, nil, int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()))
 
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
@@ -371,7 +377,7 @@ func TestImport(t *testing.T) {
 		dupSensitive := make(Private, len(sensitive))
 		stream.XORKeyStream(dupSensitive, sensitive)
 
-		hmacKey := cryptKDFa(primary.Name().Algorithm(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8, nil, false)
+		hmacKey, _ := KDFa(primary.Name().Algorithm(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8)
 		h := hmac.New(func() hash.Hash { return primary.Name().Algorithm().NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(name)

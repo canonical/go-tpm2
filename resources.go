@@ -99,7 +99,7 @@ func (d handleContextDataU) Select(selector reflect.Value) (reflect.Type, error)
 	case handleContextTypeSession:
 		return reflect.TypeOf((*sessionContextData)(nil)), nil
 	}
-	return nil, invalidSelectorError{selector}
+	return nil, InvalidSelectorError{selector}
 }
 
 type handleContextData struct {

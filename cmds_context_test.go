@@ -2,12 +2,14 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+package tpm2_test
 
 import (
 	"bytes"
 	"reflect"
 	"testing"
+
+	. "github.com/chrisccoulson/go-tpm2"
 )
 
 func TestContextSave(t *testing.T) {
@@ -112,7 +114,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(restored.Name(), rc.Name()) {
 			t.Errorf("Restored context has the wrong name")
 		}
-		if !reflect.DeepEqual(rc.(*objectContext).public(), restored.(*objectContext).public()) {
+		if !reflect.DeepEqual(rc.(TestObjectResourceContext).GetPublic(), restored.(TestObjectResourceContext).GetPublic()) {
 			t.Errorf("Restored context has the wrong public data")
 		}
 
@@ -123,7 +125,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(name, rc.Name()) {
 			t.Errorf("Restored object has the wrong name")
 		}
-		if !reflect.DeepEqual(pub, rc.(*objectContext).public()) {
+		if !reflect.DeepEqual(pub, rc.(TestObjectResourceContext).GetPublic()) {
 			t.Errorf("Restored object has the wrong public area")
 		}
 	})
@@ -135,7 +137,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sc)
 
-		scData := sc.(*sessionContext).scData()
+		scData := sc.(TestSessionContext).GetScData()
 		var data struct {
 			handle         Handle
 			name           Name
@@ -143,7 +145,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 			isExclusive    bool
 			hashAlg        HashAlgorithmId
 			sessionType    SessionType
-			policyHMACType policyHMACType
+			policyHMACType uint8
 			isBound        bool
 			boundEntity    Name
 			sessionKey     []byte
@@ -157,7 +159,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		data.isExclusive = scData.IsExclusive
 		data.hashAlg = scData.HashAlg
 		data.sessionType = scData.SessionType
-		data.policyHMACType = scData.PolicyHMACType
+		data.policyHMACType = uint8(scData.PolicyHMACType)
 		data.isBound = scData.IsBound
 		data.boundEntity = scData.BoundEntity
 		data.sessionKey = scData.SessionKey
@@ -191,7 +193,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(restored.Name(), data.name) {
 			t.Errorf("ContextLoad returned a handle with the wrong name")
 		}
-		restoredData := restored.(*sessionContext).scData()
+		restoredData := restored.(TestSessionContext).GetScData()
 		if restoredData.IsAudit != data.isAudit {
 			t.Errorf("ContextLoad returned a handle with the wrong session data")
 		}
@@ -204,7 +206,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if restoredData.SessionType != data.sessionType {
 			t.Errorf("ContextLoad returned a handle with the wrong session data")
 		}
-		if restoredData.PolicyHMACType != data.policyHMACType {
+		if uint8(restoredData.PolicyHMACType) != data.policyHMACType {
 			t.Errorf("ContextLoad returned a handle with the wrong session data")
 		}
 		if restoredData.IsBound != data.isBound {
