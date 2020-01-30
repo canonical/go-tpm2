@@ -153,7 +153,7 @@ func TestDuplicate(t *testing.T) {
 		}
 		dupSensitive := duplicate[n:]
 
-		hmacKey, _ := KDFa(parentTemplate.NameAlg, seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8)
+		hmacKey := TestCryptKDFa(parentTemplate.NameAlg, seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8, nil, false)
 		h := hmac.New(func() hash.Hash { return parentTemplate.NameAlg.NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(object.Name())
@@ -161,7 +161,7 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected outer HMAC")
 		}
 
-		symKey, _ := KDFa(parentTemplate.NameAlg, seed, []byte("STORAGE"), object.Name(), nil, int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()))
+		symKey := TestCryptKDFa(parentTemplate.NameAlg, seed, []byte("STORAGE"), object.Name(), nil, int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()), nil, false)
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
 			t.Fatalf("NewCipher failed: %v", err)
@@ -367,7 +367,7 @@ func TestImport(t *testing.T) {
 		seed := make([]byte, primary.Name().Algorithm().Size())
 		rand.Read(seed)
 
-		symKey, _ := KDFa(primary.Name().Algorithm(), seed, []byte("STORAGE"), name, nil, int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()))
+		symKey := TestCryptKDFa(primary.Name().Algorithm(), seed, []byte("STORAGE"), name, nil, int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()), nil, false)
 
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
@@ -377,7 +377,7 @@ func TestImport(t *testing.T) {
 		dupSensitive := make(Private, len(sensitive))
 		stream.XORKeyStream(dupSensitive, sensitive)
 
-		hmacKey, _ := KDFa(primary.Name().Algorithm(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8)
+		hmacKey := TestCryptKDFa(primary.Name().Algorithm(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8, nil, false)
 		h := hmac.New(func() hash.Hash { return primary.Name().Algorithm().NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(name)

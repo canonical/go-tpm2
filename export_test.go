@@ -36,6 +36,7 @@ func (l PCRSelectionList) TestSubtract(r PCRSelectionList) (PCRSelectionList, er
 	return l.subtract(r)
 }
 
+var TestCryptKDFa = cryptKDFa
 var TestComputeBindName = computeBindName
 var TestCryptEncryptSymmetricAES = cryptEncryptSymmetricAES
 var TestCryptDecryptSymmetricAES = cryptDecryptSymmetricAES
