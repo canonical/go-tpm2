@@ -35,13 +35,14 @@ import (
 //
 // If bind is specified, then the auhorization value for the corresponding resource must be known, by calling
 // ResourceContext.SetAuthValue on bind before calling this function - the authorization value will contribute to the session key
-// derivation. The created session will be bound to the resource associated with bind. If bind corresponds to a transient object and
-// only the public part of the object is loaded, or if bind corresponds to a NV index with a type of NVTypePinPass or NVTypePinFail,
-// a *TPMHandleError error with an error code of ErrorHandle will be returned for handle index 2.
+// derivation. The created session will be bound to the resource associated with bind, unless the authorization value of that resource
+// is subsequently changed. If bind corresponds to a transient object and only the public part of the object is loaded, or if bind
+// corresponds to a NV index with a type of NVTypePinPass or NVTypePinFail, a *TPMHandleError error with an error code of ErrorHandle
+// will be returned for handle index 2.
 //
-// If a session key is computed, this will be used (along with the value of the AuthValue field of the Session struct that
-// references the session in some circumstances) to derive a HMAC key for generating command and response HMACs. If both tpmKey and
-// bind are nil, no session key is created.
+// If a session key is computed, this will be used (along with the authorization value of resources that the session is being used
+// for authorization of if the session is not bound to them) to derive a HMAC key for generating command and response HMACs. If both
+// tpmKey and bind are nil, no session key is created.
 //
 // If symmetric is provided, it defines the symmetric algorithm to use if the session is subsequently used for session based command
 // or response parameter encryption. Session based parameter encryption allows the first command and/or response parameter for a
@@ -56,16 +57,8 @@ import (
 // response.
 //
 // If sessionType is SessionTypeHMAC and the session is subsequently used for authorization of a resource to which the session is not
-// bound, the AuthValue field of the Session struct referencing the session must be set to the authorization value of the resource
-// being authorized. If the session is used for authorization of the resource to which the session is bound, then the auth value does
-// not need to be provided unless the authorization value of the bound resource has been changed since the start of the session.
-// Passing the correct authorization value won't cause authorization checks to fail, but passing an incorrect authorization value
-// will cause authorization checks to fail, even if it used for authorizing the bound resource.
-//
-// For any session type that is subsequently used for both an authorization and session based parameter encryption in the same
-// command, the AuthValue field of the Session struct referencing the session must be set to the authorization value of the resource
-// being authorized, as the authorization value of the resource is used in derivation of the symmetric key regardless of bind state
-// or whether it is required for authorization.
+// bound, the authorization value of that resource must be known as it is used to derive the key for computing command and response
+// HMACs.
 //
 // If no more sessions can be created without first context loading the oldest saved session, then a *TPMWarning error with a warning
 // code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
