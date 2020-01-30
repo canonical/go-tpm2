@@ -359,8 +359,8 @@ func makeObjectContext(handle Handle, name Name, public *Public) *objectContext 
 	return &objectContext{d: handleContextData{Type: handleContextTypeObject, Handle: handle, Name: name, Data: handleContextDataU{public}}}
 }
 
-func makeObjectContextFromTPM(t *TPMContext, handle Handle) (ResourceContext, error) {
-	pub, name, _, err := t.ReadPublic(makeUntrackedContext(handle))
+func makeObjectContextFromTPM(t *TPMContext, context ResourceContext, sessions ...*Session) (ResourceContext, error) {
+	pub, name, _, err := t.ReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +369,7 @@ func makeObjectContextFromTPM(t *TPMContext, handle Handle) (ResourceContext, er
 	} else if !bytes.Equal(n, name) {
 		return nil, &InvalidResponseError{CommandReadPublic, "name and public area don't match"}
 	}
-	return makeObjectContext(handle, name, pub), nil
+	return makeObjectContext(context.Handle(), name, pub), nil
 }
 
 type nvIndexContext struct {
@@ -428,12 +428,12 @@ func (r *nvIndexContext) attrs() NVAttributes {
 	return r.d.Data.Data.(*NVPublic).Attrs
 }
 
-func makeNvIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexContext {
+func makeNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexContext {
 	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: handle, Name: name, Data: handleContextDataU{public}}}
 }
 
-func makeNVIndexContextFromTPM(t *TPMContext, handle Handle) (ResourceContext, error) {
-	pub, name, err := t.NVReadPublic(makeUntrackedContext(handle))
+func makeNVIndexContextFromTPM(t *TPMContext, context ResourceContext, sessions ...*Session) (ResourceContext, error) {
+	pub, name, err := t.NVReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +442,7 @@ func makeNVIndexContextFromTPM(t *TPMContext, handle Handle) (ResourceContext, e
 	} else if !bytes.Equal(n, name) {
 		return nil, &InvalidResponseError{CommandNVReadPublic, "name and public area don't match"}
 	}
-	return makeNvIndexContext(handle, name, pub), nil
+	return makeNVIndexContext(context.Handle(), name, pub), nil
 }
 
 type sessionContext struct {
@@ -578,10 +578,12 @@ func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
 //
 // If a new ResourceContext has to be created and the handle references a NV index or an object, it will execute a command to read the
 // public area from the TPM in order to initialize state that is maintained on the host side. It will return a ResourceUnavailableError
-// error if the specified handle references a NV index or object that is currently unavailable. It should be noted that this command is
-// executed without any sessions and therefore does not benefit from any integrity protections other than a consistency cross-check
-// that is performed on the returned data to make sure that the name and public area match. Applications should consider the
-// implications of this during subsequent use of the ResourceContext.
+// error if the specified handle references a NV index or object that is currently unavailable. If this function is called without any
+// sessions, it does not benefit from any integrity protections other than a consistency cross-check that is performed on the returned
+// data to make sure that the name and public area match. Applications should consider the implications of this during subsequent use
+// of the ResourceContext. If any sessions are passed then the pubic area is read back from the TPM twice - the session is used only
+// on the second read once the name is known. This second read provides an assurance that an entity with the name of the returned
+// ResourceContext actually lives on the TPM.
 //
 // It always succeeds if the specified handle references a permanent resource.
 //
@@ -590,7 +592,7 @@ func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
 //
 // If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
 // this should be provided by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) GetOrCreateResourceContext(handle Handle) (ResourceContext, error) {
+func (t *TPMContext) GetOrCreateResourceContext(handle Handle, sessions ...*Session) (ResourceContext, error) {
 	switch handle.Type() {
 	case HandleTypePCR, HandleTypePermanent:
 		return t.GetOrCreatePermanentContext(handle), nil
@@ -599,29 +601,37 @@ func (t *TPMContext) GetOrCreateResourceContext(handle Handle) (ResourceContext,
 			return rc.(ResourceContext), nil
 		}
 
-		var rc ResourceContext
-		var err error
-		if handle.Type() == HandleTypeNVIndex {
-			rc, err = makeNVIndexContextFromTPM(t, handle)
-		} else {
-			rc, err = makeObjectContextFromTPM(t, handle)
-		}
-
-		if err != nil {
-			switch e := err.(type) {
-			case *TPMWarning:
-				if e.Code == WarningReferenceH0 {
-					return nil, ResourceUnavailableError{handle}
-				}
-			case *TPMHandleError:
-				if e.Code() == ErrorHandle {
-					return nil, ResourceUnavailableError{handle}
-				}
+		var rc ResourceContext = makeUntrackedContext(handle)
+		var s []*Session
+		for i := 0; i < 2; i++ {
+			var err error
+			if handle.Type() == HandleTypeNVIndex {
+				rc, err = makeNVIndexContextFromTPM(t, rc, s...)
+			} else {
+				rc, err = makeObjectContextFromTPM(t, rc, s...)
 			}
-			return nil, err
+
+			if err != nil {
+				switch e := err.(type) {
+				case *TPMWarning:
+					if e.Code == WarningReferenceH0 {
+						return nil, ResourceUnavailableError{handle}
+					}
+				case *TPMHandleError:
+					if e.Code() == ErrorHandle {
+						return nil, ResourceUnavailableError{handle}
+					}
+				}
+				return nil, err
+			}
+			t.addHandleContext(rc)
+
+			if len(sessions) == 0 {
+				break
+			}
+			s = sessions
 		}
 
-		t.addHandleContext(rc)
 		return rc, nil
 	default:
 		panic("invalid handle type")

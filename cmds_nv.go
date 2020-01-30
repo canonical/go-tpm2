@@ -108,7 +108,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 
 	public := &NVPublic{}
 	publicInfo.copyTo(public)
-	rc := makeNvIndexContext(publicInfo.Index, name, public)
+	rc := makeNVIndexContext(publicInfo.Index, name, public)
 	rc.auth = make([]byte, len(auth))
 	copy(rc.auth, auth)
 	t.addHandleContext(rc)

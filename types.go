@@ -646,7 +646,7 @@ type NVCertifyInfo struct {
 // each selector value are:
 //  - TagAttestNV: *NVCertifyInfo
 //  - TagAttestCommandAudit: *CommandAuditInfo
-//  - TagAttestSessionAudir: *SessionAuditInfo
+//  - TagAttestSessionAudit: *SessionAuditInfo
 //  - TagAttestCertify: *CertifyInfo
 //  - TagAttestQuote: *QuoteInfo
 //  - TagAttestTime: *TimeAttestInfo
