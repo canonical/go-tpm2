@@ -179,8 +179,8 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *
 	getHandles(HandleTypeTransient, handles)
 	getHandles(HandleTypePersistent, handles)
 
-	for _, rc := range t.resources {
-		switch c := rc.(type) {
+	for _, hc := range t.handles {
+		switch c := hc.(type) {
 		case *objectContext:
 			if _, exists := handles[c.Handle()]; exists {
 				continue
@@ -199,7 +199,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *
 			continue
 		}
 
-		t.evictHandleContext(rc)
+		t.evictHandleContext(hc)
 	}
 
 	if err != nil {

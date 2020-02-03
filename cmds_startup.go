@@ -26,12 +26,12 @@ func (t *TPMContext) Startup(startupType StartupType) error {
 	if err := t.RunCommand(CommandStartup, nil, Separator, startupType); err != nil {
 		return err
 	}
-	for _, rc := range t.resources {
-		switch rc.Handle().Type() {
+	for _, hc := range t.handles {
+		switch hc.Handle().Type() {
 		case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypePersistent:
 			continue
 		}
-		t.evictHandleContext(rc)
+		t.evictHandleContext(hc)
 	}
 	return nil
 }

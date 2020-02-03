@@ -493,8 +493,8 @@ func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextA
 		return err
 	}
 
-	for _, rc := range t.resources {
-		nvRc, isNV := rc.(*nvIndexContext)
+	for _, hc := range t.handles {
+		nvRc, isNV := hc.(*nvIndexContext)
 		if !isNV {
 			continue
 		}

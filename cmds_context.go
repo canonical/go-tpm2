@@ -154,35 +154,35 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		return nil, err
 	}
 
-	var rc HandleContext
+	var hc HandleContext
 
 	switch hcData.Type {
 	case handleContextTypeObject:
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", loadedHandle)}
 		}
-		rc = makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Data.(*Public))
+		hc = makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Data.(*Public))
 	case handleContextTypeSession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}
 		}
-		if c, exists := t.resources[normalizeHandleForMap(loadedHandle)]; exists {
-			rc = c
-			rcData := rc.(handleContextPrivate).data()
-			rcData.Handle = loadedHandle
-			rcData.Name = make(Name, binary.Size(Handle(0)))
-			binary.BigEndian.PutUint32(rcData.Name, uint32(loadedHandle))
+		if c, exists := t.handles[normalizeHandleForMap(loadedHandle)]; exists {
+			hc = c
+			d := hc.(handleContextPrivate).data()
+			d.Handle = loadedHandle
+			d.Name = make(Name, binary.Size(Handle(0)))
+			binary.BigEndian.PutUint32(d.Name, uint32(loadedHandle))
 		} else {
-			rc = makeSessionContext(loadedHandle, nil)
+			hc = makeSessionContext(loadedHandle, nil)
 		}
 		scData := hcData.Data.Data.(*sessionContextData)
-		scData.IsExclusive = scData.IsExclusive && rc == t.exclusiveSession
-		rc.(handleContextPrivate).data().Data.Data = hcData.Data.Data.(*sessionContextData)
+		scData.IsExclusive = scData.IsExclusive && hc == t.exclusiveSession
+		hc.(handleContextPrivate).data().Data.Data = scData
 	}
 
-	t.addHandleContext(rc)
+	t.addHandleContext(hc)
 
-	return rc, nil
+	return hc, nil
 }
 
 // FlushContext executes the TPM2_FlushContext command on the handle referenced by flushContext, in order to flush resources

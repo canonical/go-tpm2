@@ -535,37 +535,37 @@ func normalizeHandleForMap(handle Handle) Handle {
 	return (handle & 0x00ffffff) | (Handle(HandleTypeHMACSession) << 24)
 }
 
-func (t *TPMContext) evictHandleContext(rc HandleContext) {
-	if err := t.checkHandleContextParam(rc); err != nil {
+func (t *TPMContext) evictHandleContext(hc HandleContext) {
+	if err := t.checkHandleContextParam(hc); err != nil {
 		panic(fmt.Sprintf("Attempting to evict an invalid resource context: %v", err))
 	}
-	delete(t.resources, normalizeHandleForMap(rc.Handle()))
-	rc.(handleContextPrivate).invalidate()
+	delete(t.handles, normalizeHandleForMap(hc.Handle()))
+	hc.(handleContextPrivate).invalidate()
 }
 
-func (t *TPMContext) addHandleContext(rc HandleContext) {
-	if rc.Handle() == HandleUnassigned {
+func (t *TPMContext) addHandleContext(hc HandleContext) {
+	if hc.Handle() == HandleUnassigned {
 		panic("Attempting to add a closed resource context")
 	}
-	handle := normalizeHandleForMap(rc.Handle())
-	if existing, exists := t.resources[handle]; exists && existing != rc {
+	handle := normalizeHandleForMap(hc.Handle())
+	if existing, exists := t.handles[handle]; exists && existing != hc {
 		t.evictHandleContext(existing)
 	}
-	t.resources[handle] = rc
+	t.handles[handle] = hc
 }
 
-func (t *TPMContext) checkHandleContextParam(rc HandleContext) error {
-	if rc == nil {
+func (t *TPMContext) checkHandleContextParam(hc HandleContext) error {
+	if hc == nil {
 		return errors.New("nil value")
 	}
-	if _, isUntracked := rc.(*untrackedContext); isUntracked {
+	if _, isUntracked := hc.(*untrackedContext); isUntracked {
 		return nil
 	}
-	if rc.Handle() == HandleUnassigned {
+	if hc.Handle() == HandleUnassigned {
 		return errors.New("resource has been closed")
 	}
-	erc, exists := t.resources[normalizeHandleForMap(rc.Handle())]
-	if !exists || erc != rc {
+	x, exists := t.handles[normalizeHandleForMap(hc.Handle())]
+	if !exists || x != hc {
 		return errors.New("resource belongs to another TPM context")
 	}
 	return nil
@@ -597,7 +597,7 @@ func (t *TPMContext) GetOrCreateResourceContext(handle Handle, sessions ...*Sess
 	case HandleTypePCR, HandleTypePermanent:
 		return t.GetOrCreatePermanentContext(handle), nil
 	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
-		if rc, exists := t.resources[normalizeHandleForMap(handle)]; exists {
+		if rc, exists := t.handles[normalizeHandleForMap(handle)]; exists {
 			return rc.(ResourceContext), nil
 		}
 
@@ -653,7 +653,7 @@ func (t *TPMContext) GetOrCreateResourceContext(handle Handle, sessions ...*Sess
 func (t *TPMContext) GetOrCreateSessionContext(handle Handle) (SessionContext, error) {
 	switch handle.Type() {
 	case HandleTypeHMACSession, HandleTypePolicySession:
-		if rc, exists := t.resources[normalizeHandleForMap(handle)]; exists {
+		if rc, exists := t.handles[normalizeHandleForMap(handle)]; exists {
 			return rc.(SessionContext), nil
 		}
 		rc, err := makeIncompleteSessionContext(t, handle)
@@ -680,7 +680,7 @@ func (t *TPMContext) GetOrCreateSessionContext(handle Handle) (SessionContext, e
 func (t *TPMContext) GetOrCreatePermanentContext(handle Handle) ResourceContext {
 	switch handle.Type() {
 	case HandleTypePermanent, HandleTypePCR:
-		if rc, exists := t.resources[normalizeHandleForMap(handle)]; exists {
+		if rc, exists := t.handles[normalizeHandleForMap(handle)]; exists {
 			return rc.(ResourceContext)
 		}
 

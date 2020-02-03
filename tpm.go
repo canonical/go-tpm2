@@ -163,7 +163,7 @@ type ResourceContextWithSession struct {
 // auditing.
 type TPMContext struct {
 	tcti             io.ReadWriteCloser
-	resources        map[Handle]HandleContext
+	handles          map[Handle]HandleContext
 	maxSubmissions   uint
 	maxNVBufferSize  uint16
 	exclusiveSession HandleContext
@@ -171,8 +171,8 @@ type TPMContext struct {
 
 // Close invalidates all HandleContext instances tracked by this TPMContext and then calls Close on the transmission interface.
 func (t *TPMContext) Close() error {
-	for _, rc := range t.resources {
-		t.evictHandleContext(rc)
+	for _, hc := range t.handles {
+		t.evictHandleContext(hc)
 	}
 
 	if err := t.tcti.Close(); err != nil {
@@ -485,7 +485,7 @@ func (t *TPMContext) SetMaxSubmissions(max uint) {
 func newTpmContext(tcti io.ReadWriteCloser) *TPMContext {
 	r := new(TPMContext)
 	r.tcti = tcti
-	r.resources = make(map[Handle]HandleContext)
+	r.handles = make(map[Handle]HandleContext)
 	r.maxSubmissions = 5
 
 	return r
