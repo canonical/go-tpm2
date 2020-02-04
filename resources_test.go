@@ -108,7 +108,7 @@ func TestCreateHandleContextFromBytes(t *testing.T) {
 
 	run := func(t *testing.T, context ResourceContext) {
 		b := context.SerializeToBytes()
-		rc, n, err := tpm.CreateHandleContextFromBytes(b)
+		rc, n, err := CreateHandleContextFromBytes(b)
 		if err != nil {
 			t.Errorf("CreateHandleContextFromBytes failed: %v", err)
 		}

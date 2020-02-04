@@ -644,7 +644,7 @@ func (t *TPMContext) PCRHandleContext(pcr int) ResourceContext {
 //
 // If a ResourceContext is returned and subsequent use of it requires knowledge of the authorization value of the corresponding TPM
 // resource, this should be provided by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
+func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var integrityAlg HashAlgorithmId
 	var integrity []byte
 	var b []byte
@@ -700,9 +700,9 @@ func (t *TPMContext) CreateHandleContextFromReader(r io.Reader) (HandleContext, 
 //
 // If a ResourceContext is returned and subsequent use of it requires knowledge of the authorization value of the corresponding TPM
 // resource, this should be provided by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
+func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 	buf := bytes.NewReader(b)
-	rc, err := t.CreateHandleContextFromReader(buf)
+	rc, err := CreateHandleContextFromReader(buf)
 	if err != nil {
 		return nil, 0, err
 	}
