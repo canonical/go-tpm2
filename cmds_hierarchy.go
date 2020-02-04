@@ -133,7 +133,6 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	rc := makeObjectContext(objectHandle, name, public)
 	rc.auth = make([]byte, len(inSensitive.UserAuth))
 	copy(rc.auth, inSensitive.UserAuth)
-	t.addHandleContext(rc)
 
 	return rc, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
 }
@@ -143,12 +142,11 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 // corresponding to either HandlePlatform or HandleLockout to authContext. The command requires authorization with the user auth
 // role for authContext, with session based authorization provided via authContextAuthSession.
 //
-// On successful completion, as well as the TPM having performed the operations associated with the TPM2_Clear command, this function
-// will invalidate all ResourceContext instances of NV indices associated with the current owner, and all transient and persistent
-// objects that reside in the storage and endorsement hierarchies. The authorization values for ResourceContext instances
-// corresponding to HandleOwner, HandleEndorsement and HandleLockout will be cleared - it isn't necessary to update them with
-// ResourceContext.SetAuthValue in order to use them in subsequent commands that require knowledge of the authorization values for
-// those permanent resources.
+// On successful completion, all NV indices and objects associated with the current owner will have been evicted and subsequent use of
+// ResourceContext instances associated with these resources will fail. The authorization values of the storage, endorsement and
+// lockout hierarchies will have been cleared. It isn't necessary to update the corresponding ResourceContext instances for these
+// by calling ResourceContext.SetAuthValue in order to use them in subsequent commands that require knowledge of the authorization
+// value for those permanent resources.
 //
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
 func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
@@ -164,42 +162,10 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *
 
 	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, []interface{}{authContext}, nil)
 
-	getHandles := func(handleType HandleType, out map[Handle]struct{}) {
-		handles, err := t.GetCapabilityHandles(handleType.BaseHandle(), CapabilityMaxProperties)
-		if err != nil {
-			return
+	for _, h := range []Handle{HandleOwner, HandleEndorsement, HandleLockout} {
+		if rc, exists := t.permanentResources[h]; exists {
+			rc.auth = nil
 		}
-		var empty struct{}
-		for _, handle := range handles {
-			out[handle] = empty
-		}
-	}
-
-	handles := make(map[Handle]struct{})
-	getHandles(HandleTypeTransient, handles)
-	getHandles(HandleTypePersistent, handles)
-
-	for _, hc := range t.handles {
-		switch c := hc.(type) {
-		case *objectContext:
-			if _, exists := handles[c.Handle()]; exists {
-				continue
-			}
-		case *nvIndexContext:
-			if c.attrs()&AttrNVPlatformCreate > 0 {
-				continue
-			}
-		case *sessionContext:
-			continue
-		case *permanentContext:
-			switch c.Handle() {
-			case HandleOwner, HandleEndorsement, HandleLockout:
-				c.auth = nil
-			}
-			continue
-		}
-
-		t.evictHandleContext(hc)
 	}
 
 	if err != nil {

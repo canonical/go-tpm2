@@ -21,19 +21,10 @@ package tpm2
 // If called with startupType == StartupState, a *TPMError error with an error code of ErrorNVUninitialized will be returned if the
 // saved state cannot be recovered. In this case, the function must be called with startupType == StartupClear.
 //
-// A call to this will evict all HandleContext objects associated with this TPMContext, whether the actual command succeeds or not.
+// Subsequent use of HandleContext instances corresponding to entities that are evicted as a consequence of this function will no
+// longer work.
 func (t *TPMContext) Startup(startupType StartupType) error {
-	if err := t.RunCommand(CommandStartup, nil, Separator, startupType); err != nil {
-		return err
-	}
-	for _, hc := range t.handles {
-		switch hc.Handle().Type() {
-		case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypePersistent:
-			continue
-		}
-		t.evictHandleContext(hc)
-	}
-	return nil
+	return t.RunCommand(CommandStartup, nil, Separator, startupType)
 }
 
 // Shutdown executes the TPM2_Shutdown command with the specified StartupType, and is used to prepare the TPM for a power cycle.

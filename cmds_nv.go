@@ -111,7 +111,6 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 	rc := makeNVIndexContext(publicInfo.Index, name, public)
 	rc.auth = make([]byte, len(auth))
 	copy(rc.auth, auth)
-	t.addHandleContext(rc)
 
 	return rc, nil
 }
@@ -134,7 +133,7 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authC
 		return err
 	}
 
-	t.evictHandleContext(nvIndex)
+	nvIndex.(handleContextPrivate).invalidate()
 	return nil
 }
 
@@ -175,7 +174,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 		return err
 	}
 
-	t.evictHandleContext(nvIndex)
+	nvIndex.(handleContextPrivate).invalidate()
 	return nil
 }
 
@@ -486,24 +485,11 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 //
 // On successful completion, the AttrNVWriteLocked attribute will be set for all NV indexes that have the AttrNVGlobalLock attribute
 // set. If an index also has the AttrNVWriteDefine attribute set, this will permanently inhibit further writes unless AttrNVWritten
-// is clear.
+// is clear. ResourceContext instances associated with NV indices that are updated as a consequence of this function will no longer
+// be able to be used because the name will be incorrect.
 func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
-	if err := t.RunCommand(CommandNVGlobalWriteLock, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}); err != nil {
-		return err
-	}
-
-	for _, hc := range t.handles {
-		nvRc, isNV := hc.(*nvIndexContext)
-		if !isNV {
-			continue
-		}
-
-		if nvRc.attrs()&AttrNVGlobalLock > 0 {
-			nvRc.setAttr(AttrNVWriteLocked)
-		}
-	}
-	return nil
+	return t.RunCommand(CommandNVGlobalWriteLock, sessions,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
 }
 
 // NVReadRaw executes the TPM2_NV_Read command to read the contents of the NV index associated with nvIndex. The amount of data to read,

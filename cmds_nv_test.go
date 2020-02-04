@@ -33,7 +33,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			if nvContext.Handle() != HandleUnassigned {
 				t.Errorf("Context should be invalid after NVUndefineSpace")
 			}
-			_, err := tpm.GetOrCreateResourceContext(handle)
+			_, err := tpm.CreateResourceContextFromTPM(handle)
 			if err == nil {
 				t.Fatalf("NVUndefineSpace didn't execute properly")
 			}
@@ -830,13 +830,6 @@ func TestNVGlobalLock(t *testing.T) {
 					NVTypeOrdinary),
 				Size: 8,
 			},
-			{
-				Index:   Handle(0x0181ffff),
-				NameAlg: HashAlgorithmSHA256,
-				Attrs: MakeNVAttributes(AttrNVOwnerWrite|AttrNVGlobalLock|AttrNVOwnerRead,
-					NVTypeOrdinary),
-				Size: 8,
-			},
 		} {
 			rc, err := tpm.NVDefineSpace(owner, nil, &data, nil)
 			if err != nil {
@@ -851,7 +844,7 @@ func TestNVGlobalLock(t *testing.T) {
 		}
 
 		for _, rc := range rcs {
-			pub, name, err := tpm.NVReadPublic(rc)
+			pub, _, err := tpm.NVReadPublic(rc)
 			if err != nil {
 				t.Fatalf("NVReadPublic failed: %v", err)
 			}
@@ -860,9 +853,6 @@ func TestNVGlobalLock(t *testing.T) {
 				t.Errorf("NV index with TPMA_NV_GLOBALLOCK set wasn't write locked")
 			} else if pub.Attrs&AttrNVGlobalLock == 0 && pub.Attrs&AttrNVWriteLocked > 0 {
 				t.Errorf("NV index without TPMA_NV_GLOBALLOCK set was write locked")
-			}
-			if !bytes.Equal(name, rc.Name()) {
-				t.Errorf("Name of NV resource context should have been refreshed")
 			}
 		}
 	}

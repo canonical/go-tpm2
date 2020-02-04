@@ -196,7 +196,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, param *sessi
 	scData.IsExclusive = resp.SessionAttrs&attrAuditExclusive > 0
 
 	if resp.SessionAttrs&attrContinueSession == 0 {
-		tpm.evictHandleContext(param.session.Context)
+		param.session.Context.(handleContextPrivate).invalidate()
 	}
 
 	if scData.SessionType == SessionTypePolicy && scData.PolicyHMACType == policyHMACTypePassword {
@@ -291,7 +291,7 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in *s
 			default:
 				associatedContext := in.associatedContext
 				if associatedContext == nil {
-					associatedContext = makeUntrackedContext(HandleNull)
+					associatedContext = makeDummyContext(HandleNull)
 				}
 				bindName := computeBindName(associatedContext.Name(), associatedContext.(resourceContextPrivate).authValue())
 				in.includeAuthValue = !bytes.Equal(bindName, scData.BoundEntity)

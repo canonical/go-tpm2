@@ -56,7 +56,7 @@ In order to evict a persistent object:
  }
  tpm, _ := tpm2.NewTPMContext(tcti)
 
- context, err := tpm.GetOrCreateResourceContext(tpm2.Handle(0x81000001))
+ context, err := tpm.CreateResourceContextFromTPM(tpm2.Handle(0x81000001))
  if err != nil {
 	 return err
  }

@@ -27,6 +27,9 @@ func TestContextSave(t *testing.T) {
 		if context.Hierarchy != hierarchy {
 			t.Errorf("context specifies the wrong hierarchy (0x%08x)", context.Hierarchy)
 		}
+		if len(context.Blob) < 32 {
+			t.Errorf("context data blob length isn't plausible")
+		}
 	}
 
 	t.Run("TransientObject", func(t *testing.T) {
@@ -61,20 +64,14 @@ func TestContextSave(t *testing.T) {
 		}
 	})
 	t.Run("IncompleteSession", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
+		sc1, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		sessionHandle := sessionContext.Handle()
-		tpm.ForgetHandleContext(sessionContext)
+		defer flushContext(t, tpm, sc1)
 
-		sessionContext, err = tpm.GetOrCreateSessionContext(sessionHandle)
-		if err != nil {
-			t.Fatalf("GetOrCreateResourceContext failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-		_, err = tpm.ContextSave(sessionContext)
+		sc2 := CreateIncompleteSessionContext(sc1.Handle())
+		_, err = tpm.ContextSave(sc2)
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
@@ -130,17 +127,15 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 	})
 
-	runSessionTest := func(t *testing.T, forget bool, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg HashAlgorithmId) {
+	runSessionTest := func(t *testing.T, tpmKey, bind ResourceContext, sessionType SessionType, hashAlg HashAlgorithmId) {
 		sc, err := tpm.StartAuthSession(tpmKey, bind, sessionType, nil, hashAlg)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer verifyContextFlushed(t, tpm, sc)
+		defer flushContext(t, tpm, sc)
 
 		scData := sc.(TestSessionContext).GetScData()
 		var data struct {
-			handle         Handle
-			name           Name
 			isAudit        bool
 			isExclusive    bool
 			hashAlg        HashAlgorithmId
@@ -153,8 +148,6 @@ func TestContextSaveAndLoad(t *testing.T) {
 			nonceTPM       Nonce
 			symmetric      *SymDef
 		}
-		data.handle = sc.Handle()
-		data.name = sc.Name()
 		data.isAudit = scData.IsAudit
 		data.isExclusive = scData.IsExclusive
 		data.hashAlg = scData.HashAlg
@@ -171,26 +164,22 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ContextSave failed: %v", err)
 		}
-		if forget {
-			tpm.ForgetHandleContext(sc)
-		}
 		restored, err := tpm.ContextLoad(context)
 		if err != nil {
 			t.Fatalf("ContextLoad failed: %v", err)
 		}
-		defer flushContext(t, tpm, restored)
 
-		if !forget && restored != sc {
-			t.Errorf("Expected the same HandleContext back")
+		if restored == sc {
+			t.Errorf("Expected a different HandleContext back")
 		}
 
 		if _, ok := restored.(SessionContext); !ok {
 			t.Fatalf("ContextLoad returned the wrong type of HandleContext")
 		}
-		if restored.Handle() != data.handle {
+		if restored.Handle() != sc.Handle() {
 			t.Errorf("ContextLoad returned an invalid handle 0x%08x", restored.Handle())
 		}
-		if !bytes.Equal(restored.Name(), data.name) {
+		if !bytes.Equal(restored.Name(), sc.Name()) {
 			t.Errorf("ContextLoad returned a handle with the wrong name")
 		}
 		restoredData := restored.(TestSessionContext).GetScData()
@@ -247,23 +236,18 @@ func TestContextSaveAndLoad(t *testing.T) {
 	t.Run("Session1", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		runSessionTest(t, false, primary, tpm.OwnerHandleContext(), SessionTypeHMAC, HashAlgorithmSHA256)
+		runSessionTest(t, primary, tpm.OwnerHandleContext(), SessionTypeHMAC, HashAlgorithmSHA256)
 	})
 	t.Run("Session2", func(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
-		runSessionTest(t, false, nil, primary, SessionTypeHMAC, HashAlgorithmSHA1)
+		runSessionTest(t, nil, primary, SessionTypeHMAC, HashAlgorithmSHA1)
 	})
 	t.Run("Session3", func(t *testing.T) {
-		runSessionTest(t, false, nil, nil, SessionTypeHMAC, HashAlgorithmSHA256)
+		runSessionTest(t, nil, nil, SessionTypeHMAC, HashAlgorithmSHA256)
 	})
 	t.Run("Session4", func(t *testing.T) {
-		runSessionTest(t, false, nil, nil, SessionTypePolicy, HashAlgorithmSHA256)
-	})
-	t.Run("Session5", func(t *testing.T) {
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-		runSessionTest(t, true, primary, tpm.OwnerHandleContext(), SessionTypeHMAC, HashAlgorithmSHA256)
+		runSessionTest(t, nil, nil, SessionTypePolicy, HashAlgorithmSHA256)
 	})
 }
 
@@ -273,7 +257,7 @@ func TestEvictControl(t *testing.T) {
 
 	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession *Session) {
 		owner := tpm.OwnerHandleContext()
-		if handle, err := tpm.GetOrCreateResourceContext(persist); err == nil {
+		if handle, err := tpm.CreateResourceContextFromTPM(persist); err == nil {
 			_, err := tpm.EvictControl(owner, handle, persist, authAuthSession)
 			if err != nil {
 				t.Logf("EvictControl failed whilst trying to remove a handle at the start of the test: %v", err)
@@ -305,12 +289,12 @@ func TestEvictControl(t *testing.T) {
 			t.Errorf("EvictControl should set the persistent context's handle to %v", HandleUnassigned)
 		}
 
-		_, err = tpm.GetOrCreateResourceContext(persist)
+		_, err = tpm.CreateResourceContextFromTPM(persist)
 		if err == nil {
-			t.Fatalf("GetOrCreateResourceContext on an evicted resource should fail")
+			t.Fatalf("CreateResourceContextFromTPM on an evicted resource should fail")
 		}
 		if _, ok := err.(ResourceUnavailableError); !ok {
-			t.Errorf("GetOrCreateResourceContext returned an unexpected error: %v", err)
+			t.Errorf("CreateResourceContextFromTPM returned an unexpected error: %v", err)
 		}
 	}
 
@@ -371,11 +355,11 @@ func TestFlushContext(t *testing.T) {
 		t.Errorf("FlushContext should set the context's handle to %v", HandleUnassigned)
 	}
 
-	_, err = tpm.GetOrCreateResourceContext(h)
+	_, err = tpm.CreateResourceContextFromTPM(h)
 	if err == nil {
-		t.Fatalf("GetOrCreateResourceContext on a flushed resource should fail")
+		t.Fatalf("CreateResourceContextFromTPM on a flushed resource should fail")
 	}
 	if _, ok := err.(ResourceUnavailableError); !ok {
-		t.Fatalf("GetOrCreateResourceContext on a flushed resource should fail")
+		t.Fatalf("CreateResourceContextFromTPM returned an unexpected error: %v", err)
 	}
 }

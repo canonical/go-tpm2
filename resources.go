@@ -18,15 +18,11 @@ import (
 )
 
 // HandleContext corresponds to an entity that resides on the TPM. Implementations of HandleContext maintain some host-side
-// state in order to be able to participate in HMAC sessions and session-based parameter encryption. HandleContext instances are
-// tracked by the TPMContext that created them (when the corresponding TPM entity is created or loaded), and are invalidated when
-// the entity is flushed or evicted from the TPM. They may also be invalidated if the TPM indicates it has allocated an entity with
-// the same handle as an existing HandleContext - these stale HandleContext instances may occur when working with sessions or
-// persistent resources via a resource manager. Once invalidated, they can no longer be used.
+// state in order to be able to participate in HMAC sessions. They are invalidated when used in a command that results in the
+// entity being flushed or evicted from the TPM. Once invalidated, they can no longer be used.
 type HandleContext interface {
-	// Handle returns the handle of the corresponding entity on the TPM. If the HandleContext has been invalidated because the
-	// corresponding entity has been flushed from the TPM or the TPM indicated that this HandleContext is stale by allocating
-	// another entity with the same handle, this will return HandleUnassigned
+	// Handle returns the handle of the corresponding entity on the TPM. If the HandleContext has been invalidated then this will
+	// return HandleUnassigned.
 	Handle() Handle
 	Name() Name                        // The name of the entity
 	SerializeToBytes() []byte          // Return a byte slice containing the serialized form of this HandleContext
@@ -63,7 +59,7 @@ type resourceContextPrivate interface {
 type handleContextType uint8
 
 const (
-	handleContextTypeUntracked handleContextType = iota
+	handleContextTypeDummy handleContextType = iota
 	handleContextTypePermanent
 	handleContextTypeObject
 	handleContextTypeNvIndex
@@ -90,7 +86,7 @@ type handleContextDataU struct {
 
 func (d handleContextDataU) Select(selector reflect.Value) (reflect.Type, error) {
 	switch selector.Interface().(handleContextType) {
-	case handleContextTypeUntracked, handleContextTypePermanent:
+	case handleContextTypeDummy, handleContextTypePermanent:
 		return nil, nil
 	case handleContextTypeObject:
 		return reflect.TypeOf((*Public)(nil)), nil
@@ -230,40 +226,39 @@ func (d *handleContextData) checkConsistency() error {
 	return nil
 }
 
-type untrackedContext struct {
+type dummyContext struct {
 	d handleContextData
 }
 
-func (r *untrackedContext) Handle() Handle {
+func (r *dummyContext) Handle() Handle {
 	return r.d.Handle
 }
 
-func (r *untrackedContext) Name() Name {
+func (r *dummyContext) Name() Name {
 	return r.d.Name
 }
 
-func (r *untrackedContext) SerializeToBytes() []byte {
+func (r *dummyContext) SerializeToBytes() []byte {
 	return nil
 }
 
-func (r *untrackedContext) SerializeToWriter(io.Writer) error {
+func (r *dummyContext) SerializeToWriter(io.Writer) error {
 	return nil
 }
 
-func (r *untrackedContext) SetAuthValue([]byte) {
+func (r *dummyContext) SetAuthValue([]byte) {
 }
 
-func (r *untrackedContext) invalidate() {
-}
+func (r *dummyContext) invalidate() {}
 
-func (r *untrackedContext) data() *handleContextData {
+func (r *dummyContext) data() *handleContextData {
 	return &r.d
 }
 
-func makeUntrackedContext(handle Handle) *untrackedContext {
+func makeDummyContext(handle Handle) *dummyContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &untrackedContext{d: handleContextData{Type: handleContextTypeUntracked, Handle: handle, Name: name}}
+	return &dummyContext{d: handleContextData{Type: handleContextTypeDummy, Handle: handle, Name: name}}
 }
 
 type permanentContext struct {
@@ -291,11 +286,7 @@ func (r *permanentContext) SetAuthValue(value []byte) {
 	r.auth = value
 }
 
-func (r *permanentContext) invalidate() {
-	r.d.Handle = HandleUnassigned
-	r.d.Name = make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
-}
+func (r *permanentContext) invalidate() {}
 
 func (r *permanentContext) data() *handleContextData {
 	return &r.d
@@ -359,7 +350,7 @@ func makeObjectContext(handle Handle, name Name, public *Public) *objectContext 
 	return &objectContext{d: handleContextData{Type: handleContextTypeObject, Handle: handle, Name: name, Data: handleContextDataU{public}}}
 }
 
-func makeObjectContextFromTPM(t *TPMContext, context ResourceContext, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) makeObjectContextFromTPM(context ResourceContext, sessions ...*Session) (ResourceContext, error) {
 	pub, name, _, err := t.ReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -432,7 +423,7 @@ func makeNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexCont
 	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: handle, Name: name, Data: handleContextDataU{public}}}
 }
 
-func makeNVIndexContextFromTPM(t *TPMContext, context ResourceContext, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions ...*Session) (ResourceContext, error) {
 	pub, name, err := t.NVReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -509,183 +500,97 @@ func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext
 	return &sessionContext{d: handleContextData{Type: handleContextTypeSession, Handle: handle, Name: name, Data: handleContextDataU{data}}}
 }
 
-func makeIncompleteSessionContext(t *TPMContext, handle Handle) (SessionContext, error) {
-	hr := handle & 0x00ffffff
-	h, err := t.GetCapabilityHandles(hr|(Handle(HandleTypeLoadedSession)<<24), 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(h) > 0 && h[0] == handle {
-		return makeSessionContext(handle, nil), nil
-	}
-	h, err = t.GetCapabilityHandles(hr|(Handle(HandleTypeSavedSession)<<24), 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(h) > 0 && h[0]&0x00ffffff == hr {
-		return makeSessionContext(hr|(Handle(HandleTypeHMACSession)<<24), nil), nil
-	}
-	return nil, nil
-}
-
-func normalizeHandleForMap(handle Handle) Handle {
-	if handle.Type() != HandleTypePolicySession {
-		return handle
-	}
-	return (handle & 0x00ffffff) | (Handle(HandleTypeHMACSession) << 24)
-}
-
-func (t *TPMContext) evictHandleContext(hc HandleContext) {
-	if err := t.checkHandleContextParam(hc); err != nil {
-		panic(fmt.Sprintf("Attempting to evict an invalid resource context: %v", err))
-	}
-	delete(t.handles, normalizeHandleForMap(hc.Handle()))
-	hc.(handleContextPrivate).invalidate()
-}
-
-func (t *TPMContext) addHandleContext(hc HandleContext) {
-	if hc.Handle() == HandleUnassigned {
-		panic("Attempting to add a closed resource context")
-	}
-	handle := normalizeHandleForMap(hc.Handle())
-	if existing, exists := t.handles[handle]; exists && existing != hc {
-		t.evictHandleContext(existing)
-	}
-	t.handles[handle] = hc
-}
-
 func (t *TPMContext) checkHandleContextParam(hc HandleContext) error {
 	if hc == nil {
 		return errors.New("nil value")
 	}
-	if _, isUntracked := hc.(*untrackedContext); isUntracked {
-		return nil
-	}
 	if hc.Handle() == HandleUnassigned {
 		return errors.New("resource has been closed")
-	}
-	x, exists := t.handles[normalizeHandleForMap(hc.Handle())]
-	if !exists || x != hc {
-		return errors.New("resource belongs to another TPM context")
 	}
 	return nil
 }
 
-// GetOrCreateResourceContext creates and returns a new ResourceContext for the specified handle, or returns the existing one if the
-// TPMContext already has a reference to one. TPMContext will maintain a reference to the returned ResourceContext until it is flushed
-// or evicted from the TPM or if the TPM indicates that it has created a new resource with the same handle - these stale
-// ResourceContext instances may occur when working with persistent resources via a resource manager.
-//
-// If a new ResourceContext has to be created and the handle references a NV index or an object, it will execute a command to read the
-// public area from the TPM in order to initialize state that is maintained on the host side. It will return a ResourceUnavailableError
-// error if the specified handle references a NV index or object that is currently unavailable. If this function is called without any
+// CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle. It will execute a command to read
+// the public area from the TPM in order to initialize state that is maintained on the host side. A ResourceUnavailableError error
+// will be returned if the specified handle references a resource that is currently unavailable. If this function is called without any
 // sessions, it does not benefit from any integrity protections other than a consistency cross-check that is performed on the returned
 // data to make sure that the name and public area match. Applications should consider the implications of this during subsequent use
 // of the ResourceContext. If any sessions are passed then the pubic area is read back from the TPM twice - the session is used only
 // on the second read once the name is known. This second read provides an assurance that an entity with the name of the returned
 // ResourceContext actually lives on the TPM.
 //
-// It always succeeds if the specified handle references a permanent resource.
-//
-// This function will panic if handle doesn't correspond to a PCR handle, permanent handle, NV index, transient object or persistent
-// object.
+// This function will panic if handle doesn't correspond to a NV index, transient object or persistent object.
 //
 // If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
 // this should be provided by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) GetOrCreateResourceContext(handle Handle, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...*Session) (ResourceContext, error) {
 	switch handle.Type() {
-	case HandleTypePCR, HandleTypePermanent:
-		return t.GetOrCreatePermanentContext(handle), nil
 	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
-		if rc, exists := t.handles[normalizeHandleForMap(handle)]; exists {
-			return rc.(ResourceContext), nil
-		}
-
-		var rc ResourceContext = makeUntrackedContext(handle)
-		var s []*Session
-		for i := 0; i < 2; i++ {
-			var err error
-			if handle.Type() == HandleTypeNVIndex {
-				rc, err = makeNVIndexContextFromTPM(t, rc, s...)
-			} else {
-				rc, err = makeObjectContextFromTPM(t, rc, s...)
-			}
-
-			if err != nil {
-				switch e := err.(type) {
-				case *TPMWarning:
-					if e.Code == WarningReferenceH0 {
-						return nil, ResourceUnavailableError{handle}
-					}
-				case *TPMHandleError:
-					if e.Code() == ErrorHandle {
-						return nil, ResourceUnavailableError{handle}
-					}
-				}
-				return nil, err
-			}
-			t.addHandleContext(rc)
-
-			if len(sessions) == 0 {
-				break
-			}
-			s = sessions
-		}
-
-		return rc, nil
 	default:
 		panic("invalid handle type")
 	}
-}
 
-// GetOrCreateSessionContext creates and returns a new SessionContext for the specified handle, or returns the existing one if the
-// TPMContext already has a reference to one. TPMContext will maintain a reference to the returned SessionContext until it is flushed
-// from the TPM or if the TPM indicates that it has created a new session with the same handle - these stale SessionContext instances
-// may occur when working with sessions via a resource manager.
-//
-// If a new SessionContext has to be created, this command will execute some commands to determine if the session exists on the TPM,
-// either as a saved or loaded session. If the session is saved then the returned SessionContext will return a Handle with a HandleType
-// of HandleTypeHMACSession regardless of the HandleType of the supplied handle. Regardless of whether the session is saved or loaded,
-// the returned SessionContext will not be complete and the session associated with it cannot be used in any command other than
-// TPMContext.FlushContext. It will return a ResourceUnavailableError error if no session with the specified handle exists.
-//
-// This function will panic if handle doesn't correspond to a session.
-func (t *TPMContext) GetOrCreateSessionContext(handle Handle) (SessionContext, error) {
-	switch handle.Type() {
-	case HandleTypeHMACSession, HandleTypePolicySession:
-		if rc, exists := t.handles[normalizeHandleForMap(handle)]; exists {
-			return rc.(SessionContext), nil
+	var rc ResourceContext = makeDummyContext(handle)
+	var s []*Session
+	for i := 0; i < 2; i++ {
+		var err error
+		if handle.Type() == HandleTypeNVIndex {
+			rc, err = t.makeNVIndexContextFromTPM(rc, s...)
+		} else {
+			rc, err = t.makeObjectContextFromTPM(rc, s...)
 		}
-		rc, err := makeIncompleteSessionContext(t, handle)
+
 		if err != nil {
+			switch e := err.(type) {
+			case *TPMWarning:
+				if e.Code == WarningReferenceH0 {
+					return nil, ResourceUnavailableError{handle}
+				}
+			case *TPMHandleError:
+				if e.Code() == ErrorHandle {
+					return nil, ResourceUnavailableError{handle}
+				}
+			}
 			return nil, err
 		}
-		if rc == nil {
-			return nil, ResourceUnavailableError{handle}
+
+		if len(sessions) == 0 {
+			break
 		}
-		t.addHandleContext(rc)
-		return rc, nil
+		s = sessions
+	}
+
+	return rc, nil
+}
+
+// CreateIncompleteSessionContext creates and returns a new SessionContext for the specified handle. The returned SessionContext will
+// not be complete and the session associated with it cannot be used in any command other than TPMContext.FlushContext.
+//
+// This function will panic if handle doesn't correspond to a session.
+func CreateIncompleteSessionContext(handle Handle) SessionContext {
+	switch handle.Type() {
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		return makeSessionContext(handle, nil)
 	default:
 		panic("invalid handle type")
 	}
 }
 
-// GetOrCreatePermanentContext creates and returns a new ResourceContext for the specified permanent handle or PCR handle, or returns
-// the existing one if the TPMContext already has a reference to one.
+// GetPermanentContext returns a ResourceContext for the specified permanent handle or PCR handle.
 //
 // This function will panic if handle does not correspond to a permanent or PCR handle.
 //
 // If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
 // this should be provided by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) GetOrCreatePermanentContext(handle Handle) ResourceContext {
+func (t *TPMContext) GetPermanentContext(handle Handle) ResourceContext {
 	switch handle.Type() {
 	case HandleTypePermanent, HandleTypePCR:
-		if rc, exists := t.handles[normalizeHandleForMap(handle)]; exists {
-			return rc.(ResourceContext)
+		if rc, exists := t.permanentResources[handle]; exists {
+			return rc
 		}
 
 		rc := makePermanentContext(handle)
-		t.addHandleContext(rc)
+		t.permanentResources[handle] = rc
 		return rc
 	default:
 		panic("invalid handle type")
@@ -694,32 +599,32 @@ func (t *TPMContext) GetOrCreatePermanentContext(handle Handle) ResourceContext 
 
 // OwnerHandleContext returns the ResouceContext corresponding to the owner hiearchy.
 func (t *TPMContext) OwnerHandleContext() ResourceContext {
-	return t.GetOrCreatePermanentContext(HandleOwner)
+	return t.GetPermanentContext(HandleOwner)
 }
 
 // NulHandleContext returns the ResourceContext corresponding to the null hiearchy.
 func (t *TPMContext) NullHandleContext() ResourceContext {
-	return t.GetOrCreatePermanentContext(HandleNull)
+	return t.GetPermanentContext(HandleNull)
 }
 
 // LockoutHandleContext returns the ResourceContext corresponding to the lockout hiearchy.
 func (t *TPMContext) LockoutHandleContext() ResourceContext {
-	return t.GetOrCreatePermanentContext(HandleLockout)
+	return t.GetPermanentContext(HandleLockout)
 }
 
 // EndorsementHandleContext returns the ResourceContext corresponding to the endorsement hiearchy.
 func (t *TPMContext) EndorsementHandleContext() ResourceContext {
-	return t.GetOrCreatePermanentContext(HandleEndorsement)
+	return t.GetPermanentContext(HandleEndorsement)
 }
 
 // PlatformHandleContext returns the ResourceContext corresponding to the platform hiearchy.
 func (t *TPMContext) PlatformHandleContext() ResourceContext {
-	return t.GetOrCreatePermanentContext(HandlePlatform)
+	return t.GetPermanentContext(HandlePlatform)
 }
 
 // PlatformNVHandleContext returns the ResourceContext corresponding to the platform hiearchy.
 func (t *TPMContext) PlatformNVHandleContext() ResourceContext {
-	return t.GetOrCreatePermanentContext(HandlePlatformNV)
+	return t.GetPermanentContext(HandlePlatformNV)
 }
 
 // PCRHandleContext returns the ResourceContext corresponding to the PCR at the specified index. It will panic if pcr is not a valid
@@ -729,15 +634,11 @@ func (t *TPMContext) PCRHandleContext(pcr int) ResourceContext {
 	if h.Type() != HandleTypePCR {
 		panic("invalid PCR index")
 	}
-	return t.GetOrCreatePermanentContext(h)
+	return t.GetPermanentContext(h)
 }
 
 // CreateHandleContextFromReader returns a new HandleContext created from the serialized data read from the supplied io.Reader. This
-// will contain data that was previously created by HandleContext.SerializeToBytes or HandleContext.SerializeToWriter. TPMContext will
-// maintain a reference to the returned HandleContext until it is flushed or evicted from the TPM or if the TPM indicates that it has
-// created a new entity with the same handle - these stale HandleContext instances may occur when working with persistent resources or
-// sessions via a resource manager. If the TPMContext contains a reference to another HandleContext with the same handle, then that
-// HandleContext will become invalid.
+// should contain data that was previously created by HandleContext.SerializeToBytes or HandleContext.SerializeToWriter.
 //
 // If the supplied data corresponds to a session then a SessionContext will be returned, else a ResourceContext will be returned.
 //
@@ -769,14 +670,16 @@ func (t *TPMContext) CreateHandleContextFromReader(r io.Reader) (HandleContext, 
 		return nil, errors.New("context blob contains trailing bytes")
 	}
 
+	if data.Type == handleContextTypePermanent {
+		return nil, errors.New("cannot create a permanent context from serialized data")
+	}
+
 	if err := data.checkConsistency(); err != nil {
 		return nil, err
 	}
 
 	var hc HandleContext
 	switch data.Type {
-	case handleContextTypePermanent:
-		hc = &permanentContext{d: *data}
 	case handleContextTypeObject:
 		hc = &objectContext{d: *data}
 	case handleContextTypeNvIndex:
@@ -784,19 +687,14 @@ func (t *TPMContext) CreateHandleContextFromReader(r io.Reader) (HandleContext, 
 	case handleContextTypeSession:
 		hc = &sessionContext{d: *data}
 	default:
-		panic("huh?")
+		panic("not reached")
 	}
 
-	t.addHandleContext(hc)
 	return hc, nil
 }
 
 // CreateHandleContextFromBytes returns a new HandleContext created from the serialized data read from the supplied byte slice. This
-// will contain data that was previously created by HandleContext.SerializeToBytes or HandleContext.SerializeToWriter. TPMContext will
-// maintain a reference to the returned HandleContext until it is flushed or evicted from the TPM or if the TPM indicates that it has
-// created a new entity with the same handle - these stale HandleContext instances may occur when working with persistent resources or
-// sessions via a resource manager. If the TPMContext contains a reference to another HandleContext with the same handle, then that
-// HandleContext will become invalid.
+// should contain data that was previously created by HandleContext.SerializeToBytes or HandleContext.SerializeToWriter.
 //
 // If the supplied data corresponds to a session then a SessionContext will be returned, else a ResourceContext will be returned.
 //
@@ -809,20 +707,4 @@ func (t *TPMContext) CreateHandleContextFromBytes(b []byte) (HandleContext, int,
 		return nil, 0, err
 	}
 	return rc, len(b) - buf.Len(), nil
-}
-
-// ForgetHandleContext tells the TPMContext to drop its reference to the specified HandleContext without flushing the corresponding
-// resources from the TPM.
-//
-// An error will be returned if the specified context has been invalidated, or if it is being tracked by another TPMContext instance.
-//
-// On succesful completion, the specified HandleContext will be invalidated and can no longer be used. APIs that return a
-// HandleContext for the corresponding TPM resource in the future will return a newly created HandleContext.
-func (t *TPMContext) ForgetHandleContext(context HandleContext) error {
-	if err := t.checkHandleContextParam(context); err != nil {
-		return makeInvalidParamError("context", fmt.Sprintf("%v", err))
-	}
-
-	t.evictHandleContext(context)
-	return nil
 }

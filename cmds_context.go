@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"crypto"
 	_ "crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 )
@@ -43,7 +42,7 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 //
 // If saveContext corresponds to a session, then TPM2_ContextSave also removes resources associated with the session from the TPM
 // (it becomes a saved session rather than a loaded session). In this case, saveContext is marked as not loaded and can only be used
-// as an argument to TPMContext.FlushContext until it is loaded again via TPMContext.ContextLoad.
+// as an argument to TPMContext.FlushContext.
 //
 // If saveContext corresponds to a session and no more contexts can be saved, a *TPMError error will be returned with an error code
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
@@ -100,9 +99,8 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 // WarningSessionMemory or WarningObjectMemory will be returned.
 //
 // On successful completion, it returns a HandleContext which corresponds to the resource loaded in to the TPM. If the context
-// corresponds to an object, this will always be a new ResourceContext. If context corresponds to a session, then the returned
-// SessionContext will be newly created unless there is still an active SessionContext for that saved session, in which case the
-// existing SessionContext will be marked as loaded and returned instead.
+// corresponds to an object, this will be a new ResourceContext. If context corresponds to a session, then this will be a new
+// SessionContext.
 func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 	if context == nil {
 		return nil, makeInvalidParamError("context", "nil value")
@@ -154,35 +152,27 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		return nil, err
 	}
 
-	var hc HandleContext
-
 	switch hcData.Type {
 	case handleContextTypeObject:
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", loadedHandle)}
 		}
-		hc = makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Data.(*Public))
+		return makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Data.(*Public)), nil
 	case handleContextTypeSession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}
 		}
-		if c, exists := t.handles[normalizeHandleForMap(loadedHandle)]; exists {
-			hc = c
-			d := hc.(handleContextPrivate).data()
-			d.Handle = loadedHandle
-			d.Name = make(Name, binary.Size(Handle(0)))
-			binary.BigEndian.PutUint32(d.Name, uint32(loadedHandle))
-		} else {
-			hc = makeSessionContext(loadedHandle, nil)
+		sc := makeSessionContext(loadedHandle, hcData.Data.Data.(*sessionContextData))
+		isExclusive := t.exclusiveSession != nil && loadedHandle == t.exclusiveSession.Handle()
+		sc.scData().IsExclusive = isExclusive
+		if isExclusive {
+			t.exclusiveSession.(*sessionContext).scData().IsExclusive = false
+			t.exclusiveSession = sc
 		}
-		scData := hcData.Data.Data.(*sessionContextData)
-		scData.IsExclusive = scData.IsExclusive && hc == t.exclusiveSession
-		hc.(handleContextPrivate).data().Data.Data = scData
+		return sc, nil
+	default:
+		panic("not reached")
 	}
-
-	t.addHandleContext(hc)
-
-	return hc, nil
 }
 
 // FlushContext executes the TPM2_FlushContext command on the handle referenced by flushContext, in order to flush resources
@@ -202,7 +192,7 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 		return err
 	}
 
-	t.evictHandleContext(flushContext)
+	flushContext.(handleContextPrivate).invalidate()
 	return nil
 }
 
@@ -241,14 +231,11 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	}
 
 	if object.Handle() == persistentHandle {
-		t.evictHandleContext(object)
+		object.(handleContextPrivate).invalidate()
 		return nil, nil
 	}
 
 	public := &Public{}
 	object.(*objectContext).public().copyTo(public)
-	objectContext := makeObjectContext(persistentHandle, object.Name(), public)
-	t.addHandleContext(objectContext)
-
-	return objectContext, nil
+	return makeObjectContext(persistentHandle, object.Name(), public), nil
 }

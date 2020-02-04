@@ -5,6 +5,7 @@
 package tpm2_test
 
 import (
+	"bytes"
 	"testing"
 
 	. "github.com/chrisccoulson/go-tpm2"
@@ -256,136 +257,53 @@ func TestClear(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, authSession *Session) {
-		var persistentObjects []HandleContext // Objects that persist across Clear
-		var transientObjects []HandleContext  // Objects that are evicted by Clar
+		cleared := false
 
-		// Create a context for a permanent resource (should persist across Clear)
 		owner := tpm.OwnerHandleContext()
-		persistentObjects = append(persistentObjects, owner)
 
-		// Create platform primary key (should persist across Clear)
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				&RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-		platform := tpm.PlatformHandleContext()
-		platformPrimary, _, _, _, _, err := tpm.CreatePrimary(platform, nil, &template, nil, nil,
-			nil)
-		if err != nil {
-			t.Fatalf("CreatePrimary failed: %v", err)
-		}
-		defer flushContext(t, tpm, platformPrimary)
-		persistentObjects = append(persistentObjects, platformPrimary)
-
-		// Create storage primary key (should be evicted by Clear)
-		ownerPrimary := createRSASrkForTesting(t, tpm, nil)
-		defer verifyContextFlushed(t, tpm, ownerPrimary)
-		transientObjects = append(transientObjects, ownerPrimary)
-
-		// Persist storage primary key (should be evicted by Clear)
-		ownerPrimaryPersist := persistObjectForTesting(t, tpm, owner, ownerPrimary, Handle(0x8100ffff))
-		defer verifyPersistentObjectEvicted(t, tpm, owner, ownerPrimaryPersist)
-		transientObjects = append(transientObjects, ownerPrimaryPersist)
-
-		// Persist platform primary key (should persist across Clear)
-		platformPrimaryPersist := persistObjectForTesting(t, tpm, platform, platformPrimary, Handle(0x8180ffff))
-		defer evictPersistentObject(t, tpm, platform, platformPrimaryPersist)
-		persistentObjects = append(persistentObjects, platformPrimaryPersist)
+		// Create storage primary key to test it gets evicted
+		primary := createRSASrkForTesting(t, tpm, nil)
+		// Persist storage primary key to test it gets evicted
+		primaryPersistHandle := Handle(0x8100ffff)
+		primaryPersist := persistObjectForTesting(t, tpm, owner, primary, primaryPersistHandle)
+		defer func() {
+			if cleared {
+				return
+			}
+			flushContext(t, tpm, primary)
+			evictPersistentObject(t, tpm, owner, primaryPersist)
+		}()
 
 		// Set endorsement hierarchy auth value (should be reset by Clear)
 		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
 
-		// Create a session (should persist across Clear)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-		persistentObjects = append(persistentObjects, sessionContext)
+		// Set platform hierarchy auth value (shouldn't be reset by Clear)
+		setHierarchyAuthForTest(t, tpm, tpm.PlatformHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.PlatformHandleContext())
 
-		// Define an NV index in the owner hierarchy (should be undefined by Clear)
-		nvPub1 := NVPublic{
-			Index:   0x0181ffff,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
-			Size:    8}
-		nv1, err := tpm.NVDefineSpace(owner, nil, &nvPub1, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		defer verifyNVSpaceUndefined(t, tpm, nv1, owner, nil)
-		transientObjects = append(transientObjects, nv1)
-
-		// Define an NV index in the platform hierarchy (should persist across Clear)
-		nvPub2 := NVPublic{
-			Index:   0x0141ffff,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead|AttrNVPlatformCreate, NVTypeOrdinary),
-			Size:    8}
-		nv2, err := tpm.NVDefineSpace(platform, nil, &nvPub2, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		defer undefineNVSpace(t, tpm, nv2, platform, nil)
-		persistentObjects = append(persistentObjects, nv2)
-
-		var transientHandles []Handle
-		for _, rc := range transientObjects {
-			transientHandles = append(transientHandles, rc.Handle())
-		}
+		primaryHandle := primary.Handle()
 
 		// Perform the clear
 		if err := tpm.Clear(tpm.LockoutHandleContext(), authSession); err != nil {
 			t.Fatalf("Clear failed: %v", err)
 		}
 
-		// Verify that handles that should have been flushed have been
-		for _, h := range transientHandles {
-			handles, err := tpm.GetCapabilityHandles(h, 1)
-			if err != nil {
-				t.Fatalf("GetCapability failed: %v", err)
-			}
-			if len(handles) > 0 && handles[0] == h {
-				t.Errorf("Unexpected behaviour: Handle 0x%08x should have been flushed", h)
-			}
+		cleared = true
+
+		// Verify that the objects we created have gone so we know that the command executed
+		if _, err := tpm.CreateResourceContextFromTPM(primaryHandle); err == nil {
+			t.Errorf("Clear didn't evict owner object")
+		}
+		if _, err := tpm.CreateResourceContextFromTPM(primaryPersistHandle); err == nil {
+			t.Errorf("Clear didn't evict owner object")
 		}
 
-		// Verify that contexts for objects that should have persisted haven't been invalidated,
-		// and check that they weren't flushed from the TPM against our expectation
-		for _, rc := range persistentObjects {
-			if rc.Handle() == HandleNull {
-				t.Fatalf("Object was evicted when it shouldn't have been")
-			}
-			handle := rc.Handle()
-			if rc.Handle().Type() == HandleTypePolicySession {
-				handle = handle&Handle(0xffffff) | HandleTypeLoadedSession.BaseHandle()
-			}
-			handles, err := tpm.GetCapabilityHandles(handle, 1)
-			if err != nil {
-				t.Fatalf("GetCapability failed: %v", err)
-			}
-			if len(handles) < 1 || handles[0] != rc.Handle() {
-				t.Errorf("Handle 0x%08x was flushed unexpectedly", rc.Handle())
-			}
+		if tpm.EndorsementHandleContext().(TestResourceContext).GetAuthValue() != nil {
+			t.Errorf("Clear didn't reset the authorization value for the EH ResourceContext")
 		}
-
-		// Check that the endorsement hierarchy auth has been reset
-		props, err := tpm.GetCapabilityTPMProperties(PropertyPermanent, 1)
-		if err != nil {
-			t.Fatalf("GetCapability failed: %v", err)
-		}
-		if PermanentAttributes(props[0].Value)&AttrEndorsementAuthSet > 0 {
-			t.Errorf("Clear did not clear the EH auth")
+		if !bytes.Equal(tpm.PlatformHandleContext().(TestResourceContext).GetAuthValue(), testAuth) {
+			t.Errorf("Clear reset the authorization value for the PH ResourceContext")
 		}
 	}
 

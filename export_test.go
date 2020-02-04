@@ -4,6 +4,14 @@
 
 package tpm2
 
+func (r *permanentContext) GetAuthValue() []byte {
+	return r.auth
+}
+
+type TestResourceContext interface {
+	GetAuthValue() []byte
+}
+
 func (r *objectContext) GetPublic() *Public {
 	return r.d.Data.Data.(*Public)
 }

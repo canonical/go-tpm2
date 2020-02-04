@@ -128,7 +128,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", sessionHandle)}
 	}
 
-	rc := makeSessionContext(sessionHandle, &sessionContextData{
+	data := &sessionContextData{
 		HashAlg:        authHash,
 		SessionType:    sessionType,
 		PolicyHMACType: policyHMACTypeNoAuth,
@@ -136,18 +136,17 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		BoundEntity:    boundEntity,
 		NonceCaller:    Nonce(nonceCaller),
 		NonceTPM:       nonceTPM,
-		Symmetric:      symmetric})
+		Symmetric:      symmetric}
 
 	if tpmKeyHandle != HandleNull || bindHandle != HandleNull {
 		key := make([]byte, len(authValue)+len(salt))
 		copy(key, authValue)
 		copy(key[len(authValue):], salt)
 
-		rc.scData().SessionKey = cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8, nil, false)
+		data.SessionKey = cryptKDFa(authHash, key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8, nil, false)
 	}
 
-	t.addHandleContext(rc)
-	return rc, nil
+	return makeSessionContext(sessionHandle, data), nil
 }
 
 // PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to reset the policy

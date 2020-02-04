@@ -151,10 +151,6 @@ type ResourceContextWithSession struct {
 // TPMContext is the main entry point by which commands are executed on a TPM device using this package. It communicates with the
 // underlying device via a transmission interface, which is an implementation of io.ReadWriteCloser provided to NewTPMContext.
 //
-// TPMContext maintains some host-side state of TPM entities that are loaded and created by this API, in the form of HandleContext
-// objects that correspond to a TPM entity. There are 2 main types of HandleContext - SessionContext for sessions, and ResourceContext
-// for non-session entities (such as NV indices, objects or permanent handles).
-//
 // Methods that execute commands on the TPM will return errors where the TPM responds with them. These are in the form of *TPMError,
 // *TPMWarning, *TPMHandleError, *TPMSessionError, *TPMParameterError and *TPMVendorError types.
 //
@@ -162,19 +158,15 @@ type ResourceContextWithSession struct {
 // for a corresponding TPM resource. These sessions may be used for the purposes of session based parameter encryption or command
 // auditing.
 type TPMContext struct {
-	tcti             io.ReadWriteCloser
-	handles          map[Handle]HandleContext
-	maxSubmissions   uint
-	maxNVBufferSize  uint16
-	exclusiveSession HandleContext
+	tcti               io.ReadWriteCloser
+	permanentResources map[Handle]*permanentContext
+	maxSubmissions     uint
+	maxNVBufferSize    uint16
+	exclusiveSession   HandleContext
 }
 
-// Close invalidates all HandleContext instances tracked by this TPMContext and then calls Close on the transmission interface.
+// Close calls Close on the transmission interface.
 func (t *TPMContext) Close() error {
-	for _, hc := range t.handles {
-		t.evictHandleContext(hc)
-	}
-
 	if err := t.tcti.Close(); err != nil {
 		return &TctiError{"close", err}
 	}
@@ -248,7 +240,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			handleNames = append(handleNames, r.Name())
 		case nil:
 			handles = append(handles, HandleNull)
-			handleNames = append(handleNames, makeUntrackedContext(HandleNull).Name())
+			handleNames = append(handleNames, makeDummyContext(HandleNull).Name())
 		default:
 			return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)",
 				commandCode, i, reflect.TypeOf(resource))
@@ -408,8 +400,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 // Command handles are provided as HandleContext types if they do not require an authorization. For command handles that require an
 // authorization, they are provided using the ResourceContextWithSession type. This links the ResourceContext to an optional
 // authorization session. If the authorization value of the TPM entity is required as part of the authorization, this will be obtained
-// from the supplied ResourceContext. If a HandleContext is not tracked by this TPMContext, then this function will return an error.
-// A nil value will automatically be converted to a handle with the value of HandleNull.
+// from the supplied ResourceContext. A nil HandleContext will automatically be converted to a handle with the value of HandleNull.
 //
 // Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
 //
@@ -485,7 +476,7 @@ func (t *TPMContext) SetMaxSubmissions(max uint) {
 func newTpmContext(tcti io.ReadWriteCloser) *TPMContext {
 	r := new(TPMContext)
 	r.tcti = tcti
-	r.handles = make(map[Handle]HandleContext)
+	r.permanentResources = make(map[Handle]*permanentContext)
 	r.maxSubmissions = 5
 
 	return r
