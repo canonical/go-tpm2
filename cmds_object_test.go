@@ -46,7 +46,7 @@ func TestCreate(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -68,7 +68,7 @@ func TestCreate(t *testing.T) {
 			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&ECCParams{
+				Data: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    ECCScheme{Scheme: ECCSchemeNull},
 					CurveID:   ECCCurveNIST_P256,
@@ -90,11 +90,11 @@ func TestCreate(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -121,7 +121,7 @@ func TestCreate(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -141,7 +141,7 @@ func TestCreate(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -160,7 +160,7 @@ func TestCreate(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -189,7 +189,7 @@ func TestLoad(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -256,7 +256,7 @@ func TestReadPublic(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 		Params: PublicParamsU{
-			&RSAParams{
+			Data: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
@@ -295,8 +295,8 @@ func TestReadPublic(t *testing.T) {
 	t.Run("ResponseEncrypt", func(t *testing.T) {
 		symmetric := SymDef{
 			Algorithm: SymAlgorithmAES,
-			KeyBits:   SymKeyBitsU{uint16(128)},
-			Mode:      SymModeU{SymModeCFB}}
+			KeyBits:   SymKeyBitsU{Data: uint16(128)},
+			Mode:      SymModeU{Data: SymModeCFB}}
 		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &symmetric, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -339,18 +339,18 @@ func TestLoadExternal(t *testing.T) {
 		}
 		sensitive := Sensitive{
 			Type:      ObjectTypeRSA,
-			Sensitive: SensitiveCompositeU{PrivateKeyRSA(key.Primes[0].Bytes())}}
+			Sensitive: SensitiveCompositeU{Data: PrivateKeyRSA(key.Primes[0].Bytes())}}
 		public := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+			Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
@@ -362,18 +362,18 @@ func TestLoadExternal(t *testing.T) {
 		}
 		sensitive := Sensitive{
 			Type:      ObjectTypeECC,
-			Sensitive: SensitiveCompositeU{ECCParameter(priv)}}
+			Sensitive: SensitiveCompositeU{Data: ECCParameter(priv)}}
 		public := Public{
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&ECCParams{
+				Data: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    ECCScheme{Scheme: ECCSchemeNull},
 					CurveID:   ECCCurveNIST_P256,
 					KDF:       KDFScheme{Scheme: KDFAlgorithmNull}}},
-			Unique: PublicIDU{&ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
+			Unique: PublicIDU{Data: &ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
@@ -392,18 +392,18 @@ func TestLoadExternal(t *testing.T) {
 		sensitive := Sensitive{
 			Type:      ObjectTypeKeyedHash,
 			SeedValue: seed,
-			Sensitive: SensitiveCompositeU{key}}
+			Sensitive: SensitiveCompositeU{Data: key}}
 		public := Public{
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 			Params: PublicParamsU{
-				&KeyedHashParams{
+				Data: &KeyedHashParams{
 					Scheme: KeyedHashScheme{
 						Scheme: KeyedHashSchemeHMAC,
 						Details: SchemeKeyedHashU{
-							&SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}},
-			Unique: PublicIDU{unique}}
+							Data: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}},
+			Unique: PublicIDU{Data: unique}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
@@ -419,12 +419,12 @@ func TestLoadExternal(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+			Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
 
 		run(t, nil, &public, HandleOwner)
 	})
@@ -445,7 +445,7 @@ func TestUnseal(t *testing.T) {
 			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent | extraAttrs,
 			AuthPolicy: authPolicy,
-			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
 		sensitive := SensitiveCreate{Data: secret, UserAuth: authValue}
 
@@ -520,7 +520,7 @@ func TestObjectChangeAuth(t *testing.T) {
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
-			Params:  PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:  PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 		if err != nil {

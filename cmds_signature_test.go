@@ -226,12 +226,12 @@ func TestVerifySignature(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+			Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
 
 		context, err := tpm.LoadExternal(nil, &public, HandleOwner)
 		if err != nil {

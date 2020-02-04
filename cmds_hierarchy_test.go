@@ -42,11 +42,11 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -65,11 +65,11 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&ECCParams{
+				Data: &ECCParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 					CurveID: ECCCurveNIST_P256,
 					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
@@ -92,11 +92,11 @@ func TestCreatePrimary(t *testing.T) {
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -113,11 +113,11 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -134,7 +134,7 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -155,11 +155,11 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -186,11 +186,11 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -206,11 +206,11 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -230,11 +230,11 @@ func TestCreatePrimary(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -362,11 +362,11 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -384,11 +384,11 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
 			Params: PublicParamsU{
-				&RSAParams{
+				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{uint16(128)},
-						Mode:      SymModeU{SymModeCFB}},
+						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}

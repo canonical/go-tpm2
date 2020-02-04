@@ -26,14 +26,14 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   SymKeyBitsU{uint16(128)},
-				Mode:      SymModeU{SymModeCFB}},
+				KeyBits:   SymKeyBitsU{Data: uint16(128)},
+				Mode:      SymModeU{Data: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   SymKeyBitsU{HashAlgorithmSHA256}},
+				KeyBits:   SymKeyBitsU{Data: HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 							NameAlg: HashAlgorithmSHA256,
 							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 							Params: PublicParamsU{
-								&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+								Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 						session := Session{Context: sessionContext, Attrs: AttrContinueSession | data2.attrs}
@@ -154,14 +154,14 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   SymKeyBitsU{uint16(128)},
-				Mode:      SymModeU{SymModeCFB}},
+				KeyBits:   SymKeyBitsU{Data: uint16(128)},
+				Mode:      SymModeU{Data: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   SymKeyBitsU{HashAlgorithmSHA256}},
+				KeyBits:   SymKeyBitsU{Data: HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -197,7 +197,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 						NameAlg: HashAlgorithmSHA256,
 						Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 						Params: PublicParamsU{
-							&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+							Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 					sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 					outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, &session)
@@ -249,14 +249,14 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   SymKeyBitsU{uint16(128)},
-				Mode:      SymModeU{SymModeCFB}},
+				KeyBits:   SymKeyBitsU{Data: uint16(128)},
+				Mode:      SymModeU{Data: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   SymKeyBitsU{HashAlgorithmSHA256}},
+				KeyBits:   SymKeyBitsU{Data: HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -297,7 +297,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 							NameAlg: HashAlgorithmSHA256,
 							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
 							Params: PublicParamsU{
-								&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+								Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 						session1 := Session{Context: sessionContext1, Attrs: AttrContinueSession | data2.attrs1}

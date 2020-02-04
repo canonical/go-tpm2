@@ -31,12 +31,12 @@ func TestPolicySigned(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 		Params: PublicParamsU{
-			&RSAParams{
+			Data: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
 	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -233,7 +233,7 @@ func TestPolicySecret(t *testing.T) {
 			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: trial.GetDigest(),
-			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
@@ -271,7 +271,7 @@ func TestPolicySecret(t *testing.T) {
 			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: trial.GetDigest(),
-			Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive1 := SensitiveCreate{Data: secret1}
 		sensitive2 := SensitiveCreate{Data: secret2}
 
@@ -825,12 +825,12 @@ func TestPolicyAuthorize(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
 		Params: PublicParamsU{
-			&RSAParams{
+			Data: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
 	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -938,7 +938,7 @@ func TestPolicyAuthValue(t *testing.T) {
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+		Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
@@ -1019,7 +1019,7 @@ func TestPolicyPassword(t *testing.T) {
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params:     PublicParamsU{&KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+		Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {

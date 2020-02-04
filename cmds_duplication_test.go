@@ -61,15 +61,15 @@ func TestDuplicate(t *testing.T) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
 		Params: PublicParamsU{
-			&RSAParams{
+			Data: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   SymKeyBitsU{uint16(128)},
-					Mode:      SymModeU{SymModeCFB}},
+					KeyBits:   SymKeyBitsU{Data: uint16(128)},
+					Mode:      SymModeU{Data: SymModeCFB}},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
 	parent, err := tpm.LoadExternal(nil, &parentTemplate, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -302,11 +302,11 @@ func TestImport(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
 	objectSensitive := Sensitive{
 		Type:      ObjectTypeRSA,
 		AuthValue: make(Auth, objectPublic.NameAlg.Size()),
-		Sensitive: SensitiveCompositeU{PrivateKeyRSA(key.Primes[0].Bytes())}}
+		Sensitive: SensitiveCompositeU{Data: PrivateKeyRSA(key.Primes[0].Bytes())}}
 	copy(objectSensitive.AuthValue, []byte("foo"))
 
 	// FIXME: Remove auth parameter once Load is using ResourceContext

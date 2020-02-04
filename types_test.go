@@ -79,19 +79,19 @@ func TestPublicIDUnion(t *testing.T) {
 		{
 			desc: "RSA",
 			in: TestPublicIDUContainer{Alg: ObjectTypeRSA,
-				Unique: PublicIDU{PublicKeyRSA{0x01, 0x02, 0x03}}},
+				Unique: PublicIDU{Data: PublicKeyRSA{0x01, 0x02, 0x03}}},
 			out: []byte{0x00, 0x01, 0x00, 0x03, 0x01, 0x02, 0x03},
 		},
 		{
 			desc: "KeyedHash",
 			in: TestPublicIDUContainer{Alg: ObjectTypeKeyedHash,
-				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
+				Unique: PublicIDU{Data: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x08, 0x00, 0x04, 0x04, 0x05, 0x06, 0x07},
 		},
 		{
 			desc: "InvalidSelector",
 			in: TestPublicIDUContainer{Alg: ObjectTypeId(AlgorithmNull),
-				Unique: PublicIDU{Digest{0x04, 0x05, 0x06, 0x07}}},
+				Unique: PublicIDU{Data: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
 			err: "cannot unmarshal struct type tpm2_test.TestPublicIDUContainer: cannot unmarshal field Unique: cannot unmarshal struct type " +
 				"tpm2.PublicIDU: error unmarshalling union struct: cannot select union data type: invalid selector value: TPM_ALG_NULL",
@@ -148,7 +148,7 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			desc: "HMAC",
 			in: TestSchemeKeyedHashUContainer{
 				Scheme:  KeyedHashSchemeHMAC,
-				Details: SchemeKeyedHashU{&SchemeHMAC{HashAlg: HashAlgorithmSHA256}}},
+				Details: SchemeKeyedHashU{Data: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}},
 			out: []byte{0x00, 0x05, 0x00, 0x0b},
 		},
 		{
