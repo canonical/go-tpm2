@@ -419,8 +419,8 @@ func (r *nvIndexContext) attrs() NVAttributes {
 	return r.d.Data.Data.(*NVPublic).Attrs
 }
 
-func makeNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexContext {
-	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: handle, Name: name, Data: handleContextDataU{public}}}
+func makeNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
+	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: public.Index, Name: name, Data: handleContextDataU{public}}}
 }
 
 func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions ...*Session) (ResourceContext, error) {
@@ -433,7 +433,10 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions
 	} else if !bytes.Equal(n, name) {
 		return nil, &InvalidResponseError{CommandNVReadPublic, "name and public area don't match"}
 	}
-	return makeNVIndexContext(context.Handle(), name, pub), nil
+	if pub.Index != context.Handle() {
+		return nil, &InvalidResponseError{CommandNVReadPublic, "unexpected index in public area"}
+	}
+	return makeNVIndexContext(name, pub), nil
 }
 
 type sessionContext struct {
@@ -707,4 +710,34 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 		return nil, 0, err
 	}
 	return rc, len(b) - buf.Len(), nil
+}
+
+// CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided public area. If subsequent use of
+// the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be
+// provided by calling ResourceContext.SetAuthValue.
+func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
+	name, err := pub.Name()
+	if err != nil {
+		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
+	}
+	rc := makeNVIndexContext(name, pub)
+	if err := rc.d.checkConsistency(); err != nil {
+		return nil, err
+	}
+	return rc, nil
+}
+
+// CreateObjectResourceContextFromPublic returns a new ResourceContext created from the provided public area. If subsequent use of
+// the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be
+// provided by calling ResourceContext.SetAuthValue.
+func CreateObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
+	name, err := pub.Name()
+	if err != nil {
+		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
+	}
+	rc := makeObjectContext(handle, name, pub)
+	if err := rc.d.checkConsistency(); err != nil {
+		return nil, err
+	}
+	return rc, nil
 }

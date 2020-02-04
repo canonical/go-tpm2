@@ -207,3 +207,66 @@ func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
 		run(t, rc)
 	})
 }
+
+func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	pub := NVPublic{
+		Index:   0x018100ff,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+		Size:    8}
+	rc1, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
+	if err != nil {
+		t.Fatalf("NVDefineSpace failed: %v", err)
+	}
+	defer undefineNVSpace(t, tpm, rc1, tpm.OwnerHandleContext(), nil)
+
+	rc2, err := CreateNVIndexResourceContextFromPublic(&pub)
+	if err != nil {
+		t.Errorf("CreateNVIndexResourceContextFromPublic failed: %v", err)
+	}
+	if rc2 == nil {
+		t.Fatalf("CreateNVIndexResourceContextFromPublic returned a nil context")
+	}
+	if rc2 == rc1 {
+		t.Errorf("CreateNVIndexResourceContextFromPublic didn't return a new context")
+	}
+	if rc2.Handle() != rc1.Handle() {
+		t.Errorf("CreateNVIndexResourceContextFromPublic returned a context with the wrong handle")
+	}
+	if !bytes.Equal(rc2.Name(), rc1.Name()) {
+		t.Errorf("CreateNVIndexResourceContextFromPublic returned a context with the wrong name")
+	}
+}
+
+func TestCreateObjectResourceContextFromPublic(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	rc1 := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, rc1)
+
+	pub, _, _, err := tpm.ReadPublic(rc1)
+	if err != nil {
+		t.Fatalf("ReadPublic failed: %v", err)
+	}
+
+	rc2, err := CreateObjectResourceContextFromPublic(rc1.Handle(), pub)
+	if err != nil {
+		t.Errorf("CreateObjectResourceContextFromPublic failed: %v", err)
+	}
+	if rc2 == nil {
+		t.Fatalf("CreateObjectResourceContextFromPublic returned a nil context")
+	}
+	if rc2 == rc1 {
+		t.Errorf("CreateObjectResourceContextFromPublic didn't return a new context")
+	}
+	if rc2.Handle() != rc1.Handle() {
+		t.Errorf("CreateObjectResourceContextFromPublic returned a context with the wrong handle")
+	}
+	if !bytes.Equal(rc2.Name(), rc1.Name()) {
+		t.Errorf("CreateObjectResourceContextFromPublic returned a context with the wrong name")
+	}
+}
