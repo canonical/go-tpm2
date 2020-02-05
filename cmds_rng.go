@@ -6,7 +6,7 @@ package tpm2
 
 // Section 16 - Random Number Generator
 
-func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...*Session) (Digest, error) {
+func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...SessionContext) (Digest, error) {
 	var randomBytes Digest
 	if err := t.RunCommand(CommandGetRandom, sessions,
 		Separator,
@@ -19,6 +19,6 @@ func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...*Session) (Dig
 	return randomBytes, nil
 }
 
-func (t *TPMContext) StirRandom(inData SensitiveData, sessions ...*Session) error {
+func (t *TPMContext) StirRandom(inData SensitiveData, sessions ...SessionContext) error {
 	return t.RunCommand(CommandStirRandom, sessions, Separator, inData)
 }

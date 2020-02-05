@@ -11,7 +11,6 @@ import (
 	"crypto/rsa"
 	"flag"
 	"fmt"
-	"io"
 	"math/big"
 	"os"
 	"reflect"
@@ -48,13 +47,13 @@ func resetHierarchyAuth(t *testing.T, tpm *TPMContext, hierarchy ResourceContext
 }
 
 // Undefine a NV index set by a test. Fails the test if it doesn't succeed.
-func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession *Session) {
+func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession SessionContext) {
 	if err := tpm.NVUndefineSpace(authHandle, context, authSession); err != nil {
 		t.Errorf("NVUndefineSpace failed: %v", err)
 	}
 }
 
-func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession *Session) {
+func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession SessionContext) {
 	if context.Handle() == HandleUnassigned {
 		return
 	}
@@ -271,7 +270,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 	defer flushContext(t, tpm, sessionContext)
 
 	endorsement := tpm.EndorsementHandleContext()
-	session := Session{Context: sessionContext, Attrs: AttrContinueSession}
+	sessionContext.SetAttrs(AttrContinueSession)
 
 	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
 		t.Fatalf("PolicySecret failed: %v", err)
@@ -290,7 +289,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, &session)
+	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, sessionContext)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -299,7 +298,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 		t.Fatalf("PolicySecret failed: %v", err)
 	}
 
-	akContext, err := tpm.Load(ek, priv, pub, &session)
+	akContext, err := tpm.Load(ek, priv, pub, sessionContext)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -433,45 +432,6 @@ func openTPMForTesting(t *testing.T) *TPMContext {
 func closeTPM(t *testing.T, tpm *TPMContext) {
 	if err := tpm.Close(); err != nil {
 		t.Errorf("Close failed: %v", err)
-	}
-}
-
-type mockSessionContext struct{}
-
-func (*mockSessionContext) Handle() Handle                    { return HandleNull }
-func (*mockSessionContext) Name() Name                        { return nil }
-func (*mockSessionContext) SerializeToBytes() []byte          { return nil }
-func (*mockSessionContext) SerializeToWriter(io.Writer) error { return nil }
-func (*mockSessionContext) NonceTPM() Nonce                   { return nil }
-func (*mockSessionContext) IsAudit() bool                     { return false }
-func (*mockSessionContext) IsExclusive() bool                 { return false }
-
-func TestSession(t *testing.T) {
-	c := &mockSessionContext{}
-	s := Session{Context: c, Attrs: AttrContinueSession}
-
-	s2 := s.WithAttrs(AttrResponseEncrypt)
-	if s2.Context != s.Context {
-		t.Errorf("Wrong context")
-	}
-	if s2.Attrs != AttrResponseEncrypt {
-		t.Errorf("Wrong attrs")
-	}
-
-	s3 := s2.AddAttrs(AttrCommandEncrypt)
-	if s3.Context != s.Context {
-		t.Errorf("Wrong context")
-	}
-	if s3.Attrs != AttrResponseEncrypt|AttrCommandEncrypt {
-		t.Errorf("Wrong attrs")
-	}
-
-	s4 := s3.RemoveAttrs(AttrResponseEncrypt)
-	if s4.Context != s.Context {
-		t.Errorf("Wrong context")
-	}
-	if s4.Attrs != AttrCommandEncrypt {
-		t.Errorf("Wrong attrs")
 	}
 }
 

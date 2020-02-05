@@ -34,6 +34,6 @@ func (t *TPMContext) Startup(startupType StartupType) error {
 //
 // If a PCR bank has been reconfigured and shutdownType == StartupState, a *TPMParameterError error with an error code of
 // ErrorType will be returned.
-func (t *TPMContext) Shutdown(shutdownType StartupType, sessions ...*Session) error {
+func (t *TPMContext) Shutdown(shutdownType StartupType, sessions ...SessionContext) error {
 	return t.RunCommand(CommandShutdown, sessions, Separator, shutdownType)
 }

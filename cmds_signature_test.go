@@ -49,7 +49,7 @@ func TestSign(t *testing.T) {
 			return context, pub
 		}
 
-		sign := func(t *testing.T, key ResourceContext, digest Digest, inScheme *SigScheme, authSession *Session) *Signature {
+		sign := func(t *testing.T, key ResourceContext, digest Digest, inScheme *SigScheme, authSession SessionContext) *Signature {
 			signature, err := tpm.Sign(key, digest, inScheme, nil, authSession)
 			if err != nil {
 				t.Fatalf("Sign failed: %v", err)
@@ -156,7 +156,7 @@ func TestSign(t *testing.T) {
 			}
 			defer verifyContextFlushed(t, tpm, sessionContext)
 
-			signature := sign(t, key, digest, nil, &Session{Context: sessionContext})
+			signature := sign(t, key, digest, nil, sessionContext)
 			verify(t, pub, digest, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
 		})
 	})

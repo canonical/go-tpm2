@@ -98,7 +98,7 @@ import (
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
 // can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
 // method.
-func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuthSession *Session, sessions ...*Session) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, error) {
+func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -149,7 +149,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 // value for those permanent resources.
 //
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
-func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
 	if err != nil {
@@ -189,7 +189,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession *
 //
 // The command requires the authorization with the user auth role for authContext, with session based authorization provided via
 // authContextAuthSession.
-func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, authContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandClearControl, sessions,
 		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Separator,
 		disable)
@@ -206,7 +206,7 @@ func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, aut
 // newAuth, and authContext will be updated to reflect this - it isn't necessary to update authContext with
 // ResourceContext.SetAuthValue in order to use it in subsequent commands that require knowledge of the authorization value for the
 // resource.
-func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Auth, authContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Auth, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	var s []*sessionParam
 	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
 	if err != nil {

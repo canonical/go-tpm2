@@ -45,12 +45,12 @@ func TestContextSave(t *testing.T) {
 		defer flushContext(t, tpm, sessionContext)
 		run(t, sessionContext, sessionContext.Handle(), HandleNull)
 		// Make sure that ContextSave marked the session context as not loaded, and that we get the expected error if we attempt to use it
-		err = tpm.Clear(tpm.LockoutHandleContext(), &Session{Context: sessionContext})
+		err = tpm.Clear(tpm.LockoutHandleContext(), sessionContext)
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "error whilst processing handle with authorization for authContext: invalid resource context for session: not "+
-			"complete and loaded" {
+		if err.Error() != "error whilst processing handle with authorization for authContext: invalid context for session: incomplete "+
+			"session can only be used in TPMContext.FlushContext" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 		handles, err := tpm.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
@@ -255,7 +255,7 @@ func TestEvictControl(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession *Session) {
+	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession SessionContext) {
 		owner := tpm.OwnerHandleContext()
 		if handle, err := tpm.CreateResourceContextFromTPM(persist); err == nil {
 			_, err := tpm.EvictControl(owner, handle, persist, authAuthSession)
@@ -320,7 +320,7 @@ func TestEvictControl(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, context, Handle(0x8100ff00), &Session{Context: sessionContext, Attrs: AttrContinueSession})
+		run(t, context, Handle(0x8100ff00), sessionContext.WithAttrs(AttrContinueSession))
 	})
 }
 

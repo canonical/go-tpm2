@@ -48,7 +48,7 @@ package tpm2
 // session's usage. If expiration is non-zero, the expiration time of the session context will be updated unless it already has an
 // expiration time that is earlier. If expiration is less than zero, a timeout value and corresponding *TkAuth ticket will be
 // returned if policySession does not correspond to a trial session.
-func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...*Session) (Timeout, *TkAuth, error) {
+func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...SessionContext) (Timeout, *TkAuth, error) {
 	var nonceTPM Nonce
 	if includeNonceTPM {
 		nonceTPM = policySession.NonceTPM()
@@ -96,7 +96,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 // expiration time of the session context will be updated unless it already has an expiration time that is earlier. If expiration is
 // less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a trial
 // session.
-func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession *Session, sessions ...*Session) (Timeout, *TkAuth, error) {
+func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession SessionContext, sessions ...SessionContext) (Timeout, *TkAuth, error) {
 	var timeout Timeout
 	var policyTicket TkAuth
 
@@ -137,7 +137,7 @@ func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession Ses
 // with the same values that the command that produced the ticket would extend it with. If provided, the value of cpHashA will be
 // recorded on the session context to restrict the session's usage. The expiration time of the session context will be updated with
 // the value of timeout, unless it already has an expiration time that is earlier.
-func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout, cpHashA Digest, policyRef Nonce, authName Name, ticket *TkAuth, sessions ...*Session) error {
+func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout, cpHashA Digest, policyRef Nonce, authName Name, ticket *TkAuth, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyTicket, sessions,
 		policySession, Separator,
 		timeout, cpHashA, policyRef, authName, ticket)
@@ -150,7 +150,7 @@ func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout,
 //
 // On successful completion, the policy digest of the session context associated with policySession is cleared, and then extended to
 // include the concatenation of all of the digests contained in pHashList.
-func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList, sessions ...*Session) error {
+func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyOR, sessions,
 		policySession, Separator,
 		pHashList)
@@ -168,13 +168,13 @@ func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList
 //
 // If the PCR contents have changed since the last time this command was executed for this session, a *TPMError error will be returned
 // with an error code of ErrorPCRChanged.
-func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, pcrs PCRSelectionList, sessions ...*Session) error {
+func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, pcrs PCRSelectionList, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyPCR, sessions,
 		policySession, Separator,
 		pcrDigest, pcrs)
 }
 
-// func (t *TPMContext) PolicyLocality(policySession HandleContext, locality Locality, sessions ...*Session) error {
+// func (t *TPMContext) PolicyLocality(policySession HandleContext, locality Locality, sessions ...SessionContext) error {
 // }
 
 // PolicyNV executes the TPM2_PolicyNV command to gate a policy based on the contents of the NV index associated with nvIndex. The
@@ -213,13 +213,13 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 //
 // On successful completion, the policy digest of the session context associated with policySession is extended to include the values
 // of operandB, offset, operation and the name of nvIndex.
-func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, authContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyNV, sessions,
 		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, policySession, Separator,
 		operandB, offset, operation)
 }
 
-// func (t *TPMContext) PolicyCounterTimer(policySession HandleContext, operandB Operand, offset uint16, operation ArithmeticOp, sessions ...*Session) error {
+// func (t *TPMContext) PolicyCounterTimer(policySession HandleContext, operandB Operand, offset uint16, operation ArithmeticOp, sessions ...SessionContext) error {
 // }
 
 // PolicyCommandCode executes the TPM2_PolicyCommandCode command to indicate that an authorization should be limited to a specific
@@ -232,13 +232,13 @@ func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySessio
 // On successful completion, the policy digest of the session context associated with policySession will be extended to
 // include the value of the specified command code, and the command code will be recorded on the session context to limit usage of
 // the session.
-func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code CommandCode, sessions ...*Session) error {
+func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code CommandCode, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyCommandCode, sessions,
 		policySession, Separator,
 		code)
 }
 
-// func (t *TPMContext) PolicyPhysicalPresence(policySession HandleContext, sessions ...*Session) error {
+// func (t *TPMContext) PolicyPhysicalPresence(policySession HandleContext, sessions ...SessionContext) error {
 // }
 
 // PolicyCpHash executes the TPM2_PolicyCpHash command to bind a policy to a specific command and set of command parameters.
@@ -260,7 +260,7 @@ func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code Comman
 // On successful completion, the policy digest of the session context associated with policySession will be extended to include the
 // value of cpHashA, and the value of cpHashA will be recorded on the session context to limit usage of the session to the specific
 // command and set of command parameters.
-func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, sessions ...*Session) error {
+func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyCpHash, sessions, policySession, Separator, cpHashA)
 }
 
@@ -276,7 +276,7 @@ func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, 
 // On successful completion, the policy digest of the session context associated with policySession will be extended to include the
 // value of nameHash, and the value of nameHash will be recorded on the session context to limit usage of the session to the specific
 // set of TPM entities.
-func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Digest, sessions ...*Session) error {
+func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Digest, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyNameHash, sessions, policySession, Separator, nameHash)
 }
 
@@ -295,7 +295,7 @@ func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Diges
 // include the value of objectName. A digest of objectName and newParentName will be recorded as the name hash on the session context
 // to limit usage of the session to those entities, and the CommandDuplicate command code will be recorded to limit usage of the
 // session to TPMContext.Duplicate.
-func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objectName, newParentName Name, includeObject bool, sessions ...*Session) error {
+func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objectName, newParentName Name, includeObject bool, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyDuplicationSelect, sessions,
 		policySession, Separator,
 		objectName, newParentName, includeObject)
@@ -324,7 +324,7 @@ func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objec
 //
 // On successful completion, the policy digest of the session context associated with policySession is cleared, and then extended to
 // include the value of keySign and policyRef.
-func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolicy Digest, policyRef Nonce, keySign Name, checkTicket *TkVerified, sessions ...*Session) error {
+func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolicy Digest, policyRef Nonce, keySign Name, checkTicket *TkVerified, sessions ...SessionContext) error {
 	if checkTicket == nil {
 		checkTicket = &TkVerified{Tag: TagVerified, Hierarchy: HandleNull}
 	}
@@ -342,7 +342,7 @@ func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolic
 //
 // When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
 // must be set to the authorization value of the entity being authorized.
-func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...*Session) error {
+func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandPolicyAuthValue, sessions, policySession); err != nil {
 		return err
 	}
@@ -359,7 +359,7 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...*
 //
 // When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
 // must be set to the authorization value of the entity being authorized.
-func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...*Session) error {
+func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandPolicyPassword, sessions, policySession); err != nil {
 		return err
 	}
@@ -370,7 +370,7 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...*S
 
 // PolicyGetDigest executes the TPM2_PolicyGetDigest command to return the current policy digest of the session context associated
 // with policySession.
-func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...*Session) (Digest, error) {
+func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...SessionContext) (Digest, error) {
 	var policyDigest Digest
 
 	if err := t.RunCommand(CommandPolicyGetDigest, sessions,
@@ -384,11 +384,11 @@ func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...*
 	return policyDigest, nil
 }
 
-// func (t *TPMContext) PolicyNvWritten(policySession HandleContext, writtenSet bool, sessions ...*Session) error {
+// func (t *TPMContext) PolicyNvWritten(policySession HandleContext, writtenSet bool, sessions ...SessionContext) error {
 // }
 
-// func (t *TPMContext) PolicyTemplate(policySession HandleContext, templateHash Digest, sessions ...*Session) error {
+// func (t *TPMContext) PolicyTemplate(policySession HandleContext, templateHash Digest, sessions ...SessionContext) error {
 // }
 
-// func (t *TPMContext) PolicyAuthorizeNV(authContext, nvIndex, policySession HandleContext, authContextAuth interface{}, sessions ...*Session) error {
+// func (t *TPMContext) PolicyAuthorizeNV(authContext, nvIndex, policySession HandleContext, authContextAuth interface{}, sessions ...SessionContext) error {
 // }

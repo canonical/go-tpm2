@@ -240,9 +240,9 @@ const (
 
 	// ErrorAttributes corresponds to TPM_RC_ATTRIBUTES and is returned as a *TPMSessionError for a command in the following
 	// circumstances:
-	// * More than one *Session instance with the AttrCommandEncrypt attribute has been provided.
-	// * More than one *Session instance with the AttrResponseEncrypt attribute has been provided.
-	// * A *Session instance referencing a trial session has been provided for authorization.
+	// * More than one SessionContext instance with the AttrCommandEncrypt attribute has been provided.
+	// * More than one SessionContext instance with the AttrResponseEncrypt attribute has been provided.
+	// * A SessionContext instance referencing a trial session has been provided for authorization.
 	ErrorAttributes ErrorCode = errorCode1Start + 0x02
 
 	// ErrorHash corresponds to TPM_RC_HASH and is returned as a *TPMParameterError error for any command that accepts a AlgorithmId
@@ -308,9 +308,9 @@ const (
 	// ErrorSymmetric corresponds to TPM_RC_SYMMETRIC and is returned for a command in the following circumstances:
 	// * As a *TPMParameterError if the command accepts a AlgorithmId parameter that corresponds to the TPMI_ALG_SYM interface type
 	//   and the parameter value is not a valid symmetric algorithm.
-	// * As a *TPMSessionError if a *Session instance is provided with the AttrCommandEncrypt attribute set but the session has no
+	// * As a *TPMSessionError if a SessionContext instance is provided with the AttrCommandEncrypt attribute set but the session has no
 	//   symmetric algorithm.
-	// * As a *TPMSessionError if a *Session instance is provided with the AttrResponseEncrypt attribute set but the session has no
+	// * As a *TPMSessionError if a SessionContext instance is provided with the AttrResponseEncrypt attribute set but the session has no
 	//   symmetric algorithm.
 	ErrorSymmetric ErrorCode = errorCode1Start + 0x16
 

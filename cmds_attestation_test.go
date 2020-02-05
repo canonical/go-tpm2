@@ -100,7 +100,7 @@ func TestCertify(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, objectContext, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, objectContextAuthSession, signContextAuthSession *Session) {
+	run := func(t *testing.T, objectContext, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, objectContextAuthSession, signContextAuthSession SessionContext) {
 		certifyInfo, signature, err := tpm.Certify(objectContext, signContext, qualifyingData, inScheme, objectContextAuthSession, signContextAuthSession)
 		if err != nil {
 			t.Fatalf("Certify failed: %v", err)
@@ -207,7 +207,7 @@ func TestCertify(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		run(t, primary, ak, HandleEndorsement, nil, nil, nil, &Session{Context: sessionContext})
+		run(t, primary, ak, HandleEndorsement, nil, nil, nil, sessionContext)
 	})
 
 	t.Run("UsePasswordAuthForObject", func(t *testing.T) {
@@ -230,7 +230,7 @@ func TestCertify(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		run(t, primary, ak, HandleEndorsement, nil, nil, &Session{Context: sessionContext}, nil)
+		run(t, primary, ak, HandleEndorsement, nil, nil, sessionContext, nil)
 	})
 }
 
@@ -244,7 +244,7 @@ func TestCertifyCreation(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuthSession *Session) {
+	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuthSession SessionContext) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -356,7 +356,7 @@ func TestCertifyCreation(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		run(t, ak, HandleEndorsement, nil, nil, &Session{Context: sessionContext})
+		run(t, ak, HandleEndorsement, nil, nil, sessionContext)
 	})
 
 	t.Run("InvalidTicket", func(t *testing.T) {
@@ -408,7 +408,7 @@ func TestQuote(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuthSession *Session) {
+	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuthSession SessionContext) {
 		quoted, signature, err := tpm.Quote(signContext, qualifyingData, inScheme, pcrs, signContextAuthSession)
 		if err != nil {
 			t.Fatalf("Quote failed: %v", err)
@@ -511,7 +511,7 @@ func TestQuote(t *testing.T) {
 
 		pcrs := PCRSelectionList{
 			PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{1, 7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, &Session{Context: sessionContext})
+		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, sessionContext)
 	})
 }
 
@@ -525,7 +525,7 @@ func TestGetTime(t *testing.T) {
 		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
 	}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuthSession, signContextAuthSession *Session) {
+	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuthSession, signContextAuthSession SessionContext) {
 		timeInfo, signature, err := tpm.GetTime(tpm.EndorsementHandleContext(), signContext, qualifyingData, inScheme, privacyAdminHandleAuthSession, signContextAuthSession)
 		if err != nil {
 			t.Fatalf("GetTime failed: %v", err)
@@ -630,7 +630,7 @@ func TestGetTime(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		run(t, ak, HandleEndorsement, nil, nil, nil, &Session{Context: sessionContext})
+		run(t, ak, HandleEndorsement, nil, nil, nil, sessionContext)
 	})
 
 	t.Run("UsePasswordAuthForPrivacyAdmin", func(t *testing.T) {
@@ -656,6 +656,6 @@ func TestGetTime(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		run(t, ak, HandleEndorsement, nil, nil, &Session{Context: sessionContext}, nil)
+		run(t, ak, HandleEndorsement, nil, nil, sessionContext, nil)
 	})
 }

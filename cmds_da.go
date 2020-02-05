@@ -11,7 +11,7 @@ package tpm2
 // lockContext, with session based authorization provided via lockContextAuthSession.
 //
 // On successful completion, the lockout counter will be reset to zero.
-func (t *TPMContext) DictionaryAttackLockReset(lockContext ResourceContext, lockContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) DictionaryAttackLockReset(lockContext ResourceContext, lockContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandDictionaryAttackLockReset, sessions,
 		ResourceContextWithSession{Context: lockContext, Session: lockContextAuthSession})
 }
@@ -27,7 +27,7 @@ func (t *TPMContext) DictionaryAttackLockReset(lockContext ResourceContext, lock
 //
 // The lockContext parameter must be a ResourceContext corresponding to HandleLockout. The command requires authorization with the user
 // auth role for lockContext, with session based authorization provided via lockContextAuthSession.
-func (t *TPMContext) DictionaryAttackParameters(lockContext ResourceContext, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) DictionaryAttackParameters(lockContext ResourceContext, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandDictionaryAttackParameters, sessions,
 		ResourceContextWithSession{Context: lockContext, Session: lockContextAuthSession}, Separator,
 		newMaxTries, newRecoveryTime, lockoutRecovery)

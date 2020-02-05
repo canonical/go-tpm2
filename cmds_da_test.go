@@ -41,7 +41,7 @@ func TestDictionaryAttackParameters(t *testing.T) {
 
 	origMaxTries, origRecoveryTime, origLockoutRecovery := getDictionaryAttackParams(t, tpm)
 
-	run := func(t *testing.T, authSession *Session) {
+	run := func(t *testing.T, authSession SessionContext) {
 		params := map[Property]uint32{
 			PropertyMaxAuthFail:     32,
 			PropertyLockoutInterval: 7200,
@@ -96,7 +96,7 @@ func TestDictionaryAttackParameters(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession})
+		run(t, sessionContext.WithAttrs(AttrContinueSession))
 	})
 }
 
@@ -139,7 +139,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		}
 	}()
 
-	run := func(t *testing.T, authSession *Session) {
+	run := func(t *testing.T, authSession SessionContext) {
 		context.SetAuthValue(nil)
 	Loop:
 		for i := 0; i < 3; i++ {
@@ -207,6 +207,6 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession})
+		run(t, sessionContext.WithAttrs(AttrContinueSession))
 	})
 }

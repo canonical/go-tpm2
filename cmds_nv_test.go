@@ -20,7 +20,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 
 	owner := tpm.OwnerHandleContext()
 
-	run := func(t *testing.T, auth Auth, publicInfo *NVPublic, ownerAuthSession *Session) {
+	run := func(t *testing.T, auth Auth, publicInfo *NVPublic, ownerAuthSession SessionContext) {
 		nvContext, err := tpm.NVDefineSpace(owner, auth, publicInfo, ownerAuthSession)
 		if err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
@@ -87,14 +87,12 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-
 		pub := NVPublic{
 			Index:   Handle(0x0181fff0),
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVWriteAll|AttrNVAuthRead|AttrNVOwnerRead, NVTypeOrdinary),
 			Size:    64}
-		run(t, nil, &pub, &session)
+		run(t, nil, &pub, sessionContext.WithAttrs(AttrContinueSession))
 	})
 	t.Run("DefineWithAuthValue", func(t *testing.T) {
 		pub := NVPublic{
@@ -147,7 +145,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 		return context
 	}
 
-	run := func(t *testing.T, context ResourceContext, platformAuthSession *Session) {
+	run := func(t *testing.T, context ResourceContext, platformAuthSession SessionContext) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -161,9 +159,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 			t.Errorf("PolicyCommandCode failed: %v", err)
 		}
 
-		session := Session{Context: sessionContext}
-
-		if err := tpm.NVUndefineSpaceSpecial(context, platform, &session, platformAuthSession); err != nil {
+		if err := tpm.NVUndefineSpaceSpecial(context, platform, sessionContext, platformAuthSession); err != nil {
 			t.Errorf("NVUndefineSpaceSpecial failed: %v", err)
 		}
 	}
@@ -194,12 +190,9 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
 
-		run(t, context, &Session{Context: sessionContext})
+		run(t, context, sessionContext)
 	})
 
-	// NVUndefineSpaceSpecial is currently the only API that accepts only a *Session parameter as an authorization, rather than
-	// accepting any type as an empty interface. Test that passing nil in here results in sane behaviour (we should emit a
-	// password auth session wth an empty value rather than a policy auth session)
 	t.Run("MissingPolicySession", func(t *testing.T) {
 		context := define(t)
 		defer verifyNVSpaceUndefined(t, tpm, context, platform, nil)
@@ -274,7 +267,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		return rc
 	}
 
-	runWrite := func(t *testing.T, rc ResourceContext, data MaxNVBuffer, offset uint16, authSession *Session) {
+	runWrite := func(t *testing.T, rc ResourceContext, data MaxNVBuffer, offset uint16, authSession SessionContext) {
 		if err := tpm.NVWrite(rc, rc, data, offset, authSession); err != nil {
 			t.Fatalf("NVWrite failed: %v", err)
 		}
@@ -292,7 +285,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		}
 	}
 
-	runRead := func(t *testing.T, rc ResourceContext, pub *NVPublic, data MaxNVBuffer, offset uint16, authSession *Session) {
+	runRead := func(t *testing.T, rc ResourceContext, pub *NVPublic, data MaxNVBuffer, offset uint16, authSession SessionContext) {
 		d, err := tpm.NVRead(rc, rc, uint16(len(data)), offset, authSession)
 		if err != nil {
 			t.Fatalf("NVRead failed: %v", err)
@@ -364,14 +357,14 @@ func TestNVReadAndWrite(t *testing.T) {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext)
-			session := Session{Context: sessionContext, Attrs: AttrContinueSession}
+			sessionContext.SetAttrs(AttrContinueSession)
 			d := make([]byte, data.pub.Size)
 			rand.Read(d)
-			runWrite(t, rc, d, 0, &session)
+			runWrite(t, rc, d, 0, sessionContext)
 
 			// Writing updates the NV index's attributes which also changes the name. This means that the
 			// session is no longer bound to it
-			runRead(t, rc, data.pub, d, 0, &session)
+			runRead(t, rc, data.pub, d, 0, sessionContext)
 		})
 
 		t.Run(data.desc+"/UseSessionAuthBound2", func(t *testing.T) {
@@ -382,10 +375,9 @@ func TestNVReadAndWrite(t *testing.T) {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext1)
-			session := Session{Context: sessionContext1, Attrs: AttrContinueSession}
 			d := make([]byte, data.pub.Size)
 			rand.Read(d)
-			runWrite(t, rc, d, 0, &session)
+			runWrite(t, rc, d, 0, sessionContext1.WithAttrs(AttrContinueSession))
 
 			// Writing updates the NV index's attributes which also changes the name. This means that the
 			// session is no longer bound to it. Create a new bound session
@@ -394,8 +386,7 @@ func TestNVReadAndWrite(t *testing.T) {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext2)
-			session = Session{Context: sessionContext2, Attrs: AttrContinueSession}
-			runRead(t, rc, data.pub, d, 0, &session)
+			runRead(t, rc, data.pub, d, 0, sessionContext2.WithAttrs(AttrContinueSession))
 		})
 	}
 }
@@ -421,7 +412,7 @@ func TestNVIncrement(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, authSession *Session) {
+	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
 		if err := tpm.NVIncrement(rc, rc, authSession); err != nil {
 			t.Fatalf("NVIncrement failed: %v", err)
 		}
@@ -457,8 +448,7 @@ func TestNVIncrement(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		session := Session{Context: sessionContext}
-		run(t, rc, &session)
+		run(t, rc, sessionContext)
 	})
 }
 
@@ -483,7 +473,7 @@ func TestNVReadCounter(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, authSession *Session) {
+	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
 		if err := tpm.NVIncrement(rc, rc, authSession); err != nil {
 			t.Fatalf("NVIncrement failed: %v", err)
 		}
@@ -525,8 +515,7 @@ func TestNVReadCounter(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-		run(t, rc, &session)
+		run(t, rc, sessionContext.WithAttrs(AttrContinueSession))
 	})
 }
 
@@ -551,7 +540,7 @@ func TestNVExtend(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, data []byte, authSession *Session) {
+	run := func(t *testing.T, rc ResourceContext, data []byte, authSession SessionContext) {
 		h := sha256.New()
 		h.Write(data)
 		dataH := h.Sum(nil)
@@ -576,7 +565,7 @@ func TestNVExtend(t *testing.T) {
 		h.Write(make([]byte, 32))
 		h.Write(dataH)
 
-		d, err := tpm.NVRead(rc, rc, 32, 0, authSession)
+		d, err := tpm.NVRead(rc, rc, 32, 0, nil)
 		if err != nil {
 			t.Fatalf("NVRead failed: %v", err)
 		}
@@ -603,9 +592,8 @@ func TestNVExtend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-		run(t, rc, []byte("foo"), &session)
+		defer verifyContextFlushed(t, tpm, sessionContext)
+		run(t, rc, []byte("foo"), sessionContext)
 	})
 }
 
@@ -630,7 +618,7 @@ func TestNVSetBits(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, bits []uint64, authSession *Session) {
+	run := func(t *testing.T, rc ResourceContext, bits []uint64, authSession SessionContext) {
 		var expected uint64
 		for _, b := range bits {
 			if err := tpm.NVSetBits(rc, rc, b, authSession); err != nil {
@@ -679,8 +667,7 @@ func TestNVSetBits(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-		run(t, rc, []uint64{0xde45670980, 0x456, 0xe}, &session)
+		run(t, rc, []uint64{0xde45670980, 0x456, 0xe}, sessionContext.WithAttrs(AttrContinueSession))
 	})
 }
 
@@ -705,7 +692,7 @@ func TestNVWriteLock(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, authSession *Session) {
+	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
 		if err := tpm.NVWriteLock(rc, rc, authSession); err != nil {
 			t.Fatalf("NVWriteLock failed: %v", err)
 		}
@@ -741,8 +728,7 @@ func TestNVWriteLock(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		session := Session{Context: sessionContext}
-		run(t, rc, &session)
+		run(t, rc, sessionContext)
 	})
 }
 
@@ -767,7 +753,7 @@ func TestNVReadLock(t *testing.T) {
 		return rc
 	}
 
-	run := func(t *testing.T, rc ResourceContext, authSession *Session) {
+	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
 		if err := tpm.NVReadLock(rc, rc, authSession); err != nil {
 			t.Fatalf("NVWriteLock failed: %v", err)
 		}
@@ -803,8 +789,7 @@ func TestNVReadLock(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer verifyContextFlushed(t, tpm, sessionContext)
-		session := Session{Context: sessionContext}
-		run(t, rc, &session)
+		run(t, rc, sessionContext)
 	})
 }
 
@@ -814,7 +799,7 @@ func TestNVGlobalLock(t *testing.T) {
 
 	owner := tpm.OwnerHandleContext()
 
-	run := func(t *testing.T, authSession *Session) {
+	run := func(t *testing.T, authSession SessionContext) {
 		var rcs []ResourceContext
 		for _, data := range []NVPublic{
 			{
@@ -872,9 +857,8 @@ func TestNVGlobalLock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
-		defer flushContext(t, tpm, sessionContext)
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-		run(t, &session)
+		defer verifyContextFlushed(t, tpm, sessionContext)
+		run(t, sessionContext)
 	})
 }
 
@@ -944,8 +928,8 @@ func TestNVChangeAuth(t *testing.T) {
 
 			executePolicy(sessionContext)
 
-			session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-			if err := tpm.NVChangeAuth(rc, testAuth, &session); err != nil {
+			sessionContext.SetAttrs(AttrContinueSession)
+			if err := tpm.NVChangeAuth(rc, testAuth, sessionContext); err != nil {
 				t.Fatalf("NVChangeAuth failed: %v", err)
 			}
 
@@ -955,7 +939,7 @@ func TestNVChangeAuth(t *testing.T) {
 
 			executePolicy(sessionContext)
 
-			if err := tpm.NVChangeAuth(rc, nil, &session); err != nil {
+			if err := tpm.NVChangeAuth(rc, nil, sessionContext); err != nil {
 				t.Errorf("NVChangeAuth failed: %v", err)
 			}
 

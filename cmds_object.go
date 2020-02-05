@@ -109,7 +109,7 @@ import (
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation ticket
 // can be used to prove the association between the created object and the returned *CreationData via the TPMContext.CertifyCreation
 // method.
-func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, parentContextAuthSession *Session, sessions ...*Session) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
+func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, parentContextAuthSession SessionContext, sessions ...SessionContext) (Private, *Public, *CreationData, Digest, *TkCreation, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
@@ -193,7 +193,7 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 // On success, a ResourceContext corresponding to the newly loaded transient object will be returned. If subsequent use of the
 // returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be provided
 // by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
 	var objectHandle Handle
 	var name Name
 
@@ -276,7 +276,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 // *TPMError with an error code of ErrorBinding will be returned.
 //
 // On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
-func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...SessionContext) (ResourceContext, error) {
 	var objectHandle Handle
 	var name Name
 
@@ -306,7 +306,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 // If objectContext corresponds to a sequence object, a *TPMError with an error code of ErrorSequence will be returned.
 //
 // On success, the public part of the object is returned, along with the object's name and qualified name.
-func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Session) (*Public, Name, Name, error) {
+func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...SessionContext) (*Public, Name, Name, error) {
 	var outPublic publicSized
 	var name Name
 	var qualifiedName Name
@@ -352,7 +352,7 @@ func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...*Sess
 //
 // On success, the decrypted credential is returned. This is typically used to decrypt a certificate associated with activateContext,
 // which was issued by a certificate authority.
-func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession *Session, sessions ...*Session) (Digest, error) {
+func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession SessionContext, sessions ...SessionContext) (Digest, error) {
 	var certInfo Digest
 	if err := t.RunCommand(CommandActivateCredential, sessions,
 		ResourceContextWithSession{Context: activateContext, Session: activateContextAuthSession}, ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Separator,
@@ -396,7 +396,7 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceCont
 // protected certificate, the encrypted credential blob and the encrypted seed to the requesting party. The seed and credential values
 // can only be recovered on the TPM associated with the endorsement certificate that the requesting party provided if the object
 // associated with objectName is resident on it.
-func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...*Session) (IDObjectRaw, EncryptedSecret, error) {
+func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...SessionContext) (IDObjectRaw, EncryptedSecret, error) {
 	var credentialBlob IDObjectRaw
 	var secret EncryptedSecret
 	if err := t.RunCommand(CommandMakeCredential, sessions,
@@ -418,7 +418,7 @@ func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, 
 // attributes set, a *TPMHandlerError error with an error code of ErrorAttributes will be returned.
 //
 // On success, the object's sensitive data is returned in decrypted form.
-func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession *Session, sessions ...*Session) (SensitiveData, error) {
+func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession SessionContext, sessions ...SessionContext) (SensitiveData, error) {
 	var outData SensitiveData
 
 	if err := t.RunCommand(CommandUnseal, sessions,
@@ -450,7 +450,7 @@ func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession 
 //
 // On success, this returns a new private area for the object associated with objectContext. This function does not make any changes
 // to the version of the object that is currently loaded in to the TPM.
-func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth, objectContextAuthSession *Session, sessions ...*Session) (Private, error) {
+func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth, objectContextAuthSession SessionContext, sessions ...SessionContext) (Private, error) {
 	var outPrivate Private
 
 	if err := t.RunCommand(CommandObjectChangeAuth, sessions,
@@ -567,7 +567,7 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned
 // *Public object will have a Unique field containing details about the public part of the key, computed from the private part of the
 // key.
-func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuthSession *Session, sessions ...*Session) (ResourceContext, Private, *Public, error) {
+func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, Private, *Public, error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}

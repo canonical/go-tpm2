@@ -63,15 +63,15 @@ func TestHMACSessions(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+			sc, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer func() {
 				if data.sessionAttrs&AttrContinueSession > 0 {
-					flushContext(t, tpm, sessionContext)
+					flushContext(t, tpm, sc)
 				} else {
-					verifyContextFlushed(t, tpm, sessionContext)
+					verifyContextFlushed(t, tpm, sc)
 				}
 			}()
 
@@ -86,13 +86,13 @@ func TestHMACSessions(t *testing.T) {
 						KeyBits:   2048,
 						Exponent:  0}}}
 
-			session := &Session{Context: sessionContext, Attrs: data.sessionAttrs}
-			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
+			sc.SetAttrs(data.sessionAttrs)
+			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, sc)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)
 			}
 
-			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, session)
+			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, sc)
 			if data.sessionAttrs&AttrContinueSession > 0 {
 				if err != nil {
 					t.Errorf("Subsequent session usage failed: %v", err)
@@ -101,7 +101,7 @@ func TestHMACSessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent use of the session should fail")
 				}
-				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Create at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Create at index 1: invalid context for session: "+
 					"resource has been closed" {
 					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 				}
@@ -175,25 +175,25 @@ func TestPolicySessions(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256)
+			sc, err := tpm.StartAuthSession(data.tpmKey, data.bind, SessionTypePolicy, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer func() {
 				if data.sessionAttrs&AttrContinueSession > 0 {
-					flushContext(t, tpm, sessionContext)
+					flushContext(t, tpm, sc)
 				} else {
-					verifyContextFlushed(t, tpm, sessionContext)
+					verifyContextFlushed(t, tpm, sc)
 				}
 			}()
 
-			session := Session{Context: sessionContext, Attrs: data.sessionAttrs}
-			_, err = tpm.Unseal(objectContext, &session)
+			sc.SetAttrs(data.sessionAttrs)
+			_, err = tpm.Unseal(objectContext, sc)
 			if err != nil {
 				t.Errorf("Session usage failed: %v", err)
 			}
 
-			_, err = tpm.Unseal(objectContext, &session)
+			_, err = tpm.Unseal(objectContext, sc)
 			if data.sessionAttrs&AttrContinueSession > 0 {
 				if err != nil {
 					t.Errorf("Subsequent usage of the session failed: %v", err)
@@ -202,7 +202,7 @@ func TestPolicySessions(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Subsequent usage of the session should fail")
 				}
-				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Unseal at index 1: invalid resource context for session: "+
+				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Unseal at index 1: invalid context for session: "+
 					"resource has been closed" {
 					t.Errorf("Unexpected error: %v", err)
 				}

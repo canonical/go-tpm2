@@ -77,7 +77,7 @@ Next:
 		}
 	}()
 
-	run := func(t *testing.T, authAuthSession *Session) {
+	run := func(t *testing.T, authAuthSession SessionContext) {
 		checkAuditDigest := func(alg HashAlgorithmId) {
 			attest, _, err = tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 			if err != nil {
@@ -168,6 +168,6 @@ Next:
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		run(t, &Session{Context: sessionContext, Attrs: AttrContinueSession})
+		run(t, sessionContext.WithAttrs(AttrContinueSession))
 	})
 }

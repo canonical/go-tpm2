@@ -51,9 +51,9 @@ import (
 // the value of symmetric.Mode.Sym() must be AlgorithmCFB, else a *TPMParameterError error with an error code of ErrorMode is returned
 // for parameter index 4.
 //
-// If a Session instance with the AttrCommandEncrypt attribute set is provided in the variable length sessions parameter, then the
-// initial caller nonce will be encrypted as this is the first command parameter, despite not being exposed via this API. If a
-// Session instance with the AttrResponseEncrypt attribute set is provided, then the initial TPM nonce will be encrypted in the
+// If a SessionContext instance with the AttrCommandEncrypt attribute set is provided in the variable length sessions parameter, then
+// the initial caller nonce will be encrypted as this is the first command parameter, despite not being exposed via this API. If a
+// SessionContext instance with the AttrResponseEncrypt attribute set is provided, then the initial TPM nonce will be encrypted in the
 // response.
 //
 // If sessionType is SessionTypeHMAC and the session is subsequently used for authorization of a resource to which the session is not
@@ -64,7 +64,7 @@ import (
 // code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
 // warning code of WarningSessionMemory will be returned. If there are no more session handles available, a *TPMwarning error with
 // a warning code of WarningSessionHandles will be returned.
-func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, sessions ...*Session) (SessionContext, error) {
+func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, sessions ...SessionContext) (SessionContext, error) {
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}
@@ -151,6 +151,6 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 
 // PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to reset the policy
 // authorization session to its initial state.
-func (t *TPMContext) PolicyRestart(sessionContext SessionContext, sessions ...*Session) error {
+func (t *TPMContext) PolicyRestart(sessionContext SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyRestart, sessions, sessionContext)
 }

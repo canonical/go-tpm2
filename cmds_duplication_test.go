@@ -87,9 +87,7 @@ func TestDuplicate(t *testing.T) {
 			t.Fatalf("PolicyCommandCode failed: %v", err)
 		}
 
-		session := Session{Context: sessionContext}
-
-		encryptionKeyOut, duplicate, outSymSeed, err := tpm.Duplicate(object, newParentContext, encryptionKeyIn, symmetricAlg, &session)
+		encryptionKeyOut, duplicate, outSymSeed, err := tpm.Duplicate(object, newParentContext, encryptionKeyIn, symmetricAlg, sessionContext)
 		if err != nil {
 			t.Fatalf("Duplicate failed: %v", err)
 		}
@@ -310,7 +308,7 @@ func TestImport(t *testing.T) {
 	copy(objectSensitive.AuthValue, []byte("foo"))
 
 	// FIXME: Remove auth parameter once Load is using ResourceContext
-	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession *Session) {
+	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext) {
 		priv, err := tpm.Import(primary, encryptionKey, &objectPublic, duplicate, inSymSeed, symmetricAlg, parentContextAuthSession)
 		if err != nil {
 			t.Fatalf("Import failed: %v", err)
@@ -406,8 +404,6 @@ func TestImport(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sessionContext)
 
-		session := Session{Context: sessionContext, Attrs: AttrContinueSession}
-
-		run(t, nil, duplicate, nil, nil, &session)
+		run(t, nil, duplicate, nil, nil, sessionContext.WithAttrs(AttrContinueSession))
 	})
 }

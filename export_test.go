@@ -32,11 +32,16 @@ type TestSessionContextData struct {
 	*sessionContextData
 }
 
+func (r *sessionContext) GetAttrs() SessionAttributes {
+	return r.attrs
+}
+
 func (r *sessionContext) GetScData() TestSessionContextData {
 	return TestSessionContextData{r.d.Data.Data.(*sessionContextData)}
 }
 
 type TestSessionContext interface {
+	GetAttrs() SessionAttributes
 	GetScData() TestSessionContextData
 }
 

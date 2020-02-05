@@ -37,7 +37,7 @@ const (
 type sessionParam struct {
 	isAuth            bool            // Whether this parameter is used for authorization
 	associatedContext ResourceContext // The resource associated with an authorization - can be nil
-	session           *Session        // The session instance used for this session parameter - will be nil for a password authorization
+	session           *sessionContext // The session instance used for this session parameter - will be nil for a password authorization
 	includeAuthValue  bool            // Whether the authorization value of associatedContext is included in the HMAC key
 }
 
@@ -80,24 +80,24 @@ func (a *commandAuthArea) Unmarshal(buf io.Reader) error {
 	panic("no need to unmarshal a command's auth area")
 }
 
-func attrsFromSession(session *Session) sessionAttrs {
+func attrsFromSession(session *sessionContext) sessionAttrs {
 	var attrs sessionAttrs
-	if session.Attrs&AttrContinueSession > 0 {
+	if session.attrs&AttrContinueSession > 0 {
 		attrs |= attrContinueSession
 	}
-	if session.Attrs&AttrAuditExclusive > 0 {
+	if session.attrs&AttrAuditExclusive > 0 {
 		attrs |= (attrAuditExclusive | attrAudit)
 	}
-	if session.Attrs&AttrAuditReset > 0 {
+	if session.attrs&AttrAuditReset > 0 {
 		attrs |= (attrAuditReset | attrAudit)
 	}
-	if session.Attrs&AttrCommandEncrypt > 0 {
+	if session.attrs&AttrCommandEncrypt > 0 {
 		attrs |= attrDecrypt
 	}
-	if session.Attrs&AttrResponseEncrypt > 0 {
+	if session.attrs&AttrResponseEncrypt > 0 {
 		attrs |= attrEncrypt
 	}
-	if session.Attrs&AttrAudit > 0 {
+	if session.attrs&AttrAudit > 0 {
 		attrs |= attrAudit
 	}
 	return attrs
@@ -109,7 +109,7 @@ func computeCallerNonces(params []*sessionParam) error {
 			continue
 		}
 
-		if err := cryptComputeNonce(param.session.Context.(*sessionContext).scData().NonceCaller); err != nil {
+		if err := cryptComputeNonce(param.session.scData().NonceCaller); err != nil {
 			return fmt.Errorf("cannot compute new caller nonce: %v", err)
 		}
 	}
@@ -136,7 +136,7 @@ func (s *sessionParam) computeSessionHMACKey() []byte {
 		authValue = s.associatedContext.(resourceContextPrivate).authValue()
 	}
 	var key []byte
-	key = append(key, s.session.Context.(*sessionContext).scData().SessionKey...)
+	key = append(key, s.session.scData().SessionKey...)
 	if s.includeAuthValue {
 		key = append(key, authValue...)
 	}
@@ -144,8 +144,7 @@ func (s *sessionParam) computeSessionHMACKey() []byte {
 }
 
 func buildCommandSessionAuth(tpm *TPMContext, param *sessionParam, commandCode CommandCode, commandHandles []Name, cpBytes []byte, decryptNonce, encryptNonce Nonce) *authCommand {
-	sc := param.session.Context.(*sessionContext)
-	scData := sc.scData()
+	scData := param.session.scData()
 
 	attrs := attrsFromSession(param.session)
 	var hmac []byte
@@ -160,12 +159,12 @@ func buildCommandSessionAuth(tpm *TPMContext, param *sessionParam, commandCode C
 		key := param.computeSessionHMACKey()
 		if len(key) > 0 {
 			cpHash := cryptComputeCpHash(scData.HashAlg, commandCode, commandHandles, cpBytes)
-			hmac = cryptComputeSessionCommandHMAC(sc, key, cpHash, decryptNonce, encryptNonce, attrs)
+			hmac = cryptComputeSessionCommandHMAC(param.session, key, cpHash, decryptNonce, encryptNonce, attrs)
 		}
 	}
 
 	return &authCommand{
-		SessionHandle: param.session.Context.Handle(),
+		SessionHandle: param.session.Handle(),
 		Nonce:         scData.NonceCaller,
 		SessionAttrs:  attrs,
 		HMAC:          hmac}
@@ -189,14 +188,13 @@ func buildCommandAuth(tpm *TPMContext, param *sessionParam, commandCode CommandC
 }
 
 func processResponseSessionAuth(tpm *TPMContext, resp authResponse, param *sessionParam, commandCode CommandCode, responseCode ResponseCode, rpBytes []byte) error {
-	sc := param.session.Context.(*sessionContext)
-	scData := sc.scData()
+	scData := param.session.scData()
 	scData.NonceTPM = resp.Nonce
 	scData.IsAudit = resp.SessionAttrs&attrAudit > 0
 	scData.IsExclusive = resp.SessionAttrs&attrAuditExclusive > 0
 
 	if resp.SessionAttrs&attrContinueSession == 0 {
-		param.session.Context.(handleContextPrivate).invalidate()
+		param.session.invalidate()
 	}
 
 	if scData.SessionType == SessionTypePolicy && scData.PolicyHMACType == policyHMACTypePassword {
@@ -212,7 +210,7 @@ func processResponseSessionAuth(tpm *TPMContext, resp authResponse, param *sessi
 	}
 
 	rpHash := cryptComputeRpHash(scData.HashAlg, responseCode, commandCode, rpBytes)
-	hmac := cryptComputeSessionResponseHMAC(sc, key, rpHash, resp.SessionAttrs)
+	hmac := cryptComputeSessionResponseHMAC(param.session, key, rpHash, resp.SessionAttrs)
 
 	if !bytes.Equal(hmac, resp.HMAC) {
 		return errors.New("incorrect HMAC")
@@ -275,12 +273,12 @@ func processResponseAuthArea(tpm *TPMContext, authResponses []authResponse, sess
 
 func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in *sessionParam, isAuth bool) ([]*sessionParam, error) {
 	if in.session != nil {
-		if err := t.checkHandleContextParam(in.session.Context); err != nil {
-			return nil, fmt.Errorf("invalid resource context for session: %v", err)
+		if err := t.checkHandleContextParam(in.session); err != nil {
+			return nil, fmt.Errorf("invalid context for session: %v", err)
 		}
-		scData := in.session.Context.(*sessionContext).scData()
+		scData := in.session.scData()
 		if scData == nil {
-			return nil, errors.New("invalid resource context for session: not complete and loaded")
+			return nil, errors.New("invalid context for session: incomplete session can only be used in TPMContext.FlushContext")
 		}
 		switch scData.SessionType {
 		case SessionTypeHMAC:
@@ -305,11 +303,15 @@ func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in *s
 }
 
 func (t *TPMContext) validateAndAppendAuthSessionParam(params []*sessionParam, in ResourceContextWithSession) ([]*sessionParam, error) {
-	s := &sessionParam{isAuth: true, associatedContext: in.Context, session: in.Session}
+	var sc *sessionContext
+	if in.Session != nil {
+		sc = in.Session.(*sessionContext)
+	}
+	s := &sessionParam{isAuth: true, associatedContext: in.Context, session: sc}
 	return t.validateAndAppendSessionParam(params, s, true)
 }
 
-func (t *TPMContext) validateAndAppendExtraSessionParams(params []*sessionParam, in []*Session) ([]*sessionParam, error) {
+func (t *TPMContext) validateAndAppendExtraSessionParams(params []*sessionParam, in []SessionContext) ([]*sessionParam, error) {
 	addedOne := false
 	for _, s := range in {
 		if s == nil {
@@ -320,7 +322,7 @@ func (t *TPMContext) validateAndAppendExtraSessionParams(params []*sessionParam,
 		}
 		addedOne = true
 		var err error
-		params, err = t.validateAndAppendSessionParam(params, &sessionParam{session: s}, false)
+		params, err = t.validateAndAppendSessionParam(params, &sessionParam{session: s.(*sessionContext)}, false)
 		if err != nil {
 			return nil, err
 		}

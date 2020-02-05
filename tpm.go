@@ -77,67 +77,11 @@ type separatorSentinel struct{}
 // parameter pointers in the variable length params argument in TPMContext.RunCommand.
 var Separator separatorSentinel
 
-// SessionAttributes is a set of flags that specify the usage and behaviour of a session.
-type SessionAttributes int
-
-const (
-	// AttrContinueSession specifies that the session should not be flushed from the TPM after it is used. If a session is used without
-	// this flag, it will be flushed from the TPM after the command completes. In this case, the HandleContext associated with the
-	// session will be invalidated.
-	AttrContinueSession SessionAttributes = 1 << iota
-
-	// AttrAuditExclusive indicates that the session should be used for auditing and that the command should only be executed if the
-	// session is exclusive at the start of the command. A session becomes exclusive when it is used for auditing for the first time,
-	// or if the AttrAuditReset attribute is provided. A session will remain exclusive until the TPM executes any command where the
-	// exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
-	AttrAuditExclusive
-
-	// AttrAuditReset indicates that the session should be used for auditing and that the audit digest of the session should be reset.
-	// The session will subsequently become exclusive. A session will remain exclusive until the TPM executes any command where the
-	// exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
-	AttrAuditReset
-
-	// AttrCommandEncrypt specifies that the session should be used for encryption of the first command parameter before being sent
-	// from the host to the TPM. This can only be used for parameters that have types corresponding to TPM2B prefixed TCG types,
-	// and requires a session that was configured with a valid symmetric algorithm via the symmetric argument of
-	// TPMContext.StartAuthSession.
-	AttrCommandEncrypt
-
-	// AttrResponseEncrypt specifies that the session should be used for encryption of the first response parameter before being sent
-	// from the TPM to the host. This can only be used for parameters that have types corresponding to TPM2B prefixed TCG types, and
-	// requires a session that was configured with a valid symmetric algorithm via the symmetric argument of TPMContext.StartAuthSession.
-	// This package automatically decrypts the received encrypted response parameter.
-	AttrResponseEncrypt
-
-	// AttrAudit indicates that the session should be used for auditing. If this is the first time that the session is used for auditing,
-	// then this attribute will result in the session becoming exclusive. A session will remain exclusive until the TPM executes any
-	// command where the exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
-	AttrAudit
-)
-
-// Session wraps a SessionContext with some attributes that define how a command should use the session.
-type Session struct {
-	Context SessionContext    // A context for a session loaded on the TPM
-	Attrs   SessionAttributes // Session usage attributes
-}
-
-func (s *Session) WithAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, Attrs: attrs}
-}
-
-func (s *Session) AddAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, Attrs: s.Attrs | attrs}
-}
-
-func (s *Session) RemoveAttrs(attrs SessionAttributes) *Session {
-	return &Session{Context: s.Context, Attrs: s.Attrs &^ attrs}
-}
-
 // ResourceContextWithAuth associates a ResourceContext with a session for authorization, and is provided to TPMContext.RunCommand in
 // the command handle area for any handles that require an authorization.
 type ResourceContextWithSession struct {
 	Context ResourceContext
-	Session *Session
+	Session SessionContext
 }
 
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
@@ -154,15 +98,15 @@ type ResourceContextWithSession struct {
 // Methods that execute commands on the TPM will return errors where the TPM responds with them. These are in the form of *TPMError,
 // *TPMWarning, *TPMHandleError, *TPMSessionError, *TPMParameterError and *TPMVendorError types.
 //
-// Some methods also accept a variable number of optional *Session arguments - these are for sessions that don't provide authorization
-// for a corresponding TPM resource. These sessions may be used for the purposes of session based parameter encryption or command
-// auditing.
+// Some methods also accept a variable number of optional SessionContext arguments - these are for sessions that don't provide
+// authorization for a corresponding TPM resource. These sessions may be used for the purposes of session based parameter encryption
+// or command auditing.
 type TPMContext struct {
 	tcti               io.ReadWriteCloser
 	permanentResources map[Handle]*permanentContext
 	maxSubmissions     uint
 	maxNVBufferSize    uint16
-	exclusiveSession   HandleContext
+	exclusiveSession   *sessionContext
 }
 
 // Close calls Close on the transmission interface.
@@ -357,21 +301,24 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		rpBuf = bytes.NewReader(rpBytes)
 	}
 
-	var exclusive HandleContext
-	for _, s := range context.sessionParams {
-		if s.session == nil {
-			continue
-		}
-		if s.session.Context.(*sessionContext).scData().IsExclusive {
-			exclusive = s.session.Context
-			break
-		}
-	}
-	if exclusive != t.exclusiveSession && (exclusive != nil || isSessionAllowed(context.commandCode)) {
+	if isSessionAllowed(context.commandCode) {
 		if t.exclusiveSession != nil {
-			t.exclusiveSession.(*sessionContext).scData().IsExclusive = false
+			t.exclusiveSession.scData().IsExclusive = false
+		}
+		var exclusive *sessionContext
+		for _, s := range context.sessionParams {
+			if s.session == nil {
+				continue
+			}
+			if s.session.scData().IsExclusive {
+				exclusive = s.session
+				break
+			}
 		}
 		t.exclusiveSession = exclusive
+		if t.exclusiveSession != nil {
+			t.exclusiveSession.scData().IsExclusive = true
+		}
 	}
 
 	if len(params) > 0 {
@@ -418,7 +365,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 //
 // In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
 // this function will also return an error if the TPM responds with any ResponseCode other than Success.
-func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, params ...interface{}) error {
+func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionContext, params ...interface{}) error {
 	commandHandles := make([]interface{}, 0, len(params))
 	commandParams := make([]interface{}, 0, len(params))
 	responseHandles := make([]interface{}, 0, len(params))
@@ -456,7 +403,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []*Session, pa
 
 	sessionParams, err := t.validateAndAppendExtraSessionParams(sessionParams, sessions)
 	if err != nil {
-		return fmt.Errorf("cannot process non-auth *Session parameters for command %s: %v", commandCode, err)
+		return fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", commandCode, err)
 	}
 
 	ctx, err := t.runCommandWithoutProcessingResponse(commandCode, sessionParams, commandHandles, commandParams)

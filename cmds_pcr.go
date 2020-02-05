@@ -29,7 +29,7 @@ func (v PCRValues) EnsureBank(alg HashAlgorithmId) {
 //
 // If the PCR associated with pcrContext can not be extended from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
-func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashList, pcrContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashList, pcrContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPCRExtend, sessions,
 		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Separator,
 		digests)
@@ -45,7 +45,7 @@ func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashLis
 // ErrorLocality will be returned.
 //
 // On success, this function will return a list of tagged digests that the PCR associated with pcrContext was extended with.
-func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession *Session, sessions ...*Session) (TaggedHashList, error) {
+func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession SessionContext, sessions ...SessionContext) (TaggedHashList, error) {
 	var digests TaggedHashList
 	if err := t.RunCommand(CommandPCREvent, sessions,
 		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Separator,
@@ -59,11 +59,11 @@ func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrCo
 
 // PCRRead executes the TPM2_PCR_Read command to return the values of the PCRs defined in the pcrSelectionIn parameter. The
 // underlying command may not be able to read all of the specified PCRs in a single transaction, so this function will
-// re-execute the TPM2_PCR_Read command until all requested values have been read. As a consequence, any *Session instances
+// re-execute the TPM2_PCR_Read command until all requested values have been read. As a consequence, any SessionContext instances
 // provided should have the AttrContinueSession attribute defined.
 //
 // On success, the current value of pcrUpdateCounter is returned, as well as the requested PCR values.
-func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Session) (uint32, PCRValues, error) {
+func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...SessionContext) (uint32, PCRValues, error) {
 	var remaining PCRSelectionList
 	for _, s := range pcrSelectionIn {
 		c := PCRSelection{Hash: s.Hash, Select: make([]int, len(s.Select))}
@@ -131,6 +131,6 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...*Sessi
 //
 // If the PCR associated with pcrContext can not be reset from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
-func (t *TPMContext) PCRReset(pcrContext ResourceContext, pcrContextAuthSession *Session, sessions ...*Session) error {
+func (t *TPMContext) PCRReset(pcrContext ResourceContext, pcrContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPCRReset, sessions, ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession})
 }

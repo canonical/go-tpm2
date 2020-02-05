@@ -166,7 +166,7 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		isExclusive := t.exclusiveSession != nil && loadedHandle == t.exclusiveSession.Handle()
 		sc.scData().IsExclusive = isExclusive
 		if isExclusive {
-			t.exclusiveSession.(*sessionContext).scData().IsExclusive = false
+			t.exclusiveSession.scData().IsExclusive = false
 			t.exclusiveSession = sc
 		}
 		return sc, nil
@@ -223,7 +223,7 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
-func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession *Session, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
 	if err := t.RunCommand(CommandEvictControl, sessions,
 		ResourceContextWithSession{Context: auth, Session: authAuthSession}, object, Separator,
 		persistentHandle); err != nil {

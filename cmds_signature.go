@@ -18,7 +18,7 @@ package tpm2
 // ErrorHandle will be returned for parameter index 2.
 //
 // On success, a valid TkVerified structure will be returned.
-func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature, sessions ...*Session) (*TkVerified, error) {
+func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature, sessions ...SessionContext) (*TkVerified, error) {
 	var validation TkVerified
 	if err := t.RunCommand(CommandVerifySignature, sessions,
 		keyContext, Separator,
@@ -55,7 +55,7 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 // then validation may be nil. If validation is not nil and doesn't correspond to a valid ticket, or it is nil and the key associated
 // with keyContext has the AttrRestricted attribute set, a *TPMParameterError error with an error code of ErrorTicket will be returned
 // for parameter index 3.
-func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *SigScheme, validation *TkHashcheck, keyContextAuthSession *Session, sessions ...*Session) (*Signature, error) {
+func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *SigScheme, validation *TkHashcheck, keyContextAuthSession SessionContext, sessions ...SessionContext) (*Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}

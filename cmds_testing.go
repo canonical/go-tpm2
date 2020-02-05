@@ -6,11 +6,11 @@ package tpm2
 
 // Section 9 - Start-up
 
-func (t *TPMContext) SelfTest(fullTest bool, sessions ...*Session) error {
+func (t *TPMContext) SelfTest(fullTest bool, sessions ...SessionContext) error {
 	return t.RunCommand(CommandSelfTest, sessions, Separator, fullTest)
 }
 
-func (t *TPMContext) IncrementalSelfTest(toTest AlgorithmList, sessions ...*Session) (AlgorithmList, error) {
+func (t *TPMContext) IncrementalSelfTest(toTest AlgorithmList, sessions ...SessionContext) (AlgorithmList, error) {
 	var toDoList AlgorithmList
 	if err := t.RunCommand(CommandIncrementalSelfTest, sessions,
 		Separator,
@@ -22,7 +22,7 @@ func (t *TPMContext) IncrementalSelfTest(toTest AlgorithmList, sessions ...*Sess
 	return toDoList, nil
 }
 
-func (t *TPMContext) GetTestResult(sessions ...*Session) (MaxBuffer, ResponseCode, error) {
+func (t *TPMContext) GetTestResult(sessions ...SessionContext) (MaxBuffer, ResponseCode, error) {
 	var outData MaxBuffer
 	var testResult ResponseCode
 	if err := t.RunCommand(CommandGetTestResult, sessions, Separator, Separator, Separator, &outData, &testResult); err != nil {

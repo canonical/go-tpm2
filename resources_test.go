@@ -165,9 +165,8 @@ func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sc)
-		session := &Session{Context: sc, Attrs: AttrContinueSession | AttrAudit}
 
-		rc, err := tpm.CreateResourceContextFromTPM(context.Handle(), session)
+		rc, err := tpm.CreateResourceContextFromTPM(context.Handle(), sc.WithAttrs(AttrContinueSession|AttrAudit))
 		if err != nil {
 			t.Errorf("CreateResourceContextFromTPM failed: %v", err)
 		}
@@ -268,5 +267,83 @@ func TestCreateObjectResourceContextFromPublic(t *testing.T) {
 	}
 	if !bytes.Equal(rc2.Name(), rc1.Name()) {
 		t.Errorf("CreateObjectResourceContextFromPublic returned a context with the wrong name")
+	}
+}
+
+func TestSessionContextSetAttrs(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	defer flushContext(t, tpm, context)
+
+	context.SetAttrs(AttrContinueSession)
+	if context.(TestSessionContext).GetAttrs() != AttrContinueSession {
+		t.Errorf("SessionContext.SetAttrs didn't work")
+	}
+}
+
+func TestSessionContextWithAttrs(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	context2 := context.WithAttrs(AttrAudit)
+	defer verifyContextFlushed(t, tpm, context)
+	defer flushContext(t, tpm, context2)
+
+	if context.(TestSessionContext).GetAttrs() != 0 {
+		t.Errorf("SessionContext.WithAttrs set attributes on the wrong context")
+	}
+	if context2.(TestSessionContext).GetAttrs() != AttrAudit {
+		t.Errorf("SessionContext.WithAttrs didn't work")
+	}
+}
+
+func TestSessionContextIncludeAttrs(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	context.SetAttrs(AttrContinueSession)
+	context2 := context.IncludeAttrs(AttrResponseEncrypt)
+	defer verifyContextFlushed(t, tpm, context)
+	defer flushContext(t, tpm, context2)
+
+	if context.(TestSessionContext).GetAttrs() != AttrContinueSession {
+		t.Errorf("SessionContext.IncludeAttrs set attributes on the wrong context")
+	}
+	if context2.(TestSessionContext).GetAttrs() != AttrContinueSession|AttrResponseEncrypt {
+		t.Errorf("SessionContext.IncludeAttrs didn't work")
+	}
+}
+
+func TestSessionContextExcludeAttrs(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	if err != nil {
+		t.Fatalf("StartAuthSession failed: %v", err)
+	}
+	context.SetAttrs(AttrAudit | AttrContinueSession | AttrCommandEncrypt)
+	context2 := context.ExcludeAttrs(AttrAudit)
+	defer verifyContextFlushed(t, tpm, context)
+	defer flushContext(t, tpm, context2)
+
+	if context.(TestSessionContext).GetAttrs() != AttrAudit|AttrContinueSession|AttrCommandEncrypt {
+		t.Errorf("SessionContext.ExcludeAttrs set attributes on the wrong context")
+	}
+	if context2.(TestSessionContext).GetAttrs() != AttrContinueSession|AttrCommandEncrypt {
+		t.Errorf("SessionContext.ExcludeAttrs didn't work")
 	}
 }

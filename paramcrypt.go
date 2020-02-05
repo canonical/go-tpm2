@@ -16,7 +16,7 @@ func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*ses
 		if session.session == nil {
 			continue
 		}
-		if session.session.Attrs&attr > 0 {
+		if session.session.attrs&attr > 0 {
 			return session, i
 		}
 	}
@@ -75,7 +75,7 @@ func isParamEncryptable(param interface{}) bool {
 
 func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
-	key = append(key, s.session.Context.(*sessionContext).scData().SessionKey...)
+	key = append(key, s.session.scData().SessionKey...)
 	if s.associatedContext != nil {
 		key = append(key, s.associatedContext.(resourceContextPrivate).authValue()...)
 	}
@@ -92,7 +92,7 @@ func computeEncryptNonce(sessions []*sessionParam) Nonce {
 		return nil
 	}
 
-	return session.session.Context.(*sessionContext).scData().NonceTPM
+	return session.session.scData().NonceTPM
 }
 
 func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, error) {
@@ -101,7 +101,7 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		return nil, nil
 	}
 
-	scData := session.session.Context.(*sessionContext).scData()
+	scData := session.session.scData()
 	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
@@ -146,7 +146,7 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 		return nil
 	}
 
-	scData := session.session.Context.(*sessionContext).scData()
+	scData := session.session.scData()
 	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)

@@ -34,12 +34,58 @@ type handleContextPrivate interface {
 	data() *handleContextData
 }
 
+// SessionAttributes is a set of flags that specify the usage and behaviour of a session.
+type SessionAttributes int
+
+const (
+	// AttrContinueSession specifies that the session should not be flushed from the TPM after it is used. If a session is used without
+	// this flag, it will be flushed from the TPM after the command completes. In this case, the HandleContext associated with the
+	// session will be invalidated.
+	AttrContinueSession SessionAttributes = 1 << iota
+
+	// AttrAuditExclusive indicates that the session should be used for auditing and that the command should only be executed if the
+	// session is exclusive at the start of the command. A session becomes exclusive when it is used for auditing for the first time,
+	// or if the AttrAuditReset attribute is provided. A session will remain exclusive until the TPM executes any command where the
+	// exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
+	AttrAuditExclusive
+
+	// AttrAuditReset indicates that the session should be used for auditing and that the audit digest of the session should be reset.
+	// The session will subsequently become exclusive. A session will remain exclusive until the TPM executes any command where the
+	// exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
+	AttrAuditReset
+
+	// AttrCommandEncrypt specifies that the session should be used for encryption of the first command parameter before being sent
+	// from the host to the TPM. This can only be used for parameters that have types corresponding to TPM2B prefixed TCG types,
+	// and requires a session that was configured with a valid symmetric algorithm via the symmetric argument of
+	// TPMContext.StartAuthSession.
+	AttrCommandEncrypt
+
+	// AttrResponseEncrypt specifies that the session should be used for encryption of the first response parameter before being sent
+	// from the TPM to the host. This can only be used for parameters that have types corresponding to TPM2B prefixed TCG types, and
+	// requires a session that was configured with a valid symmetric algorithm via the symmetric argument of TPMContext.StartAuthSession.
+	// This package automatically decrypts the received encrypted response parameter.
+	AttrResponseEncrypt
+
+	// AttrAudit indicates that the session should be used for auditing. If this is the first time that the session is used for auditing,
+	// then this attribute will result in the session becoming exclusive. A session will remain exclusive until the TPM executes any
+	// command where the exclusive session isn't used for auditing, if that command allows for audit sessions to be provided.
+	AttrAudit
+)
+
 // SessionContext is a HandleContext that corresponds to a session on the TPM.
 type SessionContext interface {
 	HandleContext
 	NonceTPM() Nonce   // The most recent TPM nonce value
 	IsAudit() bool     // Whether the session has been used for audit
 	IsExclusive() bool // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
+
+	SetAttrs(attrs SessionAttributes)                 // Set the attributes that will be used for this SessionContext
+	WithAttrs(attrs SessionAttributes) SessionContext // Return a duplicate of this SessionContext with the specified attributes
+
+	// IncludeAttrs returns a duplicate of this SessionContext and its attributes with the specified attributes included.
+	IncludeAttrs(attrs SessionAttributes) SessionContext
+	// ExcludeAttrs returns a duplicate of this SessionContext and its attributes with the specified attributes excluded.
+	ExcludeAttrs(attrs SessionAttributes) SessionContext
 }
 
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
@@ -350,7 +396,7 @@ func makeObjectContext(handle Handle, name Name, public *Public) *objectContext 
 	return &objectContext{d: handleContextData{Type: handleContextTypeObject, Handle: handle, Name: name, Data: handleContextDataU{public}}}
 }
 
-func (t *TPMContext) makeObjectContextFromTPM(context ResourceContext, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) makeObjectContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
 	pub, name, _, err := t.ReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -423,7 +469,7 @@ func makeNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: public.Index, Name: name, Data: handleContextDataU{public}}}
 }
 
-func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
 	pub, name, err := t.NVReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -440,7 +486,8 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions
 }
 
 type sessionContext struct {
-	d handleContextData
+	d     *handleContextData
+	attrs SessionAttributes
 }
 
 func (r *sessionContext) Handle() Handle {
@@ -483,6 +530,22 @@ func (r *sessionContext) IsExclusive() bool {
 	return d.IsExclusive
 }
 
+func (r *sessionContext) SetAttrs(attrs SessionAttributes) {
+	r.attrs = attrs
+}
+
+func (r *sessionContext) WithAttrs(attrs SessionAttributes) SessionContext {
+	return &sessionContext{d: r.d, attrs: attrs}
+}
+
+func (r *sessionContext) IncludeAttrs(attrs SessionAttributes) SessionContext {
+	return &sessionContext{d: r.d, attrs: r.attrs | attrs}
+}
+
+func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
+	return &sessionContext{d: r.d, attrs: r.attrs &^ attrs}
+}
+
 func (r *sessionContext) invalidate() {
 	r.d.Handle = HandleUnassigned
 	r.d.Name = make(Name, binary.Size(Handle(0)))
@@ -490,7 +553,7 @@ func (r *sessionContext) invalidate() {
 }
 
 func (r *sessionContext) data() *handleContextData {
-	return &r.d
+	return r.d
 }
 
 func (r *sessionContext) scData() *sessionContextData {
@@ -500,7 +563,7 @@ func (r *sessionContext) scData() *sessionContextData {
 func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &sessionContext{d: handleContextData{Type: handleContextTypeSession, Handle: handle, Name: name, Data: handleContextDataU{data}}}
+	return &sessionContext{d: &handleContextData{Type: handleContextTypeSession, Handle: handle, Name: name, Data: handleContextDataU{data}}}
 }
 
 func (t *TPMContext) checkHandleContextParam(hc HandleContext) error {
@@ -526,7 +589,7 @@ func (t *TPMContext) checkHandleContextParam(hc HandleContext) error {
 //
 // If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
 // this should be provided by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...*Session) (ResourceContext, error) {
+func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
 	switch handle.Type() {
 	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
 	default:
@@ -534,7 +597,7 @@ func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...*Se
 	}
 
 	var rc ResourceContext = makeDummyContext(handle)
-	var s []*Session
+	var s []SessionContext
 	for i := 0; i < 2; i++ {
 		var err error
 		if handle.Type() == HandleTypeNVIndex {
@@ -688,7 +751,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	case handleContextTypeNvIndex:
 		hc = &nvIndexContext{d: *data}
 	case handleContextTypeSession:
-		hc = &sessionContext{d: *data}
+		hc = &sessionContext{d: data}
 	default:
 		panic("not reached")
 	}
