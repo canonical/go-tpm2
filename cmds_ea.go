@@ -178,8 +178,8 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 // }
 
 // PolicyNV executes the TPM2_PolicyNV command to gate a policy based on the contents of the NV index associated with nvIndex. The
-// caller specifies a comparison operator via the operation parameter, and a value to which to compare the value of the NV index to
-// via the operandB parameter. The offset parameter specifies the offset in to the NV index data from which the first operand begins.
+// caller specifies a value to be used for the comparison via the operandB argument, an offset from the start of the NV index data
+// from which to start the comparison via the offset argument, and a comparison operator via the operation argument.
 //
 // The command requires authorization to read the NV index, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead
 // and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext. If the NV index has the
@@ -219,8 +219,20 @@ func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySessio
 		operandB, offset, operation)
 }
 
-// func (t *TPMContext) PolicyCounterTimer(policySession HandleContext, operandB Operand, offset uint16, operation ArithmeticOp, sessions ...SessionContext) error {
-// }
+// PolicyCounterTimer executes the TPM2_PolicyCounterTimer command to gate a policy based on the contents of the TimeInfo structure.
+// The caller specifies a value to be used for the comparison via the operandB argument, an offset from the start of the TimeInfo
+// structure from which to start the comparison via the offset argument, and a comparison operator via the operation argument.
+//
+// If the comparison fails and policySession does not correspond to a trial session, a *TPMError error will be returned with an error
+// code of ErrorPolicy.
+//
+// On successful completion, the policy digest of the session context associated with policySession is extended to include the values
+// of operandB, offset and operation.
+func (t *TPMContext) PolicyCounterTimer(policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, sessions ...SessionContext) error {
+	return t.RunCommand(CommandPolicyCounterTimer, sessions,
+		policySession, Separator,
+		operandB, offset, operation)
+}
 
 // PolicyCommandCode executes the TPM2_PolicyCommandCode command to indicate that an authorization should be limited to a specific
 // command.

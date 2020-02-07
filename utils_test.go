@@ -415,6 +415,80 @@ func TestTrialPolicyNV(t *testing.T) {
 	}
 }
 
+func TestTrialPolicyCounterTimer(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	uint64a := make(Operand, 8)
+	binary.BigEndian.PutUint64(uint64a, 1603123)
+
+	uint64b := make(Operand, 8)
+	binary.BigEndian.PutUint64(uint64b, 6658125610)
+
+	for _, data := range []struct {
+		desc      string
+		alg       HashAlgorithmId
+		operandB  Operand
+		offset    uint16
+		operation ArithmeticOp
+	}{
+		{
+			desc:      "SHA256",
+			alg:       HashAlgorithmSHA256,
+			operandB:  uint64b,
+			offset:    8,
+			operation: OpUnsignedGT,
+		},
+		{
+			desc:      "SHA1",
+			alg:       HashAlgorithmSHA1,
+			operandB:  uint64b,
+			offset:    8,
+			operation: OpUnsignedGE,
+		},
+		{
+			desc:      "Time",
+			alg:       HashAlgorithmSHA256,
+			operandB:  uint64a,
+			offset:    0,
+			operation: OpUnsignedGE,
+		},
+		{
+			desc:      "Safe",
+			alg:       HashAlgorithmSHA256,
+			operandB:  Operand{0x01},
+			offset:    24,
+			operation: OpEq,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyCounterTimer(sessionContext, data.operandB, data.offset, data.operation, nil); err != nil {
+				t.Fatalf("PolicyCounterTimer failed: %v", err)
+			}
+
+			trial, err := ComputeAuthPolicy(data.alg)
+			if err != nil {
+				t.Fatalf("ComputeAuthPolicy failed: %v", err)
+			}
+			trial.PolicyCounterTimer(data.operandB, data.offset, data.operation)
+
+			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(tpmDigest, trial.GetDigest()) {
+				t.Errorf("Unexpected digest")
+			}
+		})
+	}
+}
 func TestTrialPolicyCommandCode(t *testing.T) {
 	tpm := openTPMForTesting(t)
 	defer closeTPM(t, tpm)
