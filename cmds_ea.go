@@ -6,8 +6,8 @@ package tpm2
 
 // Section 23 - Enhanced Authorization (EA) Commands
 
-// PolicySigned executes the TPM2_PolicySigned command to include a signed authorization in a policy. The command binds a policy to
-// the signing key associated with authContext.
+// PolicySigned executes the TPM2_PolicySigned command to include a signed authorization in a policy. This is a combined assertion
+// that binds a policy to the signing key associated with authContext.
 //
 // An authorizing entity signs a digest of authorization qualifiers with the key associated with authContext. The digest is computed as:
 //   digest := H(nonceTPM||expiration||cpHashA||policyRef)
@@ -69,10 +69,10 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 }
 
 // PolicySecret executes the TPM2_PolicySecret command to include a secret-based authorization to the policy session associated
-// with policySession. The command requires authorization with the user auth role for authContext, with session based authorization
-// provided via authContextAuthSession. If authContextAuthSession corresponds a policy session, and that session does not include a
-// TPM2_PolicyPassword or TPM2_PolicyAuthValue assertion, a *TPMSessionError error with an error code of ErrorMode will be returned
-// for session index 1.
+// with policySession, and is a combined assertion. The command requires authorization with the user auth role for authContext, with
+// session based authorization provided via authContextAuthSession. If authContextAuthSession corresponds a policy session, and that
+// session does not include a TPM2_PolicyPassword or TPM2_PolicyAuthValue assertion, a *TPMSessionError error with an error code of
+// ErrorMode will be returned for session index 1.
 //
 // The cpHashA parameter allows the session to be bound to a specific command and set of command parameters by providing a command
 // parameter digest. Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session. If
@@ -143,10 +143,10 @@ func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout,
 		timeout, cpHashA, policyRef, authName, ticket)
 }
 
-// PolicyOR executes the TPM2_PolicyOR command to allow a policy to be satisfied by different sets of conditions. If policySession
-// does not correspond to a trial session, it determines if the current policy digest of the session context associated with
-// policySession is contained in the list of digests specified via pHashList. If it is not, then a *TPMParameterError error with
-// an error code of ErrorValue is returned without making any changes to the session context.
+// PolicyOR executes the TPM2_PolicyOR command to allow a policy to be satisfied by different sets of conditions, and is an immediate
+// assertion. If policySession does not correspond to a trial session, it determines if the current policy digest of the session
+// context associated with policySession is contained in the list of digests specified via pHashList. If it is not, then a
+// *TPMParameterError error with an error code of ErrorValue is returned without making any changes to the session context.
 //
 // On successful completion, the policy digest of the session context associated with policySession is cleared, and then extended to
 // include the concatenation of all of the digests contained in pHashList.
@@ -157,14 +157,15 @@ func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList
 }
 
 // PolicyPCR executes the TPM2_PolicyPCR command to gate a policy based on the values of the PCRs selected via the pcrs parameter. If
-// no digest has been specified via the pcrDigest parameter, the policy digest of the session context associated with policySession
-// will be extended to include the value of the PCR selection and a digest computed from the selected PCR contents.
+// no digest has been specified via the pcrDigest parameter, then it is a deferred assertion and the policy digest of the session
+// context associated with policySession will be extended to include the value of the PCR selection and a digest computed from the
+// selected PCR contents.
 //
-// If pcrDigest is provided and policySession does not correspond to a trial session, the digest computed from the selected PCRs will
-// be compared to this value and a *TPMParameterError error with an error code of ErrorValue will be returned for parameter index 1
-// if they don't match, without making any changes to the session context. If policySession corresponds to a trial session, the digest
-// computed from the selected PCRs is not compared to the value of pcrDigest - instead, the policy digest of the session is extended
-// to include the value of the PCR selection and the value of pcrDigest.
+// If pcrDigest is provided, then it is a combined assertion. If policySession does not correspond to a trial session, the digest
+// computed from the selected PCRs will be compared to the value of pcrDigest and a *TPMParameterError error with an error code of
+// ErrorValue will be returned for parameter index 1 if they don't match, without making any changes to the session context. If
+// policySession corresponds to a trial session, the digest computed from the selected PCRs is not compared to the value of pcrDigest;
+// instead, the policy digest of the session is extended to include the value of the PCR selection and the value of pcrDigest.
 //
 // If the PCR contents have changed since the last time this command was executed for this session, a *TPMError error will be returned
 // with an error code of ErrorPCRChanged.
@@ -177,9 +178,10 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 // func (t *TPMContext) PolicyLocality(policySession HandleContext, locality Locality, sessions ...SessionContext) error {
 // }
 
-// PolicyNV executes the TPM2_PolicyNV command to gate a policy based on the contents of the NV index associated with nvIndex. The
-// caller specifies a value to be used for the comparison via the operandB argument, an offset from the start of the NV index data
-// from which to start the comparison via the offset argument, and a comparison operator via the operation argument.
+// PolicyNV executes the TPM2_PolicyNV command to gate a policy based on the contents of the NV index associated with nvIndex, and is
+// an immediate assertion. The caller specifies a value to be used for the comparison via the operandB argument, an offset from the
+// start of the NV index data from which to start the comparison via the offset argument, and a comparison operator via the operation
+// argument.
 //
 // The command requires authorization to read the NV index, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead
 // and AttrNVPolicyRead attributes. The handle used for authorization is specified via authContext. If the NV index has the
@@ -219,9 +221,10 @@ func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySessio
 		operandB, offset, operation)
 }
 
-// PolicyCounterTimer executes the TPM2_PolicyCounterTimer command to gate a policy based on the contents of the TimeInfo structure.
-// The caller specifies a value to be used for the comparison via the operandB argument, an offset from the start of the TimeInfo
-// structure from which to start the comparison via the offset argument, and a comparison operator via the operation argument.
+// PolicyCounterTimer executes the TPM2_PolicyCounterTimer command to gate a policy based on the contents of the TimeInfo structure,
+// and is an immediate assertion. The caller specifies a value to be used for the comparison via the operandB argument, an offset from
+// the start of the TimeInfo structure from which to start the comparison via the offset argument, and a comparison operator via the
+// operation argument.
 //
 // If the comparison fails and policySession does not correspond to a trial session, a *TPMError error will be returned with an error
 // code of ErrorPolicy.
@@ -234,8 +237,8 @@ func (t *TPMContext) PolicyCounterTimer(policySession SessionContext, operandB O
 		operandB, offset, operation)
 }
 
-// PolicyCommandCode executes the TPM2_PolicyCommandCode command to indicate that an authorization should be limited to a specific
-// command.
+// PolicyCommandCode executes the TPM2_PolicyCommandCode command to indicate that an authorization policy should be limited to a
+// specific command. Ths is a deferred assertion.
 //
 // If the command code is not implemented, a *TPMParameterError error with an error code of ErrorPolicyCC will be returned. If
 // the session associated with policySession has already been limited to a different command code, a *TPMParameterError error with
@@ -253,7 +256,8 @@ func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code Comman
 // func (t *TPMContext) PolicyPhysicalPresence(policySession HandleContext, sessions ...SessionContext) error {
 // }
 
-// PolicyCpHash executes the TPM2_PolicyCpHash command to bind a policy to a specific command and set of command parameters.
+// PolicyCpHash executes the TPM2_PolicyCpHash command to bind a policy to a specific command and set of command parameters. This is
+// a deferred assertion.
 //
 // TPMContext.PolicySigned, TPMContext.PolicySecret and TPMContext.PolicyTicket allow an authorizing entity to execute an arbitrary
 // command as the cpHashA parameter is not included in the session's policy digest. TPMContext.PolicyCommandCode allows the policy
@@ -277,7 +281,7 @@ func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, 
 }
 
 // PolicyNameHash executes the TPM2_PolicyNameHash command to bind a policy to a specific set of TPM entities, without being bound
-// to the parameters of the command.
+// to the parameters of the command. This is a deferred assertion.
 //
 // If the size of nameHash is inconsistent with the digest algorithm for the session, a *TPMParameterError error with an error code
 // of ErrorSize will be returned.
@@ -294,7 +298,7 @@ func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Diges
 
 // PolicyDuplicationSelect executes the TPM2_PolicyDuplicationSelect command to allow the policy to be restricted to duplication
 // and to allow duplication to a specific new parent. The objectName argument corresponds to the name of the object to be duplicated.
-// The newParentName argument corresponds to the name of the new parent object.
+// The newParentName argument corresponds to the name of the new parent object. This is a deferred assertion.
 //
 // If the session associated with policySession already has a command parameter digest, name digest or template digest defined, a
 // *TPMError error with an error code of ErrorCpHash will be returned.
@@ -313,9 +317,9 @@ func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objec
 		objectName, newParentName, includeObject)
 }
 
-// PolicyAuthorize executes the TPM2_PolicyAuthorize command, which allows policies to change. The command allows an authorizing
-// entity to sign a new policy that can be used in an existing policy. The authorizing party signs a digest that is computed as
-// follows:
+// PolicyAuthorize executes the TPM2_PolicyAuthorize command, which allows policies to change. This is an immediate assertion. The
+// command allows an authorizing entity to sign a new policy that can be used in an existing policy. The authorizing party signs a
+// digest that is computed as follows:
 //   digest := H(approvedPolicy||policyRef)
 // ... where H is the name algorithm of the key used to sign the digest.
 //
@@ -347,13 +351,13 @@ func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolic
 }
 
 // PolicyAuthValue executes the TPM2_PolicyAuthValue command to bind the policy to the authorization value of the entity on which the
-// authorization is used. On successful completion, the policy digest of the session context associated with policySession will be
-// extended to record that this assertion has been executed, and a flag will be set on the session context to indicate that the
-// authorization value of the entity on which the authorization is used must be included in the key for computing the command HMAC
-// when the authorization is used.
+// authorization is used. This is a deferred assertion. On successful completion, the policy digest of the session context associated
+// with policySession will be extended to record that this assertion has been executed, and a flag will be set on the session context
+// to indicate that the authorization value of the entity on which the authorization is used must be included in the key for computing
+// the command HMAC when the session is used.
 //
-// When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
-// must be set to the authorization value of the entity being authorized.
+// When using policySession in a subsequent authorization, the authorization value of the entity being authorized must be provided by
+// calling ResourceContext.SetAuthValue.
 func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandPolicyAuthValue, sessions, policySession); err != nil {
 		return err
@@ -364,13 +368,13 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 }
 
 // PolicyPassword executes the TPM2_PolicyPassword command to bind the policy to the authorization value of the entity on which the
-// authorization is used. On successful completion, the policy digest of the session context associated with policySession will be
-// extended to record that this assertion has been executed, and a flag will be set on the session context to indicate that the
-// authorization value of the entity on which the authorization is used must be included in cleartext in the command authorization
-// when the authorization is used.
+// authorization is used. This is a deferred assertion. On successful completion, the policy digest of the session context associated
+// with policySession will be extended to record that this assertion has been executed, and a flag will be set on the session context
+// to indicate that the authorization value of the entity on which the authorization is used must be included in cleartext in the
+// command authorization when the session is used.
 //
-// When using policySession in a subsequent authorization, the AuthValue field of the Session struct that references policySession
-// must be set to the authorization value of the entity being authorized.
+// When using policySession in a subsequent authorization, the authorization value of the entity being authorized must be provided by
+// calling ResourceContext.SetAuthValue.
 func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandPolicyPassword, sessions, policySession); err != nil {
 		return err
@@ -396,8 +400,18 @@ func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...S
 	return policyDigest, nil
 }
 
-// func (t *TPMContext) PolicyNvWritten(policySession HandleContext, writtenSet bool, sessions ...SessionContext) error {
-// }
+// PolicyNvWritten executes the TPM2_PolicyNvWritten command to bind a policy to the value of the AttrNVWritten attribute of the
+// NV index being authorized, and is a deferred assertion.
+//
+// If this command has been executed previously in this session, and the value of writtenSet doesn't match the value provided
+// previously, a *TPMParameterError error with an error code of ErrorValue will be returned.
+//
+// On successful completion, the policy digest of the session associated with policySession will be extended to include the value of
+// writtenSet. A flag will be set on the session context so that the value of the AttrNVWritten attribute of the NV index being
+// authorized will be compared to writtenSet when the session is used.
+func (t *TPMContext) PolicyNvWritten(policySession SessionContext, writtenSet bool, sessions ...SessionContext) error {
+	return t.RunCommand(CommandPolicyNvWritten, sessions, policySession, Separator, writtenSet)
+}
 
 // func (t *TPMContext) PolicyTemplate(policySession HandleContext, templateHash Digest, sessions ...SessionContext) error {
 // }

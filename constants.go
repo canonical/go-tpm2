@@ -153,6 +153,7 @@ const (
 	CommandPolicyGetDigest            CommandCode = 0x00000189 // TPM_CC_PolicyGetDigest
 	CommandTestParms                  CommandCode = 0x0000018A // TPM_CC_TestParms
 	CommandPolicyPassword             CommandCode = 0x0000018C // TPM_CC_PolicyPassword
+	CommandPolicyNvWritten            CommandCode = 0x0000018F // TPM_CC_PolicyNvWritten
 	CommandCreateLoaded               CommandCode = 0x00000191 // TPM_CC_CreateLoaded
 )
 

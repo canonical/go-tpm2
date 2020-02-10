@@ -863,3 +863,57 @@ func TestTrialPolicyPassword(t *testing.T) {
 		})
 	}
 }
+
+func TestTrialPolicyNvWritten(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	for _, data := range []struct {
+		desc       string
+		alg        HashAlgorithmId
+		writtenSet bool
+	}{
+		{
+			desc:       "SHA256/1",
+			alg:        HashAlgorithmSHA256,
+			writtenSet: true,
+		},
+		{
+			desc:       "SHA1",
+			alg:        HashAlgorithmSHA1,
+			writtenSet: false,
+		},
+		{
+			desc:       "SHA256/2",
+			alg:        HashAlgorithmSHA256,
+			writtenSet: false,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, data.alg)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyNvWritten(sessionContext, data.writtenSet); err != nil {
+				t.Fatalf("PolicyNvWritten failed: %v", err)
+			}
+
+			trial, err := ComputeAuthPolicy(data.alg)
+			if err != nil {
+				t.Fatalf("ComputeAuthPolicy failed: %v", err)
+			}
+			trial.PolicyNvWritten(data.writtenSet)
+
+			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(tpmDigest, trial.GetDigest()) {
+				t.Errorf("Unexpected digest")
+			}
+		})
+	}
+}

@@ -28,7 +28,7 @@ The current support status for each command group is detailed below.
  Signing and Signature Verification | Full |
  Command Audit | Full |
  Integrity Collection (PCR) | Partial | TPM2_PCR_Extend, TPM2_PCR_Event, TPM2_PCR_Read and TPM2_PCR_Reset are supported
- Enhanced Authorization (EA) Commands | Partial | All commands are supported except for TPM2_PolicyLocality, TPM2_PolicyPhysicalPresence, TPM2_PolicyNvWritten, TPM2_PolicyTemplate and TPM2_PolicyAuthorizeNV
+ Enhanced Authorization (EA) Commands | Partial | All commands are supported except for TPM2_PolicyLocality, TPM2_PolicyPhysicalPresence, TPM2_PolicyTemplate and TPM2_PolicyAuthorizeNV
  Hierarchy Commands | Partial | TPM2_CreatePrimary, TPM2_Clear, TPM2_ClearControl and TPM2_HierarchyChangeAuth are supported
  Dictionary Attack Functions | Full |
  Miscellaneous Management Functions | None |

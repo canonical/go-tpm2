@@ -1259,3 +1259,49 @@ func TestPolicyCounterTimer(t *testing.T) {
 		})
 	}
 }
+
+func TestPolicyNvWritten(t *testing.T) {
+	tpm := openTPMForTesting(t)
+	defer closeTPM(t, tpm)
+
+	for _, data := range []struct {
+		desc       string
+		writtenSet bool
+	}{
+		{
+			desc:       "Written",
+			writtenSet: true,
+		},
+		{
+			desc:       "NotWritten",
+			writtenSet: false,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
+			trial.PolicyNvWritten(data.writtenSet)
+
+			authPolicy := trial.GetDigest()
+
+			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
+			if err != nil {
+				t.Fatalf("StartAuthSession failed: %v", err)
+			}
+			defer flushContext(t, tpm, sessionContext)
+
+			if err := tpm.PolicyNvWritten(sessionContext, data.writtenSet); err != nil {
+				t.Fatalf("PolicyNvWritten failed: %v", err)
+			}
+
+			digest, err := tpm.PolicyGetDigest(sessionContext)
+			if err != nil {
+				t.Fatalf("PolicyGetDigest failed: %v", err)
+			}
+
+			if !bytes.Equal(digest, authPolicy) {
+				t.Errorf("Unexpected session digest")
+			}
+
+		})
+	}
+}

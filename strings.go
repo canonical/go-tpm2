@@ -233,6 +233,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_TestParms"
 	case CommandPolicyPassword:
 		return "TPM_CC_PolicyPassword"
+	case CommandPolicyNvWritten:
+		return "TPM_CC_PolicyNvWritten"
 	case CommandCreateLoaded:
 		return "TPM_CC_CreateLoaded"
 	default:

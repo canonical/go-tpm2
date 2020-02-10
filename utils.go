@@ -228,3 +228,9 @@ func (p *TrialAuthPolicy) PolicyPassword() {
 	_, end := p.beginUpdateForCommand(CommandPolicyAuthValue)
 	end()
 }
+
+func (p *TrialAuthPolicy) PolicyNvWritten(writtenSet bool) {
+	h, end := p.beginUpdateForCommand(CommandPolicyNvWritten)
+	binary.Write(h, binary.BigEndian, writtenSet)
+	end()
+}
