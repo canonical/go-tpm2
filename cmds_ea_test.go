@@ -1088,7 +1088,7 @@ func TestPolicyNV(t *testing.T) {
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
 				NameAlg: HashAlgorithmSHA256,
-				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
 				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, authSession); err != nil {
@@ -1104,7 +1104,7 @@ func TestPolicyNV(t *testing.T) {
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
 				NameAlg: HashAlgorithmSHA256,
-				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
 				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, authSession); err != nil {
@@ -1120,7 +1120,7 @@ func TestPolicyNV(t *testing.T) {
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
 				NameAlg: HashAlgorithmSHA256,
-				Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
 				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4, authSession); err != nil {

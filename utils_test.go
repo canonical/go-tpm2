@@ -340,7 +340,7 @@ func TestTrialPolicyNV(t *testing.T) {
 	nvPub := NVPublic{
 		Index:   0x0181ffff,
 		NameAlg: HashAlgorithmSHA256,
-		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    64}
 	index, err := tpm.NVDefineSpace(owner, nil, &nvPub, nil)
 	if err != nil {

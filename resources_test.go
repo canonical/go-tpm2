@@ -65,7 +65,7 @@ func TestCreateResourceContextFromTPM(t *testing.T) {
 		pub := NVPublic{
 			Index:   0x018100ff,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 			Size:    8}
 		rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
 		if err != nil {
@@ -144,7 +144,7 @@ func TestCreateHandleContextFromBytes(t *testing.T) {
 		pub := NVPublic{
 			Index:   0x018100ff,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 			Size:    8}
 		rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
 		if err != nil {
@@ -196,7 +196,7 @@ func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
 		pub := NVPublic{
 			Index:   0x018100ff,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 			Size:    8}
 		rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
 		if err != nil {
@@ -214,7 +214,7 @@ func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
 	pub := NVPublic{
 		Index:   0x018100ff,
 		NameAlg: HashAlgorithmSHA256,
-		Attrs:   MakeNVAttributes(AttrNVAuthRead|AttrNVAuthWrite, NVTypeOrdinary),
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
 	rc1, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
 	if err != nil {

@@ -1665,6 +1665,11 @@ type IDObjectRaw []byte
 // NVType corresponds to the TPM_NT type.
 type NVType uint32
 
+// WithAttrs returns NVAttributes for this type with the specified attributes set.
+func (t NVType) WithAttrs(attrs NVAttributes) NVAttributes {
+	return NVAttributes(t<<4) | attrs
+}
+
 // NVPinCounterParams corresponds to the TPMS_NV_PIN_COUNTER_PARAMETERS type.
 type NVPinCounterParams struct {
 	Count uint32
@@ -1675,15 +1680,14 @@ type NVPinCounterParams struct {
 // are reserved to encode the type of the NV index (NVType).
 type NVAttributes uint32
 
-// Type returns the NVType from a composite NVAttributes value.
+// Type returns the NVType encoded in a NVAttributes value.
 func (a NVAttributes) Type() NVType {
 	return NVType((a & 0xf0) >> 4)
 }
 
-// MakeNVAttributes converts a NVAttributes value and NVType value in to a composite NVAttributes value suitable for marshalling to
-// the TPM wire format.
-func MakeNVAttributes(a NVAttributes, t NVType) NVAttributes {
-	return a | NVAttributes(t<<4)
+// AttrsOnly returns the NVAttributes without the encoded NVType.
+func (a NVAttributes) AttrsOnly() NVAttributes {
+	return a & ^NVAttributes(0xf0)
 }
 
 // NVPublic corresponds to the TPMS_NV_PUBLIC type, which describes a NV index.

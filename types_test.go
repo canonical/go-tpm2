@@ -440,7 +440,7 @@ func TestNVPublicName(t *testing.T) {
 	pub := NVPublic{
 		Index:   Handle(0x0181ffff),
 		NameAlg: HashAlgorithmSHA256,
-		Attrs:   MakeNVAttributes(AttrNVAuthWrite|AttrNVAuthRead, NVTypeOrdinary),
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
 		Size:    64}
 	rc, err := tpm.NVDefineSpace(owner, nil, &pub, nil)
 	if err != nil {
