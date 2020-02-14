@@ -224,6 +224,15 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
 func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
+	var public *Public
+	if object.Handle() != persistentHandle {
+		var err error
+		public, err = object.(*objectContext).public().clone()
+		if err != nil {
+			return nil, fmt.Errorf("cannot copy public area of object: %v", err)
+		}
+	}
+
 	if err := t.RunCommand(CommandEvictControl, sessions,
 		ResourceContextWithSession{Context: auth, Session: authAuthSession}, object, Separator,
 		persistentHandle); err != nil {
@@ -235,7 +244,5 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 		return nil, nil
 	}
 
-	public := &Public{}
-	object.(*objectContext).public().copyTo(public)
 	return makeObjectContext(persistentHandle, object.Name(), public), nil
 }

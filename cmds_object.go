@@ -212,8 +212,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 		return nil, &InvalidResponseError{CommandLoad, "name returned from TPM not consistent with loaded public area"}
 	}
 
-	public := &Public{}
-	inPublic.copyTo(public)
+	public, _ := inPublic.clone() // inPublic already marshalled successfully, so ignore errors here
 	return makeObjectContext(objectHandle, name, public), nil
 }
 
@@ -296,8 +295,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 		return nil, &InvalidResponseError{CommandLoadExternal, "name returned from TPM not consistent with loaded public area"}
 	}
 
-	public := &Public{}
-	inPublic.copyTo(public)
+	public, _ := inPublic.clone() // inPublic already marshalled successfully, so ignore errors here
 	return makeObjectContext(objectHandle, name, public), nil
 }
 
@@ -602,8 +600,10 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
-	public := &Public{}
-	outPublic.Ptr.copyTo(public)
+	public, err := outPublic.Ptr.clone()
+	if err != nil {
+		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
+	}
 	rc := makeObjectContext(objectHandle, name, public)
 	rc.auth = make([]byte, len(inSensitive.UserAuth))
 	copy(rc.auth, inSensitive.UserAuth)

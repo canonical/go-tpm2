@@ -106,8 +106,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 		return nil, err
 	}
 
-	public := &NVPublic{}
-	publicInfo.copyTo(public)
+	public, _ := publicInfo.clone() // publicInfo already marshalled successfully, so ignore errors here
 	rc := makeNVIndexContext(name, public)
 	rc.auth = make([]byte, len(auth))
 	copy(rc.auth, auth)

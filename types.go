@@ -1507,16 +1507,17 @@ func (p *Public) Name() (Name, error) {
 	return name, nil
 }
 
-func (p *Public) copyTo(dest *Public) error {
+func (p *Public) clone() (*Public, error) {
 	b, err := MarshalToBytes(p)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = UnmarshalFromBytes(b, dest)
+	var out *Public
+	_, err = UnmarshalFromBytes(b, &out)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return out, nil
 }
 
 func (p *Public) compareName(name Name) bool {
@@ -1723,16 +1724,17 @@ func (p *NVPublic) compareName(name Name) bool {
 	return bytes.Equal(n, name)
 }
 
-func (p *NVPublic) copyTo(dest *NVPublic) error {
+func (p *NVPublic) clone() (*NVPublic, error) {
 	b, err := MarshalToBytes(p)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = UnmarshalFromBytes(b, dest)
+	var out *NVPublic
+	_, err = UnmarshalFromBytes(b, &out)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return out, nil
 }
 
 type nvPublicSized struct {
