@@ -224,6 +224,10 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 // On successful completion of persisting a transient object, it returns a ResourceContext that corresponds to the persistent object.
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
 func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
+	if object == nil {
+		return nil, makeInvalidParamError("object", "nil value")
+	}
+
 	var public *Public
 	if object.Handle() != persistentHandle {
 		var err error
