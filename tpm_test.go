@@ -19,13 +19,25 @@ import (
 	. "github.com/chrisccoulson/go-tpm2"
 )
 
-var useTpm = flag.Bool("use-tpm", false, "")
-var tpmPath = flag.String("tpm-path", "/dev/tpm0", "")
+var (
+	useTpm bool
+	tpmPath string
 
-var useMssim = flag.Bool("use-mssim", false, "")
-var mssimHost = flag.String("mssim-host", "localhost", "")
-var mssimTpmPort = flag.Uint("mssim-tpm-port", 2321, "")
-var mssimPlatformPort = flag.Uint("mssim-platform-port", 2322, "")
+	useMssim bool
+	mssimHost string
+	mssimTpmPort uint
+	mssimPlatformPort uint
+)
+
+func init() {
+	flag.BoolVar(&useTpm, "use-tpm", false, "")
+	flag.StringVar(&tpmPath, "tpm-path", "/dev/tpm0", "")
+
+	flag.BoolVar(&useMssim, "use-mssim", false, "")
+	flag.StringVar(&mssimHost, "mssim-host", "localhost", "")
+	flag.UintVar(&mssimTpmPort, "mssim-tpm-port", 2321, "")
+	flag.UintVar(&mssimPlatformPort, "mssim-platform-port", 2322, "")
+}
 
 var (
 	dummyAuth = []byte("dummy")
@@ -381,15 +393,15 @@ func verifyContextFlushed(t *testing.T, tpm *TPMContext, context HandleContext) 
 }
 
 func openTPMSimulatorForTesting(t *testing.T) (*TPMContext, *TctiMssim) {
-	if !*useMssim {
+	if !useMssim {
 		t.SkipNow()
 	}
 
-	if *useTpm && *useMssim {
+	if useTpm && useMssim {
 		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
 	}
 
-	tcti, err := OpenMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+	tcti, err := OpenMssim(mssimHost, mssimTpmPort, mssimPlatformPort)
 	if err != nil {
 		t.Fatalf("Failed to open mssim connection: %v", err)
 	}
@@ -411,16 +423,16 @@ func resetTPMSimulator(t *testing.T, tpm *TPMContext, tcti *TctiMssim) {
 }
 
 func openTPMForTesting(t *testing.T) *TPMContext {
-	if !*useTpm {
+	if !useTpm {
 		tpm, _ := openTPMSimulatorForTesting(t)
 		return tpm
 	}
 
-	if *useTpm && *useMssim {
+	if useTpm && useMssim {
 		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
 	}
 
-	tcti, err := OpenTPMDevice(*tpmPath)
+	tcti, err := OpenTPMDevice(tpmPath)
 	if err != nil {
 		t.Fatalf("Failed to open the TPM device: %v", err)
 	}
@@ -438,8 +450,8 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(func() int {
-		if *useMssim {
-			tcti, err := OpenMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+		if useMssim {
+			tcti, err := OpenMssim(mssimHost, mssimTpmPort, mssimPlatformPort)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to open mssim connection: %v", err)
 				return 1
@@ -456,11 +468,11 @@ func TestMain(m *testing.M) {
 		}
 
 		defer func() {
-			if !*useMssim {
+			if !useMssim {
 				return
 			}
 
-			tcti, err := OpenMssim(*mssimHost, *mssimTpmPort, *mssimPlatformPort)
+			tcti, err := OpenMssim(mssimHost, mssimTpmPort, mssimPlatformPort)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to open mssim connection: %v\n", err)
 				return
