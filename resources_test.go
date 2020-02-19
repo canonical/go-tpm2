@@ -12,7 +12,7 @@ import (
 )
 
 func TestCreateResourceContextFromTPM(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	runCreate := func(t *testing.T, context ResourceContext) {
@@ -78,7 +78,7 @@ func TestCreateResourceContextFromTPM(t *testing.T) {
 }
 
 func TestCreateIncompleteSessionContext(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
@@ -103,7 +103,7 @@ func TestCreateIncompleteSessionContext(t *testing.T) {
 }
 
 func TestCreateHandleContextFromBytes(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, context ResourceContext) {
@@ -156,7 +156,7 @@ func TestCreateHandleContextFromBytes(t *testing.T) {
 }
 
 func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, context ResourceContext) {
@@ -208,7 +208,7 @@ func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
 }
 
 func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	pub := NVPublic{
@@ -241,7 +241,7 @@ func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
 }
 
 func TestCreateObjectResourceContextFromPublic(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	rc1 := createRSASrkForTesting(t, tpm, nil)
@@ -271,7 +271,7 @@ func TestCreateObjectResourceContextFromPublic(t *testing.T) {
 }
 
 func TestSessionContextSetAttrs(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
@@ -287,7 +287,7 @@ func TestSessionContextSetAttrs(t *testing.T) {
 }
 
 func TestSessionContextWithAttrs(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
@@ -307,7 +307,7 @@ func TestSessionContextWithAttrs(t *testing.T) {
 }
 
 func TestSessionContextIncludeAttrs(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
@@ -328,7 +328,7 @@ func TestSessionContextIncludeAttrs(t *testing.T) {
 }
 
 func TestSessionContextExcludeAttrs(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)

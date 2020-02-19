@@ -14,7 +14,7 @@ import (
 )
 
 func TestSign(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	msg := []byte("this is a message to sign")
@@ -210,7 +210,7 @@ func TestSign(t *testing.T) {
 }
 
 func TestVerifySignature(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	msg := []byte("this is a message for signing")

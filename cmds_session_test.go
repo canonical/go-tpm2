@@ -13,7 +13,7 @@ import (
 )
 
 func TestStartAuthSession(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer tpm.Close()
 
 	auth := []byte("foo")
@@ -175,7 +175,7 @@ func TestStartAuthSession(t *testing.T) {
 }
 
 func TestPolicyRestart(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer tpm.Close()
 
 	sc, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)

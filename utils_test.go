@@ -73,7 +73,7 @@ func TestComputeCpHash(t *testing.T) {
 }
 
 func TestTrialPolicySigned(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -141,7 +141,7 @@ func TestTrialPolicySigned(t *testing.T) {
 }
 
 func TestTrialPolicySecret(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -196,7 +196,7 @@ func TestTrialPolicySecret(t *testing.T) {
 }
 
 func TestTrialPolicyOR(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	digests := make(map[HashAlgorithmId]DigestList)
@@ -263,7 +263,7 @@ func TestTrialPolicyOR(t *testing.T) {
 }
 
 func TestTrialPolicyPCR(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	digests := make(map[HashAlgorithmId]Digest)
@@ -332,7 +332,7 @@ func TestTrialPolicyPCR(t *testing.T) {
 }
 
 func TestTrialPolicyNV(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -416,7 +416,7 @@ func TestTrialPolicyNV(t *testing.T) {
 }
 
 func TestTrialPolicyCounterTimer(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	uint64a := make(Operand, 8)
@@ -490,7 +490,7 @@ func TestTrialPolicyCounterTimer(t *testing.T) {
 	}
 }
 func TestTrialPolicyCommandCode(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -544,7 +544,7 @@ func TestTrialPolicyCommandCode(t *testing.T) {
 }
 
 func TestTrialPolicyCpHash(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -594,7 +594,7 @@ func TestTrialPolicyCpHash(t *testing.T) {
 }
 
 func TestTrialPolicyNameHash(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -644,7 +644,7 @@ func TestTrialPolicyNameHash(t *testing.T) {
 }
 
 func TestTrialPolicyDuplicationSelect(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -706,7 +706,7 @@ func TestTrialPolicyDuplicationSelect(t *testing.T) {
 }
 
 func TestTrialPolicyAuthorize(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	var keySignSHA1 Name
@@ -773,7 +773,7 @@ func TestTrialPolicyAuthorize(t *testing.T) {
 }
 
 func TestTrialPolicyAuthValue(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -819,7 +819,7 @@ func TestTrialPolicyAuthValue(t *testing.T) {
 }
 
 func TestTrialPolicyPassword(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -865,7 +865,7 @@ func TestTrialPolicyPassword(t *testing.T) {
 }
 
 func TestTrialPolicyNvWritten(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {

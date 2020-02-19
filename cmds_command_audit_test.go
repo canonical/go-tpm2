@@ -11,7 +11,7 @@ import (
 )
 
 func TestSetCommandCodeAuditStatus(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy|testCapabilitySetCommandCodeAuditStatus)
 	defer closeTPM(t, tpm)
 
 	var allCommands CommandCodeList

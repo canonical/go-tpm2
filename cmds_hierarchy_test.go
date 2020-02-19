@@ -12,7 +12,7 @@ import (
 )
 
 func TestCreatePrimary(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityChangeOwnerAuth|testCapabilityEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session SessionContext) (ResourceContext, *Public) {
@@ -251,7 +251,7 @@ func TestCreatePrimary(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	tpm, _ := openTPMSimulatorForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist|testCapabilityChangeEndorsementAuth|testCapabilityChangeLockoutAuth|testCapabilityChangePlatformAuth|testCapabilityClear)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, authSession SessionContext) {
@@ -336,7 +336,7 @@ func TestClear(t *testing.T) {
 }
 
 func TestHierarchyChangeAuth(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityChangeOwnerAuth|testCapabilityChangeEndorsementAuth)
 	defer closeTPM(t, tpm)
 
 	run1 := func(t *testing.T, hierarchy ResourceContext, session SessionContext) {

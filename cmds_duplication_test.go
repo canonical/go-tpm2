@@ -19,7 +19,7 @@ import (
 )
 
 func TestDuplicate(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -279,7 +279,7 @@ type sensitiveSized struct {
 }
 
 func TestImport(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)
@@ -307,7 +307,6 @@ func TestImport(t *testing.T) {
 		Sensitive: SensitiveCompositeU{Data: PrivateKeyRSA(key.Primes[0].Bytes())}}
 	copy(objectSensitive.AuthValue, []byte("foo"))
 
-	// FIXME: Remove auth parameter once Load is using ResourceContext
 	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext) {
 		priv, err := tpm.Import(primary, encryptionKey, &objectPublic, duplicate, inSymSeed, symmetricAlg, parentContextAuthSession)
 		if err != nil {

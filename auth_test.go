@@ -11,7 +11,7 @@ import (
 )
 
 func TestHMACSessions(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -111,7 +111,7 @@ func TestHMACSessions(t *testing.T) {
 }
 
 func TestPolicySessions(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)

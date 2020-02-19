@@ -18,7 +18,7 @@ import (
 )
 
 func TestPolicySigned(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -148,7 +148,7 @@ func TestPolicySigned(t *testing.T) {
 }
 
 func TestPolicySecret(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
@@ -321,7 +321,7 @@ func TestPolicySecret(t *testing.T) {
 }
 
 func TestPolicyTicketFromSecret(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
@@ -387,7 +387,7 @@ func TestPolicyTicketFromSecret(t *testing.T) {
 }
 
 func TestPolicyTicketFromSigned(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -469,7 +469,7 @@ func TestPolicyTicketFromSigned(t *testing.T) {
 }
 
 func TestPolicyOR(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
@@ -511,7 +511,7 @@ func TestPolicyOR(t *testing.T) {
 }
 
 func TestPolicyPCR(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityPCRChange)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -612,7 +612,7 @@ func TestPolicyPCR(t *testing.T) {
 }
 
 func TestPolicyCommandCode(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -655,7 +655,7 @@ func TestPolicyCommandCode(t *testing.T) {
 }
 
 func TestPolicyCpHash(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -702,7 +702,7 @@ func TestPolicyCpHash(t *testing.T) {
 }
 
 func TestPolicyNameHash(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -749,7 +749,7 @@ func TestPolicyNameHash(t *testing.T) {
 }
 
 func TestPolicyDuplicationSelect(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -812,7 +812,7 @@ func TestPolicyDuplicationSelect(t *testing.T) {
 }
 
 func TestPolicyAuthorize(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -922,7 +922,7 @@ func TestPolicyAuthorize(t *testing.T) {
 }
 
 func TestPolicyAuthValue(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
@@ -1003,7 +1003,7 @@ func TestPolicyAuthValue(t *testing.T) {
 }
 
 func TestPolicyPassword(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
@@ -1058,7 +1058,7 @@ func TestPolicyPassword(t *testing.T) {
 }
 
 func TestPolicyNV(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -1197,7 +1197,7 @@ func TestPolicyNV(t *testing.T) {
 }
 
 func TestPolicyCounterTimer(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	time, err := tpm.ReadClock()
@@ -1261,7 +1261,7 @@ func TestPolicyCounterTimer(t *testing.T) {
 }
 
 func TestPolicyNvWritten(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {

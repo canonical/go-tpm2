@@ -12,7 +12,7 @@ import (
 )
 
 func TestPCRExtend(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityPCRChange)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -89,7 +89,7 @@ func TestPCRExtend(t *testing.T) {
 }
 
 func TestPCREvent(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityPCRChange)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -331,7 +331,7 @@ func TestPCRRead(t *testing.T) {
 }
 
 func TestPCRReset(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityPCRChange)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {

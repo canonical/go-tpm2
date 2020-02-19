@@ -19,19 +19,80 @@ import (
 	. "github.com/chrisccoulson/go-tpm2"
 )
 
-var (
-	useTpm bool
-	tpmPath string
+type testCapabilityFlags uint32
 
-	useMssim bool
-	mssimHost string
-	mssimTpmPort uint
+const (
+	testCapabilityOwnerPersist = 1 << iota
+	testCapabilityPlatformPersist
+	testCapabilityDAParameters
+	testCapabilityChangeOwnerAuth
+	testCapabilityChangeEndorsementAuth
+	testCapabilityChangeLockoutAuth
+	testCapabilityChangePlatformAuth
+	testCapabilityOwnerHierarchy
+	testCapabilityEndorsementHierarchy
+	testCapabilityLockoutHierarchy
+	testCapabilityPlatformHierarchy
+	testCapabilityPCRChange
+	testCapabilitySetCommandCodeAuditStatus
+	testCapabilityClear
+)
+
+func (f *testCapabilityFlags) String() string {
+	return ""
+}
+
+func (f *testCapabilityFlags) Set(value string) error {
+	switch value {
+	case "ownerpersist":
+		*f |= (testCapabilityOwnerPersist | testCapabilityOwnerHierarchy)
+	case "platformpersist":
+		*f |= (testCapabilityPlatformPersist | testCapabilityPlatformHierarchy)
+	case "daparameters":
+		*f |= (testCapabilityDAParameters | testCapabilityLockoutHierarchy)
+	case "changeownerauth":
+		*f |= (testCapabilityChangeOwnerAuth | testCapabilityOwnerHierarchy)
+	case "changeendorsementauth":
+		*f |= (testCapabilityChangeEndorsementAuth | testCapabilityEndorsementHierarchy)
+	case "changelockoutauth":
+		*f |= (testCapabilityChangeLockoutAuth | testCapabilityLockoutHierarchy)
+	case "changeplatformauth":
+		*f |= (testCapabilityChangePlatformAuth | testCapabilityPlatformHierarchy)
+	case "ownerhierarchy":
+		*f |= testCapabilityOwnerHierarchy
+	case "endorsementhierarchy":
+		*f |= testCapabilityEndorsementHierarchy
+	case "lockouthierarchy":
+		*f |= testCapabilityLockoutHierarchy
+	case "platformhierarchy":
+		*f |= testCapabilityPlatformHierarchy
+	case "pcrchange":
+		*f |= testCapabilityPCRChange
+	case "setcommandcodeauditstatus":
+		*f |= testCapabilitySetCommandCodeAuditStatus
+	case "clear":
+		*f |= testCapabilityClear
+	default:
+		return fmt.Errorf("unrecognized option %s", value)
+	}
+	return nil
+}
+
+var (
+	useTpm        bool
+	tpmPath       string
+	permittedCaps testCapabilityFlags
+
+	useMssim          bool
+	mssimHost         string
+	mssimTpmPort      uint
 	mssimPlatformPort uint
 )
 
 func init() {
 	flag.BoolVar(&useTpm, "use-tpm", false, "")
 	flag.StringVar(&tpmPath, "tpm-path", "/dev/tpm0", "")
+	flag.Var(&permittedCaps, "tpm-allowed-cap", "")
 
 	flag.BoolVar(&useMssim, "use-mssim", false, "")
 	flag.StringVar(&mssimHost, "mssim-host", "localhost", "")
@@ -422,7 +483,7 @@ func resetTPMSimulator(t *testing.T, tpm *TPMContext, tcti *TctiMssim) {
 	}
 }
 
-func openTPMForTesting(t *testing.T) *TPMContext {
+func openTPMForTesting(t *testing.T, caps testCapabilityFlags) *TPMContext {
 	if !useTpm {
 		tpm, _ := openTPMSimulatorForTesting(t)
 		return tpm
@@ -430,6 +491,10 @@ func openTPMForTesting(t *testing.T) *TPMContext {
 
 	if useTpm && useMssim {
 		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
+	}
+
+	if caps&permittedCaps != caps {
+		t.SkipNow()
 	}
 
 	tcti, err := OpenTPMDevice(tpmPath)

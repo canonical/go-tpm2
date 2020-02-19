@@ -36,7 +36,7 @@ func getDictionaryAttackParams(t *testing.T, tpm *TPMContext) (uint32, uint32, u
 }
 
 func TestDictionaryAttackParameters(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityDAParameters|testCapabilityChangeLockoutAuth)
 	defer closeTPM(t, tpm)
 
 	origMaxTries, origRecoveryTime, origLockoutRecovery := getDictionaryAttackParams(t, tpm)
@@ -101,7 +101,7 @@ func TestDictionaryAttackParameters(t *testing.T) {
 }
 
 func TestDictionaryAttackLockReset(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityDAParameters|testCapabilityChangeLockoutAuth)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)

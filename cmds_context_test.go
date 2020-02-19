@@ -13,7 +13,7 @@ import (
 )
 
 func TestContextSave(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, rc HandleContext, savedHandle, hierarchy Handle) {
@@ -45,12 +45,12 @@ func TestContextSave(t *testing.T) {
 		defer flushContext(t, tpm, sessionContext)
 		run(t, sessionContext, sessionContext.Handle(), HandleNull)
 		// Make sure that ContextSave marked the session context as not loaded, and that we get the expected error if we attempt to use it
-		err = tpm.Clear(tpm.LockoutHandleContext(), sessionContext)
+		_, err = tpm.ReadClock(sessionContext)
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "error whilst processing handle with authorization for authContext: invalid context for session: incomplete "+
-			"session can only be used in TPMContext.FlushContext" {
+		if err.Error() != "cannot process non-auth SessionContext parameters for command TPM_CC_ReadClock: invalid context for session: "+
+			"incomplete session can only be used in TPMContext.FlushContext" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 		handles, err := tpm.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
@@ -82,7 +82,7 @@ func TestContextSave(t *testing.T) {
 }
 
 func TestContextSaveAndLoad(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	t.Run("TransientObject", func(t *testing.T) {
@@ -252,7 +252,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 }
 
 func TestEvictControl(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerPersist|testCapabilityChangeOwnerAuth)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession SessionContext) {
@@ -325,7 +325,7 @@ func TestEvictControl(t *testing.T) {
 }
 
 func TestFlushContext(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	context := createRSASrkForTesting(t, tpm, nil)

@@ -12,7 +12,7 @@ import (
 )
 
 func TestParameterEncryptionSingleExtra(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer tpm.Close()
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)
@@ -141,7 +141,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 }
 
 func TestParameterEncryptionSharedWithAuth(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer tpm.Close()
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)
@@ -236,7 +236,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 }
 
 func TestParameterEncryptionMultipleExtra(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer tpm.Close()
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)

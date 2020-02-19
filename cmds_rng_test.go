@@ -12,7 +12,7 @@ import (
 )
 
 func TestGetRandom(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	props, err := tpm.GetCapabilityTPMProperties(PropertyMaxDigest, 1)
@@ -60,7 +60,7 @@ func TestGetRandom(t *testing.T) {
 }
 
 func TestStirRandom(t *testing.T) {
-	tpm := openTPMForTesting(t)
+	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
 	inData := make([]byte, 128)
