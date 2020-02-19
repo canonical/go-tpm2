@@ -140,7 +140,15 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 
+		// We shouldn't need to call ResourceContext.SetAuthValue to use the primary object.
 		_, _, _, _, _, err := tpm.Create(objectContext, nil, &childTemplate, nil, nil, nil)
+		if err != nil {
+			t.Errorf("Use of authorization on primary key failed: %v", err)
+		}
+
+		// Verify that the primary object was created with the right auth value
+		objectContext.SetAuthValue(testAuth)
+		_, _, _, _, _, err = tpm.Create(objectContext, nil, &childTemplate, nil, nil, nil)
 		if err != nil {
 			t.Errorf("Use of authorization on primary key failed: %v", err)
 		}
@@ -339,22 +347,27 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	tpm := openTPMForTesting(t, testCapabilityChangeOwnerAuth|testCapabilityChangeEndorsementAuth)
 	defer closeTPM(t, tpm)
 
-	run1 := func(t *testing.T, hierarchy ResourceContext, session SessionContext) {
+	setAuth := func(t *testing.T, hierarchy ResourceContext, session SessionContext, testHierarchy func(t *testing.T)) {
 		if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), session); err != nil {
 			t.Fatalf("HierarchyChangeAuth failed: %v", err)
 		}
+
+		testHierarchy(t)
+		hierarchy.SetAuthValue(testAuth)
+		testHierarchy(t)
 	}
 
-	run2 := func(t *testing.T, hierarchy ResourceContext, session SessionContext, createPrimary func(*testing.T, *TPMContext, SessionContext) ResourceContext) {
-		primary := createPrimary(t, tpm, session)
-		flushContext(t, tpm, primary)
-
+	resetAuth := func(t *testing.T, hierarchy ResourceContext, session SessionContext, testHierarchy func(*testing.T)) {
 		if err := tpm.HierarchyChangeAuth(hierarchy, nil, session); err != nil {
 			t.Errorf("HierarchyChangeAuth failed: %v", err)
 		}
+
+		testHierarchy(t)
+		hierarchy.SetAuthValue(nil)
+		testHierarchy(t)
 	}
 
-	createSrk := func(t *testing.T, tpm *TPMContext, session SessionContext) ResourceContext {
+	createSrk := func(t *testing.T) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -368,13 +381,13 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, session)
+		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
-			t.Fatalf("CreatePrimary failed: %v", err)
+			t.Errorf("CreatePrimary failed: %v", err)
 		}
-		return objectContext
+		flushContext(t, tpm, objectContext)
 	}
-	createEk := func(t *testing.T, tpm *TPMContext, session SessionContext) ResourceContext {
+	createEk := func(t *testing.T) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -390,43 +403,54 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
-		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, session)
+		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
-			t.Fatalf("CreatePrimary failed: %v", err)
+			t.Errorf("CreatePrimary failed: %v", err)
 		}
-		return objectContext
+		flushContext(t, tpm, objectContext)
 	}
 
 	t.Run("OwnerWithPW", func(t *testing.T) {
-		run1(t, tpm.OwnerHandleContext(), nil)
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		run2(t, tpm.OwnerHandleContext(), nil, createSrk)
+		setAuth(t, tpm.OwnerHandleContext(), nil, createSrk)
+		resetAuth(t, tpm.OwnerHandleContext(), nil, createSrk)
 	})
 
 	t.Run("EndorsementWithPW", func(t *testing.T) {
-		run1(t, tpm.EndorsementHandleContext(), nil)
-		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
-
-		run2(t, tpm.EndorsementHandleContext(), nil, createEk)
+		setAuth(t, tpm.EndorsementHandleContext(), nil, createEk)
+		resetAuth(t, tpm.EndorsementHandleContext(), nil, createEk)
 	})
 
-	t.Run("OwnerWithBoundHMACSession", func(t *testing.T) {
+	t.Run("OwnerWithBoundHMACSession/1", func(t *testing.T) {
 		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
 		defer flushContext(t, tpm, sessionContext)
-
 		sessionContext.SetAttrs(AttrContinueSession)
 
-		run1(t, tpm.OwnerHandleContext(), sessionContext)
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		run2(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+		setAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+		resetAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
 	})
 
-	t.Run("OwnerWithUnboundHMACSession", func(t *testing.T) {
+	t.Run("OwnerWithBoundHMACSession/2", func(t *testing.T) {
+		sessionContext1, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionContext1)
+
+		setAuth(t, tpm.OwnerHandleContext(), sessionContext1, createSrk)
+
+		sessionContext2, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionContext2)
+
+		resetAuth(t, tpm.OwnerHandleContext(), sessionContext2, createSrk)
+	})
+
+	t.Run("OwnerWithUnboundHMACSession/1", func(t *testing.T) {
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
@@ -435,13 +459,11 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		sessionContext.SetAttrs(AttrContinueSession)
 
-		run1(t, tpm.OwnerHandleContext(), sessionContext)
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		run2(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+		setAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+		resetAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
 	})
 
-	t.Run("OwnerWithUnboundHMACSession2", func(t *testing.T) {
+	t.Run("OwnerWithUnboundHMACSession/2", func(t *testing.T) {
 		// This test highlights a bug where we didn't preserve the value of Session.includeAuthValue (which should be true) before computing
 		// the response HMAC. It's not caught by OwnerWithUnboundHMACSession because the lack of session key combined with
 		// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth to bail out early
@@ -456,9 +478,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 
 		sessionContext.SetAttrs(AttrContinueSession)
 
-		run1(t, tpm.OwnerHandleContext(), sessionContext)
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		run2(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+		setAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+		resetAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
 	})
 }

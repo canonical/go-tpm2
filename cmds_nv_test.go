@@ -44,6 +44,9 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 
 		nvPub := nvContext.(TestNVIndexResourceContext).GetPublic()
 
+		if nvPub.Index != publicInfo.Index {
+			t.Errorf("Unexpected index")
+		}
 		if nvPub.NameAlg != publicInfo.NameAlg {
 			t.Errorf("Unexpected nameAlg")
 		}
@@ -55,6 +58,14 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 		}
 		if nvPub.Size != publicInfo.Size {
 			t.Errorf("Unexpected size (%d)", nvPub.Size)
+		}
+
+		rc, err := tpm.CreateResourceContextFromTPM(publicInfo.Index)
+		if err != nil {
+			t.Fatalf("CreateResourceContextFromTPM failed: %v", err)
+		}
+		if !bytes.Equal(rc.Name(), nvContext.Name()) {
+			t.Errorf("Unexpected name")
 		}
 	}
 
@@ -106,6 +117,14 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 		}
 		defer undefineNVSpace(t, tpm, rc, owner, nil)
 
+		// We shouldn't have to call ResourceContext.SetAuthValue
+		if err := tpm.NVWrite(rc, rc, []byte{0}, 0, nil); err != nil {
+			t.Errorf("Failed to write to NV index with authValue: %v", err)
+		}
+
+		// Try again after calling ResourceContext.SetAuthValue to make sure that NVDefineSpace actually
+		// created the index with the specified auth value.
+		rc.SetAuthValue(testAuth)
 		if err := tpm.NVWrite(rc, rc, []byte{0}, 0, nil); err != nil {
 			t.Errorf("Failed to write to NV index with authValue: %v", err)
 		}
@@ -116,18 +135,10 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 	tpm := openTPMForTesting(t, testCapabilityPlatformPersist|testCapabilityChangePlatformAuth)
 	defer closeTPM(t, tpm)
 
-	h := sha256.New()
-	h.Write(make([]byte, 32))
-	binary.Write(h, binary.BigEndian, CommandPolicyAuthValue)
-
-	authPolicy := h.Sum(nil)
-
-	h = sha256.New()
-	h.Write(authPolicy)
-	binary.Write(h, binary.BigEndian, CommandPolicyCommandCode)
-	binary.Write(h, binary.BigEndian, CommandNVUndefineSpaceSpecial)
-
-	authPolicy = h.Sum(nil)
+	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
+	trial.PolicyAuthValue()
+	trial.PolicyCommandCode(CommandNVUndefineSpaceSpecial)
+	authPolicy := trial.GetDigest()
 
 	platform := tpm.PlatformHandleContext()
 
@@ -166,13 +177,11 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 
 	t.Run("NoAuth", func(t *testing.T) {
 		context := define(t)
-		defer verifyNVSpaceUndefined(t, tpm, context, platform, nil)
 		run(t, context, nil)
 	})
 
 	t.Run("UsePasswordAuth", func(t *testing.T) {
 		context := define(t)
-		defer verifyNVSpaceUndefined(t, tpm, context, platform, nil)
 		setHierarchyAuthForTest(t, tpm, tpm.PlatformHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.PlatformHandleContext())
 		run(t, context, nil)
@@ -180,7 +189,6 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		context := define(t)
-		defer verifyNVSpaceUndefined(t, tpm, context, platform, nil)
 		setHierarchyAuthForTest(t, tpm, tpm.PlatformHandleContext())
 		defer resetHierarchyAuth(t, tpm, tpm.PlatformHandleContext())
 
@@ -195,7 +203,6 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 
 	t.Run("MissingPolicySession", func(t *testing.T) {
 		context := define(t)
-		defer verifyNVSpaceUndefined(t, tpm, context, platform, nil)
 		err := tpm.NVUndefineSpaceSpecial(context, platform, nil, nil)
 		if err == nil {
 			t.Fatalf("Expected an error")
@@ -662,7 +669,7 @@ func TestNVSetBits(t *testing.T) {
 	t.Run("UseSessionAuth", func(t *testing.T) {
 		rc := define(t, testAuth)
 		defer undefineNVSpace(t, tpm, rc, owner, nil)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)
 		}
@@ -932,6 +939,14 @@ func TestNVChangeAuth(t *testing.T) {
 				t.Fatalf("NVChangeAuth failed: %v", err)
 			}
 
+			// We shouldn't have to call ResourceContext.SetAuthValue
+			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
+				t.Errorf("NVWrite failed: %v", err)
+			}
+
+			// Try again after calling ResourceContext.SetAuthValue to make sure that NVChangeAuth actually did change
+			// the auth value of the index.
+			rc.SetAuthValue(testAuth)
 			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
 				t.Errorf("NVWrite failed: %v", err)
 			}
@@ -942,6 +957,10 @@ func TestNVChangeAuth(t *testing.T) {
 				t.Errorf("NVChangeAuth failed: %v", err)
 			}
 
+			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
+				t.Errorf("NVWrite failed: %v", err)
+			}
+			rc.SetAuthValue(nil)
 			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
 				t.Errorf("NVWrite failed: %v", err)
 			}

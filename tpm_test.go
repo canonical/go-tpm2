@@ -126,14 +126,6 @@ func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle Resource
 	}
 }
 
-func verifyNVSpaceUndefined(t *testing.T, tpm *TPMContext, context, authHandle ResourceContext, authSession SessionContext) {
-	if context.Handle() == HandleUnassigned {
-		return
-	}
-	t.Errorf("Context is still live")
-	undefineNVSpace(t, tpm, context, authHandle, authSession)
-}
-
 func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if public.Type != template.Type {
 		t.Errorf("public object has wrong type: %v", public.Type)
