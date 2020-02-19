@@ -22,7 +22,7 @@ func (v PCRValues) EnsureBank(alg HashAlgorithmId) {
 	}
 }
 
-func (v PCRValues) AddValuesFromListAndSelection(digests DigestList, pcrs PCRSelectionList) (int, error) {
+func (v PCRValues) SetValuesFromListAndSelection(digests DigestList, pcrs PCRSelectionList) (int, error) {
 	i := 0
 	for _, p := range pcrs {
 		if _, ok := v[p.Hash]; !ok {
@@ -33,7 +33,7 @@ func (v PCRValues) AddValuesFromListAndSelection(digests DigestList, pcrs PCRSel
 		sort.Ints(sel)
 		for _, s := range sel {
 			if len(digests) == 0 {
-				return nil, errors.New("insufficient digests")
+				return 0, errors.New("insufficient digests")
 			}
 			v[p.Hash][s] = digests[0]
 			digests = digests[1:]
@@ -43,7 +43,7 @@ func (v PCRValues) AddValuesFromListAndSelection(digests DigestList, pcrs PCRSel
 	return i, nil
 }
 
-func (v PCRValues) AddValue(pcr int, alg HashAlgorithmId, digest Digest) {
+func (v PCRValues) SetValue(pcr int, alg HashAlgorithmId, digest Digest) {
 	if _, ok := v[alg]; !ok {
 		v[alg] = make(map[int]Digest)
 	}
@@ -52,9 +52,9 @@ func (v PCRValues) AddValue(pcr int, alg HashAlgorithmId, digest Digest) {
 
 func CreatePCRValuesFromListAndSelection(digests DigestList, pcrs PCRSelectionList) (PCRValues, int, error) {
 	out := make(PCRValues)
-	n, err := out.AddValuesFromListAndSelection(digests, pcrs)
+	n, err := out.SetValuesFromListAndSelection(digests, pcrs)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 	return out, n, nil
 }
@@ -134,7 +134,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 			return 0, nil, makeInvalidParamError("pcrSelectionIn", "unimplemented PCRs specified")
 		}
 
-		if n, err := pcrValues.AddValuesFromListAndSelection(values, pcrSelectionOut); err != nil {
+		if n, err := pcrValues.SetValuesFromListAndSelection(values, pcrSelectionOut); err != nil {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, err.Error()}
 		} else if n != len(values) {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, "too many digests"}
