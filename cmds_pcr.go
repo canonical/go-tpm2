@@ -7,7 +7,9 @@ package tpm2
 // Section 22 - Integrity Collection (PCR)
 
 import (
+	"errors"
 	"fmt"
+	"sort"
 )
 
 // PCRValues contains a collection of PCR values, keyed by AlgorithmId and PCR index.
@@ -18,6 +20,43 @@ func (v PCRValues) EnsureBank(alg HashAlgorithmId) {
 	if _, ok := v[alg]; !ok {
 		v[alg] = make(map[int]Digest)
 	}
+}
+
+func (v PCRValues) AddValuesFromListAndSelection(digests DigestList, pcrs PCRSelectionList) (int, error) {
+	i := 0
+	for _, p := range pcrs {
+		if _, ok := v[p.Hash]; !ok {
+			v[p.Hash] = make(map[int]Digest)
+		}
+		sel := make([]int, len(p.Select))
+		copy(sel, p.Select)
+		sort.Ints(sel)
+		for _, s := range sel {
+			if len(digests) == 0 {
+				return nil, errors.New("insufficient digests")
+			}
+			v[p.Hash][s] = digests[0]
+			digests = digests[1:]
+			i++
+		}
+	}
+	return i, nil
+}
+
+func (v PCRValues) AddValue(pcr int, alg HashAlgorithmId, digest Digest) {
+	if _, ok := v[alg]; !ok {
+		v[alg] = make(map[int]Digest)
+	}
+	v[alg][pcr] = digest
+}
+
+func CreatePCRValuesFromListAndSelection(digests DigestList, pcrs PCRSelectionList) (PCRValues, int, error) {
+	out := make(PCRValues)
+	n, err := out.AddValuesFromListAndSelection(digests, pcrs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, n, nil
 }
 
 // PCRExtend executes the TPM2_PCR_Extend command to extend the PCR associated with the pcrContext parameter with the tagged digests
@@ -95,21 +134,10 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 			return 0, nil, makeInvalidParamError("pcrSelectionIn", "unimplemented PCRs specified")
 		}
 
-		for _, s := range pcrSelectionOut {
-			pcrValues.EnsureBank(s.Hash)
-			for _, i := range s.Select {
-				if len(values) == 0 {
-					return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM didn't return enough digests"}
-				}
-				if _, exists := pcrValues[s.Hash][i]; exists {
-					return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM responded with an unexpected PCR digest"}
-				}
-				pcrValues[s.Hash][i] = values[0]
-				values = values[1:]
-			}
-		}
-		if len(values) > 0 {
-			return 0, nil, &InvalidResponseError{CommandPCRRead, "TPM returned too many digests"}
+		if n, err := pcrValues.AddValuesFromListAndSelection(values, pcrSelectionOut); err != nil {
+			return 0, nil, &InvalidResponseError{CommandPCRRead, err.Error()}
+		} else if n != len(values) {
+			return 0, nil, &InvalidResponseError{CommandPCRRead, "too many digests"}
 		}
 
 		var err error
