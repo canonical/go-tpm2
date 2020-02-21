@@ -285,7 +285,7 @@ func (n Name) Digest() Digest {
 
 // 10.6) PCR Structures
 
-// PCRSelectionData is a list of PCR indexes. It is marshalled to and from the TPMS_PCR_SELECT type, which is a bitmap of the PCR
+// PCRSelectData is a list of PCR indexes. It is marshalled to and from the TPMS_PCR_SELECT type, which is a bitmap of the PCR
 // indexes contained within this list.
 type PCRSelectionData []int
 

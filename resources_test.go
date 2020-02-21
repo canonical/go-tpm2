@@ -71,7 +71,7 @@ func TestCreateResourceContextFromTPM(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext(), nil)
+		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext())
 		runCreate(t, rc)
 		runCreateUnavailable(t, rc.Handle()+1)
 	})
@@ -150,7 +150,7 @@ func TestCreateHandleContextFromBytes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext(), nil)
+		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext())
 		run(t, rc)
 	})
 }
@@ -202,7 +202,7 @@ func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NVDefineSpace failed: %v", err)
 		}
-		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext(), nil)
+		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext())
 		run(t, rc)
 	})
 }
@@ -220,7 +220,7 @@ func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	defer undefineNVSpace(t, tpm, rc1, tpm.OwnerHandleContext(), nil)
+	defer undefineNVSpace(t, tpm, rc1, tpm.OwnerHandleContext())
 
 	rc2, err := CreateNVIndexResourceContextFromPublic(&pub)
 	if err != nil {

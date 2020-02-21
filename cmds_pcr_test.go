@@ -115,8 +115,8 @@ func TestPCREvent(t *testing.T) {
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			pcrSelection := PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{data.index}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{data.index}}}
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{data.index}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{data.index}}}
 
 			origUpdateCounter, origValues, err := tpm.PCRRead(pcrSelection)
 			if err != nil {
@@ -237,36 +237,36 @@ func TestPCRRead(t *testing.T) {
 		{
 			desc: "SinglePCRSingleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1}}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1}}},
 		},
 		{
 			desc: "MultiplePCRSingleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2, 3, 1}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2, 3, 1}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank2",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2}},
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2}}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{2}}},
 		},
 		{
 			desc: "MultiplePCRMultipleBank",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 2, 5}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5, 2}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 2, 5}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5, 2}}},
 		},
 		{
 			desc: "MultipleRequest",
 			selection: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 2, 3, 4, 5}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5, 2, 3, 4}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 2, 3, 4, 5}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5, 2, 3, 4}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -353,7 +353,7 @@ func TestPCRReset(t *testing.T) {
 				t.Fatalf("PCREvent failed: %v", err)
 			}
 			zeroDigest := make(Digest, HashAlgorithmSHA256.Size())
-			selection := PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA256, Select: []int{data.pcr}}}
+			selection := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{data.pcr}}}
 			_, v, err := tpm.PCRRead(selection)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)

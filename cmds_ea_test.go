@@ -544,40 +544,38 @@ func TestPolicyPCR(t *testing.T) {
 	}{
 		{
 			desc: "SinglePCRSingleBank",
-			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7}}},
+			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank2",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}}},
 		},
 		{
 			desc: "MultiplePCRSingleBank",
-			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}}},
+			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}}},
 		},
 		{
 			desc: "MultiplePCRMultipleBank",
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}},
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8, 9}}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8, 9}}},
 		},
 		{
 			desc: "WithDigest",
 			digest: computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}}),
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}}),
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -1170,19 +1168,19 @@ func TestPolicyNV(t *testing.T) {
 
 		t.Run(data.desc+"/NoAuth", func(t *testing.T) {
 			index := createIndex(t, nil)
-			defer undefineNVSpace(t, tpm, index, owner, nil)
+			defer undefineNVSpace(t, tpm, index, owner)
 			run(t, index, nil)
 		})
 
 		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
-			defer undefineNVSpace(t, tpm, index, owner, nil)
+			defer undefineNVSpace(t, tpm, index, owner)
 			run(t, index, nil)
 		})
 
 		t.Run(data.desc+"/UseSessionAuth", func(t *testing.T) {
 			index := createIndex(t, testAuth)
-			defer undefineNVSpace(t, tpm, index, owner, nil)
+			defer undefineNVSpace(t, tpm, index, owner)
 
 			// Don't use a bound session as the name of index changes when it is written to for the first time
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)

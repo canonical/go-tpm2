@@ -184,7 +184,7 @@ func TestPolicyRestart(t *testing.T) {
 	}
 
 	if err := tpm.PolicyPCR(sc, nil,
-		PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7}}}); err != nil {
+		PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7}}}); err != nil {
 		t.Fatalf("PolicyPCR failed: %v", err)
 	}
 

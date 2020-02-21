@@ -251,8 +251,7 @@ func TestPCRSelectionList(t *testing.T) {
 	}{
 		{
 			desc: "1",
-			in: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{3, 6, 24}}},
+			in: PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{3, 6, 24}}},
 			out: []byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x04, 0x04, 0x48, 0x00, 0x00, 0x01},
 		},
 	} {
@@ -446,7 +445,7 @@ func TestNVPublicName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	defer undefineNVSpace(t, tpm, rc, owner, nil)
+	defer undefineNVSpace(t, tpm, rc, owner)
 
 	name, err := pub.Name()
 	if err != nil {
@@ -467,70 +466,63 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 	}{
 		{
 			desc: "SingleSelection",
-			x: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 2, 3, 4}}},
-			expected: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5}}},
+			x: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 2, 3, 4}}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 5}}},
 		},
 		{
 			desc: "UnexpectedAlgorithm",
-			x: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 3, 4}}},
+			x: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 3, 4}}},
 			err: "PCRSelection has unexpected algorithm",
 		},
 		{
 			desc: "SingleSelectionEmptyResult",
-			x: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA256}},
+			x: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256}},
 		},
 		{
 			desc: "MultipleSelection",
 			x: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 4, 5}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 4, 5}}},
 			expected: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{1, 2, 3}}},
 		},
 		{
 			desc: "MultipleSectionEmptyResult1",
 			x: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{1, 3, 6}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			expected: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
-				PCRSelection{Hash: HashAlgorithmSHA256}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 2, 4, 5}},
+				{Hash: HashAlgorithmSHA256}},
 		},
 		{
 			desc: "MultipleSelectionEmptyResult2",
 			x: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{PCRSelection{Hash: HashAlgorithmSHA1}, PCRSelection{Hash: HashAlgorithmSHA256}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA1}, {Hash: HashAlgorithmSHA256}},
 		},
 		{
 			desc: "MismatchedLength",
 			x: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1, 2, 3, 4, 5, 6}}},
 			err: "incorrect number of PCRSelections",
 		},
 	} {

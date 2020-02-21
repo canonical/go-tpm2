@@ -52,8 +52,8 @@ func TestCreate(t *testing.T) {
 					KeyBits:   2048,
 					Exponent:  0}}}
 		creationPCR := PCRSelectionList{
-			PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
+			{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
 
 		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		verifyRSAAgainstTemplate(t, pub, &template)

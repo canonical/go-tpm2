@@ -284,22 +284,22 @@ func TestTrialPolicyPCR(t *testing.T) {
 			alg:    HashAlgorithmSHA256,
 			digest: digests[HashAlgorithmSHA256],
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}},
 		},
 		{
 			desc:   "SHA1",
 			alg:    HashAlgorithmSHA1,
 			digest: digests[HashAlgorithmSHA1],
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}}},
 		},
 		{
 			desc:   "Mixed",
 			alg:    HashAlgorithmSHA256,
 			digest: digests[HashAlgorithmSHA256],
 			pcrs: PCRSelectionList{
-				PCRSelection{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}},
-				PCRSelection{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2, 4}}},
+				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}},
+				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2, 4}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -346,7 +346,7 @@ func TestTrialPolicyNV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NVDefineSpace failed: %v", err)
 	}
-	defer undefineNVSpace(t, tpm, index, owner, nil)
+	defer undefineNVSpace(t, tpm, index, owner)
 
 	twentyFiveUint64 := make(Operand, 8)
 	binary.BigEndian.PutUint64(twentyFiveUint64, 25)
