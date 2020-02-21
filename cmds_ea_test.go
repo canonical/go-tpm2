@@ -544,38 +544,38 @@ func TestPolicyPCR(t *testing.T) {
 	}{
 		{
 			desc: "SinglePCRSingleBank",
-			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7}}},
+			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank",
 			pcrs: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
-				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
+				{Hash: HashAlgorithmSHA256, Select: []int{8}},
+				{Hash: HashAlgorithmSHA1, Select: []int{8}}},
 		},
 		{
 			desc: "SinglePCRMultipleBank2",
 			pcrs: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}},
-				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}}},
+				{Hash: HashAlgorithmSHA1, Select: []int{8}},
+				{Hash: HashAlgorithmSHA256, Select: []int{8}}},
 		},
 		{
 			desc: "MultiplePCRSingleBank",
-			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}}},
+			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 8, 9}}},
 		},
 		{
 			desc: "MultiplePCRMultipleBank",
 			pcrs: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8, 9}},
-				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8, 9}}},
+				{Hash: HashAlgorithmSHA256, Select: []int{7, 8, 9}},
+				{Hash: HashAlgorithmSHA1, Select: []int{7, 8, 9}}},
 		},
 		{
 			desc: "WithDigest",
 			digest: computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
-				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}}),
+				{Hash: HashAlgorithmSHA256, Select: []int{8}},
+				{Hash: HashAlgorithmSHA1, Select: []int{8}}}),
 			pcrs: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{8}},
-				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{8}}},
+				{Hash: HashAlgorithmSHA256, Select: []int{8}},
+				{Hash: HashAlgorithmSHA1, Select: []int{8}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

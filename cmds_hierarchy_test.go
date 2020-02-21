@@ -51,8 +51,8 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
+			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
@@ -74,8 +74,8 @@ func TestCreatePrimary(t *testing.T) {
 					CurveID: ECCCurveNIST_P256,
 					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
+			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
@@ -122,8 +122,8 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
+			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), &sensitive, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
@@ -221,8 +221,8 @@ func TestCreatePrimary(t *testing.T) {
 					KeyBits:  2048,
 					Exponent: 0}}}
 		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}}
+			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
+			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
 		data := Data("foo")
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, data, creationPCR, nil)

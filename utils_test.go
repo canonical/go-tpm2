@@ -284,22 +284,22 @@ func TestTrialPolicyPCR(t *testing.T) {
 			alg:    HashAlgorithmSHA256,
 			digest: digests[HashAlgorithmSHA256],
 			pcrs: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{7, 8}}},
+				{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}},
 		},
 		{
 			desc:   "SHA1",
 			alg:    HashAlgorithmSHA1,
 			digest: digests[HashAlgorithmSHA1],
 			pcrs: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}}},
+				{Hash: HashAlgorithmSHA1, Select: []int{7, 8}}},
 		},
 		{
 			desc:   "Mixed",
 			alg:    HashAlgorithmSHA256,
 			digest: digests[HashAlgorithmSHA256],
 			pcrs: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: PCRSelectionData{7, 8}},
-				{Hash: HashAlgorithmSHA256, Select: PCRSelectionData{2, 4}}},
+				{Hash: HashAlgorithmSHA1, Select: []int{7, 8}},
+				{Hash: HashAlgorithmSHA256, Select: []int{2, 4}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

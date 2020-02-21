@@ -285,11 +285,11 @@ func (n Name) Digest() Digest {
 
 // 10.6) PCR Structures
 
-// PCRSelectData is a list of PCR indexes. It is marshalled to and from the TPMS_PCR_SELECT type, which is a bitmap of the PCR
-// indexes contained within this list.
-type PCRSelectionData []int
+// PCRSelect is a slice of PCR indexes. It is marshalled to and from the TPMS_PCR_SELECT type, which is a bitmap of the PCR indices
+// contained within this slice.
+type PCRSelect []int
 
-func (d *PCRSelectionData) Marshal(buf io.Writer) error {
+func (d *PCRSelect) Marshal(buf io.Writer) error {
 	bytes := make([]byte, 3)
 
 	for _, i := range *d {
@@ -310,7 +310,7 @@ func (d *PCRSelectionData) Marshal(buf io.Writer) error {
 	return nil
 }
 
-func (d *PCRSelectionData) Unmarshal(buf io.Reader) error {
+func (d *PCRSelect) Unmarshal(buf io.Reader) error {
 	var size uint8
 	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
 		return xerrors.Errorf("cannot read size of PCR selection bit mask: %w", err)
@@ -322,7 +322,7 @@ func (d *PCRSelectionData) Unmarshal(buf io.Reader) error {
 		return xerrors.Errorf("cannot read PCR selection bit mask: %w", err)
 	}
 
-	*d = make(PCRSelectionData, 0)
+	*d = make(PCRSelect, 0)
 
 	for i, octet := range bytes {
 		for bit := uint(0); bit < 8; bit++ {
@@ -338,8 +338,8 @@ func (d *PCRSelectionData) Unmarshal(buf io.Reader) error {
 
 // PCRSelection corresponds to the TPMS_PCR_SELECTION type.
 type PCRSelection struct {
-	Hash   HashAlgorithmId  // Hash is the digest algorithm associated with the selection
-	Select PCRSelectionData // The selected PCRs
+	Hash   HashAlgorithmId // Hash is the digest algorithm associated with the selection
+	Select PCRSelect       // The selected PCRs
 }
 
 // 10.7 Tickets
@@ -391,8 +391,8 @@ type TaggedProperty struct {
 
 // TaggedPCRSelect corresponds to the TPMS_TAGGED_PCR_SELECT type. It is used to report the PCR indexes associated with a property.
 type TaggedPCRSelect struct {
-	Tag    PropertyPCR      // Property identifier
-	Select PCRSelectionData // PCRs associated with Tag
+	Tag    PropertyPCR // Property identifier
+	Select PCRSelect   // PCRs associated with Tag
 }
 
 // TaggedPolicy corresponds to the TPMS_TAGGED_POLICY type. It is used to report the authorization policy for a permanent resource.
