@@ -139,7 +139,11 @@ func (p *TrialAuthPolicy) PolicySecret(authName Name, policyRef Nonce) {
 	p.update(CommandPolicySecret, authName, policyRef)
 }
 
-func (p *TrialAuthPolicy) PolicyOR(pHashList DigestList) {
+func (p *TrialAuthPolicy) PolicyOR(pHashList DigestList) error {
+	if len(pHashList) < 2 || len(pHashList) > 8 {
+		return errors.New("invalid number of digests")
+	}
+
 	p.reset()
 
 	h, end := p.beginUpdateForCommand(CommandPolicyOR)
@@ -147,6 +151,7 @@ func (p *TrialAuthPolicy) PolicyOR(pHashList DigestList) {
 		h.Write(digest)
 	}
 	end()
+	return nil
 }
 
 func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) {

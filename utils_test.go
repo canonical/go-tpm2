@@ -248,7 +248,9 @@ func TestTrialPolicyOR(t *testing.T) {
 			}
 			// Perform another assertion first to make sure that the PolicyOR resets the digest
 			trial.PolicyPassword()
-			trial.PolicyOR(data.pHashList)
+			if err := trial.PolicyOR(data.pHashList); err != nil {
+				t.Errorf("PolicyOR failed: %v", err)
+			}
 
 			tpmDigest, err := tpm.PolicyGetDigest(sessionContext)
 			if err != nil {
