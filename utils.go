@@ -131,11 +131,12 @@ func (p *TrialAuthPolicy) GetDigest() Digest {
 	return p.digest
 }
 
-func (p *TrialAuthPolicy) SetDigest(d Digest) {
+func (p *TrialAuthPolicy) SetDigest(d Digest) error {
 	if len(d) != p.alg.Size() {
-		panic("Invalid digest length")
+		return errors.New("Invalid digest length")
 	}
 	p.digest = d
+	return nil
 }
 
 func (p *TrialAuthPolicy) Reset() {
