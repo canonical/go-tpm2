@@ -131,6 +131,17 @@ func (p *TrialAuthPolicy) GetDigest() Digest {
 	return p.digest
 }
 
+func (p *TrialAuthPolicy) SetDigest(d Digest) {
+	if len(d) != p.alg.Size() {
+		panic("Invalid digest length")
+	}
+	p.digest = d
+}
+
+func (p *TrialAuthPolicy) Reset() {
+	p.reset()
+}
+
 func (p *TrialAuthPolicy) PolicySigned(authName Name, policyRef Nonce) {
 	p.update(CommandPolicySigned, authName, policyRef)
 }
