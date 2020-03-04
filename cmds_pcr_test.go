@@ -212,7 +212,9 @@ func TestPCRRead(t *testing.T) {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
 		for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
-			expectedDigests.EnsureBank(alg)
+			if _, ok := expectedDigests[alg]; !ok {
+				expectedDigests[alg] = make(map[int]Digest)
+			}
 			digestSize := alg.Size()
 
 			if _, ok := expectedDigests[alg][data.index]; !ok {
