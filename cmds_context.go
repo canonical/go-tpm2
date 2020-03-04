@@ -231,7 +231,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	var public *Public
 	if object.Handle() != persistentHandle {
 		var err error
-		public, err = object.(*objectContext).public().clone()
+		public, err = object.(*objectContext).public().copy()
 		if err != nil {
 			return nil, fmt.Errorf("cannot copy public area of object: %v", err)
 		}

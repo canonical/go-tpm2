@@ -128,7 +128,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 			"name and public area returned from TPM are not consistent"}
 	}
 
-	public, err := outPublic.Ptr.clone()
+	public, err := outPublic.Ptr.copy()
 	if err != nil {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}

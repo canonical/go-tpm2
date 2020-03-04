@@ -16,6 +16,7 @@ import (
 	"hash"
 	"io"
 	"reflect"
+	"sort"
 	"unsafe"
 
 	"golang.org/x/xerrors"
@@ -423,6 +424,36 @@ type TaggedHashList []TaggedHash
 
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
+
+func (l PCRSelectionList) Equals(r PCRSelectionList) bool {
+	if len(l) != len(r) {
+		return false
+	}
+	for i, sl := range l {
+		if sl.Hash != r[i].Hash {
+			return false
+		}
+
+		if len(sl.Select) != len(r[i].Select) {
+			return false
+		}
+
+		sls := make([]int, len(sl.Select))
+		copy(sls, sl.Select)
+		sort.Ints(sls)
+		srs := make([]int, len(r[i].Select))
+		copy(srs, r[i].Select)
+		sort.Ints(srs)
+
+		for i := range sls {
+			if sls[i] != srs[i] {
+				return false
+			}
+		}
+	}
+
+	return true
+}
 
 func (l PCRSelectionList) subtract(r PCRSelectionList) (PCRSelectionList, error) {
 	if len(l) != len(r) {
@@ -1507,7 +1538,7 @@ func (p *Public) Name() (Name, error) {
 	return name, nil
 }
 
-func (p *Public) clone() (*Public, error) {
+func (p *Public) copy() (*Public, error) {
 	b, err := MarshalToBytes(p)
 	if err != nil {
 		return nil, err
@@ -1724,7 +1755,7 @@ func (p *NVPublic) compareName(name Name) bool {
 	return bytes.Equal(n, name)
 }
 
-func (p *NVPublic) clone() (*NVPublic, error) {
+func (p *NVPublic) copy() (*NVPublic, error) {
 	b, err := MarshalToBytes(p)
 	if err != nil {
 		return nil, err
