@@ -425,7 +425,7 @@ type TaggedHashList []TaggedHash
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
 
-func (l PCRSelectionList) Equals(r PCRSelectionList) bool {
+func (l PCRSelectionList) Equal(r PCRSelectionList) bool {
 	if len(l) != len(r) {
 		return false
 	}

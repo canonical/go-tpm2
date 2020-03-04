@@ -458,6 +458,64 @@ func TestNVPublicName(t *testing.T) {
 	}
 }
 
+func TestPCRSelectionListEqual(t *testing.T) {
+	for _, data := range []struct {
+		desc  string
+		l     PCRSelectionList
+		r     PCRSelectionList
+		equal bool
+	}{
+		{
+			desc:  "DifferentLength",
+			l:     PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{7}}, {Hash: HashAlgorithmSHA256, Select: []int{7}}},
+			r:     PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{7}}},
+			equal: false,
+		},
+		{
+			desc:  "DifferentOrdering",
+			l:     PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{7}}, {Hash: HashAlgorithmSHA256, Select: []int{7}}},
+			r:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}, {Hash: HashAlgorithmSHA1, Select: []int{7}}},
+			equal: false,
+		},
+		{
+			desc:  "DifferentSelectionLength",
+			l:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
+			r:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}},
+			equal: false,
+		},
+		{
+			desc:  "DifferentSelection",
+			l:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 9}}},
+			r:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}},
+			equal: false,
+		},
+		{
+			desc:  "Match",
+			l:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}},
+			r:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}},
+			equal: true,
+		},
+		{
+			desc:  "MatchWithDifferentSelectionOrdering",
+			l:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}},
+			r:     PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{8, 7}}},
+			equal: true,
+		},
+		{
+			desc:  "MatchMultiple",
+			l:     PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0, 5, 2}}, {Hash: HashAlgorithmSHA256, Select: []int{7, 8}}},
+			r:     PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{2, 0, 5}}, {Hash: HashAlgorithmSHA256, Select: []int{8, 7}}},
+			equal: true,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			if data.l.Equal(data.r) != data.equal {
+				t.Errorf("Equal returned the wrong result")
+			}
+		})
+	}
+}
+
 func TestPCRSelectionListSubtract(t *testing.T) {
 	for _, data := range []struct {
 		desc           string
