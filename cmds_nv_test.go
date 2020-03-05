@@ -37,7 +37,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			if err == nil {
 				t.Fatalf("NVUndefineSpace didn't execute properly")
 			}
-			if _, ok := err.(ResourceUnavailableError); !ok {
+			if !IsResourceUnavailableError(err, handle) {
 				t.Errorf("Unexpected error: %v", err)
 			}
 		}()

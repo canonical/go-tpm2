@@ -293,7 +293,7 @@ func TestEvictControl(t *testing.T) {
 		if err == nil {
 			t.Fatalf("CreateResourceContextFromTPM on an evicted resource should fail")
 		}
-		if _, ok := err.(ResourceUnavailableError); !ok {
+		if !IsResourceUnavailableError(err, persist) {
 			t.Errorf("CreateResourceContextFromTPM returned an unexpected error: %v", err)
 		}
 	}
@@ -359,7 +359,7 @@ func TestFlushContext(t *testing.T) {
 	if err == nil {
 		t.Fatalf("CreateResourceContextFromTPM on a flushed resource should fail")
 	}
-	if _, ok := err.(ResourceUnavailableError); !ok {
+	if !IsResourceUnavailableError(err, h) {
 		t.Fatalf("CreateResourceContextFromTPM returned an unexpected error: %v", err)
 	}
 }

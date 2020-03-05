@@ -19,6 +19,9 @@ const (
 	// AnyErrorCode is used to match any error code when using IsTPMError, IsTPMHandleError, IsTPMParameterError and IsTPMSessionError.
 	AnyErrorCode ErrorCode = 0x100
 
+	// AnyHandle is used to match any handle when using IsResourceUnavailableError.
+	AnyHandle Handle = 0xffffffff
+
 	// AnyHandleIndex is used to match any handle when using IsTPMHandleError.
 	AnyHandleIndex int = -1
 
@@ -226,6 +229,13 @@ func (e *TPMHandleError) Command() CommandCode {
 
 func (e *TPMHandleError) Code() ErrorCode {
 	return e.err.(*TPMError).Code
+}
+
+// IsResourceUnavailableError indicates whether an error is a ResourceUnavailableError with the specified handle. To test for any
+// handle, use AnyHandle.
+func IsResourceUnavailableError(err error, handle Handle) bool {
+	var e ResourceUnavailableError
+	return xerrors.As(err, &e) && (handle == AnyHandle || e.Handle == handle)
 }
 
 // IsTPMError indicates whether an error is a *TPMError with the specified ErrorCode and CommandCode. To test for any error code,

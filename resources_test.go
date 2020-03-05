@@ -39,10 +39,7 @@ func TestCreateResourceContextFromTPM(t *testing.T) {
 		if rc != nil {
 			t.Errorf("CreateResourceContextFromTPM returned a non-nil context for a resource that doesn't exist")
 		}
-		if err == nil {
-			t.Fatalf("CreateResourceContextFromTPM should return an error for a resource that doesn't exist")
-		}
-		if e, ok := err.(ResourceUnavailableError); !ok || e.Handle != handle {
+		if !IsResourceUnavailableError(err, handle) {
 			t.Errorf("CreateResourceContextFromTPM returned an unexpected error for a resource that doesn't exist: %v", err)
 		}
 	}
