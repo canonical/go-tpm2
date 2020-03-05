@@ -383,10 +383,7 @@ func TestCertifyCreation(t *testing.T) {
 		creationTicket.Hierarchy = HandleEndorsement
 
 		_, _, err = tpm.CertifyCreation(nil, objectHandle, nil, creationHash, nil, creationTicket, nil)
-		if err == nil {
-			t.Fatalf("CertifyCreation should fail with an invalid ticket")
-		}
-		if e, ok := err.(*TPMParameterError); !ok || e.Code() != ErrorTicket || e.Index != 4 {
+		if !IsTPMParameterError(err, ErrorTicket, CommandCertifyCreation, 4) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 	})

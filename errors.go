@@ -7,6 +7,29 @@ package tpm2
 import (
 	"bytes"
 	"fmt"
+
+	"golang.org/x/xerrors"
+)
+
+const (
+	// AnyCommandCode is used to match any command code when using IsTPMError, IsTPMHandleError, IsTPMParameterError, IsTPMSessionError
+	// and IsTPMWarning.
+	AnyCommandCode CommandCode = 0xc0000000
+
+	// AnyErrorCode is used to match any error code when using IsTPMError, IsTPMHandleError, IsTPMParameterError and IsTPMSessionError.
+	AnyErrorCode ErrorCode = 0x100
+
+	// AnyHandleIndex is used to match any handle when using IsTPMHandleError.
+	AnyHandleIndex int = -1
+
+	// AnyParameterIndex is used to match any parameter when using IsTPMParameterIndex.
+	AnyParameterIndex int = -1
+
+	// AnySessionIndex is used to match any session when using IsTPMSessionIndex.
+	AnySessionIndex int = -1
+
+	// AnyWarningCode is used to match any warning code when using IsTPMWarning.
+	AnyWarningCode WarningCode = 0x80
 )
 
 // ResourceUnavailableError is returned from TPMContext.GetOrCreateResourceContext or TPMContext.GetOrCreateSessionContext if it is
@@ -203,6 +226,44 @@ func (e *TPMHandleError) Command() CommandCode {
 
 func (e *TPMHandleError) Code() ErrorCode {
 	return e.err.(*TPMError).Code
+}
+
+// IsTPMError indicates whether an error is a *TPMError with the specified ErrorCode and CommandCode. To test for any error code,
+// use AnyErrorCode. To test for any command code, use AnyCommandCode.
+func IsTPMError(err error, code ErrorCode, command CommandCode) bool {
+	var e *TPMError
+	return xerrors.As(err, &e) && (code == AnyErrorCode || e.Code == code) && (command == AnyCommandCode || e.Command == command)
+}
+
+// IsTPMHandleError indicates whether an error is a *TPMHandleError with the specified ErrorCode, CommandCode and handle index.
+// To test for any error code, use AnyErrorCode. To test for any command code, use AnyCommandCode. To test for any handle index,
+// use AnyHandleIndex.
+func IsTPMHandleError(err error, code ErrorCode, command CommandCode, handle int) bool {
+	var e *TPMHandleError
+	return xerrors.As(err, &e) && (code == AnyErrorCode || e.Code() == code) && (command == AnyCommandCode || e.Command() == command) && (handle == AnyHandleIndex || e.Index == handle)
+}
+
+// IsTPMParameterError indicates whether an error is a *TPMParameterError with the specified ErrorCode, CommandCode and parameter
+// index. To test for any error code, use AnyErrorCode. To test for any command code, use AnyCommandCode. To test for any parameter
+// index, use AnyParameterIndex.
+func IsTPMParameterError(err error, code ErrorCode, command CommandCode, param int) bool {
+	var e *TPMParameterError
+	return xerrors.As(err, &e) && (code == AnyErrorCode || e.Code() == code) && (command == AnyCommandCode || e.Command() == command) && (param == AnyParameterIndex || e.Index == param)
+}
+
+// IsTPMSessionError indicates whether an error is a *TPMSessionError with the specified ErrorCode, CommandCode and session index.
+// To test for any error code, use AnyErrorCode. To test for any command code, use AnyCommandCode. To test for any session index,
+// use AnySessionIndex.
+func IsTPMSessionError(err error, code ErrorCode, command CommandCode, session int) bool {
+	var e *TPMSessionError
+	return xerrors.As(err, &e) && (code == AnyErrorCode || e.Code() == code) && (command == AnyCommandCode || e.Command() == command) && (session == AnySessionIndex || e.Index == session)
+}
+
+// IsTPMWarning indicates whether an error is a *TPMWarningError with the specified WarningCode and CommandCode. To test for any
+// warning code, use AnyWarningCode. To test for any command code, use AnyCommandCode.
+func IsTPMWarning(err error, code WarningCode, command CommandCode) bool {
+	var e *TPMWarning
+	return xerrors.As(err, &e) && (code == AnyWarningCode || e.Code == code) && (command == AnyCommandCode || e.Command == command)
 }
 
 const (

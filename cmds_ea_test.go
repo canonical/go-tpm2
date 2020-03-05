@@ -250,10 +250,7 @@ func TestPolicySecret(t *testing.T) {
 		useSession := func(sessionContext SessionContext) {
 			time.Sleep(2 * time.Second)
 			_, err := tpm.Unseal(objectContext, sessionContext.WithAttrs(AttrContinueSession))
-			if err == nil {
-				t.Fatalf("Unseal should have failed")
-			}
-			if e, ok := err.(*TPMSessionError); !ok || e.Code() != ErrorExpired {
+			if !IsTPMSessionError(err, ErrorExpired, CommandUnseal, 1) {
 				t.Errorf("Unexpected error: %v", err)
 			}
 		}
@@ -304,10 +301,7 @@ func TestPolicySecret(t *testing.T) {
 
 		useSession := func(sessionContext SessionContext) {
 			_, err := tpm.Unseal(objectContext1, sessionContext.WithAttrs(AttrContinueSession))
-			if err == nil {
-				t.Fatalf("Unseal should have failed")
-			}
-			if e, ok := err.(*TPMSessionError); !ok || e.Code() != ErrorPolicyFail {
+			if !IsTPMSessionError(err, ErrorPolicyFail, CommandUnseal, 1) {
 				t.Errorf("Unexpected error: %v", err)
 			}
 			_, err = tpm.Unseal(objectContext2, sessionContext.WithAttrs(AttrContinueSession))

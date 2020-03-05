@@ -204,10 +204,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 	t.Run("MissingPolicySession", func(t *testing.T) {
 		context := define(t)
 		err := tpm.NVUndefineSpaceSpecial(context, platform, nil, nil)
-		if err == nil {
-			t.Fatalf("Expected an error")
-		}
-		if e, ok := err.(*TPMError); !ok || e.Code != ErrorAuthType {
+		if !IsTPMError(err, ErrorAuthType, CommandNVUndefineSpaceSpecial) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 		run(t, context, nil)

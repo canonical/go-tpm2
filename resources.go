@@ -606,17 +606,12 @@ func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...Ses
 			rc, err = t.makeObjectContextFromTPM(rc, s...)
 		}
 
-		if err != nil {
-			switch e := err.(type) {
-			case *TPMWarning:
-				if e.Code == WarningReferenceH0 {
-					return nil, ResourceUnavailableError{handle}
-				}
-			case *TPMHandleError:
-				if e.Code() == ErrorHandle {
-					return nil, ResourceUnavailableError{handle}
-				}
-			}
+		switch {
+		case IsTPMWarning(err, WarningReferenceH0, AnyCommandCode):
+			return nil, ResourceUnavailableError{handle}
+		case IsTPMHandleError(err, ErrorHandle, AnyCommandCode, AnyHandleIndex):
+			return nil, ResourceUnavailableError{handle}
+		case err != nil:
 			return nil, err
 		}
 

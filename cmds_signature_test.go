@@ -254,10 +254,7 @@ func TestVerifySignature(t *testing.T) {
 					t.Errorf("Invalid hierarchy 0x%08x", verified.Hierarchy)
 				}
 			} else {
-				if err == nil {
-					t.Fatalf("Expected an error for an invalid signature")
-				}
-				if e, ok := err.(*TPMParameterError); !ok || e.Code() != ErrorSignature || e.Index != 2 {
+				if !IsTPMParameterError(err, ErrorSignature, CommandVerifySignature, 2) {
 					t.Errorf("Unexpected error: %v", err)
 				}
 			}

@@ -147,15 +147,11 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Expected ObjectChangeAuth to fail")
 			}
-			switch e := err.(type) {
-			case *TPMWarning:
-				if e.Code == WarningLockout {
-					break Loop
-				}
-			case *TPMSessionError:
-				if e.Code() == ErrorAuthFail {
-					continue
-				}
+			switch {
+			case IsTPMWarning(err, WarningLockout, CommandObjectChangeAuth):
+				break Loop
+			case IsTPMSessionError(err, ErrorAuthFail, CommandObjectChangeAuth, 1):
+				continue
 			}
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -165,7 +161,7 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		if err == nil {
 			t.Fatalf("ObjectChangeAuth should have failed")
 		}
-		if e, ok := err.(*TPMWarning); !ok || e.Code != WarningLockout {
+		if !IsTPMWarning(err, WarningLockout, CommandObjectChangeAuth) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 

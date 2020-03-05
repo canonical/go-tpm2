@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	. "github.com/chrisccoulson/go-tpm2"
-	"golang.org/x/xerrors"
 )
 
 func TestDecodeResponse(t *testing.T) {
@@ -17,7 +16,7 @@ func TestDecodeResponse(t *testing.T) {
 	}
 
 	err := DecodeResponseCode(CommandClear, ResponseCode(0x00000155))
-	if e, ok := err.(*TPMError); !ok || e.Code != ErrorSensitive || e.Command != CommandClear {
+	if !IsTPMError(err, ErrorSensitive, CommandClear) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
@@ -28,37 +27,36 @@ func TestDecodeResponse(t *testing.T) {
 	}
 
 	err = DecodeResponseCode(CommandNVWrite, ResponseCode(0x00000923))
-	if e, ok := err.(*TPMWarning); !ok || e.Code != WarningNVUnavailable || e.Command != CommandNVWrite {
+	if !IsTPMWarning(err, WarningNVUnavailable, CommandNVWrite) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	err = DecodeResponseCode(CommandClear, ResponseCode(0x000005e7))
-	if e, ok := err.(*TPMParameterError); !ok || e.Code() != ErrorECCPoint || e.Index != 5 || e.Command() != CommandClear {
+	if !IsTPMParameterError(err, ErrorECCPoint, CommandClear, 5) {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	var e *TPMError
-	if !xerrors.As(err, &e) || e.Code != ErrorECCPoint || e.Command != CommandClear {
+	if !IsTPMError(err, ErrorECCPoint, CommandClear) {
 		t.Errorf("Unexpected wrapping")
 	}
 
 	err = DecodeResponseCode(CommandUnseal, ResponseCode(0x000000b9c))
-	if e, ok := err.(*TPMSessionError); !ok || e.Code() != ErrorKey || e.Index != 3 || e.Command() != CommandUnseal {
+	if !IsTPMSessionError(err, ErrorKey, CommandUnseal, 3) {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	if !xerrors.As(err, &e) || e.Code != ErrorKey || e.Command != CommandUnseal {
+	if !IsTPMError(err, ErrorKey, CommandUnseal) {
 		t.Errorf("Unexpected wrapping")
 	}
 
 	err = DecodeResponseCode(CommandStartup, ResponseCode(0x00000496))
-	if e, ok := err.(*TPMHandleError); !ok || e.Code() != ErrorSymmetric || e.Index != 4 || e.Command() != CommandStartup {
+	if !IsTPMHandleError(err, ErrorSymmetric, CommandStartup, 4) {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	if !xerrors.As(err, &e) || e.Code != ErrorSymmetric || e.Command != CommandStartup {
+	if !IsTPMError(err, ErrorSymmetric, CommandStartup) {
 		t.Errorf("Unexpected wrapping")
 	}
 
 	err = DecodeResponseCode(CommandSign, ResponseCode(0x00000084))
-	if e, ok := err.(*TPMError); !ok || e.Code != ErrorValue || e.Command != CommandSign {
+	if !IsTPMError(err, ErrorValue, CommandSign) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
