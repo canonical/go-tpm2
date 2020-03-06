@@ -317,19 +317,22 @@ func IsTPMWarning(err error, code WarningCode, command CommandCode) bool {
 }
 
 const (
-	formatMask ResponseCode = 1 << 7
+	formatMask ResponseCode = 1 << 7 // Bit 7 indicates whether the error is a format-zero or format-one code
 
-	fmt0ErrorCodeMask ResponseCode = 0x7f
-	fmt0VersionMask   ResponseCode = 1 << 8
-	fmt0VendorMask    ResponseCode = 1 << 10
-	fmt0SeverityMask  ResponseCode = 1 << 11
+	fmt0ErrorCodeMask ResponseCode = 0x7f    // Format-zero error numbers are 7-bits
+	fmt0VersionMask   ResponseCode = 1 << 8  // Bit 8 of format-zero errors is zero for TPM1.2 errors and one for TPM2 errors
+	fmt0VendorMask    ResponseCode = 1 << 10 // Bit 10 of format-zero errors is zero for TCG defined errors and one for vendor defined errors
+	fmt0SeverityMask  ResponseCode = 1 << 11 // BIt 11 of format-zero errors is zero for errors and one for warnings
 
-	fmt1ErrorCodeMask            ResponseCode = 0x3f
-	fmt1IndexShift               uint         = 8
-	fmt1ParameterIndexMask       ResponseCode = 0xf << fmt1IndexShift
-	fmt1HandleOrSessionIndexMask ResponseCode = 0x7 << fmt1IndexShift
-	fmt1ParameterMask            ResponseCode = 1 << 6
-	fmt1SessionMask              ResponseCode = 1 << 11
+	fmt1ErrorCodeMask            ResponseCode = 0x3f                  // Format-one error numbers are 6-bits
+	fmt1IndexShift               uint         = 8                     // Offset of the index field in format-one errors
+	fmt1ParameterIndexMask       ResponseCode = 0xf << fmt1IndexShift // Parameter indices in format-one errors are 4-bits
+	fmt1HandleOrSessionIndexMask ResponseCode = 0x7 << fmt1IndexShift // Handle or session indices in format-one errors are 3-bits
+	// Bit 6 of format-one errors is zero for errors associated with a handle or session, and one for errors associated with a parameter
+	fmt1ParameterMask ResponseCode = 1 << 6
+	// Bit 11 of format-one errors associated with a handle or session (bit 3 of the index) is zero for errors associated with a handle
+	// and one for errors associated with a session.
+	fmt1SessionMask ResponseCode = 1 << 11
 )
 
 // DecodeResponseCode decodes the ResponseCode provided via resp. If the specified response code is Success, it returns no error,
