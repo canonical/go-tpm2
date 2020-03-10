@@ -182,6 +182,7 @@ func TestPolicyRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartAuthSession failed: %v", err)
 	}
+	defer flushContext(t, tpm, sc)
 
 	if err := tpm.PolicyPCR(sc, nil,
 		PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}}); err != nil {
