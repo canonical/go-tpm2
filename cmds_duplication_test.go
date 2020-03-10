@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	. "github.com/chrisccoulson/go-tpm2"
+	"github.com/chrisccoulson/go-tpm2/internal/crypto"
 )
 
 func TestDuplicate(t *testing.T) {
@@ -104,7 +105,7 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected duplicate type")
 		}
 		if len(sensitiveDup.AuthValue) != template.NameAlg.Size() {
-			t.Errorf("Unexpected duplicate auth value size")
+			t.Errorf("Unexpected duplicate auth value size (%d)", len(sensitiveDup.AuthValue))
 		}
 		if !bytes.Equal(sensitiveDup.AuthValue[0:len(sensitive.UserAuth)], sensitive.UserAuth) {
 			t.Errorf("Unexpected duplicate auth value")
@@ -151,7 +152,7 @@ func TestDuplicate(t *testing.T) {
 		}
 		dupSensitive := duplicate[n:]
 
-		hmacKey := TestCryptKDFa(parentTemplate.NameAlg, seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8, nil, false)
+		hmacKey := crypto.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8)
 		h := hmac.New(func() hash.Hash { return parentTemplate.NameAlg.NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(object.Name())
@@ -159,7 +160,8 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected outer HMAC")
 		}
 
-		symKey := TestCryptKDFa(parentTemplate.NameAlg, seed, []byte("STORAGE"), object.Name(), nil, int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()), nil, false)
+		symKey := crypto.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("STORAGE"), object.Name(), nil,
+			int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()))
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
 			t.Fatalf("NewCipher failed: %v", err)
@@ -364,7 +366,8 @@ func TestImport(t *testing.T) {
 		seed := make([]byte, primary.Name().Algorithm().Size())
 		rand.Read(seed)
 
-		symKey := TestCryptKDFa(primary.Name().Algorithm(), seed, []byte("STORAGE"), name, nil, int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()), nil, false)
+		symKey := crypto.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("STORAGE"), name, nil,
+			int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()))
 
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
@@ -374,7 +377,7 @@ func TestImport(t *testing.T) {
 		dupSensitive := make(Private, len(sensitive))
 		stream.XORKeyStream(dupSensitive, sensitive)
 
-		hmacKey := TestCryptKDFa(primary.Name().Algorithm(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8, nil, false)
+		hmacKey := crypto.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8)
 		h := hmac.New(func() hash.Hash { return primary.Name().Algorithm().NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(name)

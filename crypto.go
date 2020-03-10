@@ -5,9 +5,6 @@
 package tpm2
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/rand"
@@ -16,6 +13,8 @@ import (
 	"fmt"
 	"hash"
 	"math/big"
+
+	"github.com/chrisccoulson/go-tpm2/internal/crypto"
 )
 
 func getHashConstructor(alg HashAlgorithmId) func() hash.Hash {
@@ -83,86 +82,6 @@ func cryptComputeSessionCommandHMAC(context *sessionContext, key, cpHash []byte,
 func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte, attrs sessionAttrs) []byte {
 	scData := context.scData()
 	return computeSessionHMAC(scData.HashAlg, key, rpHash, scData.NonceTPM, scData.NonceCaller, nil, nil, attrs)
-}
-
-func cryptKDFa(hashAlg HashAlgorithmId, key, label, contextU, contextV []byte, sizeInBits int, counterInOut *int, once bool) []byte {
-	digestSize := hashAlg.Size()
-	if once && sizeInBits&7 > 0 {
-		panic("sizeInBits must be a multiple of 8 when called with once == true")
-	}
-
-	counter := 0
-	if counterInOut != nil {
-		counter = *counterInOut
-	}
-	var nbytes int
-	if once {
-		nbytes = digestSize
-	} else {
-		nbytes = (sizeInBits + 7) / 8
-	}
-
-	buf := new(bytes.Buffer)
-
-	for ; nbytes > 0; nbytes -= digestSize {
-		counter++
-		if nbytes < digestSize {
-			digestSize = nbytes
-		}
-
-		h := hmac.New(getHashConstructor(hashAlg), key)
-
-		binary.Write(h, binary.BigEndian, uint32(counter))
-		h.Write(label)
-		h.Write([]byte{0})
-		h.Write(contextU)
-		h.Write(contextV)
-		binary.Write(h, binary.BigEndian, uint32(sizeInBits))
-
-		buf.Write(h.Sum(nil)[0:digestSize])
-	}
-
-	outKey := buf.Bytes()
-
-	if sizeInBits%8 != 0 {
-		outKey[0] &= ((1 << uint(sizeInBits%8)) - 1)
-	}
-	if counterInOut != nil {
-		*counterInOut = counter
-	}
-	return outKey
-}
-
-func cryptKDFe(hashAlg HashAlgorithmId, z, label, partyUInfo, partyVInfo []byte, sizeInBits int) []byte {
-	digestSize := hashAlg.Size()
-
-	counter := 0
-	buf := new(bytes.Buffer)
-
-	for bytes := (sizeInBits + 7) / 8; bytes > 0; bytes -= digestSize {
-		if bytes < digestSize {
-			digestSize = bytes
-		}
-		counter++
-
-		h := hashAlg.NewHash()
-
-		binary.Write(h, binary.BigEndian, uint32(counter))
-		h.Write(z)
-		h.Write(label)
-		h.Write([]byte{0})
-		h.Write(partyUInfo)
-		h.Write(partyVInfo)
-
-		buf.Write(h.Sum(nil)[0:digestSize])
-	}
-
-	outKey := buf.Bytes()
-
-	if sizeInBits%8 != 0 {
-		outKey[0] &= ((1 << uint(sizeInBits%8)) - 1)
-	}
-	return outKey
 }
 
 func cryptComputeNonce(nonce []byte) error {
@@ -258,63 +177,9 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}
-		salt := cryptKDFe(public.NameAlg, []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC().X), digestSize*8)
+		salt := crypto.KDFe(public.NameAlg.GetHash(), []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC().X), digestSize*8)
 		return EncryptedSecret(encryptedSalt), salt, nil
 	}
 
 	return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
-}
-
-func cryptXORObfuscation(hashAlg HashAlgorithmId, key []byte, contextU, contextV Nonce, data []byte) error {
-	if !hashAlg.Supported() {
-		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", hashAlg)
-	}
-	digestSize := hashAlg.Size()
-
-	counter := 0
-	datasize := len(data)
-	remaining := datasize
-
-	for ; remaining > 0; remaining -= digestSize {
-		mask := cryptKDFa(hashAlg, key, []byte("XOR"), contextU, contextV, datasize*8, &counter, true)
-		lim := remaining
-		if digestSize < remaining {
-			lim = digestSize
-		}
-		for i := 0; i < lim; i++ {
-			data[datasize-remaining+i] ^= mask[i]
-		}
-	}
-
-	return nil
-}
-
-func cryptEncryptSymmetricAES(key []byte, mode SymModeId, data, iv []byte) error {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return fmt.Errorf("cannot construct new block cipher: %v", err)
-	}
-
-	if mode != SymModeCFB {
-		return fmt.Errorf("unsupported block cipher mode %v", mode)
-	}
-
-	stream := cipher.NewCFBEncrypter(block, iv)
-	stream.XORKeyStream(data, data)
-	return nil
-}
-
-func cryptDecryptSymmetricAES(key []byte, mode SymModeId, data, iv []byte) error {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return fmt.Errorf("cannot construct new block cipher: %v", err)
-	}
-
-	if mode != SymModeCFB {
-		return fmt.Errorf("unsupported block cipher mode %v", mode)
-	}
-
-	stream := cipher.NewCFBDecrypter(block, iv)
-	stream.XORKeyStream(data, data)
-	return nil
 }

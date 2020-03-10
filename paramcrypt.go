@@ -9,6 +9,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+
+	"github.com/chrisccoulson/go-tpm2/internal/crypto"
 )
 
 func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*sessionParam, int) {
@@ -102,6 +104,10 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 	}
 
 	scData := session.session.scData()
+	if !scData.HashAlg.Supported() {
+		return nil, fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
+	}
+
 	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
@@ -111,24 +117,16 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
-		if symmetric.Mode.Sym() != SymModeCFB {
-			return nil, fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
-		}
-		if !scData.HashAlg.Supported() {
-			return nil, fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
-		}
-		k := cryptKDFa(scData.HashAlg, sessionValue, []byte("CFB"), scData.NonceCaller, scData.NonceTPM,
-			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
+		k := crypto.KDFa(scData.HashAlg.GetHash(), sessionValue, []byte("CFB"), scData.NonceCaller, scData.NonceTPM,
+			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := cryptEncryptSymmetricAES(symKey, symmetric.Mode.Sym(), data, iv); err != nil {
+		if err := crypto.EncryptSymmetricAES(symKey, crypto.SymmetricMode(symmetric.Mode.Sym()), data, iv); err != nil {
 			return nil, fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		if err := cryptXORObfuscation(scData.HashAlg, sessionValue, scData.NonceCaller, scData.NonceTPM, data); err != nil {
-			return nil, fmt.Errorf("XOR parameter obfuscation failed: %v", err)
-		}
+		crypto.XORObfuscation(scData.HashAlg.GetHash(), sessionValue, scData.NonceCaller, scData.NonceTPM, data)
 	default:
 		return nil, fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
@@ -147,6 +145,10 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 	}
 
 	scData := session.session.scData()
+	if !scData.HashAlg.Supported() {
+		return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
+	}
+
 	sessionValue := session.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)
@@ -156,24 +158,16 @@ func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
-		if symmetric.Mode.Sym() != SymModeCFB {
-			return fmt.Errorf("invalid symmetric mode %v", symmetric.Mode.Sym())
-		}
-		if !scData.HashAlg.Supported() {
-			return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
-		}
-		k := cryptKDFa(scData.HashAlg, sessionValue, []byte("CFB"), scData.NonceTPM, scData.NonceCaller,
-			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8), nil, false)
+		k := crypto.KDFa(scData.HashAlg.GetHash(), sessionValue, []byte("CFB"), scData.NonceTPM, scData.NonceCaller,
+			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := cryptDecryptSymmetricAES(symKey, symmetric.Mode.Sym(), data, iv); err != nil {
+		if err := crypto.DecryptSymmetricAES(symKey, crypto.SymmetricMode(symmetric.Mode.Sym()), data, iv); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		if err := cryptXORObfuscation(scData.HashAlg, sessionValue, scData.NonceTPM, scData.NonceCaller, data); err != nil {
-			return fmt.Errorf("XOR parameter obfuscation failed: %v", err)
-		}
+		crypto.XORObfuscation(scData.HashAlg.GetHash(), sessionValue, scData.NonceTPM, scData.NonceCaller, data)
 	default:
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}

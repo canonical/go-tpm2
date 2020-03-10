@@ -5,107 +5,57 @@
 package tpm2_test
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/rand"
+	"reflect"
 	"testing"
 
 	. "github.com/chrisccoulson/go-tpm2"
+	"github.com/chrisccoulson/go-tpm2/internal/crypto"
 )
 
-func TestSymmetricAES(t *testing.T) {
-	for _, data := range []struct {
-		desc      string
-		keyLength int
-		data      []byte
-	}{
-		{
-			desc:      "128",
-			keyLength: 16,
-			data:      []byte("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"),
-		},
-		{
-			desc:      "256",
-			keyLength: 32,
-			data:      []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"),
-		},
-	} {
-		t.Run(data.desc, func(t *testing.T) {
-			key := make([]byte, data.keyLength)
-			rand.Read(key)
-
-			iv := make([]byte, aes.BlockSize)
-			rand.Read(iv)
-
-			var secret []byte
-			secret = append(secret, data.data...)
-
-			if err := TestCryptEncryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
-				t.Fatalf("AES encryption failed: %v", err)
-			}
-
-			if err := TestCryptDecryptSymmetricAES(key, SymModeCFB, secret, iv); err != nil {
-				t.Fatalf("AES decryption failed: %v", err)
-			}
-
-			if !bytes.Equal(secret, data.data) {
-				t.Errorf("Encrypt / decrypt with AES didn't produce the original data")
-			}
-		})
+func TestCryptoSymmetricModeConversions(t *testing.T) {
+	if reflect.TypeOf(SymModeId(0)).Kind() != reflect.TypeOf(crypto.SymmetricMode(0)).Kind() {
+		t.Errorf("Incompatible types")
 	}
-}
 
-func TestXORObfuscation(t *testing.T) {
-	for _, data := range []struct {
-		desc      string
-		keyLength int
-		alg       HashAlgorithmId
-		data      []byte
+	for _, data := range []struct{
+		desc string
+		mode SymModeId
+		cryptoMode crypto.SymmetricMode
 	}{
 		{
-			desc:      "SHA256/1",
-			keyLength: 32,
-			alg:       HashAlgorithmSHA256,
-			data:      []byte("secret data"),
+			desc: "SymModeNull",
+			mode: SymModeNull,
+			cryptoMode: crypto.SymmetricModeNull,
 		},
 		{
-			desc:      "SHA256/2",
-			keyLength: 60,
-			alg:       HashAlgorithmSHA256,
-			data:      []byte("super secret data"),
+			desc: "SymModeCTR",
+			mode: SymModeCTR,
+			cryptoMode: crypto.SymmetricModeCTR,
 		},
 		{
-			desc:      "SHA1/1",
-			keyLength: 60,
-			alg:       HashAlgorithmSHA1,
-			data:      []byte("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"),
+			desc: "SymModeOFB",
+			mode: SymModeOFB,
+			cryptoMode: crypto.SymmetricModeOFB,
+		},
+		{
+			desc: "SymModeCBC",
+			mode: SymModeCBC,
+			cryptoMode: crypto.SymmetricModeCBC,
+		},
+		{
+			desc: "SymModeCFB",
+			mode: SymModeCFB,
+			cryptoMode: crypto.SymmetricModeCFB,
+		},
+		{
+			desc: "SymModeECB",
+			mode: SymModeECB,
+			cryptoMode: crypto.SymmetricModeECB,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			key := make([]byte, data.keyLength)
-			rand.Read(key)
-
-			digestSize := data.alg.Size()
-
-			contextU := make([]byte, digestSize)
-			rand.Read(contextU)
-
-			contextV := make([]byte, digestSize)
-			rand.Read(contextV)
-
-			var secret []byte
-			secret = append(secret, data.data...)
-
-			if err := TestCryptXORObfuscation(data.alg, key, contextU, contextV, secret); err != nil {
-				t.Fatalf("XOR obfuscation failed: %v", err)
-			}
-
-			if err := TestCryptXORObfuscation(data.alg, key, contextU, contextV, secret); err != nil {
-				t.Fatalf("XOR obfuscation failed: %v", err)
-			}
-
-			if !bytes.Equal(secret, data.data) {
-				t.Errorf("Encrypt / decrypt with XOR obfuscation didn't produce the original data")
+			if uint16(data.mode) != uint16(data.cryptoMode) {
+				t.Errorf("Invalid value (%d vs %d)", data.mode, data.cryptoMode)
 			}
 		})
 	}

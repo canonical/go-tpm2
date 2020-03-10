@@ -97,8 +97,8 @@ func init() {
 	flag.StringVar(&tpmPath, "tpm-path", "/dev/tpm0", "The path of the TPM character device to use for testing (default: /dev/tpm0)")
 	flag.Var(&permittedCaps, "tpm-permitted-caps",
 		"Comma-separated list of capabilities that tests can use on a TPM character device (ownerpersist,platformpersist,daparameters,"+
-		"changeownerauth,changelockoutauth,changeplatformauth,ownerhierarchy,endorsementhierarchy,lockouthierarchy,platformhierarchy,"+
-		"pcrchange,setcommandcodeauditstatus,clear")
+			"changeownerauth,changelockoutauth,changeplatformauth,ownerhierarchy,endorsementhierarchy,lockouthierarchy,platformhierarchy,"+
+			"pcrchange,setcommandcodeauditstatus,clear")
 
 	flag.BoolVar(&useMssim, "use-mssim", false, "Whether to use the TPM simulator for testing")
 	flag.StringVar(&mssimHost, "mssim-host", "localhost", "The hostname of the TPM simulator (default: localhost)")
