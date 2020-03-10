@@ -237,6 +237,7 @@ func TestVerifySignature(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadExternal failed: %v", err)
 		}
+		defer flushContext(t, tpm, context)
 
 		run := func(t *testing.T, valid bool, digest Digest, signature *Signature) {
 			verified, err := tpm.VerifySignature(context, digest, signature)
