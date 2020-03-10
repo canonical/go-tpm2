@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	. "github.com/chrisccoulson/go-tpm2"
@@ -43,37 +44,39 @@ func (f *testCapabilityFlags) String() string {
 }
 
 func (f *testCapabilityFlags) Set(value string) error {
-	switch value {
-	case "ownerpersist":
-		*f |= (testCapabilityOwnerPersist | testCapabilityOwnerHierarchy)
-	case "platformpersist":
-		*f |= (testCapabilityPlatformPersist | testCapabilityPlatformHierarchy)
-	case "daparameters":
-		*f |= (testCapabilityDAParameters | testCapabilityLockoutHierarchy)
-	case "changeownerauth":
-		*f |= (testCapabilityChangeOwnerAuth | testCapabilityOwnerHierarchy)
-	case "changeendorsementauth":
-		*f |= (testCapabilityChangeEndorsementAuth | testCapabilityEndorsementHierarchy)
-	case "changelockoutauth":
-		*f |= (testCapabilityChangeLockoutAuth | testCapabilityLockoutHierarchy)
-	case "changeplatformauth":
-		*f |= (testCapabilityChangePlatformAuth | testCapabilityPlatformHierarchy)
-	case "ownerhierarchy":
-		*f |= testCapabilityOwnerHierarchy
-	case "endorsementhierarchy":
-		*f |= testCapabilityEndorsementHierarchy
-	case "lockouthierarchy":
-		*f |= testCapabilityLockoutHierarchy
-	case "platformhierarchy":
-		*f |= testCapabilityPlatformHierarchy
-	case "pcrchange":
-		*f |= testCapabilityPCRChange
-	case "setcommandcodeauditstatus":
-		*f |= testCapabilitySetCommandCodeAuditStatus
-	case "clear":
-		*f |= testCapabilityClear
-	default:
-		return fmt.Errorf("unrecognized option %s", value)
+	for _, value := range strings.Split(value, ",") {
+		switch value {
+		case "ownerpersist":
+			*f |= (testCapabilityOwnerPersist | testCapabilityOwnerHierarchy)
+		case "platformpersist":
+			*f |= (testCapabilityPlatformPersist | testCapabilityPlatformHierarchy)
+		case "daparameters":
+			*f |= (testCapabilityDAParameters | testCapabilityLockoutHierarchy)
+		case "changeownerauth":
+			*f |= (testCapabilityChangeOwnerAuth | testCapabilityOwnerHierarchy)
+		case "changeendorsementauth":
+			*f |= (testCapabilityChangeEndorsementAuth | testCapabilityEndorsementHierarchy)
+		case "changelockoutauth":
+			*f |= (testCapabilityChangeLockoutAuth | testCapabilityLockoutHierarchy)
+		case "changeplatformauth":
+			*f |= (testCapabilityChangePlatformAuth | testCapabilityPlatformHierarchy)
+		case "ownerhierarchy":
+			*f |= testCapabilityOwnerHierarchy
+		case "endorsementhierarchy":
+			*f |= testCapabilityEndorsementHierarchy
+		case "lockouthierarchy":
+			*f |= testCapabilityLockoutHierarchy
+		case "platformhierarchy":
+			*f |= testCapabilityPlatformHierarchy
+		case "pcrchange":
+			*f |= testCapabilityPCRChange
+		case "setcommandcodeauditstatus":
+			*f |= testCapabilitySetCommandCodeAuditStatus
+		case "clear":
+			*f |= testCapabilityClear
+		default:
+			return fmt.Errorf("unrecognized option %s", value)
+		}
 	}
 	return nil
 }
@@ -90,14 +93,17 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&useTpm, "use-tpm", false, "")
-	flag.StringVar(&tpmPath, "tpm-path", "/dev/tpm0", "")
-	flag.Var(&permittedCaps, "tpm-allowed-cap", "")
+	flag.BoolVar(&useTpm, "use-tpm", false, "Whether to use a TPM character device for testing (eg, /dev/tpm0)")
+	flag.StringVar(&tpmPath, "tpm-path", "/dev/tpm0", "The path of the TPM character device to use for testing (default: /dev/tpm0)")
+	flag.Var(&permittedCaps, "tpm-permitted-caps",
+		"Comma-separated list of capabilities that tests can use on a TPM character device (ownerpersist,platformpersist,daparameters,"+
+		"changeownerauth,changelockoutauth,changeplatformauth,ownerhierarchy,endorsementhierarchy,lockouthierarchy,platformhierarchy,"+
+		"pcrchange,setcommandcodeauditstatus,clear")
 
-	flag.BoolVar(&useMssim, "use-mssim", false, "")
-	flag.StringVar(&mssimHost, "mssim-host", "localhost", "")
-	flag.UintVar(&mssimTpmPort, "mssim-tpm-port", 2321, "")
-	flag.UintVar(&mssimPlatformPort, "mssim-platform-port", 2322, "")
+	flag.BoolVar(&useMssim, "use-mssim", false, "Whether to use the TPM simulator for testing")
+	flag.StringVar(&mssimHost, "mssim-host", "localhost", "The hostname of the TPM simulator (default: localhost)")
+	flag.UintVar(&mssimTpmPort, "mssim-tpm-port", 2321, "The port number of the TPM simulator command channel (default: 2321)")
+	flag.UintVar(&mssimPlatformPort, "mssim-platform-port", 2322, "The port number of the TPM simulator platform channel (default: 2322)")
 }
 
 var (
