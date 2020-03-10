@@ -343,7 +343,7 @@ func TestTestParms(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected TestParms to fail")
 				}
-				if e, ok := err.(*TPMParameterError); !ok || e.Code() != data.err || e.Index != 1 {
+				if !IsTPMParameterError(err, data.err, CommandTestParms, 1) {
 					t.Errorf("Unexpected error: %v", err)
 				}
 			}

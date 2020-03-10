@@ -17,39 +17,39 @@ func TestCryptoSymmetricModeConversions(t *testing.T) {
 		t.Errorf("Incompatible types")
 	}
 
-	for _, data := range []struct{
-		desc string
-		mode SymModeId
+	for _, data := range []struct {
+		desc       string
+		mode       SymModeId
 		cryptoMode crypto.SymmetricMode
 	}{
 		{
-			desc: "SymModeNull",
-			mode: SymModeNull,
+			desc:       "SymModeNull",
+			mode:       SymModeNull,
 			cryptoMode: crypto.SymmetricModeNull,
 		},
 		{
-			desc: "SymModeCTR",
-			mode: SymModeCTR,
+			desc:       "SymModeCTR",
+			mode:       SymModeCTR,
 			cryptoMode: crypto.SymmetricModeCTR,
 		},
 		{
-			desc: "SymModeOFB",
-			mode: SymModeOFB,
+			desc:       "SymModeOFB",
+			mode:       SymModeOFB,
 			cryptoMode: crypto.SymmetricModeOFB,
 		},
 		{
-			desc: "SymModeCBC",
-			mode: SymModeCBC,
+			desc:       "SymModeCBC",
+			mode:       SymModeCBC,
 			cryptoMode: crypto.SymmetricModeCBC,
 		},
 		{
-			desc: "SymModeCFB",
-			mode: SymModeCFB,
+			desc:       "SymModeCFB",
+			mode:       SymModeCFB,
 			cryptoMode: crypto.SymmetricModeCFB,
 		},
 		{
-			desc: "SymModeECB",
-			mode: SymModeECB,
+			desc:       "SymModeECB",
+			mode:       SymModeECB,
 			cryptoMode: crypto.SymmetricModeECB,
 		},
 	} {
