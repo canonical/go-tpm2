@@ -65,12 +65,14 @@ func TestPolicySigned(t *testing.T) {
 			policyRef: []byte("foo"),
 		},
 		{
-			desc:       "WithNegativeExpiration",
-			expiration: -200,
+			desc:            "WithNegativeExpiration",
+			expiration:      -200,
+			includeNonceTPM: true,
 		},
 		{
-			desc:       "WithExpiration",
-			expiration: 100,
+			desc:            "WithExpiration",
+			expiration:      100,
+			includeNonceTPM: true,
 		},
 		{
 			desc:    "WithCpHash",
