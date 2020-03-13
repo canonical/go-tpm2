@@ -121,9 +121,9 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	var creationTicket TkCreation
 
 	if err := t.RunCommand(CommandCreate, sessions,
-		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Separator,
-		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
-		Separator,
+		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
+		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Delimiter,
+		Delimiter,
 		&outPrivate, &outPublic, &creationData, &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -198,9 +198,9 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	var name Name
 
 	if err := t.RunCommand(CommandLoad, sessions,
-		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Separator,
-		inPrivate, publicSized{inPublic}, Separator,
-		&objectHandle, Separator,
+		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
+		inPrivate, publicSized{inPublic}, Delimiter,
+		&objectHandle, Delimiter,
 		&name); err != nil {
 		return nil, err
 	}
@@ -280,9 +280,9 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	var name Name
 
 	if err := t.RunCommand(CommandLoadExternal, sessions,
-		Separator,
-		sensitiveSized{inPrivate}, publicSized{inPublic}, hierarchy, Separator,
-		&objectHandle, Separator,
+		Delimiter,
+		sensitiveSized{inPrivate}, publicSized{inPublic}, hierarchy, Delimiter,
+		&objectHandle, Delimiter,
 		&name); err != nil {
 		return nil, err
 	}
@@ -309,9 +309,9 @@ func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...Sessi
 	var name Name
 	var qualifiedName Name
 	if err := t.RunCommand(CommandReadPublic, sessions,
-		objectContext, Separator,
-		Separator,
-		Separator,
+		objectContext, Delimiter,
+		Delimiter,
+		Delimiter,
 		&outPublic, &name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
 	}
@@ -353,9 +353,9 @@ func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...Sessi
 func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession SessionContext, sessions ...SessionContext) (Digest, error) {
 	var certInfo Digest
 	if err := t.RunCommand(CommandActivateCredential, sessions,
-		ResourceContextWithSession{Context: activateContext, Session: activateContextAuthSession}, ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Separator,
-		credentialBlob, secret, Separator,
-		Separator,
+		ResourceContextWithSession{Context: activateContext, Session: activateContextAuthSession}, ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Delimiter,
+		credentialBlob, secret, Delimiter,
+		Delimiter,
 		&certInfo); err != nil {
 		return nil, err
 	}
@@ -398,9 +398,9 @@ func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, 
 	var credentialBlob IDObjectRaw
 	var secret EncryptedSecret
 	if err := t.RunCommand(CommandMakeCredential, sessions,
-		context, Separator,
-		credential, objectName, Separator,
-		Separator,
+		context, Delimiter,
+		credential, objectName, Delimiter,
+		Delimiter,
 		&credentialBlob, &secret); err != nil {
 		return nil, nil, err
 	}
@@ -420,9 +420,9 @@ func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession 
 	var outData SensitiveData
 
 	if err := t.RunCommand(CommandUnseal, sessions,
-		ResourceContextWithSession{Context: itemContext, Session: itemContextAuthSession}, Separator,
-		Separator,
-		Separator,
+		ResourceContextWithSession{Context: itemContext, Session: itemContextAuthSession}, Delimiter,
+		Delimiter,
+		Delimiter,
 		&outData); err != nil {
 		return nil, err
 	}
@@ -452,9 +452,9 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 	var outPrivate Private
 
 	if err := t.RunCommand(CommandObjectChangeAuth, sessions,
-		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, parentContext, Separator,
-		newAuth, Separator,
-		Separator,
+		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, parentContext, Delimiter,
+		newAuth, Delimiter,
+		Delimiter,
 		&outPrivate); err != nil {
 		return nil, err
 	}
@@ -585,9 +585,9 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	var name Name
 
 	if err := t.RunCommand(CommandCreateLoaded, sessions,
-		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Separator,
-		sensitiveCreateSized{inSensitive}, inTemplate, Separator,
-		&objectHandle, Separator,
+		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
+		sensitiveCreateSized{inSensitive}, inTemplate, Delimiter,
+		&objectHandle, Delimiter,
 		&outPrivate, &outPublic, &name); err != nil {
 		return nil, nil, nil, err
 	}

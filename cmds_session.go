@@ -116,9 +116,9 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var nonceTPM Nonce
 
 	if err := t.RunCommand(CommandStartAuthSession, sessions,
-		tpmKey, bind, Separator,
-		Nonce(nonceCaller), encryptedSalt, sessionType, symmetric, authHash, Separator,
-		&sessionHandle, Separator,
+		tpmKey, bind, Delimiter,
+		Nonce(nonceCaller), encryptedSalt, sessionType, symmetric, authHash, Delimiter,
+		&sessionHandle, Delimiter,
 		&nonceTPM); err != nil {
 		return nil, err
 	}

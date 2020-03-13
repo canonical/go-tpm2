@@ -71,11 +71,11 @@ type cmdContext struct {
 	responseBytes []byte
 }
 
-type separatorSentinel struct{}
+type delimiterSentinel struct{}
 
-// Separator is a sentinel value used to separate command handles, command parameters, response handle pointers and response
-// parameter pointers in the variable length params argument in TPMContext.RunCommand.
-var Separator separatorSentinel
+// Delimiter is a sentinel value used to delimit command handle, command parameter, response handle pointer and response
+// parameter pointer blocks in the variable length params argument in TPMContext.RunCommand.
+var Delimiter delimiterSentinel
 
 // ResourceContextWithAuth associates a ResourceContext with a session for authorization, and is provided to TPMContext.RunCommand in
 // the command handle area for any handles that require an authorization.
@@ -341,7 +341,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 // response authorization area and performing checks on the authorization response.
 //
 // The variable length params argument provides a mechanism for the caller to provide command handles, command parameters, response
-// handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Separator
+// handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Delimiter
 // sentinel value.
 //
 // Command handles are provided as HandleContext types if they do not require an authorization. For command handles that require an
@@ -374,7 +374,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 
 	sentinels := 0
 	for _, param := range params {
-		if param == Separator {
+		if param == Delimiter {
 			sentinels++
 			continue
 		}

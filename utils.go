@@ -14,7 +14,7 @@ import (
 
 // ComputeCpHash computes a command parameter digest from the specified command code and provided command parameters, using the
 // digest algorithm specified by hashAlg. The params argument corresponds to the handle and parameters area of a command (in that
-// order), separated by the Separator sentinel value. Handle arguments must be represented by either the Handle type or
+// order), separated by the Delimiter sentinel value. Handle arguments must be represented by either the Handle type or
 // HandleContext type.
 //
 // The number of command handles and number / type of command parameters can be determined by looking in part 3 of the TPM 2.0
@@ -27,7 +27,7 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 	var i int
 
 	for _, param := range params {
-		if param == Separator {
+		if param == Delimiter {
 			break
 		}
 		i++

@@ -56,9 +56,9 @@ func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, 
 	var outSymSeed EncryptedSecret
 
 	if err := t.RunCommand(CommandDuplicate, sessions,
-		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, newParentContext, Separator,
-		encryptionKeyIn, symmetricAlg, Separator,
-		Separator,
+		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, newParentContext, Delimiter,
+		encryptionKeyIn, symmetricAlg, Delimiter,
+		Delimiter,
 		&encryptionKeyOut, &duplicate, &outSymSeed); err != nil {
 		return nil, nil, nil, err
 	}
@@ -137,9 +137,9 @@ func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, o
 	var outPrivate Private
 
 	if err := t.RunCommand(CommandImport, sessions,
-		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Separator,
-		encryptionKey, publicSized{objectPublic}, duplicate, inSymSeed, symmetricAlg, Separator,
-		Separator,
+		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
+		encryptionKey, publicSized{objectPublic}, duplicate, inSymSeed, symmetricAlg, Delimiter,
+		Delimiter,
 		&outPrivate); err != nil {
 		return nil, err
 	}

@@ -11,9 +11,9 @@ package tpm2
 func (t *TPMContext) ReadClock(sessions ...SessionContext) (*TimeInfo, error) {
 	var currentTime TimeInfo
 	if err := t.RunCommand(CommandReadClock, sessions,
-		Separator,
-		Separator,
-		Separator,
+		Delimiter,
+		Delimiter,
+		Delimiter,
 		&currentTime); err != nil {
 		return nil, err
 	}

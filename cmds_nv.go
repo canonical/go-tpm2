@@ -101,7 +101,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 	}
 
 	if err := t.RunCommand(CommandNVDefineSpace, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter,
 		auth, nvPublicSized{publicInfo}); err != nil {
 		return nil, err
 	}
@@ -182,9 +182,9 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...SessionCo
 	var nvPublic nvPublicSized
 	var nvName Name
 	if err := t.RunCommand(CommandNVReadPublic, sessions,
-		nvIndex, Separator,
-		Separator,
-		Separator,
+		nvIndex, Delimiter,
+		Delimiter,
+		Delimiter,
 		&nvPublic, &nvName); err != nil {
 		return nil, nil, err
 	}
@@ -229,7 +229,7 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 	}
 
 	if err := t.RunCommand(CommandNVWrite, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
 		data, offset); err != nil {
 		return 0, err
 	}
@@ -405,7 +405,7 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVExtend, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
 		data); err != nil {
 		return err
 	}
@@ -437,7 +437,7 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVSetBits, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
 		bits); err != nil {
 		return err
 	}
@@ -533,9 +533,9 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 	var data MaxNVBuffer
 
 	if err := t.RunCommand(CommandNVRead, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Separator,
-		size, offset, Separator,
-		Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
+		size, offset, Delimiter,
+		Delimiter,
 		&data); err != nil {
 		return nil, err
 	}

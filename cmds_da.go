@@ -29,6 +29,6 @@ func (t *TPMContext) DictionaryAttackLockReset(lockContext ResourceContext, lock
 // auth role for lockContext, with session based authorization provided via lockContextAuthSession.
 func (t *TPMContext) DictionaryAttackParameters(lockContext ResourceContext, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandDictionaryAttackParameters, sessions,
-		ResourceContextWithSession{Context: lockContext, Session: lockContextAuthSession}, Separator,
+		ResourceContextWithSession{Context: lockContext, Session: lockContextAuthSession}, Delimiter,
 		newMaxTries, newRecoveryTime, lockoutRecovery)
 }

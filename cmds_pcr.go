@@ -63,7 +63,7 @@ func CreatePCRValuesFromListAndSelection(digests DigestList, pcrs PCRSelectionLi
 // ErrorLocality will be returned.
 func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashList, pcrContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPCRExtend, sessions,
-		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Separator,
+		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Delimiter,
 		digests)
 }
 
@@ -80,9 +80,9 @@ func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashLis
 func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession SessionContext, sessions ...SessionContext) (TaggedHashList, error) {
 	var digests TaggedHashList
 	if err := t.RunCommand(CommandPCREvent, sessions,
-		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Separator,
-		eventData, Separator,
-		Separator,
+		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Delimiter,
+		eventData, Delimiter,
+		Delimiter,
 		&digests); err != nil {
 		return nil, err
 	}
@@ -112,9 +112,9 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		var values DigestList
 
 		if err := t.RunCommand(CommandPCRRead, sessions,
-			Separator,
-			remaining, Separator,
-			Separator,
+			Delimiter,
+			remaining, Delimiter,
+			Delimiter,
 			&updateCounter, &pcrSelectionOut, &values); err != nil {
 			return 0, nil, err
 		}

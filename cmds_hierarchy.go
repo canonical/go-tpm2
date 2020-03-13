@@ -112,9 +112,9 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	var name Name
 
 	if err := t.RunCommand(CommandCreatePrimary, sessions,
-		ResourceContextWithSession{Context: primaryObject, Session: primaryObjectAuthSession}, Separator,
-		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Separator,
-		&objectHandle, Separator,
+		ResourceContextWithSession{Context: primaryObject, Session: primaryObjectAuthSession}, Delimiter,
+		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Delimiter,
+		&objectHandle, Delimiter,
 		&outPublic, &creationData, &creationHash, &creationTicket, &name); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -194,7 +194,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession S
 // authContextAuthSession.
 func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandClearControl, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Separator,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter,
 		disable)
 }
 

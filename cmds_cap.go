@@ -33,9 +33,9 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 		var data CapabilityData
 
 		if err := t.RunCommand(CommandGetCapability, sessions,
-			Separator,
-			capability, nextProperty, remaining, Separator,
-			Separator,
+			Delimiter,
+			capability, nextProperty, remaining, Delimiter,
+			Delimiter,
 			&moreData, &data); err != nil {
 			return nil, err
 		}
@@ -224,5 +224,5 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (TPMManufacture
 
 // TestParms executes the TPM2_TestParms command to check if the specified combination of algorithm parameters is supported.
 func (t *TPMContext) TestParms(parameters *PublicParams, sessions ...SessionContext) error {
-	return t.RunCommand(CommandTestParms, sessions, Separator, parameters)
+	return t.RunCommand(CommandTestParms, sessions, Delimiter, parameters)
 }

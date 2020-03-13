@@ -38,9 +38,9 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 	var signature Signature
 
 	if err := t.RunCommand(CommandCertify, sessions,
-		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Separator,
-		qualifyingData, inScheme, Separator,
-		Separator,
+		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		qualifyingData, inScheme, Delimiter,
+		Delimiter,
 		&certifyInfo, &signature); err != nil {
 		return nil, nil, err
 	}
@@ -84,9 +84,9 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 	var signature Signature
 
 	if err := t.RunCommand(CommandCertifyCreation, sessions,
-		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, objectContext, Separator,
-		qualifyingData, creationHash, inScheme, creationTicket, Separator,
-		Separator,
+		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, objectContext, Delimiter,
+		qualifyingData, creationHash, inScheme, creationTicket, Delimiter,
+		Delimiter,
 		&certifyInfo, &signature); err != nil {
 		return nil, nil, err
 	}
@@ -122,9 +122,9 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 	var signature Signature
 
 	if err := t.RunCommand(CommandQuote, sessions,
-		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Separator,
-		qualifyingData, inScheme, pcrs, Separator,
-		Separator,
+		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		qualifyingData, inScheme, pcrs, Delimiter,
+		Delimiter,
 		&quoted, &signature); err != nil {
 		return nil, nil, err
 	}
@@ -163,9 +163,9 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
-		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, sessionContext, Separator,
-		qualifyingData, inScheme, Separator,
-		Separator,
+		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, sessionContext, Delimiter,
+		qualifyingData, inScheme, Delimiter,
+		Delimiter,
 		&auditInfo, &signature); err != nil {
 		return nil, nil, err
 	}
@@ -206,9 +206,9 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
-		ResourceContextWithSession{Context: privacyContext, Session: privacyContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Separator,
-		qualifyingData, inScheme, Separator,
-		Separator,
+		ResourceContextWithSession{Context: privacyContext, Session: privacyContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		qualifyingData, inScheme, Delimiter,
+		Delimiter,
 		&auditInfo, &signature); err != nil {
 		return nil, nil, err
 	}
@@ -246,9 +246,9 @@ func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, q
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetTime, sessions,
-		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Separator,
-		qualifyingData, inScheme, Separator,
-		Separator,
+		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		qualifyingData, inScheme, Delimiter,
+		Delimiter,
 		&timeInfo, &signature); err != nil {
 		return nil, nil, err
 	}

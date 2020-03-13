@@ -58,9 +58,9 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 	var context Context
 
 	if err := t.RunCommand(CommandContextSave, nil,
-		saveContext, Separator,
-		Separator,
-		Separator,
+		saveContext, Delimiter,
+		Delimiter,
+		Delimiter,
 		&context); err != nil {
 		return nil, err
 	}
@@ -146,8 +146,8 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 	var loadedHandle Handle
 
 	if err := t.RunCommand(CommandContextLoad, nil,
-		Separator,
-		tpmContext, Separator,
+		Delimiter,
+		tpmContext, Delimiter,
 		&loadedHandle); err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 	}
 
 	if err := t.RunCommand(CommandFlushContext, nil,
-		Separator,
+		Delimiter,
 		flushContext.Handle()); err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	}
 
 	if err := t.RunCommand(CommandEvictControl, sessions,
-		ResourceContextWithSession{Context: auth, Session: authAuthSession}, object, Separator,
+		ResourceContextWithSession{Context: auth, Session: authAuthSession}, object, Delimiter,
 		persistentHandle); err != nil {
 		return nil, err
 	}

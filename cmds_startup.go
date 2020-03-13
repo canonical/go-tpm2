@@ -24,7 +24,7 @@ package tpm2
 // Subsequent use of HandleContext instances corresponding to entities that are evicted as a consequence of this function will no
 // longer work.
 func (t *TPMContext) Startup(startupType StartupType) error {
-	return t.RunCommand(CommandStartup, nil, Separator, startupType)
+	return t.RunCommand(CommandStartup, nil, Delimiter, startupType)
 }
 
 // Shutdown executes the TPM2_Shutdown command with the specified StartupType, and is used to prepare the TPM for a power cycle.
@@ -35,5 +35,5 @@ func (t *TPMContext) Startup(startupType StartupType) error {
 // If a PCR bank has been reconfigured and shutdownType == StartupState, a *TPMParameterError error with an error code of
 // ErrorType will be returned.
 func (t *TPMContext) Shutdown(shutdownType StartupType, sessions ...SessionContext) error {
-	return t.RunCommand(CommandShutdown, sessions, Separator, shutdownType)
+	return t.RunCommand(CommandShutdown, sessions, Delimiter, shutdownType)
 }

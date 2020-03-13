@@ -21,9 +21,9 @@ package tpm2
 func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature, sessions ...SessionContext) (*TkVerified, error) {
 	var validation TkVerified
 	if err := t.RunCommand(CommandVerifySignature, sessions,
-		keyContext, Separator,
-		digest, signature, Separator,
-		Separator,
+		keyContext, Delimiter,
+		digest, signature, Delimiter,
+		Delimiter,
 		&validation); err != nil {
 		return nil, err
 	}
@@ -66,9 +66,9 @@ func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *S
 	var signature Signature
 
 	if err := t.RunCommand(CommandSign, sessions,
-		ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Separator,
-		digest, inScheme, validation, Separator,
-		Separator,
+		ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Delimiter,
+		digest, inScheme, validation, Delimiter,
+		Delimiter,
 		&signature); err != nil {
 		return nil, err
 	}

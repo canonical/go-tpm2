@@ -9,9 +9,9 @@ package tpm2
 func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...SessionContext) (Digest, error) {
 	var randomBytes Digest
 	if err := t.RunCommand(CommandGetRandom, sessions,
-		Separator,
-		bytesRequested, Separator,
-		Separator,
+		Delimiter,
+		bytesRequested, Delimiter,
+		Delimiter,
 		&randomBytes); err != nil {
 		return nil, err
 	}
@@ -20,5 +20,5 @@ func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...SessionContext
 }
 
 func (t *TPMContext) StirRandom(inData SensitiveData, sessions ...SessionContext) error {
-	return t.RunCommand(CommandStirRandom, sessions, Separator, inData)
+	return t.RunCommand(CommandStirRandom, sessions, Delimiter, inData)
 }
