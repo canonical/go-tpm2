@@ -26,10 +26,10 @@ const (
 	// AnyHandleIndex is used to match any handle when using {As,Is}TPMHandleError.
 	AnyHandleIndex int = -1
 
-	// AnyParameterIndex is used to match any parameter when using {As,Is}TPMParameterIndex.
+	// AnyParameterIndex is used to match any parameter when using {As,Is}TPMParameterError.
 	AnyParameterIndex int = -1
 
-	// AnySessionIndex is used to match any session when using {As,Is}TPMSessionIndex.
+	// AnySessionIndex is used to match any session when using {As,Is}TPMSessionError.
 	AnySessionIndex int = -1
 
 	// AnyWarningCode is used to match any warning code when using {As,Is}TPMWarning.
