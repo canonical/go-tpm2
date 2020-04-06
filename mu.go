@@ -264,7 +264,10 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 		return nil
 	}
 
-	if slice.Len() > math.MaxUint32 {
+	// int is either 32-bits or 64-bits. We can't compare slice.Len() to math.MaxUint32 when int is 32-bits and it isn't
+	// necessary anyway. For the case where int is 64-bits, truncate to uint32 then zero extend it again to int to make
+	// sure the original number was preserved.
+	if int(uint32(slice.Len())) != slice.Len() {
 		return errors.New("slice length greater than 2^32-1")
 	}
 
