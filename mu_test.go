@@ -723,18 +723,22 @@ type TestStructWithCustomMarshaller struct {
 	B TestListUint32
 }
 
-func (t *TestStructWithCustomMarshaller) Marshal(buf io.Writer) error {
+func (t *TestStructWithCustomMarshaller) Marshal(buf io.Writer) (nbytes int, err error) {
 	if err := binary.Write(buf, binary.BigEndian, t.A); err != nil {
-		return err
+		return nbytes, err
 	}
-	return MarshalToWriter(buf, t.B)
+	nbytes += binary.Size(t.A)
+	n, err := MarshalToWriter(buf, t.B)
+	return nbytes + n, err
 }
 
-func (t *TestStructWithCustomMarshaller) Unmarshal(buf io.Reader) error {
+func (t *TestStructWithCustomMarshaller) Unmarshal(buf io.Reader) (nbytes int, err error) {
 	if err := binary.Read(buf, binary.BigEndian, &t.A); err != nil {
-		return err
+		return nbytes, err
 	}
-	return UnmarshalFromReader(buf, &t.B)
+	nbytes += binary.Size(t.A)
+	n, err := UnmarshalFromReader(buf, &t.B)
+	return nbytes + n, err
 }
 
 func TestMarshalStructWithCustomMarshaller(t *testing.T) {

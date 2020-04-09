@@ -168,7 +168,7 @@ func (p *TrialAuthPolicy) PolicyOR(pHashList DigestList) error {
 
 func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) {
 	h, end := p.beginUpdateForCommand(CommandPolicyPCR)
-	if err := MarshalToWriter(h, pcrs); err != nil {
+	if _, err := MarshalToWriter(h, pcrs); err != nil {
 		panic(fmt.Sprintf("cannot marshal PCR selection: %v", err))
 	}
 	h.Write(pcrDigest)

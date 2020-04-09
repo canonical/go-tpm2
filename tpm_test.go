@@ -188,7 +188,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	}
 
 	hasher := template.NameAlg.NewHash()
-	if err := MarshalToWriter(hasher, creationData); err != nil {
+	if _, err := MarshalToWriter(hasher, creationData); err != nil {
 		t.Fatalf("Failed to marshal creation data: %v", err)
 	}
 

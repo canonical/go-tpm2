@@ -172,7 +172,8 @@ func (d *handleContextData) serializeToWriter(w io.Writer) error {
 	}
 	h := crypto.SHA256.New()
 	h.Write(data)
-	return MarshalToWriter(w, HashAlgorithmSHA256, h.Sum(nil), data)
+	_, err = MarshalToWriter(w, HashAlgorithmSHA256, h.Sum(nil), data)
+	return err
 }
 
 func (d *handleContextData) checkConsistency() error {
@@ -709,7 +710,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var integrityAlg HashAlgorithmId
 	var integrity []byte
 	var b []byte
-	if err := UnmarshalFromReader(r, &integrityAlg, &integrity, &b); err != nil {
+	if _, err := UnmarshalFromReader(r, &integrityAlg, &integrity, &b); err != nil {
 		return nil, xerrors.Errorf("cannot unpack context blob and checksum: %w", err)
 	}
 

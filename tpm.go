@@ -197,7 +197,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 
 	cBytes := new(bytes.Buffer)
 
-	if err := MarshalToWriter(cBytes, handles...); err != nil {
+	if _, err := MarshalToWriter(cBytes, handles...); err != nil {
 		return nil, wrapMarshallingError(commandCode, "command handles", err)
 	}
 
@@ -213,12 +213,12 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		if err != nil {
 			return nil, fmt.Errorf("cannot build command auth area for command %s: %v", commandCode, err)
 		}
-		if err := MarshalToWriter(cBytes, &authArea); err != nil {
+		if _, err := MarshalToWriter(cBytes, &authArea); err != nil {
 			return nil, wrapMarshallingError(commandCode, "command auth area", err)
 		}
 	}
 
-	if err := MarshalToWriter(cBytes, RawBytes(cpBytes)); err != nil {
+	if _, err := MarshalToWriter(cBytes, RawBytes(cpBytes)); err != nil {
 		return nil, wrapMarshallingError(commandCode, "raw command parameter bytes", err)
 	}
 
@@ -266,7 +266,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 	buf := bytes.NewReader(context.responseBytes)
 
 	if len(handles) > 0 {
-		if err := UnmarshalFromReader(buf, handles...); err != nil {
+		if _, err := UnmarshalFromReader(buf, handles...); err != nil {
 			return handleUnmarshallingError(context, "response handles", err)
 		}
 	}
@@ -276,7 +276,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 
 	if context.responseTag == TagSessions {
 		var parameterSize uint32
-		if err := UnmarshalFromReader(buf, &parameterSize); err != nil {
+		if _, err := UnmarshalFromReader(buf, &parameterSize); err != nil {
 			return handleUnmarshallingError(context, "parameterSize field", err)
 		}
 		rpBytes = make([]byte, parameterSize)
@@ -290,7 +290,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		}
 
 		authArea := responseAuthAreaRawSlice{make([]authResponse, len(context.sessionParams))}
-		if err := UnmarshalFromReader(buf, &authArea); err != nil {
+		if _, err := UnmarshalFromReader(buf, &authArea); err != nil {
 			return handleUnmarshallingError(context, "response auth area", err)
 		}
 		if err := processResponseAuthArea(t, authArea.Data, context.sessionParams, context.commandCode, context.responseCode,
@@ -322,7 +322,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 	}
 
 	if len(params) > 0 {
-		if err := UnmarshalFromReader(rpBuf, params...); err != nil {
+		if _, err := UnmarshalFromReader(rpBuf, params...); err != nil {
 			return handleUnmarshallingError(context, "response parameters", err)
 		}
 	}
