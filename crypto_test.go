@@ -9,48 +9,48 @@ import (
 	"testing"
 
 	. "github.com/chrisccoulson/go-tpm2"
-	"github.com/chrisccoulson/go-tpm2/internal/crypto"
+	"github.com/chrisccoulson/go-tpm2/internal"
 )
 
 func TestCryptoSymmetricModeConversions(t *testing.T) {
-	if reflect.TypeOf(SymModeId(0)).Kind() != reflect.TypeOf(crypto.SymmetricMode(0)).Kind() {
+	if reflect.TypeOf(SymModeId(0)).Kind() != reflect.TypeOf(internal.SymmetricMode(0)).Kind() {
 		t.Errorf("Incompatible types")
 	}
 
 	for _, data := range []struct {
 		desc       string
 		mode       SymModeId
-		cryptoMode crypto.SymmetricMode
+		cryptoMode internal.SymmetricMode
 	}{
 		{
 			desc:       "SymModeNull",
 			mode:       SymModeNull,
-			cryptoMode: crypto.SymmetricModeNull,
+			cryptoMode: internal.SymmetricModeNull,
 		},
 		{
 			desc:       "SymModeCTR",
 			mode:       SymModeCTR,
-			cryptoMode: crypto.SymmetricModeCTR,
+			cryptoMode: internal.SymmetricModeCTR,
 		},
 		{
 			desc:       "SymModeOFB",
 			mode:       SymModeOFB,
-			cryptoMode: crypto.SymmetricModeOFB,
+			cryptoMode: internal.SymmetricModeOFB,
 		},
 		{
 			desc:       "SymModeCBC",
 			mode:       SymModeCBC,
-			cryptoMode: crypto.SymmetricModeCBC,
+			cryptoMode: internal.SymmetricModeCBC,
 		},
 		{
 			desc:       "SymModeCFB",
 			mode:       SymModeCFB,
-			cryptoMode: crypto.SymmetricModeCFB,
+			cryptoMode: internal.SymmetricModeCFB,
 		},
 		{
 			desc:       "SymModeECB",
 			mode:       SymModeECB,
-			cryptoMode: crypto.SymmetricModeECB,
+			cryptoMode: internal.SymmetricModeECB,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

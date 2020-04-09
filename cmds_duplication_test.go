@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	. "github.com/chrisccoulson/go-tpm2"
-	"github.com/chrisccoulson/go-tpm2/internal/crypto"
+	"github.com/chrisccoulson/go-tpm2/internal"
 )
 
 func TestDuplicate(t *testing.T) {
@@ -152,7 +152,7 @@ func TestDuplicate(t *testing.T) {
 		}
 		dupSensitive := duplicate[n:]
 
-		hmacKey := crypto.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8)
+		hmacKey := internal.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8)
 		h := hmac.New(func() hash.Hash { return parentTemplate.NameAlg.NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(object.Name())
@@ -160,7 +160,7 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected outer HMAC")
 		}
 
-		symKey := crypto.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("STORAGE"), object.Name(), nil,
+		symKey := internal.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("STORAGE"), object.Name(), nil,
 			int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()))
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
@@ -366,7 +366,7 @@ func TestImport(t *testing.T) {
 		seed := make([]byte, primary.Name().Algorithm().Size())
 		rand.Read(seed)
 
-		symKey := crypto.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("STORAGE"), name, nil,
+		symKey := internal.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("STORAGE"), name, nil,
 			int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()))
 
 		block, err := aes.NewCipher(symKey)
@@ -377,7 +377,7 @@ func TestImport(t *testing.T) {
 		dupSensitive := make(Private, len(sensitive))
 		stream.XORKeyStream(dupSensitive, sensitive)
 
-		hmacKey := crypto.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8)
+		hmacKey := internal.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8)
 		h := hmac.New(func() hash.Hash { return primary.Name().Algorithm().NewHash() }, hmacKey)
 		h.Write(dupSensitive)
 		h.Write(name)

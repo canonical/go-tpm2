@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package crypto_test
+package internal_test
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	_ "crypto/sha256"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2/internal/crypto"
+	. "github.com/chrisccoulson/go-tpm2/internal"
 )
 
 func TestSymmetricAES(t *testing.T) {

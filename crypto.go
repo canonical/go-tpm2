@@ -14,7 +14,7 @@ import (
 	"hash"
 	"math/big"
 
-	"github.com/chrisccoulson/go-tpm2/internal/crypto"
+	"github.com/chrisccoulson/go-tpm2/internal"
 )
 
 func getHashConstructor(alg HashAlgorithmId) func() hash.Hash {
@@ -177,7 +177,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}
-		salt := crypto.KDFe(public.NameAlg.GetHash(), []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC().X), digestSize*8)
+		salt := internal.KDFe(public.NameAlg.GetHash(), []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC().X), digestSize*8)
 		return EncryptedSecret(encryptedSalt), salt, nil
 	}
 

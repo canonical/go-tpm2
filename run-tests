@@ -36,5 +36,5 @@ if [ $WITH_MSSIM -eq 1 ]; then
         MSSIM_ARGS=-use-mssim
 fi
 
-go test -v -race ./internal/crypto $@
+go test -v -race ./internal $@
 go test -v -race . -args $MSSIM_ARGS $@

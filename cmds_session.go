@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/chrisccoulson/go-tpm2/internal/crypto"
+	"github.com/chrisccoulson/go-tpm2/internal"
 )
 
 // StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session. On successful completion, it will
@@ -145,7 +145,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		copy(key, authValue)
 		copy(key[len(authValue):], salt)
 
-		data.SessionKey = crypto.KDFa(authHash.GetHash(), key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8)
+		data.SessionKey = internal.KDFa(authHash.GetHash(), key, []byte("ATH"), []byte(nonceTPM), nonceCaller, digestSize*8)
 	}
 
 	return makeSessionContext(sessionHandle, data), nil
