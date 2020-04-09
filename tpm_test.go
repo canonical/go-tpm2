@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
+	. "github.com/canonical/go-tpm2"
 )
 
 type testCapabilityFlags uint32

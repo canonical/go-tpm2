@@ -9,7 +9,7 @@ import (
 	"crypto/sha256"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
+	. "github.com/canonical/go-tpm2"
 )
 
 func TestStartAuthSession(t *testing.T) {

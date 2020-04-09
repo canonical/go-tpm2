@@ -13,7 +13,7 @@ import (
 	_ "crypto/sha256"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2/internal"
+	. "github.com/canonical/go-tpm2/internal"
 )
 
 func TestSymmetricAES(t *testing.T) {

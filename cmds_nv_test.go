@@ -11,7 +11,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
+	. "github.com/canonical/go-tpm2"
 )
 
 func TestNVDefineAndUndefineSpace(t *testing.T) {

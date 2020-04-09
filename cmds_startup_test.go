@@ -7,7 +7,7 @@ package tpm2_test
 import (
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
+	. "github.com/canonical/go-tpm2"
 )
 
 func TestStartup(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 	"hash"
 	"math/big"
 
-	"github.com/chrisccoulson/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/internal"
 )
 
 func getHashConstructor(alg HashAlgorithmId) func() hash.Hash {

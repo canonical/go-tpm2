@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
-	"github.com/chrisccoulson/go-tpm2/internal"
+	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/internal"
 )
 
 func TestCryptoSymmetricModeConversions(t *testing.T) {

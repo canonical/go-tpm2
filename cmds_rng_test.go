@@ -8,7 +8,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
+	. "github.com/canonical/go-tpm2"
 )
 
 func TestGetRandom(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"crypto/rsa"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
+	. "github.com/canonical/go-tpm2"
 )
 
 func TestSign(t *testing.T) {

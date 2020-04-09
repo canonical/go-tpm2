@@ -15,8 +15,8 @@ import (
 	"math/big"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
-	"github.com/chrisccoulson/go-tpm2/internal"
+	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/internal"
 )
 
 func TestDuplicate(t *testing.T) {

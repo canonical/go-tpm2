@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"testing"
 
-	. "github.com/chrisccoulson/go-tpm2"
+	. "github.com/canonical/go-tpm2"
 )
 
 func TestCreateResourceContextFromTPM(t *testing.T) {

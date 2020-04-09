@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/chrisccoulson/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/internal"
 )
 
 // StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session. On successful completion, it will
