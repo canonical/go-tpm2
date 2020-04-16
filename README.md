@@ -1,6 +1,6 @@
 # go-tpm2
 
-[![Build Status](https://travis-ci.org/canonical/go-tpm2.svg?branch=master)](https://travis-ci.org/canonical/go-tpm2) [![GoDoc](https://godoc.org/github.com/canonical/go-tpm2?status.svg)](https://godoc.org/github.com/canonical/go-tpm2)
+[![Build Status](![Tests](https://github.com/canonical/go-tpm2/workflows/Tests/badge.svg))] [![GoDoc](https://godoc.org/github.com/canonical/go-tpm2?status.svg)](https://godoc.org/github.com/canonical/go-tpm2)
 
 This repository contains a go library for interacting with TPM 2.0 devices. Some currently supported features are:
 
