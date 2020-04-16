@@ -1,0 +1,38 @@
+name: Tests
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+jobs:
+  tests:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Set up Go 1.10
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.10
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        path: ./src/github.com/canonical/go-tpm2
+    - name: Install dependencies
+      run: |
+          sudo snap install core core18
+          sudo snap install --edge tpm2-simulator-chrisccoulson
+    - name: Install govendor
+      run: go get -u github.com/kardianos/govendor
+    - name: Cache Go dependencies
+      id: cache-go-govendor
+      uses: actions/cache@v1
+      with:
+        path: ${{ github.workspace }}/.cache/govendor
+        key: go-govendor-{{ hashFiles('**/vendor.json') }}
+    - name: Get Go dependencies
+      run: cd ${{ github.workspace }}/src/github.com/canonical/go-tpm2 && ${{ github.workspace }}/bin/govendor sync
+    - name: Build
+      run: go build -v github.com/canonical/go-tpm2/...
+    - name: Test
+      run: cd ${{ github.workspace }}/src/github.com/canonical/go-tpm2 && ./run-tests --with-mssim
+    - name: Go vet
+      run: go vet github.com/canonical/go-tpm2/...
