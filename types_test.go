@@ -516,6 +516,99 @@ func TestPCRSelectionListEqual(t *testing.T) {
 	}
 }
 
+func TestPCRSelectionListMerge(t *testing.T) {
+	for _, data := range []struct {
+		desc           string
+		x, y, expected PCRSelectionList
+	}{
+		{
+			desc:     "SingleSelection",
+			x:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1}}},
+			y:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 1, 3}}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1, 5, 3}}},
+		},
+		{
+			desc: "MultipleSelection/1",
+			x: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7}},
+			},
+			y: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{5, 0, 9}},
+				{Hash: HashAlgorithmSHA1, Select: []int{2, 0, 7}},
+			},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7, 2, 0}},
+			},
+		},
+		{
+			desc: "MultipleSelection/2",
+			x: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7}},
+			},
+			y: PCRSelectionList{
+				{Hash: HashAlgorithmSHA1, Select: []int{2, 0, 7}},
+				{Hash: HashAlgorithmSHA256, Select: []int{5, 0, 9}},
+			},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7, 2, 0}},
+			},
+		},
+		{
+			desc: "MismatchedLength",
+			x: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7}},
+			},
+			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 0, 9}}},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7}},
+			},
+		},
+		{
+			desc: "NewSelection",
+			x:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1}}},
+			y:    PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{5, 1, 3}}},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 1, 3}},
+			},
+		},
+		{
+			desc: "DuplicateSelection/1",
+			x: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{5, 2, 6}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 3, 1}},
+			},
+			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{3, 4, 2, 7}}},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{5, 2, 6, 4, 7}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 3, 1}},
+			},
+		},
+		{
+			desc: "DuplicateSelection/2",
+			x:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 2, 6}}},
+			y: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{3, 1}},
+				{Hash: HashAlgorithmSHA256, Select: []int{2, 4, 0}},
+			},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 2, 6, 3, 1, 4, 0}}},
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			res := data.x.Merge(data.y)
+			if !reflect.DeepEqual(res, data.expected) {
+				t.Errorf("Unexpected result: %v", res)
+			}
+		})
+	}
+}
+
 func TestPCRSelectionListSubtract(t *testing.T) {
 	for _, data := range []struct {
 		desc           string
@@ -529,19 +622,18 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{1, 5}}},
 		},
 		{
-			desc: "UnexpectedAlgorithm",
+			desc: "Error",
 			x:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
 			y:    PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 3, 4}}},
-			err:  "PCRSelection has unexpected algorithm",
+			err:  "cannot subtract PCR0/TPM_ALG_SHA1 from selection",
 		},
 		{
-			desc:     "SingleSelectionEmptyResult",
-			x:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256}},
+			desc: "SingleSelectionEmptyResult",
+			x:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			y:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
 		},
 		{
-			desc: "MultipleSelection",
+			desc: "MultipleSelection/1",
 			x: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
@@ -553,26 +645,35 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 				{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 3}}},
 		},
 		{
-			desc: "MultipleSectionEmptyResult1",
+			desc: "MultipleSelection/2",
+			x: PCRSelectionList{
+				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 4, 5}},
+				{Hash: HashAlgorithmSHA1, Select: []int{1, 3, 6}}},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 4, 5}},
+				{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 3}}},
+		},
+		{
+			desc: "MultipleSectionEmptyResult/1",
 			x: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{1, 3, 6}},
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 4, 5}},
-				{Hash: HashAlgorithmSHA256}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 4, 5}}},
 		},
 		{
-			desc: "MultipleSelectionEmptyResult2",
+			desc: "MultipleSelectionEmptyResult/2",
 			x: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{{Hash: HashAlgorithmSHA1}, {Hash: HashAlgorithmSHA256}},
 		},
 		{
 			desc: "MismatchedLength",
@@ -581,11 +682,33 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
 			y: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}}},
-			err: "incorrect number of PCRSelections",
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+		},
+		{
+			desc: "DuplicateSelection",
+			x: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 4, 5}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}},
+			},
+			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 4}}},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{1, 5}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 4, 5}},
+			},
+		},
+		{
+			desc: "MultipleEmptySelection",
+			x: PCRSelectionList{
+				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			y: PCRSelectionList{{Hash: HashAlgorithmSHA1}, {Hash: HashAlgorithmSHA256}},
+			expected: PCRSelectionList{
+				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			res, err := data.x.TestSubtract(data.y)
+			res, err := data.x.Subtract(data.y)
 			if data.err == "" {
 				if err != nil {
 					t.Fatalf("subtract failed: %v", err)

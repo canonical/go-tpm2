@@ -41,8 +41,4 @@ type TestSessionContext interface {
 	GetScData() *sessionContextData
 }
 
-func (l PCRSelectionList) TestSubtract(r PCRSelectionList) (PCRSelectionList, error) {
-	return l.subtract(r)
-}
-
 var TestComputeBindName = computeBindName

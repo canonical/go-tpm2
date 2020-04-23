@@ -123,7 +123,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 			pcrUpdateCounter = updateCounter
 		} else if updateCounter != pcrUpdateCounter {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, "PCR update counter changed between commands"}
-		} else if len(values) == 0 && pcrSelectionOut.isEmpty() {
+		} else if len(values) == 0 && pcrSelectionOut.IsEmpty() {
 			return 0, nil, makeInvalidParamError("pcrSelectionIn", "unimplemented PCRs specified")
 		}
 
@@ -134,12 +134,12 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		}
 
 		var err error
-		remaining, err = remaining.subtract(pcrSelectionOut)
+		remaining, err = remaining.Subtract(pcrSelectionOut)
 		if err != nil {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, fmt.Sprintf("cannot determine outstanding PCR selection from selection returned "+
 				"from TPM: %v", err)}
 		}
-		if remaining.isEmpty() {
+		if remaining.IsEmpty() {
 			break
 		}
 	}

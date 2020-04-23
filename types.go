@@ -11,7 +11,6 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -438,6 +437,9 @@ type TaggedHashList []TaggedHash
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
 
+// Equal indicates whether l and r contain the same PCR selections. Equal selections will marshal to the same bytes in the TPM
+// wire format. To be considered equal, each set of selections must be identical length, contain the same PCR banks in the same
+// order, and each PCR bank must contain the same set of PCRs - the order of the PCRs in each bank are not important.
 func (l PCRSelectionList) Equal(r PCRSelectionList) bool {
 	if len(l) != len(r) {
 		return false
@@ -468,33 +470,113 @@ func (l PCRSelectionList) Equal(r PCRSelectionList) bool {
 	return true
 }
 
-func (l PCRSelectionList) subtract(r PCRSelectionList) (PCRSelectionList, error) {
-	if len(l) != len(r) {
-		return nil, errors.New("incorrect number of PCRSelections")
+// Merge will merge the PCR selections specified by l and r together and return a new set of PCR selections which contains a
+// combination of both. For each PCR found in r that isn't found in l, it will be added to the first occurence of the corresponding
+// PCR bank found in l if that exists, or otherwise a selection for that PCR bank will be appended to the result.
+func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
+	for _, s := range l {
+		o := PCRSelection{Hash: s.Hash}
+		o.Select = make([]int, len(s.Select))
+		copy(o.Select, s.Select)
+		out = append(out, o)
 	}
 
-	var o PCRSelectionList
-	for i, sl := range l {
-		if r[i].Hash != sl.Hash {
-			return nil, errors.New("PCRSelection has unexpected algorithm")
-		}
-		so := PCRSelection{Hash: sl.Hash}
-	Loop:
-		for _, sli := range sl.Select {
-			for _, sri := range r[i].Select {
-				if sri == sli {
-					continue Loop
+	for _, s := range r {
+		for _, y := range s.Select {
+			found := false
+			for _, o := range out {
+				if o.Hash != s.Hash {
+					continue
+				}
+				for _, x := range o.Select {
+					if x == y {
+						found = true
+						break
+					}
+				}
+				if found {
+					break
 				}
 			}
-			so.Select = append(so.Select, sli)
-		}
-		o = append(o, so)
-	}
 
-	return o, nil
+			if !found {
+				added := false
+				for i, o := range out {
+					if o.Hash != s.Hash {
+						continue
+					}
+					found = false
+					for _, x := range o.Select {
+						if x == y {
+							found = true
+							break
+						}
+					}
+					if !found {
+						out[i].Select = append(o.Select, y)
+						added = true
+						break
+					}
+				}
+				if !added {
+					out = append(out, PCRSelection{Hash: s.Hash, Select: []int{y}})
+				}
+			}
+		}
+	}
+	return
 }
 
-func (l PCRSelectionList) isEmpty() bool {
+// Subtract will subtract the PCR selections in r from the PCR selections in l, and return a new set of selections. For each PCR
+// selected in r, the first occurence found in l is removed from the result. If r references a PCR that is not found in l, an error
+// is returned.
+func (l PCRSelectionList) Subtract(r PCRSelectionList) (out PCRSelectionList, err error) {
+	var scratch PCRSelectionList
+	for _, s := range l {
+		o := PCRSelection{Hash: s.Hash}
+		o.Select = make([]int, len(s.Select))
+		copy(o.Select, s.Select)
+		scratch = append(scratch, o)
+	}
+
+	for _, s := range r {
+		for _, y := range s.Select {
+			subtracted := false
+			for i, o := range scratch {
+				if o.Hash != s.Hash {
+					continue
+				}
+				for j, x := range o.Select {
+					if x == y {
+						if j < len(o.Select)-1 {
+							copy(scratch[i].Select[j:], o.Select[j+1:])
+						}
+						scratch[i].Select = o.Select[:len(o.Select)-1]
+						subtracted = true
+						break
+					}
+				}
+				if subtracted {
+					break
+				}
+			}
+			if !subtracted {
+				return nil, fmt.Errorf("cannot subtract PCR%d/%v from selection", y, s.Hash)
+			}
+		}
+	}
+
+	for _, o := range scratch {
+		if len(o.Select) == 0 {
+			continue
+		}
+		out = append(out, o)
+	}
+	return
+}
+
+// IsEmpty returns true if the list of PCR selections selects no PCRs.
+func (l PCRSelectionList) IsEmpty() bool {
 	for _, s := range l {
 		if len(s.Select) > 0 {
 			return false
