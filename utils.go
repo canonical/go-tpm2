@@ -55,7 +55,8 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 }
 
 // ComputePCRDigest computes a digest using the specified algorithm from the provided set of PCR values and the provided PCR
-// selection. It is most useful for computing an input to TPMContext.PolicyPCR, and validating quotes and creation data.
+// selections. The digest is computed the same way as PCRComputeCurrentDigest as defined in the TPM reference implementation.
+// It is most useful for computing an input to TPMContext.PolicyPCR, and validating quotes and creation data.
 func ComputePCRDigest(alg HashAlgorithmId, pcrs PCRSelectionList, values PCRValues) (Digest, error) {
 	if !alg.Supported() {
 		return nil, fmt.Errorf("unknown digest algorithm %v", alg)
@@ -79,6 +80,20 @@ func ComputePCRDigest(alg HashAlgorithmId, pcrs PCRSelectionList, values PCRValu
 	}
 
 	return h.Sum(nil), nil
+}
+
+func ComputePCRDigestSimple(alg HashAlgorithmId, values PCRValues) (PCRSelectionList, Digest, error) {
+	if !alg.Supported() {
+		return nil, nil, fmt.Errorf("unknown digest algorithm %v", alg)
+	}
+
+	pcrs := values.SelectionList()
+	digest, err := ComputePCRDigest(alg, pcrs, values)
+	if err != nil {
+		panic(fmt.Sprintf("ComputePCRDigest failed: %v", err))
+	}
+
+	return pcrs, digest, nil
 }
 
 // TrialAuthPolicy provides a mechanism for computing authorization policy digests without having to execute a trial authorization

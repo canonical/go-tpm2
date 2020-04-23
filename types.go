@@ -470,6 +470,25 @@ func (l PCRSelectionList) Equal(r PCRSelectionList) bool {
 	return true
 }
 
+// Sort will sort the list of PCR selections in order of ascending algorithm ID, and for each PCR selection it will also sort the list
+// of PCRs in ascending order. A new list of selections is returned.
+func (l PCRSelectionList) Sort() (out PCRSelectionList) {
+	for _, p := range l {
+		o := PCRSelection{Hash: p.Hash}
+		o.Select = make([]int, len(p.Select))
+		copy(o.Select, p.Select)
+		sort.Ints(o.Select)
+		out = append(out, o)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Hash < out[j].Hash })
+	return
+}
+
+// Normalize will return a new sorted list of PCR selections with each PCR and each PCR bank only appearing once.
+func (l PCRSelectionList) Normalize() PCRSelectionList {
+	return PCRSelectionList{}.Merge(l).Sort()
+}
+
 // Merge will merge the PCR selections specified by l and r together and return a new set of PCR selections which contains a
 // combination of both. For each PCR found in r that isn't found in l, it will be added to the first occurence of the corresponding
 // PCR bank found in l if that exists, or otherwise a selection for that PCR bank will be appended to the result.

@@ -458,6 +458,46 @@ func TestNVPublicName(t *testing.T) {
 	}
 }
 
+func TestPCRSelectionListNormalize(t *testing.T) {
+	orig := PCRSelectionList{
+		{Hash: HashAlgorithmSHA256, Select: []int{2, 1, 5}},
+		{Hash: HashAlgorithmSHA1, Select: []int{4, 0, 7}},
+		{Hash: HashAlgorithmSHA512},
+		{Hash: HashAlgorithmSHA256, Select: []int{1, 7, 3, 8}},
+	}
+	normalized := orig.Normalize()
+	expected := PCRSelectionList{
+		{Hash: HashAlgorithmSHA1, Select: []int{0, 4, 7}},
+		{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 3, 5, 7, 8}},
+	}
+	if !reflect.DeepEqual(normalized, expected) {
+		t.Errorf("Unexpected result: %v", normalized)
+	}
+}
+
+func TestPCRSelectionListSort(t *testing.T) {
+	orig := PCRSelectionList{
+		{Hash: HashAlgorithmSHA384, Select: []int{5, 3, 8}},
+		{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 0}},
+		{Hash: HashAlgorithmSHA1, Select: []int{8, 3, 7, 4}},
+		{Hash: HashAlgorithmSHA512, Select: []int{9, 10, 2, 1, 5}},
+	}
+	sorted := orig.Sort()
+	expected := PCRSelectionList{
+		{Hash: HashAlgorithmSHA1, Select: []int{3, 4, 7, 8}},
+		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2}},
+		{Hash: HashAlgorithmSHA384, Select: []int{3, 5, 8}},
+		{Hash: HashAlgorithmSHA512, Select: []int{1, 2, 5, 9, 10}},
+	}
+
+	if !reflect.DeepEqual(sorted, expected) {
+		t.Errorf("Unexpected result: %v", sorted)
+	}
+	if !sorted.Equal(expected) {
+		t.Errorf("Result should be equivalent")
+	}
+}
+
 func TestPCRSelectionListEqual(t *testing.T) {
 	for _, data := range []struct {
 		desc  string
