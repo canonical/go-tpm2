@@ -799,13 +799,12 @@ func TestMarshalStructWithCustomMarshallerFromContainer(t *testing.T) {
 	}
 
 	b := TestStructWithEmbeddedCustomMarshallerType{A: 43232}
-	_, err = MarshalToBytes(b)
-	if err == nil {
-		t.Fatalf("MarshalToBytes should fail to marshal when encountering a nil pointer to a type with a custom marshaller")
+	out, err = MarshalToBytes(b)
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
 	}
-	if err.Error() != "cannot marshal struct type tpm2_test.TestStructWithEmbeddedCustomMarshallerType: cannot marshal field B: cannot "+
-		"marshal nil pointer type *tpm2_test.TestStructWithCustomMarshaller with custom marshaller" {
-		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
+	if !bytes.Equal(out, []byte{0x00, 0x00, 0xa8, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 	}
 }
 

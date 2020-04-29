@@ -318,7 +318,7 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 		case val.Kind() != reflect.Ptr:
 			val = val.Addr()
 		case val.IsNil():
-			return xerrors.Errorf("cannot marshal nil pointer type %s with custom marshaller", val.Type())
+			val = reflect.New(val.Type().Elem())
 		}
 		n, err := val.Interface().(CustomMarshaller).Marshal(buf)
 		ctx.nbytes += n
