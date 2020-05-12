@@ -7,6 +7,7 @@ package tpm2
 import (
 	"bytes"
 	"crypto"
+	"crypto/elliptic"
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
@@ -33,6 +34,22 @@ type TPMGenerated uint32
 
 // ECCCurve corresponds to the TPM_ECC_CURVE type.
 type ECCCurve uint16
+
+// GoCurve returns the equivalent elliptic.Curve for this ECC curve.
+func (c ECCCurve) GoCurve() elliptic.Curve {
+	switch c {
+	case ECCCurveNIST_P224:
+		return elliptic.P224()
+	case ECCCurveNIST_P256:
+		return elliptic.P256()
+	case ECCCurveNIST_P384:
+		return elliptic.P384()
+	case ECCCurveNIST_P521:
+		return elliptic.P521()
+	default:
+		return nil
+	}
+}
 
 // CommandCode corresponds to the TPM_CC type.
 type CommandCode uint32
