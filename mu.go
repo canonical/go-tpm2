@@ -163,7 +163,7 @@ func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	defer exit()
 
 	tmpBuf := new(bytes.Buffer)
-	if err := marshalPtr(tmpBuf, s, ctx); err != nil {
+	if err := marshalValue(tmpBuf, s, ctx); err != nil {
 		return xerrors.Errorf("cannot marshal pointer to struct to temporary buffer: %w", err)
 	}
 	if tmpBuf.Len() > math.MaxUint16 {
@@ -312,6 +312,13 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 }
 
 func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
+	if ctx.options.sized {
+		if err := marshalSized(buf, val, ctx); err != nil {
+			return xerrors.Errorf("cannot marshal sized type %s: %w", val.Type(), err)
+		}
+		return nil
+	}
+
 	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
 		switch {
@@ -324,13 +331,6 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 		ctx.nbytes += n
 		if err != nil {
 			return xerrors.Errorf("cannot marshal type %s with custom marshaller: %w", origVal.Type(), err)
-		}
-		return nil
-	}
-
-	if ctx.options.sized {
-		if err := marshalSized(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot marshal sized type %s: %w", val.Type(), err)
 		}
 		return nil
 	}
@@ -383,7 +383,7 @@ func unmarshalSized(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	defer exit()
 
 	lr := io.LimitReader(buf, int64(size))
-	if err := unmarshalPtr(lr, s, ctx); err != nil {
+	if err := unmarshalValue(lr, s, ctx); err != nil {
 		return xerrors.Errorf("cannot unmarshal pointer to struct: %w", err)
 	}
 	return nil
@@ -521,6 +521,13 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
+	if ctx.options.sized {
+		if err := unmarshalSized(buf, val, ctx); err != nil {
+			return xerrors.Errorf("cannot unmarshal sized type %s: %w", val.Type(), err)
+		}
+		return nil
+	}
+
 	if hasCustomMarshallerImpl(val.Type()) {
 		origVal := val
 		switch {
@@ -535,13 +542,6 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 		ctx.nbytes += n
 		if err != nil {
 			return xerrors.Errorf("cannot unmarshal type %s with custom marshaller: %w", origVal.Type(), err)
-		}
-		return nil
-	}
-
-	if ctx.options.sized {
-		if err := unmarshalSized(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot unmarshal sized type %s: %w", val.Type(), err)
 		}
 		return nil
 	}

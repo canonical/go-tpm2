@@ -839,3 +839,60 @@ func TestMarshalStructWithCustomMarshallerAsValueFromContainer(t *testing.T) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
 	}
 }
+
+type TestStructWithSizedCustomMarshallerType struct {
+	A uint32
+	B *TestStructWithCustomMarshaller `tpm2:"sized"`
+}
+
+func TestMarshalStructWithSizedCustomMarshaller(t *testing.T) {
+	a := TestStructWithSizedCustomMarshallerType{
+		A: 54321211,
+		B: &TestStructWithCustomMarshaller{A: 44332, B: TestListUint32{885432, 31287554}}}
+
+	out, err := MarshalToBytes(&a)
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
+	}
+
+	if !bytes.Equal(out, []byte{0x03, 0x3c, 0xe0, 0x3b, 0x00, 0x0e, 0xad, 0x2c, 0x00, 0x00, 0x00, 0x02, 0x00, 0x0d, 0x82, 0xb8, 0x01, 0xdd, 0x69, 0x02}) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+	}
+
+	var ao TestStructWithSizedCustomMarshallerType
+	n, err := UnmarshalFromBytes(out, &ao)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(a, ao) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+
+	b := TestStructWithSizedCustomMarshallerType{A: 54321211}
+
+	out, err = MarshalToBytes(&b)
+	if err != nil {
+		t.Fatalf("MarshalToBytes failed: %v", err)
+	}
+
+	if !bytes.Equal(out, []byte{0x03, 0x3c, 0xe0, 0x3b, 0x00, 0x00}) {
+		t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
+	}
+
+	var bo TestStructWithSizedCustomMarshallerType
+	n, err = UnmarshalFromBytes(out, &bo)
+	if err != nil {
+		t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	}
+	if n != len(out) {
+		t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
+	}
+
+	if !reflect.DeepEqual(b, bo) {
+		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+}

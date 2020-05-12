@@ -251,8 +251,9 @@ func TestCreatePrimary(t *testing.T) {
 		}
 		if err.Error() != "cannot marshal command parameters for command TPM_CC_CreatePrimary: cannot marshal struct type "+
 			"tpm2.publicSized: cannot marshal field Ptr: cannot marshal sized type *tpm2.Public: cannot marshal pointer to struct to "+
-			"temporary buffer: cannot marshal element: cannot marshal struct type tpm2.Public: cannot marshal field Params: cannot marshal "+
-			"struct type tpm2.PublicParamsU: error marshalling union struct: data has incorrect type *tpm2.RSAParams (expected *tpm2.ECCParams)" {
+			"temporary buffer: cannot marshal pointer type *tpm2.Public: cannot marshal element: cannot marshal struct type tpm2.Public: "+
+			"cannot marshal field Params: cannot marshal struct type tpm2.PublicParamsU: error marshalling union struct: data has incorrect "+
+			"type *tpm2.RSAParams (expected *tpm2.ECCParams)" {
 			t.Errorf("CreatePrimary returned an unexpected error: %v", err)
 		}
 	})
