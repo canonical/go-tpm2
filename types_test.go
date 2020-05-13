@@ -94,7 +94,7 @@ func TestPublicIDUnion(t *testing.T) {
 				Unique: PublicIDU{Data: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
 			err: "cannot unmarshal struct type tpm2_test.TestPublicIDUContainer: cannot unmarshal field Unique: cannot unmarshal struct type " +
-				"tpm2.PublicIDU: error unmarshalling union struct: cannot select union data type: invalid selector value: TPM_ALG_NULL",
+				"tpm2.PublicIDU: error unmarshalling union struct: invalid selector value: TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -161,8 +161,7 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
 			out:  []byte{0x00, 0x0b},
 			err: "cannot unmarshal struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot unmarshal field Details: cannot unmarshal " +
-				"struct type tpm2.SchemeKeyedHashU: error unmarshalling union struct: cannot select union data type: invalid selector value: " +
-				"TPM_ALG_SHA256",
+				"struct type tpm2.SchemeKeyedHashU: error unmarshalling union struct: invalid selector value: TPM_ALG_SHA256",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

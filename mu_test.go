@@ -526,18 +526,19 @@ type TestUnion struct {
 	Data interface{}
 }
 
-func (t TestUnion) Select(selector reflect.Value) (reflect.Type, error) {
+func (t TestUnion) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(uint32) {
 	case 1:
-		return reflect.TypeOf((*TestStructSimple)(nil)), nil
+		return reflect.TypeOf((*TestStructSimple)(nil))
 	case 2:
-		return reflect.TypeOf(TestListUint32(nil)), nil
+		return reflect.TypeOf(TestListUint32(nil))
 	case 3:
-		return reflect.TypeOf(uint16(0)), nil
+		return reflect.TypeOf(uint16(0))
 	case 4:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{Selector: selector}
 }
 
 type TestUnionContainer struct {
@@ -647,7 +648,7 @@ func TestMarshalUnionWithInvalidSelector(t *testing.T) {
 		t.Fatalf("UnmarshalFromBytes should fail to marshal a union with an invalid selector value")
 	}
 	if err.Error() != "cannot unmarshal struct type tpm2_test.TestUnionContainer: cannot unmarshal field Union: cannot unmarshal "+
-		"struct type tpm2_test.TestUnion: error unmarshalling union struct: cannot select union data type: invalid selector value: 259" {
+		"struct type tpm2_test.TestUnion: error unmarshalling union struct: invalid selector value: 259" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }

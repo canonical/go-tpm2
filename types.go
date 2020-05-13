@@ -704,30 +704,31 @@ func (c CapabilitiesU) AuthPolicies() TaggedPolicyList {
 	return c.Data.(TaggedPolicyList)
 }
 
-func (c CapabilitiesU) Select(selector reflect.Value) (reflect.Type, error) {
+func (c CapabilitiesU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(Capability) {
 	case CapabilityAlgs:
-		return reflect.TypeOf(AlgorithmPropertyList(nil)), nil
+		return reflect.TypeOf(AlgorithmPropertyList(nil))
 	case CapabilityHandles:
-		return reflect.TypeOf(HandleList(nil)), nil
+		return reflect.TypeOf(HandleList(nil))
 	case CapabilityCommands:
-		return reflect.TypeOf(CommandAttributesList(nil)), nil
+		return reflect.TypeOf(CommandAttributesList(nil))
 	case CapabilityPPCommands:
-		return reflect.TypeOf(CommandCodeList(nil)), nil
+		return reflect.TypeOf(CommandCodeList(nil))
 	case CapabilityAuditCommands:
-		return reflect.TypeOf(CommandCodeList(nil)), nil
+		return reflect.TypeOf(CommandCodeList(nil))
 	case CapabilityPCRs:
-		return reflect.TypeOf(PCRSelectionList(nil)), nil
+		return reflect.TypeOf(PCRSelectionList(nil))
 	case CapabilityTPMProperties:
-		return reflect.TypeOf(TaggedTPMPropertyList(nil)), nil
+		return reflect.TypeOf(TaggedTPMPropertyList(nil))
 	case CapabilityPCRProperties:
-		return reflect.TypeOf(TaggedPCRPropertyList(nil)), nil
+		return reflect.TypeOf(TaggedPCRPropertyList(nil))
 	case CapabilityECCCurves:
-		return reflect.TypeOf(ECCCurveList(nil)), nil
+		return reflect.TypeOf(ECCCurveList(nil))
 	case CapabilityAuthPolicies:
-		return reflect.TypeOf(TaggedPolicyList(nil)), nil
+		return reflect.TypeOf(TaggedPolicyList(nil))
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // CapabilityData corresponds to the TPMS_CAPABILITY_DATA type, and is returned by TPMContext.GetCapability.
@@ -817,24 +818,25 @@ type AttestU struct {
 	Data interface{}
 }
 
-func (a AttestU) Select(selector reflect.Value) (reflect.Type, error) {
+func (a AttestU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(StructTag) {
 	case TagAttestNV:
-		return reflect.TypeOf((*NVCertifyInfo)(nil)), nil
+		return reflect.TypeOf((*NVCertifyInfo)(nil))
 	case TagAttestCommandAudit:
-		return reflect.TypeOf((*CommandAuditInfo)(nil)), nil
+		return reflect.TypeOf((*CommandAuditInfo)(nil))
 	case TagAttestSessionAudit:
-		return reflect.TypeOf((*SessionAuditInfo)(nil)), nil
+		return reflect.TypeOf((*SessionAuditInfo)(nil))
 	case TagAttestCertify:
-		return reflect.TypeOf((*CertifyInfo)(nil)), nil
+		return reflect.TypeOf((*CertifyInfo)(nil))
 	case TagAttestQuote:
-		return reflect.TypeOf((*QuoteInfo)(nil)), nil
+		return reflect.TypeOf((*QuoteInfo)(nil))
 	case TagAttestTime:
-		return reflect.TypeOf((*TimeAttestInfo)(nil)), nil
+		return reflect.TypeOf((*TimeAttestInfo)(nil))
 	case TagAttestCreation:
-		return reflect.TypeOf((*CreationInfo)(nil)), nil
+		return reflect.TypeOf((*CreationInfo)(nil))
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // Certify returns the underlying value as *CertifyInfo. It panics if the underlying type is not *CertifyInfo.
@@ -912,20 +914,21 @@ type SymKeyBitsU struct {
 	Data interface{}
 }
 
-func (b SymKeyBitsU) Select(selector reflect.Value) (reflect.Type, error) {
+func (b SymKeyBitsU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
 		fallthrough
 	case AlgorithmSM4:
 		fallthrough
 	case AlgorithmCamellia:
-		return reflect.TypeOf(uint16(0)), nil
+		return reflect.TypeOf(uint16(0))
 	case AlgorithmXOR:
-		return reflect.TypeOf(HashAlgorithmId(0)), nil
+		return reflect.TypeOf(HashAlgorithmId(0))
 	case AlgorithmNull:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // Sym returns the underlying value as uint16. It panics if the underlying type is not uint16.
@@ -949,20 +952,21 @@ type SymModeU struct {
 	Data interface{}
 }
 
-func (m SymModeU) Select(selector reflect.Value) (reflect.Type, error) {
+func (m SymModeU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
 		fallthrough
 	case AlgorithmSM4:
 		fallthrough
 	case AlgorithmCamellia:
-		return reflect.TypeOf(SymModeId(0)), nil
+		return reflect.TypeOf(SymModeId(0))
 	case AlgorithmXOR:
 		fallthrough
 	case AlgorithmNull:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // Sym returns the underlying value as SymModeId. It panics if the underlying type is not SymModeId.
@@ -1048,16 +1052,17 @@ type SchemeKeyedHashU struct {
 	Data interface{}
 }
 
-func (d SchemeKeyedHashU) Select(selector reflect.Value) (reflect.Type, error) {
+func (d SchemeKeyedHashU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(KeyedHashSchemeId) {
 	case KeyedHashSchemeHMAC:
-		return reflect.TypeOf((*SchemeHMAC)(nil)), nil
+		return reflect.TypeOf((*SchemeHMAC)(nil))
 	case KeyedHashSchemeXOR:
-		return reflect.TypeOf((*SchemeXOR)(nil)), nil
+		return reflect.TypeOf((*SchemeXOR)(nil))
 	case KeyedHashSchemeNull:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // HMAC returns the underlying value as *SchemeHMAC. It panics if the underlying type is not *SchemeHMAC.
@@ -1101,26 +1106,27 @@ type SigSchemeU struct {
 	Data interface{}
 }
 
-func (s SigSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
+func (s SigSchemeU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return reflect.TypeOf((*SigSchemeRSASSA)(nil)), nil
+		return reflect.TypeOf((*SigSchemeRSASSA)(nil))
 	case SigSchemeAlgRSAPSS:
-		return reflect.TypeOf((*SigSchemeRSAPSS)(nil)), nil
+		return reflect.TypeOf((*SigSchemeRSAPSS)(nil))
 	case SigSchemeAlgECDSA:
-		return reflect.TypeOf((*SigSchemeECDSA)(nil)), nil
+		return reflect.TypeOf((*SigSchemeECDSA)(nil))
 	case SigSchemeAlgECDAA:
-		return reflect.TypeOf((*SigSchemeECDAA)(nil)), nil
+		return reflect.TypeOf((*SigSchemeECDAA)(nil))
 	case SigSchemeAlgSM2:
-		return reflect.TypeOf((*SigSchemeSM2)(nil)), nil
+		return reflect.TypeOf((*SigSchemeSM2)(nil))
 	case SigSchemeAlgECSCHNORR:
-		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil)), nil
+		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil))
 	case SigSchemeAlgHMAC:
-		return reflect.TypeOf((*SchemeHMAC)(nil)), nil
+		return reflect.TypeOf((*SchemeHMAC)(nil))
 	case SigSchemeAlgNull:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not *SigSchemeRSASSA
@@ -1187,20 +1193,21 @@ type KDFSchemeU struct {
 	Data interface{}
 }
 
-func (s KDFSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
+func (s KDFSchemeU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(KDFAlgorithmId) {
 	case KDFAlgorithmMGF1:
-		return reflect.TypeOf((*SchemeMGF1)(nil)), nil
+		return reflect.TypeOf((*SchemeMGF1)(nil))
 	case KDFAlgorithmKDF1_SP800_56A:
-		return reflect.TypeOf((*SchemeKDF1_SP800_56A)(nil)), nil
+		return reflect.TypeOf((*SchemeKDF1_SP800_56A)(nil))
 	case KDFAlgorithmKDF2:
-		return reflect.TypeOf((*SchemeKDF2)(nil)), nil
+		return reflect.TypeOf((*SchemeKDF2)(nil))
 	case KDFAlgorithmKDF1_SP800_108:
-		return reflect.TypeOf((*SchemeKDF1_SP800_108)(nil)), nil
+		return reflect.TypeOf((*SchemeKDF1_SP800_108)(nil))
 	case KDFAlgorithmNull:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // MGF1 returns the underlying value as *SchemeMGF1. It panics if the underlying type is not *SchemeMGF1.
@@ -1256,32 +1263,33 @@ type AsymSchemeU struct {
 	Data interface{}
 }
 
-func (s AsymSchemeU) Select(selector reflect.Value) (reflect.Type, error) {
+func (s AsymSchemeU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Convert(reflect.TypeOf(AsymSchemeId(0))).Interface().(AsymSchemeId) {
 	case AsymSchemeRSASSA:
-		return reflect.TypeOf((*SigSchemeRSASSA)(nil)), nil
+		return reflect.TypeOf((*SigSchemeRSASSA)(nil))
 	case AsymSchemeRSAES:
-		return reflect.TypeOf((*EncSchemeRSAES)(nil)), nil
+		return reflect.TypeOf((*EncSchemeRSAES)(nil))
 	case AsymSchemeRSAPSS:
-		return reflect.TypeOf((*SigSchemeRSAPSS)(nil)), nil
+		return reflect.TypeOf((*SigSchemeRSAPSS)(nil))
 	case AsymSchemeOAEP:
-		return reflect.TypeOf((*EncSchemeOAEP)(nil)), nil
+		return reflect.TypeOf((*EncSchemeOAEP)(nil))
 	case AsymSchemeECDSA:
-		return reflect.TypeOf((*SigSchemeECDSA)(nil)), nil
+		return reflect.TypeOf((*SigSchemeECDSA)(nil))
 	case AsymSchemeECDH:
-		return reflect.TypeOf((*KeySchemeECDH)(nil)), nil
+		return reflect.TypeOf((*KeySchemeECDH)(nil))
 	case AsymSchemeECDAA:
-		return reflect.TypeOf((*SigSchemeECDAA)(nil)), nil
+		return reflect.TypeOf((*SigSchemeECDAA)(nil))
 	case AsymSchemeSM2:
-		return reflect.TypeOf((*SigSchemeSM2)(nil)), nil
+		return reflect.TypeOf((*SigSchemeSM2)(nil))
 	case AsymSchemeECSCHNORR:
-		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil)), nil
+		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil))
 	case AsymSchemeECMQV:
-		return reflect.TypeOf((*KeySchemeECMQV)(nil)), nil
+		return reflect.TypeOf((*KeySchemeECMQV)(nil))
 	case AsymSchemeNull:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // ECDH returns the underlying value as *KeySchemeECDH. It panics if the underlying type is not *KeySchemeECDH.
@@ -1418,26 +1426,27 @@ type SignatureU struct {
 	Data interface{}
 }
 
-func (s SignatureU) Select(selector reflect.Value) (reflect.Type, error) {
+func (s SignatureU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return reflect.TypeOf((*SignatureRSASSA)(nil)), nil
+		return reflect.TypeOf((*SignatureRSASSA)(nil))
 	case SigSchemeAlgRSAPSS:
-		return reflect.TypeOf((*SignatureRSAPSS)(nil)), nil
+		return reflect.TypeOf((*SignatureRSAPSS)(nil))
 	case SigSchemeAlgECDSA:
-		return reflect.TypeOf((*SignatureECDSA)(nil)), nil
+		return reflect.TypeOf((*SignatureECDSA)(nil))
 	case SigSchemeAlgECDAA:
-		return reflect.TypeOf((*SignatureECDAA)(nil)), nil
+		return reflect.TypeOf((*SignatureECDAA)(nil))
 	case SigSchemeAlgSM2:
-		return reflect.TypeOf((*SignatureSM2)(nil)), nil
+		return reflect.TypeOf((*SignatureSM2)(nil))
 	case SigSchemeAlgECSCHNORR:
-		return reflect.TypeOf((*SignatureECSCHNORR)(nil)), nil
+		return reflect.TypeOf((*SignatureECSCHNORR)(nil))
 	case SigSchemeAlgHMAC:
-		return reflect.TypeOf((*TaggedHash)(nil)), nil
+		return reflect.TypeOf((*TaggedHash)(nil))
 	case SigSchemeAlgNull:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // RSASSA returns the underlying value as *SignatureRSASSA. It panics if the underlying type is not *SignatureRSASSA.
@@ -1509,18 +1518,19 @@ type PublicIDU struct {
 	Data interface{}
 }
 
-func (p PublicIDU) Select(selector reflect.Value) (reflect.Type, error) {
+func (p PublicIDU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return reflect.TypeOf(PublicKeyRSA(nil)), nil
+		return reflect.TypeOf(PublicKeyRSA(nil))
 	case ObjectTypeKeyedHash:
-		return reflect.TypeOf(Digest(nil)), nil
+		return reflect.TypeOf(Digest(nil))
 	case ObjectTypeECC:
-		return reflect.TypeOf((*ECCPoint)(nil)), nil
+		return reflect.TypeOf((*ECCPoint)(nil))
 	case ObjectTypeSymCipher:
-		return reflect.TypeOf(Digest(nil)), nil
+		return reflect.TypeOf(Digest(nil))
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // KeyedHash returns the underlying value as Digest. It panics if the underlying type is not Digest.
@@ -1590,18 +1600,19 @@ type PublicParamsU struct {
 	Data interface{}
 }
 
-func (p PublicParamsU) Select(selector reflect.Value) (reflect.Type, error) {
+func (p PublicParamsU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return reflect.TypeOf((*RSAParams)(nil)), nil
+		return reflect.TypeOf((*RSAParams)(nil))
 	case ObjectTypeKeyedHash:
-		return reflect.TypeOf((*KeyedHashParams)(nil)), nil
+		return reflect.TypeOf((*KeyedHashParams)(nil))
 	case ObjectTypeECC:
-		return reflect.TypeOf((*ECCParams)(nil)), nil
+		return reflect.TypeOf((*ECCParams)(nil))
 	case ObjectTypeSymCipher:
-		return reflect.TypeOf((*SymCipherParams)(nil)), nil
+		return reflect.TypeOf((*SymCipherParams)(nil))
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // KeyedHashDetail returns the underlying value as *KeyedHashParams. It panics if the underlying type is not *KeyedHashParams.
@@ -1763,18 +1774,19 @@ type SensitiveCompositeU struct {
 	Data interface{}
 }
 
-func (s SensitiveCompositeU) Select(selector reflect.Value) (reflect.Type, error) {
+func (s SensitiveCompositeU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return reflect.TypeOf(PrivateKeyRSA(nil)), nil
+		return reflect.TypeOf(PrivateKeyRSA(nil))
 	case ObjectTypeECC:
-		return reflect.TypeOf(ECCParameter(nil)), nil
+		return reflect.TypeOf(ECCParameter(nil))
 	case ObjectTypeKeyedHash:
-		return reflect.TypeOf(SensitiveData(nil)), nil
+		return reflect.TypeOf(SensitiveData(nil))
 	case ObjectTypeSymCipher:
-		return reflect.TypeOf(SymKey(nil)), nil
+		return reflect.TypeOf(SymKey(nil))
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 // RSA returns the underlying value as PrivateKeyRSA. It panics if the underlying type is not PrivateKeyRSA.

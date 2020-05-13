@@ -17,18 +17,23 @@ import (
 	"golang.org/x/xerrors"
 )
 
+type empty struct{}
+
+var NilValue empty
+
 var (
 	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
 	rawBytesType         reflect.Type = reflect.TypeOf(RawBytes(nil))
 	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
+	nilValueType         reflect.Type = reflect.TypeOf(NilValue)
 )
 
-type InvalidSelectorError struct {
-	Selector reflect.Value
+type invalidSelectorError struct {
+	selector reflect.Value
 }
 
-func (e InvalidSelectorError) Error() string {
-	return fmt.Sprintf("invalid selector value: %v", e.Selector)
+func (e *invalidSelectorError) Error() string {
+	return fmt.Sprintf("invalid selector value: %v", e.selector)
 }
 
 // CustomMarshaller is implemented by types that require custom marshalling and unmarshalling behaviour because they are non-standard
@@ -42,12 +47,13 @@ type CustomMarshaller interface {
 // the correct length by the caller during unmarshalling.
 type RawBytes []byte
 
-// Union is implemented by types that implement the TPMU prefixed TPM types.
-//
-// The Select method is called by the marshalling code with the value of the selector field from the enclosing struct, and the
-// implementation should respond with the type that will be marshalled or unmarshalled for the selector value.
+// Union is implemented by types that implement the TPMU prefixed TPM types. Implementations of this should be structures with
+// a single member of the empty interface type.
 type Union interface {
-	Select(selector reflect.Value) (reflect.Type, error)
+	// Select is called by the marshalling code with the value of the selector field from the enclosing struct. The implementation
+	// should respond with the type that will be marshalled or unmarshalled for the selector value. If no data should be marshalled
+	// or unmarshalled, it should respond with the type of NilValue.
+	Select(selector reflect.Value) reflect.Type
 }
 
 func isValidUnionContainer(t reflect.Type) bool {
@@ -215,10 +221,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 			ctx.options.selector, u.Type(), ctx.container.Type()))
 	}
 
-	// Ignore errors during marshalling as we can produce some confusing errors for really nested elements.
-	// In the event of an error, selectedType will be nil, we'll marshal nothing and the TPM's unmarshalling
-	// and parameter validation will catch the error when unmarshalling the selector value.
-	selectedType, _ := u.Interface().(Union).Select(selectorVal)
+	selectedType := u.Interface().(Union).Select(selectorVal)
 	if selectedType == nil {
 		return nil
 	}
@@ -420,11 +423,11 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 			ctx.options.selector, u.Type(), ctx.container.Type()))
 	}
 
-	selectedType, err := u.Interface().(Union).Select(selectorVal)
-	if err != nil {
-		return xerrors.Errorf("cannot select union data type: %w", err)
-	}
+	selectedType := u.Interface().(Union).Select(selectorVal)
 	if selectedType == nil {
+		return &invalidSelectorError{selectorVal}
+	}
+	if selectedType == nilValueType {
 		return nil
 	}
 

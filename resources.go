@@ -130,18 +130,19 @@ type handleContextDataU struct {
 	Data interface{}
 }
 
-func (d handleContextDataU) Select(selector reflect.Value) (reflect.Type, error) {
+func (d handleContextDataU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(handleContextType) {
 	case handleContextTypeDummy, handleContextTypePermanent:
-		return nil, nil
+		return reflect.TypeOf(NilValue)
 	case handleContextTypeObject:
-		return reflect.TypeOf((*Public)(nil)), nil
+		return reflect.TypeOf((*Public)(nil))
 	case handleContextTypeNvIndex:
-		return reflect.TypeOf((*NVPublic)(nil)), nil
+		return reflect.TypeOf((*NVPublic)(nil))
 	case handleContextTypeSession:
-		return reflect.TypeOf((*sessionContextData)(nil)), nil
+		return reflect.TypeOf((*sessionContextData)(nil))
+	default:
+		return nil
 	}
-	return nil, InvalidSelectorError{selector}
 }
 
 type handleContextData struct {
