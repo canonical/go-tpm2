@@ -140,6 +140,35 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	return rc, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
 }
 
+// HierarchyControl executes the TPM2_HierarchyControl command in order to enable or disable the hierarchy associated with the
+// enable argument. If state is true, the hierarchy associated with the enable argument will be enabled. If state is false, the
+// hierarchy associated with the enable argument will be disabled. This command requires authorization with the user auth role
+// for authContext, with session based authorization provided via authContextAuthSession.
+//
+// If enable is HandlePlatform and state is false, then this will disable use of the platform hierarchy. In this case, authContext
+// must correspond to HandlePlatform.
+//
+// If enable is HandlePlatformNV and state is false, then this will disable the use of NV indices with the AttrNVPlatformCreate
+// attribute set, indicating that they were created by the platform owner. In this case, authContext must correspond to
+// HandlePlatform.
+//
+// If enable is HandleOwner and state is false, then this will disable the use of the storage hierarchy and any NV indices with
+// the AttrNVPlatformCreate attribute clear. In this case, authContext must correspond to HandleOwner.
+//
+// If enable is HandleEndorsement and state is false, then this will disable the use of the endorsment hierarchy. In this case,
+// authContext must correspond to HandleEndorsement.
+//
+// When a hierarchy is disabled, persistent objects associated with it become unavailable, and transient objects associated with it
+// are flushed from the TPM.
+//
+// If state is true, then authContext must correspond to HandlePlatform. Note that the platform hierarchy can't be re-enabled by
+// this command.
+func (t *TPMContext) HierarchyControl(authContext ResourceContext, enable Handle, state bool, authContextAuthSession SessionContext, sessions ...SessionContext) error {
+	return t.RunCommand(CommandHierarchyControl, sessions,
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter,
+		enable, state)
+}
+
 // Clear executes the TPM2_Clear command to remove all context associated with the current owner. The command requires knowledge of
 // the authorization value for either the platform or lockout hierarchy. The hierarchy is specified by passing a ResourceContext
 // corresponding to either HandlePlatform or HandleLockout to authContext. The command requires authorization with the user auth

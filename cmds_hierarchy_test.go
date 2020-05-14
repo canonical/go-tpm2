@@ -261,6 +261,70 @@ func TestCreatePrimary(t *testing.T) {
 	})
 }
 
+func TestHierarchyControl(t *testing.T) {
+	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy|testCapabilityPlatformHierarchy|testCapabilityHierarchyControl)
+	defer closeTPM(t, tpm)
+
+	run := func(t *testing.T, authContext ResourceContext, enable Handle, state bool, session SessionContext) {
+		if err := tpm.HierarchyControl(authContext, enable, state, session); err != nil {
+			t.Errorf("HierarchyControl failed: %v", err)
+		}
+
+		props, err := tpm.GetCapabilityTPMProperties(PropertyStartupClear, 1)
+		if err != nil || len(props) == 0 {
+			t.Fatalf("GetCapability failed: %v", err)
+		}
+		var mask StartupClearAttributes
+		switch enable {
+		case HandleOwner:
+			mask = AttrShEnable
+		case HandleEndorsement:
+			mask = AttrEhEnable
+		}
+
+		var expected StartupClearAttributes
+		if state {
+			expected = mask
+		}
+
+		if StartupClearAttributes(props[0].Value)&mask != expected {
+			t.Errorf("Unexpected value")
+		}
+	}
+
+	t.Run("Owner", func(t *testing.T) {
+		run(t, tpm.OwnerHandleContext(), HandleOwner, false, nil)
+		run(t, tpm.PlatformHandleContext(), HandleOwner, true, nil)
+	})
+
+	t.Run("Endorsement", func(t *testing.T) {
+		run(t, tpm.EndorsementHandleContext(), HandleEndorsement, false, nil)
+		run(t, tpm.PlatformHandleContext(), HandleEndorsement, true, nil)
+	})
+
+	t.Run("UsePasswordAuth", func(t *testing.T) {
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
+
+		run(t, tpm.OwnerHandleContext(), HandleOwner, false, nil)
+		run(t, tpm.PlatformHandleContext(), HandleOwner, true, nil)
+	})
+
+	t.Run("UseSessionAuth", func(t *testing.T) {
+		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
+		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
+
+		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer verifyContextFlushed(t, tpm, sessionContext)
+
+		run(t, tpm.OwnerHandleContext(), HandleOwner, false, sessionContext)
+		run(t, tpm.PlatformHandleContext(), HandleOwner, true, nil)
+	})
+}
+
 func TestClear(t *testing.T) {
 	tpm := openTPMForTesting(t, testCapabilityOwnerPersist|testCapabilityChangeEndorsementAuth|testCapabilityChangeLockoutAuth|testCapabilityChangePlatformAuth|testCapabilityClear)
 	defer closeTPM(t, tpm)

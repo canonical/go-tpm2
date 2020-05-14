@@ -33,14 +33,15 @@ const (
 	testCapabilityPCRChange
 	testCapabilitySetCommandCodeAuditStatus
 	testCapabilityClear
+	testCapabilityHierarchyControl
 
-	testCapabilityOwnerPersist = testCapabilityPersist | testCapabilityOwnerHierarchy
+	testCapabilityOwnerPersist    = testCapabilityPersist | testCapabilityOwnerHierarchy
 	testCapabilityPlatformPersist = testCapabilityPersist | testCapabilityPlatformHierarchy
 
-	testCapabilityChangeOwnerAuth = testCapabilityChangeHierarchyAuth | testCapabilityOwnerHierarchy
+	testCapabilityChangeOwnerAuth       = testCapabilityChangeHierarchyAuth | testCapabilityOwnerHierarchy
 	testCapabilityChangeEndorsementAuth = testCapabilityChangeHierarchyAuth | testCapabilityEndorsementHierarchy
-	testCapabilityChangeLockoutAuth = testCapabilityChangeHierarchyAuth | testCapabilityLockoutHierarchy
-	testCapabilityChangePlatformAuth = testCapabilityChangeHierarchyAuth | testCapabilityPlatformHierarchy
+	testCapabilityChangeLockoutAuth     = testCapabilityChangeHierarchyAuth | testCapabilityLockoutHierarchy
+	testCapabilityChangePlatformAuth    = testCapabilityChangeHierarchyAuth | testCapabilityPlatformHierarchy
 )
 
 func (f *testCapabilityFlags) String() string {
@@ -70,6 +71,8 @@ func (f *testCapabilityFlags) Set(value string) error {
 			*f |= testCapabilitySetCommandCodeAuditStatus
 		case "clear":
 			*f |= testCapabilityClear
+		case "hierarchycontrol":
+			*f |= testCapabilityHierarchyControl
 		default:
 			return fmt.Errorf("unrecognized option %s", value)
 		}

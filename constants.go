@@ -82,6 +82,7 @@ const (
 
 	CommandNVUndefineSpaceSpecial     CommandCode = 0x0000011F // TPM_CC_NV_UndefineSpaceSpecial
 	CommandEvictControl               CommandCode = 0x00000120 // TPM_CC_EvictControl
+	CommandHierarchyControl           CommandCode = 0x00000121 // TPM_CC_HierarchyControl
 	CommandNVUndefineSpace            CommandCode = 0x00000122 // TPM_CC_NV_UndefineSpace
 	CommandClear                      CommandCode = 0x00000126 // TPM_CC_Clear
 	CommandClearControl               CommandCode = 0x00000127 // TPM_CC_ClearControl

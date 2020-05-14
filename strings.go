@@ -91,6 +91,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_NV_UndefineSpaceSpecial"
 	case CommandEvictControl:
 		return "TPM_CC_EvictControl"
+	case CommandHierarchyControl:
+		return "TPM_CC_HierarchyControl"
 	case CommandNVUndefineSpace:
 		return "TPM_CC_NV_UndefineSpace"
 	case CommandClear:
