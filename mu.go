@@ -115,31 +115,161 @@ func parseFieldOptions(s string) muOptions {
 	return opts
 }
 
+type muError struct {
+	kind      string
+	val       reflect.Value
+	container reflect.Value
+	parent    reflect.Value
+	err       error
+}
+
+func (e *muError) Error() string {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "cannot process %s type %s", e.kind, e.val.Type())
+	if e.parent.IsValid() && e.parent.Type() == reflect.PtrTo(e.val.Type()) {
+		fmt.Fprintf(&b, ", dererenced from pointer type %s", e.parent.Type())
+	}
+	if e.container.IsValid() {
+		fmt.Fprintf(&b, ", inside container type %s", e.container.Type())
+	}
+	fmt.Fprintf(&b, ": %v", e.err)
+	return b.String()
+}
+
+func (e *muError) Unwrap() error {
+	return e.err
+}
+
+func makeSizedTypeMuError(val reflect.Value, ctx *muContext, err error) error {
+	return &muError{kind: "sized", val: val, container: ctx.container, parent: ctx.parent, err: err}
+}
+
+func makeCustomTypeMuError(val reflect.Value, ctx *muContext, err error) error {
+	return &muError{kind: "custom", val: val, container: ctx.container, parent: ctx.parent, err: err}
+}
+
+func makePointerTypeMuError(val reflect.Value, ctx *muContext, err error) error {
+	return &muError{kind: "pointer", val: val, container: ctx.container, err: err}
+}
+
+func makeStructTypeMuError(val reflect.Value, ctx *muContext, err error) error {
+	return &muError{kind: "struct", val: val, container: ctx.container, parent: ctx.parent, err: err}
+}
+
+func makeSliceTypeMuError(val reflect.Value, ctx *muContext, err error) error {
+	return &muError{kind: "slice", val: val, container: ctx.container, parent: ctx.parent, err: err}
+}
+
+func makePrimitiveTypeMuError(val reflect.Value, ctx *muContext, err error) error {
+	return &muError{kind: "primitive", val: val, container: ctx.container, parent: ctx.parent, err: err}
+}
+
+type structFieldMuError struct {
+	val   reflect.Value
+	field reflect.StructField
+	err   error
+}
+
+func (e *structFieldMuError) Error() string {
+	return fmt.Sprintf("cannot process field %s from struct type %s: %v", e.field.Name, e.val.Type(), e.err)
+}
+
+func (e *structFieldMuError) Unwrap() error {
+	return e.err
+}
+
+func makeStructFieldMuError(s reflect.Value, index int, err error) error {
+	return &structFieldMuError{val: s, field: s.Type().Field(index), err: err}
+}
+
+type sliceElemMuError struct {
+	val   reflect.Value
+	index int
+	err   error
+}
+
+func (e *sliceElemMuError) Error() string {
+	return fmt.Sprintf("cannot process element at index %d from slice type %s: %v", e.index, e.val.Type(), e.err)
+}
+
+func (e *sliceElemMuError) Unwrap() error {
+	return e.err
+}
+
+func makeSliceElemMuError(s reflect.Value, index int, err error) error {
+	return &sliceElemMuError{val: s, index: index, err: err}
+}
+
+// MarshalError indicates an error during marshalling and may be returned from MarshalToBytes or MarshalToWriter.
+type MarshalError struct {
+	Index int // The index of the argument that caused the error
+	err   error
+}
+
+func (e *MarshalError) Error() string {
+	return fmt.Sprintf("cannot marshal argument at index %d: %v", e.Index, e.err)
+}
+
+func (e *MarshalError) Unwrap() error {
+	return e.err
+}
+
+// UnmarshalError indicates an error during unmarshalling and may be returned from UnmarshalFromBytes or UnmarshalFromReader.
+type UnmarshalError struct {
+	Index int // The index of the argument that caused the error
+	err   error
+}
+
+func (e *UnmarshalError) Error() string {
+	return fmt.Sprintf("cannot unmarshal argument at index %d: %v", e.Index, e.err)
+}
+
+func (e *UnmarshalError) Unwrap() error {
+	return e.err
+}
+
 type muContext struct {
 	nbytes    int
 	container reflect.Value
+	parent    reflect.Value
 	options   muOptions
 }
 
 func (c *muContext) enterStructField(s reflect.Value, i int) (exit func()) {
+	if s.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("invalid type: %v", s.Type()))
+	}
+
 	opts := parseFieldOptions(s.Type().Field(i).Tag.Get("tpm2"))
 	origContainer := c.container
+	origParent := c.parent
 	origOptions := c.options
 	c.container = s
+	c.parent = s
 	c.options = opts
+
 	return func() {
 		c.container = origContainer
+		c.parent = origParent
 		c.options = origOptions
 	}
 }
 
-func (c *muContext) enterContainerElem(e reflect.Value) (exit func()) {
+func (c *muContext) enterContainerElem(v reflect.Value) (exit func()) {
+	if v.Kind() != reflect.Struct && v.Kind() != reflect.Slice {
+		panic(fmt.Sprintf("invalid type: %v", v.Type()))
+	}
+
 	origContainer := c.container
+	origParent := c.parent
 	origOptions := c.options
-	c.container = e
+	c.container = v
+	c.parent = v
 	c.options = muOptions{}
+
 	return func() {
 		c.container = origContainer
+		c.parent = origParent
 		c.options = origOptions
 	}
 }
@@ -148,6 +278,19 @@ func (c *muContext) enterSizedStruct() (exit func()) {
 	c.options.sized = false
 	return func() {
 		c.options.sized = true
+	}
+}
+
+func (c *muContext) dereferencePointer(p reflect.Value) (exit func()) {
+	if p.Kind() != reflect.Ptr {
+		panic(fmt.Sprintf("invalid type: %v", p.Type()))
+	}
+
+	origParent := c.parent
+	c.parent = p
+
+	return func() {
+		c.parent = origParent
 	}
 }
 
@@ -170,7 +313,7 @@ func marshalSized(buf io.Writer, s reflect.Value, ctx *muContext) error {
 
 	tmpBuf := new(bytes.Buffer)
 	if err := marshalValue(tmpBuf, s, ctx); err != nil {
-		return xerrors.Errorf("cannot marshal pointer to struct to temporary buffer: %w", err)
+		return err
 	}
 	if tmpBuf.Len() > math.MaxUint16 {
 		return errors.New("sized structure length greater than 2^16-1")
@@ -195,10 +338,10 @@ func marshalPtr(buf io.Writer, ptr reflect.Value, ctx *muContext) error {
 		d = ptr.Elem()
 	}
 
-	if err := marshalValue(buf, d, ctx); err != nil {
-		return xerrors.Errorf("cannot marshal element: %w", err)
-	}
-	return nil
+	exit := ctx.dereferencePointer(ptr)
+	defer exit()
+
+	return marshalValue(buf, d, ctx)
 }
 
 func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
@@ -249,7 +392,7 @@ func marshalUnion(buf io.Writer, u reflect.Value, ctx *muContext) error {
 func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 	if isUnion(s.Type()) {
 		if err := marshalUnion(buf, s, ctx); err != nil {
-			return xerrors.Errorf("error marshalling union struct: %w", err)
+			return xerrors.Errorf("cannot process union field: %w", err)
 		}
 		return nil
 	}
@@ -258,7 +401,7 @@ func marshalStruct(buf io.Writer, s reflect.Value, ctx *muContext) error {
 		exit := ctx.enterStructField(s, i)
 		if err := marshalValue(buf, s.Field(i), ctx); err != nil {
 			exit()
-			return xerrors.Errorf("cannot marshal field %s: %w", s.Type().Field(i).Name, err)
+			return makeStructFieldMuError(s, i, err)
 		}
 		exit()
 	}
@@ -307,7 +450,7 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 		exit := ctx.enterContainerElem(slice)
 		if err := marshalValue(buf, slice.Index(i), ctx); err != nil {
 			exit()
-			return xerrors.Errorf("cannot marshal value at index %d: %w", i, err)
+			return makeSliceElemMuError(slice, i, err)
 		}
 		exit()
 	}
@@ -317,7 +460,7 @@ func marshalSlice(buf io.Writer, slice reflect.Value, ctx *muContext) error {
 func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 	if ctx.options.sized {
 		if err := marshalSized(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot marshal sized type %s: %w", val.Type(), err)
+			return makeSizedTypeMuError(val, ctx, err)
 		}
 		return nil
 	}
@@ -333,7 +476,7 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 		n, err := val.Interface().(CustomMarshaller).Marshal(buf)
 		ctx.nbytes += n
 		if err != nil {
-			return xerrors.Errorf("cannot marshal type %s with custom marshaller: %w", origVal.Type(), err)
+			return makeCustomTypeMuError(origVal, ctx, err)
 		}
 		return nil
 	}
@@ -341,21 +484,21 @@ func marshalValue(buf io.Writer, val reflect.Value, ctx *muContext) error {
 	switch val.Kind() {
 	case reflect.Ptr:
 		if err := marshalPtr(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot marshal pointer type %s: %w", val.Type(), err)
+			return makePointerTypeMuError(val, ctx, err)
 		}
 	case reflect.Struct:
 		if err := marshalStruct(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot marshal struct type %s: %w", val.Type(), err)
+			return makeStructTypeMuError(val, ctx, err)
 		}
 	case reflect.Slice:
 		if err := marshalSlice(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot marshal slice type %s: %w", val.Type(), err)
+			return makeSliceTypeMuError(val, ctx, err)
 		}
 	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
 		panic(fmt.Sprintf("cannot marshal type %s: unsupported kind %s", val.Type(), val.Kind()))
 	default:
 		if err := binary.Write(buf, binary.BigEndian, val.Interface()); err != nil {
-			return xerrors.Errorf("cannot marshal type %s: write to buffer failed: %w", val.Type(), err)
+			return makePrimitiveTypeMuError(val, ctx, err)
 		}
 		ctx.nbytes += binary.Size(val.Interface())
 	}
@@ -386,10 +529,7 @@ func unmarshalSized(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	defer exit()
 
 	lr := io.LimitReader(buf, int64(size))
-	if err := unmarshalValue(lr, s, ctx); err != nil {
-		return xerrors.Errorf("cannot unmarshal pointer to struct: %w", err)
-	}
-	return nil
+	return unmarshalValue(lr, s, ctx)
 }
 
 func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
@@ -397,10 +537,10 @@ func unmarshalPtr(buf io.Reader, ptr reflect.Value, ctx *muContext) error {
 		ptr.Set(reflect.New(ptr.Type().Elem()))
 	}
 
-	if err := unmarshalValue(buf, ptr.Elem(), ctx); err != nil {
-		return xerrors.Errorf("cannot unmarshal element: %w", err)
-	}
-	return nil
+	exit := ctx.dereferencePointer(ptr)
+	defer exit()
+
+	return unmarshalValue(buf, ptr.Elem(), ctx)
 }
 
 func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
@@ -443,7 +583,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 	defer exit()
 
 	if err := unmarshalValue(buf, d, ctx); err != nil {
-		return xerrors.Errorf("cannot unmarshal data value: %w", err)
+		return err
 	}
 
 	if f.IsNil() {
@@ -456,7 +596,7 @@ func unmarshalUnion(buf io.Reader, u reflect.Value, ctx *muContext) error {
 func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 	if isUnion(s.Type()) {
 		if err := unmarshalUnion(buf, s, ctx); err != nil {
-			return xerrors.Errorf("error unmarshalling union struct: %w", err)
+			return xerrors.Errorf("cannot process union field: %w", err)
 		}
 		return nil
 	}
@@ -465,7 +605,7 @@ func unmarshalStruct(buf io.Reader, s reflect.Value, ctx *muContext) error {
 		exit := ctx.enterStructField(s, i)
 		if err := unmarshalValue(buf, s.Field(i), ctx); err != nil {
 			exit()
-			return xerrors.Errorf("cannot unmarshal field %s: %w", s.Type().Field(i).Name, err)
+			return makeStructFieldMuError(s, i, err)
 		}
 		exit()
 	}
@@ -516,7 +656,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 		exit := ctx.enterContainerElem(slice)
 		if err := unmarshalValue(buf, slice.Index(i), ctx); err != nil {
 			exit()
-			return xerrors.Errorf("cannot unmarshal value at index %d: %w", i, err)
+			return makeSliceElemMuError(slice, i, err)
 		}
 		exit()
 	}
@@ -526,7 +666,7 @@ func unmarshalSlice(buf io.Reader, slice reflect.Value, ctx *muContext) error {
 func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 	if ctx.options.sized {
 		if err := unmarshalSized(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot unmarshal sized type %s: %w", val.Type(), err)
+			return makeSizedTypeMuError(val, ctx, err)
 		}
 		return nil
 	}
@@ -544,7 +684,7 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 		n, err := val.Interface().(CustomMarshaller).Unmarshal(buf)
 		ctx.nbytes += n
 		if err != nil {
-			return xerrors.Errorf("cannot unmarshal type %s with custom marshaller: %w", origVal.Type(), err)
+			return makeCustomTypeMuError(origVal, ctx, err)
 		}
 		return nil
 	}
@@ -552,21 +692,21 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 	switch val.Kind() {
 	case reflect.Ptr:
 		if err := unmarshalPtr(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot unmarshal pointer type %s: %w", val.Type(), err)
+			return makePointerTypeMuError(val, ctx, err)
 		}
 	case reflect.Struct:
 		if err := unmarshalStruct(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot unmarshal struct type %s: %w", val.Type(), err)
+			return makeStructTypeMuError(val, ctx, err)
 		}
 	case reflect.Slice:
 		if err := unmarshalSlice(buf, val, ctx); err != nil {
-			return xerrors.Errorf("cannot unmarshal slice type %s: %w", val.Type(), err)
+			return makeSliceTypeMuError(val, ctx, err)
 		}
 	case reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.UnsafePointer:
 		panic(fmt.Sprintf("cannot unmarshal type %s: unsupported kind %s", val.Type(), val.Kind()))
 	default:
 		if err := binary.Read(buf, binary.BigEndian, val.Addr().Interface()); err != nil {
-			return xerrors.Errorf("cannot unmarshal type %s: read from buffer failed: %w", val.Type(), err)
+			return makePrimitiveTypeMuError(val, ctx, err)
 		}
 		ctx.nbytes += binary.Size(val.Interface())
 	}
@@ -581,10 +721,10 @@ func unmarshalValue(buf io.Reader, val reflect.Value, ctx *muContext) error {
 // the number of bytes written.
 func MarshalToWriter(buf io.Writer, vals ...interface{}) (int, error) {
 	var totalBytes int
-	for _, val := range vals {
+	for i, val := range vals {
 		ctx := new(muContext)
 		if err := marshalValue(buf, reflect.ValueOf(val), ctx); err != nil {
-			return totalBytes + ctx.nbytes, err
+			return totalBytes + ctx.nbytes, &MarshalError{Index: i, err: err}
 		}
 		totalBytes += ctx.nbytes
 	}
@@ -615,7 +755,7 @@ func MarshalToBytes(vals ...interface{}) ([]byte, error) {
 // the number of bytes read. In this case, partial results may have been unmarshalled to the supplied destination values.
 func UnmarshalFromReader(buf io.Reader, vals ...interface{}) (int, error) {
 	var totalBytes int
-	for _, val := range vals {
+	for i, val := range vals {
 		v := reflect.ValueOf(val)
 		if v.Kind() != reflect.Ptr {
 			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", v.Type()))
@@ -627,7 +767,7 @@ func UnmarshalFromReader(buf io.Reader, vals ...interface{}) (int, error) {
 
 		ctx := new(muContext)
 		if err := unmarshalValue(buf, v.Elem(), ctx); err != nil {
-			return totalBytes + ctx.nbytes, err
+			return totalBytes + ctx.nbytes, &UnmarshalError{Index: i, err: err}
 		}
 		totalBytes += ctx.nbytes
 	}

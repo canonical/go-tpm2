@@ -249,11 +249,13 @@ func TestCreatePrimary(t *testing.T) {
 		if err == nil {
 			t.Fatalf("CreatePrimary should fail with an invalid template")
 		}
-		if err.Error() != "cannot marshal command parameters for command TPM_CC_CreatePrimary: cannot marshal struct type "+
-			"tpm2.publicSized: cannot marshal field Ptr: cannot marshal sized type *tpm2.Public: cannot marshal pointer to struct to "+
-			"temporary buffer: cannot marshal pointer type *tpm2.Public: cannot marshal element: cannot marshal struct type tpm2.Public: "+
-			"cannot marshal field Params: cannot marshal struct type tpm2.PublicParamsU: error marshalling union struct: data has incorrect "+
-			"type *tpm2.RSAParams (expected *tpm2.ECCParams)" {
+		if err.Error() != "cannot marshal command parameters for command TPM_CC_CreatePrimary: cannot marshal argument at index 1: cannot "+
+			"process struct type tpm2.publicSized: cannot process field Ptr from struct type tpm2.publicSized: cannot process sized type "+
+			"*tpm2.Public, inside container type tpm2.publicSized: cannot process pointer type *tpm2.Public, inside container type "+
+			"tpm2.publicSized: cannot process struct type tpm2.Public, dererenced from pointer type *tpm2.Public, inside container type "+
+			"tpm2.publicSized: cannot process field Params from struct type tpm2.Public: cannot process struct type tpm2.PublicParamsU, "+
+			"inside container type tpm2.Public: cannot process union field: data has incorrect type *tpm2.RSAParams (expected "+
+			"*tpm2.ECCParams)" {
 			t.Errorf("CreatePrimary returned an unexpected error: %v", err)
 		}
 	})

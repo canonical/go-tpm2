@@ -123,7 +123,8 @@ func TestMarshalRawBytes(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should have failed")
 	}
-	if err.Error() != "cannot unmarshal slice type tpm2.RawBytes: cannot read byte slice directly from input buffer: unexpected EOF" {
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process slice type tpm2.RawBytes: cannot read byte slice directly "+
+		"from input buffer: unexpected EOF" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -413,8 +414,9 @@ func TestUnmarshalNilRawBytes(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected UnmarshalFromBytes to fail")
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2_test.TestStructWithRawBytes: cannot unmarshal field B: cannot unmarshal slice "+
-		"type tpm2.RawBytes: nil raw byte slice" {
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestStructWithRawBytes: cannot "+
+		"process field B from struct type tpm2_test.TestStructWithRawBytes: cannot process slice type tpm2.RawBytes, inside container "+
+		"type tpm2_test.TestStructWithRawBytes: nil raw byte slice" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -487,8 +489,10 @@ func TestUnmarshalZeroSizedStructToNonNilPointer(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should have failed")
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2_test.TestStructWithPointerSizedStruct: cannot unmarshal field S: cannot "+
-		"unmarshal sized type *tpm2_test.TestSizedStruct: struct is zero sized, but destination struct has been pre-allocated" {
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestStructWithPointerSizedStruct: "+
+		"cannot process field S from struct type tpm2_test.TestStructWithPointerSizedStruct: cannot process sized type "+
+		"*tpm2_test.TestSizedStruct, inside container type tpm2_test.TestStructWithPointerSizedStruct: struct is zero sized, but "+
+		"destination struct has been pre-allocated" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
@@ -647,8 +651,9 @@ func TestMarshalUnionWithInvalidSelector(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should fail to marshal a union with an invalid selector value")
 	}
-	if err.Error() != "cannot unmarshal struct type tpm2_test.TestUnionContainer: cannot unmarshal field Union: cannot unmarshal "+
-		"struct type tpm2_test.TestUnion: error unmarshalling union struct: invalid selector value: 259" {
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestUnionContainer: cannot process "+
+		"field Union from struct type tpm2_test.TestUnionContainer: cannot process struct type tpm2_test.TestUnion, inside container "+
+		"type tpm2_test.TestUnionContainer: cannot process union field: invalid selector value: 259" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
@@ -659,8 +664,10 @@ func TestMarshalUnionWithIncorrectType(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshalToBytes should fail to marshal a union with the wrong data type")
 	}
-	if err.Error() != "cannot marshal struct type tpm2_test.TestUnionContainer: cannot marshal field Union: cannot marshal struct type "+
-		"tpm2_test.TestUnion: error marshalling union struct: data has incorrect type uint16 (expected tpm2_test.TestListUint32)" {
+	if err.Error() != "cannot marshal argument at index 0: cannot process struct type tpm2_test.TestUnionContainer: cannot process "+
+		"field Union from struct type tpm2_test.TestUnionContainer: cannot process struct type tpm2_test.TestUnion, inside container "+
+		"type tpm2_test.TestUnionContainer: cannot process union field: data has incorrect type uint16 (expected "+
+		"tpm2_test.TestListUint32)" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }
