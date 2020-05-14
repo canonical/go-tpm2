@@ -350,3 +350,16 @@ func TestTestParms(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTPM2(t *testing.T) {
+	tpm := openTPMForTesting(t, 0)
+	defer closeTPM(t, tpm)
+
+	isTpm2, err := tpm.IsTPM2()
+	if err != nil {
+		t.Errorf("IsTPM2 failed: %v", err)
+	}
+	if !isTpm2 {
+		t.Errorf("IsTPM2 returned the wrong result")
+	}
+}

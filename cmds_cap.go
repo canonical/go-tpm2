@@ -222,6 +222,23 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (TPMManufacture
 	return TPMManufacturer(props[0].Value), nil
 }
 
+// IsTPM2 determines whether this TPMContext is connected to a TPM2 device. It does this by attempting to execute a TPM2_GetCapability
+// command, and verifying that the response packet has the expected tag.
+//
+// On success, this will return true if TPMContext is connected to a TPM2 device, or false if it is connected to a TPM1.2 device. An
+// error will be returned if communication with the device fails or the response packet is badly formed.
+func (t *TPMContext) IsTPM2() (bool, error) {
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandGetCapability, nil,
+		nil, []interface{}{CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(1)})
+	if err != nil {
+		return false, err
+	}
+	if ctx.responseTag == TagNoSessions {
+		return true, nil
+	}
+	return false, nil
+}
+
 // TestParms executes the TPM2_TestParms command to check if the specified combination of algorithm parameters is supported.
 func (t *TPMContext) TestParms(parameters *PublicParams, sessions ...SessionContext) error {
 	return t.RunCommand(CommandTestParms, sessions, Delimiter, parameters)
