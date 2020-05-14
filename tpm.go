@@ -274,7 +274,8 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 	rpBuf := buf
 	var rpBytes []byte
 
-	if context.responseTag == TagSessions {
+	switch context.responseTag {
+	case TagSessions:
 		var parameterSize uint32
 		if _, err := UnmarshalFromReader(buf, &parameterSize); err != nil {
 			return handleUnmarshallingError(context, "parameterSize field", err)
@@ -299,6 +300,10 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		}
 
 		rpBuf = bytes.NewReader(rpBytes)
+	case TagNoSessions:
+		// No action
+	default:
+		return &InvalidResponseError{context.commandCode, fmt.Sprintf("unexpected response tag: %v", context.responseTag)}
 	}
 
 	if isSessionAllowed(context.commandCode) {
