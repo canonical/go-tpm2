@@ -153,10 +153,10 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 // HandlePlatform.
 //
 // If enable is HandleOwner and state is false, then this will disable the use of the storage hierarchy and any NV indices with
-// the AttrNVPlatformCreate attribute clear. In this case, authContext must correspond to HandleOwner.
+// the AttrNVPlatformCreate attribute clear. In this case, authContext must correspond to HandleOwner or HandlePlatform.
 //
 // If enable is HandleEndorsement and state is false, then this will disable the use of the endorsment hierarchy. In this case,
-// authContext must correspond to HandleEndorsement.
+// authContext must correspond to HandleEndorsement or HandlePlatform.
 //
 // When a hierarchy is disabled, persistent objects associated with it become unavailable, and transient objects associated with it
 // are flushed from the TPM.
