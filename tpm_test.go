@@ -23,13 +23,9 @@ import (
 type testCapabilityFlags uint32
 
 const (
-	testCapabilityOwnerPersist = 1 << iota
-	testCapabilityPlatformPersist
+	testCapabilityPersist = 1 << iota
 	testCapabilityDAParameters
-	testCapabilityChangeOwnerAuth
-	testCapabilityChangeEndorsementAuth
-	testCapabilityChangeLockoutAuth
-	testCapabilityChangePlatformAuth
+	testCapabilityChangeHierarchyAuth
 	testCapabilityOwnerHierarchy
 	testCapabilityEndorsementHierarchy
 	testCapabilityLockoutHierarchy
@@ -37,6 +33,14 @@ const (
 	testCapabilityPCRChange
 	testCapabilitySetCommandCodeAuditStatus
 	testCapabilityClear
+
+	testCapabilityOwnerPersist = testCapabilityPersist | testCapabilityOwnerHierarchy
+	testCapabilityPlatformPersist = testCapabilityPersist | testCapabilityPlatformHierarchy
+
+	testCapabilityChangeOwnerAuth = testCapabilityChangeHierarchyAuth | testCapabilityOwnerHierarchy
+	testCapabilityChangeEndorsementAuth = testCapabilityChangeHierarchyAuth | testCapabilityEndorsementHierarchy
+	testCapabilityChangeLockoutAuth = testCapabilityChangeHierarchyAuth | testCapabilityLockoutHierarchy
+	testCapabilityChangePlatformAuth = testCapabilityChangeHierarchyAuth | testCapabilityPlatformHierarchy
 )
 
 func (f *testCapabilityFlags) String() string {
@@ -46,20 +50,12 @@ func (f *testCapabilityFlags) String() string {
 func (f *testCapabilityFlags) Set(value string) error {
 	for _, value := range strings.Split(value, ",") {
 		switch value {
-		case "ownerpersist":
-			*f |= (testCapabilityOwnerPersist | testCapabilityOwnerHierarchy)
-		case "platformpersist":
-			*f |= (testCapabilityPlatformPersist | testCapabilityPlatformHierarchy)
+		case "persist":
+			*f |= testCapabilityPersist
 		case "daparameters":
 			*f |= (testCapabilityDAParameters | testCapabilityLockoutHierarchy)
-		case "changeownerauth":
-			*f |= (testCapabilityChangeOwnerAuth | testCapabilityOwnerHierarchy)
-		case "changeendorsementauth":
-			*f |= (testCapabilityChangeEndorsementAuth | testCapabilityEndorsementHierarchy)
-		case "changelockoutauth":
-			*f |= (testCapabilityChangeLockoutAuth | testCapabilityLockoutHierarchy)
-		case "changeplatformauth":
-			*f |= (testCapabilityChangePlatformAuth | testCapabilityPlatformHierarchy)
+		case "changehierarchyauth":
+			*f |= testCapabilityChangeHierarchyAuth
 		case "ownerhierarchy":
 			*f |= testCapabilityOwnerHierarchy
 		case "endorsementhierarchy":
