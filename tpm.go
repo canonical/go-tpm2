@@ -15,8 +15,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func makeInvalidParamError(name, msg string) error {
-	return fmt.Errorf("invalid %s parameter: %s", name, msg)
+func makeInvalidArgError(name, msg string) error {
+	return fmt.Errorf("invalid %s argument: %s", name, msg)
 }
 
 func wrapMarshallingError(commandCode CommandCode, context string, err error) error {

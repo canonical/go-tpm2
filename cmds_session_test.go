@@ -109,14 +109,14 @@ func TestStartAuthSession(t *testing.T) {
 			desc:        "HMACUnboundUnsaltedInvalidAlg",
 			sessionType: SessionTypeHMAC,
 			alg:         HashAlgorithmNull,
-			errMsg:      "invalid authHash parameter: unsupported digest algorithm TPM_ALG_NULL",
+			errMsg:      "invalid authHash argument: unsupported digest algorithm TPM_ALG_NULL",
 		},
 		{
 			desc:        "HMACUnboundSaltedInvalidKey",
 			tpmKey:      tpm.OwnerHandleContext(),
 			sessionType: SessionTypeHMAC,
 			alg:         HashAlgorithmSHA256,
-			errMsg:      "invalid resource context for tpmKey: not an object",
+			errMsg:      "invalid tpmKey argument: resource context is not an object",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

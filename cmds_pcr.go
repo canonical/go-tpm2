@@ -160,7 +160,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		} else if updateCounter != pcrUpdateCounter {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, "PCR update counter changed between commands"}
 		} else if len(values) == 0 && pcrSelectionOut.IsEmpty() {
-			return 0, nil, makeInvalidParamError("pcrSelectionIn", "unimplemented PCRs specified")
+			return 0, nil, makeInvalidArgError("pcrSelectionIn", "unimplemented PCRs specified")
 		}
 
 		if n, err := pcrValues.SetValuesFromListAndSelection(pcrSelectionOut, values); err != nil {

@@ -75,7 +75,7 @@ func TestContextSave(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "invalid saveContext parameter: unusable session HandleContext" {
+		if err.Error() != "invalid saveContext argument: unusable session HandleContext" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 	})

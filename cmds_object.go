@@ -571,7 +571,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	}
 
 	if inPublic == nil {
-		return nil, nil, nil, makeInvalidParamError("inPublic", "nil value")
+		return nil, nil, nil, makeInvalidArgError("inPublic", "nil value")
 	}
 
 	inTemplate, err := inPublic.ToTemplate()

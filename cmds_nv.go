@@ -93,7 +93,7 @@ func (t *TPMContext) initNVMaxBufferSize() {
 // authorization value so that it can be used in subsequent commands that require knowledge of it.
 func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
 	if publicInfo == nil {
-		return nil, makeInvalidParamError("publicInfo", "nil value")
+		return nil, makeInvalidArgError("publicInfo", "nil value")
 	}
 	name, err := publicInfo.Name()
 	if err != nil {
@@ -284,16 +284,16 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuf
 	if remaining > t.maxNVBufferSize {
 		if authContextAuthSession != nil {
 			if authContextAuthSession.(*sessionContext).attrs&AttrContinueSession == 0 {
-				return makeInvalidParamError("authContextAuthSession", "the AttrContinueSession attribute is required for a split write")
+				return makeInvalidArgError("authContextAuthSession", "the AttrContinueSession attribute is required for a split write")
 			}
 			if authContextAuthSession.(*sessionContext).scData().SessionType == SessionTypePolicy {
-				return makeInvalidParamError("authContextAuthSession", "a policy session can not be used for a split write - use NVWriteRaw instead")
+				return makeInvalidArgError("authContextAuthSession", "a policy session can not be used for a split write - use NVWriteRaw instead")
 			}
 		}
 
 		for i, s := range sessions {
 			if s.(*sessionContext).attrs&AttrContinueSession == 0 {
-				return makeInvalidParamError("sessions", fmt.Sprintf("the AttrContineSession attribute is required for session at index %d for "+
+				return makeInvalidArgError("sessions", fmt.Sprintf("the AttrContineSession attribute is required for session at index %d for "+
 					"a split write", i))
 			}
 		}

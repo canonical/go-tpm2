@@ -51,7 +51,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 	switch c := saveContext.(type) {
 	case *sessionContext:
 		if c.scData() == nil {
-			return nil, makeInvalidParamError("saveContext", "unusable session HandleContext")
+			return nil, makeInvalidArgError("saveContext", "unusable session HandleContext")
 		}
 	}
 
@@ -103,7 +103,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 // SessionContext.
 func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 	if context == nil {
-		return nil, makeInvalidParamError("context", "nil value")
+		return nil, makeInvalidArgError("context", "nil value")
 	}
 
 	var integrityAlg HashAlgorithmId
@@ -183,7 +183,7 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 // possible to restore that session with TPMContext.ContextLoad, even if it was previously saved with TPMContext.ContextSave.
 func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 	if err := t.checkHandleContextParam(flushContext); err != nil {
-		return makeInvalidParamError("flushContext", fmt.Sprintf("%v", err))
+		return makeInvalidArgError("flushContext", fmt.Sprintf("%v", err))
 	}
 
 	if err := t.RunCommand(CommandFlushContext, nil,
@@ -225,7 +225,7 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 // On successful completion of evicting a persistent object, it returns a nil ResourceContext, and object will be invalidated.
 func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
 	if object == nil {
-		return nil, makeInvalidParamError("object", "nil value")
+		return nil, makeInvalidArgError("object", "nil value")
 	}
 
 	var public *Public

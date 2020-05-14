@@ -37,7 +37,7 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 		case HandleContext:
 			handles = append(handles, p.Name())
 		default:
-			return nil, makeInvalidParamError("params", "parameter in handle area is not a Handle or HandleContext")
+			return nil, makeInvalidArgError("params", "parameter in handle area is not a Handle or HandleContext")
 		}
 	}
 

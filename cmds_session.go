@@ -7,7 +7,6 @@ package tpm2
 // Section 11 - Session Commands
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/canonical/go-tpm2/internal"
@@ -71,7 +70,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}
 	if !authHash.Supported() {
-		return nil, makeInvalidParamError("authHash", fmt.Sprintf("unsupported digest algorithm %v", authHash))
+		return nil, makeInvalidArgError("authHash", fmt.Sprintf("unsupported digest algorithm %v", authHash))
 	}
 	digestSize := authHash.Size()
 
@@ -81,7 +80,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	if tpmKey != nil {
 		object, isObject := tpmKey.(*objectContext)
 		if !isObject {
-			return nil, errors.New("invalid resource context for tpmKey: not an object")
+			return nil, makeInvalidArgError("tpmKey", "resource context is not an object")
 		}
 
 		tpmKeyHandle = tpmKey.Handle()
