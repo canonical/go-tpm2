@@ -132,7 +132,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 
 	bytes, err := MarshalToBytes(cHeader, RawBytes(commandBytes))
 	if err != nil {
-		return 0, 0, nil, wrapMarshallingError(commandCode, "complete command packet", err)
+		panic(fmt.Sprintf("cannot marshal complete command packet bytes: %v", err))
 	}
 
 	if _, err := t.tcti.Write(bytes); err != nil {
@@ -178,7 +178,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		switch r := resource.(type) {
 		case HandleContext:
 			if err := t.checkHandleContextParam(r); err != nil {
-				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", commandCode, i, err)
+				return nil, wrapMarshallingError(commandCode, "command handles", fmt.Errorf("cannot process HandleContext at index %d: %v", i, err))
 			}
 			handles = append(handles, r.Handle())
 			handleNames = append(handleNames, r.Name())
@@ -186,8 +186,8 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 			handles = append(handles, HandleNull)
 			handleNames = append(handleNames, makeDummyContext(HandleNull).Name())
 		default:
-			return nil, fmt.Errorf("cannot process command handle parameter for command %s at index %d: invalid type (%s)",
-				commandCode, i, reflect.TypeOf(resource))
+			return nil, wrapMarshallingError(commandCode, "command handles",
+				fmt.Errorf("cannot process command handle parameter at index %d: invalid type (%s)", i, reflect.TypeOf(resource)))
 		}
 	}
 
@@ -198,28 +198,28 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 	cBytes := new(bytes.Buffer)
 
 	if _, err := MarshalToWriter(cBytes, handles...); err != nil {
-		return nil, wrapMarshallingError(commandCode, "command handles", err)
+		panic(fmt.Sprintf("cannot marshal command handles: %v", err))
 	}
 
-	cpBytes, err := MarshalToBytes(params...)
-	if err != nil {
+	cpBytes := new(bytes.Buffer)
+	if _, err := MarshalToWriter(cpBytes, params...); err != nil {
 		return nil, wrapMarshallingError(commandCode, "command parameters", err)
 	}
 
 	tag := TagNoSessions
 	if len(sessionParams) > 0 {
 		tag = TagSessions
-		authArea, err := buildCommandAuthArea(t, sessionParams, commandCode, handleNames, cpBytes)
+		authArea, err := buildCommandAuthArea(t, sessionParams, commandCode, handleNames, cpBytes.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("cannot build command auth area for command %s: %v", commandCode, err)
 		}
 		if _, err := MarshalToWriter(cBytes, &authArea); err != nil {
-			return nil, wrapMarshallingError(commandCode, "command auth area", err)
+			panic(fmt.Sprintf("cannot marshal command auth area: %v", err))
 		}
 	}
 
-	if _, err := MarshalToWriter(cBytes, RawBytes(cpBytes)); err != nil {
-		return nil, wrapMarshallingError(commandCode, "raw command parameter bytes", err)
+	if _, err := cpBytes.WriteTo(cBytes); err != nil {
+		panic(fmt.Sprintf("cannot write command parameter bytes to command buffer: %v", err))
 	}
 
 	var responseCode ResponseCode
@@ -271,8 +271,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		}
 	}
 
-	rpBuf := buf
-	var rpBytes []byte
+	var rpBuf *bytes.Reader
 
 	switch context.responseTag {
 	case TagSessions:
@@ -280,12 +279,8 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		if _, err := UnmarshalFromReader(buf, &parameterSize); err != nil {
 			return handleUnmarshallingError(context, "parameterSize field", err)
 		}
-		rpBytes = make([]byte, parameterSize)
-		if n, err := io.ReadFull(buf, rpBytes); err != nil {
-			if err == io.ErrUnexpectedEOF {
-				return &InvalidResponseError{context.commandCode, fmt.Sprintf("insufficient bytes for response parameters (got %d, expected %d)",
-					n, parameterSize)}
-			}
+		rpBytes := make([]byte, parameterSize)
+		if _, err := io.ReadFull(buf, rpBytes); err != nil {
 			return handleUnmarshallingError(context, "response parameters",
 				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
 		}
@@ -301,7 +296,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 
 		rpBuf = bytes.NewReader(rpBytes)
 	case TagNoSessions:
-		// No action
+		rpBuf = buf
 	default:
 		return &InvalidResponseError{context.commandCode, fmt.Sprintf("unexpected response tag: %v", context.responseTag)}
 	}
