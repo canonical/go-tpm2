@@ -39,5 +39,4 @@ The marshalling code parses the "tpm2" tag on struct fields, the value of which 
  represents a list) or size (if it represents a sized buffer) field. The slice must be pre-allocated to the correct length by the
  caller during unmarshalling.
 */
-
 package mu
