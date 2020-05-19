@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"hash"
 	"sort"
+
+	"github.com/canonical/go-tpm2/mu"
 )
 
 // ComputeCpHash computes a command parameter digest from the specified command code and provided command parameters, using the
@@ -45,7 +47,7 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 
 	if i < len(params)-1 {
 		var err error
-		cpBytes, err = MarshalToBytes(params[i+1:]...)
+		cpBytes, err = mu.MarshalToBytes(params[i+1:]...)
 		if err != nil {
 			return nil, fmt.Errorf("cannot marshal command parameters: %v", err)
 		}
@@ -183,7 +185,7 @@ func (p *TrialAuthPolicy) PolicyOR(pHashList DigestList) error {
 
 func (p *TrialAuthPolicy) PolicyPCR(pcrDigest Digest, pcrs PCRSelectionList) {
 	h, end := p.beginUpdateForCommand(CommandPolicyPCR)
-	if _, err := MarshalToWriter(h, pcrs); err != nil {
+	if _, err := mu.MarshalToWriter(h, pcrs); err != nil {
 		panic(fmt.Sprintf("cannot marshal PCR selection: %v", err))
 	}
 	h.Write(pcrDigest)

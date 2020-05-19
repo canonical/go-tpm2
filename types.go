@@ -19,6 +19,8 @@ import (
 	"sort"
 	"unsafe"
 
+	"github.com/canonical/go-tpm2/mu"
+
 	"golang.org/x/xerrors"
 )
 
@@ -893,7 +895,7 @@ type AttestRaw []byte
 // Decode unmarshals the underlying buffer to the corresponding Attest structure.
 func (a AttestRaw) Decode() (*Attest, error) {
 	var out Attest
-	if _, err := UnmarshalFromBytes(a, &out); err != nil {
+	if _, err := mu.UnmarshalFromBytes(a, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -925,7 +927,7 @@ func (b SymKeyBitsU) Select(selector reflect.Value) reflect.Type {
 	case AlgorithmXOR:
 		return reflect.TypeOf(HashAlgorithmId(0))
 	case AlgorithmNull:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	default:
 		return nil
 	}
@@ -963,7 +965,7 @@ func (m SymModeU) Select(selector reflect.Value) reflect.Type {
 	case AlgorithmXOR:
 		fallthrough
 	case AlgorithmNull:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	default:
 		return nil
 	}
@@ -1059,7 +1061,7 @@ func (d SchemeKeyedHashU) Select(selector reflect.Value) reflect.Type {
 	case KeyedHashSchemeXOR:
 		return reflect.TypeOf((*SchemeXOR)(nil))
 	case KeyedHashSchemeNull:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	default:
 		return nil
 	}
@@ -1123,7 +1125,7 @@ func (s SigSchemeU) Select(selector reflect.Value) reflect.Type {
 	case SigSchemeAlgHMAC:
 		return reflect.TypeOf((*SchemeHMAC)(nil))
 	case SigSchemeAlgNull:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	default:
 		return nil
 	}
@@ -1204,7 +1206,7 @@ func (s KDFSchemeU) Select(selector reflect.Value) reflect.Type {
 	case KDFAlgorithmKDF1_SP800_108:
 		return reflect.TypeOf((*SchemeKDF1_SP800_108)(nil))
 	case KDFAlgorithmNull:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	default:
 		return nil
 	}
@@ -1286,7 +1288,7 @@ func (s AsymSchemeU) Select(selector reflect.Value) reflect.Type {
 	case AsymSchemeECMQV:
 		return reflect.TypeOf((*KeySchemeECMQV)(nil))
 	case AsymSchemeNull:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	default:
 		return nil
 	}
@@ -1443,7 +1445,7 @@ func (s SignatureU) Select(selector reflect.Value) reflect.Type {
 	case SigSchemeAlgHMAC:
 		return reflect.TypeOf((*TaggedHash)(nil))
 	case SigSchemeAlgNull:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	default:
 		return nil
 	}
@@ -1670,10 +1672,10 @@ func (p *Public) Name() (Name, error) {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
-	if _, err := MarshalToWriter(hasher, p); err != nil {
+	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := MarshalToBytes(p.NameAlg, RawBytes(hasher.Sum(nil)))
+	name, err := mu.MarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil)))
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
 	}
@@ -1681,12 +1683,12 @@ func (p *Public) Name() (Name, error) {
 }
 
 func (p *Public) copy() (*Public, error) {
-	b, err := MarshalToBytes(p)
+	b, err := mu.MarshalToBytes(p)
 	if err != nil {
 		return nil, err
 	}
 	var out *Public
-	_, err = UnmarshalFromBytes(b, &out)
+	_, err = mu.UnmarshalFromBytes(b, &out)
 	if err != nil {
 		return nil, err
 	}
@@ -1702,7 +1704,7 @@ func (p *Public) compareName(name Name) bool {
 }
 
 func (p *Public) ToTemplate() (Template, error) {
-	b, err := MarshalToBytes(p)
+	b, err := mu.MarshalToBytes(p)
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal object: %v", err)
 	}
@@ -1732,10 +1734,10 @@ func (p *PublicDerived) Name() (Name, error) {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
-	if _, err := MarshalToWriter(hasher, p); err != nil {
+	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := MarshalToBytes(p.NameAlg, RawBytes(hasher.Sum(nil)))
+	name, err := mu.MarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil)))
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
 	}
@@ -1743,7 +1745,7 @@ func (p *PublicDerived) Name() (Name, error) {
 }
 
 func (p *PublicDerived) ToTemplate() (Template, error) {
-	b, err := MarshalToBytes(p)
+	b, err := mu.MarshalToBytes(p)
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal object: %v", err)
 	}
@@ -1880,10 +1882,10 @@ func (p *NVPublic) Name() (Name, error) {
 		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
-	if _, err := MarshalToWriter(hasher, p); err != nil {
+	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := MarshalToBytes(p.NameAlg, RawBytes(hasher.Sum(nil)))
+	name, err := mu.MarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil)))
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
 	}
@@ -1899,12 +1901,12 @@ func (p *NVPublic) compareName(name Name) bool {
 }
 
 func (p *NVPublic) copy() (*NVPublic, error) {
-	b, err := MarshalToBytes(p)
+	b, err := mu.MarshalToBytes(p)
 	if err != nil {
 		return nil, err
 	}
 	var out *NVPublic
-	_, err = UnmarshalFromBytes(b, &out)
+	_, err = mu.UnmarshalFromBytes(b, &out)
 	if err != nil {
 		return nil, err
 	}

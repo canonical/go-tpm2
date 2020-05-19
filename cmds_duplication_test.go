@@ -17,6 +17,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/mu"
 )
 
 func TestDuplicate(t *testing.T) {
@@ -98,7 +99,7 @@ func TestDuplicate(t *testing.T) {
 
 	verifyUnwrapped := func(t *testing.T, duplicate Private) {
 		var sensitiveDup *Sensitive
-		if _, err := UnmarshalFromBytes(duplicate, &sensitiveDup); err != nil {
+		if _, err := mu.UnmarshalFromBytes(duplicate, &sensitiveDup); err != nil {
 			t.Fatalf("UnmarshalFromBytes failed: %v", err)
 		}
 		if sensitiveDup.Type != template.Type {
@@ -125,7 +126,7 @@ func TestDuplicate(t *testing.T) {
 		stream.XORKeyStream(plainSensitive, encSensitive)
 
 		var innerIntegrity Digest
-		n, err := UnmarshalFromBytes(plainSensitive, &innerIntegrity)
+		n, err := mu.UnmarshalFromBytes(plainSensitive, &innerIntegrity)
 		if err != nil {
 			t.Fatalf("UnmarshalFromBytes failed: %v", err)
 		}
@@ -138,7 +139,7 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected inner integrity")
 		}
 		var d Private
-		if _, err := UnmarshalFromBytes(plainSensitive, &d); err != nil {
+		if _, err := mu.UnmarshalFromBytes(plainSensitive, &d); err != nil {
 			t.Fatalf("UnmarshalFromBytes failed: %v", err)
 		}
 		verifyUnwrapped(t, d)
@@ -146,7 +147,7 @@ func TestDuplicate(t *testing.T) {
 
 	verifyOuterWrapper := func(t *testing.T, seed []byte, duplicate Private, innerKey []byte) {
 		var outerHMAC Digest
-		n, err := UnmarshalFromBytes(duplicate, &outerHMAC)
+		n, err := mu.UnmarshalFromBytes(duplicate, &outerHMAC)
 		if err != nil {
 			t.Fatalf("UnmarshalFromBytes failed: %v", err)
 		}
@@ -171,7 +172,7 @@ func TestDuplicate(t *testing.T) {
 		stream.XORKeyStream(plainSensitive, dupSensitive)
 		if len(innerKey) == 0 {
 			var d Private
-			if _, err := UnmarshalFromBytes(plainSensitive, &d); err != nil {
+			if _, err := mu.UnmarshalFromBytes(plainSensitive, &d); err != nil {
 				t.Fatalf("UnmarshalFromBytes failed: %v", err)
 			}
 			verifyUnwrapped(t, d)
@@ -189,7 +190,7 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected outSymSeed")
 		}
 		var d Private
-		if _, err := UnmarshalFromBytes(duplicate, &d); err != nil {
+		if _, err := mu.UnmarshalFromBytes(duplicate, &d); err != nil {
 			t.Fatalf("UnmarshalFromBytes failed: %v", err)
 		}
 		verifyUnwrapped(t, d)
@@ -322,19 +323,19 @@ func TestImport(t *testing.T) {
 	}
 
 	t.Run("NoWrappers", func(t *testing.T) {
-		duplicate, _ := MarshalToBytes(sensitiveSized{&objectSensitive})
+		duplicate, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
 		run(t, nil, duplicate, nil, nil, nil)
 	})
 
 	t.Run("InnerWrapper", func(t *testing.T) {
-		sensitive, _ := MarshalToBytes(sensitiveSized{&objectSensitive})
+		sensitive, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
 		name, _ := objectPublic.Name()
 
 		h := objectPublic.NameAlg.NewHash()
 		h.Write(sensitive)
 		h.Write(name)
 
-		b, _ := MarshalToBytes(h.Sum(nil), RawBytes(sensitive))
+		b, _ := mu.MarshalToBytes(h.Sum(nil), mu.RawBytes(sensitive))
 
 		encryptionKey := make([]byte, 16)
 		rand.Read(encryptionKey)
@@ -355,7 +356,7 @@ func TestImport(t *testing.T) {
 	})
 
 	t.Run("OuterWrapper", func(t *testing.T) {
-		sensitive, _ := MarshalToBytes(sensitiveSized{&objectSensitive})
+		sensitive, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
 		name, _ := objectPublic.Name()
 
 		primaryPublic, _, _, err := tpm.ReadPublic(primary)
@@ -382,7 +383,7 @@ func TestImport(t *testing.T) {
 		h.Write(dupSensitive)
 		h.Write(name)
 
-		duplicate, _ := MarshalToBytes(h.Sum(nil), RawBytes(dupSensitive))
+		duplicate, _ := mu.MarshalToBytes(h.Sum(nil), mu.RawBytes(dupSensitive))
 
 		keyPublic := rsa.PublicKey{
 			N: new(big.Int).SetBytes(primaryPublic.Unique.RSA()),
@@ -398,7 +399,7 @@ func TestImport(t *testing.T) {
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		duplicate, _ := MarshalToBytes(sensitiveSized{&objectSensitive})
+		duplicate, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
 
 		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {

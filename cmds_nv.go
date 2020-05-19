@@ -10,6 +10,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/canonical/go-tpm2/mu"
 )
 
 func (t *TPMContext) initNVMaxBufferSize() {
@@ -343,7 +345,7 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 	if context.attrs().Type() != NVTypePinPass && context.attrs().Type() != NVTypePinFail {
 		return errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
-	data, err := MarshalToBytes(params)
+	data, err := mu.MarshalToBytes(params)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal PIN counter parameters: %v", err))
 	}
@@ -678,7 +680,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 		return nil, err
 	}
 	var res NVPinCounterParams
-	if _, err := UnmarshalFromBytes(data, &res); err != nil {
+	if _, err := mu.UnmarshalFromBytes(data, &res); err != nil {
 		return nil, &InvalidResponseError{CommandNVRead, fmt.Sprintf("cannot unmarshal response bytes: %v", err)}
 	}
 	return &res, nil

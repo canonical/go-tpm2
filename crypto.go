@@ -15,6 +15,7 @@ import (
 	"math/big"
 
 	"github.com/canonical/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/mu"
 )
 
 func getHashConstructor(alg HashAlgorithmId) func() hash.Hash {
@@ -173,7 +174,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to compute secret: %v", err)
 		}
-		encryptedSalt, err := MarshalToBytes(q)
+		encryptedSalt, err := mu.MarshalToBytes(q)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}

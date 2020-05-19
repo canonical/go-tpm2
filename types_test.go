@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
 )
 
 func TestHandle(t *testing.T) {
@@ -94,12 +95,11 @@ func TestPublicIDUnion(t *testing.T) {
 				Unique: PublicIDU{Data: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
 			err: "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestPublicIDUContainer: cannot process field " +
-				"Unique from struct type tpm2_test.TestPublicIDUContainer: cannot process struct type tpm2.PublicIDU, inside container type " +
-				"tpm2_test.TestPublicIDUContainer: cannot process union field: invalid selector value: TPM_ALG_NULL",
+				"Unique from struct type tpm2_test.TestPublicIDUContainer: invalid selector value: TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			out, err := MarshalToBytes(data.in)
+			out, err := mu.MarshalToBytes(data.in)
 			if err != nil {
 				t.Fatalf("MarshalToBytes failed: %v", err)
 			}
@@ -109,7 +109,7 @@ func TestPublicIDUnion(t *testing.T) {
 			}
 
 			var a TestPublicIDUContainer
-			n, err := UnmarshalFromBytes(out, &a)
+			n, err := mu.UnmarshalFromBytes(out, &a)
 			if data.err != "" {
 				if err == nil {
 					t.Fatalf("UnmarshalFromBytes was expected to fail")
@@ -162,13 +162,11 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
 			out:  []byte{0x00, 0x0b},
 			err: "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot " +
-				"process field Details from struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot process struct type " +
-				"tpm2.SchemeKeyedHashU, inside container type tpm2_test.TestSchemeKeyedHashUContainer: cannot process union field: invalid " +
-				"selector value: TPM_ALG_SHA256",
+				"process field Details from struct type tpm2_test.TestSchemeKeyedHashUContainer: invalid selector value: TPM_ALG_SHA256",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			out, err := MarshalToBytes(data.in)
+			out, err := mu.MarshalToBytes(data.in)
 			if err != nil {
 				t.Fatalf("MarshalToBytes failed: %v", err)
 			}
@@ -178,7 +176,7 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			}
 
 			var a TestSchemeKeyedHashUContainer
-			n, err := UnmarshalFromBytes(out, &a)
+			n, err := mu.UnmarshalFromBytes(out, &a)
 			if data.err != "" {
 				if err == nil {
 					t.Fatalf("UnmarshaFromBytes was expected to fail")
@@ -220,7 +218,7 @@ func TestPCRSelect(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			out, err := MarshalToBytes(&data.in)
+			out, err := mu.MarshalToBytes(&data.in)
 			if err != nil {
 				t.Fatalf("MarshalToBytes failed: %v", err)
 			}
@@ -230,7 +228,7 @@ func TestPCRSelect(t *testing.T) {
 			}
 
 			var a PCRSelect
-			n, err := UnmarshalFromBytes(out, &a)
+			n, err := mu.UnmarshalFromBytes(out, &a)
 			if err != nil {
 				t.Fatalf("UnmarshalFromBytes failed: %v", err)
 			}
@@ -258,7 +256,7 @@ func TestPCRSelectionList(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			out, err := MarshalToBytes(&data.in)
+			out, err := mu.MarshalToBytes(&data.in)
 			if err != nil {
 				t.Fatalf("MarshalToBytes failed: %v", err)
 			}
@@ -268,7 +266,7 @@ func TestPCRSelectionList(t *testing.T) {
 			}
 
 			var a PCRSelectionList
-			n, err := UnmarshalFromBytes(out, &a)
+			n, err := mu.UnmarshalFromBytes(out, &a)
 			if err != nil {
 				t.Fatalf("UnmarshalFromBytes failed: %v", err)
 			}
@@ -306,16 +304,16 @@ func TestTaggedHash(t *testing.T) {
 		{
 			desc: "WrongDigestSize",
 			in:   TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument at index 0: cannot process custom type *tpm2.TaggedHash: invalid digest size 20",
+			err:  "cannot marshal argument at index 0: cannot process custom type tpm2.TaggedHash: invalid digest size 20",
 		},
 		{
 			desc: "UnknownAlg",
 			in:   TaggedHash{HashAlg: HashAlgorithmNull, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument at index 0: cannot process custom type *tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
+			err:  "cannot marshal argument at index 0: cannot process custom type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			out, err := MarshalToBytes(&data.in)
+			out, err := mu.MarshalToBytes(&data.in)
 			if data.err != "" {
 				if err == nil {
 					t.Fatalf("Expected MarshalToBytes to fail")
@@ -335,7 +333,7 @@ func TestTaggedHash(t *testing.T) {
 			}
 
 			var a TaggedHash
-			n, err := UnmarshalFromBytes(out, &a)
+			n, err := mu.UnmarshalFromBytes(out, &a)
 			if err != nil {
 				t.Fatalf("UnmarshalFromBytes failed: %v", err)
 			}
@@ -351,13 +349,13 @@ func TestTaggedHash(t *testing.T) {
 
 	t.Run("UnmarshalTruncated", func(t *testing.T) {
 		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
-		out, err := MarshalToBytes(&in)
+		out, err := mu.MarshalToBytes(&in)
 		if err != nil {
 			t.Fatalf("MarshalToBytes failed: %v", err)
 		}
 
 		out = out[0:32]
-		_, err = UnmarshalFromBytes(out, &in)
+		_, err = mu.UnmarshalFromBytes(out, &in)
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
 		}
@@ -368,7 +366,7 @@ func TestTaggedHash(t *testing.T) {
 
 	t.Run("UnmarshalFromLongerBuffer", func(t *testing.T) {
 		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
-		out, err := MarshalToBytes(&in)
+		out, err := mu.MarshalToBytes(&in)
 		if err != nil {
 			t.Fatalf("MarshalToBytes failed: %v", err)
 		}
@@ -377,7 +375,7 @@ func TestTaggedHash(t *testing.T) {
 		out = append(out, []byte{0, 0, 0, 0}...)
 
 		var a TaggedHash
-		n, err := UnmarshalFromBytes(out, &a)
+		n, err := mu.UnmarshalFromBytes(out, &a)
 		if err != nil {
 			t.Fatalf("UnmarshalFromBytes failed: %v", err)
 		}
@@ -392,13 +390,13 @@ func TestTaggedHash(t *testing.T) {
 
 	t.Run("UnmarshalUnknownAlg", func(t *testing.T) {
 		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
-		out, err := MarshalToBytes(&in)
+		out, err := mu.MarshalToBytes(&in)
 		if err != nil {
 			t.Fatalf("MarshalToBytes failed: %v", err)
 		}
 
 		out[1] = 0x05
-		_, err = UnmarshalFromBytes(out, &in)
+		_, err = mu.UnmarshalFromBytes(out, &in)
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
 		}

@@ -12,10 +12,12 @@ import (
 	_ "crypto/sha256"
 	"errors"
 	"fmt"
+
+	"github.com/canonical/go-tpm2/mu"
 )
 
 func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
-	data, err := MarshalToBytes(context.(handleContextPrivate).data(), tpmBlob)
+	data, err := mu.MarshalToBytes(context.(handleContextPrivate).data(), tpmBlob)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal resource context and TPM context data: %v", err))
 	}
@@ -23,7 +25,7 @@ func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
 	h := crypto.SHA256.New()
 	h.Write(data)
 
-	data, err = MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
+	data, err = mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal data blob and checksum: %v", err))
 	}
@@ -109,7 +111,7 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 	var integrityAlg HashAlgorithmId
 	var integrity []byte
 	var data []byte
-	if _, err := UnmarshalFromBytes(context.Blob, &integrityAlg, &integrity, &data); err != nil {
+	if _, err := mu.UnmarshalFromBytes(context.Blob, &integrityAlg, &integrity, &data); err != nil {
 		return nil, fmt.Errorf("cannot load context: cannot unpack checksum and data blob: %v", err)
 	}
 
@@ -124,7 +126,7 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 
 	var hcData *handleContextData
 	var tpmBlob ContextData
-	if _, err := UnmarshalFromBytes(data, &hcData, &tpmBlob); err != nil {
+	if _, err := mu.UnmarshalFromBytes(data, &hcData, &tpmBlob); err != nil {
 		return nil, fmt.Errorf("cannot load context: cannot unmarshal data blob: %v", err)
 	}
 

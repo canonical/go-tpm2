@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/canonical/go-tpm2/mu"
+
 	"golang.org/x/xerrors"
 )
 
@@ -62,7 +64,7 @@ type commandAuthAreaRawSlice struct {
 
 func (a *commandAuthArea) Marshal(buf io.Writer) (nbytes int, err error) {
 	tmpBuf := new(bytes.Buffer)
-	if _, err := MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(*a)}); err != nil {
+	if _, err := mu.MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(*a)}); err != nil {
 		panic(fmt.Sprintf("cannot marshal raw command auth area to temporary buffer: %v", err))
 	}
 

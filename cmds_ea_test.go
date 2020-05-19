@@ -15,6 +15,7 @@ import (
 	"time"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
 )
 
 func TestPolicySigned(t *testing.T) {
@@ -774,11 +775,11 @@ func TestPolicyDuplicationSelect(t *testing.T) {
 		t.Run(data.desc, func(t *testing.T) {
 			h := crypto.SHA256.New()
 			h.Write(data.objectData)
-			objectName, _ := MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil))
+			objectName, _ := mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil))
 
 			h = crypto.SHA256.New()
 			h.Write(data.parentData)
-			newParentName, _ := MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil))
+			newParentName, _ := mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil))
 
 			trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyDuplicationSelect(objectName, newParentName, data.includeObject)

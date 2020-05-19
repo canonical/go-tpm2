@@ -8,9 +8,9 @@ import (
 	"crypto/aes"
 	"encoding/binary"
 	"fmt"
-	"reflect"
 
 	"github.com/canonical/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/mu"
 )
 
 func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*sessionParam, int) {
@@ -39,40 +39,8 @@ func hasDecryptSession(sessions []*sessionParam) bool {
 	return s != nil
 }
 
-func isSizedStructParam(v reflect.Value) bool {
-	if v.Kind() != reflect.Struct {
-		return false
-	}
-	if v.Type().NumField() != 1 {
-		return false
-	}
-	f := v.Type().Field(0)
-	if !parseFieldOptions(f.Tag.Get("tpm2")).sized {
-		return false
-	}
-	if f.Type.Kind() == reflect.Struct {
-		return true
-	}
-	if f.Type.Kind() == reflect.Ptr && f.Type.Elem().Kind() == reflect.Struct {
-		return true
-	}
-	if f.Type.Kind() == reflect.Interface && v.Field(0).Elem().Kind() == reflect.Ptr &&
-		v.Field(0).Elem().Elem().Kind() == reflect.Struct {
-		return true
-	}
-	return false
-}
-
-func isSizedBuffer(t reflect.Type) bool {
-	return isByteSlice(t) && t != rawBytesType
-}
-
 func isParamEncryptable(param interface{}) bool {
-	v := reflect.ValueOf(param)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	return isSizedStructParam(v) || isSizedBuffer(v.Type())
+	return mu.DetermineTPMKind(param) == mu.TPMKindSized
 }
 
 func (s *sessionParam) computeSessionValue() []byte {

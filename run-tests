@@ -37,4 +37,5 @@ if [ $WITH_MSSIM -eq 1 ]; then
 fi
 
 go test -v -race ./internal $@
+go test -v -race ./mu $@
 go test -v -race . -args $MSSIM_ARGS $@

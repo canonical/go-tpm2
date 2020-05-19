@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
 )
 
 type testCapabilityFlags uint32
@@ -187,7 +188,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 	}
 
 	hasher := template.NameAlg.NewHash()
-	if _, err := MarshalToWriter(hasher, creationData); err != nil {
+	if _, err := mu.MarshalToWriter(hasher, creationData); err != nil {
 		t.Fatalf("Failed to marshal creation data: %v", err)
 	}
 

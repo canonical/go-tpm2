@@ -11,6 +11,8 @@ import (
 	"io"
 	"net"
 
+	"github.com/canonical/go-tpm2/mu"
+
 	"golang.org/x/xerrors"
 )
 
@@ -73,7 +75,7 @@ func (t *TctiMssim) Read(data []byte) (int, error) {
 }
 
 func (t *TctiMssim) Write(data []byte) (int, error) {
-	buf, err := MarshalToBytes(cmdTPMSendCommand, t.Locality, uint32(len(data)), RawBytes(data))
+	buf, err := mu.MarshalToBytes(cmdTPMSendCommand, t.Locality, uint32(len(data)), mu.RawBytes(data))
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal command: %v", err))
 	}

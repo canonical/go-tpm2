@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
 )
 
 type mockHandleContext struct {
@@ -24,7 +25,7 @@ func (c *mockHandleContext) SerializeToWriter(io.Writer) error { return nil }
 func TestComputeCpHash(t *testing.T) {
 	h := sha256.New()
 	h.Write([]byte("foo"))
-	name, _ := MarshalToBytes(HashAlgorithmSHA256, RawBytes(h.Sum(nil)))
+	name, _ := mu.MarshalToBytes(HashAlgorithmSHA256, mu.RawBytes(h.Sum(nil)))
 	rc := &mockHandleContext{name}
 
 	for _, data := range []struct {
@@ -915,11 +916,11 @@ func TestTrialPolicyAuthorize(t *testing.T) {
 
 	h := HashAlgorithmSHA1.NewHash()
 	h.Write([]byte("foo"))
-	keySignSHA1, _ = MarshalToBytes(HashAlgorithmSHA1, RawBytes(h.Sum(nil)))
+	keySignSHA1, _ = mu.MarshalToBytes(HashAlgorithmSHA1, mu.RawBytes(h.Sum(nil)))
 
 	h = HashAlgorithmSHA256.NewHash()
 	h.Write([]byte("foo"))
-	keySignSHA256, _ = MarshalToBytes(HashAlgorithmSHA256, RawBytes(h.Sum(nil)))
+	keySignSHA256, _ = mu.MarshalToBytes(HashAlgorithmSHA256, mu.RawBytes(h.Sum(nil)))
 
 	for _, data := range []struct {
 		desc      string

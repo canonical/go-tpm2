@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2_test
+package mu_test
 
 import (
 	"bytes"
@@ -11,7 +11,8 @@ import (
 	"reflect"
 	"testing"
 
-	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2"
+	. "github.com/canonical/go-tpm2/mu"
 )
 
 func TestMarshalBasic(t *testing.T) {
@@ -123,8 +124,7 @@ func TestMarshalRawBytes(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should have failed")
 	}
-	if err.Error() != "cannot unmarshal argument at index 0: cannot process slice type tpm2.RawBytes: cannot read byte slice directly "+
-		"from input buffer: unexpected EOF" {
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process raw type mu.RawBytes: unexpected EOF" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -407,19 +407,19 @@ func TestMarshalRawBytesInStruct(t *testing.T) {
 	}
 }
 
-func TestUnmarshalNilRawBytes(t *testing.T) {
-	b := []byte{0x00, 0x28, 0x55, 0x43, 0xd3, 0xb0, 0x73, 0x84, 0xd1, 0x13, 0xed, 0xec, 0x49, 0xea, 0xa6, 0x23, 0x8a, 0xd5, 0xff, 0x00}
-	var o TestStructWithRawBytes
-	_, err := UnmarshalFromBytes(b, &o)
-	if err == nil {
-		t.Fatalf("Expected UnmarshalFromBytes to fail")
-	}
-	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestStructWithRawBytes: cannot "+
-		"process field B from struct type tpm2_test.TestStructWithRawBytes: cannot process slice type tpm2.RawBytes, inside container "+
-		"type tpm2_test.TestStructWithRawBytes: nil raw byte slice" {
-		t.Errorf("Unexpected error: %v", err)
-	}
-}
+//func TestUnmarshalNilRawBytes(t *testing.T) {
+//	b := []byte{0x00, 0x28, 0x55, 0x43, 0xd3, 0xb0, 0x73, 0x84, 0xd1, 0x13, 0xed, 0xec, 0x49, 0xea, 0xa6, 0x23, 0x8a, 0xd5, 0xff, 0x00}
+//	var o TestStructWithRawBytes
+//	_, err := UnmarshalFromBytes(b, &o)
+//	if err == nil {
+//		t.Fatalf("Expected UnmarshalFromBytes to fail")
+//	}
+//	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type mu_test.TestStructWithRawBytes: cannot "+
+//		"process field B from struct type mu_test.TestStructWithRawBytes: cannot process slice type mu.RawBytes, inside container "+
+//		"type mu_test.TestStructWithRawBytes: nil raw byte slice" {
+//		t.Errorf("Unexpected error: %v", err)
+//	}
+//}
 
 type TestSizedStruct struct {
 	A uint32
@@ -431,7 +431,6 @@ type TestStructWithNonPointerSizedStruct struct {
 }
 
 type TestStructWithPointerSizedStruct struct {
-	A uint32
 	S *TestSizedStruct `tpm2:"sized"`
 }
 
@@ -444,15 +443,14 @@ func TestMarshalSizedStructFromPointer(t *testing.T) {
 		{
 			desc: "Normal",
 			in: TestStructWithPointerSizedStruct{
-				A: 5665443,
 				S: &TestSizedStruct{A: 754122, B: TestListUint32{22189, 854543, 445888654}}},
-			out: []byte{0x00, 0x56, 0x72, 0xa3, 0x00, 0x14, 0x00, 0x0b, 0x81, 0xca, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x56, 0xad, 0x00, 0x0d,
-				0x0a, 0x0f, 0x1a, 0x93, 0xb8, 0x8e},
+			out: []byte{0x00, 0x14, 0x00, 0x0b, 0x81, 0xca, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x56, 0xad, 0x00, 0x0d, 0x0a, 0x0f, 0x1a,
+				0x93, 0xb8, 0x8e},
 		},
 		{
 			desc: "NilPointer",
-			in:   TestStructWithPointerSizedStruct{A: 67764232},
-			out:  []byte{0x04, 0x0a, 0x00, 0x08, 0x00, 0x00},
+			in:   TestStructWithPointerSizedStruct{},
+			out:  []byte{0x00, 0x00},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -485,14 +483,14 @@ func TestMarshalSizedStructFromPointer(t *testing.T) {
 func TestUnmarshalZeroSizedStructToNonNilPointer(t *testing.T) {
 	a := TestStructWithPointerSizedStruct{S: &TestSizedStruct{}}
 
-	_, err := UnmarshalFromBytes([]byte{0x04, 0x0a, 0x00, 0x08, 0x00, 0x00}, &a)
+	_, err := UnmarshalFromBytes([]byte{0x00, 0x00}, &a)
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should have failed")
 	}
-	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestStructWithPointerSizedStruct: "+
-		"cannot process field S from struct type tpm2_test.TestStructWithPointerSizedStruct: cannot process sized type "+
-		"*tpm2_test.TestSizedStruct, inside container type tpm2_test.TestStructWithPointerSizedStruct: struct is zero sized, but "+
-		"destination struct has been pre-allocated" {
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type mu_test.TestStructWithPointerSizedStruct: "+
+		"cannot process field S from struct type mu_test.TestStructWithPointerSizedStruct: cannot process sized type "+
+		"*mu_test.TestSizedStruct, inside container type mu_test.TestStructWithPointerSizedStruct: sized value is zero sized, but "+
+		"destination value has been pre-allocated" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
@@ -539,7 +537,7 @@ func (t TestUnion) Select(selector reflect.Value) reflect.Type {
 	case 3:
 		return reflect.TypeOf(uint16(0))
 	case 4:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(NilUnionValue)
 	default:
 		return nil
 	}
@@ -609,7 +607,7 @@ func TestMarshalUnion(t *testing.T) {
 	}
 }
 
-func TestMarshalUnionWithNilValue(t *testing.T) {
+func TestMarshalUnionWithNilUnionValue(t *testing.T) {
 	a := TestUnionContainer{Select: 2}
 	out, err := MarshalToBytes(a)
 	if err != nil {
@@ -651,9 +649,8 @@ func TestMarshalUnionWithInvalidSelector(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UnmarshalFromBytes should fail to marshal a union with an invalid selector value")
 	}
-	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestUnionContainer: cannot process "+
-		"field Union from struct type tpm2_test.TestUnionContainer: cannot process struct type tpm2_test.TestUnion, inside container "+
-		"type tpm2_test.TestUnionContainer: cannot process union field: invalid selector value: 259" {
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process struct type mu_test.TestUnionContainer: cannot process "+
+		"field Union from struct type mu_test.TestUnionContainer: invalid selector value: 259" {
 		t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 	}
 }
@@ -664,10 +661,8 @@ func TestMarshalUnionWithIncorrectType(t *testing.T) {
 	if err == nil {
 		t.Fatalf("MarshalToBytes should fail to marshal a union with the wrong data type")
 	}
-	if err.Error() != "cannot marshal argument at index 0: cannot process struct type tpm2_test.TestUnionContainer: cannot process "+
-		"field Union from struct type tpm2_test.TestUnionContainer: cannot process struct type tpm2_test.TestUnion, inside container "+
-		"type tpm2_test.TestUnionContainer: cannot process union field: data has incorrect type uint16 (expected "+
-		"tpm2_test.TestListUint32)" {
+	if err.Error() != "cannot marshal argument at index 0: cannot process struct type mu_test.TestUnionContainer: cannot process field "+
+		"Union from struct type mu_test.TestUnionContainer: data has incorrect type uint16 (expected mu_test.TestListUint32)" {
 		t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
 	}
 }
@@ -698,7 +693,7 @@ func TestMarshalUnionWithNilPointerValue(t *testing.T) {
 }
 
 func TestMarshalUnionDataImplicitTypeConversion(t *testing.T) {
-	a := TestUnionContainer{Select: 3, Union: TestUnion{AlgorithmSHA256}}
+	a := TestUnionContainer{Select: 3, Union: TestUnion{tpm2.AlgorithmSHA256}}
 	if reflect.TypeOf(a.Union.Data) == reflect.TypeOf(uint16(0)) {
 		t.Fatalf("Test requires these to be different types")
 	}
@@ -902,5 +897,76 @@ func TestMarshalStructWithSizedCustomMarshaller(t *testing.T) {
 
 	if !reflect.DeepEqual(b, bo) {
 		t.Errorf("UnmarshalFromBytes didn't return the original data")
+	}
+}
+
+func TestDetemineTPMKind(t *testing.T) {
+	for _, data := range []struct {
+		desc string
+		d    interface{}
+		k    TPMKind
+	}{
+		{
+			desc: "Unsupported",
+			d:    [3]uint16{1, 2, 3},
+			k:    TPMKindUnsupported,
+		},
+		{
+			desc: "Primitive",
+			d:    uint32(10),
+			k:    TPMKindPrimitive,
+		},
+		{
+			desc: "Sized/1",
+			d:    TestSizedBuffer{},
+			k:    TPMKindSized,
+		},
+		{
+			desc: "Sized/2",
+			d:    TestStructWithPointerSizedStruct{},
+			k:    TPMKindSized,
+		},
+		{
+			desc: "List",
+			d:    TestListUint32{},
+			k:    TPMKindList,
+		},
+		{
+			desc: "Struct",
+			d:    TestStructSimple{},
+			k:    TPMKindStruct,
+		},
+		{
+			desc: "Union",
+			d:    TestUnion{},
+			k:    TPMKindUnion,
+		},
+		{
+			desc: "Custom",
+			d:    TestStructWithCustomMarshaller{},
+			k:    TPMKindCustom,
+		},
+		{
+			desc: "RawBytes/1",
+			d:    RawBytes{},
+			k:    TPMKindRawBytes,
+		},
+		{
+			desc: "RawBytes/2",
+			d:    testFakeRawBytes{},
+			k:    TPMKindRawBytes,
+		},
+		{
+			desc: "RawList",
+			d:    testUint16RawSlice{},
+			k:    TPMKindRawList,
+		},
+	} {
+		t.Run(data.desc, func(t *testing.T) {
+			k := DetermineTPMKind(data.d)
+			if k != data.k {
+				t.Errorf("Unexpected value: %d", k)
+			}
+		})
 	}
 }

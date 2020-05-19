@@ -12,6 +12,8 @@ import (
 	"io"
 	"reflect"
 
+	"github.com/canonical/go-tpm2/mu"
+
 	"golang.org/x/xerrors"
 )
 
@@ -24,7 +26,7 @@ func wrapMarshallingError(commandCode CommandCode, context string, err error) er
 }
 
 func handleUnmarshallingError(context *cmdContext, scope string, err error) error {
-	var s *invalidSelectorError
+	var s *mu.InvalidSelectorError
 	if xerrors.Is(err, io.EOF) || xerrors.Is(err, io.ErrUnexpectedEOF) || xerrors.As(err, &s) {
 		return &InvalidResponseError{context.commandCode, fmt.Sprintf("cannot unmarshal %s: %v", scope, err)}
 	}
@@ -130,7 +132,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
 
-	bytes, err := MarshalToBytes(cHeader, RawBytes(commandBytes))
+	bytes, err := mu.MarshalToBytes(cHeader, mu.RawBytes(commandBytes))
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal complete command packet bytes: %v", err))
 	}
@@ -150,7 +152,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 		return 0, 0, nil, &TctiError{"read", err}
 	}
 
-	if _, err := UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
+	if _, err := mu.UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
 		panic(fmt.Sprintf("cannot unmarshal response header: %v", err))
 	}
 
@@ -197,12 +199,12 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 
 	cBytes := new(bytes.Buffer)
 
-	if _, err := MarshalToWriter(cBytes, handles...); err != nil {
+	if _, err := mu.MarshalToWriter(cBytes, handles...); err != nil {
 		panic(fmt.Sprintf("cannot marshal command handles: %v", err))
 	}
 
 	cpBytes := new(bytes.Buffer)
-	if _, err := MarshalToWriter(cpBytes, params...); err != nil {
+	if _, err := mu.MarshalToWriter(cpBytes, params...); err != nil {
 		return nil, wrapMarshallingError(commandCode, "command parameters", err)
 	}
 
@@ -213,7 +215,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		if err != nil {
 			return nil, fmt.Errorf("cannot build command auth area for command %s: %v", commandCode, err)
 		}
-		if _, err := MarshalToWriter(cBytes, &authArea); err != nil {
+		if _, err := mu.MarshalToWriter(cBytes, &authArea); err != nil {
 			panic(fmt.Sprintf("cannot marshal command auth area: %v", err))
 		}
 	}
@@ -266,7 +268,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 	buf := bytes.NewReader(context.responseBytes)
 
 	if len(handles) > 0 {
-		if _, err := UnmarshalFromReader(buf, handles...); err != nil {
+		if _, err := mu.UnmarshalFromReader(buf, handles...); err != nil {
 			return handleUnmarshallingError(context, "response handles", err)
 		}
 	}
@@ -276,7 +278,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 	switch context.responseTag {
 	case TagSessions:
 		var parameterSize uint32
-		if _, err := UnmarshalFromReader(buf, &parameterSize); err != nil {
+		if _, err := mu.UnmarshalFromReader(buf, &parameterSize); err != nil {
 			return handleUnmarshallingError(context, "parameterSize field", err)
 		}
 		rpBytes := make([]byte, parameterSize)
@@ -286,7 +288,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		}
 
 		authArea := responseAuthAreaRawSlice{make([]authResponse, len(context.sessionParams))}
-		if _, err := UnmarshalFromReader(buf, &authArea); err != nil {
+		if _, err := mu.UnmarshalFromReader(buf, &authArea); err != nil {
 			return handleUnmarshallingError(context, "response auth area", err)
 		}
 		if err := processResponseAuthArea(t, authArea.Data, context.sessionParams, context.commandCode, context.responseCode,
@@ -322,7 +324,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 	}
 
 	if len(params) > 0 {
-		if _, err := UnmarshalFromReader(rpBuf, params...); err != nil {
+		if _, err := mu.UnmarshalFromReader(rpBuf, params...); err != nil {
 			return handleUnmarshallingError(context, "response parameters", err)
 		}
 	}

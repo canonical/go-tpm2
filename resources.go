@@ -14,6 +14,8 @@ import (
 	"io"
 	"reflect"
 
+	"github.com/canonical/go-tpm2/mu"
+
 	"golang.org/x/xerrors"
 )
 
@@ -133,7 +135,7 @@ type handleContextDataU struct {
 func (d handleContextDataU) Select(selector reflect.Value) reflect.Type {
 	switch selector.Interface().(handleContextType) {
 	case handleContextTypeDummy, handleContextTypePermanent:
-		return reflect.TypeOf(NilValue)
+		return reflect.TypeOf(mu.NilUnionValue)
 	case handleContextTypeObject:
 		return reflect.TypeOf((*Public)(nil))
 	case handleContextTypeNvIndex:
@@ -153,13 +155,13 @@ type handleContextData struct {
 }
 
 func (d *handleContextData) serializeToBytes() []byte {
-	data, err := MarshalToBytes(d)
+	data, err := mu.MarshalToBytes(d)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal context data: %v", err))
 	}
 	h := crypto.SHA256.New()
 	h.Write(data)
-	data, err = MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
+	data, err = mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
 	if err != nil {
 		panic(fmt.Sprintf("cannot pack context blob and checksum: %v", err))
 	}
@@ -167,13 +169,13 @@ func (d *handleContextData) serializeToBytes() []byte {
 }
 
 func (d *handleContextData) serializeToWriter(w io.Writer) error {
-	data, err := MarshalToBytes(d)
+	data, err := mu.MarshalToBytes(d)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal context data: %v", err))
 	}
 	h := crypto.SHA256.New()
 	h.Write(data)
-	_, err = MarshalToWriter(w, HashAlgorithmSHA256, h.Sum(nil), data)
+	_, err = mu.MarshalToWriter(w, HashAlgorithmSHA256, h.Sum(nil), data)
 	return err
 }
 
@@ -711,7 +713,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var integrityAlg HashAlgorithmId
 	var integrity []byte
 	var b []byte
-	if _, err := UnmarshalFromReader(r, &integrityAlg, &integrity, &b); err != nil {
+	if _, err := mu.UnmarshalFromReader(r, &integrityAlg, &integrity, &b); err != nil {
 		return nil, xerrors.Errorf("cannot unpack context blob and checksum: %w", err)
 	}
 
@@ -725,7 +727,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	}
 
 	var data *handleContextData
-	n, err := UnmarshalFromBytes(b, &data)
+	n, err := mu.UnmarshalFromBytes(b, &data)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot unmarshal context data: %w", err)
 	}
