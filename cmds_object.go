@@ -274,7 +274,9 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 // If the digest in the Unique field of inPublic is inconsistent with the value of the sensitive data and the seed value, a
 // *TPMError with an error code of ErrorBinding will be returned.
 //
-// On success, a ResourceContext corresponding to the newly loaded transient object will be returned.
+// On success, a ResourceContext corresponding to the newly loaded transient object will be returned. If inPrivate has been provided,
+// it will not be necessary to call ResourceContext.SetAuthValue on it - this function sets the correct authorization value so that it
+// can be used in subsequent commands that require knowledge of the authorization value.
 func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...SessionContext) (ResourceContext, error) {
 	var objectHandle Handle
 	var name Name
@@ -296,7 +298,12 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	}
 
 	public, _ := inPublic.copy() // inPublic already marshalled successfully, so ignore errors here
-	return makeObjectContext(objectHandle, name, public), nil
+	rc := makeObjectContext(objectHandle, name, public)
+	if inPrivate != nil {
+		rc.auth = make([]byte, len(inPrivate.AuthValue))
+		copy(rc.auth, inPrivate.AuthValue)
+	}
+	return rc, nil
 }
 
 // ReadPublic executes the TPM2_ReadPublic command to read the public area of the object associated with objectContext.

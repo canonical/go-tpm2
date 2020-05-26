@@ -198,6 +198,8 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("Create failed: %v", err)
 		}
 
+		outName, _ := outPublic.Name()
+
 		objectContext, err := tpm.Load(parent, outPrivate, outPublic, session)
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
@@ -205,10 +207,10 @@ func TestLoad(t *testing.T) {
 		defer flushContext(t, tpm, objectContext)
 
 		if objectContext.Handle().Type() != HandleTypeTransient {
-			t.Errorf("Create returned an invalid handle 0x%08x", objectContext.Handle())
+			t.Errorf("Load returned an invalid handle 0x%08x", objectContext.Handle())
 		}
-		if objectContext.Name().Algorithm() != HashAlgorithmSHA256 {
-			t.Errorf("Create returned a name with the wrong algorithm %v", objectContext.Name().Algorithm())
+		if !bytes.Equal(objectContext.Name(), outName) {
+			t.Errorf("Load returned a context with the wrong name")
 		}
 	}
 
@@ -307,12 +309,18 @@ func TestLoadExternal(t *testing.T) {
 	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
 
-	run := func(t *testing.T, sensitive *Sensitive, template *Public, hierarchy Handle) {
+	run1 := func(t *testing.T, sensitive *Sensitive, template *Public, hierarchy Handle) ResourceContext {
 		objectContext, err := tpm.LoadExternal(sensitive, template, hierarchy)
 		if err != nil {
 			t.Fatalf("LoadExternal failed: %v", err)
 		}
-		defer flushContext(t, tpm, objectContext)
+		finished := false
+		defer func() {
+			if finished {
+				return
+			}
+			flushContext(t, tpm, objectContext)
+		}()
 
 		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("LoadExternal returned an invalid handle 0x%08x", objectContext.Handle())
@@ -326,6 +334,14 @@ func TestLoadExternal(t *testing.T) {
 		if !bytes.Equal(objectContext.Name(), templateName) {
 			t.Errorf("Unexpected name")
 		}
+
+		finished = true
+		return objectContext
+	}
+
+	run := func(t *testing.T, sensitive *Sensitive, template *Public, hierarchy Handle) {
+		rc := run1(t, sensitive, template, hierarchy)
+		flushContext(t, tpm, rc)
 	}
 
 	t.Run("RSA", func(t *testing.T) {
@@ -402,6 +418,49 @@ func TestLoadExternal(t *testing.T) {
 			Unique: PublicIDU{Data: unique}}
 
 		run(t, &sensitive, &public, HandleNull)
+	})
+
+	t.Run("WithAuthValue", func(t *testing.T) {
+		key := make([]byte, 32)
+		rand.Read(key)
+
+		seed := make([]byte, 32)
+
+		h := sha256.New()
+		h.Write(seed)
+		h.Write(key)
+		unique := h.Sum(nil)
+
+		authValue := make(Auth, HashAlgorithmSHA256.Size())
+		copy(authValue, testAuth)
+
+		sensitive := Sensitive{
+			Type:      ObjectTypeKeyedHash,
+			AuthValue: authValue,
+			SeedValue: seed,
+			Sensitive: SensitiveCompositeU{Data: key}}
+		public := Public{
+			Type:    ObjectTypeKeyedHash,
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth,
+			Params:  PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}},
+			Unique:  PublicIDU{Data: unique}}
+
+		rc := run1(t, &sensitive, &public, HandleNull)
+		defer flushContext(t, tpm, rc)
+
+		// We shouldn't need to call ResourceContext.SetAuthValue to use the object.
+		_, err := tpm.Unseal(rc, nil)
+		if err != nil {
+			t.Errorf("Unseal failed: %v", err)
+		}
+
+		// Verify that the object was loaded with the right auth value.
+		rc.SetAuthValue(testAuth)
+		_, err = tpm.Unseal(rc, nil)
+		if err != nil {
+			t.Errorf("Unseal failed: %v", err)
+		}
 	})
 
 	t.Run("PublicOnly", func(t *testing.T) {
