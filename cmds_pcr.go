@@ -12,7 +12,7 @@ import (
 	"sort"
 )
 
-// PCRValues contains a collection of PCR values, keyed by AlgorithmId and PCR index.
+// PCRValues contains a collection of PCR values, keyed by HashAlgorithmId and PCR index.
 type PCRValues map[HashAlgorithmId]map[int]Digest
 
 // SelectionList computes a list of PCR selections corresponding to this set of PCR values.

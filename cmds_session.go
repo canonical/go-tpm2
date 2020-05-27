@@ -48,8 +48,8 @@ import (
 // If symmetric is provided, it defines the symmetric algorithm to use if the session is subsequently used for session based command
 // or response parameter encryption. Session based parameter encryption allows the first command and/or response parameter for a
 // command to be encrypted between the TPM and host CPU for supported parameter types (go types that correspond to TPM2B prefixed
-// types). If symmetric is provided and corresponds to a symmetric block cipher (ie, the Algorithm field is not AlgorithmXOR) then
-// the value of symmetric.Mode.Sym() must be AlgorithmCFB, else a *TPMParameterError error with an error code of ErrorMode is returned
+// types). If symmetric is provided and corresponds to a symmetric block cipher (ie, the Algorithm field is not SymAlgorithmXOR) then
+// the value of symmetric.Mode.Sym() must be SymModeCFB, else a *TPMParameterError error with an error code of ErrorMode is returned
 // for parameter index 4.
 //
 // If a SessionContext instance with the AttrCommandEncrypt attribute set is provided in the variable length sessions parameter, then

@@ -37,11 +37,11 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 // If the object associated with keyContext is not a signing key, a *TPMHandleError error with an error code of ErrorKey will be
 // returned.
 //
-// If the scheme of the key associated with keyContext is AlgorithmNull, then inScheme must be provided to specify a valid signing
+// If the scheme of the key associated with keyContext is AsymSchemeNull, then inScheme must be provided to specify a valid signing
 // scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be returned for parameter index
 // 2.
 //
-// If the scheme of the key associated with keyContext is not AlgorithmNull, then inScheme may be nil. If it is provided, then the
+// If the scheme of the key associated with keyContext is not AsymSchemeNull, then inScheme may be nil. If it is provided, then the
 // specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of ErrorScheme will be
 // returned for parameter index 2.
 //

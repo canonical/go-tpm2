@@ -19,11 +19,11 @@ package tpm2
 // If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
 // code of ErrorKey will be returned for handle index 2.
 //
-// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
-// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
-// returned for parameter index 2.
+// If signContext is not nil and if the scheme of the key associated with signContext is AsymSchemeNull, then inScheme must be
+// provided to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme
+// will be returned for parameter index 2.
 //
-// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// If signContext is not nil and the scheme of the key associated with signContext is not AsymSchemeNull, then inScheme may be nil. If
 // it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
 // ErrorScheme will be returned for parameter index 2.
 //
@@ -59,11 +59,11 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 // If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
 // code of ErrorKey will be returned for handle index 1.
 //
-// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
-// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
-// returned for parameter index 3.
+// If signContext is not nil and if the scheme of the key associated with signContext is AsymSchemeNull, then inScheme must be
+// provided to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme
+// will be returned for parameter index 3.
 //
-// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// If signContext is not nil and the scheme of the key associated with signContext is not AsymSchemeNull, then inScheme may be nil. If
 // it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
 // ErrorScheme will be returned for parameter index 3.
 //
@@ -103,11 +103,11 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 // If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
 // code of ErrorKey will be returned for handle index 1.
 //
-// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
-// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
-// returned for parameter index 2.
+// If signContext is not nil and if the scheme of the key associated with signContext is AsymSchemeNull, then inScheme must be
+// provided to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme
+// will be returned for parameter index 2.
 //
-// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// If signContext is not nil and the scheme of the key associated with signContext is not AsymSchemeNull, then inScheme may be nil. If
 // it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
 // ErrorScheme will be returned for parameter index 2.
 //
@@ -144,11 +144,11 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 // If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
 // code of ErrorKey will be returned for handle index 2.
 //
-// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
-// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
-// returned for parameter index 2.
+// If signContext is not nil and if the scheme of the key associated with signContext is AsymSchemeNull, then inScheme must be
+// provided to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme
+// will be returned for parameter index 2.
 //
-// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// If signContext is not nil and the scheme of the key associated with signContext is not AsymSchemeNull, then inScheme may be nil. If
 // it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
 // ErrorScheme will be returned for parameter index 2.
 //
@@ -186,11 +186,11 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 // If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
 // code of ErrorKey will be returned for handle index 2.
 //
-// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
-// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
-// returned for parameter index 2.
+// If signContext is not nil and if the scheme of the key associated with signContext is AsymSchemeNull, then inScheme must be
+// provided to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme
+// will be returned for parameter index 2.
 //
-// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// If signContext is not nil and the scheme of the key associated with signContext is not AsymSchemeNull, then inScheme may be nil. If
 // it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
 // ErrorScheme will be returned for parameter index 2.
 //
@@ -227,11 +227,11 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 // If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
 // code of ErrorKey will be returned for handle index 2.
 //
-// If signContext is not nil and if the scheme of the key associated with signContext is AlgorithmNull, then inScheme must be provided
-// to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme will be
-// returned for parameter index 2.
+// If signContext is not nil and if the scheme of the key associated with signContext is AsymSchemeNull, then inScheme must be
+// provided to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme
+// will be returned for parameter index 2.
 //
-// If signContext is not nil and the scheme of the key associated with signContext is not AlgorithmNull, then inScheme may be nil. If
+// If signContext is not nil and the scheme of the key associated with signContext is not AsymSchemeNull, then inScheme may be nil. If
 // it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
 // ErrorScheme will be returned for parameter index 2.
 //

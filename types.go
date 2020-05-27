@@ -1589,7 +1589,7 @@ type ECCParams struct {
 	// For a storage key: AlgorithmNull.
 	Scheme  ECCScheme
 	CurveID ECCCurve  // ECC curve ID
-	KDF     KDFScheme // Unused - always AlgorithmNull
+	KDF     KDFScheme // Unused - always KDFAlgorithmNull
 }
 
 // PublicParamsU is a fake union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is ObjectTypeId. Valid types

@@ -25,22 +25,22 @@ import (
 // If the Attrs field of inPublic does not have the AttrSensitiveDataOrigin attribute set, then the sensitive data in the created
 // object is initialized with the data provided via the Data field of inSensitive.
 //
-// If the Attrs field of inPublic has the AttrSensitiveDataOrigin attribute set and Type is AlgorithmSymCipher, then the sensitive
+// If the Attrs field of inPublic has the AttrSensitiveDataOrigin attribute set and Type is ObjectTypeSymCipher, then the sensitive
 // data in the created object is initialized with a TPM generated key. The size of this key is determined by the value of the Params
-// field of inPublic. If Type is AlgorithmKeyedHash, then the sensitive data in the created object is initialized with a TPM
+// field of inPublic. If Type is ObjectTypeKeyedHash, then the sensitive data in the created object is initialized with a TPM
 // generated value that is the same size as the name algorithm selected by the NameAlg field of inPublic.
 //
-// If the Type field of inPublic is AlgorithmRSA or AlgorithmECC, then the sensitive data in the created object is initialized with
+// If the Type field of inPublic is ObjectTypeRSA or ObjectTypeECC, then the sensitive data in the created object is initialized with
 // a TPM generated private key. The size of this is determined by the value of the Params field of inPublic.
 //
-// If the Type field of inPublic is AlgorithmKeyedHash and the Attrs field has AttrSensitiveDataOrigin, AttrSign and AttrDecrypt all
+// If the Type field of inPublic is ObjectTypeKeyedHash and the Attrs field has AttrSensitiveDataOrigin, AttrSign and AttrDecrypt all
 // clear, then the created object is a sealed data object.
 //
-// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is not AlgorithmKeyedHash,
-// then the newly created object will be a storage parent.
+// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is not
+// ObjectTypeKeyedHash, then the newly created object will be a storage parent.
 //
-// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is AlgorithmKeyedHash, then
-// the newly created object will be a derivation parent.
+// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is ObjectTypeKeyedHash,
+// then the newly created object will be a derivation parent.
 //
 // The authorization value for the created object is initialized to the value of the UserAuth field of inSensitive.
 //
@@ -57,8 +57,8 @@ import (
 // If the attributes in the Attrs field of inPublic are inconsistent or inappropriate for the usage, a *TPMParameterError error with
 // an error code of ErrorAttributes will be returned for parameter index 2.
 //
-// If the NameAlg field of inPublic is AlgorithmNull, then a *TPMParameterError error with an error code of ErrorHash will be returned
-// for parameter index 2.
+// If the NameAlg field of inPublic is HashAlgorithmNull, then a *TPMParameterError error with an error code of ErrorHash will be
+// returned for parameter index 2.
 //
 // If an authorization policy is defined via the AuthPolicy field of inPublic then the length of the digest must match the name
 // algorithm selected via the NameAlg field, else a *TPMParameterError error with an error code of ErrorSize is returned for parameter
@@ -70,14 +70,14 @@ import (
 // If the digest algorithm specified by the scheme in the Params field of inPublic is inappropriate for the usage, a
 // *TPMParameterError error with an error code of ErrorHash will be returned for parameter index 2.
 //
-// If the Type field of inPublic is not AlgorithmKeyedHash, a *TPMParameterError error with an error code of ErrorSymmetric will be
+// If the Type field of inPublic is not ObjectTypeKeyedHash, a *TPMParameterError error with an error code of ErrorSymmetric will be
 // returned for parameter index 2 if the symmetric algorithm specified in the Params field of inPublic is inappropriate for the
 // usage.
 //
-// If the Type field of inPublic is AlgorithmECC and the KDF scheme specified in the Params field of inPublic is not AlgorithmNull,
-// a *TPMParameterError error with an error code of ErrorKDF will be returned for parameter index 2.
+// If the Type field of inPublic is ObjectTypeECC and the KDF scheme specified in the Params field of inPublic is not
+// KDFAlgorithmNull, a *TPMParameterError error with an error code of ErrorKDF will be returned for parameter index 2.
 //
-// If the Type field of inPublic is not AlgorithmKeyedHash and the AttrRestricted, AttrFixedParent and AttrDecrypt attributes of
+// If the Type field of inPublic is not ObjectTypeKeyedHash and the AttrRestricted, AttrFixedParent and AttrDecrypt attributes of
 // Attrs are set, a *TPMParameterError error with an error code of ErrorHash will be returned for parameter index 2 if the NameAlg
 // field of inPublic does not select the same name algorithm as the parent object. A *TPMParameterError error with an error code
 // of ErrorSymmetric will be returned for parameter index 2 if the symmetric algorithm specified in the Params field of inPublic
@@ -86,23 +86,23 @@ import (
 // If the length of the UserAuth field of inSensitive is longer than the name algorithm selected by the NameAlg field of inPublic, a
 // *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmRSA and the Params field specifies an unsupported exponent, a *TPMError with an error
+// If the Type field of inPublic is ObjectTypeRSA and the Params field specifies an unsupported exponent, a *TPMError with an error
 // code of ErrorRange will be returned. If the specified key size is an unsupported value, a *TPMError with an error code of
 // ErrorValue will be returned.
 //
-// If the Type field of inPublic is AlgorithmSymCipher and the key size is an unsupported value, a *TPMError with an error code of
+// If the Type field of inPublic is ObjectTypeSymCipher and the key size is an unsupported value, a *TPMError with an error code of
 // ErrorKeySize will be returned. If the AttrSensitiveDataOrigin attribute is not set and the length of the Data field of inSensitive
 // does not match the key size specified in the Params field of inPublic, a *TPMError with an error code of ErrorKeySize will be
 // returned.
 //
-// If the Type field of inPublic is AlgorithmKeyedHash and the AttrSensitiveDataOrigin attribute is not set, a *TPMError with an error
-// code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest algorithm
-// selected by the specified scheme.
+// If the Type field of inPublic is ObjectTypeKeyedHash and the AttrSensitiveDataOrigin attribute is not set, a *TPMError with an
+// error code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest
+// algorithm selected by the specified scheme.
 //
 // On success, the private and public parts of the newly created object will be returned. The newly created object will not exist on
-// the TPM. If the Type field of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object will have a
+// the TPM. If the Type field of inPublic is ObjectTypeKeyedHash or ObjectTypeSymCipher, then the returned *Public object will have a
 // Unique field that is the digest of the sensitive data and the value of the object's seed in the sensitive area, computed using the
-// object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned *Public object will
+// object's name algorithm. If the Type field of inPublic is ObjectTypeECC or ObjectTypeRSA, then the returned *Public object will
 // have a Unique field containing details about the public part of the key, computed from the private part of the key.
 //
 // The returned *CreationData will contain a digest computed from the values of PCRs selected by the creationPCR parameter at creation
@@ -164,25 +164,25 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 // code of ErrorType is returned for parameter index 1. If the authorization value in the sensitive area is larger than the name
 // algorithm, a *TPMParameterError error with an error code of ErrorSize is returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmRSA and the size of the modulus in the Unique field is inconsistent with the size
+// If the Type field of inPublic is ObjectTypeRSA and the size of the modulus in the Unique field is inconsistent with the size
 // specified in the Params field, a *TPMParameterError error with an error code of ErrorKey will be returned for parameter index 2.
 // If the value of the exponent in the Params field is invalid, a *TPMParameterError error with an error code of ErrorValue will
 // be returned for parameter index 2. If the size of private key in the sensitive area is not the correct size, a *TPMParameterError
 // error with an error code of ErrorKeySize will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmECC and the private key in the sensitive area is invalid, a *TPMParameterError error
+// If the Type field of inPublic is ObjectTypeECC and the private key in the sensitive area is invalid, a *TPMParameterError error
 // with an error code of ErrorKeySize will be returned for parameter index 1. If the public point specified in the Unique field of
 // inPublic does not belong to the private key, a *TPMError with an error code of ErrorBinding will be returned.
 //
-// If the Type field of inPublic is AlgorithmSymCipher and the size of the symmetric key in the sensitive area is inconsistent with
+// If the Type field of inPublic is ObjectTypeSymCipher and the size of the symmetric key in the sensitive area is inconsistent with
 // the symmetric algorithm specified in the Params field of inPublic, a *TPMParameterError error with an error code of ErrorKeySize
 // will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmKeyedHash and the size of the sensitive data is larger than permitted for the digest
+// If the Type field of inPublic is ObjectTypeKeyedHash and the size of the sensitive data is larger than permitted for the digest
 // algorithm selected by the scheme defined in the Params field of inPublic, a *TPMParameterError error with an error code of
 // ErrorKeySize will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmSymCipher or AlgorithmKeyedHash and the size of seed value in the sensitive area does
+// If the Type field of inPublic is ObjectTypeSymCipher or ObjectTypeKeyedHash and the size of seed value in the sensitive area does
 // not match the name algorithm, a *TPMError error with an error code of ErrorKeySize will be returned. If the digest in the Unique
 // field of inPublic is inconsistent with the value of the sensitive data and the seed value, a *TPMError with an error code of
 // ErrorBinding will be returned.
@@ -241,35 +241,35 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 // sensitive area is larger than the name algorithm, a *TPMParameterError error with an error code of ErrorSize is returned for
 // parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmRSA and the size of the modulus in the Unique field is inconsistent with the size
+// If the Type field of inPublic is ObjectTypeRSA and the size of the modulus in the Unique field is inconsistent with the size
 // specified in the Params field, a *TPMParameterError error with an error code of ErrorKey will be returned for parameter index 2.
 // If the value of the exponent in the Params field is invalid, a *TPMParameterError error with an error code of ErrorValue will
 // be returned for parameter index 2. If inPrivate is provided and the size of private key in the sensitive area is not the correct
 // size, a *TPMParameterError error with an error code of ErrorKeySize will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmECC, inPrivate is provided and the private key in the sensitive area is invalid, a
+// If the Type field of inPublic is ObjectTypeECC, inPrivate is provided and the private key in the sensitive area is invalid, a
 // *TPMParameterError error with an error code of ErrorKeySize will be returned for parameter index 1. If the public point specified
 // in the Unique field of inPublic does not belong to the private key, a *TPMError with an error code of ErrorBinding will be
 // returned.
 //
-// If the Type field of inPublic is AlgorithmECC, inPrivate is not provided and the size of the public key in the Unique field of
+// If the Type field of inPublic is ObjectTypeECC, inPrivate is not provided and the size of the public key in the Unique field of
 // inPublic is inconsistent with the value of the Params field of inPublic, a *TPMParameterError error with an error code of ErrorKey
 // is returned for parameter index 2. If the public point is not on the curve specified in the Params field of inPublic, a
 // *TPMParameterError error with an error code of ErrorECCPoint will be returned for parameter index 2.
 //
-// If the Type field of inPublic is AlgorithmSymCipher, inPrivate is provided and the size of the symmetric key in the sensitive area
+// If the Type field of inPublic is ObjectTypeSymCipher, inPrivate is provided and the size of the symmetric key in the sensitive area
 // is inconsistent with the symmetric algorithm specified in the Params field of inPublic, a *TPMParameterError error with an error
 // code of ErrorKeySize will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmKeyedHash, inPrivate is provided and the size of the sensitive data is larger than
+// If the Type field of inPublic is ObjectTypeKeyedHash, inPrivate is provided and the size of the sensitive data is larger than
 // permitted for the digest algorithm selected by the scheme defined in the Params field of inPublic, a *TPMParameterError error
 // with an error code of ErrorKeySize will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmSymCipher or AlgorithmKeyedHash and inPrivate has not been provided, a *TPMParameterError
-// error with an error code of ErrorKey will be returned for parameter index 2 if the size of the digest in the Unique field of
-// inPublic does not match the selected name algorithm.
+// If the Type field of inPublic is ObjectTypeSymCipher or ObjectTypeKeyedHash and inPrivate has not been provided, a
+// *TPMParameterError error with an error code of ErrorKey will be returned for parameter index 2 if the size of the digest in the
+// Unique field of inPublic does not match the selected name algorithm.
 //
-// If the Type field of inPublic is AlgorithmSymCipher or AlgorithmKeyedHash, inPrivate has been provided and the size of seed value
+// If the Type field of inPublic is ObjectTypeSymCipher or ObjectTypeKeyedHash, inPrivate has been provided and the size of seed value
 // in the sensitive area does not match the name algorithm, a *TPMError error with an error code of ErrorKeySize will be returned.
 // If the digest in the Unique field of inPublic is inconsistent with the value of the sensitive data and the seed value, a
 // *TPMError with an error code of ErrorBinding will be returned.
@@ -388,8 +388,8 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceCont
 // If the size of credential is larger than the name algorithm associated with context, a *TPMParameterError error with an error code
 // of ErrorSize will be returned for parameter index 1.
 //
-// If the algorithm of the object associated with context is AlgorithmECC, a *TPMError with an error code of ErrorKey will be returned
-// if the ECC key is invalid. If the algorithm of the object associated with context is AlgorithmRSA, a *TPMError with an error code
+// If the algorithm of the object associated with context is ObjectTypeECC, a *TPMError with an error code of ErrorKey will be returned
+// if the ECC key is invalid. If the algorithm of the object associated with context is ObjectTypeRSA, a *TPMError with an error code
 // of ErrorScheme will be returned if the padding scheme is invalid or not supported.
 //
 // On success, the encrypted activation credential is returned as IDObjectRaw. The activation credential is encrypted with a key
@@ -418,7 +418,7 @@ func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, 
 // data. The command requires authorization with the user auth role for itemContext, with session based authorization provided via
 // itemContextAuthSession.
 //
-// If the type of object associated with itemContext is not AlgorithmKeyedHash, a *TPMHandleError error with an error code of
+// If the type of object associated with itemContext is not ObjectTypeKeyedHash, a *TPMHandleError error with an error code of
 // ErrorType will be returned. If the object associated with itemContext has either the AttrDecrypt, AttrSign or AttrRestricted
 // attributes set, a *TPMHandlerError error with an error code of ErrorAttributes will be returned.
 //
@@ -486,30 +486,30 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // AttrSensitiveDataOrigin attribute set, then the sensitive data in the created object is initialized with the data provided via the
 // Data field of inSensitive.
 //
-// If the Attrs field of inPublic has the AttrSensitiveDataOrigin attribute set and Type is AlgorithmSymCipher, then the sensitive
+// If the Attrs field of inPublic has the AttrSensitiveDataOrigin attribute set and Type is ObjectTypeSymCipher, then the sensitive
 // data in the created object is initialized with a TPM generated key. The size of this key is determined by the value of the Params
-// field of inPublic. If Type is AlgorithmKeyedHash, then the sensitive data in the created object is initialized with a TPM
+// field of inPublic. If Type is ObjectTypeKeyedHash, then the sensitive data in the created object is initialized with a TPM
 // generated value that is the same size as the name algorithm selected by the NameAlg field of inPublic.
 //
-// If the Type field of inPublic is AlgorithmRSA then the sensitive data in the created object is initialized with a TPM generated
+// If the Type field of inPublic is ObjectTypeRSA then the sensitive data in the created object is initialized with a TPM generated
 // private key. The size of this is determined by the value of the Params field of inPublic.
 //
-// If the Type field of inPublic is AlgorithmECC and parentContext does not correspond to a derivation parent, then the sensitive data
-// in the created object is initialized with a TPM generated private key. The size of this is determined by the value of the Params
-// field of inPublic.
+// If the Type field of inPublic is ObjectTypeECC and parentContext does not correspond to a derivation parent, then the sensitive
+// data in the created object is initialized with a TPM generated private key. The size of this is determined by the value of the
+// Params field of inPublic.
 //
 // If parentContext corresponds to a derivation parent, the sensitive data in the created object is initialized with a value derived
 // from the parent object's private seed, and the derivation values specified in either the Unique field of inPublic or the Data
 // field of inSensitive.
 //
-// If the Type field of inPublic is AlgorithmKeyedHash, the Attrs field has AttrSensitiveDataOrigin, AttrSign and AttrDecrypt all
+// If the Type field of inPublic is ObjectTypeKeyedHash, the Attrs field has AttrSensitiveDataOrigin, AttrSign and AttrDecrypt all
 // clear, then the created object is a sealed data object.
 //
-// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is not AlgorithmKeyedHash,
-// then the newly created object will be a storage parent.
+// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is not
+// ObjectTypeKeyedHash, then the newly created object will be a storage parent.
 //
-// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is AlgorithmKeyedHash, then
-// the newly created object will be a derivation parent.
+// If the Attrs field of inPublic has the AttrRestricted and AttrDecrypt attributes set, and the Type field is ObjectTypeKeyedHash,
+// then the newly created object will be a derivation parent.
 //
 // The authorization value for the created object is initialized to the value of the UserAuth field of inSensitive.
 //
@@ -522,8 +522,8 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // If the attributes in the Attrs field of inPublic are inconsistent or inappropriate for the usage, a *TPMParameterError error with
 // an error code of ErrorAttributes will be returned for parameter index 2.
 //
-// If the NameAlg field of inPublic is AlgorithmNull, then a *TPMParameterError error with an error code of ErrorHash will be returned
-// for parameter index 2.
+// If the NameAlg field of inPublic is HashAlgorithmNull, then a *TPMParameterError error with an error code of ErrorHash will be
+// returned for parameter index 2.
 //
 // If an authorization policy is defined via the AuthPolicy field of inPublic then the length of the digest must match the name
 // algorithm selected via the NameAlg field, else a *TPMParameterError error with an error code of ErrorSize is returned for parameter
@@ -535,14 +535,14 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // If the digest algorithm specified by the scheme in the Params field of inPublic is inappropriate for the usage, a
 // *TPMParameterError error with an error code of ErrorHash will be returned for parameter index 2.
 //
-// If the Type field of inPublic is not AlgorithmKeyedHash, a *TPMParameterError error with an error code of ErrorSymmetric will be
+// If the Type field of inPublic is not ObjectTypeKeyedHash, a *TPMParameterError error with an error code of ErrorSymmetric will be
 // returned for parameter index 2 if the symmetric algorithm specified in the Params field of inPublic is inappropriate for the
 // usage.
 //
-// If the Type field of inPublic is AlgorithmECC and the KDF scheme specified in the Params field of inPublic is not AlgorithmNull,
-// a *TPMParameterError error with an error code of ErrorKDF will be returned for parameter index 2.
+// If the Type field of inPublic is ObjectTypeECC and the KDF scheme specified in the Params field of inPublic is not
+// KDFAlgorithmNull, a *TPMParameterError error with an error code of ErrorKDF will be returned for parameter index 2.
 //
-// If the Type field of inPublic is not AlgorithmKeyedHash and the AttrRestricted, AttrFixedParent and AttrDecrypt attributes of
+// If the Type field of inPublic is not ObjectTypeKeyedHash and the AttrRestricted, AttrFixedParent and AttrDecrypt attributes of
 // Attrs are set, a *TPMParameterError error with an error code of ErrorHash will be returned for parameter index 2 if the NameAlg
 // field of inPublic does not select the same name algorithm as the parent object. A *TPMParameterError error with an error code
 // of ErrorSymmetric will be returned for parameter index 2 if the symmetric algorithm specified in the Params field of inPublic
@@ -551,25 +551,25 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // If the length of the UserAuth field of inSensitive is longer than the name algorithm selected by the NameAlg field of inPublic, a
 // *TPMParameterError error with an error code of ErrorSize will be returned for parameter index 1.
 //
-// If the Type field of inPublic is AlgorithmRSA and the Params field specifies an unsupported exponent, a *TPMError with an error
+// If the Type field of inPublic is ObjectTypeRSA and the Params field specifies an unsupported exponent, a *TPMError with an error
 // code of ErrorRange will be returned. If the specified key size is an unsupported value, a *TPMError with an error code of
 // ErrorValue will be returned.
 //
-// If the Type field of inPublic is AlgorithmSymCipher and the key size is an unsupported value, a *TPMError with an error code of
+// If the Type field of inPublic is ObjectTypeSymCipher and the key size is an unsupported value, a *TPMError with an error code of
 // ErrorKeySize will be returned. If the AttrSensitiveDataOrigin attribute is not set and the length of the Data field of inSensitive
 // does not match the key size specified in the Params field of inPublic, a *TPMError with an error code of ErrorKeySize will be
 // returned.
 //
-// If the Type field of inPublic is AlgorithmKeyedHash and the AttrSensitiveDataOrigin attribute is not set, a *TPMError with an error
-// code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest algorithm
-// selected by the specified scheme.
+// If the Type field of inPublic is ObjectTypeKeyedHash and the AttrSensitiveDataOrigin attribute is not set, a *TPMError with an
+// error code of ErrorSize will be returned if the length of the Data field of inSensitive is longer than permitted for the digest
+// algorithm selected by the specified scheme.
 //
 // On success, a ResourceContext instance will be returned that corresponds to the newly created object on the TPM, along with the
 // private and public parts.  It will not be necessary to call ResourceContext.SetAuthValue on the returned ResourceContext - this
 // function sets the correct authorization value so that it can be used in subsequent commands that require knowledge of the
-// authorization value. If the Type field of inPublic is AlgorithmKeyedHash or AlgorithmSymCipher, then the returned *Public object
+// authorization value. If the Type field of inPublic is ObjectTypeKeyedHash or ObjectTypeSymCipher, then the returned *Public object
 // will have a Unique field that is the digest of the sensitive data and the value of the object's seed in the sensitive area,
-// computed using the object's name algorithm. If the Type field of inPublic is AlgorithmECC or AlgorithmRSA, then the returned
+// computed using the object's name algorithm. If the Type field of inPublic is ObjectTypeECC or ObjectTypeRSA, then the returned
 // *Public object will have a Unique field containing details about the public part of the key, computed from the private part of the
 // key.
 func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, Private, *Public, error) {
