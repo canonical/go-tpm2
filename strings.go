@@ -129,6 +129,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PCR_Event"
 	case CommandPCRReset:
 		return "TPM_CC_PCR_Reset"
+	case CommandSequenceComplete:
+		return "TPM_CC_SequenceComplete"
 	case CommandSetCommandCodeAuditStatus:
 		return "TPM_CC_SetCommandCodeAuditStatus"
 	case CommandIncrementalSelfTest:
@@ -171,6 +173,10 @@ func (c CommandCode) String() string {
 		return "TPM_CC_Load"
 	case CommandQuote:
 		return "TPM_CC_Quote"
+	case CommandHMACStart:
+		return "TPM_CC_HMAC_Start"
+	case CommandSequenceUpdate:
+		return "TPM_CC_SequenceUpdate"
 	case CommandSign:
 		return "TPM_CC_Sign"
 	case CommandUnseal:
@@ -227,6 +233,10 @@ func (c CommandCode) String() string {
 		return "TPM_CC_ReadClock"
 	case CommandPCRExtend:
 		return "TPM_CC_PCR_Extend"
+	case CommandEventSequenceComplete:
+		return "TPM_CC_EventSequenceComplete"
+	case CommandHashSequenceStart:
+		return "TPM_CC_HashSequenceStart"
 	case CommandPolicyDuplicationSelect:
 		return "TPM_CC_PolicyDuplicationSelect"
 	case CommandPolicyGetDigest:

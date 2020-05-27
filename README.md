@@ -22,7 +22,7 @@ The current support status for each command group is detailed below.
  Asymmetric Primitives | None |
  Symmetric Primitives | None |
  Random Number Generator | Full |
- Hash/HMAC/Event Sequences | None |
+ Hash/HMAC/Event Sequences | Full |
  Attestation Commands | Full |
  Ephemeral EC Keys | None |
  Signing and Signature Verification | Full |

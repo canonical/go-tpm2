@@ -101,6 +101,7 @@ const (
 	CommandNVChangeAuth               CommandCode = 0x0000013B // TPM_CC_NV_ChangeAuth
 	CommandPCREvent                   CommandCode = 0x0000013C // TPM_CC_PCR_Event
 	CommandPCRReset                   CommandCode = 0x0000013D // TPM_CC_PCR_Reset
+	CommandSequenceComplete           CommandCode = 0x0000013E // TPM_CC_SequenceComplete
 	CommandSetCommandCodeAuditStatus  CommandCode = 0x00000140 // TPM_CC_SetCommandCodeAuditStatus
 	CommandIncrementalSelfTest        CommandCode = 0x00000142 // TPM_CC_IncrementalSelfTest
 	CommandSelfTest                   CommandCode = 0x00000143 // TPM_CC_SelfTest
@@ -122,6 +123,8 @@ const (
 	CommandImport                     CommandCode = 0x00000156 // TPM_CC_Import
 	CommandLoad                       CommandCode = 0x00000157 // TPM_CC_Load
 	CommandQuote                      CommandCode = 0x00000158 // TPM_CC_Quote
+	CommandHMACStart                  CommandCode = 0x0000015B // TPM_CC_HMAC_Start
+	CommandSequenceUpdate             CommandCode = 0x0000015C // TPM_CC_SequenceUpdate
 	CommandSign                       CommandCode = 0x0000015D // TPM_CC_Sign
 	CommandUnseal                     CommandCode = 0x0000015E // TPM_CC_Unseal
 	CommandPolicySigned               CommandCode = 0x00000160 // TPM_CC_PolicySigned
@@ -150,6 +153,8 @@ const (
 	CommandPolicyRestart              CommandCode = 0x00000180 // TPM_CC_PolicyRestart
 	CommandReadClock                  CommandCode = 0x00000181 // TPM_CC_ReadClock
 	CommandPCRExtend                  CommandCode = 0x00000182 // TPM_CC_PCR_Extend
+	CommandEventSequenceComplete      CommandCode = 0x00000185 // TPM_CC_EventSequenceComplete
+	CommandHashSequenceStart          CommandCode = 0x00000186 // TPM_CC_HashSequenceStart
 	CommandPolicyDuplicationSelect    CommandCode = 0x00000188 // TPM_CC_PolicyDuplicationSelect
 	CommandPolicyGetDigest            CommandCode = 0x00000189 // TPM_CC_PolicyGetDigest
 	CommandTestParms                  CommandCode = 0x0000018A // TPM_CC_TestParms
