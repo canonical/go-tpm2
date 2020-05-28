@@ -75,7 +75,7 @@ func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessi
 // returned.
 //
 // If sequenceContext corresponds to a hash sequence and the hash sequence is intended to produce a digest that will be signed with
-// a restricted signing key, the first block of data must be 4 bytes and not the value of TPMGeneratedValue.
+// a restricted signing key, the first block of data added to this sequence must be 4 bytes and not the value of TPMGeneratedValue.
 func (t *TPMContext) SequenceUpdate(sequenceContext ResourceContext, buffer MaxBuffer, sequenceContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandSequenceUpdate, sessions,
 		ResourceContextWithSession{Context: sequenceContext, Session: sequenceContextAuthSession}, Delimiter,
@@ -83,15 +83,16 @@ func (t *TPMContext) SequenceUpdate(sequenceContext ResourceContext, buffer MaxB
 }
 
 // SequenceComplete executes the TPM2_SequenceComplete command to add the last part of the data the HMAC or hash sequence associated
-// with sequenceContext, and return the result. This command requires authorization with the user auth role for sequenceContext, with
+// with sequenceContext, and returns the result. This command requires authorization with the user auth role for sequenceContext, with
 // session based authorization provided via sequenceContextAuthSession.
 //
 // If sequenceContext does not correspond to a HMAC or hash sequence object, then a *TPMHandleError error with an error code of
 // ErrorMode will be returned.
 //
-// If sequenceContext corresponds to a hash sequence and the returned digest is safe to sign with a restricted signing key, then
-// a ticket that can be passed to TPMContext.Sign will be returned. In this case, the hierarchy argument is used to specify the
-// hierarchy for the ticket.
+// If sequenceContext corresponds to a hash sequence and the hash sequence is intended to produce a digest that will be signed with
+// a restricted signing key, the first block of data added to this sequence must be 4 bytes and not the value of TPMGeneratedValue.
+// If the returned digest is safe to sign with a restricted signing key, then a ticket that can be passed to TPMContext.Sign will be
+// returned. In this case, the hierarchy argument is used to specify the hierarchy for the ticket.
 //
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
 func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer MaxBuffer, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (Digest, *TkHashcheck, error) {
@@ -142,4 +143,77 @@ func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceC
 
 	sequenceContext.(handleContextPrivate).invalidate()
 	return results, nil
+}
+
+// SequenceExecute executes a hash or HMAC sequence to completion and returns the result by adding the provided data to the sequence
+// with a number of TPM2_SequenceUpdate commands appropriate for the size of buffer, and executing a final TPM2_SequenceComplete
+// command. This command requires authorization with the user auth role for sequenceContext, with session based authorization provided
+// via sequenceContextAuthSession. As this function executes multiple commands, any SessionContext instances provided should have the
+// AttrContinueSession attribute defined.
+//
+// If sequenceContext does not correspond to a hash or HMAC sequence object, then a *TPMHandleError error with an error code of
+// ErrorMode will be returned.
+//
+// If sequenceContext corresponds to a hash sequence and the hash sequence is intended to produce a digest that will be signed with
+// a restricted signing key, the first block of data added to this sequence must be 4 bytes and not the value of TPMGeneratedValue.
+// If the returned digest is safe to sign with a restricted signing key, then a ticket that can be passed to TPMContext.Sign will be
+// returned. In this case, the hierarchy argument is used to specify the hierarchy for the ticket.
+//
+// On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
+func (t *TPMContext) SequenceExecute(sequenceContext ResourceContext, buffer []byte, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (Digest, *TkHashcheck, error) {
+	if err := t.initPropertiesIfNeeded(); err != nil {
+		return nil, nil, err
+	}
+
+	total := 0
+	for len(buffer)-total > t.maxBufferSize {
+		b := buffer[total:]
+		b = b[:t.maxBufferSize]
+		if err := t.SequenceUpdate(sequenceContext, b, sequenceContextAuthSession, sessions...); err != nil {
+			return nil, nil, err
+		}
+
+		total += len(b)
+	}
+
+	return t.SequenceComplete(sequenceContext, buffer[total:], hierarchy, sequenceContextAuthSession, sessions...)
+}
+
+// EventSequenceExecute executes an event sequence to completion and returns the result by adding the provided data to the sequence
+// with a number of TPM2_SequenceUpdate commands appropriate for the size of buffer, and executing a final TPM2_EventSequenceComplete
+// command. This command requires authorization with the user auth role for sequenceContext, with session based authorization provided
+// via sequenceContextAuthSession.
+//
+// If pcrContext is not nil, the result will be extended to the corresponding PCR in the same manner as TPMContext.PCRExtend.
+// Authorization with the user auth role is required for pcrContext, with session based authorization provided via
+// pcrContextAuthSession.
+//
+// As this function executes multiple commands, any SessionContext instances provided should have the AttrContinueSession attribute
+// defined.
+//
+// If sequenceContext does not correspond to an event sequence object, then a *TPMHandleError error with an error code of ErrorMode
+// will be returned for handle index 1 if the command is CommandSequenceUpdate, or handle index 2 if the command is
+// CommandEventSequenceComplete.
+//
+// If pcrContext is not nil and the corresponding PCR can not be extended from the current locality, a *TPMError error with an
+// error code of ErrorLocality will be returned.
+//
+// On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
+func (t *TPMContext) EventSequenceExecute(pcrContext, sequenceContext ResourceContext, buffer []byte, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (TaggedHashList, error) {
+	if err := t.initPropertiesIfNeeded(); err != nil {
+		return nil, err
+	}
+
+	total := 0
+	for len(buffer)-total > t.maxBufferSize {
+		b := buffer[total:]
+		b = b[:t.maxBufferSize]
+		if err := t.SequenceUpdate(sequenceContext, b, sequenceContextAuthSession, sessions...); err != nil {
+			return nil, err
+		}
+
+		total += len(b)
+	}
+
+	return t.EventSequenceComplete(pcrContext, sequenceContext, buffer[total:], pcrContextAuthSession, sequenceContextAuthSession, sessions...)
 }

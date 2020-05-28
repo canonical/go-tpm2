@@ -362,3 +362,191 @@ func TestEventSequence(t *testing.T) {
 		run(t, -1, seq, [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}, session.WithAttrs(AttrContinueSession))
 	})
 }
+
+func TestHashSequenceExecute(t *testing.T) {
+	tpm := openTPMForTesting(t, 0)
+	defer closeTPM(t, tpm)
+
+	b := make([]byte, 2500)
+	rand.Read(b[4:])
+
+	start := func(t *testing.T, auth Auth, hashAlg HashAlgorithmId) ResourceContext {
+		seq, err := tpm.HashSequenceStart(auth, hashAlg)
+		if err != nil {
+			t.Fatalf("HashSequenceStart failed: %v", err)
+		}
+		return seq
+	}
+
+	run := func(t *testing.T, seq ResourceContext, data []byte, hierarchy Handle, alg HashAlgorithmId, session SessionContext) {
+		defer verifyContextFlushed(t, tpm, seq)
+
+		ticketIsSafe := len(data) >= binary.Size(TPMGenerated(0)) && TPMGenerated(binary.BigEndian.Uint32(data)) != TPMGeneratedValue
+
+		result, validation, err := tpm.SequenceExecute(seq, data, hierarchy, session)
+		if err != nil {
+			t.Fatalf("SequenceExecute failed: %v", err)
+		}
+		if ticketIsSafe && hierarchy != HandleNull {
+			if validation == nil {
+				t.Fatalf("nil validation")
+			}
+			if validation.Tag != TagHashcheck {
+				t.Errorf("Unexpected tag")
+			}
+			if validation.Hierarchy != hierarchy {
+				t.Errorf("Unexpected hierarchy")
+			}
+		} else if validation != nil {
+			t.Errorf("validation should be nil")
+		}
+		h := alg.NewHash()
+		h.Write(data)
+		if !bytes.Equal(result, h.Sum(nil)) {
+			t.Errorf("Unexpected result")
+		}
+	}
+
+	t.Run("NoPassword", func(t *testing.T) {
+		seq := start(t, nil, HashAlgorithmSHA256)
+		run(t, seq, b, HandleOwner, HashAlgorithmSHA256, nil)
+	})
+
+	t.Run("SHA1", func(t *testing.T) {
+		seq := start(t, nil, HashAlgorithmSHA1)
+		run(t, seq, b, HandleOwner, HashAlgorithmSHA1, nil)
+	})
+
+	t.Run("NoTicket/1", func(t *testing.T) {
+		seq := start(t, nil, HashAlgorithmSHA256)
+		run(t, seq, b, HandleNull, HashAlgorithmSHA256, nil)
+	})
+
+	t.Run("NoTicket/2", func(t *testing.T) {
+		seq := start(t, nil, HashAlgorithmSHA256)
+		run(t, seq, append([]byte("\xff\x54\x43\x47foo"), b...), HandleOwner, HashAlgorithmSHA256, nil)
+	})
+
+	t.Run("UsePassword", func(t *testing.T) {
+		seq := start(t, testAuth, HashAlgorithmSHA256)
+		run(t, seq, b, HandleOwner, HashAlgorithmSHA256, nil)
+	})
+
+	t.Run("UseSession", func(t *testing.T) {
+		seq := start(t, testAuth, HashAlgorithmSHA256)
+
+		session, err := tpm.StartAuthSession(nil, seq, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, session)
+
+		run(t, seq, b, HandleOwner, HashAlgorithmSHA256, session.WithAttrs(AttrContinueSession))
+	})
+}
+
+func TestEventSequenceExecute(t *testing.T) {
+	tpm := openTPMForTesting(t, testCapabilityPCRChange)
+	defer closeTPM(t, tpm)
+
+	data := make([]byte, 2500)
+	rand.Read(data)
+
+	start := func(t *testing.T, auth Auth) ResourceContext {
+		seq, err := tpm.HashSequenceStart(auth, HashAlgorithmNull)
+		if err != nil {
+			t.Fatalf("HashSequenceStart failed: %v", err)
+		}
+		return seq
+	}
+
+	run := func(t *testing.T, pcr int, seq ResourceContext, session SessionContext) {
+		defer verifyContextFlushed(t, tpm, seq)
+
+		var pcrValues PCRValues
+		if pcr > -1 {
+			var err error
+			_, pcrValues, err = tpm.PCRRead(PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{pcr}}, {Hash: HashAlgorithmSHA1, Select: []int{pcr}}})
+			if err != nil {
+				t.Fatalf("PCRRead failed: %v", err)
+			}
+		}
+
+		var pcrContext ResourceContext
+		if pcr > -1 {
+			pcrContext = tpm.PCRHandleContext(pcr)
+		}
+		results, err := tpm.EventSequenceExecute(pcrContext, seq, data, nil, session)
+		if err != nil {
+			t.Fatalf("EventSequenceExecute failed: %v", err)
+		}
+
+		expectedPcrValues := make(PCRValues)
+		checked := false
+		for _, r := range results {
+			if !r.HashAlg.Supported() {
+				continue
+			}
+			checked = true
+			h := r.HashAlg.NewHash()
+			h.Write(data)
+			d := h.Sum(nil)
+			if !bytes.Equal(r.Digest, d) {
+				t.Errorf("Unexpected digest")
+			}
+
+			if pcr < 0 {
+				continue
+			}
+
+			if v, ok := pcrValues[r.HashAlg]; ok {
+				h := r.HashAlg.NewHash()
+				h.Write(v[pcr])
+				h.Write(d)
+				expectedPcrValues[r.HashAlg] = make(map[int]Digest)
+				expectedPcrValues[r.HashAlg][pcr] = h.Sum(nil)
+			}
+		}
+		if !checked {
+			t.Errorf("Unable to check the results")
+		}
+
+		if pcr < 0 {
+			return
+		}
+		_, updatedPcrValues, err := tpm.PCRRead(PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{pcr}}, {Hash: HashAlgorithmSHA1, Select: []int{pcr}}})
+		if err != nil {
+			t.Fatalf("PCRRead failed: %v", err)
+		}
+		if !reflect.DeepEqual(updatedPcrValues, expectedPcrValues) {
+			t.Errorf("Unexpected PCR values")
+		}
+	}
+
+	t.Run("NoPassword", func(t *testing.T) {
+		seq := start(t, nil)
+		run(t, -1, seq, nil)
+	})
+
+	t.Run("WithPCR", func(t *testing.T) {
+		seq := start(t, nil)
+		run(t, 12, seq, nil)
+	})
+
+	t.Run("UsePassword", func(t *testing.T) {
+		seq := start(t, testAuth)
+		run(t, -1, seq, nil)
+	})
+
+	t.Run("UseSession", func(t *testing.T) {
+		seq := start(t, testAuth)
+
+		session, err := tpm.StartAuthSession(nil, seq, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+		if err != nil {
+			t.Fatalf("StartAuthSession failed: %v", err)
+		}
+		defer flushContext(t, tpm, session)
+
+		run(t, -1, seq, session.WithAttrs(AttrContinueSession))
+	})
+}

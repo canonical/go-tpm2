@@ -252,7 +252,9 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	t.initPropertiesIfNeeded()
+	if err := t.initPropertiesIfNeeded(); err != nil {
+		return err
+	}
 
 	if authContextAuthSession != nil {
 		if authContextAuthSession.(*sessionContext).attrs&AttrContinueSession == 0 {
@@ -544,7 +546,9 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 //
 // On successful completion, the requested data will be returned.
 func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) ([]byte, error) {
-	t.initPropertiesIfNeeded()
+	if err := t.initPropertiesIfNeeded(); err != nil {
+		return nil, err
+	}
 
 	data := make([]byte, size)
 	total := 0
