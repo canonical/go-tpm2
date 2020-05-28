@@ -104,11 +104,12 @@ type ResourceContextWithSession struct {
 // authorization for a corresponding TPM resource. These sessions may be used for the purposes of session based parameter encryption
 // or command auditing.
 type TPMContext struct {
-	tcti               io.ReadWriteCloser
-	permanentResources map[Handle]*permanentContext
-	maxSubmissions     uint
-	maxNVBufferSize    uint16
-	exclusiveSession   *sessionContext
+	tcti                  io.ReadWriteCloser
+	permanentResources    map[Handle]*permanentContext
+	maxSubmissions        uint
+	propertiesInitialized bool
+	maxNVBufferSize       int
+	exclusiveSession      *sessionContext
 }
 
 // Close calls Close on the transmission interface.
@@ -420,6 +421,37 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 // The default value is 5.
 func (t *TPMContext) SetMaxSubmissions(max uint) {
 	t.maxSubmissions = max
+}
+
+// InitProperties executes a TPM2_GetCapability command to initialize properties used internally by TPMContext. This is normally done
+// automatically by functions that require these properties when they are used for the first time, but this function is provided so
+// that the command can be audited, and so the exclusivity of an audit session can be preserved.
+func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
+	props, err := t.GetCapabilityTPMProperties(PropertyFixed, CapabilityMaxProperties, sessions...)
+	if err != nil {
+		return err
+	}
+
+	for _, prop := range props {
+		switch prop.Property {
+		case PropertyNVBufferMax:
+			t.maxNVBufferSize = int(prop.Value)
+		}
+	}
+
+	t.propertiesInitialized = false
+	if t.maxNVBufferSize == 0 {
+		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_NV_BUFFER_MAX property"}
+	}
+	t.propertiesInitialized = true
+	return nil
+}
+
+func (t *TPMContext) initPropertiesIfNeeded() error {
+	if t.propertiesInitialized {
+		return nil
+	}
+	return t.InitProperties()
 }
 
 func newTpmContext(tcti io.ReadWriteCloser) *TPMContext {

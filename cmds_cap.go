@@ -5,6 +5,7 @@
 package tpm2
 
 import (
+	"encoding/binary"
 	"fmt"
 )
 
@@ -216,8 +217,8 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (TPMManufacture
 	if err != nil {
 		return 0, err
 	}
-	if len(props) == 0 {
-		return 0, nil
+	if len(props) == 0 || props[0].Property != PropertyManufacturer {
+		return 0, &InvalidResponseError{Command: CommandGetCapability, msg: "expected TPM_PT_MANUFACTURER property"}
 	}
 	return TPMManufacturer(props[0].Value), nil
 }
@@ -237,6 +238,54 @@ func (t *TPMContext) IsTPM2() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// GetInputBuffer returns the value of the PropertyInputBuffer property, which indicates the maximum size of arguments of the
+// MaxBuffer type. The size is TPM implementation specific, but required to be at least 1024 bytes.
+func (t *TPMContext) GetInputBuffer(sessions ...SessionContext) int {
+	props, err := t.GetCapabilityTPMProperties(PropertyInputBuffer, 1, sessions...)
+	if err != nil {
+		return 1024
+	}
+	if len(props) == 0 || props[0].Property != PropertyInputBuffer {
+		return 1024
+	}
+	return int(props[0].Value)
+}
+
+// GetMaxDigest returns the value of the PropertyMaxDigest property, which indicates the size of the largest digest algorithm
+// supported by the TPM.
+func (t *TPMContext) GetMaxDigest(sessions ...SessionContext) (int, error) {
+	props, err := t.GetCapabilityTPMProperties(PropertyMaxDigest, 1, sessions...)
+	if err != nil {
+		return 0, err
+	}
+	if len(props) == 0 || props[0].Property != PropertyMaxDigest {
+		return 0, &InvalidResponseError{Command: CommandGetCapability, msg: "expected TPM_PT_MAX_DIGEST property"}
+	}
+	return int(props[0].Value), nil
+}
+
+// GetMaxData returns the maximum size of arguments of the Data type supported by the TPM.
+func (t *TPMContext) GetMaxData(sessions ...SessionContext) (int, error) {
+	n, err := t.GetMaxDigest(sessions...)
+	if err != nil {
+		return 0, err
+	}
+	return n + binary.Size(AlgorithmId(0)), nil
+}
+
+// GetNVBufferMax returns the value of the PropertyNVBufferMax property, which indicates the maximum buffer size supported by
+// the TPM for TPMContext.NVReadRaw and TPMContext.NVWriteRaw.
+func (t *TPMContext) GetNVBufferMax(sessions ...SessionContext) (int, error) {
+	props, err := t.GetCapabilityTPMProperties(PropertyNVBufferMax, 1, sessions...)
+	if err != nil {
+		return 0, err
+	}
+	if len(props) == 0 || props[0].Property != PropertyNVBufferMax {
+		return 0, &InvalidResponseError{Command: CommandGetCapability, msg: "expected TPM_PT_NV_BUFFER_MAX property"}
+	}
+	return int(props[0].Value), nil
 }
 
 // TestParms executes the TPM2_TestParms command to check if the specified combination of algorithm parameters is supported.

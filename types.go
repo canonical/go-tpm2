@@ -239,10 +239,12 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) (nbytes int, err error) {
 
 // 10.4 Sized Buffers
 
-// Digest corresponds to the TPM2B_DIGEST type.
+// Digest corresponds to the TPM2B_DIGEST type. The largest size of this supported by the TPM can be determined by calling
+// TPMContext.GetMaxDigest.
 type Digest []byte
 
-// Data corresponds to the TPM2B_DATA type.
+// Data corresponds to the TPM2B_DATA type. The largest size of this supported by the TPM can be determined by calling
+// TPMContext.GetMaxData.
 type Data []byte
 
 // Nonce corresponds to the TPM2B_NONCE type.
@@ -254,13 +256,15 @@ type Auth Digest
 // Operand corresponds to the TPM2B_OPERAND type.
 type Operand Digest
 
-// Event corresponds to the TPM2B_EVENT type.
+// Event corresponds to the TPM2B_EVENT type. The largest size of this is indicated by EventMaxSize.
 type Event []byte
 
-// MaxBuffer corresponds to the TPM2B_MAX_BUFFER type.
+// MaxBuffer corresponds to the TPM2B_MAX_BUFFER type. The largest size of this supported by the TPM can be determined by
+// calling TPMContext.GetInputBuffer.
 type MaxBuffer []byte
 
-// MaxNVBuffer corresponds to the TPM2B_MAX_NV_BUFFER type.
+// MaxNVBuffer corresponds to the TPM2B_MAX_NV_BUFFER type. The largest size of this supported by the TPM can be determined by
+// calling TPMContext.GetNVBufferMax.
 type MaxNVBuffer []byte
 
 // Timeout corresponds to the TPM2B_TIMEOUT type.

@@ -271,7 +271,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		return rc
 	}
 
-	runWrite := func(t *testing.T, rc ResourceContext, data MaxNVBuffer, offset uint16, authSession SessionContext) {
+	runWrite := func(t *testing.T, rc ResourceContext, data []byte, offset uint16, authSession SessionContext) {
 		if err := tpm.NVWrite(rc, rc, data, offset, authSession); err != nil {
 			t.Fatalf("NVWrite failed: %v", err)
 		}
@@ -289,7 +289,7 @@ func TestNVReadAndWrite(t *testing.T) {
 		}
 	}
 
-	runRead := func(t *testing.T, rc ResourceContext, pub *NVPublic, data MaxNVBuffer, offset uint16, authSession SessionContext) {
+	runRead := func(t *testing.T, rc ResourceContext, pub *NVPublic, data []byte, offset uint16, authSession SessionContext) {
 		d, err := tpm.NVRead(rc, rc, uint16(len(data)), offset, authSession)
 		if err != nil {
 			t.Fatalf("NVRead failed: %v", err)

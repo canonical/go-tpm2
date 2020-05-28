@@ -14,19 +14,6 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-func (t *TPMContext) initNVMaxBufferSize() {
-	if t.maxNVBufferSize > 0 {
-		return
-	}
-	props, err := t.GetCapabilityTPMProperties(PropertyNVBufferMax, 1)
-	switch {
-	case err == nil && len(props) > 0:
-		t.maxNVBufferSize = uint16(props[0].Value)
-	default:
-		t.maxNVBufferSize = 512
-	}
-}
-
 // NVDefineSpace executes the TPM2_NV_DefineSpace command to reserve space to hold the data associated with a NV index described by
 // the publicInfo parameter. The Index field of publicInfo defines the handle at which the index should be reserved. The NameAlg
 // field defines the digest algorithm for computing the name of the NV index. The Attrs field is used to describe attributes for
@@ -194,8 +181,6 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...SessionCo
 }
 
 // NVWriteRaw executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
-// If the length of the data is greater than the maximum supported by the TPM in a single command, a partial write will be performed
-// and the number of bytes written will be returned.
 //
 // The command requires authorization, defined by the state of the AttrNVPPWrite, AttrNVOwnerWrite, AttrNVAuthWrite and
 // AttrNVPolicyWrite attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPWrite
@@ -223,21 +208,15 @@ func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...SessionCo
 // code of ErrorNVRange will be returned.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) (uint16, error) {
-	t.initNVMaxBufferSize()
-
-	if uint16(len(data)) > t.maxNVBufferSize {
-		data = data[0:t.maxNVBufferSize]
-	}
-
+func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVWrite, sessions,
 		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
 		data, offset); err != nil {
-		return 0, err
+		return err
 	}
 
 	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
-	return uint16(len(data)), nil
+	return nil
 }
 
 // NVWrite executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
@@ -256,13 +235,8 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 // digest that matches the authorization policy for the index.
 //
 // If data is too large to be written in a single command, this function will re-execute the TPM2_NV_Write command until all data is
-// written. As a consequence, any SessionContext instances provided should have the AttrContinueSession attribute defined. An error will
-// be returned if the write will require more than one command execution and there are sessions without the AttrContinueSession
-// attribute defined. If authContextAuth is a SessionContext instance that references a bound session and this is the first write to this
-// index, the first write will break the session binding. In this case, the AuthValue field should be set to the authorization value
-// of the resource associated with authContext to avoid a partial write when the write is split across multiple commands. A policy
-// session can not be used for authContextAuth if the write is to be split across multiple commands - in this case,
-// TPMContext.NVWriteRaw must be used instead.
+// written. As a consequence, any SessionContext instances provided must have the AttrContinueSession attribute defined and
+// authContextAuthSession must not be a policy session.
 //
 // If the index has the AttrNVWriteLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
@@ -277,40 +251,36 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 // code of ErrorNVRange will be returned.
 //
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
-func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	t.initNVMaxBufferSize()
+func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) error {
+	t.initPropertiesIfNeeded()
 
-	remaining := uint16(len(data))
-	total := uint16(0)
-
-	if remaining > t.maxNVBufferSize {
-		if authContextAuthSession != nil {
-			if authContextAuthSession.(*sessionContext).attrs&AttrContinueSession == 0 {
-				return makeInvalidArgError("authContextAuthSession", "the AttrContinueSession attribute is required for a split write")
-			}
-			if authContextAuthSession.(*sessionContext).scData().SessionType == SessionTypePolicy {
-				return makeInvalidArgError("authContextAuthSession", "a policy session can not be used for a split write - use NVWriteRaw instead")
-			}
+	if authContextAuthSession != nil {
+		if authContextAuthSession.(*sessionContext).attrs&AttrContinueSession == 0 {
+			return makeInvalidArgError("authContextAuthSession", "the AttrContinueSession attribute is required for authorization sessions")
 		}
-
-		for i, s := range sessions {
-			if s.(*sessionContext).attrs&AttrContinueSession == 0 {
-				return makeInvalidArgError("sessions", fmt.Sprintf("the AttrContineSession attribute is required for session at index %d for "+
-					"a split write", i))
-			}
+		if authContextAuthSession.(*sessionContext).scData().SessionType == SessionTypePolicy {
+			return makeInvalidArgError("authContextAuthSession", "a policy authorization session cannot be used")
 		}
 	}
 
+	for i, s := range sessions {
+		if s.(*sessionContext).attrs&AttrContinueSession == 0 {
+			return makeInvalidArgError("sessions", fmt.Sprintf("the AttrContineSession attribute is required for session at index %d", i))
+		}
+	}
+
+	total := 0
 	for {
-		n, err := t.NVWriteRaw(authContext, nvIndex, data[total:], offset+total, authContextAuthSession, sessions...)
-		if err != nil {
+		d := data[total:]
+		if len(d) > t.maxNVBufferSize {
+			d = d[:t.maxNVBufferSize]
+		}
+		if err := t.NVWriteRaw(authContext, nvIndex, d, offset+uint16(total), authContextAuthSession, sessions...); err != nil {
 			return err
 		}
 
-		total += n
-		remaining -= n
-
-		if remaining == 0 {
+		total += len(d)
+		if len(data)-total == 0 {
 			break
 		}
 	}
@@ -494,8 +464,7 @@ func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextA
 }
 
 // NVReadRaw executes the TPM2_NV_Read command to read the contents of the NV index associated with nvIndex. The amount of data to read,
-// and the offset within the index are defined by the size and offset parameters. If the amount of data requested is greater than the
-// maximum supported by the TPM in a single command, a partial read will be performed.
+// and the offset within the index are defined by the size and offset parameters.
 //
 // The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead and AttrNVPolicyRead
 // attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
@@ -526,12 +495,6 @@ func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextA
 //
 // On successful completion, the requested data will be returned.
 func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) (MaxNVBuffer, error) {
-	t.initNVMaxBufferSize()
-
-	if size > t.maxNVBufferSize {
-		size = t.maxNVBufferSize
-	}
-
 	var data MaxNVBuffer
 
 	if err := t.RunCommand(CommandNVRead, sessions,
@@ -562,9 +525,8 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 // digest that matches the authorization policy for the index.
 //
 // If the requested data can not be read in a single command, this function will re-execute the TPM2_NV_Read command until all data
-// is read. As a consequence, any SessionContext instances provided should have the AttrContinueSession attribute defined. If the requested
-// data cannot be read in a single command, then authContextAuth should not correspond to a policy session. If a policy session is
-// required, use TPMContext.NVReadRaw instead.
+// is read. As a consequence, any SessionContext instances provided should have the AttrContinueSession attribute defined and
+// authContextAuth should not correspond to a policy session.
 //
 // If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
@@ -581,21 +543,26 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 // returned.
 //
 // On successful completion, the requested data will be returned.
-func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) (MaxNVBuffer, error) {
-	data := make(MaxNVBuffer, size)
-	total := uint16(0)
+func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) ([]byte, error) {
+	t.initPropertiesIfNeeded()
+
+	data := make([]byte, size)
+	total := 0
 	remaining := size
 
 	for {
-		tmpData, err := t.NVReadRaw(authContext, nvIndex, remaining, offset+total, authContextAuthSession, sessions...)
+		sz := remaining
+		if remaining > uint16(t.maxNVBufferSize) {
+			sz = uint16(t.maxNVBufferSize)
+		}
+		tmpData, err := t.NVReadRaw(authContext, nvIndex, sz, offset+uint16(total), authContextAuthSession, sessions...)
 		if err != nil {
 			return nil, err
 		}
 
 		copy(data[total:], tmpData)
-		n := uint16(len(tmpData))
-		total += n
-		remaining -= n
+		total += int(sz)
+		remaining -= sz
 
 		if remaining == 0 {
 			break

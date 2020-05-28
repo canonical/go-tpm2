@@ -666,6 +666,11 @@ const (
 )
 
 const (
+	// EventMaxSize indicates the maximum size of arguments of the Event type.
+	EventMaxSize = 1024
+)
+
+const (
 	// These constants represent properties that only change when the firmware in the TPM changes.
 	PropertyFamilyIndicator   Property = 0x100 // TPM_PT_FAMILY_INDICATOR
 	PropertyLevel             Property = 0x101 // TPM_PT_LEVEL
