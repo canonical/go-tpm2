@@ -53,7 +53,7 @@ func TestGetCapabilityAlgs(t *testing.T) {
 		case AlgorithmOAEP:
 			a = AttrAsymmetric | AttrEncrypting
 		case AlgorithmECDSA:
-			a = AttrAsymmetric | AttrSigning | AttrMethod
+			a = AttrAsymmetric | AttrSigning
 		case AlgorithmECDH:
 			a = AttrAsymmetric | AttrMethod
 		case AlgorithmECDAA:
