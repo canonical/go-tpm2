@@ -198,43 +198,37 @@ type TaggedHash struct {
 // array of raw bytes. As no length is encoded, we need a custom marshaller implementation that unmarshals the
 // correct number of bytes depending on the hash algorithm
 
-func (p *TaggedHash) Marshal(buf io.Writer) (nbytes int, err error) {
+func (p *TaggedHash) Marshal(buf io.Writer) error {
 	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
-		return nbytes, xerrors.Errorf("cannot marshal digest algorithm: %w", err)
+		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
-	nbytes += binary.Size(p.HashAlg)
 	if !p.HashAlg.Supported() {
-		return nbytes, fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
+		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
 	if p.HashAlg.Size() != len(p.Digest) {
-		return nbytes, fmt.Errorf("invalid digest size %d", len(p.Digest))
+		return fmt.Errorf("invalid digest size %d", len(p.Digest))
 	}
 
-	n, err := buf.Write(p.Digest)
-	nbytes += n
-	if err != nil {
-		return nbytes, xerrors.Errorf("cannot write digest: %w", err)
+	if _, err := buf.Write(p.Digest); err != nil {
+		return xerrors.Errorf("cannot write digest: %w", err)
 	}
-	return
+	return nil
 }
 
-func (p *TaggedHash) Unmarshal(buf io.Reader) (nbytes int, err error) {
+func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
-		return nbytes, xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
+		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
-	nbytes += binary.Size(p.HashAlg)
 	if !p.HashAlg.Supported() {
-		return nbytes, fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
+		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
 	p.Digest = make(Digest, p.HashAlg.Size())
-	n, err := io.ReadFull(buf, p.Digest)
-	nbytes += n
-	if err != nil {
-		return nbytes, xerrors.Errorf("cannot read digest: %w", err)
+	if _, err := io.ReadFull(buf, p.Digest); err != nil {
+		return xerrors.Errorf("cannot read digest: %w", err)
 	}
-	return
+	return nil
 }
 
 // 10.4 Sized Buffers
@@ -318,7 +312,7 @@ func (n Name) Digest() Digest {
 // contained within this slice.
 type PCRSelect []int
 
-func (d *PCRSelect) Marshal(buf io.Writer) (nbytes int, err error) {
+func (d *PCRSelect) Marshal(buf io.Writer) error {
 	bytes := make([]byte, 3)
 
 	for _, i := range *d {
@@ -331,31 +325,25 @@ func (d *PCRSelect) Marshal(buf io.Writer) (nbytes int, err error) {
 	}
 
 	if err := binary.Write(buf, binary.BigEndian, uint8(len(bytes))); err != nil {
-		return nbytes, xerrors.Errorf("cannot write size of PCR selection bit mask: %w", err)
+		return xerrors.Errorf("cannot write size of PCR selection bit mask: %w", err)
 	}
-	nbytes += binary.Size(uint8(0))
 
-	n, err := buf.Write(bytes)
-	nbytes += int(n)
-	if err != nil {
-		return nbytes, xerrors.Errorf("cannot write PCR selection bit mask: %w", err)
+	if _, err := buf.Write(bytes); err != nil {
+		return xerrors.Errorf("cannot write PCR selection bit mask: %w", err)
 	}
-	return
+	return nil
 }
 
-func (d *PCRSelect) Unmarshal(buf io.Reader) (nbytes int, err error) {
+func (d *PCRSelect) Unmarshal(buf io.Reader) error {
 	var size uint8
 	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
-		return nbytes, xerrors.Errorf("cannot read size of PCR selection bit mask: %w", err)
+		return xerrors.Errorf("cannot read size of PCR selection bit mask: %w", err)
 	}
-	nbytes += binary.Size(uint8(0))
 
 	bytes := make([]byte, size)
 
-	n, err := io.ReadFull(buf, bytes)
-	nbytes += n
-	if err != nil {
-		return nbytes, xerrors.Errorf("cannot read PCR selection bit mask: %w", err)
+	if _, err := io.ReadFull(buf, bytes); err != nil {
+		return xerrors.Errorf("cannot read PCR selection bit mask: %w", err)
 	}
 
 	*d = make(PCRSelect, 0)
@@ -369,7 +357,7 @@ func (d *PCRSelect) Unmarshal(buf io.Reader) (nbytes int, err error) {
 		}
 	}
 
-	return
+	return nil
 }
 
 // PCRSelection corresponds to the TPMS_PCR_SELECTION type.

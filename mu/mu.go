@@ -37,8 +37,8 @@ func (e *InvalidSelectorError) Error() string {
 // CustomMarshaller is implemented by types that require custom marshalling and unmarshalling behaviour because they are non-standard
 // and not directly supported by the marshalling code.
 type CustomMarshaller interface {
-	Marshal(buf io.Writer) (int, error)
-	Unmarshal(buf io.Reader) (int, error)
+	Marshal(buf io.Writer) error
+	Unmarshal(buf io.Reader) error
 }
 
 type empty struct{}
@@ -191,7 +191,6 @@ func parseStructFieldMuOptions(f reflect.StructField) (out muOptions) {
 }
 
 type muContext struct {
-	nbytes    int
 	container reflect.Value
 	options   muOptions
 }
@@ -373,6 +372,17 @@ func DetermineTPMKind(i interface{}) TPMKind {
 	}
 }
 
+type marshalWriter struct {
+	w      io.Writer
+	nbytes int
+}
+
+func (w *marshalWriter) Write(p []byte) (n int, err error) {
+	n, err = w.w.Write(p)
+	w.nbytes += n
+	return
+}
+
 func marshalSized(w io.Writer, val reflect.Value, ctx *muContext) error {
 	exit := ctx.enterSizedType(val)
 	defer exit()
@@ -381,7 +391,6 @@ func marshalSized(w io.Writer, val reflect.Value, ctx *muContext) error {
 		if err := binary.Write(w, binary.BigEndian, uint16(0)); err != nil {
 			return xerrors.Errorf("cannot write size of zero sized value: %w", err)
 		}
-		ctx.nbytes += binary.Size(uint16(0))
 		return nil
 	}
 
@@ -395,10 +404,7 @@ func marshalSized(w io.Writer, val reflect.Value, ctx *muContext) error {
 	if err := binary.Write(w, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
 		return xerrors.Errorf("cannot write size of sized value: %w", err)
 	}
-	ctx.nbytes += binary.Size(uint16(0))
-	n, err := tmpBuf.WriteTo(w)
-	ctx.nbytes += int(n)
-	if err != nil {
+	if _, err := tmpBuf.WriteTo(w); err != nil {
 		return xerrors.Errorf("cannot write marshalled sized value: %w", err)
 	}
 	return nil
@@ -419,8 +425,7 @@ func marshalRawList(w io.Writer, slice reflect.Value, ctx *muContext) error {
 func marshalRaw(w io.Writer, slice reflect.Value, ctx *muContext) error {
 	switch slice.Type().Elem().Kind() {
 	case reflect.Uint8:
-		n, err := w.Write(slice.Bytes())
-		ctx.nbytes += n
+		_, err := w.Write(slice.Bytes())
 		return err
 	default:
 		return marshalRawList(w, slice, ctx)
@@ -436,11 +441,7 @@ func marshalPtr(w io.Writer, ptr reflect.Value, ctx *muContext) error {
 }
 
 func marshalPrimitive(w io.Writer, val reflect.Value, ctx *muContext) error {
-	if err := binary.Write(w, binary.BigEndian, val.Interface()); err != nil {
-		return err
-	}
-	ctx.nbytes += binary.Size(val.Interface())
-	return nil
+	return binary.Write(w, binary.BigEndian, val.Interface())
 }
 
 func marshalList(w io.Writer, slice reflect.Value, ctx *muContext) error {
@@ -455,7 +456,6 @@ func marshalList(w io.Writer, slice reflect.Value, ctx *muContext) error {
 	if err := binary.Write(w, binary.BigEndian, uint32(slice.Len())); err != nil {
 		return xerrors.Errorf("cannot write length of list: %w", err)
 	}
-	ctx.nbytes += binary.Size(uint32(0))
 
 	return marshalRawList(w, slice, ctx)
 }
@@ -489,9 +489,7 @@ func marshalCustom(w io.Writer, val reflect.Value, ctx *muContext) error {
 	if val.Kind() != reflect.Ptr {
 		val = val.Addr()
 	}
-	n, err := val.Interface().(CustomMarshaller).Marshal(w)
-	ctx.nbytes += n
-	return err
+	return val.Interface().(CustomMarshaller).Marshal(w)
 }
 
 func marshalValue(w io.Writer, val reflect.Value, ctx *muContext) error {
@@ -548,6 +546,17 @@ func marshalValue(w io.Writer, val reflect.Value, ctx *muContext) error {
 	return nil
 }
 
+type unmarshalReader struct {
+	r      io.Reader
+	nbytes int
+}
+
+func (r *unmarshalReader) Read(p []byte) (n int, err error) {
+	n, err = r.r.Read(p)
+	r.nbytes += n
+	return
+}
+
 func unmarshalSized(r io.Reader, val reflect.Value, ctx *muContext) error {
 	exit := ctx.enterSizedType(val)
 	defer exit()
@@ -556,7 +565,6 @@ func unmarshalSized(r io.Reader, val reflect.Value, ctx *muContext) error {
 	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
 		return xerrors.Errorf("cannot read size of sized value: %w", err)
 	}
-	ctx.nbytes += binary.Size(uint16(0))
 
 	switch {
 	case size == 0 && !val.IsNil() && val.Kind() == reflect.Ptr:
@@ -590,8 +598,7 @@ func unmarshalRawList(r io.Reader, slice reflect.Value, ctx *muContext) error {
 func unmarshalRaw(r io.Reader, slice reflect.Value, ctx *muContext) error {
 	switch slice.Type().Elem().Kind() {
 	case reflect.Uint8:
-		n, err := io.ReadFull(r, slice.Bytes())
-		ctx.nbytes += n
+		_, err := io.ReadFull(r, slice.Bytes())
 		return err
 	default:
 		return unmarshalRawList(r, slice, ctx)
@@ -606,11 +613,7 @@ func unmarshalPtr(r io.Reader, ptr reflect.Value, ctx *muContext) error {
 }
 
 func unmarshalPrimitive(r io.Reader, val reflect.Value, ctx *muContext) error {
-	if err := binary.Read(r, binary.BigEndian, val.Addr().Interface()); err != nil {
-		return err
-	}
-	ctx.nbytes += binary.Size(val.Interface())
-	return nil
+	return binary.Read(r, binary.BigEndian, val.Addr().Interface())
 }
 
 func unmarshalList(r io.Reader, slice reflect.Value, ctx *muContext) error {
@@ -619,7 +622,6 @@ func unmarshalList(r io.Reader, slice reflect.Value, ctx *muContext) error {
 	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
 		return xerrors.Errorf("cannot read length of list: %w", err)
 	}
-	ctx.nbytes += binary.Size(uint32(0))
 	slice.Set(reflect.MakeSlice(slice.Type(), int(length), int(length)))
 
 	return unmarshalRawList(r, slice, ctx)
@@ -653,9 +655,7 @@ func unmarshalCustom(r io.Reader, val reflect.Value, ctx *muContext) error {
 	if val.Kind() != reflect.Ptr {
 		val = val.Addr()
 	}
-	n, err := val.Interface().(CustomMarshaller).Unmarshal(r)
-	ctx.nbytes += n
-	return err
+	return val.Interface().(CustomMarshaller).Unmarshal(r)
 }
 
 func unmarshalValue(r io.Reader, val reflect.Value, ctx *muContext) error {
@@ -722,10 +722,12 @@ func MarshalToWriter(w io.Writer, vals ...interface{}) (int, error) {
 	var totalBytes int
 	for i, val := range vals {
 		ctx := new(muContext)
-		if err := marshalValue(w, reflect.ValueOf(val), ctx); err != nil {
-			return totalBytes + ctx.nbytes, &MarshalError{Index: i, err: err}
+		mw := &marshalWriter{w: w}
+		err := marshalValue(mw, reflect.ValueOf(val), ctx)
+		totalBytes += mw.nbytes
+		if err != nil {
+			return totalBytes, &MarshalError{Index: i, err: err}
 		}
-		totalBytes += ctx.nbytes
 	}
 	return totalBytes, nil
 }
@@ -764,10 +766,12 @@ func UnmarshalFromReader(r io.Reader, vals ...interface{}) (int, error) {
 		}
 
 		ctx := new(muContext)
-		if err := unmarshalValue(r, v.Elem(), ctx); err != nil {
-			return totalBytes + ctx.nbytes, &UnmarshalError{Index: i, err: err}
+		ur := &unmarshalReader{r: r}
+		err := unmarshalValue(ur, v.Elem(), ctx)
+		totalBytes += ur.nbytes
+		if err != nil {
+			return totalBytes, &UnmarshalError{Index: i, err: err}
 		}
-		totalBytes += ctx.nbytes
 	}
 	return totalBytes, nil
 }
