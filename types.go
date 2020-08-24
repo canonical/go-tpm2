@@ -12,6 +12,7 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -198,8 +199,8 @@ type TaggedHash struct {
 // array of raw bytes. As no length is encoded, we need a custom marshaller implementation that unmarshals the
 // correct number of bytes depending on the hash algorithm
 
-func (p *TaggedHash) Marshal(buf io.Writer) error {
-	if err := binary.Write(buf, binary.BigEndian, p.HashAlg); err != nil {
+func (p *TaggedHash) Marshal(w io.Writer) error {
+	if err := binary.Write(w, binary.BigEndian, p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
 	if !p.HashAlg.Supported() {
@@ -210,14 +211,14 @@ func (p *TaggedHash) Marshal(buf io.Writer) error {
 		return fmt.Errorf("invalid digest size %d", len(p.Digest))
 	}
 
-	if _, err := buf.Write(p.Digest); err != nil {
+	if _, err := w.Write(p.Digest); err != nil {
 		return xerrors.Errorf("cannot write digest: %w", err)
 	}
 	return nil
 }
 
-func (p *TaggedHash) Unmarshal(buf io.Reader) error {
-	if err := binary.Read(buf, binary.BigEndian, &p.HashAlg); err != nil {
+func (p *TaggedHash) Unmarshal(r mu.Reader) error {
+	if err := binary.Read(r, binary.BigEndian, &p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
 	if !p.HashAlg.Supported() {
@@ -225,7 +226,7 @@ func (p *TaggedHash) Unmarshal(buf io.Reader) error {
 	}
 
 	p.Digest = make(Digest, p.HashAlg.Size())
-	if _, err := io.ReadFull(buf, p.Digest); err != nil {
+	if _, err := io.ReadFull(r, p.Digest); err != nil {
 		return xerrors.Errorf("cannot read digest: %w", err)
 	}
 	return nil
@@ -312,7 +313,7 @@ func (n Name) Digest() Digest {
 // contained within this slice.
 type PCRSelect []int
 
-func (d *PCRSelect) Marshal(buf io.Writer) error {
+func (d *PCRSelect) Marshal(w io.Writer) error {
 	bytes := make([]byte, 3)
 
 	for _, i := range *d {
@@ -324,25 +325,28 @@ func (d *PCRSelect) Marshal(buf io.Writer) error {
 		bytes[octet] |= 1 << bit
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, uint8(len(bytes))); err != nil {
+	if err := binary.Write(w, binary.BigEndian, uint8(len(bytes))); err != nil {
 		return xerrors.Errorf("cannot write size of PCR selection bit mask: %w", err)
 	}
 
-	if _, err := buf.Write(bytes); err != nil {
+	if _, err := w.Write(bytes); err != nil {
 		return xerrors.Errorf("cannot write PCR selection bit mask: %w", err)
 	}
 	return nil
 }
 
-func (d *PCRSelect) Unmarshal(buf io.Reader) error {
+func (d *PCRSelect) Unmarshal(r mu.Reader) error {
 	var size uint8
-	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
+	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
 		return xerrors.Errorf("cannot read size of PCR selection bit mask: %w", err)
+	}
+	if int(size) > r.Len() {
+		return errors.New("size field is larger than the remaining bytes")
 	}
 
 	bytes := make([]byte, size)
 
-	if _, err := io.ReadFull(buf, bytes); err != nil {
+	if _, err := io.ReadFull(r, bytes); err != nil {
 		return xerrors.Errorf("cannot read PCR selection bit mask: %w", err)
 	}
 

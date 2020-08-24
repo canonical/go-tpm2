@@ -62,23 +62,23 @@ type commandAuthAreaRawSlice struct {
 	Data []authCommand `tpm2:"raw"`
 }
 
-func (a *commandAuthArea) Marshal(buf io.Writer) error {
+func (a *commandAuthArea) Marshal(w io.Writer) error {
 	tmpBuf := new(bytes.Buffer)
 	if _, err := mu.MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(*a)}); err != nil {
 		panic(fmt.Sprintf("cannot marshal raw command auth area to temporary buffer: %v", err))
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, uint32(tmpBuf.Len())); err != nil {
+	if err := binary.Write(w, binary.BigEndian, uint32(tmpBuf.Len())); err != nil {
 		return xerrors.Errorf("cannot write size of auth area to buffer: %w", err)
 	}
 
-	if _, err := tmpBuf.WriteTo(buf); err != nil {
+	if _, err := tmpBuf.WriteTo(w); err != nil {
 		return xerrors.Errorf("cannot write marshalled auth area to buffer: %w", err)
 	}
 	return nil
 }
 
-func (a *commandAuthArea) Unmarshal(buf io.Reader) error {
+func (a *commandAuthArea) Unmarshal(r mu.Reader) error {
 	panic("no need to unmarshal a command's auth area")
 }
 

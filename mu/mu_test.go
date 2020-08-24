@@ -726,19 +726,19 @@ type TestStructWithCustomMarshaller struct {
 	B TestListUint32
 }
 
-func (t *TestStructWithCustomMarshaller) Marshal(buf io.Writer) error {
-	if err := binary.Write(buf, binary.BigEndian, t.A); err != nil {
+func (t *TestStructWithCustomMarshaller) Marshal(w io.Writer) error {
+	if err := binary.Write(w, binary.BigEndian, t.A); err != nil {
 		return err
 	}
-	_, err := MarshalToWriter(buf, t.B)
+	_, err := MarshalToWriter(w, t.B)
 	return err
 }
 
-func (t *TestStructWithCustomMarshaller) Unmarshal(buf io.Reader) error {
-	if err := binary.Read(buf, binary.BigEndian, &t.A); err != nil {
+func (t *TestStructWithCustomMarshaller) Unmarshal(r Reader) error {
+	if err := binary.Read(r, binary.BigEndian, &t.A); err != nil {
 		return err
 	}
-	_, err := UnmarshalFromReader(buf, &t.B)
+	_, err := UnmarshalFromReader(r, &t.B)
 	return err
 }
 
@@ -966,5 +966,19 @@ func TestDetemineTPMKind(t *testing.T) {
 				t.Errorf("Unexpected value: %d", k)
 			}
 		})
+	}
+}
+
+func TestSizedBufferUnmarshalBadSize(t *testing.T) {
+	b := []byte{0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+
+	var o TestSizedBuffer
+	_, err := UnmarshalFromBytes(b, &o)
+	if err == nil {
+		t.Fatalf("Should have failed")
+	}
+
+	if err.Error() != "cannot unmarshal argument at index 0: cannot process sized type mu_test.TestSizedBuffer: sized value has a size larger than the remaining bytes" {
+		t.Errorf("Unexpected error: %v", err)
 	}
 }
