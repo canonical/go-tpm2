@@ -235,7 +235,7 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 // digest that matches the authorization policy for the index.
 //
 // If data is too large to be written in a single command, this function will re-execute the TPM2_NV_Write command until all data is
-// written. As a consequence, any SessionContext instances provided must have the AttrContinueSession attribute defined and
+// written. In this case, any SessionContext instances provided must have the AttrContinueSession attribute defined and
 // authContextAuthSession must not be a policy session.
 //
 // If the index has the AttrNVWriteLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
@@ -256,18 +256,22 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 		return err
 	}
 
-	if authContextAuthSession != nil {
-		if authContextAuthSession.(*sessionContext).attrs&AttrContinueSession == 0 {
-			return makeInvalidArgError("authContextAuthSession", "the AttrContinueSession attribute is required for authorization sessions")
+	if len(data) > t.maxNVBufferSize {
+		if authContextAuthSession != nil {
+			if authContextAuthSession.(*sessionContext).attrs&AttrContinueSession == 0 {
+				return makeInvalidArgError("authContextAuthSession",
+					fmt.Sprintf("the AttrContinueSession attribute is required for authorization sessions for writes larger than %d bytes", t.maxNVBufferSize))
+			}
+			if authContextAuthSession.(*sessionContext).scData().SessionType == SessionTypePolicy {
+				return makeInvalidArgError("authContextAuthSession",
+					fmt.Sprintf("a policy authorization session cannot be used for writes larger than %d bytes", t.maxNVBufferSize))
+			}
 		}
-		if authContextAuthSession.(*sessionContext).scData().SessionType == SessionTypePolicy {
-			return makeInvalidArgError("authContextAuthSession", "a policy authorization session cannot be used")
-		}
-	}
-
-	for i, s := range sessions {
-		if s.(*sessionContext).attrs&AttrContinueSession == 0 {
-			return makeInvalidArgError("sessions", fmt.Sprintf("the AttrContineSession attribute is required for session at index %d", i))
+		for i, s := range sessions {
+			if s.(*sessionContext).attrs&AttrContinueSession == 0 {
+				return makeInvalidArgError("sessions",
+					fmt.Sprintf("the AttrContineSession attribute is required for session at index %d for writes larger than %d bytes", i, t.maxNVBufferSize))
+			}
 		}
 	}
 
@@ -527,7 +531,7 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 // digest that matches the authorization policy for the index.
 //
 // If the requested data can not be read in a single command, this function will re-execute the TPM2_NV_Read command until all data
-// is read. As a consequence, any SessionContext instances provided should have the AttrContinueSession attribute defined and
+// is read. In this case, any SessionContext instances provided should have the AttrContinueSession attribute defined and
 // authContextAuth should not correspond to a policy session.
 //
 // If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
