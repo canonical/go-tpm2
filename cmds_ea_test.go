@@ -37,7 +37,7 @@ func TestPolicySigned(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
 	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -104,7 +104,7 @@ func TestPolicySigned(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSAPSS,
-				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
 
 			timeout, policyTicket, err :=
 				tpm.PolicySigned(keyContext, sessionContext, data.includeNonceTPM, data.cpHashA, data.policyRef, data.expiration, &signature)
@@ -154,7 +154,7 @@ func TestPolicySecret(t *testing.T) {
 	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
-	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
+	primary := createRSASrkForTesting(t, tpm, testAuth)
 	defer flushContext(t, tpm, primary)
 
 	run := func(t *testing.T, cpHashA []byte, policyRef Nonce, expiration int32, useSession func(SessionContext), authSession SessionContext) {
@@ -321,7 +321,7 @@ func TestPolicyTicketFromSecret(t *testing.T) {
 	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
-	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
+	primary := createRSASrkForTesting(t, tpm, testAuth)
 	defer flushContext(t, tpm, primary)
 
 	testHash := make([]byte, 32)
@@ -825,7 +825,7 @@ func TestPolicyAuthorize(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
 	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -880,7 +880,7 @@ func TestPolicyAuthorize(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSAPSS,
-				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
 
 			checkTicket, err := tpm.VerifySignature(keyContext, aHash, &signature)
 			if err != nil {
@@ -1086,7 +1086,7 @@ func TestPolicyNV(t *testing.T) {
 				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, authSession); err != nil {
+				if err := tpm.NVWrite(index, index, twentyFiveUint64, 0, authSession); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -1102,7 +1102,7 @@ func TestPolicyNV(t *testing.T) {
 				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(twentyFiveUint64), 0, authSession); err != nil {
+				if err := tpm.NVWrite(index, index, twentyFiveUint64, 0, authSession); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},
@@ -1118,7 +1118,7 @@ func TestPolicyNV(t *testing.T) {
 				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
-				if err := tpm.NVWrite(index, index, MaxNVBuffer(fortyUint32), 4, authSession); err != nil {
+				if err := tpm.NVWrite(index, index, fortyUint32, 4, authSession); err != nil {
 					t.Fatalf("NVWrite failed: %v", err)
 				}
 			},

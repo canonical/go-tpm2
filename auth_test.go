@@ -16,7 +16,7 @@ func TestHMACSessions(t *testing.T) {
 
 	owner := tpm.OwnerHandleContext()
 
-	primary := createRSASrkForTesting(t, tpm, Auth(testAuth))
+	primary := createRSASrkForTesting(t, tpm, testAuth)
 	defer flushContext(t, tpm, primary)
 
 	primaryECC := createECCSrkForTesting(t, tpm, nil)

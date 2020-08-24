@@ -231,7 +231,7 @@ func TestVerifySignature(t *testing.T) {
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
+			Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
 
 		context, err := tpm.LoadExternal(nil, &public, HandleOwner)
 		if err != nil {
@@ -273,7 +273,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
 			run(t, true, digest, &signature)
 		})
 
@@ -289,7 +289,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSAPSS,
-				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
 			run(t, true, digest, &signature)
 		})
 
@@ -305,7 +305,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: PublicKeyRSA(s)}}}
+				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
 			run(t, false, digest, &signature)
 		})
 
@@ -321,7 +321,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA1, Sig: PublicKeyRSA(s)}}}
+				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA1, Sig: s}}}
 			run(t, true, digest, &signature)
 		})
 	})

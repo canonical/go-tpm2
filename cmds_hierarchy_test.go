@@ -107,7 +107,7 @@ func TestCreatePrimary(t *testing.T) {
 	})
 
 	t.Run("CreateWithAuthValue", func(t *testing.T) {
-		sensitive := SensitiveCreate{UserAuth: Auth(testAuth)}
+		sensitive := SensitiveCreate{UserAuth: testAuth}
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -413,7 +413,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 	defer closeTPM(t, tpm)
 
 	setAuth := func(t *testing.T, hierarchy ResourceContext, session SessionContext, testHierarchy func(t *testing.T)) {
-		if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), session); err != nil {
+		if err := tpm.HierarchyChangeAuth(hierarchy, testAuth, session); err != nil {
 			t.Fatalf("HierarchyChangeAuth failed: %v", err)
 		}
 

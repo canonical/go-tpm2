@@ -152,7 +152,7 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 
 	mulX, _ := curve.ScalarMult(tpmX, tpmY, ephPriv)
 
-	return ECCParameter(mulX.Bytes()), &ECCPoint{X: ECCParameter(ephX.Bytes()), Y: ECCParameter(ephY.Bytes())}, nil
+	return mulX.Bytes(), &ECCPoint{X: ephX.Bytes(), Y: ephY.Bytes()}, nil
 }
 
 func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
@@ -179,7 +179,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}
 		salt := internal.KDFe(public.NameAlg.GetHash(), []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC().X), digestSize*8)
-		return EncryptedSecret(encryptedSalt), salt, nil
+		return encryptedSalt, salt, nil
 	}
 
 	return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)

@@ -84,7 +84,7 @@ func TestCreate(t *testing.T) {
 		primary := createRSASrkForTesting(t, tpm, nil)
 		defer flushContext(t, tpm, primary)
 
-		sensitive := SensitiveCreate{UserAuth: Auth(testAuth)}
+		sensitive := SensitiveCreate{UserAuth: testAuth}
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -351,7 +351,7 @@ func TestLoadExternal(t *testing.T) {
 		}
 		sensitive := Sensitive{
 			Type:      ObjectTypeRSA,
-			Sensitive: SensitiveCompositeU{Data: PrivateKeyRSA(key.Primes[0].Bytes())}}
+			Sensitive: SensitiveCompositeU{Data: key.Primes[0].Bytes()}}
 		public := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -362,7 +362,7 @@ func TestLoadExternal(t *testing.T) {
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
+			Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
@@ -374,7 +374,7 @@ func TestLoadExternal(t *testing.T) {
 		}
 		sensitive := Sensitive{
 			Type:      ObjectTypeECC,
-			Sensitive: SensitiveCompositeU{Data: ECCParameter(priv)}}
+			Sensitive: SensitiveCompositeU{Data: priv}}
 		public := Public{
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA1,
@@ -479,7 +479,7 @@ func TestLoadExternal(t *testing.T) {
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
+			Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
 
 		run(t, nil, &public, HandleOwner)
 	})
@@ -534,13 +534,13 @@ func TestUnseal(t *testing.T) {
 	})
 
 	t.Run("UsePasswordAuth", func(t *testing.T) {
-		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
+		handle := create(t, nil, testAuth, AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
 		run(t, handle, nil)
 	})
 
 	t.Run("UseHMACSessionAuth", func(t *testing.T) {
-		handle := create(t, nil, Auth(testAuth), AttrUserWithAuth)
+		handle := create(t, nil, testAuth, AttrUserWithAuth)
 		defer flushContext(t, tpm, handle)
 		sessionContext, err := tpm.StartAuthSession(nil, handle, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
@@ -617,13 +617,13 @@ func TestObjectChangeAuth(t *testing.T) {
 	})
 
 	t.Run("UsePasswordAuth", func(t *testing.T) {
-		context, pub := create(t, Auth(testAuth))
+		context, pub := create(t, testAuth)
 		defer flushContext(t, tpm, context)
 		run(t, context, pub, Auth("1234"), nil)
 	})
 
 	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
-		context, pub := create(t, Auth(testAuth))
+		context, pub := create(t, testAuth)
 		defer flushContext(t, tpm, context)
 		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
@@ -634,7 +634,7 @@ func TestObjectChangeAuth(t *testing.T) {
 	})
 
 	t.Run("UseBoundSessionAuth", func(t *testing.T) {
-		context, pub := create(t, Auth(testAuth))
+		context, pub := create(t, testAuth)
 		defer flushContext(t, tpm, context)
 		sessionContext, err := tpm.StartAuthSession(nil, context, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {

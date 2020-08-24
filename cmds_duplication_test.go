@@ -71,7 +71,7 @@ func TestDuplicate(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
 	parent, err := tpm.LoadExternal(nil, &parentTemplate, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -303,11 +303,11 @@ func TestImport(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: Digest(key.PublicKey.N.Bytes())}}
+		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
 	objectSensitive := Sensitive{
 		Type:      ObjectTypeRSA,
 		AuthValue: make(Auth, objectPublic.NameAlg.Size()),
-		Sensitive: SensitiveCompositeU{Data: PrivateKeyRSA(key.Primes[0].Bytes())}}
+		Sensitive: SensitiveCompositeU{Data: key.Primes[0].Bytes()}}
 	copy(objectSensitive.AuthValue, []byte("foo"))
 
 	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext) {
