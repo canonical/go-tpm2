@@ -13,16 +13,15 @@ import (
 )
 
 // StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session. On successful completion, it will
-// return a HandleContext that corresponds to the new session. The session can be used in subsequent commands by passing it as the
-// Context field of a Session struct instance to a command that accepts a session.
+// return a SessionContext that corresponds to the new session.
 //
 // The type of session is defined by the sessionType parameter. If sessionType is SessionTypeHMAC or SessionTypePolicy, then the
 // created session may be used for authorization. If sessionType is SessionTypeTrial, then the created session can only be used for
 // computing an authorization policy digest.
 //
-// The authHash parameter must be a digest algorithm, and defines the algorithm used for computing command and response parameter
-// digests, command and response HMACs, and derivation of the session key and symmetric keys for parameter encryption where used.
-// The size of the digest algorithm is used to determine the nonce size used for the session.
+// The authHash parameter defines the algorithm used for computing command and response parameter digests, command and response
+// HMACs, and derivation of the session key and symmetric keys for parameter encryption where used. The size of the digest algorithm
+// is used to determine the nonce size used for the session.
 //
 // If tpmKey is provided, it must correspond to an asymmetric decrypt key in the TPM. In this case, a random salt value will
 // contribute to the session key derivation, and the salt will be encrypted using the method specified by tpmKey before being sent to
