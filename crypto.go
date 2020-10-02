@@ -6,23 +6,15 @@ package tpm2
 
 import (
 	"crypto/elliptic"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/binary"
 	"fmt"
-	"hash"
 	"math/big"
 
 	"github.com/canonical/go-tpm2/internal"
 	"github.com/canonical/go-tpm2/mu"
 )
-
-func getHashConstructor(alg HashAlgorithmId) func() hash.Hash {
-	return func() hash.Hash {
-		return alg.NewHash()
-	}
-}
 
 func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 	switch curve {
@@ -59,30 +51,6 @@ func cryptComputeRpHash(hashAlg HashAlgorithmId, responseCode ResponseCode, comm
 	hash.Write(rpBytes)
 
 	return hash.Sum(nil)
-}
-
-func computeSessionHMAC(alg HashAlgorithmId, key, pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce,
-	attrs sessionAttrs) []byte {
-	hmac := hmac.New(getHashConstructor(alg), key)
-
-	hmac.Write(pHash)
-	hmac.Write(nonceNewer)
-	hmac.Write(nonceOlder)
-	hmac.Write(nonceDecrypt)
-	hmac.Write(nonceEncrypt)
-	hmac.Write([]byte{uint8(attrs)})
-
-	return hmac.Sum(nil)
-}
-
-func cryptComputeSessionCommandHMAC(context *sessionContext, key, cpHash []byte, nonceDecrypt, nonceEncrypt Nonce, attrs sessionAttrs) []byte {
-	scData := context.scData()
-	return computeSessionHMAC(scData.HashAlg, key, cpHash, scData.NonceCaller, scData.NonceTPM, nonceDecrypt, nonceEncrypt, attrs)
-}
-
-func cryptComputeSessionResponseHMAC(context *sessionContext, key, rpHash []byte, attrs sessionAttrs) []byte {
-	scData := context.scData()
-	return computeSessionHMAC(scData.HashAlg, key, rpHash, scData.NonceTPM, scData.NonceCaller, nil, nil, attrs)
 }
 
 func cryptComputeNonce(nonce []byte) error {

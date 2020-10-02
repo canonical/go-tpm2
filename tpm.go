@@ -67,7 +67,7 @@ type responseHeader struct {
 
 type cmdContext struct {
 	commandCode   CommandCode
-	sessionParams []*sessionParam
+	sessionParams sessionParams
 	responseCode  ResponseCode
 	responseTag   StructTag
 	responseBytes []byte
@@ -174,7 +174,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams []*sessionParam, resources, params []interface{}) (*cmdContext, error) {
+func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams sessionParams, resources, params []interface{}) (*cmdContext, error) {
 	handles := make([]interface{}, 0, len(resources))
 	handleNames := make([]Name, 0, len(resources))
 
@@ -197,7 +197,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 		}
 	}
 
-	if hasDecryptSession(sessionParams) && (len(params) == 0 || !isParamEncryptable(params[0])) {
+	if sessionParams.hasDecryptSession() && (len(params) == 0 || !isParamEncryptable(params[0])) {
 		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
 	}
 
@@ -215,7 +215,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 	tag := TagNoSessions
 	if len(sessionParams) > 0 {
 		tag = TagSessions
-		authArea, err := buildCommandAuthArea(t, sessionParams, commandCode, handleNames, cpBytes.Bytes())
+		authArea, err := sessionParams.buildCommandAuthArea(commandCode, handleNames, cpBytes.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("cannot build command auth area for command %s: %v", commandCode, err)
 		}
@@ -295,8 +295,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 		if _, err := mu.UnmarshalFromReader(buf, &authArea); err != nil {
 			return handleUnmarshallingError(context, "response auth area", err)
 		}
-		if err := processResponseAuthArea(t, authArea.Data, context.sessionParams, context.commandCode, context.responseCode,
-			rpBytes); err != nil {
+		if err := context.sessionParams.processResponseAuthArea(authArea.Data, context.responseCode, context.commandCode, rpBytes); err != nil {
 			return &InvalidResponseError{context.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
 		}
 
@@ -376,7 +375,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 	commandParams := make([]interface{}, 0, len(params))
 	responseHandles := make([]interface{}, 0, len(params))
 	responseParams := make([]interface{}, 0, len(params))
-	sessionParams := make([]*sessionParam, 0, 3)
+	sessionParams := make(sessionParams, 0, 3)
 
 	sentinels := 0
 	for _, param := range params {
@@ -391,7 +390,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 			case ResourceContextWithSession:
 				commandHandles = append(commandHandles, p.Context)
 				var err error
-				sessionParams, err = t.validateAndAppendAuthSessionParam(sessionParams, p)
+				sessionParams, err = sessionParams.validateAndAppendAuth(p)
 				if err != nil {
 					return fmt.Errorf("cannot process ResourceContextWithSession for command %s at index %d: %v", commandCode, len(commandHandles), err)
 				}
@@ -407,7 +406,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 		}
 	}
 
-	sessionParams, err := t.validateAndAppendExtraSessionParams(sessionParams, sessions)
+	sessionParams, err := sessionParams.validateAndAppendExtra(sessions)
 	if err != nil {
 		return fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", commandCode, err)
 	}

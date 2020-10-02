@@ -564,6 +564,29 @@ func (r *sessionContext) scData() *sessionContextData {
 	return r.d.Data.Data.(*sessionContextData)
 }
 
+func (r *sessionContext) tpmAttrs() sessionAttrs {
+	var attrs sessionAttrs
+	if r.attrs&AttrContinueSession > 0 {
+		attrs |= attrContinueSession
+	}
+	if r.attrs&AttrAuditExclusive > 0 {
+		attrs |= (attrAuditExclusive | attrAudit)
+	}
+	if r.attrs&AttrAuditReset > 0 {
+		attrs |= (attrAuditReset | attrAudit)
+	}
+	if r.attrs&AttrCommandEncrypt > 0 {
+		attrs |= attrDecrypt
+	}
+	if r.attrs&AttrResponseEncrypt > 0 {
+		attrs |= attrEncrypt
+	}
+	if r.attrs&AttrAudit > 0 {
+		attrs |= attrAudit
+	}
+	return attrs
+}
+
 func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))

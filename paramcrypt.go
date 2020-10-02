@@ -13,32 +13,6 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-func findSessionWithAttr(attr SessionAttributes, sessions []*sessionParam) (*sessionParam, int) {
-	for i, session := range sessions {
-		if session.session == nil {
-			continue
-		}
-		if session.session.attrs&attr > 0 {
-			return session, i
-		}
-	}
-
-	return nil, 0
-}
-
-func findDecryptSession(sessions []*sessionParam) (*sessionParam, int) {
-	return findSessionWithAttr(AttrCommandEncrypt, sessions)
-}
-
-func findEncryptSession(sessions []*sessionParam) (*sessionParam, int) {
-	return findSessionWithAttr(AttrResponseEncrypt, sessions)
-}
-
-func hasDecryptSession(sessions []*sessionParam) bool {
-	s, _ := findDecryptSession(sessions)
-	return s != nil
-}
-
 func isParamEncryptable(param interface{}) bool {
 	return mu.DetermineTPMKind(param) == mu.TPMKindSized
 }
@@ -52,28 +26,41 @@ func (s *sessionParam) computeSessionValue() []byte {
 	return key
 }
 
-func computeEncryptNonce(sessions []*sessionParam) Nonce {
-	session, i := findEncryptSession(sessions)
-	if session == nil || i == 0 || !sessions[0].isAuth {
-		return nil
-	}
-	decSession, di := findDecryptSession(sessions)
-	if decSession != nil && di == i {
-		return nil
-	}
-
-	return session.session.scData().NonceTPM
+func (sessions sessionParams) findDecryptSession() (*sessionParam, int) {
+	return sessions.findSessionWithAttr(AttrCommandEncrypt)
 }
 
-func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, error) {
-	session, index := findDecryptSession(sessions)
+func (sessions sessionParams) findEncryptSession() (*sessionParam, int) {
+	return sessions.findSessionWithAttr(AttrResponseEncrypt)
+}
+
+func (sessions sessionParams) hasDecryptSession() bool {
+	s, _ := sessions.findDecryptSession()
+	return s != nil
+}
+
+func (sessions sessionParams) computeEncryptNonce() {
+	session, i := sessions.findEncryptSession()
+	if session == nil || i == 0 || !sessions[0].isAuth() {
+		return
+	}
+	decSession, di := sessions.findDecryptSession()
+	if decSession != nil && di == i {
+		return
+	}
+
+	sessions[0].encryptNonce = session.session.scData().NonceTPM
+}
+
+func (sessions sessionParams) encryptCommandParameter(cpBytes []byte) error {
+	session, index := sessions.findDecryptSession()
 	if session == nil {
-		return nil, nil
+		return nil
 	}
 
 	scData := session.session.scData()
 	if !scData.HashAlg.Supported() {
-		return nil, fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
+		return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
 	}
 
 	sessionValue := session.computeSessionValue()
@@ -91,23 +78,23 @@ func encryptCommandParameter(sessions []*sessionParam, cpBytes []byte) (Nonce, e
 		symKey := k[0:offset]
 		iv := k[offset:]
 		if err := internal.EncryptSymmetricAES(symKey, internal.SymmetricMode(symmetric.Mode.Sym()), data, iv); err != nil {
-			return nil, fmt.Errorf("AES encryption failed: %v", err)
+			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
 		internal.XORObfuscation(scData.HashAlg.GetHash(), sessionValue, scData.NonceCaller, scData.NonceTPM, data)
 	default:
-		return nil, fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
+		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
-	if index == 0 || !sessions[0].isAuth {
-		return nil, nil
+	if index > 0 && sessions[0].isAuth() {
+		sessions[0].decryptNonce = scData.NonceTPM
 	}
 
-	return scData.NonceTPM, nil
+	return nil
 }
 
-func decryptResponseParameter(sessions []*sessionParam, rpBytes []byte) error {
-	session, _ := findEncryptSession(sessions)
+func (sessions sessionParams) decryptResponseParameter(rpBytes []byte) error {
+	session, _ := sessions.findEncryptSession()
 	if session == nil {
 		return nil
 	}

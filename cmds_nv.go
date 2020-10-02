@@ -135,16 +135,16 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authC
 //
 // On successful completion, nvIndex will be invalidated.
 func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, nvIndexAuthSession, platformAuthSession SessionContext, sessions ...SessionContext) error {
-	var s []*sessionParam
-	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
+	var s sessionParams
+	s, err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
 	if err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: platform, Session: platformAuthSession})
+	s, err = s.validateAndAppendAuth(ResourceContextWithSession{Context: platform, Session: platformAuthSession})
 	if err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
 	}
-	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
+	s, err = s.validateAndAppendExtra(sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
@@ -702,12 +702,12 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 // and nvIndex will be updated to reflect this - it isn't necessary to update nvIndex with ResourceContext.SetAuthValue in order to
 // use it in authorization roles that require knowledge of the authorization value for the index.
 func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuthSession SessionContext, sessions ...SessionContext) error {
-	var s []*sessionParam
-	s, err := t.validateAndAppendAuthSessionParam(s, ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
+	var s sessionParams
+	s, err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
 	if err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = t.validateAndAppendExtraSessionParams(s, sessions)
+	s, err = s.validateAndAppendExtra(sessions)
 	if err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
