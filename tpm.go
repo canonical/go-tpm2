@@ -181,11 +181,13 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 	for i, resource := range resources {
 		switch r := resource.(type) {
 		case HandleContext:
-			if err := t.checkHandleContextParam(r); err != nil {
-				return nil, wrapMarshallingError(commandCode, "command handles", fmt.Errorf("cannot process HandleContext at index %d: %v", i, err))
+			if r == nil {
+				handles = append(handles, HandleNull)
+				handleNames = append(handleNames, makeDummyContext(HandleNull).Name())
+			} else {
+				handles = append(handles, r.Handle())
+				handleNames = append(handleNames, r.Name())
 			}
-			handles = append(handles, r.Handle())
-			handleNames = append(handleNames, r.Name())
 		case nil:
 			handles = append(handles, HandleNull)
 			handleNames = append(handleNames, makeDummyContext(HandleNull).Name())

@@ -275,9 +275,6 @@ func processResponseAuthArea(tpm *TPMContext, authResponses []authResponse, sess
 
 func (t *TPMContext) validateAndAppendSessionParam(params []*sessionParam, in *sessionParam, isAuth bool) ([]*sessionParam, error) {
 	if in.session != nil {
-		if err := t.checkHandleContextParam(in.session); err != nil {
-			return nil, fmt.Errorf("invalid context for session: %v", err)
-		}
 		scData := in.session.scData()
 		if scData == nil {
 			return nil, errors.New("invalid context for session: incomplete session can only be used in TPMContext.FlushContext")

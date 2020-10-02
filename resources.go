@@ -570,16 +570,6 @@ func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext
 	return &sessionContext{d: &handleContextData{Type: handleContextTypeSession, Handle: handle, Name: name, Data: handleContextDataU{data}}}
 }
 
-func (t *TPMContext) checkHandleContextParam(hc HandleContext) error {
-	if hc == nil {
-		return errors.New("nil value")
-	}
-	if hc.Handle() == HandleUnassigned {
-		return errors.New("resource has been closed")
-	}
-	return nil
-}
-
 // CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle. It will execute a command to read
 // the public area from the TPM in order to initialize state that is maintained on the host side. A ResourceUnavailableError error
 // will be returned if the specified handle references a resource that is currently unavailable. If this function is called without any

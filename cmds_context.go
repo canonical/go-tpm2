@@ -184,8 +184,8 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 // On successful completion, flushContext is invalidated. If flushContext corresponded to a session, then it will no longer be
 // possible to restore that session with TPMContext.ContextLoad, even if it was previously saved with TPMContext.ContextSave.
 func (t *TPMContext) FlushContext(flushContext HandleContext) error {
-	if err := t.checkHandleContextParam(flushContext); err != nil {
-		return makeInvalidArgError("flushContext", fmt.Sprintf("%v", err))
+	if flushContext == nil {
+		return makeInvalidArgError("flushContext", "nil value")
 	}
 
 	if err := t.RunCommand(CommandFlushContext, nil,

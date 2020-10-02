@@ -98,11 +98,7 @@ func TestHMACSessions(t *testing.T) {
 					t.Errorf("Subsequent session usage failed: %v", err)
 				}
 			} else {
-				if err == nil {
-					t.Fatalf("Subsequent use of the session should fail")
-				}
-				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Create at index 1: invalid context for session: "+
-					"resource has been closed" {
+				if !IsTPMSessionError(err, ErrorValue, CommandCreate, 1) {
 					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
 				}
 			}
@@ -199,11 +195,7 @@ func TestPolicySessions(t *testing.T) {
 					t.Errorf("Subsequent usage of the session failed: %v", err)
 				}
 			} else {
-				if err == nil {
-					t.Fatalf("Subsequent usage of the session should fail")
-				}
-				if err.Error() != "cannot process ResourceContextWithSession for command TPM_CC_Unseal at index 1: invalid context for session: "+
-					"resource has been closed" {
+				if !IsTPMSessionError(err, ErrorValue, CommandUnseal, 1) {
 					t.Errorf("Unexpected error: %v", err)
 				}
 			}
