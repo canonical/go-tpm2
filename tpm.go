@@ -67,7 +67,7 @@ type responseHeader struct {
 
 type cmdContext struct {
 	commandCode   CommandCode
-	sessionParams sessionParams
+	sessionParams *sessionParams
 	responseCode  ResponseCode
 	responseTag   StructTag
 	responseBytes []byte
@@ -174,7 +174,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams sessionParams, resources, params []interface{}) (*cmdContext, error) {
+func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode, sessionParams *sessionParams, resources, params []interface{}) (*cmdContext, error) {
 	handles := make([]interface{}, 0, len(resources))
 	handleNames := make([]Name, 0, len(resources))
 
@@ -213,7 +213,7 @@ func (t *TPMContext) runCommandWithoutProcessingResponse(commandCode CommandCode
 	}
 
 	tag := TagNoSessions
-	if len(sessionParams) > 0 {
+	if len(sessionParams.sessions) > 0 {
 		tag = TagSessions
 		authArea, err := sessionParams.buildCommandAuthArea(commandCode, handleNames, cpBytes.Bytes())
 		if err != nil {
@@ -291,11 +291,11 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 				fmt.Errorf("error reading parameters to temporary buffer: %v", err))
 		}
 
-		authArea := responseAuthAreaRawSlice{make([]authResponse, len(context.sessionParams))}
+		authArea := responseAuthAreaRawSlice{make([]authResponse, len(context.sessionParams.sessions))}
 		if _, err := mu.UnmarshalFromReader(buf, &authArea); err != nil {
 			return handleUnmarshallingError(context, "response auth area", err)
 		}
-		if err := context.sessionParams.processResponseAuthArea(authArea.Data, context.responseCode, context.commandCode, rpBytes); err != nil {
+		if err := context.sessionParams.processResponseAuthArea(authArea.Data, context.responseCode, rpBytes); err != nil {
 			return &InvalidResponseError{context.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
 		}
 
@@ -311,7 +311,7 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 			t.exclusiveSession.scData().IsExclusive = false
 		}
 		var exclusive *sessionContext
-		for _, s := range context.sessionParams {
+		for _, s := range context.sessionParams.sessions {
 			if s.session == nil {
 				continue
 			}
@@ -371,11 +371,11 @@ func (t *TPMContext) processResponse(context *cmdContext, handles, params []inte
 // In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
 // this function will also return an error if the TPM responds with any ResponseCode other than Success.
 func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionContext, params ...interface{}) error {
-	commandHandles := make([]interface{}, 0, len(params))
-	commandParams := make([]interface{}, 0, len(params))
-	responseHandles := make([]interface{}, 0, len(params))
-	responseParams := make([]interface{}, 0, len(params))
-	sessionParams := make(sessionParams, 0, 3)
+	var commandHandles []interface{}
+	var commandParams []interface{}
+	var responseHandles []interface{}
+	var responseParams []interface{}
+	var sessionParams sessionParams
 
 	sentinels := 0
 	for _, param := range params {
@@ -389,9 +389,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 			switch p := param.(type) {
 			case ResourceContextWithSession:
 				commandHandles = append(commandHandles, p.Context)
-				var err error
-				sessionParams, err = sessionParams.validateAndAppendAuth(p)
-				if err != nil {
+				if err := sessionParams.validateAndAppendAuth(p); err != nil {
 					return fmt.Errorf("cannot process ResourceContextWithSession for command %s at index %d: %v", commandCode, len(commandHandles), err)
 				}
 			default:
@@ -406,12 +404,11 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 		}
 	}
 
-	sessionParams, err := sessionParams.validateAndAppendExtra(sessions)
-	if err != nil {
+	if err := sessionParams.validateAndAppendExtra(sessions); err != nil {
 		return fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", commandCode, err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(commandCode, sessionParams, commandHandles, commandParams)
+	ctx, err := t.runCommandWithoutProcessingResponse(commandCode, &sessionParams, commandHandles, commandParams)
 	if err != nil {
 		return err
 	}

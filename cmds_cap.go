@@ -229,7 +229,7 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (TPMManufacture
 // On success, this will return true if TPMContext is connected to a TPM2 device, or false if it is connected to a TPM1.2 device. An
 // error will be returned if communication with the device fails or the response packet is badly formed.
 func (t *TPMContext) IsTPM2() (bool, error) {
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandGetCapability, nil,
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandGetCapability, &sessionParams{},
 		nil, []interface{}{CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(1)})
 	if err != nil {
 		return false, err

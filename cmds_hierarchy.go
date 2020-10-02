@@ -183,16 +183,14 @@ func (t *TPMContext) HierarchyControl(authContext ResourceContext, enable Handle
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
 func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	var s sessionParams
-	s, err := s.validateAndAppendAuth(ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
-	if err != nil {
+	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}); err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for authContext: %v", err)
 	}
-	s, err = s.validateAndAppendExtra(sessions)
-	if err != nil {
+	if err := s.validateAndAppendExtra(sessions); err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, s, []interface{}{authContext}, nil)
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, &s, []interface{}{authContext}, nil)
 
 	for _, h := range []Handle{HandleOwner, HandleEndorsement, HandleLockout} {
 		if rc, exists := t.permanentResources[h]; exists {
@@ -240,16 +238,14 @@ func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, aut
 // resource.
 func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Auth, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	var s sessionParams
-	s, err := s.validateAndAppendAuth(ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
-	if err != nil {
+	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}); err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
 	}
-	s, err = s.validateAndAppendExtra(sessions)
-	if err != nil {
+	if err := s.validateAndAppendExtra(sessions); err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, s, []interface{}{authContext}, []interface{}{newAuth})
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, &s, []interface{}{authContext}, []interface{}{newAuth})
 	if err != nil {
 		return err
 	}

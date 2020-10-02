@@ -26,44 +26,44 @@ func (s *sessionParam) computeSessionValue() []byte {
 	return key
 }
 
-func (sessions sessionParams) findDecryptSession() (*sessionParam, int) {
-	return sessions.findSessionWithAttr(AttrCommandEncrypt)
+func (p *sessionParams) findDecryptSession() (*sessionParam, int) {
+	return p.findSessionWithAttr(AttrCommandEncrypt)
 }
 
-func (sessions sessionParams) findEncryptSession() (*sessionParam, int) {
-	return sessions.findSessionWithAttr(AttrResponseEncrypt)
+func (p *sessionParams) findEncryptSession() (*sessionParam, int) {
+	return p.findSessionWithAttr(AttrResponseEncrypt)
 }
 
-func (sessions sessionParams) hasDecryptSession() bool {
-	s, _ := sessions.findDecryptSession()
+func (p *sessionParams) hasDecryptSession() bool {
+	s, _ := p.findDecryptSession()
 	return s != nil
 }
 
-func (sessions sessionParams) computeEncryptNonce() {
-	session, i := sessions.findEncryptSession()
-	if session == nil || i == 0 || !sessions[0].isAuth() {
+func (p *sessionParams) computeEncryptNonce() {
+	s, i := p.findEncryptSession()
+	if s == nil || i == 0 || !p.sessions[0].isAuth() {
 		return
 	}
-	decSession, di := sessions.findDecryptSession()
-	if decSession != nil && di == i {
+	ds, di := p.findDecryptSession()
+	if ds != nil && di == i {
 		return
 	}
 
-	sessions[0].encryptNonce = session.session.scData().NonceTPM
+	p.sessions[0].encryptNonce = s.session.scData().NonceTPM
 }
 
-func (sessions sessionParams) encryptCommandParameter(cpBytes []byte) error {
-	session, index := sessions.findDecryptSession()
-	if session == nil {
+func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
+	s, i := p.findDecryptSession()
+	if s == nil {
 		return nil
 	}
 
-	scData := session.session.scData()
+	scData := s.session.scData()
 	if !scData.HashAlg.Supported() {
 		return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
 	}
 
-	sessionValue := session.computeSessionValue()
+	sessionValue := s.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
 	data := cpBytes[2 : size+2]
@@ -86,25 +86,25 @@ func (sessions sessionParams) encryptCommandParameter(cpBytes []byte) error {
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
-	if index > 0 && sessions[0].isAuth() {
-		sessions[0].decryptNonce = scData.NonceTPM
+	if i > 0 && p.sessions[0].isAuth() {
+		p.sessions[0].decryptNonce = scData.NonceTPM
 	}
 
 	return nil
 }
 
-func (sessions sessionParams) decryptResponseParameter(rpBytes []byte) error {
-	session, _ := sessions.findEncryptSession()
-	if session == nil {
+func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
+	s, _ := p.findEncryptSession()
+	if s == nil {
 		return nil
 	}
 
-	scData := session.session.scData()
+	scData := s.session.scData()
 	if !scData.HashAlg.Supported() {
 		return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
 	}
 
-	sessionValue := session.computeSessionValue()
+	sessionValue := s.computeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)
 	data := rpBytes[2 : size+2]

@@ -136,20 +136,17 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authC
 // On successful completion, nvIndex will be invalidated.
 func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, nvIndexAuthSession, platformAuthSession SessionContext, sessions ...SessionContext) error {
 	var s sessionParams
-	s, err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
-	if err != nil {
+	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession}); err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = s.validateAndAppendAuth(ResourceContextWithSession{Context: platform, Session: platformAuthSession})
-	if err != nil {
+	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: platform, Session: platformAuthSession}); err != nil {
 		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
 	}
-	s, err = s.validateAndAppendExtra(sessions)
-	if err != nil {
+	if err := s.validateAndAppendExtra(sessions); err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVUndefineSpaceSpecial, s, []interface{}{nvIndex, platform}, nil)
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVUndefineSpaceSpecial, &s, []interface{}{nvIndex, platform}, nil)
 	if err != nil {
 		return err
 	}
@@ -703,16 +700,14 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 // use it in authorization roles that require knowledge of the authorization value for the index.
 func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuthSession SessionContext, sessions ...SessionContext) error {
 	var s sessionParams
-	s, err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession})
-	if err != nil {
+	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession}); err != nil {
 		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
 	}
-	s, err = s.validateAndAppendExtra(sessions)
-	if err != nil {
+	if err := s.validateAndAppendExtra(sessions); err != nil {
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVChangeAuth, s, []interface{}{nvIndex}, []interface{}{newAuth})
+	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVChangeAuth, &s, []interface{}{nvIndex}, []interface{}{newAuth})
 	if err != nil {
 		return err
 	}

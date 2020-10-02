@@ -208,10 +208,13 @@ func computeBindName(name Name, auth Auth) Name {
 	return r
 }
 
-type sessionParams []*sessionParam
+type sessionParams struct {
+	commandCode CommandCode
+	sessions    []*sessionParam
+}
 
-func (sessions sessionParams) findSessionWithAttr(attr SessionAttributes) (*sessionParam, int) {
-	for i, session := range sessions {
+func (p *sessionParams) findSessionWithAttr(attr SessionAttributes) (*sessionParam, int) {
+	for i, session := range p.sessions {
 		if session.session == nil {
 			continue
 		}
@@ -223,11 +226,11 @@ func (sessions sessionParams) findSessionWithAttr(attr SessionAttributes) (*sess
 	return nil, 0
 }
 
-func (sessions sessionParams) validateAndAppend(s *sessionParam) (sessionParams, error) {
+func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 	if s.session != nil {
 		scData := s.session.scData()
 		if scData == nil {
-			return nil, errors.New("invalid context for session: incomplete session can only be used in TPMContext.FlushContext")
+			return errors.New("invalid context for session: incomplete session can only be used in TPMContext.FlushContext")
 		}
 		switch scData.SessionType {
 		case SessionTypeHMAC:
@@ -251,10 +254,11 @@ func (sessions sessionParams) validateAndAppend(s *sessionParam) (sessionParams,
 		}
 	}
 
-	return append(sessions, s), nil
+	p.sessions = append(p.sessions, s)
+	return nil
 }
 
-func (sessions sessionParams) validateAndAppendAuth(in ResourceContextWithSession) (sessionParams, error) {
+func (p *sessionParams) validateAndAppendAuth(in ResourceContextWithSession) error {
 	var sc *sessionContext
 	if in.Session != nil {
 		sc = in.Session.(*sessionContext)
@@ -264,26 +268,24 @@ func (sessions sessionParams) validateAndAppendAuth(in ResourceContextWithSessio
 		associatedContext = makePermanentContext(HandleNull)
 	}
 	s := &sessionParam{associatedContext: associatedContext, session: sc}
-	return sessions.validateAndAppend(s)
+	return p.validateAndAppend(s)
 }
 
-func (sessions sessionParams) validateAndAppendExtra(in []SessionContext) (sessionParams, error) {
+func (p *sessionParams) validateAndAppendExtra(in []SessionContext) error {
 	for _, s := range in {
 		if s == nil {
 			continue
 		}
-		var err error
-		sessions, err = sessions.validateAndAppend(&sessionParam{session: s.(*sessionContext)})
-		if err != nil {
-			return nil, err
+		if err := p.validateAndAppend(&sessionParam{session: s.(*sessionContext)}); err != nil {
+			return err
 		}
 	}
 
-	return sessions, nil
+	return nil
 }
 
-func (sessions sessionParams) computeCallerNonces() error {
-	for _, s := range sessions {
+func (p *sessionParams) computeCallerNonces() error {
+	for _, s := range p.sessions {
 		if s.session == nil {
 			continue
 		}
@@ -295,23 +297,24 @@ func (sessions sessionParams) computeCallerNonces() error {
 	return nil
 }
 
-func (sessions sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte) (commandAuthArea, error) {
-	if len(sessions) > 3 {
+func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte) (commandAuthArea, error) {
+	if len(p.sessions) > 3 {
 		return nil, errors.New("too many session parameters provided")
 	}
 
-	if err := sessions.computeCallerNonces(); err != nil {
+	if err := p.computeCallerNonces(); err != nil {
 		return nil, fmt.Errorf("cannot compute caller nonces: %v", err)
 	}
 
-	if err := sessions.encryptCommandParameter(cpBytes); err != nil {
+	if err := p.encryptCommandParameter(cpBytes); err != nil {
 		return nil, fmt.Errorf("cannot encrypt first command parameter: %v", err)
 	}
 
-	sessions.computeEncryptNonce()
+	p.computeEncryptNonce()
+	p.commandCode = commandCode
 
 	var area commandAuthArea
-	for _, s := range sessions {
+	for _, s := range p.sessions {
 		a := s.buildCommandAuth(commandCode, commandHandles, cpBytes)
 		area = append(area, *a)
 	}
@@ -319,14 +322,14 @@ func (sessions sessionParams) buildCommandAuthArea(commandCode CommandCode, comm
 	return area, nil
 }
 
-func (sessions sessionParams) processResponseAuthArea(authResponses []authResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) error {
+func (p *sessionParams) processResponseAuthArea(authResponses []authResponse, responseCode ResponseCode, rpBytes []byte) error {
 	for i, resp := range authResponses {
-		if err := sessions[i].processResponseAuth(resp, responseCode, commandCode, rpBytes); err != nil {
+		if err := p.sessions[i].processResponseAuth(resp, responseCode, p.commandCode, rpBytes); err != nil {
 			return fmt.Errorf("encountered an error for session at index %d: %v", i, err)
 		}
 	}
 
-	if err := sessions.decryptResponseParameter(rpBytes); err != nil {
+	if err := p.decryptResponseParameter(rpBytes); err != nil {
 		return fmt.Errorf("cannot decrypt first response parameter: %v", err)
 	}
 
