@@ -227,6 +227,10 @@ func (p *sessionParams) findSessionWithAttr(attr SessionAttributes) (*sessionPar
 }
 
 func (p *sessionParams) validateAndAppend(s *sessionParam) error {
+	if len(p.sessions) >= 3 {
+		return errors.New("too many session parameters")
+	}
+
 	if s.session != nil {
 		scData := s.session.scData()
 		if scData == nil {
@@ -298,10 +302,6 @@ func (p *sessionParams) computeCallerNonces() error {
 }
 
 func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte) (commandAuthArea, error) {
-	if len(p.sessions) > 3 {
-		return nil, errors.New("too many session parameters provided")
-	}
-
 	if err := p.computeCallerNonces(); err != nil {
 		return nil, fmt.Errorf("cannot compute caller nonces: %v", err)
 	}
