@@ -91,14 +91,10 @@ func (s *sessionParam) isAuth() bool {
 }
 
 func (s *sessionParam) computeSessionHMACKey() []byte {
-	var authValue []byte
-	if s.associatedContext != nil {
-		authValue = s.associatedContext.(resourceContextPrivate).authValue()
-	}
 	var key []byte
 	key = append(key, s.session.scData().SessionKey...)
 	if s.includeAuthValue {
-		key = append(key, authValue...)
+		key = append(key, s.associatedContext.(resourceContextPrivate).authValue()...)
 	}
 	return key
 }
@@ -254,7 +250,12 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 		case SessionTypePolicy:
 			// A policy session that includes a TPM2_PolicyAuthValue assertion. Include the auth value of the associated
 			// ResourceContext.
-			s.includeAuthValue = scData.PolicyHMACType == policyHMACTypeAuth
+			switch {
+			case !s.isAuth():
+				// This is actually an invalid case, but just let the TPM return the appropriate error
+			default:
+				s.includeAuthValue = scData.PolicyHMACType == policyHMACTypeAuth
+			}
 		}
 	}
 

@@ -20,7 +20,7 @@ func isParamEncryptable(param interface{}) bool {
 func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
 	key = append(key, s.session.scData().SessionKey...)
-	if s.associatedContext != nil {
+	if s.isAuth() {
 		key = append(key, s.associatedContext.(resourceContextPrivate).authValue()...)
 	}
 	return key
