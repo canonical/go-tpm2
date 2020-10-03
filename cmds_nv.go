@@ -146,8 +146,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVUndefineSpaceSpecial, &s, []interface{}{nvIndex, platform}, nil)
-	if err != nil {
+	if err := t.runCommandWithoutProcessingAuthResponse(CommandNVUndefineSpaceSpecial, &s, []interface{}{nvIndex, platform}, nil, nil); err != nil {
 		return err
 	}
 
@@ -155,7 +154,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 	// executed), the TPM will respond with a HMAC generated with a key based on an empty auth value.
 	nvIndex.SetAuthValue(nil)
 
-	if err := t.processResponse(ctx, nil, nil); err != nil {
+	if err := t.processLastAuthResponse(nil); err != nil {
 		return err
 	}
 
@@ -707,8 +706,7 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandNVChangeAuth, &s, []interface{}{nvIndex}, []interface{}{newAuth})
-	if err != nil {
+	if err := t.runCommandWithoutProcessingAuthResponse(CommandNVChangeAuth, &s, []interface{}{nvIndex}, []interface{}{newAuth}, nil); err != nil {
 		return err
 	}
 
@@ -716,7 +714,7 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 	// session is bound, the TPM will respond with a HMAC generated from the original key
 	nvIndex.SetAuthValue(newAuth)
 
-	return t.processResponse(ctx, nil, nil)
+	return t.processLastAuthResponse(nil)
 }
 
 // func (t *TPMContext) NVCertify(signContext, authContext, nvIndex HandleContext, qualifyingData Data,

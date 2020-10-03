@@ -190,7 +190,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession S
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandClear, &s, []interface{}{authContext}, nil)
+	err := t.runCommandWithoutProcessingAuthResponse(CommandClear, &s, []interface{}{authContext}, nil, nil)
 
 	for _, h := range []Handle{HandleOwner, HandleEndorsement, HandleLockout} {
 		if rc, exists := t.permanentResources[h]; exists {
@@ -202,7 +202,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession S
 		return err
 	}
 
-	return t.processResponse(ctx, nil, nil)
+	return t.processLastAuthResponse(nil)
 }
 
 // ClearControl executes the TPM2_ClearControl command to enable or disable execution of the TPM2_Clear command (via the
@@ -245,8 +245,7 @@ func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Au
 		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingResponse(CommandHierarchyChangeAuth, &s, []interface{}{authContext}, []interface{}{newAuth})
-	if err != nil {
+	if err := t.runCommandWithoutProcessingAuthResponse(CommandHierarchyChangeAuth, &s, []interface{}{authContext}, []interface{}{newAuth}, nil); err != nil {
 		return err
 	}
 
@@ -254,5 +253,5 @@ func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Au
 	// that includes newAuth instead.
 	authContext.SetAuthValue(newAuth)
 
-	return t.processResponse(ctx, nil, nil)
+	return t.processLastAuthResponse(nil)
 }
