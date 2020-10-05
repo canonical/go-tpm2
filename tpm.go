@@ -105,7 +105,7 @@ type ResourceContextWithSession struct {
 // authorization for a corresponding TPM resource. These sessions may be used for the purposes of session based parameter encryption
 // or command auditing.
 type TPMContext struct {
-	tcti                  io.ReadWriteCloser
+	tcti                  TCTI
 	permanentResources    map[Handle]*permanentContext
 	maxSubmissions        uint
 	propertiesInitialized bool
@@ -477,7 +477,7 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 	return t.InitProperties()
 }
 
-func newTpmContext(tcti io.ReadWriteCloser) *TPMContext {
+func newTpmContext(tcti TCTI) *TPMContext {
 	r := new(TPMContext)
 	r.tcti = tcti
 	r.permanentResources = make(map[Handle]*permanentContext)
@@ -496,7 +496,7 @@ func newTpmContext(tcti io.ReadWriteCloser) *TPMContext {
 // It will return an error if a TPM interface cannot be detected.
 //
 // If the tcti parameter is not nil, this function never returns an error.
-func NewTPMContext(tcti io.ReadWriteCloser) (*TPMContext, error) {
+func NewTPMContext(tcti TCTI) (*TPMContext, error) {
 	if tcti == nil {
 		for _, path := range []string{"/dev/tpmrm0", "/dev/tpm0"} {
 			var err error

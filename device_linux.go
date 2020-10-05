@@ -6,6 +6,7 @@ package tpm2
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 
@@ -17,7 +18,7 @@ const (
 	maxCommandSize int = 4096
 )
 
-// TctiDeviceLinux represents a connection to a Linux TPM character device.
+// tctiDeviceLinux represents a connection to a Linux TPM character device.
 type TctiDeviceLinux struct {
 	f   *os.File
 	buf *bytes.Reader
@@ -60,6 +61,14 @@ func (d *TctiDeviceLinux) Write(data []byte) (int, error) {
 
 func (d *TctiDeviceLinux) Close() error {
 	return d.f.Close()
+}
+
+func (d *TctiDeviceLinux) SetLocality(locality uint8) error {
+	return errors.New("not implemented")
+}
+
+func (d *TctiDeviceLinux) MakeSticky(handle Handle, sticky bool) error {
+	return errors.New("not implemented")
 }
 
 // OpenTPMDevice attempts to open a connection to the Linux TPM character device at the specified path. If successful, it returns a

@@ -7,6 +7,7 @@ package tpm2
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -37,7 +38,7 @@ func (e PlatformCommandError) Error() string {
 
 // TctiMssim represents a connection to a TPM simulator that implements the Microsoft TPM2 simulator interface.
 type TctiMssim struct {
-	Locality uint8 // Locality of commands submitted to the simulator on this interface
+	locality uint8 // Locality of commands submitted to the simulator on this interface
 
 	tpm      net.Conn
 	platform net.Conn
@@ -75,7 +76,7 @@ func (t *TctiMssim) Read(data []byte) (int, error) {
 }
 
 func (t *TctiMssim) Write(data []byte) (int, error) {
-	buf, err := mu.MarshalToBytes(cmdTPMSendCommand, t.Locality, uint32(len(data)), mu.RawBytes(data))
+	buf, err := mu.MarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal command: %v", err))
 	}
@@ -100,6 +101,15 @@ func (t *TctiMssim) Close() (out error) {
 		out = xerrors.Errorf("cannot close TPM command channel: %w", err)
 	}
 	return
+}
+
+func (t *TctiMssim) SetLocality(locality uint8) error {
+	t.locality = locality
+	return nil
+}
+
+func (t *TctiMssim) MakeSticky(handle Handle, sticky bool) error {
+	return errors.New("not implemented")
 }
 
 func (t *TctiMssim) platformCommand(cmd uint32) error {
@@ -153,7 +163,7 @@ func OpenMssim(host string, tpmPort, platformPort uint) (*TctiMssim, error) {
 	platformAddress := fmt.Sprintf("%s:%d", host, platformPort)
 
 	tcti := new(TctiMssim)
-	tcti.Locality = 3
+	tcti.locality = 3
 
 	tpm, err := net.Dial("tcp", tpmAddress)
 	if err != nil {
