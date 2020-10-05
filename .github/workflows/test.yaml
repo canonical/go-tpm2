@@ -35,6 +35,6 @@ jobs:
     - name: Build
       run: go build -v github.com/canonical/go-tpm2/...
     - name: Test
-      run: cd ${{ github.workspace }}/src/github.com/canonical/go-tpm2 && ./run-tests --with-mssim
+      run: cd ${{ github.workspace }}/src/github.com/canonical/go-tpm2 && ./run-tests -use-mssim
     - name: Go vet
       run: go vet github.com/canonical/go-tpm2/...
