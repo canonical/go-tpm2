@@ -9,6 +9,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 type mockHandleContext struct {
@@ -273,7 +274,7 @@ func TestComputePCRDigestSimple(t *testing.T) {
 }
 
 func TestTrialPolicySigned(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -341,7 +342,7 @@ func TestTrialPolicySigned(t *testing.T) {
 }
 
 func TestTrialPolicySecret(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -534,7 +535,7 @@ func TestTrialPolicyPCR(t *testing.T) {
 }
 
 func TestTrialPolicyNV(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()

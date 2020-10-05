@@ -14,96 +14,15 @@ import (
 	"math/big"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
-)
-
-type testCapabilityFlags uint32
-
-const (
-	testCapabilityPersist = 1 << iota
-	testCapabilityDAParameters
-	testCapabilityChangeHierarchyAuth
-	testCapabilityOwnerHierarchy
-	testCapabilityEndorsementHierarchy
-	testCapabilityLockoutHierarchy
-	testCapabilityPlatformHierarchy
-	testCapabilityPCRChange
-	testCapabilitySetCommandCodeAuditStatus
-	testCapabilityClear
-	testCapabilityHierarchyControl
-
-	testCapabilityOwnerPersist    = testCapabilityPersist | testCapabilityOwnerHierarchy
-	testCapabilityPlatformPersist = testCapabilityPersist | testCapabilityPlatformHierarchy
-
-	testCapabilityChangeOwnerAuth       = testCapabilityChangeHierarchyAuth | testCapabilityOwnerHierarchy
-	testCapabilityChangeEndorsementAuth = testCapabilityChangeHierarchyAuth | testCapabilityEndorsementHierarchy
-	testCapabilityChangeLockoutAuth     = testCapabilityChangeHierarchyAuth | testCapabilityLockoutHierarchy
-	testCapabilityChangePlatformAuth    = testCapabilityChangeHierarchyAuth | testCapabilityPlatformHierarchy
-)
-
-func (f *testCapabilityFlags) String() string {
-	return ""
-}
-
-func (f *testCapabilityFlags) Set(value string) error {
-	for _, value := range strings.Split(value, ",") {
-		switch value {
-		case "persist":
-			*f |= testCapabilityPersist
-		case "daparameters":
-			*f |= (testCapabilityDAParameters | testCapabilityLockoutHierarchy)
-		case "changehierarchyauth":
-			*f |= testCapabilityChangeHierarchyAuth
-		case "ownerhierarchy":
-			*f |= testCapabilityOwnerHierarchy
-		case "endorsementhierarchy":
-			*f |= testCapabilityEndorsementHierarchy
-		case "lockouthierarchy":
-			*f |= testCapabilityLockoutHierarchy
-		case "platformhierarchy":
-			*f |= testCapabilityPlatformHierarchy
-		case "pcrchange":
-			*f |= testCapabilityPCRChange
-		case "setcommandcodeauditstatus":
-			*f |= testCapabilitySetCommandCodeAuditStatus
-		case "clear":
-			*f |= testCapabilityClear
-		case "hierarchycontrol":
-			*f |= testCapabilityHierarchyControl
-		default:
-			return fmt.Errorf("unrecognized option %s", value)
-		}
-	}
-	return nil
-}
-
-var (
-	useTpm        bool
-	tpmPath       string
-	permittedCaps testCapabilityFlags
-
-	useMssim          bool
-	mssimHost         string
-	mssimTpmPort      uint
-	mssimPlatformPort uint
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func init() {
-	flag.BoolVar(&useTpm, "use-tpm", false, "Whether to use a TPM character device for testing (eg, /dev/tpm0)")
-	flag.StringVar(&tpmPath, "tpm-path", "/dev/tpm0", "The path of the TPM character device to use for testing (default: /dev/tpm0)")
-	flag.Var(&permittedCaps, "tpm-permitted-caps",
-		"Comma-separated list of capabilities that tests can use on a TPM character device (ownerpersist,platformpersist,daparameters,"+
-			"changeownerauth,changelockoutauth,changeplatformauth,ownerhierarchy,endorsementhierarchy,lockouthierarchy,platformhierarchy,"+
-			"pcrchange,setcommandcodeauditstatus,clear")
-
-	flag.BoolVar(&useMssim, "use-mssim", false, "Whether to use the TPM simulator for testing")
-	flag.StringVar(&mssimHost, "mssim-host", "localhost", "The hostname of the TPM simulator (default: localhost)")
-	flag.UintVar(&mssimTpmPort, "mssim-tpm-port", 2321, "The port number of the TPM simulator command channel (default: 2321)")
-	flag.UintVar(&mssimPlatformPort, "mssim-platform-port", 2322, "The port number of the TPM simulator platform channel (default: 2322)")
+	testutil.AddCommandLineFlags()
 }
 
 var (
@@ -451,56 +370,31 @@ func verifyContextFlushed(t *testing.T, tpm *TPMContext, context HandleContext) 
 	flushContext(t, tpm, context)
 }
 
+func resetTPMSimulator(t *testing.T, tpm *TPMContext, tcti *TctiMssim) {
+	if err := testutil.ResetTPMSimulator(tpm, tcti); err != nil {
+		t.Fatalf("Cannot reset TPM simulator: %v", err)
+	}
+}
+
 func openTPMSimulatorForTesting(t *testing.T) (*TPMContext, *TctiMssim) {
-	if !useMssim {
+	tpm, tcti, err := testutil.NewTPMSimulatorContext()
+	if err != nil {
+		t.Fatalf("Cannot open TPM simulator: %v", err)
+	}
+	if tpm == nil {
 		t.SkipNow()
 	}
-
-	if useTpm && useMssim {
-		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
-	}
-
-	tcti, err := OpenMssim(mssimHost, mssimTpmPort, mssimPlatformPort)
-	if err != nil {
-		t.Fatalf("Failed to open mssim connection: %v", err)
-	}
-
-	tpm, _ := NewTPMContext(tcti)
 	return tpm, tcti
 }
 
-func resetTPMSimulator(t *testing.T, tpm *TPMContext, tcti *TctiMssim) {
-	if err := tpm.Shutdown(StartupClear); err != nil {
-		t.Fatalf("Shutdown failed: %v", err)
+func openTPMForTesting(t *testing.T, features testutil.TPMFeatureFlags) *TPMContext {
+	tpm, _, err := testutil.NewTPMContext(features)
+	if err != nil {
+		t.Fatalf("Cannot open TPM: %v", err)
 	}
-	if err := tcti.Reset(); err != nil {
-		t.Fatalf("Resetting the TPM simulator failed: %v", err)
-	}
-	if err := tpm.Startup(StartupClear); err != nil {
-		t.Fatalf("Startup failed: %v", err)
-	}
-}
-
-func openTPMForTesting(t *testing.T, caps testCapabilityFlags) *TPMContext {
-	if !useTpm {
-		tpm, _ := openTPMSimulatorForTesting(t)
-		return tpm
-	}
-
-	if useTpm && useMssim {
-		t.Fatalf("Cannot specify both -use-tpm and -use-mssim")
-	}
-
-	if caps&permittedCaps != caps {
+	if tpm == nil {
 		t.SkipNow()
 	}
-
-	tcti, err := OpenTPMDevice(tpmPath)
-	if err != nil {
-		t.Fatalf("Failed to open the TPM device: %v", err)
-	}
-
-	tpm, _ := NewTPMContext(tcti)
 	return tpm
 }
 
@@ -513,43 +407,14 @@ func closeTPM(t *testing.T, tpm *TPMContext) {
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(func() int {
-		if useMssim {
-			tcti, err := OpenMssim(mssimHost, mssimTpmPort, mssimPlatformPort)
+		if testutil.TPMBackend == testutil.TPMBackendMssim {
+			simulatorCleanup, err := testutil.LaunchTPMSimulator(nil)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to open mssim connection: %v", err)
+				fmt.Fprintf(os.Stderr, "Cannot launch TPM simulator: %v\n", err)
 				return 1
 			}
-
-			tpm, _ := NewTPMContext(tcti)
-			if err := func() error {
-				defer tpm.Close()
-				return tpm.Startup(StartupClear)
-			}(); err != nil {
-				fmt.Fprintf(os.Stderr, "Simulator startup failed: %v\n", err)
-				return 1
-			}
+			defer simulatorCleanup()
 		}
-
-		defer func() {
-			if !useMssim {
-				return
-			}
-
-			tcti, err := OpenMssim(mssimHost, mssimTpmPort, mssimPlatformPort)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to open mssim connection: %v\n", err)
-				return
-			}
-
-			tpm, _ := NewTPMContext(tcti)
-			if err := tpm.Shutdown(StartupClear); err != nil {
-				fmt.Fprintf(os.Stderr, "TPM simulator shutdown failed: %v\n", err)
-			}
-			if err := tcti.Stop(); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to stop TPM simulator: %v\n", err)
-			}
-			tpm.Close()
-		}()
 
 		return m.Run()
 	}())

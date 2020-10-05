@@ -13,7 +13,12 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	. "github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/testutil"
 )
+
+func init() {
+	testutil.AddCommandLineFlags()
+}
 
 func TestMarshalBasic(t *testing.T) {
 	var a uint16 = 1156

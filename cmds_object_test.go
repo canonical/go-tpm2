@@ -14,10 +14,11 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestCreate(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, parent, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session SessionContext) (*Public, Private) {
@@ -178,7 +179,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, parent ResourceContext, session SessionContext) {
@@ -243,7 +244,7 @@ func TestLoad(t *testing.T) {
 }
 
 func TestReadPublic(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -486,7 +487,7 @@ func TestLoadExternal(t *testing.T) {
 }
 
 func TestUnseal(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -563,7 +564,7 @@ func TestUnseal(t *testing.T) {
 }
 
 func TestObjectChangeAuth(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -646,7 +647,7 @@ func TestObjectChangeAuth(t *testing.T) {
 }
 
 func TestMakeCredential(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityEndorsementHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	ek := createRSAEkForTesting(t, tpm)
@@ -688,7 +689,7 @@ func TestMakeCredential(t *testing.T) {
 }
 
 func TestActivateCredential(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityEndorsementHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	ek := createRSAEkForTesting(t, tpm)

@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestHMACSessions(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -107,7 +108,7 @@ func TestHMACSessions(t *testing.T) {
 }
 
 func TestPolicySessions(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)

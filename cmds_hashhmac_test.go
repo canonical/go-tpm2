@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestHMACSequence(t *testing.T) {
@@ -247,7 +248,7 @@ func TestHashSequence(t *testing.T) {
 }
 
 func TestEventSequence(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityPCRChange)
+	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	start := func(t *testing.T, auth Auth) ResourceContext {
@@ -446,7 +447,7 @@ func TestHashSequenceExecute(t *testing.T) {
 }
 
 func TestEventSequenceExecute(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityPCRChange)
+	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	data := make([]byte, 2500)

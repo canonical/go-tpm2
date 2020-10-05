@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestSetCommandCodeAuditStatus(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy|testCapabilitySetCommandCodeAuditStatus)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureSetCommandCodeAuditStatus|testutil.TPMFeatureHierarchyChangeAuth)
 	defer closeTPM(t, tpm)
 
 	var allCommands CommandCodeList

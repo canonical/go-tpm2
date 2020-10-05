@@ -18,10 +18,11 @@ import (
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/internal"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestDuplicate(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -282,7 +283,7 @@ type sensitiveSized struct {
 }
 
 func TestImport(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)

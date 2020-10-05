@@ -16,6 +16,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestPolicySigned(t *testing.T) {
@@ -151,7 +152,7 @@ func TestPolicySigned(t *testing.T) {
 }
 
 func TestPolicySecret(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)
@@ -318,7 +319,7 @@ func TestPolicySecret(t *testing.T) {
 }
 
 func TestPolicyTicketFromSecret(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)
@@ -384,7 +385,7 @@ func TestPolicyTicketFromSecret(t *testing.T) {
 }
 
 func TestPolicyTicketFromSigned(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -508,7 +509,7 @@ func TestPolicyOR(t *testing.T) {
 }
 
 func TestPolicyPCR(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityPCRChange)
+	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -917,7 +918,7 @@ func TestPolicyAuthorize(t *testing.T) {
 }
 
 func TestPolicyAuthValue(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
@@ -998,7 +999,7 @@ func TestPolicyAuthValue(t *testing.T) {
 }
 
 func TestPolicyPassword(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
@@ -1053,7 +1054,7 @@ func TestPolicyPassword(t *testing.T) {
 }
 
 func TestPolicyNV(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)

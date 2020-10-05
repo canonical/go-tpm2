@@ -13,6 +13,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestHandle(t *testing.T) {
@@ -408,7 +409,7 @@ func TestTaggedHash(t *testing.T) {
 }
 
 func TestPublicName(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -431,7 +432,7 @@ func TestPublicName(t *testing.T) {
 }
 
 func TestNVPublicName(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()

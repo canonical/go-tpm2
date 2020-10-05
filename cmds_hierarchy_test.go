@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestCreatePrimary(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityChangeOwnerAuth|testCapabilityEndorsementHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureChangeOwnerAuth|testutil.TPMFeatureEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session SessionContext) (ResourceContext, *Public) {
@@ -260,7 +261,7 @@ func TestCreatePrimary(t *testing.T) {
 }
 
 func TestHierarchyControl(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy|testCapabilityPlatformHierarchy|testCapabilityHierarchyControl)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureHierarchyControl|testutil.TPMFeatureHierarchyChangeAuth)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, authContext ResourceContext, enable Handle, state bool, session SessionContext) {
@@ -324,7 +325,7 @@ func TestHierarchyControl(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist|testCapabilityChangeEndorsementAuth|testCapabilityChangeLockoutAuth|testCapabilityChangePlatformAuth|testCapabilityClear)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist|testutil.TPMFeatureChangeEndorsementAuth|testutil.TPMFeatureChangeLockoutAuth|testutil.TPMFeatureChangePlatformAuth|testutil.TPMFeatureClear)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, authSession SessionContext) {
@@ -409,7 +410,7 @@ func TestClear(t *testing.T) {
 }
 
 func TestHierarchyChangeAuth(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityChangeOwnerAuth|testCapabilityChangeEndorsementAuth)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureChangeOwnerAuth|testutil.TPMFeatureChangeEndorsementAuth)
 	defer closeTPM(t, tpm)
 
 	setAuth := func(t *testing.T, hierarchy ResourceContext, session SessionContext, testHierarchy func(t *testing.T)) {

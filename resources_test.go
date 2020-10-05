@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestCreateResourceContextFromTPM(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	runCreate := func(t *testing.T, context ResourceContext) {
@@ -100,7 +101,7 @@ func TestCreateIncompleteSessionContext(t *testing.T) {
 }
 
 func TestCreateHandleContextFromBytes(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, context ResourceContext) {
@@ -153,7 +154,7 @@ func TestCreateHandleContextFromBytes(t *testing.T) {
 }
 
 func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, context ResourceContext) {
@@ -205,7 +206,7 @@ func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
 }
 
 func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerPersist)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist)
 	defer closeTPM(t, tpm)
 
 	pub := NVPublic{
@@ -238,7 +239,7 @@ func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
 }
 
 func TestCreateObjectResourceContextFromPublic(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	rc1 := createRSASrkForTesting(t, tpm, nil)

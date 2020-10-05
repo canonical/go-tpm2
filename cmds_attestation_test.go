@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag StructTag, signContext ResourceContext, signHierarchy Handle, qualifyingData Data) *Attest {
@@ -91,7 +92,7 @@ func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceCo
 }
 
 func TestCertify(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	prepare := func(t *testing.T, auth Auth) ResourceContext {
@@ -235,7 +236,7 @@ func TestCertify(t *testing.T) {
 }
 
 func TestCertifyCreation(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	prepare := func(t *testing.T, auth Auth) ResourceContext {
@@ -390,7 +391,7 @@ func TestCertifyCreation(t *testing.T) {
 }
 
 func TestQuote(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy|testCapabilityPCRChange)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for i := 0; i < 8; i++ {
@@ -507,7 +508,7 @@ func TestQuote(t *testing.T) {
 }
 
 func TestGetTime(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityOwnerHierarchy|testCapabilityEndorsementHierarchy)
+	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureHierarchyChangeAuth)
 	defer closeTPM(t, tpm)
 
 	prepare := func(t *testing.T, auth Auth) ResourceContext {

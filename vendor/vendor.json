@@ -3,6 +3,18 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "SbguDK5lY8uhaHNrmJmNbiWIGM0=",
+			"path": "github.com/kr/text",
+			"revision": "e2ffdb16a802fe2bb95e2e35ff34f0e53aeef34f",
+			"revisionTime": "2018-05-06T08:24:08Z"
+		},
+		{
+			"checksumSHA1": "YtvGaQLW242TVjn91Awqlth4B1M=",
+			"path": "github.com/niemeyer/pretty",
+			"revision": "a10e7caefd8e0d600cea437f5c3613aeb1553d56",
+			"revisionTime": "2020-02-27T12:48:42Z"
+		},
+		{
 			"checksumSHA1": "hYsuWh8Zj6z+8rFsK7F7mABIR44=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "dd2ff4accc098aceecb86b36eaa7829b2a17b1c9",
@@ -19,6 +31,12 @@
 			"path": "golang.org/x/xerrors/internal",
 			"revision": "1b5146add8981d58be77b16229c0ff0f8bebd8c1",
 			"revisionTime": "2019-10-05T12:30:33Z"
+		},
+		{
+			"checksumSHA1": "EJtDxIBjwHiU00xUZZLu7VD4nUQ=",
+			"path": "gopkg.in/check.v1",
+			"revision": "038fdea0a05bc030b0bfda479dc2e08d2220ec74",
+			"revisionTime": "2020-09-02T07:46:54Z"
 		}
 	],
 	"rootPath": "github.com/canonical/go-tpm2"

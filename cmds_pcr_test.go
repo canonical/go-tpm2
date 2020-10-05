@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestPCRExtend(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityPCRChange)
+	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -89,7 +90,7 @@ func TestPCRExtend(t *testing.T) {
 }
 
 func TestPCREvent(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityPCRChange)
+	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -333,7 +334,7 @@ func TestPCRRead(t *testing.T) {
 }
 
 func TestPCRReset(t *testing.T) {
-	tpm := openTPMForTesting(t, testCapabilityPCRChange)
+	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
