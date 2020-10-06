@@ -641,7 +641,7 @@ func unmarshalSized(r *muReader, val reflect.Value, ctx *muContext) error {
 	return unmarshalValue(lr, val, ctx)
 }
 
-func unmarshalListCommon(r *muReader, slice reflect.Value, n int, ctx *muContext) (reflect.Value, error) {
+func unmarshalRawList(r *muReader, slice reflect.Value, n int, ctx *muContext) (reflect.Value, error) {
 	for i := 0; i < n; i++ {
 		slice = reflect.Append(slice, reflect.Zero(slice.Type().Elem()))
 		elem, exit := ctx.enterListElem(slice, i)
@@ -654,21 +654,14 @@ func unmarshalListCommon(r *muReader, slice reflect.Value, n int, ctx *muContext
 	return slice, nil
 }
 
-func unmarshalRawList(r *muReader, slice reflect.Value, ctx *muContext) error {
-	if slice.IsNil() {
-		return errors.New("nil raw slice")
-	}
-	_, err := unmarshalListCommon(r, slice.Slice(0, 0), slice.Len(), ctx)
-	return err
-}
-
 func unmarshalRaw(r *muReader, slice reflect.Value, ctx *muContext) error {
 	switch slice.Type().Elem().Kind() {
 	case reflect.Uint8:
 		_, err := io.ReadFull(r, slice.Bytes())
 		return err
 	default:
-		return unmarshalRawList(r, slice, ctx)
+		_, err := unmarshalRawList(r, slice.Slice(0, 0), slice.Len(), ctx)
+		return err
 	}
 }
 
@@ -690,7 +683,7 @@ func unmarshalList(r *muReader, slice reflect.Value, ctx *muContext) error {
 		return xerrors.Errorf("cannot read length of list: %w", err)
 	}
 
-	s, err := unmarshalListCommon(r, reflect.MakeSlice(slice.Type(), 0, 0), int(length), ctx)
+	s, err := unmarshalRawList(r, reflect.MakeSlice(slice.Type(), 0, 0), int(length), ctx)
 	if err != nil {
 		return err
 	}
