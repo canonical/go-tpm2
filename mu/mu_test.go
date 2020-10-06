@@ -411,6 +411,29 @@ func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
 		expected: expected})
 }
 
+type testStructWithRawTagSizedFields struct {
+	A [][]byte `tpm2:"raw"`
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
+	a := testStructWithRawTagSizedFields{A: [][]byte{testutil.DecodeHexString(c, "a5a5a5"), testutil.DecodeHexString(c, "4d4d4d4d")}}
+	expected := testutil.DecodeHexString(c, "0003a5a5a500044d4d4d4d")
+
+	ua := testStructWithRawTagSizedFields{A: make([][]byte, len(a.A))}
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:         []interface{}{a},
+		expected:       expected,
+		unmarshalDests: []interface{}{&ua}})
+
+	ua = testStructWithRawTagSizedFields{A: make([][]byte, len(a.A))}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:         []interface{}{a},
+		expected:       expected,
+		unmarshalDests: []interface{}{&ua}})
+}
+
 type testDetermineTPMKindData struct {
 	d interface{}
 	k TPMKind
