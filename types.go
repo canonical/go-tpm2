@@ -957,42 +957,33 @@ type SchemeXOR struct {
 	KDF     KDFAlgorithmId  // Hash algorithm used for the KDF
 }
 
-// SchemeKeyedHashU is a fake union type that corresponds to the TPMU_SCHEME_KEYED_HASH type. The selector type is KeyedHashSchemeId. Valid
-// types for Data for each selector value are:
-//  - KeyedHashSchemeHMAC: *SchemeHMAC
-//  - KeyedHashSchemeXOR: *SchemeXOR
-//  - KeyedHashSchemeNull: <nil>
+// SchemeKeyedHashU is a union type that corresponds to the TPMU_SCHEME_KEYED_HASH type. The selector type is KeyedHashSchemeId.
+// The mapping of selector values to fields is as follows:
+//  - KeyedHashSchemeHMAC: HMAC
+//  - KeyedHashSchemeXOR: XOR
+//  - KeyedHashSchemeNull: none
 type SchemeKeyedHashU struct {
-	Data interface{}
+	HMAC *SchemeHMAC
+	XOR  *SchemeXOR
 }
 
-func (d SchemeKeyedHashU) Select(selector reflect.Value) reflect.Type {
+func (d *SchemeKeyedHashU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(KeyedHashSchemeId) {
 	case KeyedHashSchemeHMAC:
-		return reflect.TypeOf((*SchemeHMAC)(nil))
+		return &d.HMAC
 	case KeyedHashSchemeXOR:
-		return reflect.TypeOf((*SchemeXOR)(nil))
+		return &d.XOR
 	case KeyedHashSchemeNull:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	default:
 		return nil
 	}
 }
 
-// HMAC returns the underlying value as *SchemeHMAC. It panics if the underlying type is not *SchemeHMAC.
-func (d SchemeKeyedHashU) HMAC() *SchemeHMAC {
-	return d.Data.(*SchemeHMAC)
-}
-
-// XOR returns the underlying value as *SchemeXOR. It panics if the underlying type is not *SchemeXOR.
-func (d SchemeKeyedHashU) XOR() *SchemeXOR {
-	return d.Data.(*SchemeXOR)
-}
-
 // KeyedHashScheme corresponds to the TPMT_KEYEDHASH_SCHEME type.
 type KeyedHashScheme struct {
 	Scheme  KeyedHashSchemeId // Scheme selector
-	Details SchemeKeyedHashU  `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Details *SchemeKeyedHashU `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
 // 11.2 Assymetric

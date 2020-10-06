@@ -414,8 +414,8 @@ func TestLoadExternal(t *testing.T) {
 				Data: &KeyedHashParams{
 					Scheme: KeyedHashScheme{
 						Scheme: KeyedHashSchemeHMAC,
-						Details: SchemeKeyedHashU{
-							Data: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}},
+						Details: &SchemeKeyedHashU{
+							HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}},
 			Unique: PublicIDU{Data: unique}}
 
 		run(t, &sensitive, &public, HandleNull)

@@ -136,7 +136,7 @@ func TestPublicIDUnion(t *testing.T) {
 
 type TestSchemeKeyedHashUContainer struct {
 	Scheme  KeyedHashSchemeId
-	Details SchemeKeyedHashU `tpm2:"selector:Scheme"`
+	Details *SchemeKeyedHashU `tpm2:"selector:Scheme"`
 }
 
 func TestSchemeKeyedHashUnion(t *testing.T) {
@@ -150,12 +150,12 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			desc: "HMAC",
 			in: TestSchemeKeyedHashUContainer{
 				Scheme:  KeyedHashSchemeHMAC,
-				Details: SchemeKeyedHashU{Data: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}},
+				Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}},
 			out: []byte{0x00, 0x05, 0x00, 0x0b},
 		},
 		{
 			desc: "Null",
-			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeNull},
+			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeNull, Details: &SchemeKeyedHashU{}},
 			out:  []byte{0x00, 0x10},
 		},
 		{
