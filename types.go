@@ -762,73 +762,44 @@ type NVCertifyInfo struct {
 	NVContents MaxNVBuffer // Contents of the NV index
 }
 
-// AttestU is a fake union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag. Valid types for Data for
-// each selector value are:
-//  - TagAttestNV: *NVCertifyInfo
-//  - TagAttestCommandAudit: *CommandAuditInfo
-//  - TagAttestSessionAudit: *SessionAuditInfo
-//  - TagAttestCertify: *CertifyInfo
-//  - TagAttestQuote: *QuoteInfo
-//  - TagAttestTime: *TimeAttestInfo
-//  - TagAttestCreation: *CreationInfo
+// AttestU is a union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag.
+// Mapping of selector values to fileds is as follows:
+//  - TagAttestNV: NV
+//  - TagAttestCommandAudit: CommandAudit
+//  - TagAttestSessionAudit: SessionAudit
+//  - TagAttestCertify: Certify
+//  - TagAttestQuote: Quote
+//  - TagAttestTime: Time
+//  - TagAttestCreation: Creation
 type AttestU struct {
-	Data interface{}
+	Certify      *CertifyInfo
+	Creation     *CreationInfo
+	Quote        *QuoteInfo
+	CommandAudit *CommandAuditInfo
+	SessionAudit *SessionAuditInfo
+	Time         *TimeAttestInfo
+	NV           *NVCertifyInfo
 }
 
-func (a AttestU) Select(selector reflect.Value) reflect.Type {
+func (a *AttestU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(StructTag) {
 	case TagAttestNV:
-		return reflect.TypeOf((*NVCertifyInfo)(nil))
+		return &a.NV
 	case TagAttestCommandAudit:
-		return reflect.TypeOf((*CommandAuditInfo)(nil))
+		return &a.CommandAudit
 	case TagAttestSessionAudit:
-		return reflect.TypeOf((*SessionAuditInfo)(nil))
+		return &a.SessionAudit
 	case TagAttestCertify:
-		return reflect.TypeOf((*CertifyInfo)(nil))
+		return &a.Certify
 	case TagAttestQuote:
-		return reflect.TypeOf((*QuoteInfo)(nil))
+		return &a.Quote
 	case TagAttestTime:
-		return reflect.TypeOf((*TimeAttestInfo)(nil))
+		return &a.Time
 	case TagAttestCreation:
-		return reflect.TypeOf((*CreationInfo)(nil))
+		return &a.Creation
 	default:
 		return nil
 	}
-}
-
-// Certify returns the underlying value as *CertifyInfo. It panics if the underlying type is not *CertifyInfo.
-func (a AttestU) Certify() *CertifyInfo {
-	return a.Data.(*CertifyInfo)
-}
-
-// Creation returns the underlying value as *CreationInfo. It panics if the underlying type is not *CreationInfo.
-func (a AttestU) Creation() *CreationInfo {
-	return a.Data.(*CreationInfo)
-}
-
-// Quote returns the underlying value as *QuoteInfo. It panics if the underlying type is not *QuoteInfo.
-func (a AttestU) Quote() *QuoteInfo {
-	return a.Data.(*QuoteInfo)
-}
-
-// CommandAudit returns the underlying value as *CommandAuditInfo. It panics if the underlying type is not *CommandAuditInfo.
-func (a AttestU) CommandAudit() *CommandAuditInfo {
-	return a.Data.(*CommandAuditInfo)
-}
-
-// SessionAudit returns the underlying value as *SessionAuditInfo. It panics if the underlying type is not *SessionAuditInfo.
-func (a AttestU) SessionAudit() *SessionAuditInfo {
-	return a.Data.(*SessionAuditInfo)
-}
-
-// Time returns the underlying value as *TimeAttestInfo. It panics if the underlying type is not *TimeAttestInfo.
-func (a AttestU) Time() *TimeAttestInfo {
-	return a.Data.(*TimeAttestInfo)
-}
-
-// NV returns the underlying value as *NVCertifyInfo. It panics if the underlying type is not *NVCertifyInfo.
-func (a AttestU) NV() *NVCertifyInfo {
-	return a.Data.(*NVCertifyInfo)
 }
 
 // Attest corresponds to the TPMS_ATTEST type, and is returned by the attestation commands. The signature of the attestation is over
@@ -840,7 +811,7 @@ type Attest struct {
 	ExtraData       Data         // External information provided by the caller
 	ClockInfo       ClockInfo    // Clock information
 	FirmwareVersion uint64       // TPM vendor specific value indicating the version of the firmware
-	Attested        AttestU      `tpm2:"selector:Type"` // Type specific attestation data
+	Attested        *AttestU     `tpm2:"selector:Type"` // Type specific attestation data
 }
 
 // AttestRaw corresponds to the TPM2B_ATTEST type, and is returned by the attestation commands. The signature of the attestation is

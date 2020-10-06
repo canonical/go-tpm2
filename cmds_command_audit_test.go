@@ -39,7 +39,7 @@ func TestSetCommandCodeAuditStatus(t *testing.T) {
 		t.Fatalf("Decode failed: %v", err)
 	}
 
-	initialAlgorithm := HashAlgorithmId(auditInfo.Attested.CommandAudit().DigestAlg)
+	initialAlgorithm := HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg)
 
 	var alg HashAlgorithmId
 	switch initialAlgorithm {
@@ -90,7 +90,7 @@ Next:
 				t.Fatalf("Decode failed: %v", err)
 			}
 
-			if HashAlgorithmId(auditInfo.Attested.CommandAudit().DigestAlg) != alg {
+			if HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg) != alg {
 				t.Errorf("Failed to set command audit digest")
 			}
 		}
