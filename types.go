@@ -636,94 +636,53 @@ type TaggedPolicyList []TaggedPolicy
 
 // 10.10) Capabilities Structures
 
-// Capabilities is a fake union type that corresponds to the TPMU_CAPABILITIES type. The selector type is Capability. Valid types
-// for Data for each selector value are:
-//  - CapabilityAlgs: AlgorithmPropertyList
-//  - CapabilityHandles: HandleList
-//  - CapabilityCommands: CommandAttributesList
-//  - CapabilityPPCommands: CommandCodeList
-//  - CapabilityAuditCommands: CommandCodeList
-//  - CapabilityPCRs: PCRSelectionList
-//  - CapabilityTPMProperties: TaggedTPMPropertyList
-//  - CapabilityPCRProperties: TaggedPCRPropertyList
-//  - CapabilityECCCurves: ECCCurveList
-//  - CapabilityAuthPolicies: TaggedPolicyList
+// Capabilities is a union type that corresponds to the TPMU_CAPABILITIES type. The selector type is Capability.
+// Mapping of selector values to fields is as follows:
+//  - CapabilityAlgs: Algorithms
+//  - CapabilityHandles: Handles
+//  - CapabilityCommands: Command
+//  - CapabilityPPCommands: PPCommands
+//  - CapabilityAuditCommands: AuditCommands
+//  - CapabilityPCRs: AssignedPCR
+//  - CapabilityTPMProperties: TPMProperties
+//  - CapabilityPCRProperties: PCRProperties
+//  - CapabilityECCCurves: ECCCurves
+//  - CapabilityAuthPolicies: AuthPolicies
 type CapabilitiesU struct {
-	Data interface{}
+	Algorithms    AlgorithmPropertyList
+	Handles       HandleList
+	Command       CommandAttributesList
+	PPCommands    CommandCodeList
+	AuditCommands CommandCodeList
+	AssignedPCR   PCRSelectionList
+	TPMProperties TaggedTPMPropertyList
+	PCRProperties TaggedPCRPropertyList
+	ECCCurves     ECCCurveList
+	AuthPolicies  TaggedPolicyList
 }
 
-// Algorithms returns the underlying value as AlgorithmPropertyList. It panics if the underlying type is not AlgorithmPropertyList.
-func (c CapabilitiesU) Algorithms() AlgorithmPropertyList {
-	return c.Data.(AlgorithmPropertyList)
-}
-
-// Handles returns the underlying value as HandleList. It panics if the underlying type is not HandleList.
-func (c CapabilitiesU) Handles() HandleList {
-	return c.Data.(HandleList)
-}
-
-// Command returns the underlying value as CommandAttributesList. It panics if the underlying type is not CommandAttributesList.
-func (c CapabilitiesU) Command() CommandAttributesList {
-	return c.Data.(CommandAttributesList)
-}
-
-// PPCommands returns the underlying value as CommandCodeList. If panics if the underlying type is not CommandCodeList.
-func (c CapabilitiesU) PPCommands() CommandCodeList {
-	return c.Data.(CommandCodeList)
-}
-
-// AuditCommands returns the underlying value as CommandCodeList. It panics if the underlying type is not CommandCodeList.
-func (c CapabilitiesU) AuditCommands() CommandCodeList {
-	return c.Data.(CommandCodeList)
-}
-
-// AssignedPCR returns the underlying value as PCRSelectionList. It panics if the underlying type is not PCRSelectionList.
-func (c CapabilitiesU) AssignedPCR() PCRSelectionList {
-	return c.Data.(PCRSelectionList)
-}
-
-// TPMProperties returns the underlying value as TaggedTPMPropertyList. It panics if the underlying type is not TaggedTPMPropertyList.
-func (c CapabilitiesU) TPMProperties() TaggedTPMPropertyList {
-	return c.Data.(TaggedTPMPropertyList)
-}
-
-// PCRProperties returns the underlying value as TaggedPCRPropertyList. It panics if the underlying type is not TaggedPCRPropertyList.
-func (c CapabilitiesU) PCRProperties() TaggedPCRPropertyList {
-	return c.Data.(TaggedPCRPropertyList)
-}
-
-// ECCCurves returns the underlying value as ECCCurveList. It panics if the underlying type is not ECCCurveList.
-func (c CapabilitiesU) ECCCurves() ECCCurveList {
-	return c.Data.(ECCCurveList)
-}
-
-// AuthPolicies returns the underlying value as TaggedPolicyList. It panics if the underlying type is not TaggedPolicyList.
-func (c CapabilitiesU) AuthPolicies() TaggedPolicyList {
-	return c.Data.(TaggedPolicyList)
-}
-
-func (c CapabilitiesU) Select(selector reflect.Value) reflect.Type {
+func (c *CapabilitiesU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(Capability) {
 	case CapabilityAlgs:
-		return reflect.TypeOf(AlgorithmPropertyList(nil))
+		return &c.Algorithms
 	case CapabilityHandles:
-		return reflect.TypeOf(HandleList(nil))
+		return &c.Handles
 	case CapabilityCommands:
-		return reflect.TypeOf(CommandAttributesList(nil))
+		return &c.Command
 	case CapabilityPPCommands:
-		return reflect.TypeOf(CommandCodeList(nil))
+		return &c.PPCommands
 	case CapabilityAuditCommands:
-		return reflect.TypeOf(CommandCodeList(nil))
+		return &c.AuditCommands
 	case CapabilityPCRs:
-		return reflect.TypeOf(PCRSelectionList(nil))
+		return &c.AssignedPCR
 	case CapabilityTPMProperties:
-		return reflect.TypeOf(TaggedTPMPropertyList(nil))
+		return &c.TPMProperties
 	case CapabilityPCRProperties:
-		return reflect.TypeOf(TaggedPCRPropertyList(nil))
+		return &c.PCRProperties
 	case CapabilityECCCurves:
-		return reflect.TypeOf(ECCCurveList(nil))
+		return &c.ECCCurves
 	case CapabilityAuthPolicies:
-		return reflect.TypeOf(TaggedPolicyList(nil))
+		return &c.AuthPolicies
 	default:
 		return nil
 	}
@@ -731,8 +690,8 @@ func (c CapabilitiesU) Select(selector reflect.Value) reflect.Type {
 
 // CapabilityData corresponds to the TPMS_CAPABILITY_DATA type, and is returned by TPMContext.GetCapability.
 type CapabilityData struct {
-	Capability Capability    // Capability
-	Data       CapabilitiesU `tpm2:"selector:Capability"` // Capability data
+	Capability Capability     // Capability
+	Data       *CapabilitiesU `tpm2:"selector:Capability"` // Capability data
 }
 
 // 10.11 Clock/Counter Structures

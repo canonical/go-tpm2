@@ -52,35 +52,35 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 			var s int
 			switch data.Capability {
 			case CapabilityAlgs:
-				capabilityData.Data.Data = append(capabilityData.Data.Algorithms(), data.Data.Algorithms()...)
-				s = len(data.Data.Algorithms())
+				capabilityData.Data.Algorithms = append(capabilityData.Data.Algorithms, data.Data.Algorithms...)
+				s = len(data.Data.Algorithms)
 			case CapabilityHandles:
-				capabilityData.Data.Data = append(capabilityData.Data.Handles(), data.Data.Handles()...)
-				s = len(data.Data.Handles())
+				capabilityData.Data.Handles = append(capabilityData.Data.Handles, data.Data.Handles...)
+				s = len(data.Data.Handles)
 			case CapabilityCommands:
-				capabilityData.Data.Data = append(capabilityData.Data.Command(), data.Data.Command()...)
-				s = len(data.Data.Command())
+				capabilityData.Data.Command = append(capabilityData.Data.Command, data.Data.Command...)
+				s = len(data.Data.Command)
 			case CapabilityPPCommands:
-				capabilityData.Data.Data = append(capabilityData.Data.PPCommands(), data.Data.PPCommands()...)
-				s = len(data.Data.PPCommands())
+				capabilityData.Data.PPCommands = append(capabilityData.Data.PPCommands, data.Data.PPCommands...)
+				s = len(data.Data.PPCommands)
 			case CapabilityAuditCommands:
-				capabilityData.Data.Data = append(capabilityData.Data.AuditCommands(), data.Data.AuditCommands()...)
-				s = len(data.Data.AuditCommands())
+				capabilityData.Data.AuditCommands = append(capabilityData.Data.AuditCommands, data.Data.AuditCommands...)
+				s = len(data.Data.AuditCommands)
 			case CapabilityPCRs:
-				capabilityData.Data.Data = append(capabilityData.Data.AssignedPCR(), data.Data.AssignedPCR()...)
-				s = len(data.Data.AssignedPCR())
+				capabilityData.Data.AssignedPCR = append(capabilityData.Data.AssignedPCR, data.Data.AssignedPCR...)
+				s = len(data.Data.AssignedPCR)
 			case CapabilityTPMProperties:
-				capabilityData.Data.Data = append(capabilityData.Data.TPMProperties(), data.Data.TPMProperties()...)
-				s = len(data.Data.TPMProperties())
+				capabilityData.Data.TPMProperties = append(capabilityData.Data.TPMProperties, data.Data.TPMProperties...)
+				s = len(data.Data.TPMProperties)
 			case CapabilityPCRProperties:
-				capabilityData.Data.Data = append(capabilityData.Data.PCRProperties(), data.Data.PCRProperties()...)
-				s = len(data.Data.PCRProperties())
+				capabilityData.Data.PCRProperties = append(capabilityData.Data.PCRProperties, data.Data.PCRProperties...)
+				s = len(data.Data.PCRProperties)
 			case CapabilityECCCurves:
-				capabilityData.Data.Data = append(capabilityData.Data.ECCCurves(), data.Data.ECCCurves()...)
-				s = len(data.Data.ECCCurves())
+				capabilityData.Data.ECCCurves = append(capabilityData.Data.ECCCurves, data.Data.ECCCurves...)
+				s = len(data.Data.ECCCurves)
 			case CapabilityAuthPolicies:
-				capabilityData.Data.Data = append(capabilityData.Data.AuthPolicies(), data.Data.AuthPolicies()...)
-				s = len(data.Data.AuthPolicies())
+				capabilityData.Data.AuthPolicies = append(capabilityData.Data.AuthPolicies, data.Data.AuthPolicies...)
+				s = len(data.Data.AuthPolicies)
 			}
 			nextProperty += uint32(s)
 			remaining -= uint32(s)
@@ -103,7 +103,7 @@ func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32, 
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Algorithms(), nil
+	return data.Data.Algorithms, nil
 }
 
 // GetCapabilityCommands is a helper function that wraps around TPMContext.GetCapability, and returns attributes of the commands
@@ -115,7 +115,7 @@ func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Command(), nil
+	return data.Data.Command, nil
 }
 
 // GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that
@@ -126,7 +126,7 @@ func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount ui
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.PPCommands(), nil
+	return data.Data.PPCommands, nil
 }
 
 // GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that are
@@ -137,7 +137,7 @@ func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AuditCommands(), nil
+	return data.Data.AuditCommands, nil
 }
 
 // GetCapabilityHandles is a helper function that wraps around TPMContext.GetCapability, and returns a list of handles of resources
@@ -148,7 +148,7 @@ func (t *TPMContext) GetCapabilityHandles(handleType Handle, propertyCount uint3
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Handles(), nil
+	return data.Data.Handles, nil
 }
 
 // GetCapabilityPCRs is a helper function that wraps around TPMContext.GetCapability, and returns the current allocation of PCRs on
@@ -158,7 +158,7 @@ func (t *TPMContext) GetCapabilityPCRs(sessions ...SessionContext) (PCRSelection
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AssignedPCR(), nil
+	return data.Data.AssignedPCR, nil
 }
 
 // GetCapabilityTPMProperties is a helper function that wraps around TPMContext.GetCapability, and returns the values of properties of
@@ -170,7 +170,7 @@ func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount ui
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.TPMProperties(), nil
+	return data.Data.TPMProperties, nil
 }
 
 // GetCapabilityPCRProperties is a helper function that wraps around TPMContext.GetCapability, and returns the values of PCR
@@ -182,7 +182,7 @@ func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.PCRProperties(), nil
+	return data.Data.PCRProperties, nil
 }
 
 // GetCapabilityECCCurves is a helper function that wraps around TPMContext.GetCapability, and returns a list of ECC curves supported
@@ -192,7 +192,7 @@ func (t *TPMContext) GetCapabilityECCCurves(sessions ...SessionContext) (ECCCurv
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.ECCCurves(), nil
+	return data.Data.ECCCurves, nil
 }
 
 // GetCapabilityAuthPolicies is a helper function that wraps around TPMContext.GetCapability, and returns auth policy digests
@@ -204,7 +204,7 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AuthPolicies(), nil
+	return data.Data.AuthPolicies, nil
 }
 
 // TPMManufacturer corresponds to the TPM manufacturer and is returned when querying the value PropertyManufacturer with
