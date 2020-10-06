@@ -51,9 +51,9 @@ type commandAuthAreaRawSlice struct {
 	Data []authCommand `tpm2:"raw"`
 }
 
-func (a *commandAuthArea) Marshal(w io.Writer) error {
+func (a commandAuthArea) Marshal(w io.Writer) error {
 	tmpBuf := new(bytes.Buffer)
-	if _, err := mu.MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(*a)}); err != nil {
+	if _, err := mu.MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(a)}); err != nil {
 		panic(fmt.Sprintf("cannot marshal raw command auth area to temporary buffer: %v", err))
 	}
 

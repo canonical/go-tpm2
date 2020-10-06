@@ -383,7 +383,7 @@ type testStructWithCustomMarshaller struct {
 	B []uint32
 }
 
-func (t *testStructWithCustomMarshaller) Marshal(w io.Writer) error {
+func (t testStructWithCustomMarshaller) Marshal(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, t.A); err != nil {
 		return err
 	}
@@ -404,10 +404,10 @@ func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
 	expected := testutil.DecodeHexString(c, "2cad00000002000d82b801dd6902")
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:   []interface{}{&a},
+		values:   []interface{}{a},
 		expected: expected})
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:   []interface{}{&a},
+		values:   []interface{}{a},
 		expected: expected})
 }
 

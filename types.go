@@ -199,7 +199,7 @@ type TaggedHash struct {
 // array of raw bytes. As no length is encoded, we need a custom marshaller implementation that unmarshals the
 // correct number of bytes depending on the hash algorithm
 
-func (p *TaggedHash) Marshal(w io.Writer) error {
+func (p TaggedHash) Marshal(w io.Writer) error {
 	if err := binary.Write(w, binary.BigEndian, p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
@@ -313,10 +313,10 @@ func (n Name) Digest() Digest {
 // contained within this slice.
 type PCRSelect []int
 
-func (d *PCRSelect) Marshal(w io.Writer) error {
+func (d PCRSelect) Marshal(w io.Writer) error {
 	bytes := make([]byte, 3)
 
-	for _, i := range *d {
+	for _, i := range d {
 		octet := i / 8
 		for octet >= len(bytes) {
 			bytes = append(bytes, byte(0))

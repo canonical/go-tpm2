@@ -19,10 +19,10 @@ import (
 )
 
 var (
-	customMarshallerType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
-	unionType            reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
-	nilValueType         reflect.Type = reflect.TypeOf(NilUnionValue)
-	rawBytesType         reflect.Type = reflect.TypeOf(RawBytes(nil))
+	customMuType reflect.Type = reflect.TypeOf((*customMuIface)(nil)).Elem()
+	unionType    reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
+	nilValueType reflect.Type = reflect.TypeOf(NilUnionValue)
+	rawBytesType reflect.Type = reflect.TypeOf(RawBytes(nil))
 )
 
 // InvalidSelectorError may be returned as a wrapped error from UnmarshalFromBytes or UnmarshalFromReader when a union type indicates
@@ -35,10 +35,22 @@ func (e *InvalidSelectorError) Error() string {
 	return fmt.Sprintf("invalid selector value: %v", e.Selector)
 }
 
-// CustomMarshaller is implemented by types that require custom marshalling and unmarshalling behaviour because they are non-standard
-// and not directly supported by the marshalling code.
+type customMuIface interface {
+	CustomMarshaller
+	CustomUnmarshaller
+}
+
+// CustomMarshaller is implemented by types that require custom marshalling behaviour because they are non-standard and not
+// directly supported by the marshalling code. This interface must be implemented by types with a value receiver, and types
+// must also implement the CustomUnmarshaller interface.
 type CustomMarshaller interface {
 	Marshal(w io.Writer) error
+}
+
+// CustomUnmarshaller is implemented by types that require custom unmarshalling behaviour because they are non-standard and not
+// directly supported by the marshalling code. This interface must be implemented by types with a pointer receiver, and types
+// must also implement the CustomMarshaller interface.
+type CustomUnmarshaller interface {
 	Unmarshal(r Reader) error
 }
 
@@ -307,7 +319,7 @@ func tpmKind(t reflect.Type) TPMKind {
 		t = t.Elem()
 	}
 
-	if reflect.PtrTo(t).Implements(customMarshallerType) {
+	if reflect.PtrTo(t).Implements(customMuType) {
 		return TPMKindCustom
 	}
 
@@ -491,9 +503,6 @@ func (m *marshaller) marshalUnion(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalCustom(v reflect.Value) error {
-	if v.Kind() != reflect.Ptr {
-		v = v.Addr()
-	}
 	return v.Interface().(CustomMarshaller).Marshal(m)
 }
 
@@ -747,7 +756,7 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 	if v.Kind() != reflect.Ptr {
 		v = v.Addr()
 	}
-	return v.Interface().(CustomMarshaller).Unmarshal(u)
+	return v.Interface().(CustomUnmarshaller).Unmarshal(u)
 }
 
 func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
