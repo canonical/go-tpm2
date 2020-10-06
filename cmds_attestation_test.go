@@ -145,7 +145,7 @@ func TestCertify(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, primary, ak, HandleEndorsement, nil, &scheme, nil, nil)
 	})
 
@@ -176,7 +176,7 @@ func TestCertify(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, primary, key, HandleOwner, nil, &scheme, nil, nil)
 	})
 
@@ -300,7 +300,7 @@ func TestCertifyCreation(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, ak, HandleEndorsement, nil, &scheme, nil)
 	})
 
@@ -331,7 +331,7 @@ func TestCertifyCreation(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, key, HandleOwner, nil, &scheme, nil)
 	})
 
@@ -439,7 +439,7 @@ func TestQuote(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{2, 4, 7}}}
 		run(t, ak, HandleEndorsement, nil, &scheme, pcrs, HashAlgorithmSHA256, nil)
 	})
@@ -471,7 +471,7 @@ func TestQuote(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}}
 		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{4, 7}}}
 		run(t, key, HandleOwner, nil, &scheme, pcrs, HashAlgorithmSHA1, nil)
 	})
@@ -565,7 +565,7 @@ func TestGetTime(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, ak, HandleEndorsement, nil, &scheme, nil, nil)
 	})
 
@@ -596,7 +596,7 @@ func TestGetTime(t *testing.T) {
 
 		scheme := SigScheme{
 			Scheme:  SigSchemeAlgRSASSA,
-			Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 		run(t, key, HandleOwner, nil, &scheme, nil, nil)
 	})
 

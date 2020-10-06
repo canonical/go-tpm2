@@ -95,7 +95,7 @@ func TestSign(t *testing.T) {
 				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			inScheme := SigScheme{
 				Scheme:  SigSchemeAlgRSASSA,
-				Details: SigSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 
 			key, pub := create(t, &keyScheme, nil)
 			defer flushContext(t, tpm, key)
@@ -112,7 +112,7 @@ func TestSign(t *testing.T) {
 			keyScheme := RSAScheme{Scheme: RSASchemeNull}
 			inScheme := SigScheme{
 				Scheme:  SigSchemeAlgRSAPSS,
-				Details: SigSchemeU{Data: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA1}}}
+				Details: &SigSchemeU{RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA1}}}
 
 			key, pub := create(t, &keyScheme, nil)
 			defer flushContext(t, tpm, key)

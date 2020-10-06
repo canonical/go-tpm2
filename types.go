@@ -997,87 +997,64 @@ type SigSchemeECDAA SchemeECDAA
 type SigSchemeSM2 SchemeHash
 type SigSchemeECSCHNORR SchemeHash
 
-// SigSchemeU is a fake union type that corresponds to the TPMU_SIG_SCHEME type. The selector type is SigSchemeId. Valid types for
-// Data for each selector value are:
-//  - SigSchemeAlgRSASSA: *SigSchemeRSASSA
-//  - SigSchemeAlgRSAPSS: *SigSchemeRSAPSS
-//  - SigSchemeAlgECDSA: *SigSchemeECDSA
-//  - SigSchemeAlgECDAA: *SigSchemeECDAA
-//  - SigSchemeAlgSM2: *SigSchemeSM2
-//  - SigSchemeAlgECSCHNORR: *SigSchemeECSCHNORR
-//  - SigSchemeAlgHMAC: *SigSchemeHMAC
-//  - SigSchemeAlgNull: <nil>
+// SigSchemeU is a union type that corresponds to the TPMU_SIG_SCHEME type. The selector type is SigSchemeId.
+// The mapping of selector value to fields is as follows:
+//  - SigSchemeAlgRSASSA: RSASSA
+//  - SigSchemeAlgRSAPSS: RSAPSS
+//  - SigSchemeAlgECDSA: ECDSA
+//  - SigSchemeAlgECDAA: ECDAA
+//  - SigSchemeAlgSM2: SM2
+//  - SigSchemeAlgECSCHNORR: ECSCHNORR
+//  - SigSchemeAlgHMAC: HMAC
+//  - SigSchemeAlgNull: none
 type SigSchemeU struct {
-	Data interface{}
+	RSASSA    *SigSchemeRSASSA
+	RSAPSS    *SigSchemeRSAPSS
+	ECDSA     *SigSchemeECDSA
+	ECDAA     *SigSchemeECDAA
+	SM2       *SigSchemeSM2
+	ECSCHNORR *SigSchemeECSCHNORR
+	HMAC      *SchemeHMAC
 }
 
-func (s SigSchemeU) Select(selector reflect.Value) reflect.Type {
+func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return reflect.TypeOf((*SigSchemeRSASSA)(nil))
+		return &s.RSASSA
 	case SigSchemeAlgRSAPSS:
-		return reflect.TypeOf((*SigSchemeRSAPSS)(nil))
+		return &s.RSAPSS
 	case SigSchemeAlgECDSA:
-		return reflect.TypeOf((*SigSchemeECDSA)(nil))
+		return &s.ECDSA
 	case SigSchemeAlgECDAA:
-		return reflect.TypeOf((*SigSchemeECDAA)(nil))
+		return &s.ECDAA
 	case SigSchemeAlgSM2:
-		return reflect.TypeOf((*SigSchemeSM2)(nil))
+		return &s.SM2
 	case SigSchemeAlgECSCHNORR:
-		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil))
+		return &s.ECSCHNORR
 	case SigSchemeAlgHMAC:
-		return reflect.TypeOf((*SchemeHMAC)(nil))
+		return &s.HMAC
 	case SigSchemeAlgNull:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	default:
 		return nil
 	}
 }
 
-// RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not *SigSchemeRSASSA
-func (s SigSchemeU) RSASSA() *SigSchemeRSASSA {
-	return s.Data.(*SigSchemeRSASSA)
-}
-
-// RSAPSS returns the underlying value as *SigSchemeRSAPSS. It panics if the underlying type is not *SigSchemeRSAPSS
-func (s SigSchemeU) RSAPSS() *SigSchemeRSAPSS {
-	return s.Data.(*SigSchemeRSAPSS)
-}
-
-// ECDSA returns the underlying value as *SigSchemeECDSA. It panics if the underlying type is not *SigSchemeECDSA
-func (s SigSchemeU) ECDSA() *SigSchemeECDSA {
-	return s.Data.(*SigSchemeECDSA)
-}
-
-// ECDAA returns the underlying value as *SigSchemeECDAA. It panics if the underlying type is not *SigSchemeECDAA
-func (s SigSchemeU) ECDAA() *SigSchemeECDAA {
-	return s.Data.(*SigSchemeECDAA)
-}
-
-// SM2 returns the underlying value as *SigSchemeSM2. It panics if the underlying type is not *SigSchemeSM2
-func (s SigSchemeU) SM2() *SigSchemeSM2 {
-	return s.Data.(*SigSchemeSM2)
-}
-
-// ECSCHNORR returns the underlying value as *SigSchemeECSCHNORR. It panics if the underlying type is not *SigSchemeECSCHNORR
-func (s SigSchemeU) ECSCHNORR() *SigSchemeECSCHNORR {
-	return s.Data.(*SigSchemeECSCHNORR)
-}
-
-// HMAC returns the underlying value as *SchemeHMAC. It panics if the underlying type is not *SchemeHMAC
-func (s SigSchemeU) HMAC() *SchemeHMAC {
-	return s.Data.(*SchemeHMAC)
-}
-
-// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to *SchemeHash.
+// Any returns the underlying value as *SchemeHash. Note that if more than one field is set, it will return the
+// first set field as *SchemeHash.
 func (s SigSchemeU) Any() *SchemeHash {
-	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
+	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.ECDSA, s.ECDAA, s.SM2, s.ECSCHNORR, s.HMAC} {
+		if p != nil {
+			return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+		}
+	}
+	return nil
 }
 
 // SigScheme corresponds to the TPMT_SIG_SCHEME type.
 type SigScheme struct {
 	Scheme  SigSchemeId // Scheme selector
-	Details SigSchemeU  `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Details *SigSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
 // 11.2.3 Key Derivation Schemes
