@@ -95,7 +95,7 @@ func TestCreate(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -295,7 +295,7 @@ func TestReadPublic(t *testing.T) {
 		symmetric := SymDef{
 			Algorithm: SymAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      SymModeU{Data: SymModeCFB}}
+			Mode:      &SymModeU{Sym: SymModeCFB}}
 		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &symmetric, HashAlgorithmSHA256)
 		if err != nil {
 			t.Fatalf("StartAuthSession failed: %v", err)

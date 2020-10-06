@@ -285,7 +285,7 @@ func TestTestParms(t *testing.T) {
 						Symmetric: SymDefObject{
 							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   &SymKeyBitsU{Sym: 128},
-							Mode:      SymModeU{Data: SymModeCFB}},
+							Mode:      &SymModeU{Sym: SymModeCFB}},
 						Scheme:   RSAScheme{Scheme: RSASchemeNull},
 						KeyBits:  2048,
 						Exponent: 0}}},
@@ -314,7 +314,7 @@ func TestTestParms(t *testing.T) {
 						Symmetric: SymDefObject{
 							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   &SymKeyBitsU{Sym: 128},
-							Mode:      SymModeU{Data: SymModeCFB}},
+							Mode:      &SymModeU{Sym: SymModeCFB}},
 						Scheme:   RSAScheme{Scheme: RSASchemeNull},
 						KeyBits:  2047,
 						Exponent: 0}}},
@@ -329,7 +329,7 @@ func TestTestParms(t *testing.T) {
 						Sym: SymDefObject{
 							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   &SymKeyBitsU{Sym: 256},
-							Mode:      SymModeU{Data: SymModeCFB}}}}},
+							Mode:      &SymModeU{Sym: SymModeCFB}}}}},
 			valid: true,
 		},
 	} {

@@ -255,7 +255,7 @@ func TestCertifyCreation(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -370,7 +370,7 @@ func TestCertifyCreation(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}

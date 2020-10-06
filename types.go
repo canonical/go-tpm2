@@ -860,51 +860,46 @@ func (b *SymKeyBitsU) Select(selector reflect.Value) interface{} {
 	}
 }
 
-// SymModeU is a fake union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId. Valid types for Data
-// for each selector value are:
-//  - AlgorithmAES: SymModeId
-//  - AlgorithmSM4: SymModeId
-//  - AlgorithmCamellia: SymModeId
-//  - AlgorithmXOR: <nil>
-//  - AlgorithmNull: <nil>
+// SymModeU is a union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId.
+// The mapping of selector values to fields is as follows:
+//  - AlgorithmAES: Sym
+//  - AlgorithmSM4: Sym
+//  - AlgorithmCamellia: Sym
+//  - AlgorithmXOR: none
+//  - AlgorithmNull: none
 type SymModeU struct {
-	Data interface{}
+	Sym SymModeId
 }
 
-func (m SymModeU) Select(selector reflect.Value) reflect.Type {
+func (m *SymModeU) Select(selector reflect.Value) interface{} {
 	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
 		fallthrough
 	case AlgorithmSM4:
 		fallthrough
 	case AlgorithmCamellia:
-		return reflect.TypeOf(SymModeId(0))
+		return &m.Sym
 	case AlgorithmXOR:
 		fallthrough
 	case AlgorithmNull:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	default:
 		return nil
 	}
-}
-
-// Sym returns the underlying value as SymModeId. It panics if the underlying type is not SymModeId.
-func (m SymModeU) Sym() SymModeId {
-	return m.Data.(SymModeId)
 }
 
 // SymDef corresponds to the TPMT_SYM_DEF type, and is used to select the algorithm used for parameter encryption.
 type SymDef struct {
 	Algorithm SymAlgorithmId // Symmetric algorithm
 	KeyBits   *SymKeyBitsU   `tpm2:"selector:Algorithm"` // Symmetric key size
-	Mode      SymModeU       `tpm2:"selector:Algorithm"` // Symmetric mode
+	Mode      *SymModeU      `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 
 // SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an object's symmetric algorithm.
 type SymDefObject struct {
 	Algorithm SymObjectAlgorithmId // Symmetric algorithm
 	KeyBits   *SymKeyBitsU         `tpm2:"selector:Algorithm"` // Symmetric key size
-	Mode      SymModeU             `tpm2:"selector:Algorithm"` // Symmetric mode
+	Mode      *SymModeU            `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 
 // SymKey corresponds to the TPM2B_SYM_KEY type.

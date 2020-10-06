@@ -68,7 +68,7 @@ func TestDuplicate(t *testing.T) {
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Data: SymModeCFB}},
+					Mode:      &SymModeU{Sym: SymModeCFB}},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: uint32(key.PublicKey.E)}},
@@ -201,7 +201,7 @@ func TestDuplicate(t *testing.T) {
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      SymModeU{Data: SymModeCFB}}
+			Mode:      &SymModeU{Sym: SymModeCFB}}
 		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, nil, &symmetricAlg)
 		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
 			t.Errorf("Unexpected encryption key size")
@@ -217,7 +217,7 @@ func TestDuplicate(t *testing.T) {
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      SymModeU{Data: SymModeCFB}}
+			Mode:      &SymModeU{Sym: SymModeCFB}}
 		encryptionKeyIn := make(Data, 16)
 		rand.Read(encryptionKeyIn)
 		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, encryptionKeyIn, &symmetricAlg)
@@ -256,7 +256,7 @@ func TestDuplicate(t *testing.T) {
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      SymModeU{Data: SymModeCFB}}
+			Mode:      &SymModeU{Sym: SymModeCFB}}
 		encryptionKeyOut, duplicate, outSymSeed := run(t, parent, nil, &symmetricAlg)
 		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
 			t.Errorf("Unexpected encryption key size")
@@ -352,7 +352,7 @@ func TestImport(t *testing.T) {
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      SymModeU{Data: SymModeCFB}}
+			Mode:      &SymModeU{Sym: SymModeCFB}}
 		run(t, encryptionKey, encSensitive, nil, &symmetricAlg, nil)
 	})
 

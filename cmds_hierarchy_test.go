@@ -47,7 +47,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -70,7 +70,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 					CurveID: ECCCurveNIST_P256,
 					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
@@ -97,7 +97,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -118,7 +118,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -168,7 +168,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -197,7 +197,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -217,7 +217,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -241,7 +241,7 @@ func TestCreatePrimary(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -443,7 +443,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}
@@ -465,7 +465,7 @@ func TestHierarchyChangeAuth(t *testing.T) {
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      SymModeU{Data: SymModeCFB}},
+						Mode:      &SymModeU{Sym: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
 					Exponent: 0}}}

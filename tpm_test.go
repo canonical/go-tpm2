@@ -203,7 +203,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Data: SymModeCFB}},
+					Mode:      &SymModeU{Sym: SymModeCFB}},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
@@ -225,7 +225,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Data: SymModeCFB}},
+					Mode:      &SymModeU{Sym: SymModeCFB}},
 				Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 				CurveID: ECCCurveNIST_P256,
 				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
@@ -249,7 +249,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      SymModeU{Data: SymModeCFB}},
+					Mode:      &SymModeU{Sym: SymModeCFB}},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}

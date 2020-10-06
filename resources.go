@@ -265,7 +265,7 @@ func (d *handleContextData) checkConsistency() error {
 			}
 			switch scData.Symmetric.Algorithm {
 			case SymAlgorithmAES, SymAlgorithmSM4, SymAlgorithmCamellia:
-				if scData.Symmetric.Mode.Sym() != SymModeCFB {
+				if scData.Symmetric.Mode.Sym != SymModeCFB {
 					return errors.New("invalid symmetric mode for session context")
 				}
 			}

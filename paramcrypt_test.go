@@ -28,7 +28,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
 				KeyBits:   &SymKeyBitsU{Sym: 128},
-				Mode:      SymModeU{Data: SymModeCFB}},
+				Mode:      &SymModeU{Sym: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
@@ -157,7 +157,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
 				KeyBits:   &SymKeyBitsU{Sym: 128},
-				Mode:      SymModeU{Data: SymModeCFB}},
+				Mode:      &SymModeU{Sym: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
@@ -252,7 +252,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
 				KeyBits:   &SymKeyBitsU{Sym: 128},
-				Mode:      SymModeU{Data: SymModeCFB}},
+				Mode:      &SymModeU{Sym: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
