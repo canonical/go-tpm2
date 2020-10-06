@@ -67,7 +67,7 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 	if exp == 0 {
 		exp = DefaultRSAExponent
 	}
-	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA()), E: exp}
+	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA), E: exp}
 
 	padding := public.Params.RSADetail().Scheme.Scheme
 	if paddingOverride != RSASchemeNull {
@@ -115,8 +115,8 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 		return nil, nil, fmt.Errorf("ephemeral public key is not on curve")
 	}
 
-	tpmX := new(big.Int).SetBytes(public.Unique.ECC().X)
-	tpmY := new(big.Int).SetBytes(public.Unique.ECC().Y)
+	tpmX := new(big.Int).SetBytes(public.Unique.ECC.X)
+	tpmY := new(big.Int).SetBytes(public.Unique.ECC.Y)
 
 	mulX, _ := curve.ScalarMult(tpmX, tpmY, ephPriv)
 
@@ -146,7 +146,7 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
 		}
-		salt := internal.KDFe(public.NameAlg.GetHash(), []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC().X), digestSize*8)
+		salt := internal.KDFe(public.NameAlg.GetHash(), []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC.X), digestSize*8)
 		return encryptedSalt, salt, nil
 	}
 

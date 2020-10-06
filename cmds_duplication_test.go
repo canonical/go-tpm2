@@ -72,7 +72,7 @@ func TestDuplicate(t *testing.T) {
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
+		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 	parent, err := tpm.LoadExternal(nil, &parentTemplate, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -304,7 +304,7 @@ func TestImport(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
+		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 	objectSensitive := Sensitive{
 		Type:      ObjectTypeRSA,
 		AuthValue: make(Auth, objectPublic.NameAlg.Size()),
@@ -387,7 +387,7 @@ func TestImport(t *testing.T) {
 		duplicate, _ := mu.MarshalToBytes(h.Sum(nil), mu.RawBytes(dupSensitive))
 
 		keyPublic := rsa.PublicKey{
-			N: new(big.Int).SetBytes(primaryPublic.Unique.RSA()),
+			N: new(big.Int).SetBytes(primaryPublic.Unique.RSA),
 			E: 65537}
 		label := []byte("DUPLICATE")
 		label = append(label, 0)

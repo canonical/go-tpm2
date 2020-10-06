@@ -38,7 +38,7 @@ func TestPolicySigned(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
+		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -826,7 +826,7 @@ func TestPolicyAuthorize(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
+		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 	keyContext, err := tpm.LoadExternal(nil, &keyPublic, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)

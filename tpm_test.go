@@ -78,8 +78,8 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 }
 
 func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
-	if len(public.Unique.RSA()) != int(template.Params.RSADetail().KeyBits)/8 {
-		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA()))
+	if len(public.Unique.RSA) != int(template.Params.RSADetail().KeyBits)/8 {
+		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA))
 	}
 }
 
@@ -154,7 +154,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 		if exp == 0 {
 			exp = DefaultRSAExponent
 		}
-		pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA()), E: exp}
+		pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA), E: exp}
 
 		switch signature.SigAlg {
 		case SigSchemeAlgRSASSA:
@@ -177,7 +177,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 			t.Errorf("Unknown signature algorithm")
 		}
 	case ObjectTypeECC:
-		pubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(pub.Unique.ECC().X), Y: new(big.Int).SetBytes(pub.Unique.ECC().Y)}
+		pubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(pub.Unique.ECC.X), Y: new(big.Int).SetBytes(pub.Unique.ECC.Y)}
 
 		switch signature.SigAlg {
 		case SigSchemeAlgECDSA:

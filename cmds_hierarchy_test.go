@@ -80,7 +80,7 @@ func TestCreatePrimary(t *testing.T) {
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
-		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
+		if len(pub.Unique.ECC.X) != 32 || len(pub.Unique.ECC.Y) != 32 {
 			t.Errorf("CreatePrimary returned object with invalid ECC coords")
 		}
 	})

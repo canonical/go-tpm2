@@ -68,7 +68,7 @@ func TestHandle(t *testing.T) {
 
 type TestPublicIDUContainer struct {
 	Alg    ObjectTypeId
-	Unique PublicIDU `tpm2:"selector:Alg"`
+	Unique *PublicIDU `tpm2:"selector:Alg"`
 }
 
 func TestPublicIDUnion(t *testing.T) {
@@ -81,19 +81,19 @@ func TestPublicIDUnion(t *testing.T) {
 		{
 			desc: "RSA",
 			in: TestPublicIDUContainer{Alg: ObjectTypeRSA,
-				Unique: PublicIDU{Data: PublicKeyRSA{0x01, 0x02, 0x03}}},
+				Unique: &PublicIDU{RSA: PublicKeyRSA{0x01, 0x02, 0x03}}},
 			out: []byte{0x00, 0x01, 0x00, 0x03, 0x01, 0x02, 0x03},
 		},
 		{
 			desc: "KeyedHash",
 			in: TestPublicIDUContainer{Alg: ObjectTypeKeyedHash,
-				Unique: PublicIDU{Data: Digest{0x04, 0x05, 0x06, 0x07}}},
+				Unique: &PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x08, 0x00, 0x04, 0x04, 0x05, 0x06, 0x07},
 		},
 		{
 			desc: "InvalidSelector",
 			in: TestPublicIDUContainer{Alg: ObjectTypeId(AlgorithmNull),
-				Unique: PublicIDU{Data: Digest{0x04, 0x05, 0x06, 0x07}}},
+				Unique: &PublicIDU{Sym: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
 			err: "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestPublicIDUContainer: cannot process field " +
 				"Unique from struct type tpm2_test.TestPublicIDUContainer: invalid selector value: TPM_ALG_NULL",

@@ -232,7 +232,7 @@ func TestVerifySignature(t *testing.T) {
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
+			Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 
 		context, err := tpm.LoadExternal(nil, &public, HandleOwner)
 		if err != nil {

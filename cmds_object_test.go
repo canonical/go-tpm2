@@ -76,7 +76,7 @@ func TestCreate(t *testing.T) {
 					KDF:       KDFScheme{Scheme: KDFAlgorithmNull}}}}
 
 		pub, _ := run(t, primary, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
-		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
+		if len(pub.Unique.ECC.X) != 32 || len(pub.Unique.ECC.Y) != 32 {
 			t.Errorf("CreatePrimary returned object with invalid ECC coords")
 		}
 	})
@@ -363,7 +363,7 @@ func TestLoadExternal(t *testing.T) {
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
+			Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
@@ -386,7 +386,7 @@ func TestLoadExternal(t *testing.T) {
 					Scheme:    ECCScheme{Scheme: ECCSchemeNull},
 					CurveID:   ECCCurveNIST_P256,
 					KDF:       KDFScheme{Scheme: KDFAlgorithmNull}}},
-			Unique: PublicIDU{Data: &ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
+			Unique: &PublicIDU{ECC: &ECCPoint{X: x.Bytes(), Y: y.Bytes()}}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
@@ -416,7 +416,7 @@ func TestLoadExternal(t *testing.T) {
 						Scheme: KeyedHashSchemeHMAC,
 						Details: &SchemeKeyedHashU{
 							HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}},
-			Unique: PublicIDU{Data: unique}}
+			Unique: &PublicIDU{KeyedHash: unique}}
 
 		run(t, &sensitive, &public, HandleNull)
 	})
@@ -445,7 +445,7 @@ func TestLoadExternal(t *testing.T) {
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth,
 			Params:  PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}},
-			Unique:  PublicIDU{Data: unique}}
+			Unique:  &PublicIDU{KeyedHash: unique}}
 
 		rc := run1(t, &sensitive, &public, HandleNull)
 		defer flushContext(t, tpm, rc)
@@ -480,7 +480,7 @@ func TestLoadExternal(t *testing.T) {
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
 					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: PublicIDU{Data: key.PublicKey.N.Bytes()}}
+			Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
 
 		run(t, nil, &public, HandleOwner)
 	})

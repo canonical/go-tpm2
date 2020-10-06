@@ -37,7 +37,7 @@ In order to create and persist a new storage primary key:
 			Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
 			KeyBits:  2048,
 			Exponent: 0}},
-	Unique: tpm2.PublicIDU{Data: make(tpm2.PublicKeyRSA, 256)}}
+	Unique: &tpm2.PublicIDU{RSA: make(tpm2.PublicKeyRSA, 256)}}
  context, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
  if err != nil {
 	return err

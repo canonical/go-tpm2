@@ -1316,49 +1316,32 @@ type EncryptedSecret []byte
 // ObjectTypeId corresponds to the TPMI_ALG_PUBLIC type.
 type ObjectTypeId AlgorithmId
 
-// PublicIDU is a fake union type that corresponds to the TPMU_PUBLIC_ID type. The selector type is ObjectTypeId. Valid types for Data
-// for each selector value are:
-//  - ObjectTypeRSA: PublicKeyRSA
-//  - ObjectTypeKeyedHash: Digest
-//  - ObjectTypeECC: *ECCPoint
-//  - ObjectTypeSymCipher: Digest
+// PublicIDU is a union type that corresponds to the TPMU_PUBLIC_ID type. The selector type is ObjectTypeId.
+// The mapping of selector values to fields is as follows:
+//  - ObjectTypeRSA: RSA
+//  - ObjectTypeKeyedHash: KeyedHash
+//  - ObjectTypeECC: ECC
+//  - ObjectTypeSymCipher: Sym
 type PublicIDU struct {
-	Data interface{}
+	KeyedHash Digest
+	Sym       Digest
+	RSA       PublicKeyRSA
+	ECC       *ECCPoint
 }
 
-func (p PublicIDU) Select(selector reflect.Value) reflect.Type {
+func (p *PublicIDU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return reflect.TypeOf(PublicKeyRSA(nil))
+		return &p.RSA
 	case ObjectTypeKeyedHash:
-		return reflect.TypeOf(Digest(nil))
+		return &p.KeyedHash
 	case ObjectTypeECC:
-		return reflect.TypeOf((*ECCPoint)(nil))
+		return &p.ECC
 	case ObjectTypeSymCipher:
-		return reflect.TypeOf(Digest(nil))
+		return &p.Sym
 	default:
 		return nil
 	}
-}
-
-// KeyedHash returns the underlying value as Digest. It panics if the underlying type is not Digest.
-func (p PublicIDU) KeyedHash() Digest {
-	return p.Data.(Digest)
-}
-
-// Sym returns the underlying value as Digest. It panics if the underlying type is not Digest.
-func (p PublicIDU) Sym() Digest {
-	return p.Data.(Digest)
-}
-
-// RSA returns the underlying value as PublicKeyRSA. It panics if the underlying type is not PublicKeyRSA.
-func (p PublicIDU) RSA() PublicKeyRSA {
-	return p.Data.(PublicKeyRSA)
-}
-
-// ECC returns the underlying value as *ECCPoint. It panics if the underlying type is not *ECCPoint.
-func (p PublicIDU) ECC() *ECCPoint {
-	return p.Data.(*ECCPoint)
 }
 
 // KeyedHashParams corresponds to the TPMS_KEYEDHASH_PARMS type, and defines the public parameters for a keyedhash object.
@@ -1469,7 +1452,7 @@ type Public struct {
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
 	Params     PublicParamsU    `tpm2:"selector:Type"` // Type specific parameters
-	Unique     PublicIDU        `tpm2:"selector:Type"` // Type specific unique identifier
+	Unique     *PublicIDU       `tpm2:"selector:Type"` // Type specific unique identifier
 }
 
 // Name computes the name of this object
