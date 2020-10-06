@@ -158,7 +158,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 
 		switch signature.SigAlg {
 		case SigSchemeAlgRSASSA:
-			sig := (*SignatureRSA)(signature.Signature.RSASSA())
+			sig := (*SignatureRSA)(signature.Signature.RSASSA)
 			if !sig.Hash.Supported() {
 				t.Fatalf("Signature has unknown digest")
 			}
@@ -166,7 +166,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 				t.Errorf("Signature is invalid")
 			}
 		case SigSchemeAlgRSAPSS:
-			sig := (*SignatureRSA)(signature.Signature.RSAPSS())
+			sig := (*SignatureRSA)(signature.Signature.RSAPSS)
 			if !sig.Hash.Supported() {
 				t.Fatalf("Signature has unknown digest")
 			}
@@ -181,7 +181,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 
 		switch signature.SigAlg {
 		case SigSchemeAlgECDSA:
-			sig := signature.Signature.ECDSA()
+			sig := signature.Signature.ECDSA
 			if !ecdsa.Verify(&pubKey, digest, new(big.Int).SetBytes(sig.SignatureR), new(big.Int).SetBytes(sig.SignatureS)) {
 				t.Errorf("Signature is invalid")
 			}

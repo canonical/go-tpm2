@@ -105,7 +105,7 @@ func TestPolicySigned(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSAPSS,
-				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: &SignatureU{RSAPSS: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
 
 			timeout, policyTicket, err :=
 				tpm.PolicySigned(keyContext, sessionContext, data.includeNonceTPM, data.cpHashA, data.policyRef, data.expiration, &signature)
@@ -881,7 +881,7 @@ func TestPolicyAuthorize(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSAPSS,
-				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: &SignatureU{RSAPSS: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
 
 			checkTicket, err := tpm.VerifySignature(keyContext, aHash, &signature)
 			if err != nil {

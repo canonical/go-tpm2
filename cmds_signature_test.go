@@ -201,7 +201,7 @@ func TestSign(t *testing.T) {
 		if SigSchemeAlgECDSA != signature.SigAlg {
 			t.Fatalf("Signature has the wrong scheme")
 		}
-		sig := signature.Signature.ECDSA()
+		sig := signature.Signature.ECDSA
 		if HashAlgorithmSHA256 != sig.Hash {
 			t.Errorf("Signature has the wrong hash")
 		}
@@ -274,7 +274,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: &SignatureU{RSASSA: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
 			run(t, true, digest, &signature)
 		})
 
@@ -290,7 +290,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSAPSS,
-				Signature: SignatureU{Data: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: &SignatureU{RSAPSS: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
 			run(t, true, digest, &signature)
 		})
 
@@ -306,7 +306,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: &SignatureU{RSASSA: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
 			run(t, false, digest, &signature)
 		})
 
@@ -322,7 +322,7 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: SignatureU{Data: &SignatureRSASSA{Hash: HashAlgorithmSHA1, Sig: s}}}
+				Signature: &SignatureU{RSASSA: &SignatureRSASSA{Hash: HashAlgorithmSHA1, Sig: s}}}
 			run(t, true, digest, &signature)
 		})
 	})

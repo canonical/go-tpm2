@@ -1044,8 +1044,9 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 // first set field as *SchemeHash.
 func (s SigSchemeU) Any() *SchemeHash {
 	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.ECDSA, s.ECDAA, s.SM2, s.ECSCHNORR, s.HMAC} {
-		if p != nil {
-			return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+		h := (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+		if h != nil {
+			return h
 		}
 	}
 	return nil
@@ -1168,8 +1169,9 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 // first set field as *SchemeHash.
 func (s AsymSchemeU) Any() *SchemeHash {
 	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.OAEP, s.ECDSA, s.ECDH, s.ECDAA, s.SM2, s.ECSCHNORR, s.ECMQV} {
-		if p != nil {
-			return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+		h := (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+		if h != nil {
+			return h
 		}
 	}
 	return nil
@@ -1240,88 +1242,66 @@ type SignatureECDAA SignatureECC
 type SignatureSM2 SignatureECC
 type SignatureECSCHNORR SignatureECC
 
-// SignatureU is a fake union type that corresponds to TPMU_SIGNATURE. The selector type is SigSchemeId. Valid types for Data for
-// each selector value are:
-//  - SigSchemeAlgRSASSA: *SignatureRSASSA
-//  - SigSchemeAlgRSAPSS: *SignatureRSAPSS
-//  - SigSchemeAlgECDSA: *SignatureECDSA
-//  - SigSchemeAlgECDAA: *SignatureECDAA
-//  - SigSchemeAlgSM2: *SignatureSM2
-//  - SigSchemeAlgECSCHNORR: *SignatureECSCHNORR
-//  - SigSchemeAlgHMAC: *TaggedHash
-//  - SigSchemeAlgNull: <nil>
+// SignatureU is a union type that corresponds to TPMU_SIGNATURE. The selector type is SigSchemeId.
+// The mapping of selector values to fields is as follows:
+//  - SigSchemeAlgRSASSA: RSASSA
+//  - SigSchemeAlgRSAPSS: RSAPSS
+//  - SigSchemeAlgECDSA: ECDSA
+//  - SigSchemeAlgECDAA: ECDAA
+//  - SigSchemeAlgSM2: SM2
+//  - SigSchemeAlgECSCHNORR: ECSCHNORR
+//  - SigSchemeAlgHMAC: HMAC
+//  - SigSchemeAlgNull: none
 type SignatureU struct {
-	Data interface{}
+	RSASSA    *SignatureRSASSA
+	RSAPSS    *SignatureRSAPSS
+	ECDSA     *SignatureECDSA
+	ECDAA     *SignatureECDAA
+	SM2       *SignatureSM2
+	ECSCHNORR *SignatureECSCHNORR
+	HMAC      *TaggedHash
 }
 
-func (s SignatureU) Select(selector reflect.Value) reflect.Type {
+func (s *SignatureU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return reflect.TypeOf((*SignatureRSASSA)(nil))
+		return &s.RSASSA
 	case SigSchemeAlgRSAPSS:
-		return reflect.TypeOf((*SignatureRSAPSS)(nil))
+		return &s.RSAPSS
 	case SigSchemeAlgECDSA:
-		return reflect.TypeOf((*SignatureECDSA)(nil))
+		return &s.ECDSA
 	case SigSchemeAlgECDAA:
-		return reflect.TypeOf((*SignatureECDAA)(nil))
+		return &s.ECDAA
 	case SigSchemeAlgSM2:
-		return reflect.TypeOf((*SignatureSM2)(nil))
+		return &s.SM2
 	case SigSchemeAlgECSCHNORR:
-		return reflect.TypeOf((*SignatureECSCHNORR)(nil))
+		return &s.ECSCHNORR
 	case SigSchemeAlgHMAC:
-		return reflect.TypeOf((*TaggedHash)(nil))
+		return &s.HMAC
 	case SigSchemeAlgNull:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	default:
 		return nil
 	}
 }
 
-// RSASSA returns the underlying value as *SignatureRSASSA. It panics if the underlying type is not *SignatureRSASSA.
-func (s SignatureU) RSASSA() *SignatureRSASSA {
-	return s.Data.(*SignatureRSASSA)
-}
-
-// RSAPSS returns the underlying value as *SignatureRSAPSS. It panics if the underlying type is not *SignatureRSAPSS.
-func (s SignatureU) RSAPSS() *SignatureRSAPSS {
-	return s.Data.(*SignatureRSAPSS)
-}
-
-// ECDSA returns the underlying value as *SignatureECDSA. It panics if the underlying type is not *SignatureECDSA.
-func (s SignatureU) ECDSA() *SignatureECDSA {
-	return s.Data.(*SignatureECDSA)
-}
-
-// ECDAA returns the underlying value as *SignatureECDAA. It panics if the underlying type is not *SignatureECDAA.
-func (s SignatureU) ECDAA() *SignatureECDAA {
-	return s.Data.(*SignatureECDAA)
-}
-
-// SM2 returns the underlying value as *SignatureSM2. It panics if the underlying type is not *SignatureSM2.
-func (s SignatureU) SM2() *SignatureSM2 {
-	return s.Data.(*SignatureSM2)
-}
-
-// ECSCHNORR returns the underlying value as *SignatureECSCHNORR. It panics if the underlying type is not *SignatureECSCHNORR.
-func (s SignatureU) ECSCHNORR() *SignatureECSCHNORR {
-	return s.Data.(*SignatureECSCHNORR)
-}
-
-// HMAC returns the underlying value as *TaggedHash. It panics if the underlying type is not *TaggedHash.
-func (s SignatureU) HMAC() *TaggedHash {
-	return s.Data.(*TaggedHash)
-}
-
-// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to *SchemeHash.
+// Any returns the underlying value as *SchemeHash. Note that if more than one field is set, it will return the
+// first set field as *SchemeHash.
 func (s SignatureU) Any() *SchemeHash {
-	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
+	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.ECDSA, s.ECDAA, s.SM2, s.ECSCHNORR, s.HMAC} {
+		h := (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+		if h != nil {
+			return h
+		}
+	}
+	return nil
 }
 
 // Signature corresponds to the TPMT_SIGNATURE type. It is returned by the attestation commands, and is a parameter for
 // TPMContext.VerifySignature and TPMContext.PolicySigned.
 type Signature struct {
 	SigAlg    SigSchemeId // Signature algorithm
-	Signature SignatureU  `tpm2:"selector:SigAlg"` // Actual signature
+	Signature *SignatureU `tpm2:"selector:SigAlg"` // Actual signature
 }
 
 // 11.4) Key/Secret Exchange
