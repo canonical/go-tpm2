@@ -94,7 +94,7 @@ func TestCreate(t *testing.T) {
 				Data: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   SymKeyBitsU{Data: uint16(128)},
+						KeyBits:   &SymKeyBitsU{Sym: 128},
 						Mode:      SymModeU{Data: SymModeCFB}},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
@@ -294,7 +294,7 @@ func TestReadPublic(t *testing.T) {
 	t.Run("ResponseEncrypt", func(t *testing.T) {
 		symmetric := SymDef{
 			Algorithm: SymAlgorithmAES,
-			KeyBits:   SymKeyBitsU{Data: uint16(128)},
+			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      SymModeU{Data: SymModeCFB}}
 		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &symmetric, HashAlgorithmSHA256)
 		if err != nil {

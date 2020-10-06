@@ -32,7 +32,7 @@ In order to create and persist a new storage primary key:
 		Data: &tpm2.RSAParams{
 			Symmetric: tpm2.SymDefObject{
 				Algorithm: tpm2.SymObjectAlgorithmAES,
-				KeyBits:   tpm2.SymKeyBitsU{Data: uint16(128)},
+				KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
 				Mode:      tpm2.SymModeU{Data: tpm2.SymModeCFB}},
 			Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
 			KeyBits:  2048,

@@ -64,7 +64,15 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if !bytes.Equal(public.AuthPolicy, template.AuthPolicy) {
 		t.Errorf("public object has wrong auth policy")
 	}
-	if !reflect.DeepEqual(public.Params, template.Params) {
+	pp, err := mu.MarshalToBytes(public.Params.Data)
+	if err != nil {
+		t.Errorf("cannot marshal public params: %w", err)
+	}
+	tp, err := mu.MarshalToBytes(template.Params.Data)
+	if err != nil {
+		t.Errorf("cannot marshal template params: %w", err)
+	}
+	if !bytes.Equal(pp, tp) {
 		t.Errorf("public object has wrong params")
 	}
 }
@@ -194,7 +202,7 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 			Data: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   SymKeyBitsU{Data: uint16(128)},
+					KeyBits:   &SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Data: SymModeCFB}},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
@@ -216,7 +224,7 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 			Data: &ECCParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   SymKeyBitsU{Data: uint16(128)},
+					KeyBits:   &SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Data: SymModeCFB}},
 				Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 				CurveID: ECCCurveNIST_P256,
@@ -240,7 +248,7 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 			Data: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   SymKeyBitsU{Data: uint16(128)},
+					KeyBits:   &SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Data: SymModeCFB}},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,

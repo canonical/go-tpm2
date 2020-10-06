@@ -73,8 +73,8 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
 		k := internal.KDFa(scData.HashAlg.GetHash(), sessionValue, []byte("CFB"), scData.NonceCaller, scData.NonceTPM,
-			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
-		offset := (symmetric.KeyBits.Sym() + 7) / 8
+			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
+		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
 		if err := internal.EncryptSymmetricAES(symKey, internal.SymmetricMode(symmetric.Mode.Sym()), data, iv); err != nil {
@@ -114,8 +114,8 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
 		k := internal.KDFa(scData.HashAlg.GetHash(), sessionValue, []byte("CFB"), scData.NonceTPM, scData.NonceCaller,
-			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
-		offset := (symmetric.KeyBits.Sym() + 7) / 8
+			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
+		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
 		if err := internal.DecryptSymmetricAES(symKey, internal.SymmetricMode(symmetric.Mode.Sym()), data, iv); err != nil {

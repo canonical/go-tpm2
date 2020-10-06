@@ -160,6 +160,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		data.nonceCaller = scData.NonceCaller
 		data.nonceTPM = scData.NonceTPM
 		data.symmetric = scData.Symmetric
+		data.symmetric.KeyBits = &SymKeyBitsU{}
 
 		context, err := tpm.ContextSave(sc)
 		if err != nil {

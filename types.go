@@ -763,7 +763,7 @@ type NVCertifyInfo struct {
 }
 
 // AttestU is a union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag.
-// Mapping of selector values to fileds is as follows:
+// Mapping of selector values to fields is as follows:
 //  - TagAttestNV: NV
 //  - TagAttestCommandAudit: CommandAudit
 //  - TagAttestSessionAudit: SessionAudit
@@ -831,42 +831,33 @@ func (a AttestRaw) Decode() (*Attest, error) {
 
 // 11.1) Symmetric
 
-// SymKeyBitsU is a fake union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to specify symmetric encryption key
-// sizes. The selector type is AlgorithmId. Valid types for Data for each selector value are:
-//  - AlgorithmAES: uint16
-//  - AlgorithmSM4: uint16
-//  - AlgorithmCamellia: uint16
-//  - AlgorithmXOR: HashAlgorithmId
-//  - AlgorithmNull: <nil>
+// SymKeyBitsU is a union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to specify symmetric encryption key
+// sizes. The selector type is AlgorithmId. Mapping of selector values to fields is as follows:
+//  - AlgorithmAES: Sym
+//  - AlgorithmSM4: Sym
+//  - AlgorithmCamellia: Sym
+//  - AlgorithmXOR: XOR
+//  - AlgorithmNull: none
 type SymKeyBitsU struct {
-	Data interface{}
+	Sym uint16
+	XOR HashAlgorithmId
 }
 
-func (b SymKeyBitsU) Select(selector reflect.Value) reflect.Type {
+func (b *SymKeyBitsU) Select(selector reflect.Value) interface{} {
 	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
 		fallthrough
 	case AlgorithmSM4:
 		fallthrough
 	case AlgorithmCamellia:
-		return reflect.TypeOf(uint16(0))
+		return &b.Sym
 	case AlgorithmXOR:
-		return reflect.TypeOf(HashAlgorithmId(0))
+		return &b.XOR
 	case AlgorithmNull:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	default:
 		return nil
 	}
-}
-
-// Sym returns the underlying value as uint16. It panics if the underlying type is not uint16.
-func (b SymKeyBitsU) Sym() uint16 {
-	return b.Data.(uint16)
-}
-
-// XOR returns the underlying value as HashAlgorithmId. It panics if the underlying type is not HashAlgorithmId.
-func (b SymKeyBitsU) XOR() HashAlgorithmId {
-	return b.Data.(HashAlgorithmId)
 }
 
 // SymModeU is a fake union type that corresponds to the TPMU_SYM_MODE type. The selector type is AlgorithmId. Valid types for Data
@@ -905,14 +896,14 @@ func (m SymModeU) Sym() SymModeId {
 // SymDef corresponds to the TPMT_SYM_DEF type, and is used to select the algorithm used for parameter encryption.
 type SymDef struct {
 	Algorithm SymAlgorithmId // Symmetric algorithm
-	KeyBits   SymKeyBitsU    `tpm2:"selector:Algorithm"` // Symmetric key size
+	KeyBits   *SymKeyBitsU   `tpm2:"selector:Algorithm"` // Symmetric key size
 	Mode      SymModeU       `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 
 // SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an object's symmetric algorithm.
 type SymDefObject struct {
 	Algorithm SymObjectAlgorithmId // Symmetric algorithm
-	KeyBits   SymKeyBitsU          `tpm2:"selector:Algorithm"` // Symmetric key size
+	KeyBits   *SymKeyBitsU         `tpm2:"selector:Algorithm"` // Symmetric key size
 	Mode      SymModeU             `tpm2:"selector:Algorithm"` // Symmetric mode
 }
 

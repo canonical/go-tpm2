@@ -67,7 +67,7 @@ func TestDuplicate(t *testing.T) {
 			Data: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   SymKeyBitsU{Data: uint16(128)},
+					KeyBits:   &SymKeyBitsU{Sym: 128},
 					Mode:      SymModeU{Data: SymModeCFB}},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
@@ -163,7 +163,7 @@ func TestDuplicate(t *testing.T) {
 		}
 
 		symKey := internal.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("STORAGE"), object.Name(), nil,
-			int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym()))
+			int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym))
 		block, err := aes.NewCipher(symKey)
 		if err != nil {
 			t.Fatalf("NewCipher failed: %v", err)
@@ -200,10 +200,10 @@ func TestDuplicate(t *testing.T) {
 	t.Run("InnerWrapper", func(t *testing.T) {
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   SymKeyBitsU{Data: uint16(128)},
+			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      SymModeU{Data: SymModeCFB}}
 		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, nil, &symmetricAlg)
-		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym())/8 {
+		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
 			t.Errorf("Unexpected encryption key size")
 		}
 		if len(outSymSeed) > 0 {
@@ -216,7 +216,7 @@ func TestDuplicate(t *testing.T) {
 	t.Run("InnerWrapperWithKey", func(t *testing.T) {
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   SymKeyBitsU{Data: uint16(128)},
+			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      SymModeU{Data: SymModeCFB}}
 		encryptionKeyIn := make(Data, 16)
 		rand.Read(encryptionKeyIn)
@@ -255,10 +255,10 @@ func TestDuplicate(t *testing.T) {
 	t.Run("OuterAndInnerWrapper", func(t *testing.T) {
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   SymKeyBitsU{Data: uint16(128)},
+			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      SymModeU{Data: SymModeCFB}}
 		encryptionKeyOut, duplicate, outSymSeed := run(t, parent, nil, &symmetricAlg)
-		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym())/8 {
+		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
 			t.Errorf("Unexpected encryption key size")
 		}
 		if len(outSymSeed) != int(parentTemplate.Params.RSADetail().KeyBits)/8 {
@@ -351,7 +351,7 @@ func TestImport(t *testing.T) {
 
 		symmetricAlg := SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   SymKeyBitsU{Data: uint16(128)},
+			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      SymModeU{Data: SymModeCFB}}
 		run(t, encryptionKey, encSensitive, nil, &symmetricAlg, nil)
 	})
@@ -369,7 +369,7 @@ func TestImport(t *testing.T) {
 		rand.Read(seed)
 
 		symKey := internal.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("STORAGE"), name, nil,
-			int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym()))
+			int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym))
 
 		block, err := aes.NewCipher(symKey)
 		if err != nil {

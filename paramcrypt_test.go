@@ -27,14 +27,14 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   SymKeyBitsU{Data: uint16(128)},
+				KeyBits:   &SymKeyBitsU{Sym: 128},
 				Mode:      SymModeU{Data: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   SymKeyBitsU{Data: HashAlgorithmSHA256}},
+				KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -156,14 +156,14 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   SymKeyBitsU{Data: uint16(128)},
+				KeyBits:   &SymKeyBitsU{Sym: 128},
 				Mode:      SymModeU{Data: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   SymKeyBitsU{Data: HashAlgorithmSHA256}},
+				KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -251,14 +251,14 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   SymKeyBitsU{Data: uint16(128)},
+				KeyBits:   &SymKeyBitsU{Sym: 128},
 				Mode:      SymModeU{Data: SymModeCFB}},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   SymKeyBitsU{Data: HashAlgorithmSHA256}},
+				KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
