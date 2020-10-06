@@ -378,6 +378,54 @@ func (s *muSuite) TestMarshalAndUnmarshalUnion(c *C) {
 			testUnionContainer{Select: 3, Union: testUnion{uint16(tpm2.HashAlgorithmSHA256)}}}})
 }
 
+type testUnion2 struct {
+	A *testStruct
+	B []uint32
+	C uint16
+}
+
+func (t *testUnion2) Select(selector reflect.Value) interface{} {
+	switch selector.Interface().(uint32) {
+	case 1:
+		return &t.A
+	case 2:
+		return &t.B
+	case 3:
+		return &t.C
+	case 4:
+		return NilUnionValue
+	default:
+		return nil
+	}
+}
+
+type testUnion2Container struct {
+	Select uint32
+	Union  *testUnion2 `tpm2:"selector:Select"`
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalUnion2(c *C) {
+	var u32 uint32 = 657763432
+	v := testUnion2Container{Select: 1, Union: &testUnion2{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
+	w := testUnion2Container{Select: 2, Union: &testUnion2{B: []uint32{3287743, 98731}}}
+	x := testUnion2Container{Select: 3, Union: &testUnion2{C: uint16(4321)}}
+	y := testUnion2Container{Select: 4}
+	z := testUnion2Container{Select: 1} // Test that the zero value gets marshalled
+
+	expected := testutil.DecodeHexString(c, "00000001dc042734ac68010000000205e3131b0053366f000000020000000200322abf000181ab0000000310e100000004000000010000000000000000000000")
+
+	var u32_0 uint32
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{v, w, x, y, z},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{v, w, x, testUnion2Container{Select: 4, Union: &testUnion2{}}, testUnion2Container{Select: 1, Union: &testUnion2{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{v, w, x, y, z},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{v, w, x, testUnion2Container{Select: 4, Union: &testUnion2{}}, testUnion2Container{Select: 1, Union: &testUnion2{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+}
+
 type testStructWithCustomMarshaller struct {
 	A uint16
 	B []uint32
@@ -479,6 +527,10 @@ func (s *muSuite) TestDetermineTPMKindUnion(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testUnion{}, k: TPMKindUnion})
 }
 
+func (s *muSuite) TestDetermineTPMKindUnion2(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testUnion2{}, k: TPMKindUnion})
+}
+
 func (s *muSuite) TestDetermineTPMKindCustom(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithCustomMarshaller{}, k: TPMKindCustom})
 }
@@ -519,6 +571,17 @@ func (s *muSuite) TestMarshalUnionWithIncorrectType(c *C) {
 	_, err := MarshalToBytes(v)
 	c.Check(err, ErrorMatches, "cannot marshal argument at index 0: cannot process struct type mu_test.testUnionContainer: cannot process "+
 		"field Union from struct type mu_test.testUnionContainer: data has incorrect type uint16 \\(expected \\*mu_test.testStruct\\)")
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalUnion2WithInvalidSelector(c *C) {
+	w := testUnion2Container{Select: 259}
+	b, err := MarshalToBytes(w)
+	c.Check(err, IsNil)
+
+	var uw testUnion2Container
+	_, err = UnmarshalFromBytes(b, &uw)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument at index 0: cannot process struct type mu_test.testUnion2Container: cannot "+
+		"process field Union from struct type mu_test.testUnion2Container: invalid selector value: 259")
 }
 
 func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
