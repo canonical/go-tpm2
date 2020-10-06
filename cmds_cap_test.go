@@ -300,7 +300,7 @@ func TestTestParms(t *testing.T) {
 						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 						Scheme: ECCScheme{
 							Scheme:  ECCSchemeECDSA,
-							Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
+							Details: &AsymSchemeU{ECDSA: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
 						CurveID: ECCCurveNIST_P256,
 						KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}},
 			valid: true,

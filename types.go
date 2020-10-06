@@ -1109,111 +1109,76 @@ type EncSchemeOAEP SchemeHash
 // AsymSchemeId corresponds to the TPMI_ALG_ASYM_SCHEME type
 type AsymSchemeId AlgorithmId
 
-// AsymSchemeU is a fake union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is AsymSchemeId. Valid types for
-// Data for each selector value are:
-//  - AsymSchemeRSASSA: *SigSchemeRSASSA
-//  - AsymSchemeRSAES: *EncSchemeRSAES
-//  - AsymSchemeRSAPSS: *SigSchemeRSAPSS
-//  - AsymSchemeOAEP: *EncSchemeOAEP
-//  - AsymSchemeECDSA: *SigSchemeECDSA
-//  - AsymSchemeECDH: *KeySchemeECDH
-//  - AsymSchemeECDAA: *SigSchemeECDAA
-//  - AsymSchemeSM2: *SigSchemeSM2
-//  - AsymSchemeECSCHNORR: *SigSchemeECSCHNORR
-//  - AsymSchemeECMQV: *KeySchemeECMQV
-//  - AsymSchemeNull: <nil>
+// AsymSchemeU is a union type that corresponds to the TPMU_ASYM_SCHEME type. The selector type is AsymSchemeId.
+// The mapping of selector values to fields is as follows:
+//  - AsymSchemeRSASSA: RSASSA
+//  - AsymSchemeRSAES: RSAES
+//  - AsymSchemeRSAPSS: RSAPSS
+//  - AsymSchemeOAEP: OAEP
+//  - AsymSchemeECDSA: ECDSA
+//  - AsymSchemeECDH: ECDH
+//  - AsymSchemeECDAA: ECDAA
+//  - AsymSchemeSM2: SM2
+//  - AsymSchemeECSCHNORR: ECSCHNORR
+//  - AsymSchemeECMQV: ECMQV
+//  - AsymSchemeNull: none
 type AsymSchemeU struct {
-	Data interface{}
+	RSASSA    *SigSchemeRSASSA
+	RSAES     *EncSchemeRSAES
+	RSAPSS    *SigSchemeRSAPSS
+	OAEP      *EncSchemeOAEP
+	ECDSA     *SigSchemeECDSA
+	ECDH      *KeySchemeECDH
+	ECDAA     *SigSchemeECDAA
+	SM2       *SigSchemeSM2
+	ECSCHNORR *SigSchemeECSCHNORR
+	ECMQV     *KeySchemeECMQV
 }
 
-func (s AsymSchemeU) Select(selector reflect.Value) reflect.Type {
+func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 	switch selector.Convert(reflect.TypeOf(AsymSchemeId(0))).Interface().(AsymSchemeId) {
 	case AsymSchemeRSASSA:
-		return reflect.TypeOf((*SigSchemeRSASSA)(nil))
+		return &s.RSASSA
 	case AsymSchemeRSAES:
-		return reflect.TypeOf((*EncSchemeRSAES)(nil))
+		return &s.RSAES
 	case AsymSchemeRSAPSS:
-		return reflect.TypeOf((*SigSchemeRSAPSS)(nil))
+		return &s.RSAPSS
 	case AsymSchemeOAEP:
-		return reflect.TypeOf((*EncSchemeOAEP)(nil))
+		return &s.OAEP
 	case AsymSchemeECDSA:
-		return reflect.TypeOf((*SigSchemeECDSA)(nil))
+		return &s.ECDSA
 	case AsymSchemeECDH:
-		return reflect.TypeOf((*KeySchemeECDH)(nil))
+		return &s.ECDH
 	case AsymSchemeECDAA:
-		return reflect.TypeOf((*SigSchemeECDAA)(nil))
+		return &s.ECDAA
 	case AsymSchemeSM2:
-		return reflect.TypeOf((*SigSchemeSM2)(nil))
+		return &s.SM2
 	case AsymSchemeECSCHNORR:
-		return reflect.TypeOf((*SigSchemeECSCHNORR)(nil))
+		return &s.ECSCHNORR
 	case AsymSchemeECMQV:
-		return reflect.TypeOf((*KeySchemeECMQV)(nil))
+		return &s.ECMQV
 	case AsymSchemeNull:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	default:
 		return nil
 	}
 }
 
-// ECDH returns the underlying value as *KeySchemeECDH. It panics if the underlying type is not *KeySchemeECDH.
-func (s AsymSchemeU) ECDH() *KeySchemeECDH {
-	return s.Data.(*KeySchemeECDH)
-}
-
-// ECMQV returns the underlying value as *KeySchemeECMQV. It panics if the underlying type is not *KeySchemeECMQV.
-func (s AsymSchemeU) ECMQV() *KeySchemeECMQV {
-	return s.Data.(*KeySchemeECMQV)
-}
-
-// RSASSA returns the underlying value as *SigSchemeRSASSA. It panics if the underlying type is not *SigSchemeRSASSA.
-func (s AsymSchemeU) RSASSA() *SigSchemeRSASSA {
-	return s.Data.(*SigSchemeRSASSA)
-}
-
-// RSAPSS returns the underlying value as *SigSchemeRSAPSS. It panics if the underlying type is not *SigSchemeRSAPSS.
-func (s AsymSchemeU) RSAPSS() *SigSchemeRSAPSS {
-	return s.Data.(*SigSchemeRSAPSS)
-}
-
-// ECDSA returns the underlying value as *SigSchemeECDSA. It panics if the underlying type is not *SigSchemeECDSA.
-func (s AsymSchemeU) ECDSA() *SigSchemeECDSA {
-	return s.Data.(*SigSchemeECDSA)
-}
-
-// ECDAA returns the underlying value as *SigSchemeECDAA. It panics if the underlying type is not *SigSchemeECDAA.
-func (s AsymSchemeU) ECDAA() *SigSchemeECDAA {
-	return s.Data.(*SigSchemeECDAA)
-}
-
-// SM2 returns the underlying value as *SigSchemeSM2. It panics if the underlying type is not *SigSchemeSM2.
-func (s AsymSchemeU) SM2() *SigSchemeSM2 {
-	return s.Data.(*SigSchemeSM2)
-}
-
-// ECSCHNORR returns the underlying value as *SigSchemeECSCHNORR. It panics if the underlying type is not *SigSchemeECSCHNORR.
-func (s AsymSchemeU) ECSCHNORR() *SigSchemeECSCHNORR {
-	return s.Data.(*SigSchemeECSCHNORR)
-}
-
-// RSAES returns the underlying value as *EncSchemeRSAES. It panics if the underlying type is not *EncSchemeRSAES.
-func (s AsymSchemeU) RSAES() *EncSchemeRSAES {
-	return s.Data.(*EncSchemeRSAES)
-}
-
-// OAEP returns the underlying value as *EncSchemeOAEP. It panics if the underlying type is not *EncSchemeOAEP.
-func (s AsymSchemeU) OAEP() *EncSchemeOAEP {
-	return s.Data.(*EncSchemeOAEP)
-}
-
-// Any returns the underlying value as *SchemeHash. It panics if the underlying type is not convertible to *SchemeHash.
+// Any returns the underlying value as *SchemeHash. Note that if more than one field is set, it will return the
+// first set field as *SchemeHash.
 func (s AsymSchemeU) Any() *SchemeHash {
-	return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(s.Data).Pointer()))
+	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.OAEP, s.ECDSA, s.ECDH, s.ECDAA, s.SM2, s.ECSCHNORR, s.ECMQV} {
+		if p != nil {
+			return (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+		}
+	}
+	return nil
 }
 
 // AsymScheme corresponds to the TPMT_ASYM_SCHEME type.
 type AsymScheme struct {
 	Scheme  AsymSchemeId // Scheme selector
-	Details AsymSchemeU  `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Details *AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters
 }
 
 // 11.2.4 RSA
@@ -1223,8 +1188,8 @@ type RSASchemeId AsymSchemeId
 
 // RSAScheme corresponds to the TPMT_RSA_SCHEME type.
 type RSAScheme struct {
-	Scheme  RSASchemeId // Scheme selector
-	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Scheme  RSASchemeId  // Scheme selector
+	Details *AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
 // PublicKeyRSA corresponds to the TPM2B_PUBLIC_KEY_RSA type.
@@ -1249,8 +1214,8 @@ type ECCSchemeId AsymSchemeId
 
 // ECCScheme corresponds to the TPMT_ECC_SCHEME type.
 type ECCScheme struct {
-	Scheme  ECCSchemeId // Scheme selector
-	Details AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Scheme  ECCSchemeId  // Scheme selector
+	Details *AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
 // 11.3 Signatures

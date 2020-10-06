@@ -78,7 +78,7 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 	case RSASchemeOAEP:
 		schemeHashAlg := public.NameAlg
 		if paddingOverride == RSASchemeNull {
-			schemeHashAlg = public.Params.RSADetail().Scheme.Details.OAEP().HashAlg
+			schemeHashAlg = public.Params.RSADetail().Scheme.Details.OAEP.HashAlg
 		}
 		if schemeHashAlg == HashAlgorithmNull {
 			schemeHashAlg = public.NameAlg

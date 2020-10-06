@@ -77,7 +77,7 @@ func TestSign(t *testing.T) {
 		t.Run("UseKeyScheme", func(t *testing.T) {
 			scheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			key, pub := create(t, &scheme, nil)
 			defer flushContext(t, tpm, key)
 
@@ -92,7 +92,7 @@ func TestSign(t *testing.T) {
 		t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
 			keyScheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			inScheme := SigScheme{
 				Scheme:  SigSchemeAlgRSASSA,
 				Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
@@ -128,7 +128,7 @@ func TestSign(t *testing.T) {
 		t.Run("UsePasswordAuth", func(t *testing.T) {
 			scheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			key, pub := create(t, &scheme, testAuth)
 			defer flushContext(t, tpm, key)
 
@@ -143,7 +143,7 @@ func TestSign(t *testing.T) {
 		t.Run("UseSessionAuth", func(t *testing.T) {
 			scheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
 			key, pub := create(t, &scheme, testAuth)
 			defer flushContext(t, tpm, key)
 
@@ -175,7 +175,7 @@ func TestSign(t *testing.T) {
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme: ECCScheme{
 						Scheme:  ECCSchemeECDSA,
-						Details: AsymSchemeU{Data: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
+						Details: &AsymSchemeU{ECDSA: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
 					CurveID: ECCCurveNIST_P256,
 					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
 		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)

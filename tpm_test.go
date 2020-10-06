@@ -283,7 +283,7 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
 					Scheme:  RSASchemeRSASSA,
-					Details: AsymSchemeU{Data: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}},
+					Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
@@ -314,8 +314,8 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
 					Scheme: RSASchemeRSAPSS,
-					Details: AsymSchemeU{
-						Data: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}},
+					Details: &AsymSchemeU{
+						RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	priv, pub, _, _, _, err := tpm.Create(parent, nil, &template, nil, nil, nil)
