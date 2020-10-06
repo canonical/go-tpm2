@@ -1064,60 +1064,41 @@ type SchemeKDF1_SP800_56A SchemeHash
 type SchemeKDF2 SchemeHash
 type SchemeKDF1_SP800_108 SchemeHash
 
-// KDFSchemeU is a fake union type that corresponds to the TPMU_KDF_SCHEME type. The selector type is KDFAlgorithmId. Valid types for
-// Data for each selector value are:
-//  - KDFAlgorithmMGF1: *SchemeMGF1
-//  - KDFAlgorithmKDF1_SP800_56A: *SchemeKDF1_SP800_56A
-//  - KDFAlgorithmKDF2: *SchemeKF2
-//  - KDFAlgorithmKDF1_SP800_108: *SchemeKDF1_SP800_108
-//  - KDFAlgorithmNull: <nil>
+// KDFSchemeU is a union type that corresponds to the TPMU_KDF_SCHEME type. The selector type is KDFAlgorithmId.
+// The mapping of selector value to field is as follows:
+//  - KDFAlgorithmMGF1: MGF1
+//  - KDFAlgorithmKDF1_SP800_56A: KDF1_SP800_56A
+//  - KDFAlgorithmKDF2: KDF2
+//  - KDFAlgorithmKDF1_SP800_108: KDF1_SP800_108
+//  - KDFAlgorithmNull: none
 type KDFSchemeU struct {
-	Data interface{}
+	MGF1           *SchemeMGF1
+	KDF1_SP800_56A *SchemeKDF1_SP800_56A
+	KDF2           *SchemeKDF2
+	KDF1_SP800_108 *SchemeKDF1_SP800_108
 }
 
-func (s KDFSchemeU) Select(selector reflect.Value) reflect.Type {
+func (s *KDFSchemeU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(KDFAlgorithmId) {
 	case KDFAlgorithmMGF1:
-		return reflect.TypeOf((*SchemeMGF1)(nil))
+		return &s.MGF1
 	case KDFAlgorithmKDF1_SP800_56A:
-		return reflect.TypeOf((*SchemeKDF1_SP800_56A)(nil))
+		return &s.KDF1_SP800_56A
 	case KDFAlgorithmKDF2:
-		return reflect.TypeOf((*SchemeKDF2)(nil))
+		return &s.KDF2
 	case KDFAlgorithmKDF1_SP800_108:
-		return reflect.TypeOf((*SchemeKDF1_SP800_108)(nil))
+		return &s.KDF1_SP800_108
 	case KDFAlgorithmNull:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	default:
 		return nil
 	}
 }
 
-// MGF1 returns the underlying value as *SchemeMGF1. It panics if the underlying type is not *SchemeMGF1.
-func (s KDFSchemeU) MGF1() *SchemeMGF1 {
-	return s.Data.(*SchemeMGF1)
-}
-
-// KDF1_SP800_56A returns the underlying value as *SchemeKDF1_SP800_56A. It panics if the underlying type is not
-// *SchemeKDF1_SP800_56A.
-func (s KDFSchemeU) KDF1_SP800_56A() *SchemeKDF1_SP800_56A {
-	return s.Data.(*SchemeKDF1_SP800_56A)
-}
-
-// KDF2 returns the underlying value as *SchemeKDF2. It panics if the underlying type is not *SchemeKDF2.
-func (s KDFSchemeU) KDF2() *SchemeKDF2 {
-	return s.Data.(*SchemeKDF2)
-}
-
-// KDF1_SP800_108 returns the underlying value as *SchemeKDF1_SP800_108. It panics if the underlying type is not
-// *SchemeKDF1_SP800_108.
-func (s KDFSchemeU) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
-	return s.Data.(*SchemeKDF1_SP800_108)
-}
-
 // KDFScheme corresponds to the TPMT_KDF_SCHEME type.
 type KDFScheme struct {
 	Scheme  KDFAlgorithmId // Scheme selector
-	Details KDFSchemeU     `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Details *KDFSchemeU    `tpm2:"selector:Scheme"` // Scheme specific parameters.
 }
 
 type KeySchemeECDH SchemeHash
