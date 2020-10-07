@@ -49,7 +49,7 @@ func TestHMACSequence(t *testing.T) {
 			Type:      ObjectTypeKeyedHash,
 			AuthValue: authValue,
 			SeedValue: seed,
-			Sensitive: SensitiveCompositeU{Data: key}}
+			Sensitive: &SensitiveCompositeU{Bits: key}}
 		rc, err := tpm.LoadExternal(&sensitive, &public, HandleNull)
 		if err != nil {
 			t.Fatalf("LoadExternal failed: %v", err)

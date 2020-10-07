@@ -112,7 +112,7 @@ func TestDuplicate(t *testing.T) {
 		if !bytes.Equal(sensitiveDup.AuthValue[0:len(sensitive.UserAuth)], sensitive.UserAuth) {
 			t.Errorf("Unexpected duplicate auth value")
 		}
-		if len(sensitiveDup.Sensitive.RSA()) != int(template.Params.RSADetail.KeyBits)/16 {
+		if len(sensitiveDup.Sensitive.RSA) != int(template.Params.RSADetail.KeyBits)/16 {
 			t.Errorf("Unexpected duplicate sensitive size")
 		}
 	}
@@ -308,7 +308,7 @@ func TestImport(t *testing.T) {
 	objectSensitive := Sensitive{
 		Type:      ObjectTypeRSA,
 		AuthValue: make(Auth, objectPublic.NameAlg.Size()),
-		Sensitive: SensitiveCompositeU{Data: key.Primes[0].Bytes()}}
+		Sensitive: &SensitiveCompositeU{RSA: key.Primes[0].Bytes()}}
 	copy(objectSensitive.AuthValue, []byte("foo"))
 
 	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext) {

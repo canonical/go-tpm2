@@ -352,7 +352,7 @@ func TestLoadExternal(t *testing.T) {
 		}
 		sensitive := Sensitive{
 			Type:      ObjectTypeRSA,
-			Sensitive: SensitiveCompositeU{Data: key.Primes[0].Bytes()}}
+			Sensitive: &SensitiveCompositeU{RSA: key.Primes[0].Bytes()}}
 		public := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
@@ -375,7 +375,7 @@ func TestLoadExternal(t *testing.T) {
 		}
 		sensitive := Sensitive{
 			Type:      ObjectTypeECC,
-			Sensitive: SensitiveCompositeU{Data: priv}}
+			Sensitive: &SensitiveCompositeU{ECC: priv}}
 		public := Public{
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA1,
@@ -405,7 +405,7 @@ func TestLoadExternal(t *testing.T) {
 		sensitive := Sensitive{
 			Type:      ObjectTypeKeyedHash,
 			SeedValue: seed,
-			Sensitive: SensitiveCompositeU{Data: key}}
+			Sensitive: &SensitiveCompositeU{Bits: key}}
 		public := Public{
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
@@ -439,7 +439,7 @@ func TestLoadExternal(t *testing.T) {
 			Type:      ObjectTypeKeyedHash,
 			AuthValue: authValue,
 			SeedValue: seed,
-			Sensitive: SensitiveCompositeU{Data: key}}
+			Sensitive: &SensitiveCompositeU{Bits: key}}
 		public := Public{
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,

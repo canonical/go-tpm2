@@ -1574,63 +1574,57 @@ type PublicTemplate interface {
 // PrivateVendorSpecific corresponds to the TPM2B_PRIVATE_VENDOR_SPECIFIC type.
 type PrivateVendorSpecific []byte
 
-// SensitiveCompositeU is a fake union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector type is ObjectTypeId.
-// Valid types for Data for each selector value are:
-//  - ObjectTypeRSA: PrivateKeyRSA
-//  - ObjectTypeECC: ECCParameter
-//  - ObjectTypeKeyedHash: SensitiveData
-//  - ObjectTypeSymCipher: SymKey
+// SensitiveCompositeU is a union type that corresponds to the TPMU_SENSITIVE_COMPOSITE type. The selector type is ObjectTypeId.
+// The mapping of selector values to fields is as follows:
+//  - ObjectTypeRSA: RSA
+//  - ObjectTypeECC: ECC
+//  - ObjectTypeKeyedHash: Bits
+//  - ObjectTypeSymCipher: Sym
 type SensitiveCompositeU struct {
-	Data interface{}
+	RSA  PrivateKeyRSA
+	ECC  ECCParameter
+	Bits SensitiveData
+	Sym  SymKey
 }
 
-func (s SensitiveCompositeU) Select(selector reflect.Value) reflect.Type {
+func (s *SensitiveCompositeU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return reflect.TypeOf(PrivateKeyRSA(nil))
+		return &s.RSA
 	case ObjectTypeECC:
-		return reflect.TypeOf(ECCParameter(nil))
+		return &s.ECC
 	case ObjectTypeKeyedHash:
-		return reflect.TypeOf(SensitiveData(nil))
+		return &s.Bits
 	case ObjectTypeSymCipher:
-		return reflect.TypeOf(SymKey(nil))
+		return &s.Sym
 	default:
 		return nil
 	}
 }
 
-// RSA returns the underlying value as PrivateKeyRSA. It panics if the underlying type is not PrivateKeyRSA.
-func (s SensitiveCompositeU) RSA() PrivateKeyRSA {
-	return s.Data.(PrivateKeyRSA)
-}
-
-// ECC returns the underlying value as ECCParameter. It panics if the underlying type is not ECCParameter.
-func (s SensitiveCompositeU) ECC() ECCParameter {
-	return s.Data.(ECCParameter)
-}
-
-// Bits returns the underlying value as SensitiveData. It panics if the underlying type is not SensitiveData.
-func (s SensitiveCompositeU) Bits() SensitiveData {
-	return s.Data.(SensitiveData)
-}
-
-// Sym returns the underlying value as SymKey. It panics if the underlying type is not SymKey.
-func (s SensitiveCompositeU) Sym() SymKey {
-	return s.Data.(SymKey)
-}
-
-// Any returns the underlying value as PrivateVendorSpecific. It panics if the underlying type is not convertible to
-// PrivateVendorSpecific.
+// Any returns the underlying value as PrivateVendorSpecific. Note that if more than one field is set, it will return
+// the first set field as PrivateVendorSpecific.
 func (s SensitiveCompositeU) Any() PrivateVendorSpecific {
-	return reflect.ValueOf(s.Data).Convert(reflect.TypeOf((PrivateVendorSpecific)(nil))).Interface().(PrivateVendorSpecific)
+	switch {
+	case len(s.RSA) > 0:
+		return PrivateVendorSpecific(s.RSA)
+	case len(s.ECC) > 0:
+		return PrivateVendorSpecific(s.ECC)
+	case len(s.Bits) > 0:
+		return PrivateVendorSpecific(s.Bits)
+	case len(s.Sym) > 0:
+		return PrivateVendorSpecific(s.Sym)
+	default:
+		return nil
+	}
 }
 
 // Sensitive corresponds to the TPMT_SENSITIVE type.
 type Sensitive struct {
-	Type      ObjectTypeId        // Same as the corresponding Type in the Public object
-	AuthValue Auth                // Authorization value
-	SeedValue Digest              // For a parent object, the seed value for protecting descendant objects
-	Sensitive SensitiveCompositeU `tpm2:"selector:Type"` // Type specific private data
+	Type      ObjectTypeId         // Same as the corresponding Type in the Public object
+	AuthValue Auth                 // Authorization value
+	SeedValue Digest               // For a parent object, the seed value for protecting descendant objects
+	Sensitive *SensitiveCompositeU `tpm2:"selector:Type"` // Type specific private data
 }
 
 type sensitiveSized struct {
