@@ -132,7 +132,7 @@ func TestStartAuthSession(t *testing.T) {
 					t.Errorf("StartAuthSession returned a handle of the wrong type")
 				}
 
-				scData := sc.(TestSessionContext).GetScData()
+				scData := sc.(*TestSessionContext).GetScData()
 				if scData.HashAlg != data.alg {
 					t.Errorf("The returned session context has the wrong algorithm (got %v)", scData.HashAlg)
 				}

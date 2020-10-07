@@ -43,7 +43,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 			}
 		}()
 
-		nvPub := nvContext.(TestNVIndexResourceContext).GetPublic()
+		nvPub := nvContext.(*NvIndexContext).GetPublic()
 
 		if nvPub.Index != publicInfo.Index {
 			t.Errorf("Unexpected index")

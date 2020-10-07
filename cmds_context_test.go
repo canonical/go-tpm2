@@ -112,7 +112,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(restored.Name(), rc.Name()) {
 			t.Errorf("Restored context has the wrong name")
 		}
-		if !reflect.DeepEqual(rc.(TestObjectResourceContext).GetPublic(), restored.(TestObjectResourceContext).GetPublic()) {
+		if !reflect.DeepEqual(rc.(*ObjectContext).GetPublic(), restored.(*ObjectContext).GetPublic()) {
 			t.Errorf("Restored context has the wrong public data")
 		}
 
@@ -123,7 +123,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(name, rc.Name()) {
 			t.Errorf("Restored object has the wrong name")
 		}
-		if !reflect.DeepEqual(pub, rc.(TestObjectResourceContext).GetPublic()) {
+		if !reflect.DeepEqual(pub, rc.(*ObjectContext).GetPublic()) {
 			t.Errorf("Restored object has the wrong public area")
 		}
 	})
@@ -135,7 +135,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sc)
 
-		scData := sc.(TestSessionContext).GetScData()
+		scData := sc.(*TestSessionContext).GetScData()
 		var data struct {
 			isAudit        bool
 			isExclusive    bool
@@ -185,7 +185,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(restored.Name(), sc.Name()) {
 			t.Errorf("ContextLoad returned a handle with the wrong name")
 		}
-		restoredData := restored.(TestSessionContext).GetScData()
+		restoredData := restored.(*TestSessionContext).GetScData()
 		if restoredData.IsAudit != data.isAudit {
 			t.Errorf("ContextLoad returned a handle with the wrong session data")
 		}

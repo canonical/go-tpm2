@@ -12,33 +12,26 @@ type TestResourceContext interface {
 	GetAuthValue() []byte
 }
 
-func (r *objectContext) GetPublic() *Public {
+type ObjectContext = objectContext
+
+func (r *ObjectContext) GetPublic() *Public {
 	return r.d.Data.Object
 }
 
-type TestObjectResourceContext interface {
-	GetPublic() *Public
-}
+type NvIndexContext = nvIndexContext
 
-func (r *nvIndexContext) GetPublic() *NVPublic {
+func (r *NvIndexContext) GetPublic() *NVPublic {
 	return r.d.Data.NV
 }
 
-type TestNVIndexResourceContext interface {
-	GetPublic() *NVPublic
-}
+type TestSessionContext = sessionContext
 
-func (r *sessionContext) GetAttrs() SessionAttributes {
+func (r *TestSessionContext) GetAttrs() SessionAttributes {
 	return r.attrs
 }
 
-func (r *sessionContext) GetScData() *sessionContextData {
+func (r *TestSessionContext) GetScData() *sessionContextData {
 	return r.d.Data.Session
-}
-
-type TestSessionContext interface {
-	GetAttrs() SessionAttributes
-	GetScData() *sessionContextData
 }
 
 var TestComputeBindName = computeBindName
