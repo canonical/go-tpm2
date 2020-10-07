@@ -99,10 +99,18 @@ func (c CommandCode) String() string {
 		return "TPM_CC_Clear"
 	case CommandClearControl:
 		return "TPM_CC_ClearControl"
+	case CommandClockSet:
+		return "TPM_CC_ClockSet"
 	case CommandHierarchyChangeAuth:
 		return "TPM_CC_HierarchyChangeAuth"
 	case CommandNVDefineSpace:
 		return "TPM_CC_NV_DefineSpace"
+	case CommandPCRAllocate:
+		return "TPM_CC_PCR_Allocate"
+	case CommandSetPrimaryPolicy:
+		return "TPM_CC_SetPrimaryPolicy"
+	case CommandClockRateAdjust:
+		return "TPM_CC_ClockRateAdjust"
 	case CommandCreatePrimary:
 		return "TPM_CC_CreatePrimary"
 	case CommandNVGlobalWriteLock:
@@ -167,12 +175,18 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicySecret"
 	case CommandCreate:
 		return "TPM_CC_Create"
+	case CommandECDHZGen:
+		return "TPM_CC_ECDH_ZGen"
+	case CommandHMAC:
+		return "TPM_CC_HMAC"
 	case CommandImport:
 		return "TPM_CC_Import"
 	case CommandLoad:
 		return "TPM_CC_Load"
 	case CommandQuote:
 		return "TPM_CC_Quote"
+	case CommandRSADecrypt:
+		return "TPM_CC_RSA_Decrypt"
 	case CommandHMACStart:
 		return "TPM_CC_HMAC_Start"
 	case CommandSequenceUpdate:
@@ -187,6 +201,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_ContextLoad"
 	case CommandContextSave:
 		return "TPM_CC_ContextSave"
+	case CommandECDHKeyGen:
+		return "TPM_CC_ECDH_KeyGen"
 	case CommandFlushContext:
 		return "TPM_CC_FlushContext"
 	case CommandLoadExternal:
@@ -205,6 +221,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicyCounterTimer"
 	case CommandPolicyCpHash:
 		return "TPM_CC_PolicyCpHash"
+	case CommandPolicyLocality:
+		return "TPM_CC_PolicyLocality"
 	case CommandPolicyNameHash:
 		return "TPM_CC_PolicyNameHash"
 	case CommandPolicyOR:
@@ -213,16 +231,22 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicyTicket"
 	case CommandReadPublic:
 		return "TPM_CC_ReadPublic"
+	case CommandRSAEncrypt:
+		return "TPM_CC_RSA_Encrypt"
 	case CommandStartAuthSession:
 		return "TPM_CC_StartAuthSession"
 	case CommandVerifySignature:
 		return "TPM_CC_VerifySignature"
+	case CommandECCParameters:
+		return "TPM_CC_ECC_Parameters"
 	case CommandGetCapability:
 		return "TPM_CC_GetCapability"
 	case CommandGetRandom:
 		return "TPM_CC_GetRandom"
 	case CommandGetTestResult:
 		return "TPM_CC_GetTestResult"
+	case CommandHash:
+		return "TPM_CC_Hash"
 	case CommandPCRRead:
 		return "TPM_CC_PCR_Read"
 	case CommandPolicyPCR:
@@ -233,6 +257,8 @@ func (c CommandCode) String() string {
 		return "TPM_CC_ReadClock"
 	case CommandPCRExtend:
 		return "TPM_CC_PCR_Extend"
+	case CommandNVCertify:
+		return "TPM_CC_NV_Certify"
 	case CommandEventSequenceComplete:
 		return "TPM_CC_EventSequenceComplete"
 	case CommandHashSequenceStart:
@@ -243,12 +269,18 @@ func (c CommandCode) String() string {
 		return "TPM_CC_PolicyGetDigest"
 	case CommandTestParms:
 		return "TPM_CC_TestParms"
+	case CommandCommit:
+		return "TPM_CC_Commit"
 	case CommandPolicyPassword:
 		return "TPM_CC_PolicyPassword"
 	case CommandPolicyNvWritten:
 		return "TPM_CC_PolicyNvWritten"
+	case CommandPolicyTemplate:
+		return "TPM_CC_PolicyTemplate"
 	case CommandCreateLoaded:
 		return "TPM_CC_CreateLoaded"
+	case CommandPolicyAuthorizeNV:
+		return "TPM_CC_PolicyAuthorizeNV"
 	default:
 		return fmt.Sprintf("0x%08x", uint32(c))
 	}

@@ -24,7 +24,7 @@ import (
 // If capability is CapabilityHandles and property does not correspond to a valid handle type, a *TPMParameterError error with
 // an error code of ErrorHandle is returned for parameter index 2.
 func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32, sessions ...SessionContext) (*CapabilityData, error) {
-	var capabilityData *CapabilityData
+	capabilityData := &CapabilityData{Capability: capability, Data: &CapabilitiesU{}}
 
 	nextProperty := property
 	remaining := propertyCount
@@ -42,49 +42,77 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 		}
 
 		if data.Capability != capability {
-			return nil, &InvalidResponseError{CommandGetCapability, fmt.Sprintf("TPM responded with data for the wrong capability (got %s)",
-				data.Capability)}
+			return nil, &InvalidResponseError{CommandGetCapability,
+				fmt.Sprintf("TPM responded with data for the wrong capability (got %s)", data.Capability)}
 		}
 
-		if capabilityData == nil {
-			capabilityData = &data
-		} else {
-			var s int
-			switch data.Capability {
-			case CapabilityAlgs:
-				capabilityData.Data.Algorithms = append(capabilityData.Data.Algorithms, data.Data.Algorithms...)
-				s = len(data.Data.Algorithms)
-			case CapabilityHandles:
-				capabilityData.Data.Handles = append(capabilityData.Data.Handles, data.Data.Handles...)
-				s = len(data.Data.Handles)
-			case CapabilityCommands:
-				capabilityData.Data.Command = append(capabilityData.Data.Command, data.Data.Command...)
-				s = len(data.Data.Command)
-			case CapabilityPPCommands:
-				capabilityData.Data.PPCommands = append(capabilityData.Data.PPCommands, data.Data.PPCommands...)
-				s = len(data.Data.PPCommands)
-			case CapabilityAuditCommands:
-				capabilityData.Data.AuditCommands = append(capabilityData.Data.AuditCommands, data.Data.AuditCommands...)
-				s = len(data.Data.AuditCommands)
-			case CapabilityPCRs:
-				capabilityData.Data.AssignedPCR = append(capabilityData.Data.AssignedPCR, data.Data.AssignedPCR...)
-				s = len(data.Data.AssignedPCR)
-			case CapabilityTPMProperties:
-				capabilityData.Data.TPMProperties = append(capabilityData.Data.TPMProperties, data.Data.TPMProperties...)
-				s = len(data.Data.TPMProperties)
-			case CapabilityPCRProperties:
-				capabilityData.Data.PCRProperties = append(capabilityData.Data.PCRProperties, data.Data.PCRProperties...)
-				s = len(data.Data.PCRProperties)
-			case CapabilityECCCurves:
-				capabilityData.Data.ECCCurves = append(capabilityData.Data.ECCCurves, data.Data.ECCCurves...)
-				s = len(data.Data.ECCCurves)
-			case CapabilityAuthPolicies:
-				capabilityData.Data.AuthPolicies = append(capabilityData.Data.AuthPolicies, data.Data.AuthPolicies...)
-				s = len(data.Data.AuthPolicies)
+		var l int
+		var p uint32
+		switch data.Capability {
+		case CapabilityAlgs:
+			capabilityData.Data.Algorithms = append(capabilityData.Data.Algorithms, data.Data.Algorithms...)
+			l = len(data.Data.Algorithms)
+			if l > 0 {
+				p = uint32(data.Data.Algorithms[l-1].Alg)
 			}
-			nextProperty += uint32(s)
-			remaining -= uint32(s)
+		case CapabilityHandles:
+			capabilityData.Data.Handles = append(capabilityData.Data.Handles, data.Data.Handles...)
+			l = len(data.Data.Handles)
+			if l > 0 {
+				p = uint32(data.Data.Handles[l-1])
+			}
+		case CapabilityCommands:
+			capabilityData.Data.Command = append(capabilityData.Data.Command, data.Data.Command...)
+			l = len(data.Data.Command)
+			if l > 0 {
+				p = uint32(data.Data.Command[l-1].CommandCode())
+			}
+		case CapabilityPPCommands:
+			capabilityData.Data.PPCommands = append(capabilityData.Data.PPCommands, data.Data.PPCommands...)
+			l = len(data.Data.PPCommands)
+			if l > 0 {
+				p = uint32(data.Data.PPCommands[l-1])
+			}
+		case CapabilityAuditCommands:
+			capabilityData.Data.AuditCommands = append(capabilityData.Data.AuditCommands, data.Data.AuditCommands...)
+			l = len(data.Data.AuditCommands)
+			if l > 0 {
+				p = uint32(data.Data.AuditCommands[l-1])
+			}
+		case CapabilityPCRs:
+			if moreData {
+				return nil, &InvalidResponseError{CommandGetCapability,
+					fmt.Sprintf("TPM did not respond with all requested properties for capability %s", data.Capability)}
+			}
+			return &data, nil
+		case CapabilityTPMProperties:
+			capabilityData.Data.TPMProperties = append(capabilityData.Data.TPMProperties, data.Data.TPMProperties...)
+			l = len(data.Data.TPMProperties)
+			if l > 0 {
+				p = uint32(data.Data.TPMProperties[l-1].Property)
+			}
+		case CapabilityPCRProperties:
+			capabilityData.Data.PCRProperties = append(capabilityData.Data.PCRProperties, data.Data.PCRProperties...)
+			l = len(data.Data.PCRProperties)
+			if l > 0 {
+				p = uint32(data.Data.PCRProperties[l-1].Tag)
+			}
+		case CapabilityECCCurves:
+			capabilityData.Data.ECCCurves = append(capabilityData.Data.ECCCurves, data.Data.ECCCurves...)
+			l = len(data.Data.ECCCurves)
+			if l > 0 {
+				p = uint32(data.Data.ECCCurves[l-1])
+			}
+		case CapabilityAuthPolicies:
+			capabilityData.Data.AuthPolicies = append(capabilityData.Data.AuthPolicies, data.Data.AuthPolicies...)
+			l = len(data.Data.AuthPolicies)
+			if l > 0 {
+				p = uint32(data.Data.AuthPolicies[l-1].Handle)
+			}
 		}
+
+		nextProperty += p + 1
+		remaining -= uint32(l)
 
 		if !moreData || remaining <= 0 {
 			break
@@ -141,10 +169,10 @@ func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount
 }
 
 // GetCapabilityHandles is a helper function that wraps around TPMContext.GetCapability, and returns a list of handles of resources
-// on the TPM. The handleType parameter indicates the type of handles to be returned (represented by the most-significant byte),
+// on the TPM. The firstHandle parameter indicates the type of handles to be returned (represented by the most-significant byte),
 // and also the handle at which the list should start. The propertyCount parameter indicates the maximum number of handles to return.
-func (t *TPMContext) GetCapabilityHandles(handleType Handle, propertyCount uint32, sessions ...SessionContext) (HandleList, error) {
-	data, err := t.GetCapability(CapabilityHandles, uint32(handleType), propertyCount, sessions...)
+func (t *TPMContext) GetCapabilityHandles(firstHandle Handle, propertyCount uint32, sessions ...SessionContext) (HandleList, error) {
+	data, err := t.GetCapability(CapabilityHandles, uint32(firstHandle), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
 	}

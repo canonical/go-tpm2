@@ -44,8 +44,8 @@ func (b *BaseTest) AddCleanup(fn func()) {
 // the supplied TPMContext.
 type TPMTestBase struct {
 	BaseTest
-	TPM  *tpm2.TPMContext // Not anonymous because of TestParms
-	TCTI tpm2.TCTI
+	TPM  *tpm2.TPMContext // Not anonymous because of TestParms. Should be set before SetUpTest is called
+	TCTI tpm2.TCTI        // Should be set before SetUpTest is called
 }
 
 func (b *TPMTestBase) SetUpTest(c *C) {

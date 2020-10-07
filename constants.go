@@ -86,8 +86,12 @@ const (
 	CommandNVUndefineSpace            CommandCode = 0x00000122 // TPM_CC_NV_UndefineSpace
 	CommandClear                      CommandCode = 0x00000126 // TPM_CC_Clear
 	CommandClearControl               CommandCode = 0x00000127 // TPM_CC_ClearControl
+	CommandClockSet                   CommandCode = 0x00000128 // TPM_CC_ClockSet
 	CommandHierarchyChangeAuth        CommandCode = 0x00000129 // TPM_CC_HierarchyChangeAuth
 	CommandNVDefineSpace              CommandCode = 0x0000012A // TPM_CC_NV_DefineSpace
+	CommandPCRAllocate                CommandCode = 0x0000012B // TPM_CC_PCR_Allocate
+	CommandSetPrimaryPolicy           CommandCode = 0x0000012E // TPM_CC_SetPrimaryPolicy
+	CommandClockRateAdjust            CommandCode = 0x00000130 // TPM_CC_ClockRateAdjust
 	CommandCreatePrimary              CommandCode = 0x00000131 // TPM_CC_CreatePrimary
 	CommandNVGlobalWriteLock          CommandCode = 0x00000132 // TPM_CC_NV_GlobalWriteLock
 	CommandGetCommandAuditDigest      CommandCode = 0x00000133 // TPM_CC_GetCommandAuditDigest
@@ -120,9 +124,12 @@ const (
 	CommandObjectChangeAuth           CommandCode = 0x00000150 // TPM_CC_ObjectChangeAuth
 	CommandPolicySecret               CommandCode = 0x00000151 // TPM_CC_PolicySecret
 	CommandCreate                     CommandCode = 0x00000153 // TPM_CC_Create
+	CommandECDHZGen                   CommandCode = 0x00000154 // TPM_CC_ECDH_ZGen
+	CommandHMAC                       CommandCode = 0x00000155 // TPM_CC_HMAC
 	CommandImport                     CommandCode = 0x00000156 // TPM_CC_Import
 	CommandLoad                       CommandCode = 0x00000157 // TPM_CC_Load
 	CommandQuote                      CommandCode = 0x00000158 // TPM_CC_Quote
+	CommandRSADecrypt                 CommandCode = 0x00000159 // TPM_CC_RSA_Decrypt
 	CommandHMACStart                  CommandCode = 0x0000015B // TPM_CC_HMAC_Start
 	CommandSequenceUpdate             CommandCode = 0x0000015C // TPM_CC_SequenceUpdate
 	CommandSign                       CommandCode = 0x0000015D // TPM_CC_Sign
@@ -130,6 +137,7 @@ const (
 	CommandPolicySigned               CommandCode = 0x00000160 // TPM_CC_PolicySigned
 	CommandContextLoad                CommandCode = 0x00000161 // TPM_CC_ContextLoad
 	CommandContextSave                CommandCode = 0x00000162 // TPM_CC_ContextSave
+	CommandECDHKeyGen                 CommandCode = 0x00000163 // TPM_CC_ECDH_KeyGen
 	CommandFlushContext               CommandCode = 0x00000165 // TPM_CC_FlushContext
 	CommandLoadExternal               CommandCode = 0x00000167 // TPM_CC_LoadExternal
 	CommandMakeCredential             CommandCode = 0x00000168 // TPM_CC_MakeCredential
@@ -139,28 +147,36 @@ const (
 	CommandPolicyCommandCode          CommandCode = 0x0000016C // TPM_CC_PolicyCommandCode
 	CommandPolicyCounterTimer         CommandCode = 0x0000016D // TPM_CC_PolicyCounterTimer
 	CommandPolicyCpHash               CommandCode = 0x0000016E // TPM_CC_PolicyCpHash
+	CommandPolicyLocality             CommandCode = 0x0000016F // TPM_CC_PolicyLocality
 	CommandPolicyNameHash             CommandCode = 0x00000170 // TPM_CC_PolicyNameHash
 	CommandPolicyOR                   CommandCode = 0x00000171 // TPM_CC_PolicyOR
 	CommandPolicyTicket               CommandCode = 0x00000172 // TPM_CC_PolicyTicket
 	CommandReadPublic                 CommandCode = 0x00000173 // TPM_CC_ReadPublic
+	CommandRSAEncrypt                 CommandCode = 0x00000174 // TPM_CC_RSA_Encrypt
 	CommandStartAuthSession           CommandCode = 0x00000176 // TPM_CC_StartAuthSession
 	CommandVerifySignature            CommandCode = 0x00000177 // TPM_CC_VerifySignature
+	CommandECCParameters              CommandCode = 0x00000178 // TPM_CC_ECC_Parameters
 	CommandGetCapability              CommandCode = 0x0000017A // TPM_CC_GetCapability
 	CommandGetRandom                  CommandCode = 0x0000017B // TPM_CC_GetRandom
 	CommandGetTestResult              CommandCode = 0x0000017C // TPM_CC_GetTestResult
+	CommandHash                       CommandCode = 0x0000017D // TPM_CC_Hash
 	CommandPCRRead                    CommandCode = 0x0000017E // TPM_CC_PCR_Read
 	CommandPolicyPCR                  CommandCode = 0x0000017F // TPM_CC_PolicyPCR
 	CommandPolicyRestart              CommandCode = 0x00000180 // TPM_CC_PolicyRestart
 	CommandReadClock                  CommandCode = 0x00000181 // TPM_CC_ReadClock
 	CommandPCRExtend                  CommandCode = 0x00000182 // TPM_CC_PCR_Extend
+	CommandNVCertify                  CommandCode = 0x00000184 // TPM_CC_NV_Certify
 	CommandEventSequenceComplete      CommandCode = 0x00000185 // TPM_CC_EventSequenceComplete
 	CommandHashSequenceStart          CommandCode = 0x00000186 // TPM_CC_HashSequenceStart
 	CommandPolicyDuplicationSelect    CommandCode = 0x00000188 // TPM_CC_PolicyDuplicationSelect
 	CommandPolicyGetDigest            CommandCode = 0x00000189 // TPM_CC_PolicyGetDigest
 	CommandTestParms                  CommandCode = 0x0000018A // TPM_CC_TestParms
+	CommandCommit                     CommandCode = 0x0000018B // TPM_CC_Commit
 	CommandPolicyPassword             CommandCode = 0x0000018C // TPM_CC_PolicyPassword
 	CommandPolicyNvWritten            CommandCode = 0x0000018F // TPM_CC_PolicyNvWritten
+	CommandPolicyTemplate             CommandCode = 0x00000190 // TPM_CC_PolicyTemplate
 	CommandCreateLoaded               CommandCode = 0x00000191 // TPM_CC_CreateLoaded
+	CommandPolicyAuthorizeNV          CommandCode = 0x00000192 // TPM_CC_PolicyAuthorizeNV
 )
 
 const (
