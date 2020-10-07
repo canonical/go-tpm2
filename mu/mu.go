@@ -21,7 +21,6 @@ import (
 var (
 	customMuType reflect.Type = reflect.TypeOf((*customMuIface)(nil)).Elem()
 	unionType    reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
-	union2Type   reflect.Type = reflect.TypeOf((*Union2)(nil)).Elem()
 	nilValueType reflect.Type = reflect.TypeOf(NilUnionValue)
 	rawBytesType reflect.Type = reflect.TypeOf(RawBytes(nil))
 )
@@ -66,17 +65,8 @@ var NilUnionValue empty
 // the correct length by the caller during unmarshalling.
 type RawBytes []byte
 
-// Union is implemented by types that implement the TPMU prefixed TPM types. Implementations of this should be structures with
-// a single member of the empty interface type.
+// Union is implemented by structure types that correspond to TPMU prefixed TPM types.
 type Union interface {
-	// Select is called by the marshalling code with the value of the selector field from the enclosing struct. The implementation
-	// should respond with the type that will be marshalled or unmarshalled for the selector value. If no data should be marshalled
-	// or unmarshalled, it should respond with the type of NilUnionValue.
-	Select(selector reflect.Value) reflect.Type
-}
-
-// Union2 is implemented by structure types that correspond to TPMU prefixed TPM types.
-type Union2 interface {
 	// Select is called by the marshalling code to map the supplied selector to a field. The returned value must be a pointer to
 	// the field to be marshalled or unmarshalled. To work correctly during marshalling and unmarshalling, implementations must
 	// take a pointer receiver. If no data should be marshalled or unmarshalled, it should return NilUnionValue.
@@ -257,42 +247,14 @@ func (c *muContext) enterUnionElem(u reflect.Value) (elem reflect.Value, exit fu
 			c.options.selector, u.Type(), c.container.Type()))
 	}
 
+	p := u.Addr().Interface().(Union).Select(selectorVal)
 	switch {
-	case u.Type().Implements(unionType):
-		selectedType := u.Interface().(Union).Select(selectorVal)
-		switch {
-		case selectedType == nil:
-			return reflect.Value{}, nil, &InvalidSelectorError{selectorVal}
-		case selectedType == nilValueType:
-			return reflect.Value{}, nil, nil
-		}
-
-		f := u.Field(0)
-		switch {
-		case f.IsNil():
-			elem = reflect.New(selectedType).Elem()
-		default:
-			elem = f.Elem()
-		}
-
-		if elem.Type() != selectedType {
-			if !elem.Type().ConvertibleTo(selectedType) {
-				return reflect.Value{}, nil, xerrors.Errorf("data has incorrect type %s (expected %s)", elem.Type(), selectedType)
-			}
-			elem = elem.Convert(selectedType)
-		}
-	case reflect.PtrTo(u.Type()).Implements(union2Type):
-		p := u.Addr().Interface().(Union2).Select(selectorVal)
-		switch {
-		case p == nil:
-			return reflect.Value{}, nil, &InvalidSelectorError{selectorVal}
-		case p == NilUnionValue:
-			return reflect.Value{}, nil, nil
-		}
-		elem = reflect.ValueOf(p).Elem()
-	default:
-		panic("invalid type")
+	case p == nil:
+		return reflect.Value{}, nil, &InvalidSelectorError{selectorVal}
+	case p == NilUnionValue:
+		return reflect.Value{}, nil, nil
 	}
+	elem = reflect.ValueOf(p).Elem()
 
 	origOptions := c.options
 	c.options.selector = ""
@@ -358,10 +320,7 @@ func tpmKind(t reflect.Type) TPMKind {
 		}
 		return TPMKindList
 	case reflect.Struct:
-		if t.Implements(unionType) && t.NumField() == 1 && t.Field(0).Type.Kind() == reflect.Interface && t.Field(0).Type.NumMethod() == 0 {
-			return TPMKindUnion
-		}
-		if reflect.PtrTo(t).Implements(union2Type) {
+		if reflect.PtrTo(t).Implements(unionType) {
 			return TPMKindUnion
 		}
 		return TPMKindStruct
@@ -767,17 +726,7 @@ func (u *unmarshaller) unmarshalUnion(v reflect.Value) error {
 	if !elem.IsValid() {
 		return nil
 	}
-	defer func() {
-		exit()
-		if !v.Type().Implements(unionType) {
-			return
-		}
-		f := v.Field(0)
-		if !f.IsNil() {
-			return
-		}
-		f.Set(elem)
-	}()
+	defer exit()
 	return u.unmarshalValue(elem)
 }
 

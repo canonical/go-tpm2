@@ -21,8 +21,8 @@ Go types are marshalled to and from the TPM wire format according to the followi
  * TPML prefixed types (lists with a 4-byte length field) <-> slice of whichever go type corresponds to the underlying TPM type.
  * TPMS prefixed types (structures) <-> struct
  * TPMT prefixed types (structures with a tag field used as a union selector) <-> struct
- * TPMU prefixed types (unions) <-> struct which implements the Union or Union2 interface. These must be referenced from a field
-  in an enclosing struct, where the field has the `tpm2:"selector:<field_name>"` tag referencing a valid selector field name in the
+ * TPMU prefixed types (unions) <-> struct which implements the Union interface. These must be referenced from a field in an
+  enclosing struct, where the field has the `tpm2:"selector:<field_name>"` tag referencing a valid selector field name in the
   enclosing struct.
 
 TPMI prefixed types (interface types) are generally not explicitly supported. These are used by the TPM for type checking during
