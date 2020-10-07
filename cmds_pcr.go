@@ -8,7 +8,6 @@ package tpm2
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 )
 
@@ -169,12 +168,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 			return 0, nil, &InvalidResponseError{CommandPCRRead, "too many digests"}
 		}
 
-		var err error
-		remaining, err = remaining.Subtract(pcrSelectionOut)
-		if err != nil {
-			return 0, nil, &InvalidResponseError{CommandPCRRead, fmt.Sprintf("cannot determine outstanding PCR selection from selection returned "+
-				"from TPM: %v", err)}
-		}
+		remaining = remaining.Remove(pcrSelectionOut)
 		if remaining.IsEmpty() {
 			break
 		}

@@ -459,23 +459,6 @@ func TestNVPublicName(t *testing.T) {
 	}
 }
 
-func TestPCRSelectionListNormalize(t *testing.T) {
-	orig := PCRSelectionList{
-		{Hash: HashAlgorithmSHA256, Select: []int{2, 1, 5}},
-		{Hash: HashAlgorithmSHA1, Select: []int{4, 0, 7}},
-		{Hash: HashAlgorithmSHA512},
-		{Hash: HashAlgorithmSHA256, Select: []int{1, 7, 3, 8}},
-	}
-	normalized := orig.Normalize()
-	expected := PCRSelectionList{
-		{Hash: HashAlgorithmSHA1, Select: []int{0, 4, 7}},
-		{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 3, 5, 7, 8}},
-	}
-	if !reflect.DeepEqual(normalized, expected) {
-		t.Errorf("Unexpected result: %v", normalized)
-	}
-}
-
 func TestPCRSelectionListSort(t *testing.T) {
 	orig := PCRSelectionList{
 		{Hash: HashAlgorithmSHA384, Select: []int{5, 3, 8}},
@@ -566,7 +549,7 @@ func TestPCRSelectionListMerge(t *testing.T) {
 			desc:     "SingleSelection",
 			x:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1}}},
 			y:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 1, 3}}},
-			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1, 5, 3}}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 5}}},
 		},
 		{
 			desc: "MultipleSelection/1",
@@ -580,7 +563,7 @@ func TestPCRSelectionListMerge(t *testing.T) {
 			},
 			expected: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9}},
-				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7, 2, 0}},
+				{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 5, 7, 8}},
 			},
 		},
 		{
@@ -595,7 +578,7 @@ func TestPCRSelectionListMerge(t *testing.T) {
 			},
 			expected: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9}},
-				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7, 2, 0}},
+				{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 5, 7, 8}},
 			},
 		},
 		{
@@ -607,7 +590,7 @@ func TestPCRSelectionListMerge(t *testing.T) {
 			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 0, 9}}},
 			expected: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9}},
-				{Hash: HashAlgorithmSHA1, Select: []int{5, 8, 7}},
+				{Hash: HashAlgorithmSHA1, Select: []int{5, 7, 8}},
 			},
 		},
 		{
@@ -615,8 +598,8 @@ func TestPCRSelectionListMerge(t *testing.T) {
 			x:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1}}},
 			y:    PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{5, 1, 3}}},
 			expected: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1}},
-				{Hash: HashAlgorithmSHA1, Select: []int{5, 1, 3}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2}},
+				{Hash: HashAlgorithmSHA1, Select: []int{1, 3, 5}},
 			},
 		},
 		{
@@ -627,8 +610,8 @@ func TestPCRSelectionListMerge(t *testing.T) {
 			},
 			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{3, 4, 2, 7}}},
 			expected: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: []int{5, 2, 6, 4, 7}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 3, 1}},
+				{Hash: HashAlgorithmSHA256, Select: []int{2, 4, 5, 6, 7}},
+				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 3}},
 			},
 		},
 		{
@@ -638,7 +621,7 @@ func TestPCRSelectionListMerge(t *testing.T) {
 				{Hash: HashAlgorithmSHA256, Select: []int{3, 1}},
 				{Hash: HashAlgorithmSHA256, Select: []int{2, 4, 0}},
 			},
-			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 2, 6, 3, 1, 4, 0}}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6}}},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -650,7 +633,7 @@ func TestPCRSelectionListMerge(t *testing.T) {
 	}
 }
 
-func TestPCRSelectionListSubtract(t *testing.T) {
+func TestPCRSelectionListRemove(t *testing.T) {
 	for _, data := range []struct {
 		desc           string
 		x, y, expected PCRSelectionList
@@ -663,15 +646,16 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{1, 5}}},
 		},
 		{
-			desc: "Error",
-			x:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y:    PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 3, 4}}},
-			err:  "cannot subtract PCR0/TPM_ALG_SHA1 from selection",
+			desc:     "None",
+			x:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			y:        PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 3, 4}}},
+			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
 		},
 		{
-			desc: "SingleSelectionEmptyResult",
-			x:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y:    PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			desc:     "SingleSelectionEmptyResult",
+			x:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			y:        PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{},
 		},
 		{
 			desc: "MultipleSelection/1",
@@ -715,6 +699,7 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 			y: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
 				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
+			expected: PCRSelectionList{},
 		},
 		{
 			desc: "MismatchedLength",
@@ -734,7 +719,7 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 4}}},
 			expected: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{1, 5}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 4, 5}},
+				{Hash: HashAlgorithmSHA256, Select: []int{1, 5}},
 			},
 		},
 		{
@@ -749,21 +734,9 @@ func TestPCRSelectionListSubtract(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			res, err := data.x.Subtract(data.y)
-			if data.err == "" {
-				if err != nil {
-					t.Fatalf("subtract failed: %v", err)
-				}
-				if !reflect.DeepEqual(res, data.expected) {
-					t.Errorf("Unexpected result %v", res)
-				}
-			} else {
-				if err == nil {
-					t.Fatalf("Expected subtract to fail")
-				}
-				if err.Error() != data.err {
-					t.Errorf("Unexpected error: %v", err)
-				}
+			res := data.x.Remove(data.y)
+			if !reflect.DeepEqual(res, data.expected) {
+				t.Errorf("Unexpected result %v", res)
 			}
 		})
 	}
