@@ -129,19 +129,21 @@ type sessionContextData struct {
 }
 
 type handleContextDataU struct {
-	Data interface{}
+	Object  *Public
+	NV      *NVPublic
+	Session *sessionContextData
 }
 
-func (d handleContextDataU) Select(selector reflect.Value) reflect.Type {
+func (d *handleContextDataU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(handleContextType) {
 	case handleContextTypeDummy, handleContextTypePermanent:
-		return reflect.TypeOf(mu.NilUnionValue)
+		return mu.NilUnionValue
 	case handleContextTypeObject:
-		return reflect.TypeOf((*Public)(nil))
+		return &d.Object
 	case handleContextTypeNvIndex:
-		return reflect.TypeOf((*NVPublic)(nil))
+		return &d.NV
 	case handleContextTypeSession:
-		return reflect.TypeOf((*sessionContextData)(nil))
+		return &d.Session
 	default:
 		return nil
 	}
@@ -151,7 +153,7 @@ type handleContextData struct {
 	Type   handleContextType
 	Handle Handle
 	Name   Name
-	Data   handleContextDataU `tpm2:"selector:Type"`
+	Data   *handleContextDataU `tpm2:"selector:Type"`
 }
 
 func (d *handleContextData) serializeToBytes() []byte {
@@ -196,28 +198,20 @@ func (d *handleContextData) checkConsistency() error {
 		default:
 			return errors.New("inconsistent handle type for object context")
 		}
-		public, ok := d.Data.Data.(*Public)
-		if !ok {
-			return errors.New("inconsistent data type for object context")
-		}
-		if public == nil {
+		if d.Data.Object == nil {
 			return errors.New("no public area for object context")
 		}
-		if !public.compareName(d.Name) {
+		if !d.Data.Object.compareName(d.Name) {
 			return errors.New("name inconsistent with public area for object context")
 		}
 	case handleContextTypeNvIndex:
 		if d.Handle.Type() != HandleTypeNVIndex {
 			return errors.New("inconsistent handle type for NV context")
 		}
-		public, ok := d.Data.Data.(*NVPublic)
-		if !ok {
-			return errors.New("inconsistent data type for NV context")
-		}
-		if public == nil {
+		if d.Data.NV == nil {
 			return errors.New("no public area for NV context")
 		}
-		if !public.compareName(d.Name) {
+		if !d.Data.NV.compareName(d.Name) {
 			return errors.New("name inconsistent with public area for NV context")
 		}
 	case handleContextTypeSession:
@@ -229,10 +223,7 @@ func (d *handleContextData) checkConsistency() error {
 		if !d.Name.IsHandle() || d.Name.Handle() != d.Handle {
 			return errors.New("name inconsistent with handle for session context")
 		}
-		scData, ok := d.Data.Data.(*sessionContextData)
-		if !ok {
-			return errors.New("inconsistent data type for session context")
-		}
+		scData := d.Data.Session
 		if scData != nil {
 			if !scData.IsAudit && scData.IsExclusive {
 				return errors.New("inconsistent audit attributes for session context")
@@ -381,7 +372,7 @@ func (r *objectContext) invalidate() {
 	r.d.Handle = HandleUnassigned
 	r.d.Name = make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
-	r.d.Data.Data = (*Public)(nil)
+	r.d.Data.Object = nil
 }
 
 func (r *objectContext) data() *handleContextData {
@@ -393,11 +384,11 @@ func (r *objectContext) authValue() []byte {
 }
 
 func (r *objectContext) public() *Public {
-	return r.d.Data.Data.(*Public)
+	return r.d.Data.Object
 }
 
 func makeObjectContext(handle Handle, name Name, public *Public) *objectContext {
-	return &objectContext{d: handleContextData{Type: handleContextTypeObject, Handle: handle, Name: name, Data: handleContextDataU{public}}}
+	return &objectContext{d: handleContextData{Type: handleContextTypeObject, Handle: handle, Name: name, Data: &handleContextDataU{Object: public}}}
 }
 
 func (t *TPMContext) makeObjectContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -442,7 +433,7 @@ func (r *nvIndexContext) invalidate() {
 	r.d.Handle = HandleUnassigned
 	r.d.Name = make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
-	r.d.Data.Data = (*NVPublic)(nil)
+	r.d.Data.NV = nil
 }
 
 func (r *nvIndexContext) data() *handleContextData {
@@ -454,23 +445,23 @@ func (r *nvIndexContext) authValue() []byte {
 }
 
 func (r *nvIndexContext) setAttr(a NVAttributes) {
-	r.d.Data.Data.(*NVPublic).Attrs |= a
-	name, _ := r.d.Data.Data.(*NVPublic).Name()
+	r.d.Data.NV.Attrs |= a
+	name, _ := r.d.Data.NV.Name()
 	r.d.Name = name
 }
 
 func (r *nvIndexContext) clearAttr(a NVAttributes) {
-	r.d.Data.Data.(*NVPublic).Attrs &= ^a
-	name, _ := r.d.Data.Data.(*NVPublic).Name()
+	r.d.Data.NV.Attrs &= ^a
+	name, _ := r.d.Data.NV.Name()
 	r.d.Name = name
 }
 
 func (r *nvIndexContext) attrs() NVAttributes {
-	return r.d.Data.Data.(*NVPublic).Attrs
+	return r.d.Data.NV.Attrs
 }
 
 func makeNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
-	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: public.Index, Name: name, Data: handleContextDataU{public}}}
+	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: public.Index, Name: name, Data: &handleContextDataU{NV: public}}}
 }
 
 func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -511,7 +502,7 @@ func (r *sessionContext) SerializeToWriter(w io.Writer) error {
 }
 
 func (r *sessionContext) NonceTPM() Nonce {
-	d := r.d.Data.Data.(*sessionContextData)
+	d := r.d.Data.Session
 	if d == nil {
 		return nil
 	}
@@ -519,7 +510,7 @@ func (r *sessionContext) NonceTPM() Nonce {
 }
 
 func (r *sessionContext) IsAudit() bool {
-	d := r.d.Data.Data.(*sessionContextData)
+	d := r.d.Data.Session
 	if d == nil {
 		return false
 	}
@@ -527,7 +518,7 @@ func (r *sessionContext) IsAudit() bool {
 }
 
 func (r *sessionContext) IsExclusive() bool {
-	d := r.d.Data.Data.(*sessionContextData)
+	d := r.d.Data.Session
 	if d == nil {
 		return false
 	}
@@ -561,7 +552,7 @@ func (r *sessionContext) data() *handleContextData {
 }
 
 func (r *sessionContext) scData() *sessionContextData {
-	return r.d.Data.Data.(*sessionContextData)
+	return r.d.Data.Session
 }
 
 func (r *sessionContext) tpmAttrs() sessionAttrs {
@@ -590,7 +581,7 @@ func (r *sessionContext) tpmAttrs() sessionAttrs {
 func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &sessionContext{d: &handleContextData{Type: handleContextTypeSession, Handle: handle, Name: name, Data: handleContextDataU{data}}}
+	return &sessionContext{d: &handleContextData{Type: handleContextTypeSession, Handle: handle, Name: name, Data: &handleContextDataU{Session: data}}}
 }
 
 // CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle. It will execute a command to read

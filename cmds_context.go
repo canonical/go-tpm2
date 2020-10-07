@@ -71,7 +71,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 
 	switch c := saveContext.(type) {
 	case *sessionContext:
-		c.d.Data.Data = (*sessionContextData)(nil)
+		c.d.Data.Session = nil
 	}
 
 	return &context, nil
@@ -159,12 +159,12 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", loadedHandle)}
 		}
-		return makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Data.(*Public)), nil
+		return makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Object), nil
 	case handleContextTypeSession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}
 		}
-		sc := makeSessionContext(loadedHandle, hcData.Data.Data.(*sessionContextData))
+		sc := makeSessionContext(loadedHandle, hcData.Data.Session)
 		isExclusive := t.exclusiveSession != nil && loadedHandle == t.exclusiveSession.Handle()
 		sc.scData().IsExclusive = isExclusive
 		if isExclusive {

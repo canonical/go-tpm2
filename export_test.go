@@ -13,7 +13,7 @@ type TestResourceContext interface {
 }
 
 func (r *objectContext) GetPublic() *Public {
-	return r.d.Data.Data.(*Public)
+	return r.d.Data.Object
 }
 
 type TestObjectResourceContext interface {
@@ -21,7 +21,7 @@ type TestObjectResourceContext interface {
 }
 
 func (r *nvIndexContext) GetPublic() *NVPublic {
-	return r.d.Data.Data.(*NVPublic)
+	return r.d.Data.NV
 }
 
 type TestNVIndexResourceContext interface {
@@ -33,7 +33,7 @@ func (r *sessionContext) GetAttrs() SessionAttributes {
 }
 
 func (r *sessionContext) GetScData() *sessionContextData {
-	return r.d.Data.Data.(*sessionContextData)
+	return r.d.Data.Session
 }
 
 type TestSessionContext interface {
