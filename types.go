@@ -1043,13 +1043,24 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 // Any returns the underlying value as *SchemeHash. Note that if more than one field is set, it will return the
 // first set field as *SchemeHash.
 func (s SigSchemeU) Any() *SchemeHash {
-	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.ECDSA, s.ECDAA, s.SM2, s.ECSCHNORR, s.HMAC} {
-		h := (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
-		if h != nil {
-			return h
-		}
+	switch {
+	case s.RSASSA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.RSASSA))
+	case s.RSAPSS != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.RSAPSS))
+	case s.ECDSA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECDSA))
+	case s.ECDAA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECDAA))
+	case s.SM2 != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.SM2))
+	case s.ECSCHNORR != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECSCHNORR))
+	case s.HMAC != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.HMAC))
+	default:
+		return nil
 	}
-	return nil
 }
 
 // SigScheme corresponds to the TPMT_SIG_SCHEME type.
@@ -1168,13 +1179,28 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 // Any returns the underlying value as *SchemeHash. Note that if more than one field is set, it will return the
 // first set field as *SchemeHash.
 func (s AsymSchemeU) Any() *SchemeHash {
-	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.OAEP, s.ECDSA, s.ECDH, s.ECDAA, s.SM2, s.ECSCHNORR, s.ECMQV} {
-		h := (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
-		if h != nil {
-			return h
-		}
+	switch {
+	case s.RSASSA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.RSASSA))
+	case s.RSAPSS != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.RSAPSS))
+	case s.OAEP != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.OAEP))
+	case s.ECDSA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECDSA))
+	case s.ECDH != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECDH))
+	case s.ECDAA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECDAA))
+	case s.SM2 != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.SM2))
+	case s.ECSCHNORR != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECSCHNORR))
+	case s.ECMQV != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECMQV))
+	default:
+		return nil
 	}
-	return nil
 }
 
 // AsymScheme corresponds to the TPMT_ASYM_SCHEME type.
@@ -1288,13 +1314,24 @@ func (s *SignatureU) Select(selector reflect.Value) interface{} {
 // Any returns the underlying value as *SchemeHash. Note that if more than one field is set, it will return the
 // first set field as *SchemeHash.
 func (s SignatureU) Any() *SchemeHash {
-	for _, p := range []interface{}{s.RSASSA, s.RSAPSS, s.ECDSA, s.ECDAA, s.SM2, s.ECSCHNORR, s.HMAC} {
-		h := (*SchemeHash)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
-		if h != nil {
-			return h
-		}
+	switch {
+	case s.RSASSA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.RSASSA))
+	case s.RSAPSS != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.RSAPSS))
+	case s.ECDSA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECDSA))
+	case s.ECDAA != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECDAA))
+	case s.SM2 != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.SM2))
+	case s.ECSCHNORR != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.ECSCHNORR))
+	case s.HMAC != nil:
+		return (*SchemeHash)(unsafe.Pointer(s.HMAC))
+	default:
+		return nil
 	}
-	return nil
 }
 
 // Signature corresponds to the TPMT_SIGNATURE type. It is returned by the attestation commands, and is a parameter for
@@ -1381,68 +1418,50 @@ type ECCParams struct {
 	KDF     KDFScheme // Unused - always KDFAlgorithmNull
 }
 
-// PublicParamsU is a fake union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is ObjectTypeId. Valid types
-// for Data for each selector value are:
-//  - ObjectTypeRSA: *RSAParams
-//  - ObjectTypeKeyedHash: *KeyedHashParams
-//  - ObjectTypeECC: *ECCParams
-//  - ObjectTypeSymCipher: *SymCipherParams
+// PublicParamsU is a union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector type is ObjectTypeId.
+// The mapping of selector values to fields is as follows:
+//  - ObjectTypeRSA: RSADetail
+//  - ObjectTypeKeyedHash: KeyedHashDetail
+//  - ObjectTypeECC: ECCDetail
+//  - ObjectTypeSymCipher: SymDetail
 type PublicParamsU struct {
-	Data interface{}
+	KeyedHashDetail *KeyedHashParams
+	SymDetail       *SymCipherParams
+	RSADetail       *RSAParams
+	ECCDetail       *ECCParams
 }
 
-func (p PublicParamsU) Select(selector reflect.Value) reflect.Type {
+func (p *PublicParamsU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return reflect.TypeOf((*RSAParams)(nil))
+		return &p.RSADetail
 	case ObjectTypeKeyedHash:
-		return reflect.TypeOf((*KeyedHashParams)(nil))
+		return &p.KeyedHashDetail
 	case ObjectTypeECC:
-		return reflect.TypeOf((*ECCParams)(nil))
+		return &p.ECCDetail
 	case ObjectTypeSymCipher:
-		return reflect.TypeOf((*SymCipherParams)(nil))
+		return &p.SymDetail
 	default:
 		return nil
 	}
 }
 
-// KeyedHashDetail returns the underlying value as *KeyedHashParams. It panics if the underlying type is not *KeyedHashParams.
-func (p PublicParamsU) KeyedHashDetail() *KeyedHashParams {
-	return p.Data.(*KeyedHashParams)
-}
-
-// SymDetail returns the underlying value as *SymCipherParams. It panics if the underlying type is not *SymCipherParams.
-func (p PublicParamsU) SymDetail() *SymCipherParams {
-	return p.Data.(*SymCipherParams)
-}
-
-// RSADetail returns the underlying value as *RSAParams. It panics if the underlying type is not *RSAParams.
-func (p PublicParamsU) RSADetail() *RSAParams {
-	return p.Data.(*RSAParams)
-}
-
-// ECCDetail returns the underlying value as *ECCParams. It panics if the underlying type is not *ECCParams.
-func (p PublicParamsU) ECCDetail() *ECCParams {
-	return p.Data.(*ECCParams)
-}
-
 // AsymDetail returns the underlying value as *AsymParams. It panics if the underlying type is not *RSAParams or *ECCParams.
 func (p PublicParamsU) AsymDetail() *AsymParams {
-	switch d := p.Data.(type) {
-	case *RSAParams:
-		return (*AsymParams)(unsafe.Pointer(d))
-	case *ECCParams:
-		return (*AsymParams)(unsafe.Pointer(d))
+	switch {
+	case p.RSADetail != nil:
+		return (*AsymParams)(unsafe.Pointer(p.RSADetail))
+	case p.ECCDetail != nil:
+		return (*AsymParams)(unsafe.Pointer(p.ECCDetail))
 	default:
-		panic(fmt.Sprintf("data type is %s, expected %s or %s", reflect.TypeOf(p.Data),
-			reflect.TypeOf((*RSAParams)(nil)), reflect.TypeOf((*ECCParams)(nil))))
+		panic("invalid type")
 	}
 }
 
 // PublicParams corresponds to the TPMT_PUBLIC_PARMS type.
 type PublicParams struct {
-	Type       ObjectTypeId  // Type specifier
-	Parameters PublicParamsU `tpm2:"selector:Type"` // Algorithm details
+	Type       ObjectTypeId   // Type specifier
+	Parameters *PublicParamsU `tpm2:"selector:Type"` // Algorithm details
 }
 
 // Public corresponds to the TPMT_PUBLIC type, and defines the public area for an object.
@@ -1451,7 +1470,7 @@ type Public struct {
 	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
-	Params     PublicParamsU    `tpm2:"selector:Type"` // Type specific parameters
+	Params     *PublicParamsU   `tpm2:"selector:Type"` // Type specific parameters
 	Unique     *PublicIDU       `tpm2:"selector:Type"` // Type specific unique identifier
 }
 
@@ -1510,7 +1529,7 @@ type PublicDerived struct {
 	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
-	Params     PublicParamsU    `tpm2:"selector:Type"` // Type specific parameters
+	Params     *PublicParamsU   `tpm2:"selector:Type"` // Type specific parameters
 
 	// Unique contains the derivation values. These take precedence over any values specified in SensitiveCreate.Data when creating a
 	// derived object,

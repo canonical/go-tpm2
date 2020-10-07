@@ -29,8 +29,8 @@ func TestSign(t *testing.T) {
 				Type:    ObjectTypeRSA,
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-				Params: PublicParamsU{
-					Data: &RSAParams{
+				Params: &PublicParamsU{
+					RSADetail: &RSAParams{
 						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 						Scheme:    *scheme,
 						KeyBits:   2048,
@@ -170,8 +170,8 @@ func TestSign(t *testing.T) {
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-			Params: PublicParamsU{
-				Data: &ECCParams{
+			Params: &PublicParamsU{
+				ECCDetail: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme: ECCScheme{
 						Scheme:  ECCSchemeECDSA,
@@ -226,8 +226,8 @@ func TestVerifySignature(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,

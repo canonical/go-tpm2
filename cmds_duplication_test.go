@@ -36,8 +36,8 @@ func TestDuplicate(t *testing.T) {
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrSign,
 		AuthPolicy: trial.GetDigest(),
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
@@ -63,8 +63,8 @@ func TestDuplicate(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -112,7 +112,7 @@ func TestDuplicate(t *testing.T) {
 		if !bytes.Equal(sensitiveDup.AuthValue[0:len(sensitive.UserAuth)], sensitive.UserAuth) {
 			t.Errorf("Unexpected duplicate auth value")
 		}
-		if len(sensitiveDup.Sensitive.RSA()) != int(template.Params.RSADetail().KeyBits)/16 {
+		if len(sensitiveDup.Sensitive.RSA()) != int(template.Params.RSADetail.KeyBits)/16 {
 			t.Errorf("Unexpected duplicate sensitive size")
 		}
 	}
@@ -236,7 +236,7 @@ func TestDuplicate(t *testing.T) {
 		if len(encryptionKeyOut) > 0 {
 			t.Errorf("Unexpected encryption key")
 		}
-		if len(outSymSeed) != int(parentTemplate.Params.RSADetail().KeyBits)/8 {
+		if len(outSymSeed) != int(parentTemplate.Params.RSADetail.KeyBits)/8 {
 			t.Errorf("Unexpected outSymSeed size")
 		}
 		label := []byte("DUPLICATE")
@@ -261,7 +261,7 @@ func TestDuplicate(t *testing.T) {
 		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
 			t.Errorf("Unexpected encryption key size")
 		}
-		if len(outSymSeed) != int(parentTemplate.Params.RSADetail().KeyBits)/8 {
+		if len(outSymSeed) != int(parentTemplate.Params.RSADetail.KeyBits)/8 {
 			t.Errorf("Unexpected outSymSeed size")
 		}
 		label := []byte("DUPLICATE")
@@ -298,8 +298,8 @@ func TestImport(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrSign,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,

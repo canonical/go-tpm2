@@ -28,8 +28,8 @@ In order to create and persist a new storage primary key:
 	Type:    tpm2.ObjectTypeRSA,
 	NameAlg: tpm2.HashAlgorithmSHA256,
 	Attrs: tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrNoDA | tpm2.AttrRestricted | tpm2.AttrDecrypt,
-	Params: tpm2.PublicParamsU{
-		Data: &tpm2.RSAParams{
+	Params: &tpm2.PublicParamsU{
+		RSADetail: &tpm2.RSAParams{
 			Symmetric: tpm2.SymDefObject{
 				Algorithm: tpm2.SymObjectAlgorithmAES,
 				KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},

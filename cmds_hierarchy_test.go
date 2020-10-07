@@ -42,8 +42,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -65,8 +65,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &ECCParams{
+			Params: &PublicParamsU{
+				ECCDetail: &ECCParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -92,8 +92,8 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -113,8 +113,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -134,8 +134,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -163,8 +163,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -192,8 +192,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -212,8 +212,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -236,8 +236,8 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -247,14 +247,7 @@ func TestCreatePrimary(t *testing.T) {
 					Exponent: 0}}}
 
 		_, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
-		if err == nil {
-			t.Fatalf("CreatePrimary should fail with an invalid template")
-		}
-		if err.Error() != "cannot marshal command parameters for command TPM_CC_CreatePrimary: cannot marshal argument at index 1: cannot "+
-			"process struct type tpm2.publicSized: cannot process field Ptr from struct type tpm2.publicSized: cannot process sized type "+
-			"*tpm2.Public, inside container type tpm2.publicSized: cannot process struct type tpm2.Public, inside container type "+
-			"tpm2.publicSized: cannot process field Params from struct type tpm2.Public: data has incorrect type *tpm2.RSAParams (expected "+
-			"*tpm2.ECCParams)" {
+		if !IsTPMParameterError(err, ErrorSymmetric, CommandCreatePrimary, 2) {
 			t.Errorf("CreatePrimary returned an unexpected error: %v", err)
 		}
 	})
@@ -438,8 +431,8 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -460,8 +453,8 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},

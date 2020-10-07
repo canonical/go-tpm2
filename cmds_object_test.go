@@ -46,8 +46,8 @@ func TestCreate(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -68,8 +68,8 @@ func TestCreate(t *testing.T) {
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &ECCParams{
+			Params: &PublicParamsU{
+				ECCDetail: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    ECCScheme{Scheme: ECCSchemeNull},
 					CurveID:   ECCCurveNIST_P256,
@@ -90,8 +90,8 @@ func TestCreate(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -121,8 +121,8 @@ func TestCreate(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -141,8 +141,8 @@ func TestCreate(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -160,8 +160,8 @@ func TestCreate(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -187,8 +187,8 @@ func TestLoad(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -254,8 +254,8 @@ func TestReadPublic(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
@@ -357,8 +357,8 @@ func TestLoadExternal(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -380,8 +380,8 @@ func TestLoadExternal(t *testing.T) {
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &ECCParams{
+			Params: &PublicParamsU{
+				ECCDetail: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    ECCScheme{Scheme: ECCSchemeNull},
 					CurveID:   ECCCurveNIST_P256,
@@ -410,8 +410,8 @@ func TestLoadExternal(t *testing.T) {
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-			Params: PublicParamsU{
-				Data: &KeyedHashParams{
+			Params: &PublicParamsU{
+				KeyedHashDetail: &KeyedHashParams{
 					Scheme: KeyedHashScheme{
 						Scheme: KeyedHashSchemeHMAC,
 						Details: &SchemeKeyedHashU{
@@ -444,7 +444,7 @@ func TestLoadExternal(t *testing.T) {
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth,
-			Params:  PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}},
+			Params:  &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}},
 			Unique:  &PublicIDU{KeyedHash: unique}}
 
 		rc := run1(t, &sensitive, &public, HandleNull)
@@ -474,8 +474,8 @@ func TestLoadExternal(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: PublicParamsU{
-				Data: &RSAParams{
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
@@ -501,7 +501,7 @@ func TestUnseal(t *testing.T) {
 			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent | extraAttrs,
 			AuthPolicy: authPolicy,
-			Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
 		sensitive := SensitiveCreate{Data: secret, UserAuth: authValue}
 
@@ -576,7 +576,7 @@ func TestObjectChangeAuth(t *testing.T) {
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
-			Params:  PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:  &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 		if err != nil {

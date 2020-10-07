@@ -280,8 +280,8 @@ func TestTestParms(t *testing.T) {
 			desc: "RSARestrictedDecrypt",
 			parms: &PublicParams{
 				Type: ObjectTypeRSA,
-				Parameters: PublicParamsU{
-					Data: &RSAParams{
+				Parameters: &PublicParamsU{
+					RSADetail: &RSAParams{
 						Symmetric: SymDefObject{
 							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -295,8 +295,8 @@ func TestTestParms(t *testing.T) {
 			desc: "ECCSigning",
 			parms: &PublicParams{
 				Type: ObjectTypeECC,
-				Parameters: PublicParamsU{
-					Data: &ECCParams{
+				Parameters: &PublicParamsU{
+					ECCDetail: &ECCParams{
 						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 						Scheme: ECCScheme{
 							Scheme:  ECCSchemeECDSA,
@@ -309,8 +309,8 @@ func TestTestParms(t *testing.T) {
 			desc: "RSAInvalidKeyBits",
 			parms: &PublicParams{
 				Type: ObjectTypeRSA,
-				Parameters: PublicParamsU{
-					Data: &RSAParams{
+				Parameters: &PublicParamsU{
+					RSADetail: &RSAParams{
 						Symmetric: SymDefObject{
 							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -324,8 +324,8 @@ func TestTestParms(t *testing.T) {
 			desc: "Symmetric",
 			parms: &PublicParams{
 				Type: ObjectTypeSymCipher,
-				Parameters: PublicParamsU{
-					Data: &SymCipherParams{
+				Parameters: &PublicParamsU{
+					SymDetail: &SymCipherParams{
 						Sym: SymDefObject{
 							Algorithm: SymObjectAlgorithmAES,
 							KeyBits:   &SymKeyBitsU{Sym: 256},

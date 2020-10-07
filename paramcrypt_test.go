@@ -69,8 +69,8 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 							Type:    ObjectTypeKeyedHash,
 							NameAlg: HashAlgorithmSHA256,
 							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
-							Params: PublicParamsU{
-								Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+							Params: &PublicParamsU{
+								KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 						sessionContext.SetAttrs(AttrContinueSession | data2.attrs)
@@ -198,8 +198,8 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 						Type:    ObjectTypeKeyedHash,
 						NameAlg: HashAlgorithmSHA256,
 						Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
-						Params: PublicParamsU{
-							Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+						Params: &PublicParamsU{
+							KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 					sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 					outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, sessionContext)
@@ -298,8 +298,8 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 							Type:    ObjectTypeKeyedHash,
 							NameAlg: HashAlgorithmSHA256,
 							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
-							Params: PublicParamsU{
-								Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+							Params: &PublicParamsU{
+								KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 						sessionContext1.SetAttrs(AttrContinueSession | data2.attrs1)

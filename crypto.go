@@ -63,13 +63,13 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
-	exp := int(public.Params.RSADetail().Exponent)
+	exp := int(public.Params.RSADetail.Exponent)
 	if exp == 0 {
 		exp = DefaultRSAExponent
 	}
 	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA), E: exp}
 
-	padding := public.Params.RSADetail().Scheme.Scheme
+	padding := public.Params.RSADetail.Scheme.Scheme
 	if paddingOverride != RSASchemeNull {
 		padding = paddingOverride
 	}
@@ -78,7 +78,7 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 	case RSASchemeOAEP:
 		schemeHashAlg := public.NameAlg
 		if paddingOverride == RSASchemeNull {
-			schemeHashAlg = public.Params.RSADetail().Scheme.Details.OAEP.HashAlg
+			schemeHashAlg = public.Params.RSADetail.Scheme.Details.OAEP.HashAlg
 		}
 		if schemeHashAlg == HashAlgorithmNull {
 			schemeHashAlg = public.NameAlg
@@ -101,9 +101,9 @@ func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
 		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
 	}
 
-	curve := eccCurveToGoCurve(public.Params.ECCDetail().CurveID)
+	curve := eccCurveToGoCurve(public.Params.ECCDetail.CurveID)
 	if curve == nil {
-		return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail().CurveID)
+		return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail.CurveID)
 	}
 
 	ephPriv, ephX, ephY, err := elliptic.GenerateKey(curve, rand.Reader)

@@ -32,8 +32,8 @@ func TestPolicySigned(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
@@ -237,7 +237,7 @@ func TestPolicySecret(t *testing.T) {
 			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: trial.GetDigest(),
-			Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
@@ -272,7 +272,7 @@ func TestPolicySecret(t *testing.T) {
 			NameAlg:    HashAlgorithmSHA256,
 			Attrs:      AttrFixedTPM | AttrFixedParent,
 			AuthPolicy: trial.GetDigest(),
-			Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+			Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive1 := SensitiveCreate{Data: secret1}
 		sensitive2 := SensitiveCreate{Data: secret2}
 
@@ -820,8 +820,8 @@ func TestPolicyAuthorize(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
@@ -934,7 +934,7 @@ func TestPolicyAuthValue(t *testing.T) {
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+		Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {
@@ -1015,7 +1015,7 @@ func TestPolicyPassword(t *testing.T) {
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent,
 		AuthPolicy: authPolicy,
-		Params:     PublicParamsU{Data: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+		Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {

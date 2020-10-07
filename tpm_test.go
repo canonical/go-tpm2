@@ -64,11 +64,11 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if !bytes.Equal(public.AuthPolicy, template.AuthPolicy) {
 		t.Errorf("public object has wrong auth policy")
 	}
-	pp, err := mu.MarshalToBytes(public.Params.Data)
+	pp, err := mu.MarshalToBytes(public.Params.Select(reflect.ValueOf(public.Type)))
 	if err != nil {
 		t.Errorf("cannot marshal public params: %w", err)
 	}
-	tp, err := mu.MarshalToBytes(template.Params.Data)
+	tp, err := mu.MarshalToBytes(template.Params.Select(reflect.ValueOf(template.Type)))
 	if err != nil {
 		t.Errorf("cannot marshal template params: %w", err)
 	}
@@ -78,7 +78,7 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 }
 
 func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
-	if len(public.Unique.RSA) != int(template.Params.RSADetail().KeyBits)/8 {
+	if len(public.Unique.RSA) != int(template.Params.RSADetail.KeyBits)/8 {
 		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA))
 	}
 }
@@ -150,7 +150,7 @@ func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg HashAlgorithmId,
 func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signature) {
 	switch pub.Type {
 	case ObjectTypeRSA:
-		exp := int(pub.Params.RSADetail().Exponent)
+		exp := int(pub.Params.RSADetail.Exponent)
 		if exp == 0 {
 			exp = DefaultRSAExponent
 		}
@@ -198,8 +198,8 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -220,8 +220,8 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 		Type:    ObjectTypeECC,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
-		Params: PublicParamsU{
-			Data: &ECCParams{
+		Params: &PublicParamsU{
+			ECCDetail: &ECCParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -244,8 +244,8 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 		AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 			0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
 					KeyBits:   &SymKeyBitsU{Sym: 128},
@@ -278,8 +278,8 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrSign,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
 					Scheme:  RSASchemeRSASSA,
@@ -309,8 +309,8 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-		Params: PublicParamsU{
-			Data: &RSAParams{
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
 					Scheme: RSASchemeRSAPSS,
