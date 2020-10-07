@@ -114,6 +114,10 @@ func makeStructTypeMuError(val reflect.Value, ctx *muContext, err error) error {
 	return &muError{kind: "struct", val: val, container: ctx.container, err: err}
 }
 
+func makeUnionTypeMuError(val reflect.Value, ctx *muContext, err error) error {
+	return &muError{kind: "union", val: val, container: ctx.container, err: err}
+}
+
 func makeCustomTypeMuError(val reflect.Value, ctx *muContext, err error) error {
 	return &muError{kind: "custom", val: val, container: ctx.container, err: err}
 }
@@ -470,16 +474,8 @@ func (m *marshaller) marshalStruct(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalUnion(v reflect.Value) error {
-	elem, exit, err := m.enterUnionElem(v)
-	if err != nil {
-		switch e := err.(type) {
-		case *InvalidSelectorError:
-			// Ignore during marshalling - let the TPM unmarshalling catch it
-			_ = e
-		default:
-			return err
-		}
-	}
+	// Ignore during marshalling - let the TPM unmarshalling catch it
+	elem, exit, _ := m.enterUnionElem(v)
 	if !elem.IsValid() {
 		return nil
 	}
@@ -528,7 +524,7 @@ func (m *marshaller) marshalValue(v reflect.Value) error {
 		}
 	case TPMKindUnion:
 		if err := m.marshalUnion(v); err != nil {
-			return err
+			return makeUnionTypeMuError(v, m.muContext, err)
 		}
 	case TPMKindCustom:
 		if err := m.marshalCustom(v); err != nil {
@@ -774,7 +770,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 		}
 	case TPMKindUnion:
 		if err := u.unmarshalUnion(v); err != nil {
-			return err
+			return makeUnionTypeMuError(v, u.muContext, err)
 		}
 	case TPMKindCustom:
 		if err := u.unmarshalCustom(v); err != nil {
@@ -785,7 +781,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 			return makeRawTypeMuError(v, u.muContext, err)
 		}
 	default:
-		panic(fmt.Sprintf("cannot marshal unsupported type %s", v.Type()))
+		panic(fmt.Sprintf("cannot unmarshal unsupported type %s", v.Type()))
 	}
 
 	return nil

@@ -96,7 +96,8 @@ func TestPublicIDUnion(t *testing.T) {
 				Unique: &PublicIDU{Sym: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
 			err: "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestPublicIDUContainer: cannot process field " +
-				"Unique from struct type tpm2_test.TestPublicIDUContainer: invalid selector value: TPM_ALG_NULL",
+				"Unique from struct type tpm2_test.TestPublicIDUContainer: cannot process union type tpm2.PublicIDU, inside container type " +
+				"tpm2_test.TestPublicIDUContainer: invalid selector value: TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -163,7 +164,8 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
 			out:  []byte{0x00, 0x0b},
 			err: "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot " +
-				"process field Details from struct type tpm2_test.TestSchemeKeyedHashUContainer: invalid selector value: TPM_ALG_SHA256",
+				"process field Details from struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot process union type " +
+				"tpm2.SchemeKeyedHashU, inside container type tpm2_test.TestSchemeKeyedHashUContainer: invalid selector value: TPM_ALG_SHA256",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {

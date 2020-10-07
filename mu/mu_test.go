@@ -506,7 +506,8 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionWithInvalidSelector(c *C) {
 	var uw testUnionContainer
 	_, err = UnmarshalFromBytes(b, &uw)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument at index 0: cannot process struct type mu_test.testUnionContainer: cannot "+
-		"process field Union from struct type mu_test.testUnionContainer: invalid selector value: 259")
+		"process field Union from struct type mu_test.testUnionContainer: cannot process union type mu_test.testUnion, inside container "+
+		"type mu_test.testUnionContainer: invalid selector value: 259")
 }
 
 func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
@@ -532,4 +533,117 @@ func (s *muSuite) TestMarshalBadSizedBuffer(c *C) {
 	x := make([]byte, 100000)
 	_, err := MarshalToBytes(x)
 	c.Check(err, ErrorMatches, "cannot marshal argument at index 0: cannot process sized type \\[\\]uint8: sized value size greater than 2\\^16-1")
+}
+
+func (s *muSuite) TestMarshalUnionInNoContainer(c *C) {
+	a := &testUnion{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion is not inside a container")
+}
+
+type testUnionInvalidContainer struct {
+	A *testUnion
+}
+
+func (s *muSuite) TestMarshalUnionInInvalidContainer(c *C) {
+	a := testUnionInvalidContainer{&testUnion{}}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "no selector member for union type mu_test.testUnion defined in container type mu_test.testUnionInvalidContainer")
+}
+
+type testUnionInvalidContainer2 struct {
+	A *testUnion `tpm2:"selector:foo"`
+}
+
+func (s *muSuite) TestMarshalUnionInInvalidContainer2(c *C) {
+	a := testUnionInvalidContainer2{&testUnion{}}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "selector name foo for union type mu_test.testUnion does not reference a valid field inside container type mu_test.testUnionInvalidContainer2")
+}
+
+type testStructWithInvalidSizedField struct {
+	A testStruct `tpm2:"sized"`
+}
+
+func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
+	a := testStructWithInvalidSizedField{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "invalid sized type: mu_test.testStruct")
+}
+
+func (s *muSuite) TestMarshalUnsupportedType(c *C) {
+	a := "foo"
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type string")
+}
+
+func (s *muSuite) TestUnmarshalUnsupportedType(c *C) {
+	var a [3]uint16
+	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16")
+}
+
+func (s *muSuite) TestUnmarshalValue(c *C) {
+	var a uint16
+	c.Check(func() { UnmarshalFromBytes([]byte{}, a) }, PanicMatches, "cannot unmarshal to non-pointer type uint16")
+}
+
+func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
+	var a *uint16
+	c.Check(func() { UnmarshalFromBytes([]byte{}, a) }, PanicMatches, "cannot unmarshal to nil pointer of type \\*uint16")
+}
+
+type testMarshalErrorData struct {
+	value interface{}
+	err   string
+}
+
+type testBrokenWriter struct{}
+
+func (*testBrokenWriter) Write(data []byte) (int, error) {
+	return 0, io.ErrClosedPipe
+}
+
+func (s *muSuite) testMarshalError(c *C, data *testMarshalErrorData) {
+	_, err := MarshalToWriter(&testBrokenWriter{}, data.value)
+	c.Check(err, ErrorMatches, data.err)
+}
+
+func (s *muSuite) TestMarshalErrorPrimitive(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		uint16(0),
+		"cannot marshal argument at index 0: cannot process primitive type uint16: io: read/write on closed pipe"})
+}
+
+func (s *muSuite) TestMarshalErrorSized1(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		[]byte{0},
+		"cannot marshal argument at index 0: cannot process sized type \\[\\]uint8: cannot write size of sized value: io: read/write on closed pipe"})
+}
+
+type testStructWithSizedField2 struct {
+	A *testStruct `tpm2:"sized"`
+}
+
+func (s *muSuite) TestMarshalErrorSized2(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		testStructWithSizedField2{A: &testStruct{}},
+		"cannot marshal argument at index 0: cannot process struct type mu_test.testStructWithSizedField2: cannot process field A from " +
+			"struct type mu_test.testStructWithSizedField2: cannot process sized type \\*mu_test.testStruct, inside container type " +
+			"mu_test.testStructWithSizedField2: cannot write size of sized value: io: read/write on closed pipe"})
+}
+
+func (s *muSuite) TestMarshalErrorRawField(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		testStructWithRawTagFields{A: []uint16{0}},
+		"cannot marshal argument at index 0: cannot process struct type mu_test.testStructWithRawTagFields: cannot process field A from " +
+			"struct type mu_test.testStructWithRawTagFields: cannot process raw type \\[\\]uint16, inside container type " +
+			"mu_test.testStructWithRawTagFields: cannot process element at index 0 from list type \\[\\]uint16: cannot process primitive " +
+			"type uint16, inside container type \\[\\]uint16: io: read/write on closed pipe"})
+}
+
+func (s *muSuite) TestMarshalErrorRawBytes(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		RawBytes{0},
+		"cannot marshal argument at index 0: cannot process raw type mu.RawBytes: io: read/write on closed pipe"})
+}
+
+func (s *muSuite) TestMashalErrorList(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		[]uint32{0},
+		"cannot marshal argument at index 0: cannot process list type \\[\\]uint32: cannot write length of list: io: read/write on closed pipe"})
 }
