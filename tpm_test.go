@@ -19,11 +19,15 @@ import (
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
+
+	. "gopkg.in/check.v1"
 )
 
 func init() {
 	testutil.AddCommandLineFlags()
 }
+
+func Test(t *testing.T) { TestingT(t) }
 
 var (
 	dummyAuth = []byte("dummy")

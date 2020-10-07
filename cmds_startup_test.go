@@ -5,66 +5,46 @@
 package tpm2_test
 
 import (
-	"testing"
-
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/testutil"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestStartup(t *testing.T) {
-	tpm, tcti := openTPMSimulatorForTesting(t)
-	defer closeTPM(t, tpm)
+type startupSuite struct {
+	testutil.TPMSimulatorTest
+}
 
-	run := func(t *testing.T, shutdownType, startupType StartupType) (*TimeInfo, *TimeInfo) {
-		timeBefore, err := tpm.ReadClock()
-		if err != nil {
-			t.Fatalf("ReadClock failed: %v", err)
-		}
+var _ = Suite(&startupSuite{})
 
-		if err := tpm.Shutdown(shutdownType); err != nil {
-			t.Errorf("Shutdown failed: %v", err)
-		}
-		if err := tcti.Reset(); err != nil {
-			t.Errorf("Reset failed: %v", err)
-		}
-		if err := tpm.Startup(startupType); err != nil {
-			t.Errorf("Startup failed: %v", err)
-		}
+func (s *startupSuite) runStartupTest(c *C, shutdownType, startupType StartupType) (*TimeInfo, *TimeInfo) {
+	timeBefore, err := s.TPM.ReadClock()
+	c.Assert(err, IsNil)
 
-		time, err := tpm.ReadClock()
-		if err != nil {
-			t.Fatalf("ReadClock failed: %v", err)
-		}
+	c.Check(s.TPM.Shutdown(shutdownType), IsNil)
+	c.Check(s.TCTI.(*TctiMssim).Reset(), IsNil)
+	c.Check(s.TPM.Startup(startupType), IsNil)
 
-		return timeBefore, time
-	}
+	time, err := s.TPM.ReadClock()
+	c.Assert(err, IsNil)
 
-	t.Run("Resume", func(t *testing.T) {
-		time1, time2 := run(t, StartupState, StartupState)
-		if time2.ClockInfo.ResetCount != time1.ClockInfo.ResetCount {
-			t.Errorf("Unexpected resetCount")
-		}
-		if time2.ClockInfo.RestartCount != time1.ClockInfo.RestartCount+1 {
-			t.Errorf("Unexpected restartCount")
-		}
-	})
+	return timeBefore, time
+}
 
-	t.Run("Restart", func(t *testing.T) {
-		time1, time2 := run(t, StartupState, StartupClear)
-		if time2.ClockInfo.ResetCount != time1.ClockInfo.ResetCount {
-			t.Errorf("Unexpected resetCount")
-		}
-		if time2.ClockInfo.RestartCount != time1.ClockInfo.RestartCount+1 {
-			t.Errorf("Unexpected restartCount")
-		}
-	})
+func (s *startupSuite) TestResume(c *C) {
+	time1, time2 := s.runStartupTest(c, StartupState, StartupState)
+	c.Check(time2.ClockInfo.ResetCount, Equals, time1.ClockInfo.ResetCount)
+	c.Check(time2.ClockInfo.RestartCount, Equals, time1.ClockInfo.RestartCount+1)
+}
 
-	t.Run("Reset", func(t *testing.T) {
-		time1, time2 := run(t, StartupClear, StartupClear)
-		if time2.ClockInfo.ResetCount != time1.ClockInfo.ResetCount+1 {
-			t.Errorf("Unexpected resetCount")
-		}
-		if time2.ClockInfo.RestartCount != 0 {
-			t.Errorf("Unexpected restartCount")
-		}
-	})
+func (s *startupSuite) TestRestart(c *C) {
+	time1, time2 := s.runStartupTest(c, StartupState, StartupClear)
+	c.Check(time2.ClockInfo.ResetCount, Equals, time1.ClockInfo.ResetCount)
+	c.Check(time2.ClockInfo.RestartCount, Equals, time1.ClockInfo.RestartCount+1)
+}
+
+func (s *startupSuite) TestReset(c *C) {
+	time1, time2 := s.runStartupTest(c, StartupClear, StartupClear)
+	c.Check(time2.ClockInfo.ResetCount, Equals, time1.ClockInfo.ResetCount+1)
+	c.Check(time2.ClockInfo.RestartCount, Equals, uint32(0))
 }
