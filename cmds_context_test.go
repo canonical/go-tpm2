@@ -135,7 +135,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sc)
 
-		scData := sc.(*TestSessionContext).GetScData()
+		scData := sc.(*TestSessionContext).Data()
 		var data struct {
 			isAudit        bool
 			isExclusive    bool
@@ -185,7 +185,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(restored.Name(), sc.Name()) {
 			t.Errorf("ContextLoad returned a handle with the wrong name")
 		}
-		restoredData := restored.(*TestSessionContext).GetScData()
+		restoredData := restored.(*TestSessionContext).Data()
 		if restoredData.IsAudit != data.isAudit {
 			t.Errorf("ContextLoad returned a handle with the wrong session data")
 		}

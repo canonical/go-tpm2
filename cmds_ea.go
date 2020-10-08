@@ -359,11 +359,16 @@ func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolic
 // When using policySession in a subsequent authorization, the authorization value of the entity being authorized must be provided by
 // calling ResourceContext.SetAuthValue.
 func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...SessionContext) error {
+	sessionData := policySession.(*sessionContext).Data()
+	if sessionData == nil {
+		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
+	}
+
 	if err := t.RunCommand(CommandPolicyAuthValue, sessions, policySession); err != nil {
 		return err
 	}
 
-	policySession.(*sessionContext).scData().PolicyHMACType = policyHMACTypeAuth
+	sessionData.PolicyHMACType = policyHMACTypeAuth
 	return nil
 }
 
@@ -376,11 +381,16 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 // When using policySession in a subsequent authorization, the authorization value of the entity being authorized must be provided by
 // calling ResourceContext.SetAuthValue.
 func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...SessionContext) error {
+	sessionData := policySession.(*sessionContext).Data()
+	if sessionData == nil {
+		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
+	}
+
 	if err := t.RunCommand(CommandPolicyPassword, sessions, policySession); err != nil {
 		return err
 	}
 
-	policySession.(*sessionContext).scData().PolicyHMACType = policyHMACTypePassword
+	sessionData.PolicyHMACType = policyHMACTypePassword
 	return nil
 }
 

@@ -134,8 +134,8 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 			fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
-	rc.auth = make([]byte, len(inSensitive.UserAuth))
-	copy(rc.auth, inSensitive.UserAuth)
+	rc.authValue = make([]byte, len(inSensitive.UserAuth))
+	copy(rc.authValue, inSensitive.UserAuth)
 
 	return rc, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
 }
@@ -194,7 +194,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession S
 
 	for _, h := range []Handle{HandleOwner, HandleEndorsement, HandleLockout} {
 		if rc, exists := t.permanentResources[h]; exists {
-			rc.auth = nil
+			rc.SetAuthValue(nil)
 		}
 	}
 

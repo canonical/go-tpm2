@@ -19,9 +19,9 @@ func isParamEncryptable(param interface{}) bool {
 
 func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
-	key = append(key, s.session.scData().SessionKey...)
+	key = append(key, s.session.Data().SessionKey...)
 	if s.isAuth() {
-		key = append(key, s.associatedContext.(resourceContextPrivate).authValue()...)
+		key = append(key, s.associatedContext.(resourceContextPrivate).GetAuthValue()...)
 	}
 	return key
 }
@@ -49,7 +49,7 @@ func (p *sessionParams) computeEncryptNonce() {
 		return
 	}
 
-	p.sessions[0].encryptNonce = s.session.scData().NonceTPM
+	p.sessions[0].encryptNonce = s.session.NonceTPM()
 }
 
 func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
@@ -58,9 +58,11 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 		return nil
 	}
 
-	scData := s.session.scData()
-	if !scData.HashAlg.Supported() {
-		return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
+	sessionData := s.session.Data()
+
+	hashAlg := sessionData.HashAlg
+	if !hashAlg.Supported() {
+		return fmt.Errorf("invalid digest algorithm: %v", hashAlg)
 	}
 
 	sessionValue := s.computeSessionValue()
@@ -68,11 +70,11 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 	size := binary.BigEndian.Uint16(cpBytes)
 	data := cpBytes[2 : size+2]
 
-	symmetric := scData.Symmetric
+	symmetric := sessionData.Symmetric
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
-		k := internal.KDFa(scData.HashAlg.GetHash(), sessionValue, []byte("CFB"), scData.NonceCaller, scData.NonceTPM,
+		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceCaller, sessionData.NonceTPM,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
@@ -81,13 +83,13 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		internal.XORObfuscation(scData.HashAlg.GetHash(), sessionValue, scData.NonceCaller, scData.NonceTPM, data)
+		internal.XORObfuscation(hashAlg.GetHash(), sessionValue, sessionData.NonceCaller, sessionData.NonceTPM, data)
 	default:
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
 	if i > 0 && p.sessions[0].isAuth() {
-		p.sessions[0].decryptNonce = scData.NonceTPM
+		p.sessions[0].decryptNonce = sessionData.NonceTPM
 	}
 
 	return nil
@@ -99,9 +101,11 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 		return nil
 	}
 
-	scData := s.session.scData()
-	if !scData.HashAlg.Supported() {
-		return fmt.Errorf("invalid digest algorithm: %v", scData.HashAlg)
+	sessionData := s.session.Data()
+
+	hashAlg := sessionData.HashAlg
+	if !hashAlg.Supported() {
+		return fmt.Errorf("invalid digest algorithm: %v", hashAlg)
 	}
 
 	sessionValue := s.computeSessionValue()
@@ -109,11 +113,11 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 	size := binary.BigEndian.Uint16(rpBytes)
 	data := rpBytes[2 : size+2]
 
-	symmetric := scData.Symmetric
+	symmetric := sessionData.Symmetric
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
-		k := internal.KDFa(scData.HashAlg.GetHash(), sessionValue, []byte("CFB"), scData.NonceTPM, scData.NonceCaller,
+		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceTPM, sessionData.NonceCaller,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
@@ -122,7 +126,7 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		internal.XORObfuscation(scData.HashAlg.GetHash(), sessionValue, scData.NonceTPM, scData.NonceCaller, data)
+		internal.XORObfuscation(hashAlg.GetHash(), sessionValue, sessionData.NonceTPM, sessionData.NonceCaller, data)
 	default:
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}

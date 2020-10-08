@@ -100,7 +100,7 @@ type ResourceContext interface {
 }
 
 type resourceContextPrivate interface {
-	authValue() []byte
+	GetAuthValue() []byte
 }
 
 type handleContextType uint8
@@ -127,13 +127,13 @@ type sessionContextData struct {
 	Symmetric      *SymDef
 }
 
-type handleContextDataU struct {
+type handleContextU struct {
 	Object  *Public
 	NV      *NVPublic
 	Session *sessionContextData
 }
 
-func (d *handleContextDataU) Select(selector reflect.Value) interface{} {
+func (d *handleContextU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(handleContextType) {
 	case handleContextTypeDummy, handleContextTypePermanent:
 		return mu.NilUnionValue
@@ -148,81 +148,95 @@ func (d *handleContextDataU) Select(selector reflect.Value) interface{} {
 	}
 }
 
-type handleContextData struct {
-	Type   handleContextType
-	Handle Handle
-	Name   Name
-	Data   *handleContextDataU `tpm2:"selector:Type"`
+type handleContext struct {
+	Type handleContextType
+	H    Handle
+	N    Name
+	Data *handleContextU `tpm2:"selector:Type"`
 }
 
-func (d *handleContextData) serializeToBytes() []byte {
-	data, err := mu.MarshalToBytes(d)
+func (h *handleContext) Handle() Handle {
+	return h.H
+}
+
+func (h *handleContext) Name() Name {
+	return h.N
+}
+
+func (h *handleContext) SerializeToBytes() []byte {
+	data, err := mu.MarshalToBytes(h)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal context data: %v", err))
 	}
-	h := crypto.SHA256.New()
-	h.Write(data)
-	data, err = mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
+	hash := crypto.SHA256.New()
+	hash.Write(data)
+	data, err = mu.MarshalToBytes(HashAlgorithmSHA256, hash.Sum(nil), data)
 	if err != nil {
 		panic(fmt.Sprintf("cannot pack context blob and checksum: %v", err))
 	}
 	return data
 }
 
-func (d *handleContextData) serializeToWriter(w io.Writer) error {
-	data, err := mu.MarshalToBytes(d)
+func (h *handleContext) SerializeToWriter(w io.Writer) error {
+	data, err := mu.MarshalToBytes(h)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal context data: %v", err))
 	}
-	h := crypto.SHA256.New()
-	h.Write(data)
-	_, err = mu.MarshalToWriter(w, HashAlgorithmSHA256, h.Sum(nil), data)
+	hash := crypto.SHA256.New()
+	hash.Write(data)
+	_, err = mu.MarshalToWriter(w, HashAlgorithmSHA256, hash.Sum(nil), data)
 	return err
 }
 
-func (d *handleContextData) checkConsistency() error {
-	switch d.Type {
+func (h *handleContext) invalidate() {
+	h.H = HandleUnassigned
+	h.N = make(Name, binary.Size(Handle(0)))
+	binary.BigEndian.PutUint32(h.N, uint32(h.H))
+}
+
+func (h *handleContext) checkConsistency() error {
+	switch h.Type {
 	case handleContextTypePermanent:
-		switch d.Handle.Type() {
+		switch h.Handle().Type() {
 		case HandleTypePCR, HandleTypePermanent:
 		default:
 			return errors.New("inconsistent handle type for permanent context")
 		}
-		if !d.Name.IsHandle() || d.Name.Handle() != d.Handle {
+		if !h.Name().IsHandle() || h.Name().Handle() != h.Handle() {
 			return errors.New("name inconsistent with handle for permanent context")
 		}
 	case handleContextTypeObject:
-		switch d.Handle.Type() {
+		switch h.Handle().Type() {
 		case HandleTypeTransient, HandleTypePersistent:
 		default:
 			return errors.New("inconsistent handle type for object context")
 		}
-		if d.Data.Object == nil {
+		if h.Data.Object == nil {
 			return errors.New("no public area for object context")
 		}
-		if !d.Data.Object.compareName(d.Name) {
+		if !h.Data.Object.compareName(h.Name()) {
 			return errors.New("name inconsistent with public area for object context")
 		}
 	case handleContextTypeNvIndex:
-		if d.Handle.Type() != HandleTypeNVIndex {
+		if h.Handle().Type() != HandleTypeNVIndex {
 			return errors.New("inconsistent handle type for NV context")
 		}
-		if d.Data.NV == nil {
+		if h.Data.NV == nil {
 			return errors.New("no public area for NV context")
 		}
-		if !d.Data.NV.compareName(d.Name) {
+		if !h.Data.NV.compareName(h.Name()) {
 			return errors.New("name inconsistent with public area for NV context")
 		}
 	case handleContextTypeSession:
-		switch d.Handle.Type() {
+		switch h.Handle().Type() {
 		case HandleTypeHMACSession, HandleTypePolicySession:
 		default:
 			return errors.New("inconsistent handle type for session context")
 		}
-		if !d.Name.IsHandle() || d.Name.Handle() != d.Handle {
+		if !h.Name().IsHandle() || h.Name().Handle() != h.Handle() {
 			return errors.New("name inconsistent with handle for session context")
 		}
-		scData := d.Data.Session
+		scData := h.Data.Session
 		if scData != nil {
 			if !scData.IsAudit && scData.IsExclusive {
 				return errors.New("inconsistent audit attributes for session context")
@@ -267,15 +281,7 @@ func (d *handleContextData) checkConsistency() error {
 }
 
 type dummyContext struct {
-	d handleContextData
-}
-
-func (r *dummyContext) Handle() Handle {
-	return r.d.Handle
-}
-
-func (r *dummyContext) Name() Name {
-	return r.d.Name
+	handleContext
 }
 
 func (r *dummyContext) SerializeToBytes() []byte {
@@ -286,96 +292,66 @@ func (r *dummyContext) SerializeToWriter(io.Writer) error {
 	return nil
 }
 
-func (r *dummyContext) SetAuthValue([]byte) {
-}
+func (r *dummyContext) SetAuthValue([]byte) {}
 
 func (r *dummyContext) invalidate() {}
 
 func makeDummyContext(handle Handle) *dummyContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &dummyContext{d: handleContextData{Type: handleContextTypeDummy, Handle: handle, Name: name}}
+	return &dummyContext{
+		handleContext: handleContext{
+			Type: handleContextTypeDummy,
+			H:    handle,
+			N:    name}}
+}
+
+type resourceContext struct {
+	handleContext
+	authValue []byte
+}
+
+func (r *resourceContext) SetAuthValue(authValue []byte) {
+	r.authValue = authValue
+}
+
+func (r *resourceContext) GetAuthValue() []byte {
+	return r.authValue
 }
 
 type permanentContext struct {
-	d    handleContextData
-	auth []byte
-}
-
-func (r *permanentContext) Handle() Handle {
-	return r.d.Handle
-}
-
-func (r *permanentContext) Name() Name {
-	return r.d.Name
-}
-
-func (r *permanentContext) SerializeToBytes() []byte {
-	return r.d.serializeToBytes()
-}
-
-func (r *permanentContext) SerializeToWriter(w io.Writer) error {
-	return r.d.serializeToWriter(w)
-}
-
-func (r *permanentContext) SetAuthValue(value []byte) {
-	r.auth = value
+	resourceContext
 }
 
 func (r *permanentContext) invalidate() {}
 
-func (r *permanentContext) authValue() []byte {
-	return r.auth
-}
-
 func makePermanentContext(handle Handle) *permanentContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &permanentContext{d: handleContextData{Type: handleContextTypePermanent, Handle: handle, Name: name}}
+	return &permanentContext{
+		resourceContext: resourceContext{
+			handleContext: handleContext{
+				Type: handleContextTypePermanent,
+				H:    handle,
+				N:    name}}}
 }
 
 type objectContext struct {
-	d    handleContextData
-	auth []byte
+	resourceContext
 }
 
-func (r *objectContext) Handle() Handle {
-	return r.d.Handle
-}
-
-func (r *objectContext) Name() Name {
-	return r.d.Name
-}
-
-func (r *objectContext) SerializeToBytes() []byte {
-	return r.d.serializeToBytes()
-}
-
-func (r *objectContext) SerializeToWriter(w io.Writer) error {
-	return r.d.serializeToWriter(w)
-}
-
-func (r *objectContext) SetAuthValue(value []byte) {
-	r.auth = value
-}
-
-func (r *objectContext) invalidate() {
-	r.d.Handle = HandleUnassigned
-	r.d.Name = make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
-	r.d.Data.Object = nil
-}
-
-func (r *objectContext) authValue() []byte {
-	return r.auth
-}
-
-func (r *objectContext) public() *Public {
-	return r.d.Data.Object
+func (r *objectContext) GetPublic() *Public {
+	return r.Data.Object
 }
 
 func makeObjectContext(handle Handle, name Name, public *Public) *objectContext {
-	return &objectContext{d: handleContextData{Type: handleContextTypeObject, Handle: handle, Name: name, Data: &handleContextDataU{Object: public}}}
+	return &objectContext{
+		resourceContext: resourceContext{
+			handleContext: handleContext{
+				Type: handleContextTypeObject,
+				H:    handle,
+				N:    name,
+				Data: &handleContextU{Object: public}}}}
 }
 
 func (t *TPMContext) makeObjectContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -392,59 +368,37 @@ func (t *TPMContext) makeObjectContextFromTPM(context ResourceContext, sessions 
 }
 
 type nvIndexContext struct {
-	d    handleContextData
-	auth []byte
+	resourceContext
 }
 
-func (r *nvIndexContext) Handle() Handle {
-	return r.d.Handle
+func (r *nvIndexContext) GetPublic() *NVPublic {
+	return r.Data.NV
 }
 
-func (r *nvIndexContext) Name() Name {
-	return r.d.Name
+func (r *nvIndexContext) SetAttr(a NVAttributes) {
+	r.Data.NV.Attrs |= a
+	name, _ := r.Data.NV.Name()
+	r.N = name
 }
 
-func (r *nvIndexContext) SerializeToBytes() []byte {
-	return r.d.serializeToBytes()
+func (r *nvIndexContext) ClearAttr(a NVAttributes) {
+	r.Data.NV.Attrs &= ^a
+	name, _ := r.Data.NV.Name()
+	r.N = name
 }
 
-func (r *nvIndexContext) SerializeToWriter(w io.Writer) error {
-	return r.d.serializeToWriter(w)
-}
-
-func (r *nvIndexContext) SetAuthValue(value []byte) {
-	r.auth = value
-}
-
-func (r *nvIndexContext) invalidate() {
-	r.d.Handle = HandleUnassigned
-	r.d.Name = make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
-	r.d.Data.NV = nil
-}
-
-func (r *nvIndexContext) authValue() []byte {
-	return r.auth
-}
-
-func (r *nvIndexContext) setAttr(a NVAttributes) {
-	r.d.Data.NV.Attrs |= a
-	name, _ := r.d.Data.NV.Name()
-	r.d.Name = name
-}
-
-func (r *nvIndexContext) clearAttr(a NVAttributes) {
-	r.d.Data.NV.Attrs &= ^a
-	name, _ := r.d.Data.NV.Name()
-	r.d.Name = name
-}
-
-func (r *nvIndexContext) attrs() NVAttributes {
-	return r.d.Data.NV.Attrs
+func (r *nvIndexContext) Attrs() NVAttributes {
+	return r.Data.NV.Attrs
 }
 
 func makeNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
-	return &nvIndexContext{d: handleContextData{Type: handleContextTypeNvIndex, Handle: public.Index, Name: name, Data: &handleContextDataU{NV: public}}}
+	return &nvIndexContext{
+		resourceContext: resourceContext{
+			handleContext: handleContext{
+				Type: handleContextTypeNvIndex,
+				H:    public.Index,
+				N:    name,
+				Data: &handleContextU{NV: public}}}}
 }
 
 func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -464,28 +418,12 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions
 }
 
 type sessionContext struct {
-	d     *handleContextData
+	*handleContext
 	attrs SessionAttributes
 }
 
-func (r *sessionContext) Handle() Handle {
-	return r.d.Handle
-}
-
-func (r *sessionContext) Name() Name {
-	return r.d.Name
-}
-
-func (r *sessionContext) SerializeToBytes() []byte {
-	return r.d.serializeToBytes()
-}
-
-func (r *sessionContext) SerializeToWriter(w io.Writer) error {
-	return r.d.serializeToWriter(w)
-}
-
 func (r *sessionContext) NonceTPM() Nonce {
-	d := r.d.Data.Session
+	d := r.Data()
 	if d == nil {
 		return nil
 	}
@@ -493,7 +431,7 @@ func (r *sessionContext) NonceTPM() Nonce {
 }
 
 func (r *sessionContext) IsAudit() bool {
-	d := r.d.Data.Session
+	d := r.Data()
 	if d == nil {
 		return false
 	}
@@ -501,7 +439,7 @@ func (r *sessionContext) IsAudit() bool {
 }
 
 func (r *sessionContext) IsExclusive() bool {
-	d := r.d.Data.Session
+	d := r.Data()
 	if d == nil {
 		return false
 	}
@@ -513,29 +451,19 @@ func (r *sessionContext) SetAttrs(attrs SessionAttributes) {
 }
 
 func (r *sessionContext) WithAttrs(attrs SessionAttributes) SessionContext {
-	return &sessionContext{d: r.d, attrs: attrs}
+	return &sessionContext{handleContext: r.handleContext, attrs: attrs}
 }
 
 func (r *sessionContext) IncludeAttrs(attrs SessionAttributes) SessionContext {
-	return &sessionContext{d: r.d, attrs: r.attrs | attrs}
+	return &sessionContext{handleContext: r.handleContext, attrs: r.attrs | attrs}
 }
 
 func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
-	return &sessionContext{d: r.d, attrs: r.attrs &^ attrs}
+	return &sessionContext{handleContext: r.handleContext, attrs: r.attrs &^ attrs}
 }
 
-func (r *sessionContext) invalidate() {
-	r.d.Handle = HandleUnassigned
-	r.d.Name = make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
-}
-
-func (r *sessionContext) data() *handleContextData {
-	return r.d
-}
-
-func (r *sessionContext) scData() *sessionContextData {
-	return r.d.Data.Session
+func (r *sessionContext) Data() *sessionContextData {
+	return r.handleContext.Data.Session
 }
 
 func (r *sessionContext) tpmAttrs() sessionAttrs {
@@ -564,7 +492,12 @@ func (r *sessionContext) tpmAttrs() sessionAttrs {
 func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &sessionContext{d: &handleContextData{Type: handleContextTypeSession, Handle: handle, Name: name, Data: &handleContextDataU{Session: data}}}
+	return &sessionContext{
+		handleContext: &handleContext{
+			Type: handleContextTypeSession,
+			H:    handle,
+			N:    name,
+			Data: &handleContextU{Session: data}}}
 }
 
 // CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle. It will execute a command to read
@@ -713,7 +646,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 		return nil, errors.New("invalid checksum")
 	}
 
-	var data *handleContextData
+	var data *handleContext
 	n, err := mu.UnmarshalFromBytes(b, &data)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot unmarshal context data: %w", err)
@@ -733,11 +666,11 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var hc HandleContext
 	switch data.Type {
 	case handleContextTypeObject:
-		hc = &objectContext{d: *data}
+		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
 	case handleContextTypeNvIndex:
-		hc = &nvIndexContext{d: *data}
+		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
 	case handleContextTypeSession:
-		hc = &sessionContext{d: data}
+		hc = &sessionContext{handleContext: data}
 	default:
 		panic("not reached")
 	}
@@ -770,7 +703,7 @@ func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, err
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
 	rc := makeNVIndexContext(name, pub)
-	if err := rc.d.checkConsistency(); err != nil {
+	if err := rc.checkConsistency(); err != nil {
 		return nil, err
 	}
 	return rc, nil
@@ -785,7 +718,7 @@ func CreateObjectResourceContextFromPublic(handle Handle, pub *Public) (Resource
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
 	rc := makeObjectContext(handle, name, pub)
-	if err := rc.d.checkConsistency(); err != nil {
+	if err := rc.checkConsistency(); err != nil {
 		return nil, err
 	}
 	return rc, nil

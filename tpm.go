@@ -327,21 +327,21 @@ func (t *TPMContext) processLastAuthResponse(params []interface{}) error {
 
 	if isSessionAllowed(cmd.commandCode) {
 		if t.exclusiveSession != nil {
-			t.exclusiveSession.scData().IsExclusive = false
+			t.exclusiveSession.Data().IsExclusive = false
 		}
 		var exclusive *sessionContext
 		for _, s := range cmd.sessionParams.sessions {
 			if s.session == nil {
 				continue
 			}
-			if s.session.scData().IsExclusive {
+			if s.session.Data().IsExclusive {
 				exclusive = s.session
 				break
 			}
 		}
 		t.exclusiveSession = exclusive
 		if t.exclusiveSession != nil {
-			t.exclusiveSession.scData().IsExclusive = true
+			t.exclusiveSession.Data().IsExclusive = true
 		}
 	}
 

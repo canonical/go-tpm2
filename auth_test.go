@@ -100,7 +100,7 @@ func TestHMACSessions(t *testing.T) {
 				}
 			} else {
 				if !IsTPMSessionError(err, ErrorValue, CommandCreate, 1) {
-					t.Errorf("Subsequent use of the session failed with an unexpected error: %v", err)
+					t.Errorf("Unexpected error: %v", err)
 				}
 			}
 		})

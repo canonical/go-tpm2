@@ -548,22 +548,6 @@ type Reader interface {
 	Len() int
 }
 
-type muReader struct {
-	r      io.Reader
-	sz     int64
-	nbytes int
-}
-
-func (r *muReader) Read(p []byte) (n int, err error) {
-	n, err = r.r.Read(p)
-	r.nbytes += n
-	return
-}
-
-func (r *muReader) Len() int {
-	return int(r.sz - int64(r.nbytes))
-}
-
 type unmarshaller struct {
 	*muContext
 	r      io.Reader
@@ -611,8 +595,6 @@ func startingSizeOfReader(r io.Reader) (int64, error) {
 			sz = rImpl.N
 		}
 		return sz, nil
-	case *muReader:
-		return int64(rImpl.Len()), nil
 	}
 	return 1<<63 - 1, nil
 }

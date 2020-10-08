@@ -300,8 +300,8 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	public, _ := inPublic.copy() // inPublic already marshalled successfully, so ignore errors here
 	rc := makeObjectContext(objectHandle, name, public)
 	if inPrivate != nil {
-		rc.auth = make([]byte, len(inPrivate.AuthValue))
-		copy(rc.auth, inPrivate.AuthValue)
+		rc.authValue = make([]byte, len(inPrivate.AuthValue))
+		copy(rc.authValue, inPrivate.AuthValue)
 	}
 	return rc, nil
 }
@@ -612,8 +612,8 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
-	rc.auth = make([]byte, len(inSensitive.UserAuth))
-	copy(rc.auth, inSensitive.UserAuth)
+	rc.authValue = make([]byte, len(inSensitive.UserAuth))
+	copy(rc.authValue, inSensitive.UserAuth)
 
 	return rc, outPrivate, outPublic.Ptr, nil
 }

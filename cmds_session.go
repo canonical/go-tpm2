@@ -85,7 +85,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		tpmKeyHandle = tpmKey.Handle()
 
 		var err error
-		encryptedSalt, salt, err = cryptComputeEncryptedSalt(object.public())
+		encryptedSalt, salt, err = cryptComputeEncryptedSalt(object.GetPublic())
 		if err != nil {
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
@@ -95,7 +95,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	bindHandle := HandleNull
 	if bind != nil {
 		bindHandle = bind.Handle()
-		authValue = bind.(resourceContextPrivate).authValue()
+		authValue = bind.(resourceContextPrivate).GetAuthValue()
 	}
 
 	var isBound bool = false

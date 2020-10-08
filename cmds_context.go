@@ -34,7 +34,7 @@ import (
 func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 	switch c := saveContext.(type) {
 	case *sessionContext:
-		if c.scData() == nil {
+		if c.Data() == nil {
 			return nil, makeInvalidArgError("saveContext", "unusable session HandleContext")
 		}
 	}
@@ -57,7 +57,10 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 
 	switch c := saveContext.(type) {
 	case *sessionContext:
-		c.d.Data.Session = nil
+		c.handleContext.Data.Session = nil
+		if t.exclusiveSession == c {
+			t.exclusiveSession = nil
+		}
 	}
 
 	return &context, nil
@@ -135,17 +138,12 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		hc.(*objectContext).d.Handle = loadedHandle
+		hc.(*objectContext).H = loadedHandle
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is incorrect", loadedHandle)}
 		}
-		isExclusive := t.exclusiveSession != nil && loadedHandle == t.exclusiveSession.Handle()
-		hc.(*sessionContext).scData().IsExclusive = isExclusive
-		if isExclusive {
-			t.exclusiveSession.scData().IsExclusive = false
-			t.exclusiveSession = hc.(*sessionContext)
-		}
+		hc.(*sessionContext).Data().IsExclusive = false
 	default:
 		panic("not reached")
 	}
@@ -208,7 +206,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	var public *Public
 	if object.Handle() != persistentHandle {
 		var err error
-		public, err = object.(*objectContext).public().copy()
+		public, err = object.(*objectContext).GetPublic().copy()
 		if err != nil {
 			return nil, fmt.Errorf("cannot copy public area of object: %v", err)
 		}

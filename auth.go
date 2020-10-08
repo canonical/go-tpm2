@@ -92,16 +92,16 @@ func (s *sessionParam) isAuth() bool {
 
 func (s *sessionParam) computeSessionHMACKey() []byte {
 	var key []byte
-	key = append(key, s.session.scData().SessionKey...)
+	key = append(key, s.session.Data().SessionKey...)
 	if s.includeAuthValue {
-		key = append(key, s.associatedContext.(resourceContextPrivate).authValue()...)
+		key = append(key, s.associatedContext.(resourceContextPrivate).GetAuthValue()...)
 	}
 	return key
 }
 
 func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce, attrs sessionAttrs) ([]byte, bool) {
 	key := s.computeSessionHMACKey()
-	h := hmac.New(func() hash.Hash { return s.session.scData().HashAlg.NewHash() }, key)
+	h := hmac.New(func() hash.Hash { return s.session.Data().HashAlg.NewHash() }, key)
 
 	h.Write(pHash)
 	h.Write(nonceNewer)
@@ -114,22 +114,22 @@ func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDe
 }
 
 func (s *sessionParam) computeCommandHMAC(commandCode CommandCode, commandHandles []Name, cpBytes []byte) []byte {
-	scData := s.session.scData()
-	cpHash := cryptComputeCpHash(scData.HashAlg, commandCode, commandHandles, cpBytes)
-	h, _ := s.computeHMAC(cpHash, scData.NonceCaller, scData.NonceTPM, s.decryptNonce, s.encryptNonce, s.session.tpmAttrs())
+	data := s.session.Data()
+	cpHash := cryptComputeCpHash(data.HashAlg, commandCode, commandHandles, cpBytes)
+	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.decryptNonce, s.encryptNonce, s.session.tpmAttrs())
 	return h
 }
 
 func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *authCommand {
-	scData := s.session.scData()
+	data := s.session.Data()
 
 	var hmac []byte
 
-	if scData.SessionType == SessionTypePolicy && scData.PolicyHMACType == policyHMACTypePassword {
+	if data.SessionType == SessionTypePolicy && data.PolicyHMACType == policyHMACTypePassword {
 		// Policy session that contains a TPM2_PolicyPassword assertion. The HMAC is just the authorization value
 		// of the resource being authorized.
 		if s.isAuth() {
-			hmac = s.associatedContext.(resourceContextPrivate).authValue()
+			hmac = s.associatedContext.(resourceContextPrivate).GetAuthValue()
 		}
 	} else {
 		hmac = s.computeCommandHMAC(commandCode, commandHandles, cpBytes)
@@ -137,13 +137,13 @@ func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandH
 
 	return &authCommand{
 		SessionHandle: s.session.Handle(),
-		Nonce:         scData.NonceCaller,
+		Nonce:         data.NonceCaller,
 		SessionAttrs:  s.session.tpmAttrs(),
 		HMAC:          hmac}
 }
 
 func (s *sessionParam) buildCommandPasswordAuth() *authCommand {
-	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: s.associatedContext.(resourceContextPrivate).authValue()}
+	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: s.associatedContext.(resourceContextPrivate).GetAuthValue()}
 }
 
 func (s *sessionParam) buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *authCommand {
@@ -156,9 +156,9 @@ func (s *sessionParam) buildCommandAuth(commandCode CommandCode, commandHandles 
 }
 
 func (s *sessionParam) computeResponseHMAC(resp authResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) ([]byte, bool) {
-	scData := s.session.scData()
-	rpHash := cryptComputeRpHash(scData.HashAlg, responseCode, commandCode, rpBytes)
-	return s.computeHMAC(rpHash, scData.NonceTPM, scData.NonceCaller, nil, nil, resp.SessionAttrs)
+	data := s.session.Data()
+	rpHash := cryptComputeRpHash(data.HashAlg, responseCode, commandCode, rpBytes)
+	return s.computeHMAC(rpHash, data.NonceTPM, data.NonceCaller, nil, nil, resp.SessionAttrs)
 }
 
 func (s *sessionParam) processResponseAuth(resp authResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) error {
@@ -166,16 +166,12 @@ func (s *sessionParam) processResponseAuth(resp authResponse, responseCode Respo
 		return nil
 	}
 
-	scData := s.session.scData()
-	scData.NonceTPM = resp.Nonce
-	scData.IsAudit = resp.SessionAttrs&attrAudit > 0
-	scData.IsExclusive = resp.SessionAttrs&attrAuditExclusive > 0
+	data := s.session.Data()
+	data.NonceTPM = resp.Nonce
+	data.IsAudit = resp.SessionAttrs&attrAudit > 0
+	data.IsExclusive = resp.SessionAttrs&attrAuditExclusive > 0
 
-	if resp.SessionAttrs&attrContinueSession == 0 {
-		s.session.invalidate()
-	}
-
-	if scData.SessionType == SessionTypePolicy && scData.PolicyHMACType == policyHMACTypePassword {
+	if data.SessionType == SessionTypePolicy && data.PolicyHMACType == policyHMACTypePassword {
 		if len(resp.HMAC) != 0 {
 			return errors.New("non-zero length HMAC for policy session with PolicyPassword assertion")
 		}
@@ -228,24 +224,24 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 	}
 
 	if s.session != nil {
-		scData := s.session.scData()
-		if scData == nil {
+		data := s.session.Data()
+		if data == nil {
 			return errors.New("invalid context for session: incomplete session can only be used in TPMContext.FlushContext")
 		}
-		switch scData.SessionType {
+		switch data.SessionType {
 		case SessionTypeHMAC:
 			switch {
 			case !s.isAuth():
 				// HMAC session not used for authorization
-			case !scData.IsBound:
+			case !data.IsBound:
 				// A non-bound HMAC session used for authorization. Include the auth value of the associated
 				// ResourceContext in the HMAC key
 				s.includeAuthValue = true
 			default:
 				// A bound HMAC session used for authorization. Include the auth value of the associated
 				// ResourceContext only if it is not the bind entity.
-				bindName := computeBindName(s.associatedContext.Name(), s.associatedContext.(resourceContextPrivate).authValue())
-				s.includeAuthValue = !bytes.Equal(bindName, scData.BoundEntity)
+				bindName := computeBindName(s.associatedContext.Name(), s.associatedContext.(resourceContextPrivate).GetAuthValue())
+				s.includeAuthValue = !bytes.Equal(bindName, data.BoundEntity)
 			}
 		case SessionTypePolicy:
 			// A policy session that includes a TPM2_PolicyAuthValue assertion. Include the auth value of the associated
@@ -254,7 +250,7 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 			case !s.isAuth():
 				// This is actually an invalid case, but just let the TPM return the appropriate error
 			default:
-				s.includeAuthValue = scData.PolicyHMACType == policyHMACTypeAuth
+				s.includeAuthValue = data.PolicyHMACType == policyHMACTypeAuth
 			}
 		}
 	}
@@ -264,10 +260,7 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 }
 
 func (p *sessionParams) validateAndAppendAuth(in ResourceContextWithSession) error {
-	var sc *sessionContext
-	if in.Session != nil {
-		sc = in.Session.(*sessionContext)
-	}
+	sc, _ := in.Session.(*sessionContext)
 	associatedContext := in.Context
 	if associatedContext == nil {
 		associatedContext = makePermanentContext(HandleNull)
@@ -295,7 +288,7 @@ func (p *sessionParams) computeCallerNonces() error {
 			continue
 		}
 
-		if err := cryptComputeNonce(s.session.scData().NonceCaller); err != nil {
+		if err := cryptComputeNonce(s.session.Data().NonceCaller); err != nil {
 			return fmt.Errorf("cannot compute new caller nonce: %v", err)
 		}
 	}
@@ -323,7 +316,22 @@ func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHan
 	return area, nil
 }
 
+func (p *sessionParams) invalidateSessionContexts(authResponses []authResponse) {
+	for i, resp := range authResponses {
+		session := p.sessions[i].session
+		if session == nil {
+			continue
+		}
+		if resp.SessionAttrs&attrContinueSession != 0 {
+			continue
+		}
+		session.invalidate()
+	}
+}
+
 func (p *sessionParams) processResponseAuthArea(authResponses []authResponse, responseCode ResponseCode, rpBytes []byte) error {
+	defer p.invalidateSessionContexts(authResponses)
+
 	for i, resp := range authResponses {
 		if err := p.sessions[i].processResponseAuth(resp, responseCode, p.commandCode, rpBytes); err != nil {
 			return fmt.Errorf("encountered an error for session at index %d: %v", i, err)

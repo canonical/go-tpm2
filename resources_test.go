@@ -279,7 +279,7 @@ func TestSessionContextSetAttrs(t *testing.T) {
 	defer flushContext(t, tpm, context)
 
 	context.SetAttrs(AttrContinueSession)
-	if context.(*TestSessionContext).GetAttrs() != AttrContinueSession {
+	if context.(*TestSessionContext).Attrs() != AttrContinueSession {
 		t.Errorf("SessionContext.SetAttrs didn't work")
 	}
 }
@@ -296,10 +296,10 @@ func TestSessionContextWithAttrs(t *testing.T) {
 	defer verifyContextFlushed(t, tpm, context)
 	defer flushContext(t, tpm, context2)
 
-	if context.(*TestSessionContext).GetAttrs() != 0 {
+	if context.(*TestSessionContext).Attrs() != 0 {
 		t.Errorf("SessionContext.WithAttrs set attributes on the wrong context")
 	}
-	if context2.(*TestSessionContext).GetAttrs() != AttrAudit {
+	if context2.(*TestSessionContext).Attrs() != AttrAudit {
 		t.Errorf("SessionContext.WithAttrs didn't work")
 	}
 }
@@ -317,10 +317,10 @@ func TestSessionContextIncludeAttrs(t *testing.T) {
 	defer verifyContextFlushed(t, tpm, context)
 	defer flushContext(t, tpm, context2)
 
-	if context.(*TestSessionContext).GetAttrs() != AttrContinueSession {
+	if context.(*TestSessionContext).Attrs() != AttrContinueSession {
 		t.Errorf("SessionContext.IncludeAttrs set attributes on the wrong context")
 	}
-	if context2.(*TestSessionContext).GetAttrs() != AttrContinueSession|AttrResponseEncrypt {
+	if context2.(*TestSessionContext).Attrs() != AttrContinueSession|AttrResponseEncrypt {
 		t.Errorf("SessionContext.IncludeAttrs didn't work")
 	}
 }
@@ -338,10 +338,10 @@ func TestSessionContextExcludeAttrs(t *testing.T) {
 	defer verifyContextFlushed(t, tpm, context)
 	defer flushContext(t, tpm, context2)
 
-	if context.(*TestSessionContext).GetAttrs() != AttrAudit|AttrContinueSession|AttrCommandEncrypt {
+	if context.(*TestSessionContext).Attrs() != AttrAudit|AttrContinueSession|AttrCommandEncrypt {
 		t.Errorf("SessionContext.ExcludeAttrs set attributes on the wrong context")
 	}
-	if context2.(*TestSessionContext).GetAttrs() != AttrContinueSession|AttrCommandEncrypt {
+	if context2.(*TestSessionContext).Attrs() != AttrContinueSession|AttrCommandEncrypt {
 		t.Errorf("SessionContext.ExcludeAttrs didn't work")
 	}
 }

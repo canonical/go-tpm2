@@ -97,8 +97,8 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 
 	public, _ := publicInfo.copy() // publicInfo already marshalled successfully, so ignore errors here
 	rc := makeNVIndexContext(name, public)
-	rc.auth = make([]byte, len(auth))
-	copy(rc.auth, auth)
+	rc.authValue = make([]byte, len(auth))
+	copy(rc.authValue, auth)
 
 	return rc, nil
 }
@@ -211,7 +211,7 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
+	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
 	return nil
 }
 
@@ -254,11 +254,16 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 
 	if len(data) > t.maxNVBufferSize {
 		if authContextAuthSession != nil {
-			if authContextAuthSession.(*sessionContext).attrs&AttrContinueSession == 0 {
+			sessionPrivate := authContextAuthSession.(*sessionContext)
+			if sessionPrivate.attrs&AttrContinueSession == 0 {
 				return makeInvalidArgError("authContextAuthSession",
 					fmt.Sprintf("the AttrContinueSession attribute is required for authorization sessions for writes larger than %d bytes", t.maxNVBufferSize))
 			}
-			if authContextAuthSession.(*sessionContext).scData().SessionType == SessionTypePolicy {
+			sessionData := sessionPrivate.Data()
+			if sessionData == nil {
+				return makeInvalidArgError("authContextAuthSession", "unusable session context")
+			}
+			if sessionData.SessionType == SessionTypePolicy {
 				return makeInvalidArgError("authContextAuthSession",
 					fmt.Sprintf("a policy authorization session cannot be used for writes larger than %d bytes", t.maxNVBufferSize))
 			}
@@ -314,7 +319,7 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 	if !isNv {
 		return errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.attrs().Type() != NVTypePinPass && context.attrs().Type() != NVTypePinFail {
+	if context.Attrs().Type() != NVTypePinPass && context.Attrs().Type() != NVTypePinFail {
 		return errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data, err := mu.MarshalToBytes(params)
@@ -351,7 +356,7 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
+	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
 	return nil
 }
 
@@ -384,7 +389,7 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
+	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
 	return nil
 }
 
@@ -416,7 +421,7 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).setAttr(AttrNVWritten)
+	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
 	return nil
 }
 
@@ -446,7 +451,7 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).setAttr(AttrNVWriteLocked)
+	nvIndex.(*nvIndexContext).SetAttr(AttrNVWriteLocked)
 	return nil
 }
 
@@ -603,7 +608,7 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.attrs().Type() != NVTypeCounter {
+	if context.Attrs().Type() != NVTypeCounter {
 		return 0, errors.New("nvIndex does not correspond to a counter")
 	}
 	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
@@ -643,7 +648,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 	if !isNv {
 		return nil, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.attrs().Type() != NVTypePinPass && context.attrs().Type() != NVTypePinFail {
+	if context.Attrs().Type() != NVTypePinPass && context.Attrs().Type() != NVTypePinFail {
 		return nil, errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
@@ -683,7 +688,7 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).setAttr(AttrNVReadLocked)
+	nvIndex.(*nvIndexContext).SetAttr(AttrNVReadLocked)
 	return nil
 }
 
