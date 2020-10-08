@@ -33,7 +33,6 @@ type HandleContext interface {
 
 type handleContextPrivate interface {
 	invalidate()
-	data() *handleContextData
 }
 
 // SessionAttributes is a set of flags that specify the usage and behaviour of a session.
@@ -292,10 +291,6 @@ func (r *dummyContext) SetAuthValue([]byte) {
 
 func (r *dummyContext) invalidate() {}
 
-func (r *dummyContext) data() *handleContextData {
-	return &r.d
-}
-
 func makeDummyContext(handle Handle) *dummyContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
@@ -328,10 +323,6 @@ func (r *permanentContext) SetAuthValue(value []byte) {
 }
 
 func (r *permanentContext) invalidate() {}
-
-func (r *permanentContext) data() *handleContextData {
-	return &r.d
-}
 
 func (r *permanentContext) authValue() []byte {
 	return r.auth
@@ -373,10 +364,6 @@ func (r *objectContext) invalidate() {
 	r.d.Name = make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
 	r.d.Data.Object = nil
-}
-
-func (r *objectContext) data() *handleContextData {
-	return &r.d
 }
 
 func (r *objectContext) authValue() []byte {
@@ -434,10 +421,6 @@ func (r *nvIndexContext) invalidate() {
 	r.d.Name = make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(r.d.Name, uint32(r.d.Handle))
 	r.d.Data.NV = nil
-}
-
-func (r *nvIndexContext) data() *handleContextData {
-	return &r.d
 }
 
 func (r *nvIndexContext) authValue() []byte {

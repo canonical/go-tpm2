@@ -7,31 +7,13 @@ package tpm2
 // Section 28 - Context Management
 
 import (
-	"bytes"
-	"crypto"
-	_ "crypto/sha256"
 	"errors"
 	"fmt"
 
 	"github.com/canonical/go-tpm2/mu"
+
+	"golang.org/x/xerrors"
 )
-
-func wrapContextBlob(tpmBlob ContextData, context HandleContext) ContextData {
-	data, err := mu.MarshalToBytes(context.(handleContextPrivate).data(), tpmBlob)
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal resource context and TPM context data: %v", err))
-	}
-
-	h := crypto.SHA256.New()
-	h.Write(data)
-
-	data, err = mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil), data)
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal data blob and checksum: %v", err))
-	}
-
-	return data
-}
 
 // ContextSave executes the TPM2_ContextSave command on the handle referenced by saveContext, in order to save the context associated
 // with that handle outside of the TPM. The TPM encrypts and integrity protects the context with a key derived from the hierarchy
@@ -67,7 +49,11 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 		return nil, err
 	}
 
-	context.Blob = wrapContextBlob(context.Blob, saveContext)
+	blob, err := mu.MarshalToBytes(saveContext.SerializeToBytes(), context.Blob)
+	if err != nil {
+		panic(fmt.Sprintf("cannot marshal context blob: %v", err))
+	}
+	context.Blob = blob
 
 	switch c := saveContext.(type) {
 	case *sessionContext:
@@ -108,42 +94,32 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		return nil, makeInvalidArgError("context", "nil value")
 	}
 
-	var integrityAlg HashAlgorithmId
-	var integrity []byte
-	var data []byte
-	if _, err := mu.UnmarshalFromBytes(context.Blob, &integrityAlg, &integrity, &data); err != nil {
-		return nil, fmt.Errorf("cannot load context: cannot unpack checksum and data blob: %v", err)
+	var contextData []byte
+	var blob ContextData
+	if _, err := mu.UnmarshalFromBytes(context.Blob, &contextData, &blob); err != nil {
+		return nil, xerrors.Errorf("cannot unmarshal context blob: %w", err)
 	}
 
-	if !integrityAlg.Supported() {
-		return nil, errors.New("cannot load context: invalid checksum algorithm")
-	}
-	h := integrityAlg.NewHash()
-	h.Write(data)
-	if !bytes.Equal(h.Sum(nil), integrity) {
-		return nil, errors.New("cannot load context: invalid checksum")
+	hc, _, err := CreateHandleContextFromBytes(contextData)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot unmarshal handle context: %w", err)
 	}
 
-	var hcData *handleContextData
-	var tpmBlob ContextData
-	if _, err := mu.UnmarshalFromBytes(data, &hcData, &tpmBlob); err != nil {
-		return nil, fmt.Errorf("cannot load context: cannot unmarshal data blob: %v", err)
-	}
-
-	switch hcData.Type {
-	case handleContextTypeObject, handleContextTypeSession:
+	switch hc.Handle().Type() {
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		if hc.Handle() != context.SavedHandle {
+			return nil, errors.New("host and TPM context blobs have inconsistent handles")
+		}
+	case HandleTypeTransient:
 	default:
-		return nil, errors.New("cannot load context: unexpected context type")
-	}
-	if err := hcData.checkConsistency(); err != nil {
-		return nil, fmt.Errorf("cannot load context: %v", err)
+		return nil, errors.New("unexpected context type")
 	}
 
 	tpmContext := Context{
 		Sequence:    context.Sequence,
 		SavedHandle: context.SavedHandle,
 		Hierarchy:   context.Hierarchy,
-		Blob:        tpmBlob}
+		Blob:        blob}
 
 	var loadedHandle Handle
 
@@ -154,27 +130,26 @@ func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
 		return nil, err
 	}
 
-	switch hcData.Type {
-	case handleContextTypeObject:
+	switch hc.Handle().Type() {
+	case HandleTypeTransient:
 		if loadedHandle.Type() != HandleTypeTransient {
-			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", loadedHandle)}
+			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		return makeObjectContext(loadedHandle, hcData.Name, hcData.Data.Object), nil
-	case handleContextTypeSession:
+		hc.(*objectContext).d.Handle = loadedHandle
+	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
-			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle 0x%08x returned from TPM is incorrect", loadedHandle)}
+			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is incorrect", loadedHandle)}
 		}
-		sc := makeSessionContext(loadedHandle, hcData.Data.Session)
 		isExclusive := t.exclusiveSession != nil && loadedHandle == t.exclusiveSession.Handle()
-		sc.scData().IsExclusive = isExclusive
+		hc.(*sessionContext).scData().IsExclusive = isExclusive
 		if isExclusive {
 			t.exclusiveSession.scData().IsExclusive = false
-			t.exclusiveSession = sc
+			t.exclusiveSession = hc.(*sessionContext)
 		}
-		return sc, nil
 	default:
 		panic("not reached")
 	}
+	return hc, nil
 }
 
 // FlushContext executes the TPM2_FlushContext command on the handle referenced by flushContext, in order to flush resources
