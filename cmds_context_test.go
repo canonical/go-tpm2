@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
@@ -135,33 +136,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sc)
 
-		scData := sc.(*TestSessionContext).Data()
-		var data struct {
-			isAudit        bool
-			isExclusive    bool
-			hashAlg        HashAlgorithmId
-			sessionType    SessionType
-			policyHMACType uint8
-			isBound        bool
-			boundEntity    Name
-			sessionKey     []byte
-			nonceCaller    Nonce
-			nonceTPM       Nonce
-			symmetric      *SymDef
-		}
-		data.isAudit = scData.IsAudit
-		data.isExclusive = scData.IsExclusive
-		data.hashAlg = scData.HashAlg
-		data.sessionType = scData.SessionType
-		data.policyHMACType = uint8(scData.PolicyHMACType)
-		data.isBound = scData.IsBound
-		data.boundEntity = scData.BoundEntity
-		data.sessionKey = scData.SessionKey
-		data.nonceCaller = scData.NonceCaller
-		data.nonceTPM = scData.NonceTPM
-		data.symmetric = scData.Symmetric
-		data.symmetric.KeyBits = &SymKeyBitsU{}
-		data.symmetric.Mode = &SymModeU{}
+		origData := sc.(*TestSessionContext).Data()
 
 		context, err := tpm.ContextSave(sc)
 		if err != nil {
@@ -186,37 +161,10 @@ func TestContextSaveAndLoad(t *testing.T) {
 			t.Errorf("ContextLoad returned a handle with the wrong name")
 		}
 		restoredData := restored.(*TestSessionContext).Data()
-		if restoredData.IsAudit != data.isAudit {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if restoredData.IsExclusive != data.isExclusive {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if restoredData.HashAlg != data.hashAlg {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if restoredData.SessionType != data.sessionType {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if uint8(restoredData.PolicyHMACType) != data.policyHMACType {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if restoredData.IsBound != data.isBound {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if !bytes.Equal(restoredData.BoundEntity, data.boundEntity) {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if !bytes.Equal(restoredData.SessionKey, data.sessionKey) {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if !bytes.Equal(restoredData.NonceCaller, data.nonceCaller) {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if !bytes.Equal(restoredData.NonceTPM, data.nonceTPM) {
-			t.Errorf("ContextLoad returned a handle with the wrong session data")
-		}
-		if !reflect.DeepEqual(restoredData.Symmetric, data.symmetric) {
+
+		origBytes, _ := mu.MarshalToBytes(origData)
+		restoredBytes, _ := mu.MarshalToBytes(restoredData)
+		if !bytes.Equal(origBytes, restoredBytes) {
 			t.Errorf("ContextLoad returned a handle with the wrong session data")
 		}
 

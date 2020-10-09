@@ -14,3 +14,5 @@ func (r *TestSessionContext) Attrs() SessionAttributes {
 }
 
 var TestComputeBindName = computeBindName
+
+type SessionContextData = sessionContextData
