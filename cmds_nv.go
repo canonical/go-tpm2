@@ -724,5 +724,5 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 
 // func (t *TPMContext) NVCertify(signContext, authContext, nvIndex HandleContext, qualifyingData Data,
 //	inScheme *SigScheme, size, offset uint16, signContextAuth, authContextAuth interface{},
-//	sessions ...SessionContext) (AttestRaw, *Signature, error) {
+//	sessions ...SessionContext) (*Attest, *Signature, error) {
 // }

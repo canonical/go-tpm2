@@ -11,16 +11,13 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
-func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag StructTag, signContext ResourceContext, signHierarchy Handle, qualifyingData Data) *Attest {
-	if attestRaw == nil {
+func verifyAttest(t *testing.T, tpm *TPMContext, attest *Attest, tag StructTag, signContext ResourceContext, signHierarchy Handle, qualifyingData Data) {
+	if attest == nil {
 		t.Fatalf("attestation is empty")
-	}
-	attest, err := attestRaw.Decode()
-	if err != nil {
-		t.Fatalf("attestation failed to unmarshal: %v", err)
 	}
 	if attest.Magic != TPMGeneratedValue {
 		t.Errorf("attestation has the wrong magic value")
@@ -59,10 +56,9 @@ func verifyAttest(t *testing.T, tpm *TPMContext, attestRaw AttestRaw, tag Struct
 			t.Errorf("attestation has the wrong clockInfo.safe")
 		}
 	}
-	return attest
 }
 
-func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceContext, attest AttestRaw, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
+func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceContext, attest *Attest, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
 	if signature == nil {
 		t.Fatalf("nil signature")
 	}
@@ -72,7 +68,7 @@ func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceCo
 		}
 	} else {
 		h := hash.NewHash()
-		h.Write(attest)
+		mu.MarshalToWriter(h, attest)
 		digest := h.Sum(nil)
 
 		if signature.SigAlg != scheme {
@@ -107,16 +103,16 @@ func TestCertify(t *testing.T) {
 			t.Fatalf("Certify failed: %v", err)
 		}
 
-		attest := verifyAttest(t, tpm, certifyInfo, TagAttestCertify, signContext, signHierarchy, qualifyingData)
+		verifyAttest(t, tpm, certifyInfo, TagAttestCertify, signContext, signHierarchy, qualifyingData)
 
 		_, name, qn, err := tpm.ReadPublic(objectContext)
 		if err != nil {
 			t.Fatalf("ReadPublic failed: %v", err)
 		}
-		if !bytes.Equal(attest.Attested.Certify.Name, name) {
+		if !bytes.Equal(certifyInfo.Attested.Certify.Name, name) {
 			t.Errorf("certifyInfo has the wrong name")
 		}
-		if !bytes.Equal(attest.Attested.Certify.QualifiedName, qn) {
+		if !bytes.Equal(certifyInfo.Attested.Certify.QualifiedName, qn) {
 			t.Errorf("certifyInfo has the wrong qualifiedName")
 		}
 
@@ -272,12 +268,12 @@ func TestCertifyCreation(t *testing.T) {
 			t.Fatalf("CertifyCreation failed: %v", err)
 		}
 
-		attest := verifyAttest(t, tpm, certifyInfo, TagAttestCreation, signContext, signHierarchy, qualifyingData)
+		verifyAttest(t, tpm, certifyInfo, TagAttestCreation, signContext, signHierarchy, qualifyingData)
 
-		if !bytes.Equal(attest.Attested.Creation.ObjectName, objectHandle.Name()) {
+		if !bytes.Equal(certifyInfo.Attested.Creation.ObjectName, objectHandle.Name()) {
 			t.Errorf("certifyInfo has the wrong objectName")
 		}
-		if !bytes.Equal(attest.Attested.Creation.CreationHash, creationHash) {
+		if !bytes.Equal(certifyInfo.Attested.Creation.CreationHash, creationHash) {
 			t.Errorf("certifyInfo has the wrong creationHash")
 		}
 
@@ -412,13 +408,13 @@ func TestQuote(t *testing.T) {
 			t.Fatalf("Quote failed: %v", err)
 		}
 
-		attest := verifyAttest(t, tpm, quoted, TagAttestQuote, signContext, signHierarchy, qualifyingData)
+		verifyAttest(t, tpm, quoted, TagAttestQuote, signContext, signHierarchy, qualifyingData)
 
 		pcrDigest := computePCRDigestFromTPM(t, tpm, alg, pcrs)
-		if !reflect.DeepEqual(attest.Attested.Quote.PCRSelect, pcrs) {
+		if !reflect.DeepEqual(quoted.Attested.Quote.PCRSelect, pcrs) {
 			t.Errorf("quoted has the wrong pcrSelect")
 		}
-		if !bytes.Equal(attest.Attested.Quote.PCRDigest, pcrDigest) {
+		if !bytes.Equal(quoted.Attested.Quote.PCRDigest, pcrDigest) {
 			t.Errorf("quoted has the wrong pcrDigest")
 		}
 
@@ -523,26 +519,26 @@ func TestGetTime(t *testing.T) {
 			t.Fatalf("GetTime failed: %v", err)
 		}
 
-		attest := verifyAttest(t, tpm, timeInfo, TagAttestTime, signContext, signHierarchy, qualifyingData)
+		verifyAttest(t, tpm, timeInfo, TagAttestTime, signContext, signHierarchy, qualifyingData)
 
 		time, err := tpm.ReadClock()
 		if err != nil {
 			t.Fatalf("ReadClock failed: %v", err)
 		}
-		if attest.Attested.Time.Time.ClockInfo.ResetCount != time.ClockInfo.ResetCount {
+		if timeInfo.Attested.Time.Time.ClockInfo.ResetCount != time.ClockInfo.ResetCount {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.resetCount is unexpected")
 		}
-		if attest.Attested.Time.Time.ClockInfo.RestartCount != time.ClockInfo.RestartCount {
+		if timeInfo.Attested.Time.Time.ClockInfo.RestartCount != time.ClockInfo.RestartCount {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.restartCount is unexpected")
 		}
-		if attest.Attested.Time.Time.ClockInfo.Safe != time.ClockInfo.Safe {
+		if timeInfo.Attested.Time.Time.ClockInfo.Safe != time.ClockInfo.Safe {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.safe is unexpected")
 		}
 
-		if attest.Attested.Time.Time.ClockInfo.Clock != attest.ClockInfo.Clock {
+		if timeInfo.Attested.Time.Time.ClockInfo.Clock != timeInfo.ClockInfo.Clock {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.clock is unexpected")
 		}
-		if attest.Attested.Time.Time.ClockInfo.Safe != attest.ClockInfo.Safe {
+		if timeInfo.Attested.Time.Time.ClockInfo.Safe != timeInfo.ClockInfo.Safe {
 			t.Errorf("timeInfo.attested.time.time.clockInfo.safe is unexpected")
 		}
 

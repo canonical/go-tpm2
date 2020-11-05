@@ -770,17 +770,8 @@ type Attest struct {
 	Attested        *AttestU     `tpm2:"selector:Type"` // Type specific attestation data
 }
 
-// AttestRaw corresponds to the TPM2B_ATTEST type, and is returned by the attestation commands. The signature of the attestation is
-// over this data.
-type AttestRaw []byte
-
-// Decode unmarshals the underlying buffer to the corresponding Attest structure.
-func (a AttestRaw) Decode() (*Attest, error) {
-	var out Attest
-	if _, err := mu.UnmarshalFromBytes(a, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
+type attestSized struct {
+	Ptr *Attest `tpm2:"sized"`
 }
 
 // 11) Algorithm Parameters and Structures

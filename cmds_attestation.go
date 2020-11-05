@@ -29,12 +29,12 @@ package tpm2
 //
 // On successful, it returns an attestation structure detailing the name of the object associated with objectContext. If signContext
 // is not nil, the attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, objectContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (AttestRaw, *Signature, error) {
+func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, objectContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (*Attest, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var certifyInfo AttestRaw
+	var certifyInfo attestSized
 	var signature Signature
 
 	if err := t.RunCommand(CommandCertify, sessions,
@@ -45,7 +45,7 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 		return nil, nil, err
 	}
 
-	return certifyInfo, &signature, nil
+	return certifyInfo.Ptr, &signature, nil
 }
 
 // CertifyCreation executes the TPM2_CertifyCreation command, which is used to prove the association between the object represented
@@ -75,12 +75,12 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 //
 // If successful, it returns an attestation structure. If signContext is not nil, the attestation structure will be signed by the
 // associated key and returned too.
-func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation, signContextAuthSession SessionContext, sessions ...SessionContext) (AttestRaw, *Signature, error) {
+func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext, qualifyingData Data, creationHash Digest, inScheme *SigScheme, creationTicket *TkCreation, signContextAuthSession SessionContext, sessions ...SessionContext) (*Attest, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var certifyInfo AttestRaw
+	var certifyInfo attestSized
 	var signature Signature
 
 	if err := t.RunCommand(CommandCertifyCreation, sessions,
@@ -91,7 +91,7 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 		return nil, nil, err
 	}
 
-	return certifyInfo, &signature, nil
+	return certifyInfo.Ptr, &signature, nil
 }
 
 // Quote executes the TPM2_Quote command in order to quote a set of PCR values. The TPM will hash the set of PCRs specified by the
@@ -113,12 +113,12 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 //
 // On successful, it returns an attestation structure containing the hash of the PCRs selected by the pcrs parameter. If signContext
 // is not nil, the attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, signContextAuthSession SessionContext, sessions ...SessionContext) (AttestRaw, *Signature, error) {
+func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, signContextAuthSession SessionContext, sessions ...SessionContext) (*Attest, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var quoted AttestRaw
+	var quoted attestSized
 	var signature Signature
 
 	if err := t.RunCommand(CommandQuote, sessions,
@@ -129,7 +129,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 		return nil, nil, err
 	}
 
-	return quoted, &signature, nil
+	return quoted.Ptr, &signature, nil
 }
 
 // GetSessionAuditDigest executes the TPM2_GetSessionAuditDigest to obtain the current digest of the audit session corresponding to
@@ -154,12 +154,12 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 //
 // On success, it returns an attestation structure detailing the current audit digest for sessionContext. If signContext is not nil,
 // the attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext ResourceContext, sessionContext SessionContext, qualifyingData Data, inScheme *SigScheme, privacyAdminContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext ResourceContext, sessionContext SessionContext, qualifyingData Data, inScheme *SigScheme, privacyAdminContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (*Attest, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var auditInfo AttestRaw
+	var auditInfo attestSized
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
@@ -170,7 +170,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 		return nil, nil, err
 	}
 
-	return auditInfo, &signature, nil
+	return auditInfo.Ptr, &signature, nil
 }
 
 // GetCommandAuditDigest executes the TPM2_GetCommandAuditDigest command to obtain the current command audit digest, the current
@@ -197,12 +197,12 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 // On success, it returns an attestation structure detailing the current command audit digest, digest algorithm and a digest of the
 // list of commands being audited. If signContext is not nil, the attestation structure will be signed by the associated key and
 // returned too.
-func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (*Attest, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var auditInfo AttestRaw
+	var auditInfo attestSized
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
@@ -213,7 +213,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 		return nil, nil, err
 	}
 
-	return auditInfo, &signature, nil
+	return auditInfo.Ptr, &signature, nil
 }
 
 // GetTime executes the TPM2_GetTime command in order to obtain the current values of time and clock.
@@ -237,12 +237,12 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 //
 // On success, it returns an attestation structure detailing the current values of time and clock. If signContext is not nil, the
 // attestation structure will be signed by the associated key and returned too.
-func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyAdminContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (AttestRaw, *Signature, error) {
+func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, privacyAdminContextAuthSession, signContextAuthSession SessionContext, sessions ...SessionContext) (*Attest, *Signature, error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var timeInfo AttestRaw
+	var timeInfo attestSized
 	var signature Signature
 
 	if err := t.RunCommand(CommandGetTime, sessions,
@@ -253,5 +253,5 @@ func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, q
 		return nil, nil, err
 	}
 
-	return timeInfo, &signature, nil
+	return timeInfo.Ptr, &signature, nil
 }

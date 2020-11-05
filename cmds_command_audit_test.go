@@ -29,14 +29,9 @@ func TestSetCommandCodeAuditStatus(t *testing.T) {
 		t.Fatalf("GetCapability failed: %v", err)
 	}
 
-	attest, _, err := tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
+	auditInfo, _, err := tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("GetCommandAuditDigest failed: %v", err)
-	}
-
-	auditInfo, err := attest.Decode()
-	if err != nil {
-		t.Fatalf("Decode failed: %v", err)
 	}
 
 	initialAlgorithm := HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg)
@@ -80,14 +75,9 @@ Next:
 
 	run := func(t *testing.T, authAuthSession SessionContext) {
 		checkAuditDigest := func(alg HashAlgorithmId) {
-			attest, _, err = tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
+			auditInfo, _, err = tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("GetCommandAuditDigest failed: %v", err)
-			}
-
-			auditInfo, err = attest.Decode()
-			if err != nil {
-				t.Fatalf("Decode failed: %v", err)
 			}
 
 			if HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg) != alg {
