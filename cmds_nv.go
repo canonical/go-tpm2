@@ -163,17 +163,17 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 }
 
 // NVReadPublic executes the TPM2_NV_ReadPublic command to read the public area of the NV index associated with nvIndex.
-func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...SessionContext) (*NVPublic, Name, error) {
-	var nvPublic nvPublicSized
-	var nvName Name
+func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...SessionContext) (nvPublic *NVPublic, nvName Name, err error) {
+	var nvPublicSized nvPublicSized
+
 	if err := t.RunCommand(CommandNVReadPublic, sessions,
 		nvIndex, Delimiter,
 		Delimiter,
 		Delimiter,
-		&nvPublic, &nvName); err != nil {
+		&nvPublicSized, &nvName); err != nil {
 		return nil, nil, err
 	}
-	return nvPublic.Ptr, nvName, nil
+	return nvPublicSized.Ptr, nvName, nil
 }
 
 // NVWriteRaw executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
@@ -501,9 +501,7 @@ func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextA
 // returned.
 //
 // On successful completion, the requested data will be returned.
-func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) (MaxNVBuffer, error) {
-	var data MaxNVBuffer
-
+func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) (data MaxNVBuffer, err error) {
 	if err := t.RunCommand(CommandNVRead, sessions,
 		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
 		size, offset, Delimiter,
@@ -550,12 +548,12 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 // returned.
 //
 // On successful completion, the requested data will be returned.
-func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) ([]byte, error) {
+func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) (data []byte, err error) {
 	if err := t.initPropertiesIfNeeded(); err != nil {
 		return nil, err
 	}
 
-	data := make([]byte, size)
+	data = make([]byte, size)
 	total := 0
 	remaining := size
 

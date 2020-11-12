@@ -18,8 +18,7 @@ package tpm2
 // ErrorHandle will be returned for parameter index 2.
 //
 // On success, a valid TkVerified structure will be returned.
-func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature, sessions ...SessionContext) (*TkVerified, error) {
-	var validation TkVerified
+func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature, sessions ...SessionContext) (validation *TkVerified, err error) {
 	if err := t.RunCommand(CommandVerifySignature, sessions,
 		keyContext, Delimiter,
 		digest, signature, Delimiter,
@@ -28,7 +27,7 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 		return nil, err
 	}
 
-	return &validation, nil
+	return validation, nil
 }
 
 // Sign executes the TPM2_Sign command to sign the provided digest with the key associated with keyContext. The function requires
@@ -55,15 +54,13 @@ func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, 
 // then validation may be nil. If validation is not nil and doesn't correspond to a valid ticket, or it is nil and the key associated
 // with keyContext has the AttrRestricted attribute set, a *TPMParameterError error with an error code of ErrorTicket will be returned
 // for parameter index 3.
-func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *SigScheme, validation *TkHashcheck, keyContextAuthSession SessionContext, sessions ...SessionContext) (*Signature, error) {
+func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *SigScheme, validation *TkHashcheck, keyContextAuthSession SessionContext, sessions ...SessionContext) (signature *Signature, err error) {
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 	if validation == nil {
 		validation = &TkHashcheck{Tag: TagHashcheck, Hierarchy: HandleNull}
 	}
-
-	var signature Signature
 
 	if err := t.RunCommand(CommandSign, sessions,
 		ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Delimiter,
@@ -73,5 +70,5 @@ func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *S
 		return nil, err
 	}
 
-	return &signature, nil
+	return signature, nil
 }

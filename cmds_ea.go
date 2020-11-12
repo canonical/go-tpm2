@@ -48,14 +48,11 @@ package tpm2
 // session's usage. If expiration is non-zero, the expiration time of the session context will be updated unless it already has an
 // expiration time that is earlier. If expiration is less than zero, a timeout value and corresponding *TkAuth ticket will be
 // returned if policySession does not correspond to a trial session.
-func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...SessionContext) (Timeout, *TkAuth, error) {
+func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...SessionContext) (timeout Timeout, policyTicket *TkAuth, err error) {
 	var nonceTPM Nonce
 	if includeNonceTPM {
 		nonceTPM = policySession.NonceTPM()
 	}
-
-	var timeout Timeout
-	var policyTicket TkAuth
 
 	if err := t.RunCommand(CommandPolicySigned, sessions,
 		authContext, policySession, Delimiter,
@@ -65,7 +62,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 		return nil, nil, err
 	}
 
-	return timeout, &policyTicket, nil
+	return timeout, policyTicket, nil
 }
 
 // PolicySecret executes the TPM2_PolicySecret command to include a secret-based authorization to the policy session associated
@@ -96,10 +93,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 // expiration time of the session context will be updated unless it already has an expiration time that is earlier. If expiration is
 // less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a trial
 // session.
-func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession SessionContext, sessions ...SessionContext) (Timeout, *TkAuth, error) {
-	var timeout Timeout
-	var policyTicket TkAuth
-
+func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession SessionContext, sessions ...SessionContext) (timeout Timeout, policyTicket *TkAuth, err error) {
 	if err := t.RunCommand(CommandPolicySecret, sessions,
 		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, policySession, Delimiter,
 		policySession.NonceTPM(), cpHashA, policyRef, expiration, Delimiter,
@@ -108,7 +102,7 @@ func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession Ses
 		return nil, nil, err
 	}
 
-	return timeout, &policyTicket, nil
+	return timeout, policyTicket, nil
 }
 
 // PolicyTicket executes the TPM2_PolicyTicket command, and behaves similarly to TPMContext.PolicySigned with the exception that it
@@ -396,9 +390,7 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 
 // PolicyGetDigest executes the TPM2_PolicyGetDigest command to return the current policy digest of the session context associated
 // with policySession.
-func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...SessionContext) (Digest, error) {
-	var policyDigest Digest
-
+func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...SessionContext) (policyDigest Digest, err error) {
 	if err := t.RunCommand(CommandPolicyGetDigest, sessions,
 		policySession, Delimiter,
 		Delimiter,

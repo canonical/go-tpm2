@@ -112,8 +112,7 @@ func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashLis
 // ErrorLocality will be returned.
 //
 // On success, this function will return a list of tagged digests that the PCR associated with pcrContext was extended with.
-func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession SessionContext, sessions ...SessionContext) (TaggedHashList, error) {
-	var digests TaggedHashList
+func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession SessionContext, sessions ...SessionContext) (digests TaggedHashList, err error) {
 	if err := t.RunCommand(CommandPCREvent, sessions,
 		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Delimiter,
 		eventData, Delimiter,
@@ -130,7 +129,7 @@ func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrCo
 // provided should have the AttrContinueSession attribute defined.
 //
 // On success, the current value of pcrUpdateCounter is returned, as well as the requested PCR values.
-func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...SessionContext) (uint32, PCRValues, error) {
+func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...SessionContext) (pcrUpdateCounter uint32, pcrValues PCRValues, err error) {
 	var remaining PCRSelectionList
 	for _, s := range pcrSelectionIn {
 		c := PCRSelection{Hash: s.Hash, Select: make([]int, len(s.Select))}
@@ -138,8 +137,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		remaining = append(remaining, c)
 	}
 
-	var pcrUpdateCounter uint32
-	pcrValues := make(PCRValues)
+	pcrValues = make(PCRValues)
 
 	for i := 0; ; i++ {
 		var updateCounter uint32

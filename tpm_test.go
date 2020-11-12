@@ -70,11 +70,11 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	}
 	pp, err := mu.MarshalToBytes(public.Params.Select(reflect.ValueOf(public.Type)))
 	if err != nil {
-		t.Errorf("cannot marshal public params: %w", err)
+		t.Errorf("cannot marshal public params: %v", err)
 	}
 	tp, err := mu.MarshalToBytes(template.Params.Select(reflect.ValueOf(template.Type)))
 	if err != nil {
-		t.Errorf("cannot marshal template params: %w", err)
+		t.Errorf("cannot marshal template params: %v", err)
 	}
 	if !bytes.Equal(pp, tp) {
 		t.Errorf("public object has wrong params")

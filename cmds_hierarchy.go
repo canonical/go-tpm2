@@ -98,24 +98,22 @@ import (
 // time in the PCRDigest field. It will also contain the provided outsideInfo in the OutsideInfo field. The returned *TkCreation
 // ticket can be used to prove the association between the created object and the returned *CreationData via the
 // TPMContext.CertifyCreation method.
-func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, *Public, *CreationData, Digest, *TkCreation, error) {
+func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *SensitiveCreate, inPublic *Public, outsideInfo Data, creationPCR PCRSelectionList, primaryObjectAuthSession SessionContext, sessions ...SessionContext) (objectContext ResourceContext, outPublic *Public, creationData *CreationData, creationHash Digest, creationTicket *TkCreation, err error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
 
 	var objectHandle Handle
 
-	var outPublic publicSized
-	var creationData creationDataSized
-	var creationHash Digest
-	var creationTicket TkCreation
+	var outPublicSized publicSized
+	var creationDataSized creationDataSized
 	var name Name
 
 	if err := t.RunCommand(CommandCreatePrimary, sessions,
 		ResourceContextWithSession{Context: primaryObject, Session: primaryObjectAuthSession}, Delimiter,
 		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Delimiter,
 		&objectHandle, Delimiter,
-		&outPublic, &creationData, &creationHash, &creationTicket, &name); err != nil {
+		&outPublicSized, &creationDataSized, &creationHash, &creationTicket, &name); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -123,12 +121,12 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
-	if outPublic.Ptr == nil || !outPublic.Ptr.compareName(name) {
+	if outPublicSized.Ptr == nil || !outPublicSized.Ptr.compareName(name) {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			"name and public area returned from TPM are not consistent"}
 	}
 
-	public, err := outPublic.Ptr.copy()
+	public, err := outPublicSized.Ptr.copy()
 	if err != nil {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
@@ -137,7 +135,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))
 	copy(rc.authValue, inSensitive.UserAuth)
 
-	return rc, outPublic.Ptr, creationData.Ptr, creationHash, &creationTicket, nil
+	return rc, outPublicSized.Ptr, creationDataSized.Ptr, creationHash, creationTicket, nil
 }
 
 // HierarchyControl executes the TPM2_HierarchyControl command in order to enable or disable the hierarchy associated with the

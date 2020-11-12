@@ -23,8 +23,8 @@ import (
 //
 // If capability is CapabilityHandles and property does not correspond to a valid handle type, a *TPMParameterError error with
 // an error code of ErrorHandle is returned for parameter index 2.
-func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32, sessions ...SessionContext) (*CapabilityData, error) {
-	capabilityData := &CapabilityData{Capability: capability, Data: &CapabilitiesU{}}
+func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32, sessions ...SessionContext) (capabilityData *CapabilityData, err error) {
+	capabilityData = &CapabilityData{Capability: capability, Data: &CapabilitiesU{}}
 
 	nextProperty := property
 	remaining := propertyCount
@@ -126,7 +126,7 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 // supported by the TPM. The first parameter indicates the first algorithm for which to return properties. If this algorithm isn't
 // supported, then the properties of the next supported algorithm are returned instead. The propertyCount parameter indicates the
 // number of algorithms for which to return properties.
-func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32, sessions ...SessionContext) (AlgorithmPropertyList, error) {
+func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32, sessions ...SessionContext) (algs AlgorithmPropertyList, err error) {
 	data, err := t.GetCapability(CapabilityAlgs, uint32(first), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32, 
 // supported by the TPM. The first parameter indicates the first command for which to return attributes. If this command isn't
 // supported, then the attributes of the next supported command are returned instead. The propertyCount parameter indicates the
 // number of commands for which to return attributes.
-func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint32, sessions ...SessionContext) (CommandAttributesList, error) {
+func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint32, sessions ...SessionContext) (commands CommandAttributesList, err error) {
 	data, err := t.GetCapability(CapabilityCommands, uint32(first), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint
 // GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that
 // require physical presence for platform authorization. The first parameter indicates the command code at which the returned list
 // should start. The propertyCount parameter indicates the maximum number of command codes to return.
-func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount uint32, sessions ...SessionContext) (CommandCodeList, error) {
+func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount uint32, sessions ...SessionContext) (ppCommands CommandCodeList, err error) {
 	data, err := t.GetCapability(CapabilityPPCommands, uint32(first), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount ui
 // GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that are
 // currently set for command audit. The first parameter indicates the command code at which the returned list should start. The
 // propertyCount parameter indicates the maximum number of command codes to return.
-func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount uint32, sessions ...SessionContext) (CommandCodeList, error) {
+func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount uint32, sessions ...SessionContext) (auditCommands CommandCodeList, err error) {
 	data, err := t.GetCapability(CapabilityAuditCommands, uint32(first), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount
 // GetCapabilityHandles is a helper function that wraps around TPMContext.GetCapability, and returns a list of handles of resources
 // on the TPM. The firstHandle parameter indicates the type of handles to be returned (represented by the most-significant byte),
 // and also the handle at which the list should start. The propertyCount parameter indicates the maximum number of handles to return.
-func (t *TPMContext) GetCapabilityHandles(firstHandle Handle, propertyCount uint32, sessions ...SessionContext) (HandleList, error) {
+func (t *TPMContext) GetCapabilityHandles(firstHandle Handle, propertyCount uint32, sessions ...SessionContext) (handles HandleList, err error) {
 	data, err := t.GetCapability(CapabilityHandles, uint32(firstHandle), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func (t *TPMContext) GetCapabilityHandles(firstHandle Handle, propertyCount uint
 
 // GetCapabilityPCRs is a helper function that wraps around TPMContext.GetCapability, and returns the current allocation of PCRs on
 // the TPM.
-func (t *TPMContext) GetCapabilityPCRs(sessions ...SessionContext) (PCRSelectionList, error) {
+func (t *TPMContext) GetCapabilityPCRs(sessions ...SessionContext) (pcrs PCRSelectionList, err error) {
 	data, err := t.GetCapability(CapabilityPCRs, 0, CapabilityMaxProperties, sessions...)
 	if err != nil {
 		return nil, err
@@ -193,7 +193,7 @@ func (t *TPMContext) GetCapabilityPCRs(sessions ...SessionContext) (PCRSelection
 // the TPM. The first parameter indicates the first property for which to return a value. If the property does not exist, then the
 // value of the next available property is returned. The propertyCount parameter indicates the number of properties for which to
 // return values.
-func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount uint32, sessions ...SessionContext) (TaggedTPMPropertyList, error) {
+func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount uint32, sessions ...SessionContext) (tpmProperties TaggedTPMPropertyList, err error) {
 	data, err := t.GetCapability(CapabilityTPMProperties, uint32(first), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount ui
 // properties. The first parameter indicates the first property for which to return a value. If the property does not exist, then
 // the value of the next available property is returned. The propertyCount parameter indicates the number of properties for which to
 // return values. Each returned property value is a list of PCR indexes associated with a property.
-func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount uint32, sessions ...SessionContext) (TaggedPCRPropertyList, error) {
+func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount uint32, sessions ...SessionContext) (pcrProperties TaggedPCRPropertyList, err error) {
 	data, err := t.GetCapability(CapabilityPCRProperties, uint32(first), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -215,7 +215,7 @@ func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount
 
 // GetCapabilityECCCurves is a helper function that wraps around TPMContext.GetCapability, and returns a list of ECC curves supported
 // by the TPM.
-func (t *TPMContext) GetCapabilityECCCurves(sessions ...SessionContext) (ECCCurveList, error) {
+func (t *TPMContext) GetCapabilityECCCurves(sessions ...SessionContext) (eccCurves ECCCurveList, err error) {
 	data, err := t.GetCapability(CapabilityECCCurves, uint32(ECCCurveFirst), CapabilityMaxProperties, sessions...)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ func (t *TPMContext) GetCapabilityECCCurves(sessions ...SessionContext) (ECCCurv
 // associated with permanent handles. The first parameter indicates the first handle for which to return an auth policy. If the
 // handle doesn't exist, then the auth policy for the next available handle is returned. The propertyCount parameter indicates the
 // number of permanent handles for which to return an auth policy.
-func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint32, sessions ...SessionContext) (TaggedPolicyList, error) {
+func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint32, sessions ...SessionContext) (authPolicies TaggedPolicyList, err error) {
 	data, err := t.GetCapability(CapabilityAuthPolicies, uint32(first), propertyCount, sessions...)
 	if err != nil {
 		return nil, err
@@ -240,7 +240,7 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 type TPMManufacturer uint32
 
 // GetManufacturer is a helper function that wraps around TPMContext.GetCapability in order to obtain the ID of the TPM manufacturer.
-func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (TPMManufacturer, error) {
+func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (manufacturer TPMManufacturer, err error) {
 	props, err := t.GetCapabilityTPMProperties(PropertyManufacturer, 1, sessions...)
 	if err != nil {
 		return 0, err
@@ -256,7 +256,7 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (TPMManufacture
 //
 // On success, this will return true if TPMContext is connected to a TPM2 device, or false if it is connected to a TPM1.2 device. An
 // error will be returned if communication with the device fails or the response packet is badly formed.
-func (t *TPMContext) IsTPM2() (bool, error) {
+func (t *TPMContext) IsTPM2() (isTpm2 bool, err error) {
 	if err := t.runCommandWithoutProcessingAuthResponse(CommandGetCapability, &sessionParams{},
 		nil, []interface{}{CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(1)}, nil); err != nil {
 		return false, err
@@ -270,7 +270,7 @@ func (t *TPMContext) IsTPM2() (bool, error) {
 }
 
 // GetInputBuffer returns the value of the PropertyInputBuffer property, which indicates the maximum size of arguments of the
-// MaxBuffer type. The size is TPM implementation specific, but required to be at least 1024 bytes.
+// MaxBuffer type in bytes. The size is TPM implementation specific, but required to be at least 1024 bytes.
 func (t *TPMContext) GetInputBuffer(sessions ...SessionContext) int {
 	props, err := t.GetCapabilityTPMProperties(PropertyInputBuffer, 1, sessions...)
 	if err != nil {
@@ -283,7 +283,7 @@ func (t *TPMContext) GetInputBuffer(sessions ...SessionContext) int {
 }
 
 // GetMaxDigest returns the value of the PropertyMaxDigest property, which indicates the size of the largest digest algorithm
-// supported by the TPM.
+// supported by the TPM in bytes.
 func (t *TPMContext) GetMaxDigest(sessions ...SessionContext) (int, error) {
 	props, err := t.GetCapabilityTPMProperties(PropertyMaxDigest, 1, sessions...)
 	if err != nil {
@@ -295,7 +295,7 @@ func (t *TPMContext) GetMaxDigest(sessions ...SessionContext) (int, error) {
 	return int(props[0].Value), nil
 }
 
-// GetMaxData returns the maximum size of arguments of the Data type supported by the TPM.
+// GetMaxData returns the maximum size of arguments of the Data type supported by the TPM in bytes.
 func (t *TPMContext) GetMaxData(sessions ...SessionContext) (int, error) {
 	n, err := t.GetMaxDigest(sessions...)
 	if err != nil {
@@ -305,7 +305,7 @@ func (t *TPMContext) GetMaxData(sessions ...SessionContext) (int, error) {
 }
 
 // GetNVBufferMax returns the value of the PropertyNVBufferMax property, which indicates the maximum buffer size supported by
-// the TPM for TPMContext.NVReadRaw and TPMContext.NVWriteRaw.
+// the TPM in bytes for TPMContext.NVReadRaw and TPMContext.NVWriteRaw.
 func (t *TPMContext) GetNVBufferMax(sessions ...SessionContext) (int, error) {
 	props, err := t.GetCapabilityTPMProperties(PropertyNVBufferMax, 1, sessions...)
 	if err != nil {

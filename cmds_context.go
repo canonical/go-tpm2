@@ -31,15 +31,13 @@ import (
 // If saveContext corresponds to a session and no more contexts can be saved, a *TPMError error will be returned with an error code
 // of ErrorTooManyContexts. If a context ID cannot be assigned for the session, a *TPMWarning error with a warning code of
 // WarningContextGap will be returned.
-func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
+func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, err error) {
 	switch c := saveContext.(type) {
 	case *sessionContext:
 		if c.Data() == nil {
 			return nil, makeInvalidArgError("saveContext", "unusable session HandleContext")
 		}
 	}
-
-	var context Context
 
 	if err := t.RunCommand(CommandContextSave, nil,
 		saveContext, Delimiter,
@@ -63,7 +61,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 		}
 	}
 
-	return &context, nil
+	return context, nil
 }
 
 // ContextLoad executes the TPM2_ContextLoad command with the supplied Context, in order to restore a context previously saved from
@@ -92,7 +90,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (*Context, error) {
 // On successful completion, it returns a HandleContext which corresponds to the resource loaded in to the TPM. If the context
 // corresponds to an object, this will be a new ResourceContext. If context corresponds to a session, then this will be a new
 // SessionContext.
-func (t *TPMContext) ContextLoad(context *Context) (HandleContext, error) {
+func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext, err error) {
 	if context == nil {
 		return nil, makeInvalidArgError("context", "nil value")
 	}

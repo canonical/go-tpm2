@@ -27,7 +27,7 @@ package tpm2
 // On success, a ResourceContext corresponding to the newly created HMAC sequence object will be returned. It will not be necessary
 // to call ResourceContext.SetAuthValue on it - this function sets the correct authorization value so that it can be used in
 // subsequent commands that require knowledge of the authorization value.
-func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashAlgorithmId, contextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
+func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashAlgorithmId, contextAuthSession SessionContext, sessions ...SessionContext) (sequenceContext ResourceContext, err error) {
 	var sequenceHandle Handle
 
 	if err := t.RunCommand(CommandHMACStart, sessions,
@@ -51,7 +51,7 @@ func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashA
 // object. If hashAlg is not HashAlgorithmNull, this function will return a ResourceContext corresponding to a newly created hash
 // sequence object. It will not be necessary to call ResourceContext.SetAuthValue on it - this function sets the correct authorization
 // value so that it can be used in subsequent commands that require knowledge of the authorization value.
-func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessions ...SessionContext) (ResourceContext, error) {
+func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessions ...SessionContext) (sequenceContext ResourceContext, err error) {
 	var sequenceHandle Handle
 
 	if err := t.RunCommand(CommandHashSequenceStart, sessions,
@@ -95,10 +95,7 @@ func (t *TPMContext) SequenceUpdate(sequenceContext ResourceContext, buffer MaxB
 // returned. In this case, the hierarchy argument is used to specify the hierarchy for the ticket.
 //
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
-func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer MaxBuffer, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (Digest, *TkHashcheck, error) {
-	var result Digest
-	var validation *TkHashcheck
-
+func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer MaxBuffer, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (result Digest, validation *TkHashcheck, err error) {
 	if err := t.RunCommand(CommandSequenceComplete, sessions,
 		ResourceContextWithSession{Context: sequenceContext, Session: sequenceContextAuthSession}, Delimiter,
 		buffer, hierarchy, Delimiter,
@@ -130,9 +127,7 @@ func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer Ma
 // error code of ErrorLocality will be returned.
 //
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
-func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceContext, buffer MaxBuffer, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (TaggedHashList, error) {
-	var results TaggedHashList
-
+func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceContext, buffer MaxBuffer, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (results TaggedHashList, err error) {
 	if err := t.RunCommand(CommandEventSequenceComplete, sessions,
 		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, ResourceContextWithSession{Context: sequenceContext, Session: sequenceContextAuthSession}, Delimiter,
 		buffer, Delimiter,
@@ -160,7 +155,7 @@ func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceC
 // returned. In this case, the hierarchy argument is used to specify the hierarchy for the ticket.
 //
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
-func (t *TPMContext) SequenceExecute(sequenceContext ResourceContext, buffer []byte, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (Digest, *TkHashcheck, error) {
+func (t *TPMContext) SequenceExecute(sequenceContext ResourceContext, buffer []byte, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (result Digest, validation *TkHashcheck, err error) {
 	if err := t.initPropertiesIfNeeded(); err != nil {
 		return nil, nil, err
 	}
@@ -199,7 +194,7 @@ func (t *TPMContext) SequenceExecute(sequenceContext ResourceContext, buffer []b
 // error code of ErrorLocality will be returned.
 //
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
-func (t *TPMContext) EventSequenceExecute(pcrContext, sequenceContext ResourceContext, buffer []byte, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (TaggedHashList, error) {
+func (t *TPMContext) EventSequenceExecute(pcrContext, sequenceContext ResourceContext, buffer []byte, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (results TaggedHashList, err error) {
 	if err := t.initPropertiesIfNeeded(); err != nil {
 		return nil, err
 	}

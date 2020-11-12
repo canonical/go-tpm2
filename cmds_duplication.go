@@ -46,14 +46,10 @@ package tpm2
 // duplication wrapper (if newParentContext was provided). If newParentContext was provided, the seed used to generate the symmetric
 // key and the HMAC key for the outer duplication wrapper is encrypted using the methods defined by newParentContext and returned as
 // an EncryptedSecret.
-func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, encryptionKeyIn Data, symmetricAlg *SymDefObject, objectContextAuthSession SessionContext, sessions ...SessionContext) (Data, Private, EncryptedSecret, error) {
+func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, encryptionKeyIn Data, symmetricAlg *SymDefObject, objectContextAuthSession SessionContext, sessions ...SessionContext) (encryptionKeyOut Data, duplicate Private, outSymSeed EncryptedSecret, err error) {
 	if symmetricAlg == nil {
 		symmetricAlg = &SymDefObject{Algorithm: SymObjectAlgorithmNull}
 	}
-
-	var encryptionKeyOut Data
-	var duplicate Private
-	var outSymSeed EncryptedSecret
 
 	if err := t.RunCommand(CommandDuplicate, sessions,
 		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, newParentContext, Delimiter,
@@ -129,12 +125,10 @@ func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, 
 //
 // On success, a new private area encrypted with the symmetric algorithm defined by the object associated with parentContext is
 // returned.
-func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, objectPublic *Public, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext, sessions ...SessionContext) (Private, error) {
+func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, objectPublic *Public, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext, sessions ...SessionContext) (outPrivate Private, err error) {
 	if symmetricAlg == nil {
 		symmetricAlg = &SymDefObject{Algorithm: SymObjectAlgorithmNull}
 	}
-
-	var outPrivate Private
 
 	if err := t.RunCommand(CommandImport, sessions,
 		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,

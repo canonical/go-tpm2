@@ -22,9 +22,7 @@ func (t *TPMContext) IncrementalSelfTest(toTest AlgorithmList, sessions ...Sessi
 	return toDoList, nil
 }
 
-func (t *TPMContext) GetTestResult(sessions ...SessionContext) (MaxBuffer, ResponseCode, error) {
-	var outData MaxBuffer
-	var testResult ResponseCode
+func (t *TPMContext) GetTestResult(sessions ...SessionContext) (outData MaxBuffer, testResult ResponseCode, err error) {
 	if err := t.RunCommand(CommandGetTestResult, sessions, Delimiter, Delimiter, Delimiter, &outData, &testResult); err != nil {
 		return nil, 0, err
 	}
