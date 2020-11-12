@@ -109,8 +109,9 @@ type TPMContext struct {
 	permanentResources    map[Handle]*permanentContext
 	maxSubmissions        uint
 	propertiesInitialized bool
-	maxNVBufferSize       int
 	maxBufferSize         int
+	maxDigestSize         int
+	maxNVBufferSize       int
 	exclusiveSession      *sessionContext
 	currentCmd            *cmdContext
 }
@@ -453,18 +454,23 @@ func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 
 	for _, prop := range props {
 		switch prop.Property {
-		case PropertyNVBufferMax:
-			t.maxNVBufferSize = int(prop.Value)
 		case PropertyInputBuffer:
 			t.maxBufferSize = int(prop.Value)
+		case PropertyMaxDigest:
+			t.maxDigestSize = int(prop.Value)
+		case PropertyNVBufferMax:
+			t.maxNVBufferSize = int(prop.Value)
 		}
 	}
 
-	if t.maxNVBufferSize == 0 {
-		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_NV_BUFFER_MAX property"}
-	}
 	if t.maxBufferSize == 0 {
 		t.maxBufferSize = 1024
+	}
+	if t.maxDigestSize == 0 {
+		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_MAX_DIGEST property"}
+	}
+	if t.maxNVBufferSize == 0 {
+		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_NV_BUFFER_MAX property"}
 	}
 	t.propertiesInitialized = true
 	return nil

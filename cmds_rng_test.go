@@ -7,20 +7,12 @@ package tpm2_test
 import (
 	"crypto/rand"
 	"testing"
-
-	. "github.com/canonical/go-tpm2"
+	//. "github.com/canonical/go-tpm2"
 )
 
 func TestGetRandom(t *testing.T) {
 	tpm := openTPMForTesting(t, 0)
 	defer closeTPM(t, tpm)
-
-	props, err := tpm.GetCapabilityTPMProperties(PropertyMaxDigest, 1)
-	if err != nil {
-		t.Fatalf("GetCapability failed: %v", err)
-	}
-
-	maxDigest := props[0].Value
 
 	for _, data := range []struct {
 		desc  string
@@ -39,8 +31,8 @@ func TestGetRandom(t *testing.T) {
 			bytes: 48,
 		},
 		{
-			desc:  "64Bytes",
-			bytes: 64,
+			desc:  "512Bytes",
+			bytes: 512,
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -48,11 +40,7 @@ func TestGetRandom(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GetRandom failed: %v", err)
 			}
-			size := int(data.bytes)
-			if uint32(data.bytes) > maxDigest {
-				size = int(maxDigest)
-			}
-			if len(random) != size {
+			if len(random) != int(data.bytes) {
 				t.Errorf("Unexpected random data length (%d)", len(random))
 			}
 		})
