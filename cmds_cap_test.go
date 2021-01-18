@@ -74,24 +74,24 @@ func (s *capabilitiesSuite) TestGetCapabilityAlgs1(c *C) {
 		first:         AlgorithmRSA,
 		propertyCount: math.MaxUint32,
 		expected: AlgorithmPropertyList{
-			{AlgorithmRSA, AttrAsymmetric | AttrObject},
-			{AlgorithmSHA1, AttrHash},
-			{AlgorithmHMAC, AttrHash | AttrSigning},
-			{AlgorithmAES, AttrSymmetric},
-			{AlgorithmMGF1, AttrHash | AttrMethod},
-			{AlgorithmKeyedHash, AttrHash | AttrEncrypting | AttrSigning | AttrObject},
-			{AlgorithmXOR, AttrHash | AttrSymmetric},
-			{AlgorithmSHA256, AttrHash},
-			{AlgorithmRSASSA, AttrAsymmetric | AttrSigning},
-			{AlgorithmRSAES, AttrAsymmetric | AttrEncrypting},
-			{AlgorithmRSAPSS, AttrAsymmetric | AttrSigning},
-			{AlgorithmOAEP, AttrAsymmetric | AttrEncrypting},
-			{AlgorithmECDSA, AttrAsymmetric | AttrSigning},
-			{AlgorithmECDH, AttrAsymmetric | AttrMethod},
-			{AlgorithmECDAA, AttrAsymmetric | AttrSigning},
-			{AlgorithmECSCHNORR, AttrAsymmetric | AttrSigning},
-			{AlgorithmECC, AttrAsymmetric | AttrObject},
-			{AlgorithmSymCipher, AttrObject}}})
+			{Alg: AlgorithmRSA, Properties: AttrAsymmetric | AttrObject},
+			{Alg: AlgorithmSHA1, Properties: AttrHash},
+			{Alg: AlgorithmHMAC, Properties: AttrHash | AttrSigning},
+			{Alg: AlgorithmAES, Properties: AttrSymmetric},
+			{Alg: AlgorithmMGF1, Properties: AttrHash | AttrMethod},
+			{Alg: AlgorithmKeyedHash, Properties: AttrHash | AttrEncrypting | AttrSigning | AttrObject},
+			{Alg: AlgorithmXOR, Properties: AttrHash | AttrSymmetric},
+			{Alg: AlgorithmSHA256, Properties: AttrHash},
+			{Alg: AlgorithmRSASSA, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmRSAES, Properties: AttrAsymmetric | AttrEncrypting},
+			{Alg: AlgorithmRSAPSS, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmOAEP, Properties: AttrAsymmetric | AttrEncrypting},
+			{Alg: AlgorithmECDSA, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECDH, Properties: AttrAsymmetric | AttrMethod},
+			{Alg: AlgorithmECDAA, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECSCHNORR, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECC, Properties: AttrAsymmetric | AttrObject},
+			{Alg: AlgorithmSymCipher, Properties: AttrObject}}})
 }
 
 func (s *capabilitiesSuite) TestGetCapabilityAlgs2(c *C) {
@@ -99,24 +99,24 @@ func (s *capabilitiesSuite) TestGetCapabilityAlgs2(c *C) {
 		first:         AlgorithmSHA256,
 		propertyCount: math.MaxUint32,
 		expected: AlgorithmPropertyList{
-			{AlgorithmSHA256, AttrHash},
-			{AlgorithmRSASSA, AttrAsymmetric | AttrSigning},
-			{AlgorithmRSAES, AttrAsymmetric | AttrEncrypting},
-			{AlgorithmRSAPSS, AttrAsymmetric | AttrSigning},
-			{AlgorithmOAEP, AttrAsymmetric | AttrEncrypting},
-			{AlgorithmECDSA, AttrAsymmetric | AttrSigning},
-			{AlgorithmECDH, AttrAsymmetric | AttrMethod},
-			{AlgorithmECDAA, AttrAsymmetric | AttrSigning},
-			{AlgorithmECSCHNORR, AttrAsymmetric | AttrSigning},
-			{AlgorithmECC, AttrAsymmetric | AttrObject},
-			{AlgorithmSymCipher, AttrObject}}})
+			{Alg: AlgorithmSHA256, Properties: AttrHash},
+			{Alg: AlgorithmRSASSA, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmRSAES, Properties: AttrAsymmetric | AttrEncrypting},
+			{Alg: AlgorithmRSAPSS, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmOAEP, Properties: AttrAsymmetric | AttrEncrypting},
+			{Alg: AlgorithmECDSA, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECDH, Properties: AttrAsymmetric | AttrMethod},
+			{Alg: AlgorithmECDAA, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECSCHNORR, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECC, Properties: AttrAsymmetric | AttrObject},
+			{Alg: AlgorithmSymCipher, Properties: AttrObject}}})
 }
 
 func (s *capabilitiesSuite) TestGetCapabilityAlgs3(c *C) {
 	s.testGetCapabilityAlgs(c, &testGetCapabilityAlgsData{
 		first:         AlgorithmRSA,
 		propertyCount: 1,
-		expected:      AlgorithmPropertyList{{AlgorithmRSA, AttrAsymmetric | AttrObject}}})
+		expected:      AlgorithmPropertyList{{Alg: AlgorithmRSA, Properties: AttrAsymmetric | AttrObject}}})
 }
 
 func makeCommandAttributes(code CommandCode, attrs CommandAttributes, handles int) CommandAttributes {
