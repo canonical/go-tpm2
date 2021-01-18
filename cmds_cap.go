@@ -7,6 +7,8 @@ package tpm2
 import (
 	"encoding/binary"
 	"fmt"
+
+	"github.com/canonical/go-tpm2/mu"
 )
 
 // Section 30 - Capability Commands
@@ -257,13 +259,17 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (manufacturer T
 // On success, this will return true if TPMContext is connected to a TPM2 device, or false if it is connected to a TPM1.2 device. An
 // error will be returned if communication with the device fails or the response packet is badly formed.
 func (t *TPMContext) IsTPM2() (isTpm2 bool, err error) {
-	if err := t.runCommandWithoutProcessingAuthResponse(CommandGetCapability, &sessionParams{},
-		nil, []interface{}{CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(1)}, nil); err != nil {
+	cBytes, err := mu.MarshalToBytes(CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(1))
+	if err != nil {
+		panic(fmt.Sprintf("cannot marshal command parameter bytes: %v", err))
+	}
+
+	_, tag, _, err := t.RunCommandBytes(TagNoSessions, CommandGetCapability, cBytes)
+	if err != nil {
 		return false, err
 	}
-	ctx := t.currentCmd
-	t.currentCmd = nil
-	if ctx.responseTag == TagNoSessions {
+
+	if tag == TagNoSessions {
 		return true, nil
 	}
 	return false, nil

@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 
 	. "gopkg.in/check.v1"
@@ -519,4 +520,51 @@ func (s *capabilitiesSuite) TestGetCapabilityPCRProperties3(c *C) {
 		propertyCount: 1,
 		expected: TaggedPCRPropertyList{
 			{Tag: PropertyPCRSave, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}}}})
+}
+
+// We don't have a TPM1.2 simulator, so create a mock TCTI that just returns
+// a TPM_BAD_ORDINAL error
+type mockTPM12Tcti struct{}
+
+func (t *mockTPM12Tcti) Read(data []byte) (int, error) {
+	// tag = TPM_TAG_RSP_COMMAND (0xc4)
+	// paramSize = 10
+	// returnCode = TPM_BAD_ORDINAL (10)
+	b, _ := mu.MarshalToBytes(uint16(0xc4), uint32(10), uint32(10))
+	return copy(data, b), nil
+}
+
+func (t *mockTPM12Tcti) Write(data []byte) (int, error) {
+	return len(data), nil
+}
+
+func (t *mockTPM12Tcti) Close() error {
+	return nil
+}
+
+func (t *mockTPM12Tcti) SetLocality(locality uint8) error {
+	return nil
+}
+
+func (t *mockTPM12Tcti) MakeSticky(handle Handle, sticky bool) error {
+	return nil
+}
+
+type capabilitiesMockTPM12Suite struct {
+	testutil.BaseTest
+	tpm *TPMContext
+}
+
+func (s *capabilitiesMockTPM12Suite) SetUpTest(c *C) {
+	tpm, _ := NewTPMContext(&mockTPM12Tcti{})
+	s.tpm = tpm
+	s.BaseTest.SetUpTest(c)
+}
+
+var _ = Suite(&capabilitiesMockTPM12Suite{})
+
+func (s *capabilitiesMockTPM12Suite) TestIsTPM2(c *C) {
+	isTpm2, err := s.tpm.IsTPM2()
+	c.Check(err, IsNil)
+	c.Check(isTpm2, testutil.IsFalse)
 }
