@@ -80,7 +80,18 @@ func (t *TctiMssim) Write(data []byte) (int, error) {
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal command: %v", err))
 	}
-	return t.tpm.Write(buf)
+	n, err := t.tpm.Write(buf)
+	if err != nil {
+		return 0, err
+	}
+	n -= (len(buf) - len(data))
+	if n < 0 {
+		n = 0
+	}
+	if n < len(data) {
+		return n, io.ErrShortWrite
+	}
+	return n, nil
 }
 
 func sendSessionEnd(conn net.Conn) error {

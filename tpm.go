@@ -137,27 +137,22 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	cHeader := commandHeader{tag, 0, commandCode}
 	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
 
-	bytes, err := mu.MarshalToBytes(cHeader, mu.RawBytes(commandBytes))
-	if err != nil {
+	cmd := new(bytes.Buffer)
+	if _, err := mu.MarshalToWriter(cmd, cHeader, mu.RawBytes(commandBytes)); err != nil {
 		panic(fmt.Sprintf("cannot marshal complete command packet bytes: %v", err))
 	}
 
-	if _, err := t.tcti.Write(bytes); err != nil {
+	if _, err := cmd.WriteTo(t.tcti); err != nil {
 		return 0, 0, nil, &TctiError{"write", err}
 	}
 
 	var rHeader responseHeader
 	rHeaderSize := uint32(binary.Size(rHeader))
-	rHeaderBytes := make([]byte, rHeaderSize)
-	if n, err := io.ReadFull(t.tcti, rHeaderBytes); err != nil {
+	if n, err := mu.UnmarshalFromReader(t.tcti, &rHeader); err != nil {
 		if xerrors.Is(err, io.ErrUnexpectedEOF) {
 			return 0, 0, nil, &InvalidResponseError{commandCode, fmt.Sprintf("insufficient bytes for response header (got %d, expected %d)", n, rHeaderSize)}
 		}
 		return 0, 0, nil, &TctiError{"read", err}
-	}
-
-	if _, err := mu.UnmarshalFromBytes(rHeaderBytes, &rHeader); err != nil {
-		panic(fmt.Sprintf("cannot unmarshal response header: %v", err))
 	}
 
 	if rHeader.ResponseSize < rHeaderSize {
