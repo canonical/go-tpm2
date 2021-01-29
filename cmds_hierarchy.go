@@ -180,27 +180,18 @@ func (t *TPMContext) HierarchyControl(authContext ResourceContext, enable Handle
 //
 // If the TPM2_Clear command has been disabled, a *TPMError error will be returned with an error code of ErrorDisabled.
 func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	var s sessionParams
-	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}); err != nil {
-		return fmt.Errorf("error whilst processing handle with authorization for authContext: %v", err)
-	}
-	if err := s.validateAndAppendExtra(sessions); err != nil {
-		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
-	}
-
-	err := t.runCommandWithoutProcessingAuthResponse(CommandClear, &s, []interface{}{authContext}, nil, nil)
-
-	for _, h := range []Handle{HandleOwner, HandleEndorsement, HandleLockout} {
-		if rc, exists := t.permanentResources[h]; exists {
-			rc.SetAuthValue(nil)
-		}
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return t.processLastAuthResponse(nil)
+	return t.RunCommandWithResponseCallback(CommandClear, sessions,
+		func() {
+			// Clear auth values for the owner, endorsement and lockout hierarchies. If the supplied session is not
+			// bound to authContext, the TPM will response with a HMAC generated with a key derived from the empty
+			// auth value.
+			for _, h := range []Handle{HandleOwner, HandleEndorsement, HandleLockout} {
+				if rc, exists := t.permanentResources[h]; exists {
+					rc.SetAuthValue(nil)
+				}
+			}
+		},
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
 }
 
 // ClearControl executes the TPM2_ClearControl command to enable or disable execution of the TPM2_Clear command (via the
@@ -235,21 +226,11 @@ func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, aut
 // ResourceContext.SetAuthValue in order to use it in subsequent commands that require knowledge of the authorization value for the
 // resource.
 func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Auth, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	var s sessionParams
-	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}); err != nil {
-		return fmt.Errorf("error whilst processing handle with authorization for authHandle: %v", err)
-	}
-	if err := s.validateAndAppendExtra(sessions); err != nil {
-		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
-	}
-
-	if err := t.runCommandWithoutProcessingAuthResponse(CommandHierarchyChangeAuth, &s, []interface{}{authContext}, []interface{}{newAuth}, nil); err != nil {
-		return err
-	}
-
-	// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond with a HMAC generated with a key
-	// that includes newAuth instead.
-	authContext.SetAuthValue(newAuth)
-
-	return t.processLastAuthResponse(nil)
+	return t.RunCommandWithResponseCallback(CommandHierarchyChangeAuth, sessions,
+		func() {
+			// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond with a HMAC generated with a key
+			// that includes newAuth instead.
+			authContext.SetAuthValue(newAuth)
+		},
+		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter, newAuth)
 }

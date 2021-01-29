@@ -113,7 +113,6 @@ type TPMContext struct {
 	maxDigestSize         int
 	maxNVBufferSize       int
 	exclusiveSession      *sessionContext
-	currentCmd            *cmdContext
 }
 
 // Close calls Close on the transmission interface.
@@ -170,11 +169,7 @@ func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, com
 	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, resources, params, outHandles []interface{}) error {
-	if t.currentCmd != nil {
-		panic("starting a new command without processing the auth response of the previous command")
-	}
-
+func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, resources, params, outHandles []interface{}) (*cmdContext, error) {
 	handles := make([]interface{}, 0, len(resources))
 	handleNames := make([]Name, 0, len(resources))
 
@@ -192,19 +187,19 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 			handles = append(handles, HandleNull)
 			handleNames = append(handleNames, makeDummyContext(HandleNull).Name())
 		default:
-			return fmt.Errorf("cannot process command handle context parameter for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(resource))
+			return nil, fmt.Errorf("cannot process command handle context parameter for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(resource))
 		}
 	}
 
 	for i, handle := range outHandles {
 		_, isHandle := handle.(*Handle)
 		if !isHandle {
-			return fmt.Errorf("cannot process response handle parameter for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(handle))
+			return nil, fmt.Errorf("cannot process response handle parameter for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(handle))
 		}
 	}
 
 	if sessionParams.hasDecryptSession() && (len(params) == 0 || !isParamEncryptable(params[0])) {
-		return fmt.Errorf("command %s does not support command parameter encryption", commandCode)
+		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
 	}
 
 	cBytes := new(bytes.Buffer)
@@ -215,7 +210,7 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 
 	cpBytes := new(bytes.Buffer)
 	if _, err := mu.MarshalToWriter(cpBytes, params...); err != nil {
-		return xerrors.Errorf("cannot marshal command parameters for command %s: %w", commandCode, err)
+		return nil, xerrors.Errorf("cannot marshal command parameters for command %s: %w", commandCode, err)
 	}
 
 	tag := TagNoSessions
@@ -223,7 +218,7 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		tag = TagSessions
 		authArea, err := sessionParams.buildCommandAuthArea(commandCode, handleNames, cpBytes.Bytes())
 		if err != nil {
-			return xerrors.Errorf("cannot build command auth area for command %s: %w", commandCode, err)
+			return nil, xerrors.Errorf("cannot build command auth area for command %s: %w", commandCode, err)
 		}
 		if _, err := mu.MarshalToWriter(cBytes, &authArea); err != nil {
 			panic(fmt.Sprintf("cannot marshal command auth area: %v", err))
@@ -242,7 +237,7 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		var err error
 		responseCode, responseTag, responseBytes, err = t.RunCommandBytes(tag, commandCode, cBytes.Bytes())
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		err = DecodeResponseCode(commandCode, responseCode)
@@ -251,10 +246,10 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		}
 
 		if tries >= t.maxSubmissions {
-			return err
+			return nil, err
 		}
 		if e, ok := err.(*TPMWarning); !ok || !(e.Code == WarningYielded || e.Code == WarningTesting || e.Code == WarningRetry) {
-			return err
+			return nil, err
 		}
 	}
 
@@ -262,7 +257,7 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 
 	if len(outHandles) > 0 {
 		if _, err := mu.UnmarshalFromReader(buf, outHandles...); err != nil {
-			return &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response handles: %v", err)}
+			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response handles: %v", err)}
 		}
 	}
 
@@ -273,48 +268,40 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 	case TagSessions:
 		var parameterSize uint32
 		if _, err := mu.UnmarshalFromReader(buf, &parameterSize); err != nil {
-			return &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response parameterSize: %v", err)}
+			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response parameterSize: %v", err)}
 		}
 		rpBytes = make([]byte, parameterSize)
 		if _, err := io.ReadFull(buf, rpBytes); err != nil {
-			return &InvalidResponseError{commandCode, fmt.Sprintf("cannot read response parameter area: %v", err)}
+			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot read response parameter area: %v", err)}
 		}
 
 		authArea.Data = make([]authResponse, len(sessionParams.sessions))
 		if _, err := mu.UnmarshalFromReader(buf, &authArea); err != nil {
-			return &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response auth area: %v", err)}
+			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response auth area: %v", err)}
 		}
 	case TagNoSessions:
 		rpBytes = make([]byte, buf.Len())
 		if _, err := io.ReadFull(buf, rpBytes); err != nil {
-			return &InvalidResponseError{commandCode, fmt.Sprintf("cannot read response parameter area: %v", err)}
+			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot read response parameter area: %v", err)}
 		}
 	default:
-		return &InvalidResponseError{commandCode, fmt.Sprintf("unexpected response tag: %v", responseTag)}
+		return nil, &InvalidResponseError{commandCode, fmt.Sprintf("unexpected response tag: %v", responseTag)}
 	}
 
 	if buf.Len() > 0 {
-		return &InvalidResponseError{commandCode, fmt.Sprintf("response payload contains %d trailing bytes", buf.Len())}
+		return nil, &InvalidResponseError{commandCode, fmt.Sprintf("response payload contains %d trailing bytes", buf.Len())}
 	}
 
-	t.currentCmd = &cmdContext{
+	return &cmdContext{
 		commandCode:      commandCode,
 		sessionParams:    sessionParams,
 		responseCode:     responseCode,
 		responseTag:      responseTag,
 		responseAuthArea: authArea.Data,
-		rpBytes:          rpBytes}
-	return nil
+		rpBytes:          rpBytes}, nil
 }
 
-func (t *TPMContext) processLastAuthResponse(params []interface{}) error {
-	if t.currentCmd == nil {
-		panic("no command to process an auth response for")
-	}
-
-	cmd := t.currentCmd
-	t.currentCmd = nil
-
+func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) error {
 	if cmd.responseTag == TagSessions {
 		if err := cmd.sessionParams.processResponseAuthArea(cmd.responseAuthArea, cmd.responseCode, cmd.rpBytes); err != nil {
 			return &InvalidResponseError{cmd.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
@@ -356,11 +343,13 @@ func (t *TPMContext) processLastAuthResponse(params []interface{}) error {
 	return nil
 }
 
-// RunCommand is the high-level generic interface for executing the command specified by commandCode. All of the methods on TPMContext
-// exported by this package that execute commands on the TPM are essentially wrappers around this function. It takes care of
-// marshalling command handles and command parameters, as well as constructing and marshalling the authorization area and choosing
-// the correct StructTag value. It takes care of unmarshalling response handles and response parameters, as well as unmarshalling the
-// response authorization area and performing checks on the authorization response.
+// RunCommandWithResponseCallback is a high-level generic interface for executing the command specified by commandCode. It differs
+// from RunCommand with the addition of an optional callback which is executed after receiving a response from the TPM, but before
+// the response is decoded and the session state is updated. This is useful for commands that change the authorization value of a
+// supplied entity, where the response HMAC may be generated based on the new authorization value. It takes care of marshalling
+// command handles and command parameters, as well as constructing and marshalling the authorization area and choosing the correct
+// StructTag value. It takes care of unmarshalling response handles and response parameters, as well as unmarshalling the response
+// authorization area and performing checks on the authorization response.
 //
 // The variable length params argument provides a mechanism for the caller to provide command handles, command parameters, response
 // handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Delimiter
@@ -387,7 +376,7 @@ func (t *TPMContext) processLastAuthResponse(params []interface{}) error {
 //
 // In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
 // this function will also return an error if the TPM responds with any ResponseCode other than Success.
-func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionContext, params ...interface{}) error {
+func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, sessions []SessionContext, responseCb func(), params ...interface{}) error {
 	var commandHandles []interface{}
 	var commandParams []interface{}
 	var responseHandles []interface{}
@@ -425,11 +414,51 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionConte
 		return fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", commandCode, err)
 	}
 
-	if err := t.runCommandWithoutProcessingAuthResponse(commandCode, &sessionParams, commandHandles, commandParams, responseHandles); err != nil {
+	ctx, err := t.runCommandWithoutProcessingAuthResponse(commandCode, &sessionParams, commandHandles, commandParams, responseHandles)
+	if err != nil {
 		return err
 	}
 
-	return t.processLastAuthResponse(responseParams)
+	if responseCb != nil {
+		responseCb()
+	}
+
+	return t.processAuthResponse(ctx, responseParams)
+}
+
+// RunCommand is the high-level generic interface for executing the command specified by commandCode. All of the methods on TPMContext
+// exported by this package that execute commands on the TPM are essentially wrappers around this function. It takes care of
+// marshalling command handles and command parameters, as well as constructing and marshalling the authorization area and choosing
+// the correct StructTag value. It takes care of unmarshalling response handles and response parameters, as well as unmarshalling the
+// response authorization area and performing checks on the authorization response.
+//
+// The variable length params argument provides a mechanism for the caller to provide command handles, command parameters, response
+// handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Delimiter
+// sentinel value.
+//
+// Command handles are provided as HandleContext types if they do not require an authorization. For command handles that require an
+// authorization, they are provided using the ResourceContextWithSession type. This links the ResourceContext to an optional
+// authorization session. If the authorization value of the TPM entity is required as part of the authorization, this will be obtained
+// from the supplied ResourceContext. A nil HandleContext will automatically be converted to a handle with the value of HandleNull.
+//
+// Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
+//
+// Response handles are provided as pointers to Handle values.
+//
+// Response parameters are provided as pointers to values of the go equivalent types for the types defined in the TPM Library
+// Specification.
+//
+// If the TPM responds with a warning that indicates the command could not be started and should be retried, this function will
+// resubmit the command a finite number of times before returning an error. The maximum number of retries can be set via
+// TPMContext.SetMaxSubmissions.
+//
+// The caller can provide additional sessions that aren't associated with a TPM entity (and therefore not used for authorization) via
+// the sessions parameter, for the purposes of command auditing or session based parameter encryption.
+//
+// In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
+// this function will also return an error if the TPM responds with any ResponseCode other than Success.
+func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionContext, params ...interface{}) error {
+	return t.RunCommandWithResponseCallback(commandCode, sessions, nil, params...)
 }
 
 // SetMaxSubmissions sets the maximum number of times that RunCommand will attempt to submit a command before failing with an error.

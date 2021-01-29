@@ -135,26 +135,14 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authC
 //
 // On successful completion, nvIndex will be invalidated.
 func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, nvIndexAuthSession, platformAuthSession SessionContext, sessions ...SessionContext) error {
-	var s sessionParams
-	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession}); err != nil {
-		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
-	}
-	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: platform, Session: platformAuthSession}); err != nil {
-		return fmt.Errorf("error whilst processing handle with authorization for platform: %v", err)
-	}
-	if err := s.validateAndAppendExtra(sessions); err != nil {
-		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
-	}
-
-	if err := t.runCommandWithoutProcessingAuthResponse(CommandNVUndefineSpaceSpecial, &s, []interface{}{nvIndex, platform}, nil, nil); err != nil {
-		return err
-	}
-
-	// If the HMAC key for this command includes the authorization value for nvIndex (eg, because the PolicyAuthValue assertion was
-	// executed), the TPM will respond with a HMAC generated with a key based on an empty auth value.
-	nvIndex.SetAuthValue(nil)
-
-	if err := t.processLastAuthResponse(nil); err != nil {
+	if err := t.RunCommandWithResponseCallback(CommandNVUndefineSpaceSpecial, sessions,
+		func() {
+			// If the HMAC key for this command includes the authorization value for nvIndex (eg, because the PolicyAuthValue assertion was
+			// executed), the TPM will respond with a HMAC generated with a key based on an empty auth value.
+			nvIndex.SetAuthValue(nil)
+		},
+		ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession},
+		ResourceContextWithSession{Context: platform, Session: platformAuthSession}); err != nil {
 		return err
 	}
 
@@ -701,23 +689,14 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 // and nvIndex will be updated to reflect this - it isn't necessary to update nvIndex with ResourceContext.SetAuthValue in order to
 // use it in authorization roles that require knowledge of the authorization value for the index.
 func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndexAuthSession SessionContext, sessions ...SessionContext) error {
-	var s sessionParams
-	if err := s.validateAndAppendAuth(ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession}); err != nil {
-		return fmt.Errorf("error whilst processing resource context with authorization for nvIndex: %v", err)
-	}
-	if err := s.validateAndAppendExtra(sessions); err != nil {
-		return fmt.Errorf("error whilst processing non-auth sessions: %v", err)
-	}
-
-	if err := t.runCommandWithoutProcessingAuthResponse(CommandNVChangeAuth, &s, []interface{}{nvIndex}, []interface{}{newAuth}, nil); err != nil {
-		return err
-	}
-
-	// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key derived from newAuth. If the
-	// session is bound, the TPM will respond with a HMAC generated from the original key
-	nvIndex.SetAuthValue(newAuth)
-
-	return t.processLastAuthResponse(nil)
+	return t.RunCommandWithResponseCallback(CommandNVChangeAuth, sessions,
+		func() {
+			// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key derived from newAuth. If the
+			// session is bound, the TPM will respond with a HMAC generated from the original key
+			nvIndex.SetAuthValue(newAuth)
+		},
+		ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession}, Delimiter,
+		newAuth)
 }
 
 // func (t *TPMContext) NVCertify(signContext, authContext, nvIndex HandleContext, qualifyingData Data,
