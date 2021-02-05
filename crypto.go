@@ -83,8 +83,8 @@ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []
 		if schemeHashAlg == HashAlgorithmNull {
 			schemeHashAlg = public.NameAlg
 		}
-		if !schemeHashAlg.Supported() {
-			return nil, fmt.Errorf("unknown scheme hash algorithm: %v", schemeHashAlg)
+		if !schemeHashAlg.Available() {
+			return nil, fmt.Errorf("unknown scheme hash algorithm or algorithm not linked in to binary: %v", schemeHashAlg)
 		}
 		hash := schemeHashAlg.NewHash()
 		labelCopy := make([]byte, len(label)+1)

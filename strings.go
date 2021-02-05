@@ -606,6 +606,12 @@ func (a AlgorithmId) String() string {
 		return "TPM_ALG_SYMCIPHER"
 	case AlgorithmCamellia:
 		return "TPM_ALG_CAMELLIA"
+	case AlgorithmSHA3_256:
+		return "TPM_ALG_SHA3_256"
+	case AlgorithmSHA3_384:
+		return "TPM_ALG_SHA3_384"
+	case AlgorithmSHA3_512:
+		return "TPM_ALG_SHA3_512"
 	case AlgorithmCTR:
 		return "TPM_ALG_CTR"
 	case AlgorithmOFB:

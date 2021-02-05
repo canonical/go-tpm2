@@ -241,7 +241,7 @@ func (h *handleContext) checkConsistency() error {
 			if !scData.IsAudit && scData.IsExclusive {
 				return errors.New("inconsistent audit attributes for session context")
 			}
-			if !scData.HashAlg.Supported() {
+			if !scData.HashAlg.Available() {
 				return errors.New("invalid digest algorithm for session context")
 			}
 			switch scData.SessionType {

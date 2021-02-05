@@ -2,7 +2,7 @@ package tpm2_test
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto"
 	"encoding/binary"
 	"io"
 	"testing"
@@ -24,7 +24,7 @@ func (c *mockHandleContext) SerializeToBytes() []byte          { return nil }
 func (c *mockHandleContext) SerializeToWriter(io.Writer) error { return nil }
 
 func TestComputeCpHash(t *testing.T) {
-	h := sha256.New()
+	h := crypto.SHA256.New()
 	h.Write([]byte("foo"))
 	name, _ := mu.MarshalToBytes(HashAlgorithmSHA256, mu.RawBytes(h.Sum(nil)))
 	rc := &mockHandleContext{name}
@@ -309,7 +309,7 @@ func TestTrialPolicySigned(t *testing.T) {
 			}
 			defer flushContext(t, tpm, sessionContext)
 
-			h := sha256.New()
+			h := crypto.SHA256.New()
 			binary.Write(h, binary.BigEndian, int32(0))
 			h.Write(data.policyRef)
 			aHash := h.Sum(nil)

@@ -503,6 +503,9 @@ const (
 	AlgorithmECC            AlgorithmId = 0x0023 // TPM_ALG_ECC
 	AlgorithmSymCipher      AlgorithmId = 0x0025 // TPM_ALG_SYMCIPHER
 	AlgorithmCamellia       AlgorithmId = 0x0026 // TPM_ALG_CAMELLIA
+	AlgorithmSHA3_256       AlgorithmId = 0x0027 // TPM_ALG_SHA3_256
+	AlgorithmSHA3_384       AlgorithmId = 0x0028 // TPM_ALG_SHA3_384
+	AlgorithmSHA3_512       AlgorithmId = 0x0029 // TPM_ALG_SHA3_512
 	AlgorithmCTR            AlgorithmId = 0x0040 // TPM_ALG_CTR
 	AlgorithmOFB            AlgorithmId = 0x0041 // TPM_ALG_OFB
 	AlgorithmCBC            AlgorithmId = 0x0042 // TPM_ALG_CBC
@@ -513,12 +516,15 @@ const (
 )
 
 const (
-	HashAlgorithmNull    HashAlgorithmId = HashAlgorithmId(AlgorithmNull)    // TPM_ALG_NULL
-	HashAlgorithmSHA1    HashAlgorithmId = HashAlgorithmId(AlgorithmSHA1)    // TPM_ALG_SHA1
-	HashAlgorithmSHA256  HashAlgorithmId = HashAlgorithmId(AlgorithmSHA256)  // TPM_ALG_SHA256
-	HashAlgorithmSHA384  HashAlgorithmId = HashAlgorithmId(AlgorithmSHA384)  // TPM_ALG_SHA384
-	HashAlgorithmSHA512  HashAlgorithmId = HashAlgorithmId(AlgorithmSHA512)  // TPM_ALG_SHA512
-	HashAlgorithmSM3_256 HashAlgorithmId = HashAlgorithmId(AlgorithmSM3_256) // TPM_ALG_SM3_256
+	HashAlgorithmNull     HashAlgorithmId = HashAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
+	HashAlgorithmSHA1     HashAlgorithmId = HashAlgorithmId(AlgorithmSHA1)     // TPM_ALG_SHA1
+	HashAlgorithmSHA256   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA256)   // TPM_ALG_SHA256
+	HashAlgorithmSHA384   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA384)   // TPM_ALG_SHA384
+	HashAlgorithmSHA512   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA512)   // TPM_ALG_SHA512
+	HashAlgorithmSM3_256  HashAlgorithmId = HashAlgorithmId(AlgorithmSM3_256)  // TPM_ALG_SM3_256
+	HashAlgorithmSHA3_256 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_256) // TPM_ALG_SHA3_256
+	HashAlgorithmSHA3_384 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_384) // TPM_ALG_SHA3_384
+	HashAlgorithmSHA3_512 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_512) // TPM_ALG_SHA3_512
 )
 
 const (

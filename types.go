@@ -137,7 +137,8 @@ func (a CommandAttributes) NumberOfCommandHandles() int {
 // HashAlgorithmId corresponds to the TPMI_ALG_HASH type
 type HashAlgorithmId AlgorithmId
 
-// GetHash returns the equivalent crypto.Hash value for this algorithm.
+// GetHash returns the equivalent crypto.Hash value for this algorithm if one
+// exists.
 func (a HashAlgorithmId) GetHash() crypto.Hash {
 	switch a {
 	case HashAlgorithmSHA1:
@@ -148,6 +149,12 @@ func (a HashAlgorithmId) GetHash() crypto.Hash {
 		return crypto.SHA384
 	case HashAlgorithmSHA512:
 		return crypto.SHA512
+	case HashAlgorithmSHA3_256:
+		return crypto.SHA3_256
+	case HashAlgorithmSHA3_384:
+		return crypto.SHA3_384
+	case HashAlgorithmSHA3_512:
+		return crypto.SHA3_512
 	default:
 		return 0
 	}
@@ -158,8 +165,14 @@ func (a HashAlgorithmId) Supported() bool {
 	return a.GetHash() != crypto.Hash(0)
 }
 
-// NewHash constructs a new hash.Hash implementation for this algorithm. It will panic if HashAlgorithmId.Supported
-// returns false.
+// Available determines if the TPM digest algorithm has an equivalent go crypto.Hash
+// that is linked into the current binary.
+func (a HashAlgorithmId) Available() bool {
+	return a.GetHash().Available()
+}
+
+// NewHash constructs a new hash.Hash implementation for this algorithm. It will panic if
+// HashAlgorithmId.Available returns false.
 func (a HashAlgorithmId) NewHash() hash.Hash {
 	return a.GetHash().New()
 }
@@ -1423,8 +1436,8 @@ type Public struct {
 
 // Name computes the name of this object
 func (p *Public) Name() (Name, error) {
-	if !p.NameAlg.Supported() {
-		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
+	if !p.NameAlg.Available() {
+		return nil, fmt.Errorf("unsupported name algorithm or algorithm not linked into binary: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
 	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
@@ -1485,8 +1498,8 @@ type PublicDerived struct {
 
 // Name computes the name of this object
 func (p *PublicDerived) Name() (Name, error) {
-	if !p.NameAlg.Supported() {
-		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
+	if !p.NameAlg.Available() {
+		return nil, fmt.Errorf("unsupported name algorithm or algorithm not linked into binary: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
 	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
@@ -1627,8 +1640,8 @@ type NVPublic struct {
 
 // Name computes the name of this NV index
 func (p *NVPublic) Name() (Name, error) {
-	if !p.NameAlg.Supported() {
-		return nil, fmt.Errorf("unsupported name algorithm: %v", p.NameAlg)
+	if !p.NameAlg.Available() {
+		return nil, fmt.Errorf("unsupported name algorithm or algorithm not linked into binary: %v", p.NameAlg)
 	}
 	hasher := p.NameAlg.NewHash()
 	if _, err := mu.MarshalToWriter(hasher, p); err != nil {

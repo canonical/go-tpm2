@@ -69,7 +69,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
 	}
 	if !authHash.Supported() {
-		return nil, makeInvalidArgError("authHash", fmt.Sprintf("unsupported digest algorithm %v", authHash))
+		return nil, makeInvalidArgError("authHash", fmt.Sprintf("unsupported digest algorithm or algorithm not linked in to binary (%v)", authHash))
 	}
 	digestSize := authHash.Size()
 

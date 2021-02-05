@@ -25,6 +25,10 @@ import (
 // The result of this is useful for extended authorization commands that bind an authorization to a command and set of command
 // parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret, TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
 func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...interface{}) (Digest, error) {
+	if !hashAlg.Available() {
+		return nil, fmt.Errorf("unsupported digest algorithm or algorithm not linked in to binary (%v)", hashAlg)
+	}
+
 	var handles []Name
 	var i int
 
@@ -60,8 +64,8 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 // selections. The digest is computed the same way as PCRComputeCurrentDigest as defined in the TPM reference implementation.
 // It is most useful for computing an input to TPMContext.PolicyPCR, and validating quotes and creation data.
 func ComputePCRDigest(alg HashAlgorithmId, pcrs PCRSelectionList, values PCRValues) (Digest, error) {
-	if !alg.Supported() {
-		return nil, fmt.Errorf("unknown digest algorithm %v", alg)
+	if !alg.Available() {
+		return nil, fmt.Errorf("unsupported digest algorithm or algorithm not linked in to binary (%v)", alg)
 	}
 	h := alg.NewHash()
 
@@ -85,7 +89,7 @@ func ComputePCRDigest(alg HashAlgorithmId, pcrs PCRSelectionList, values PCRValu
 }
 
 func ComputePCRDigestSimple(alg HashAlgorithmId, values PCRValues) (PCRSelectionList, Digest, error) {
-	if !alg.Supported() {
+	if !alg.Available() {
 		return nil, nil, fmt.Errorf("unknown digest algorithm %v", alg)
 	}
 
@@ -108,8 +112,8 @@ type TrialAuthPolicy struct {
 
 // ComputeAuthPolicy creates a new context for computing an authorization policy digest.
 func ComputeAuthPolicy(alg HashAlgorithmId) (*TrialAuthPolicy, error) {
-	if !alg.Supported() {
-		return nil, errors.New("invalid algorithm")
+	if !alg.Available() {
+		return nil, errors.New("unsupported digest algorithm or algorithm not linked in to binary")
 	}
 	return &TrialAuthPolicy{alg: alg, digest: make(Digest, alg.Size())}, nil
 }

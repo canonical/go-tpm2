@@ -110,7 +110,7 @@ func TestStartAuthSession(t *testing.T) {
 			desc:        "HMACUnboundUnsaltedInvalidAlg",
 			sessionType: SessionTypeHMAC,
 			alg:         HashAlgorithmNull,
-			errMsg:      "invalid authHash argument: unsupported digest algorithm TPM_ALG_NULL",
+			errMsg:      "invalid authHash argument: unsupported digest algorithm or algorithm not linked in to binary (TPM_ALG_NULL)",
 		},
 		{
 			desc:        "HMACUnboundSaltedInvalidKey",

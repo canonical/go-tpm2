@@ -9,7 +9,6 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/binary"
 	"testing"
 	"time"
@@ -88,7 +87,7 @@ func TestPolicySigned(t *testing.T) {
 			}
 			defer flushContext(t, tpm, sessionContext)
 
-			h := sha256.New()
+			h := crypto.SHA256.New()
 			if data.includeNonceTPM {
 				h.Write(sessionContext.NonceTPM())
 			}
@@ -421,7 +420,7 @@ func TestPolicyTicketFromSigned(t *testing.T) {
 			}
 			defer flushContext(t, tpm, sessionContext1)
 
-			h := sha256.New()
+			h := crypto.SHA256.New()
 			h.Write(sessionContext1.NonceTPM())
 			binary.Write(h, binary.BigEndian, int32(-60))
 			h.Write(data.cpHashA)
@@ -476,7 +475,7 @@ func TestPolicyOR(t *testing.T) {
 
 	digestList := []Digest{digest}
 	for i := 0; i < 4; i++ {
-		digest := make(Digest, sha256.Size)
+		digest := make(Digest, crypto.SHA256.Size())
 		if _, err := rand.Read(digest); err != nil {
 			t.Fatalf("Failed to get random data: %v", err)
 		}
