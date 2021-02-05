@@ -7,66 +7,10 @@ package internal
 import (
 	"bytes"
 	"crypto"
-	"crypto/hmac"
 	"encoding/binary"
-	"hash"
 
 	"github.com/canonical/go-sp800.108-kdf"
 )
-
-func getHashConstructor(hashAlg crypto.Hash) func() hash.Hash {
-	return func() hash.Hash {
-		return hashAlg.New()
-	}
-}
-
-func internalKDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, sizeInBits int, counterInOut *int, once bool) []byte {
-	digestSize := hashAlg.Size()
-	if once && sizeInBits&7 > 0 {
-		panic("sizeInBits must be a multiple of 8 when called with once == true")
-	}
-
-	counter := 0
-	if counterInOut != nil {
-		counter = *counterInOut
-	}
-	var nbytes int
-	if once {
-		nbytes = digestSize
-	} else {
-		nbytes = (sizeInBits + 7) / 8
-	}
-
-	buf := new(bytes.Buffer)
-
-	for ; nbytes > 0; nbytes -= digestSize {
-		counter++
-		if nbytes < digestSize {
-			digestSize = nbytes
-		}
-
-		h := hmac.New(getHashConstructor(hashAlg), key)
-
-		binary.Write(h, binary.BigEndian, uint32(counter))
-		h.Write(label)
-		h.Write([]byte{0})
-		h.Write(contextU)
-		h.Write(contextV)
-		binary.Write(h, binary.BigEndian, uint32(sizeInBits))
-
-		buf.Write(h.Sum(nil)[0:digestSize])
-	}
-
-	outKey := buf.Bytes()
-
-	if sizeInBits%8 != 0 {
-		outKey[0] &= ((1 << uint(sizeInBits%8)) - 1)
-	}
-	if counterInOut != nil {
-		*counterInOut = counter
-	}
-	return outKey
-}
 
 func KDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, sizeInBits int) []byte {
 	context := make([]byte, len(contextU)+len(contextV))
