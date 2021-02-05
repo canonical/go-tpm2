@@ -10,6 +10,8 @@ import (
 	"crypto/hmac"
 	"encoding/binary"
 	"hash"
+
+	"github.com/canonical/go-sp800.108-kdf"
 )
 
 func getHashConstructor(hashAlg crypto.Hash) func() hash.Hash {
@@ -67,20 +69,22 @@ func internalKDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, si
 }
 
 func KDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, sizeInBits int) []byte {
-	return internalKDFa(hashAlg, key, label, contextU, contextV, sizeInBits, nil, false)
+	context := make([]byte, len(contextU)+len(contextV))
+	copy(context, contextU)
+	copy(context[len(contextU):], contextV)
+	return kdf.CounterModeKey(kdf.NewHMACPRF(hashAlg), key, label, context, uint32(sizeInBits))
 }
 
 func KDFe(hashAlg crypto.Hash, z, label, partyUInfo, partyVInfo []byte, sizeInBits int) []byte {
 	digestSize := hashAlg.Size()
 
-	counter := 0
-	buf := new(bytes.Buffer)
+	counter := 1
+	var res bytes.Buffer
 
-	for bytes := (sizeInBits + 7) / 8; bytes > 0; bytes -= digestSize {
+	for bytes := (sizeInBits + 7) / 8; bytes > 8; bytes -= digestSize {
 		if bytes < digestSize {
 			digestSize = bytes
 		}
-		counter++
 
 		h := hashAlg.New()
 
@@ -91,10 +95,10 @@ func KDFe(hashAlg crypto.Hash, z, label, partyUInfo, partyVInfo []byte, sizeInBi
 		h.Write(partyUInfo)
 		h.Write(partyVInfo)
 
-		buf.Write(h.Sum(nil)[0:digestSize])
+		res.Write(h.Sum(nil)[0:digestSize])
 	}
 
-	outKey := buf.Bytes()
+	outKey := res.Bytes()
 
 	if sizeInBits%8 != 0 {
 		outKey[0] &= ((1 << uint(sizeInBits%8)) - 1)
