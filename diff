@@ -1,0 +1,632 @@
+commit f137c94eef79f959d60e6f6d9e9b092957567516
+Author: Chris Coulson <chris.coulson@canonical.com>
+Date:   Fri Feb 5 23:24:07 2021 +0000
+
+    Support symmetric encryption with more algorithms and cipher modes
+
+diff --git a/constants.go b/constants.go
+index 5913b09..8f14275 100644
+--- a/constants.go
++++ b/constants.go
+@@ -475,6 +475,7 @@ const (
+ const (
+ 	AlgorithmError          AlgorithmId = 0x0000 // TPM_ALG_ERROR
+ 	AlgorithmRSA            AlgorithmId = 0x0001 // TPM_ALG_RSA
++	AlgorithmTDES           AlgorithmId = 0x0003 // TPM_ALG_TDES
+ 	AlgorithmSHA1           AlgorithmId = 0x0004 // TPM_ALG_SHA1
+ 	AlgorithmHMAC           AlgorithmId = 0x0005 // TPM_ALG_HMAC
+ 	AlgorithmAES            AlgorithmId = 0x0006 // TPM_ALG_AES
+@@ -528,6 +529,7 @@ const (
+ )
+ 
+ const (
++	SymAlgorithmTDES     SymAlgorithmId = SymAlgorithmId(AlgorithmTDES)     // TPM_ALG_TDES
+ 	SymAlgorithmAES      SymAlgorithmId = SymAlgorithmId(AlgorithmAES)      // TPM_ALG_AES
+ 	SymAlgorithmXOR      SymAlgorithmId = SymAlgorithmId(AlgorithmXOR)      // TPM_ALG_XOR
+ 	SymAlgorithmNull     SymAlgorithmId = SymAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
+diff --git a/crypto.go b/crypto.go
+index 9c17313..dadc59c 100644
+--- a/crypto.go
++++ b/crypto.go
+@@ -5,17 +5,108 @@
+ package tpm2
+ 
+ import (
++	"crypto/aes"
++	"crypto/cipher"
+ 	"crypto/elliptic"
+ 	"crypto/rand"
+ 	"crypto/rsa"
+ 	"encoding/binary"
++	"errors"
+ 	"fmt"
+ 	"math/big"
+ 
+ 	"github.com/canonical/go-tpm2/internal"
+ 	"github.com/canonical/go-tpm2/mu"
++
++	"golang.org/x/xerrors"
+ )
+ 
++type NewCipherFunc func([]byte) (cipher.Block, error)
++type NewSymStreamModeFunc func(cipher.Block, []byte) cipher.Stream
++type NewSymBlockModeFunc func(cipher.Block, []byte) cipher.BlockMode
++
++type SymStreamModeFuncs struct {
++	Encrypt NewSymStreamModeFunc
++	Decrypt NewSymStreamModeFunc
++}
++
++type SymBlockModeFuncs struct {
++	Encrypt NewSymBlockModeFunc
++	Decrypt NewSymBlockModeFunc
++}
++
++type ecb struct {
++	block cipher.Block
++}
++
++type ecbEncrypter ecb
++
++func (b *ecbEncrypter) BlockSize() int {
++	return b.block.BlockSize()
++}
++
++func (b *ecbEncrypter) CryptBlocks(dst, src []byte) {
++	b.block.Encrypt(dst, src)
++}
++
++func newECBEncrypter(block cipher.Block, iv []byte) cipher.BlockMode {
++	return &ecbEncrypter{block}
++}
++
++type ecbDecrypter ecb
++
++func (b *ecbDecrypter) BlockSize() int {
++	return b.block.BlockSize()
++}
++
++func (b *ecbDecrypter) CryptBlocks(dst, src []byte) {
++	b.block.Decrypt(dst, src)
++}
++
++func newECBDecrypter(block cipher.Block, iv []byte) cipher.BlockMode {
++	return &ecbDecrypter{block}
++}
++
++type symmetricCipher struct {
++	fn        NewCipherFunc
++	blockSize int
++}
++
++var (
++	symmetricAlgs = map[SymAlgorithmId]*symmetricCipher{
++		SymAlgorithmAES: &symmetricCipher{aes.NewCipher, aes.BlockSize},
++	}
++
++	symmetricStreamModes = map[SymModeId]*SymStreamModeFuncs{
++		SymModeCTR: &SymStreamModeFuncs{cipher.NewCTR, cipher.NewCTR},
++		SymModeOFB: &SymStreamModeFuncs{cipher.NewOFB, cipher.NewOFB},
++		SymModeCFB: &SymStreamModeFuncs{cipher.NewCFBEncrypter, cipher.NewCFBDecrypter},
++	}
++
++	symmetricBlockModes = map[SymModeId]*SymBlockModeFuncs{
++		SymModeCBC: &SymBlockModeFuncs{cipher.NewCBCEncrypter, cipher.NewCBCDecrypter},
++		SymModeECB: &SymBlockModeFuncs{newECBEncrypter, newECBDecrypter},
++	}
++)
++
++// RegisterCipher allows a go block cipher implementation to be registered for the
++// specified algorithm, so binaries don't need to link against every implementation.
++func RegisterCipher(alg SymAlgorithmId, fn NewCipherFunc, blockSize int) {
++	symmetricAlgs[alg] = &symmetricCipher{fn, blockSize}
++}
++
++// RegisterSymStreamMode allows a go stream cipher mode implementation to be registered
++// for the specified mode, so binaries don't need to link against every implementation.
++func RegisterSymStreamMode(mode SymModeId, fns *SymStreamModeFuncs) {
++	symmetricStreamModes[mode] = fns
++}
++
++// RegisterSymBlockMode allows a go block cipher mode implementation to be registered
++// for the specified mode, so binaries don't need to link against every implementation.
++func RegisterSymBlockMode(mode SymModeId, fns *SymBlockModeFuncs) {
++	symmetricBlockModes[mode] = fns
++}
++
+ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
+ 	switch curve {
+ 	case ECCCurveNIST_P224:
+@@ -30,6 +121,44 @@ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
+ 	return nil
+ }
+ 
++func streamSymmetricEncryptDecrypt(alg SymAlgorithmId, key []byte, newMode NewSymStreamModeFunc, iv, data []byte) error {
++	c, err := alg.NewCipher(key)
++	if err != nil {
++		return xerrors.Errorf("cannot construct new block cipher: %w", err)
++	}
++
++	stream := newMode(c, iv)
++	stream.XORKeyStream(data, data)
++	return nil
++}
++
++func streamSymmetricEncrypt(alg SymAlgorithmId, key []byte, mode SymModeId, iv, data []byte) error {
++	return streamSymmetricEncryptDecrypt(alg, key, mode.NewStreamModeEncrypter, iv, data)
++}
++
++func streamSymmetricDecrypt(alg SymAlgorithmId, key []byte, mode SymModeId, iv, data []byte) error {
++	return streamSymmetricEncryptDecrypt(alg, key, mode.NewStreamModeDecrypter, iv, data)
++}
++
++func blockSymmetricEncryptDecrypt(alg SymAlgorithmId, key []byte, newMode NewSymBlockModeFunc, iv, data []byte) error {
++	c, err := alg.NewCipher(key)
++	if err != nil {
++		return xerrors.Errorf("cannot construct new block cipher: %w", err)
++	}
++
++	block := newMode(c, iv)
++	block.CryptBlocks(data, data)
++	return nil
++}
++
++func blockSymmetricEncrypt(alg SymAlgorithmId, key []byte, mode SymModeId, iv, data []byte) error {
++	return blockSymmetricEncryptDecrypt(alg, key, mode.NewBlockModeEncrypter, iv, data)
++}
++
++func blockSymmetricDecrypt(alg SymAlgorithmId, key []byte, mode SymModeId, iv, data []byte) error {
++	return blockSymmetricEncryptDecrypt(alg, key, mode.NewBlockModeDecrypter, iv, data)
++}
++
+ func cryptComputeCpHash(hashAlg HashAlgorithmId, commandCode CommandCode, commandHandles []Name,
+ 	cpBytes []byte) []byte {
+ 	hash := hashAlg.NewHash()
+@@ -58,6 +187,38 @@ func cryptComputeNonce(nonce []byte) error {
+ 	return err
+ }
+ 
++func cryptSymmetricEncrypt(symmetric *SymDef, key, iv, data []byte) error {
++	switch symmetric.Algorithm {
++	case SymAlgorithmXOR, SymAlgorithmNull:
++		return errors.New("unsupported symmetric algorithm")
++	default:
++		switch symmetric.Mode.Sym {
++		case SymModeCTR, SymModeOFB, SymModeCFB:
++			return streamSymmetricEncrypt(symmetric.Algorithm, key, symmetric.Mode.Sym, iv, data)
++		case SymModeCBC, SymModeECB:
++			return blockSymmetricEncrypt(symmetric.Algorithm, key, symmetric.Mode.Sym, iv, data)
++		default:
++			return errors.New("unsupported cipher mode")
++		}
++	}
++}
++
++func cryptSymmetricDecrypt(symmetric *SymDef, key, iv, data []byte) error {
++	switch symmetric.Algorithm {
++	case SymAlgorithmXOR, SymAlgorithmNull:
++		return errors.New("unsupported symmetric algorithm")
++	default:
++		switch symmetric.Mode.Sym {
++		case SymModeCTR, SymModeOFB, SymModeCFB:
++			return streamSymmetricDecrypt(symmetric.Algorithm, key, symmetric.Mode.Sym, iv, data)
++		case SymModeCBC, SymModeECB:
++			return blockSymmetricDecrypt(symmetric.Algorithm, key, symmetric.Mode.Sym, iv, data)
++		default:
++			return errors.New("unsupported cipher mode")
++		}
++	}
++}
++
+ func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []byte) ([]byte, error) {
+ 	if public.Type != ObjectTypeRSA {
+ 		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
+diff --git a/crypto_test.go b/crypto_test.go
+deleted file mode 100644
+index a82b038..0000000
+--- a/crypto_test.go
++++ /dev/null
+@@ -1,62 +0,0 @@
+-// Copyright 2019 Canonical Ltd.
+-// Licensed under the LGPLv3 with static-linking exception.
+-// See LICENCE file for details.
+-
+-package tpm2_test
+-
+-import (
+-	"reflect"
+-	"testing"
+-
+-	. "github.com/canonical/go-tpm2"
+-	"github.com/canonical/go-tpm2/internal"
+-)
+-
+-func TestCryptoSymmetricModeConversions(t *testing.T) {
+-	if reflect.TypeOf(SymModeId(0)).Kind() != reflect.TypeOf(internal.SymmetricMode(0)).Kind() {
+-		t.Errorf("Incompatible types")
+-	}
+-
+-	for _, data := range []struct {
+-		desc       string
+-		mode       SymModeId
+-		cryptoMode internal.SymmetricMode
+-	}{
+-		{
+-			desc:       "SymModeNull",
+-			mode:       SymModeNull,
+-			cryptoMode: internal.SymmetricModeNull,
+-		},
+-		{
+-			desc:       "SymModeCTR",
+-			mode:       SymModeCTR,
+-			cryptoMode: internal.SymmetricModeCTR,
+-		},
+-		{
+-			desc:       "SymModeOFB",
+-			mode:       SymModeOFB,
+-			cryptoMode: internal.SymmetricModeOFB,
+-		},
+-		{
+-			desc:       "SymModeCBC",
+-			mode:       SymModeCBC,
+-			cryptoMode: internal.SymmetricModeCBC,
+-		},
+-		{
+-			desc:       "SymModeCFB",
+-			mode:       SymModeCFB,
+-			cryptoMode: internal.SymmetricModeCFB,
+-		},
+-		{
+-			desc:       "SymModeECB",
+-			mode:       SymModeECB,
+-			cryptoMode: internal.SymmetricModeECB,
+-		},
+-	} {
+-		t.Run(data.desc, func(t *testing.T) {
+-			if uint16(data.mode) != uint16(data.cryptoMode) {
+-				t.Errorf("Invalid value (%d vs %d)", data.mode, data.cryptoMode)
+-			}
+-		})
+-	}
+-}
+diff --git a/internal/crypto.go b/internal/crypto.go
+index b1adac9..9bfe9be 100644
+--- a/internal/crypto.go
++++ b/internal/crypto.go
+@@ -7,25 +7,11 @@ package internal
+ import (
+ 	"bytes"
+ 	"crypto"
+-	"crypto/aes"
+-	"crypto/cipher"
+ 	"crypto/hmac"
+ 	"encoding/binary"
+-	"fmt"
+ 	"hash"
+ )
+ 
+-type SymmetricMode uint16
+-
+-const (
+-	SymmetricModeNull SymmetricMode = 0x0010 // TPM_ALG_NULL
+-	SymmetricModeCTR  SymmetricMode = 0x0040 // TPM_ALG_CTR
+-	SymmetricModeOFB  SymmetricMode = 0x0041 // TPM_ALG_OFB
+-	SymmetricModeCBC  SymmetricMode = 0x0042 // TPM_ALG_CBC
+-	SymmetricModeCFB  SymmetricMode = 0x0043 // TPM_ALG_CFB
+-	SymmetricModeECB  SymmetricMode = 0x0044 // TPM_ALG_ECB
+-)
+-
+ func getHashConstructor(hashAlg crypto.Hash) func() hash.Hash {
+ 	return func() hash.Hash {
+ 		return hashAlg.New()
+@@ -116,36 +102,6 @@ func KDFe(hashAlg crypto.Hash, z, label, partyUInfo, partyVInfo []byte, sizeInBi
+ 	return outKey
+ }
+ 
+-func EncryptSymmetricAES(key []byte, mode SymmetricMode, data, iv []byte) error {
+-	block, err := aes.NewCipher(key)
+-	if err != nil {
+-		return fmt.Errorf("cannot construct new block cipher: %v", err)
+-	}
+-
+-	if mode != SymmetricModeCFB {
+-		return fmt.Errorf("unsupported block cipher mode %v", mode)
+-	}
+-
+-	stream := cipher.NewCFBEncrypter(block, iv)
+-	stream.XORKeyStream(data, data)
+-	return nil
+-}
+-
+-func DecryptSymmetricAES(key []byte, mode SymmetricMode, data, iv []byte) error {
+-	block, err := aes.NewCipher(key)
+-	if err != nil {
+-		return fmt.Errorf("cannot construct new block cipher: %v", err)
+-	}
+-
+-	if mode != SymmetricModeCFB {
+-		return fmt.Errorf("unsupported block cipher mode %v", mode)
+-	}
+-
+-	stream := cipher.NewCFBDecrypter(block, iv)
+-	stream.XORKeyStream(data, data)
+-	return nil
+-}
+-
+ func XORObfuscation(hashAlg crypto.Hash, key []byte, contextU, contextV, data []byte) {
+ 	digestSize := hashAlg.Size()
+ 
+diff --git a/internal/crypto_test.go b/internal/crypto_test.go
+index 2741e1e..f42e30c 100644
+--- a/internal/crypto_test.go
++++ b/internal/crypto_test.go
+@@ -7,7 +7,6 @@ package internal_test
+ import (
+ 	"bytes"
+ 	"crypto"
+-	"crypto/aes"
+ 	"crypto/rand"
+ 	_ "crypto/sha1"
+ 	_ "crypto/sha256"
+@@ -16,48 +15,6 @@ import (
+ 	. "github.com/canonical/go-tpm2/internal"
+ )
+ 
+-func TestSymmetricAES(t *testing.T) {
+-	for _, data := range []struct {
+-		desc      string
+-		keyLength int
+-		data      []byte
+-	}{
+-		{
+-			desc:      "128",
+-			keyLength: 16,
+-			data:      []byte("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"),
+-		},
+-		{
+-			desc:      "256",
+-			keyLength: 32,
+-			data:      []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"),
+-		},
+-	} {
+-		t.Run(data.desc, func(t *testing.T) {
+-			key := make([]byte, data.keyLength)
+-			rand.Read(key)
+-
+-			iv := make([]byte, aes.BlockSize)
+-			rand.Read(iv)
+-
+-			var secret []byte
+-			secret = append(secret, data.data...)
+-
+-			if err := EncryptSymmetricAES(key, SymmetricModeCFB, secret, iv); err != nil {
+-				t.Fatalf("AES encryption failed: %v", err)
+-			}
+-
+-			if err := DecryptSymmetricAES(key, SymmetricModeCFB, secret, iv); err != nil {
+-				t.Fatalf("AES decryption failed: %v", err)
+-			}
+-
+-			if !bytes.Equal(secret, data.data) {
+-				t.Errorf("Encrypt / decrypt with AES didn't produce the original data")
+-			}
+-		})
+-	}
+-}
+-
+ func TestXORObfuscation(t *testing.T) {
+ 	for _, data := range []struct {
+ 		desc      string
+diff --git a/paramcrypt.go b/paramcrypt.go
+index bee5814..f7273b8 100644
+--- a/paramcrypt.go
++++ b/paramcrypt.go
+@@ -7,6 +7,7 @@ package tpm2
+ import (
+ 	"crypto/aes"
+ 	"encoding/binary"
++	"errors"
+ 	"fmt"
+ 
+ 	"github.com/canonical/go-tpm2/internal"
+@@ -59,11 +60,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
+ 	}
+ 
+ 	sessionData := s.session.Data()
+-
+ 	hashAlg := sessionData.HashAlg
+-	if !hashAlg.Supported() {
+-		return fmt.Errorf("invalid digest algorithm: %v", hashAlg)
+-	}
+ 
+ 	sessionValue := s.computeSessionValue()
+ 
+@@ -74,12 +71,15 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
+ 
+ 	switch symmetric.Algorithm {
+ 	case SymAlgorithmAES:
++		if symmetric.Mode.Sym != SymModeCFB {
++			return errors.New("unsupported cipher mode")
++		}
+ 		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceCaller, sessionData.NonceTPM,
+ 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
+ 		offset := (symmetric.KeyBits.Sym + 7) / 8
+ 		symKey := k[0:offset]
+ 		iv := k[offset:]
+-		if err := internal.EncryptSymmetricAES(symKey, internal.SymmetricMode(symmetric.Mode.Sym), data, iv); err != nil {
++		if err := cryptSymmetricEncrypt(symmetric, symKey, iv, data); err != nil {
+ 			return fmt.Errorf("AES encryption failed: %v", err)
+ 		}
+ 	case SymAlgorithmXOR:
+@@ -102,11 +102,7 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
+ 	}
+ 
+ 	sessionData := s.session.Data()
+-
+ 	hashAlg := sessionData.HashAlg
+-	if !hashAlg.Supported() {
+-		return fmt.Errorf("invalid digest algorithm: %v", hashAlg)
+-	}
+ 
+ 	sessionValue := s.computeSessionValue()
+ 
+@@ -117,12 +113,15 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
+ 
+ 	switch symmetric.Algorithm {
+ 	case SymAlgorithmAES:
++		if symmetric.Mode.Sym != SymModeCFB {
++			return errors.New("unsupported cipher mode")
++		}
+ 		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceTPM, sessionData.NonceCaller,
+ 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
+ 		offset := (symmetric.KeyBits.Sym + 7) / 8
+ 		symKey := k[0:offset]
+ 		iv := k[offset:]
+-		if err := internal.DecryptSymmetricAES(symKey, internal.SymmetricMode(symmetric.Mode.Sym), data, iv); err != nil {
++		if err := cryptSymmetricDecrypt(symmetric, symKey, iv, data); err != nil {
+ 			return fmt.Errorf("AES encryption failed: %v", err)
+ 		}
+ 	case SymAlgorithmXOR:
+diff --git a/resources.go b/resources.go
+index 0ef9c10..6fbe131 100644
+--- a/resources.go
++++ b/resources.go
+@@ -263,15 +263,12 @@ func (h *handleContext) checkConsistency() error {
+ 				return errors.New("unexpected nonce size for session context")
+ 			}
+ 			switch scData.Symmetric.Algorithm {
+-			case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull, SymAlgorithmSM4, SymAlgorithmCamellia:
++			case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull:
+ 			default:
+ 				return errors.New("invalid symmetric algorithm for session context")
+ 			}
+-			switch scData.Symmetric.Algorithm {
+-			case SymAlgorithmAES, SymAlgorithmSM4, SymAlgorithmCamellia:
+-				if scData.Symmetric.Mode.Sym != SymModeCFB {
+-					return errors.New("invalid symmetric mode for session context")
+-				}
++			if scData.Symmetric.Algorithm == SymAlgorithmAES && scData.Symmetric.Mode.Sym != SymModeCFB {
++				return errors.New("invalid symmetric mode for session context")
+ 			}
+ 		}
+ 	default:
+diff --git a/strings.go b/strings.go
+index cd55487..c60c9e3 100644
+--- a/strings.go
++++ b/strings.go
+@@ -550,6 +550,8 @@ func (a AlgorithmId) String() string {
+ 	switch a {
+ 	case AlgorithmRSA:
+ 		return "TPM_ALG_RSA"
++	case AlgorithmTDES:
++		return "TPM_ALG_TDES"
+ 	case AlgorithmSHA1:
+ 		return "TPM_ALG_SHA1"
+ 	case AlgorithmHMAC:
+diff --git a/types.go b/types.go
+index 0ea44aa..9f1b1f2 100644
+--- a/types.go
++++ b/types.go
+@@ -7,6 +7,7 @@ package tpm2
+ import (
+ 	"bytes"
+ 	"crypto"
++	"crypto/cipher"
+ 	"crypto/elliptic"
+ 	_ "crypto/sha1"
+ 	_ "crypto/sha256"
+@@ -185,12 +186,94 @@ func (a HashAlgorithmId) Size() int {
+ // SymAlgorithmId corresponds to the TPMI_ALG_SYM type
+ type SymAlgorithmId AlgorithmId
+ 
++// Available indicates whether the TPM symmetric cipher has a registered go implementation.
++func (a SymAlgorithmId) Available() bool {
++	_, ok := symmetricAlgs[a]
++	return ok
++}
++
++// BlockSize indicates the block size of the symmetric cipher. This will panic if there
++// is no registered go implementation of the cipher or the algorithm does not correspond
++// to a symmetric cipher.
++func (a SymAlgorithmId) BlockSize() int {
++	c, ok := symmetricAlgs[a]
++	if !ok {
++		panic("unsupported cipher")
++	}
++	return c.blockSize
++}
++
++// NewCipher constructs a new symmetric cipher with the supplied key, if there is a go
++// implementation registered.
++func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
++	c, ok := symmetricAlgs[a]
++	if !ok {
++		return nil, errors.New("unavailable cipher")
++	}
++	return c.fn(key)
++}
++
+ // SymObjectAlgorithmId corresponds to the TPMI_ALG_SYM_OBJECT type
+ type SymObjectAlgorithmId AlgorithmId
+ 
+ // SymModeId corresponds to the TPMI_ALG_SYM_MODE type
+ type SymModeId AlgorithmId
+ 
++// Available indicates whether the TPM symmetric cipher mode has a registered go
++// implementation.
++func (m SymModeId) Available() bool {
++	switch m {
++	case SymModeCTR, SymModeOFB, SymModeCFB:
++		_, ok := symmetricStreamModes[m]
++		return ok
++	case SymModeCBC, SymModeECB:
++		_, ok := symmetricBlockModes[m]
++		return ok
++	default:
++		return false
++	}
++}
++
++// NewStreamModeEncrypter constructs a new symmetric stream mode encrypter. This will
++// panic if the mode is not a stream mode or there is no go implementation registered.
++func (m SymModeId) NewStreamModeEncrypter(c cipher.Block, iv []byte) cipher.Stream {
++	fns, ok := symmetricStreamModes[m]
++	if !ok {
++		panic("unsupported stream mode")
++	}
++	return fns.Encrypt(c, iv)
++}
++
++// NewStreamModeDecrypter constructs a new symmetric stream mode decrypter. This will
++// panic if the mode is not a stream mode or there is no go implementation registered.
++func (m SymModeId) NewStreamModeDecrypter(c cipher.Block, iv []byte) cipher.Stream {
++	fns, ok := symmetricStreamModes[m]
++	if !ok {
++		panic("unsupported stream mode")
++	}
++	return fns.Decrypt(c, iv)
++}
++
++// NewBlockModeEncrypter constructs a new symmetric block mode encrypter. This will
++// panic if the mode is not a block mode or there is no go implementation registered.
++func (m SymModeId) NewBlockModeEncrypter(c cipher.Block, iv []byte) cipher.BlockMode {
++	fns, ok := symmetricBlockModes[m]
++	if !ok {
++		panic("unsupported block mode")
++	}
++	return fns.Encrypt(c, iv)
++}
++
++// NewBlockModeDecrypter constructs a new symmetric block mode decrypter. This will
++// panic if the mode is not a block mode or there is no go implementation registered.
++func (m SymModeId) NewBlockModeDecrypter(c cipher.Block, iv []byte) cipher.BlockMode {
++	fns, ok := symmetricBlockModes[m]
++	if !ok {
++		panic("unsupported block mode")
++	}
++	return fns.Decrypt(c, iv)
++}
++
+ // KDFAlgorithmId corresppnds to the TPMI_ALG_KDF type
+ type KDFAlgorithmId AlgorithmId
+ 

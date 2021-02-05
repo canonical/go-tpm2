@@ -475,6 +475,7 @@ const (
 const (
 	AlgorithmError          AlgorithmId = 0x0000 // TPM_ALG_ERROR
 	AlgorithmRSA            AlgorithmId = 0x0001 // TPM_ALG_RSA
+	AlgorithmTDES           AlgorithmId = 0x0003 // TPM_ALG_TDES
 	AlgorithmSHA1           AlgorithmId = 0x0004 // TPM_ALG_SHA1
 	AlgorithmHMAC           AlgorithmId = 0x0005 // TPM_ALG_HMAC
 	AlgorithmAES            AlgorithmId = 0x0006 // TPM_ALG_AES
@@ -528,6 +529,7 @@ const (
 )
 
 const (
+	SymAlgorithmTDES     SymAlgorithmId = SymAlgorithmId(AlgorithmTDES)     // TPM_ALG_TDES
 	SymAlgorithmAES      SymAlgorithmId = SymAlgorithmId(AlgorithmAES)      // TPM_ALG_AES
 	SymAlgorithmXOR      SymAlgorithmId = SymAlgorithmId(AlgorithmXOR)      // TPM_ALG_XOR
 	SymAlgorithmNull     SymAlgorithmId = SymAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL

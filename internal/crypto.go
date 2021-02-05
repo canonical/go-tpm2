@@ -7,23 +7,9 @@ package internal
 import (
 	"bytes"
 	"crypto"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
 	"encoding/binary"
-	"fmt"
 	"hash"
-)
-
-type SymmetricMode uint16
-
-const (
-	SymmetricModeNull SymmetricMode = 0x0010 // TPM_ALG_NULL
-	SymmetricModeCTR  SymmetricMode = 0x0040 // TPM_ALG_CTR
-	SymmetricModeOFB  SymmetricMode = 0x0041 // TPM_ALG_OFB
-	SymmetricModeCBC  SymmetricMode = 0x0042 // TPM_ALG_CBC
-	SymmetricModeCFB  SymmetricMode = 0x0043 // TPM_ALG_CFB
-	SymmetricModeECB  SymmetricMode = 0x0044 // TPM_ALG_ECB
 )
 
 func getHashConstructor(hashAlg crypto.Hash) func() hash.Hash {
@@ -114,36 +100,6 @@ func KDFe(hashAlg crypto.Hash, z, label, partyUInfo, partyVInfo []byte, sizeInBi
 		outKey[0] &= ((1 << uint(sizeInBits%8)) - 1)
 	}
 	return outKey
-}
-
-func EncryptSymmetricAES(key []byte, mode SymmetricMode, data, iv []byte) error {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return fmt.Errorf("cannot construct new block cipher: %v", err)
-	}
-
-	if mode != SymmetricModeCFB {
-		return fmt.Errorf("unsupported block cipher mode %v", mode)
-	}
-
-	stream := cipher.NewCFBEncrypter(block, iv)
-	stream.XORKeyStream(data, data)
-	return nil
-}
-
-func DecryptSymmetricAES(key []byte, mode SymmetricMode, data, iv []byte) error {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return fmt.Errorf("cannot construct new block cipher: %v", err)
-	}
-
-	if mode != SymmetricModeCFB {
-		return fmt.Errorf("unsupported block cipher mode %v", mode)
-	}
-
-	stream := cipher.NewCFBDecrypter(block, iv)
-	stream.XORKeyStream(data, data)
-	return nil
 }
 
 func XORObfuscation(hashAlg crypto.Hash, key []byte, contextU, contextV, data []byte) {

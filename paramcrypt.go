@@ -7,6 +7,7 @@ package tpm2
 import (
 	"crypto/aes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/canonical/go-tpm2/internal"
@@ -59,11 +60,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 	}
 
 	sessionData := s.session.Data()
-
 	hashAlg := sessionData.HashAlg
-	if !hashAlg.Supported() {
-		return fmt.Errorf("invalid digest algorithm: %v", hashAlg)
-	}
 
 	sessionValue := s.computeSessionValue()
 
@@ -74,12 +71,15 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
+		if symmetric.Mode.Sym != SymModeCFB {
+			return errors.New("unsupported cipher mode")
+		}
 		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceCaller, sessionData.NonceTPM,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := internal.EncryptSymmetricAES(symKey, internal.SymmetricMode(symmetric.Mode.Sym), data, iv); err != nil {
+		if err := cryptSymmetricEncrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
@@ -102,11 +102,7 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 	}
 
 	sessionData := s.session.Data()
-
 	hashAlg := sessionData.HashAlg
-	if !hashAlg.Supported() {
-		return fmt.Errorf("invalid digest algorithm: %v", hashAlg)
-	}
 
 	sessionValue := s.computeSessionValue()
 
@@ -117,12 +113,15 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
+		if symmetric.Mode.Sym != SymModeCFB {
+			return errors.New("unsupported cipher mode")
+		}
 		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceTPM, sessionData.NonceCaller,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := internal.DecryptSymmetricAES(symKey, internal.SymmetricMode(symmetric.Mode.Sym), data, iv); err != nil {
+		if err := cryptSymmetricDecrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:

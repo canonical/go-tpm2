@@ -550,6 +550,8 @@ func (a AlgorithmId) String() string {
 	switch a {
 	case AlgorithmRSA:
 		return "TPM_ALG_RSA"
+	case AlgorithmTDES:
+		return "TPM_ALG_TDES"
 	case AlgorithmSHA1:
 		return "TPM_ALG_SHA1"
 	case AlgorithmHMAC:

@@ -263,15 +263,12 @@ func (h *handleContext) checkConsistency() error {
 				return errors.New("unexpected nonce size for session context")
 			}
 			switch scData.Symmetric.Algorithm {
-			case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull, SymAlgorithmSM4, SymAlgorithmCamellia:
+			case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull:
 			default:
 				return errors.New("invalid symmetric algorithm for session context")
 			}
-			switch scData.Symmetric.Algorithm {
-			case SymAlgorithmAES, SymAlgorithmSM4, SymAlgorithmCamellia:
-				if scData.Symmetric.Mode.Sym != SymModeCFB {
-					return errors.New("invalid symmetric mode for session context")
-				}
+			if scData.Symmetric.Algorithm == SymAlgorithmAES && scData.Symmetric.Mode.Sym != SymModeCFB {
+				return errors.New("invalid symmetric mode for session context")
 			}
 		}
 	default:

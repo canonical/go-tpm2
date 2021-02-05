@@ -7,6 +7,7 @@ package tpm2
 import (
 	"bytes"
 	"crypto"
+	"crypto/cipher"
 	"crypto/elliptic"
 	_ "crypto/sha1"
 	_ "crypto/sha256"
@@ -184,6 +185,33 @@ func (a HashAlgorithmId) Size() int {
 
 // SymAlgorithmId corresponds to the TPMI_ALG_SYM type
 type SymAlgorithmId AlgorithmId
+
+// Available indicates whether the TPM symmetric cipher has a registered go implementation.
+func (a SymAlgorithmId) Available() bool {
+	_, ok := symmetricAlgs[a]
+	return ok
+}
+
+// BlockSize indicates the block size of the symmetric cipher. This will panic if there
+// is no registered go implementation of the cipher or the algorithm does not correspond
+// to a symmetric cipher.
+func (a SymAlgorithmId) BlockSize() int {
+	c, ok := symmetricAlgs[a]
+	if !ok {
+		panic("unsupported cipher")
+	}
+	return c.blockSize
+}
+
+// NewCipher constructs a new symmetric cipher with the supplied key, if there is a go
+// implementation registered.
+func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
+	c, ok := symmetricAlgs[a]
+	if !ok {
+		return nil, errors.New("unavailable cipher")
+	}
+	return c.fn(key)
+}
 
 // SymObjectAlgorithmId corresponds to the TPMI_ALG_SYM_OBJECT type
 type SymObjectAlgorithmId AlgorithmId

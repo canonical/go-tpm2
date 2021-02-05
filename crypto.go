@@ -5,16 +5,40 @@
 package tpm2
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/canonical/go-tpm2/internal"
 	"github.com/canonical/go-tpm2/mu"
+
+	"golang.org/x/xerrors"
 )
+
+type NewCipherFunc func([]byte) (cipher.Block, error)
+
+type symmetricCipher struct {
+	fn        NewCipherFunc
+	blockSize int
+}
+
+var (
+	symmetricAlgs = map[SymAlgorithmId]*symmetricCipher{
+		SymAlgorithmAES: &symmetricCipher{aes.NewCipher, aes.BlockSize},
+	}
+)
+
+// RegisterCipher allows a go block cipher implementation to be registered for the
+// specified algorithm, so binaries don't need to link against every implementation.
+func RegisterCipher(alg SymAlgorithmId, fn NewCipherFunc, blockSize int) {
+	symmetricAlgs[alg] = &symmetricCipher{fn, blockSize}
+}
 
 func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 	switch curve {
@@ -56,6 +80,38 @@ func cryptComputeRpHash(hashAlg HashAlgorithmId, responseCode ResponseCode, comm
 func cryptComputeNonce(nonce []byte) error {
 	_, err := rand.Read(nonce)
 	return err
+}
+
+func cryptSymmetricEncrypt(alg SymAlgorithmId, key, iv, data []byte) error {
+	switch alg {
+	case SymAlgorithmXOR, SymAlgorithmNull:
+		return errors.New("unsupported symmetric algorithm")
+	default:
+		c, err := alg.NewCipher(key)
+		if err != nil {
+			return xerrors.Errorf("cannot create cipher: %w", err)
+		}
+		// The TPM uses CFB cipher mode for all secret sharing
+		s := cipher.NewCFBEncrypter(c, iv)
+		s.XORKeyStream(data, data)
+		return nil
+	}
+}
+
+func cryptSymmetricDecrypt(alg SymAlgorithmId, key, iv, data []byte) error {
+	switch alg {
+	case SymAlgorithmXOR, SymAlgorithmNull:
+		return errors.New("unsupported symmetric algorithm")
+	default:
+		c, err := alg.NewCipher(key)
+		if err != nil {
+			return xerrors.Errorf("cannot create cipher: %w", err)
+		}
+		// The TPM uses CFB cipher mode for all secret sharing
+		s := cipher.NewCFBDecrypter(c, iv)
+		s.XORKeyStream(data, data)
+		return nil
+	}
 }
 
 func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []byte) ([]byte, error) {
