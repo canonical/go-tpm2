@@ -56,7 +56,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 				},
 			} {
 				t.Run(data2.desc, func(t *testing.T) {
-					secret := []byte("sensitive data")
+					secret := []byte("sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data")
 
 					run1 := func(t *testing.T, authSession SessionContext) ResourceContext {
 						sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256)
@@ -192,7 +192,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 					defer flushContext(t, tpm, sessionContext)
 					sessionContext.SetAttrs(AttrContinueSession | data2.attrs)
 
-					secret := []byte("sensitive data")
+					secret := []byte("sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data")
 
 					template := Public{
 						Type:    ObjectTypeKeyedHash,
@@ -279,7 +279,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 				},
 			} {
 				t.Run(data2.desc, func(t *testing.T) {
-					secret := []byte("sensitive data")
+					secret := []byte("sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data sensitive data")
 
 					run1 := func(t *testing.T, authSession SessionContext) ResourceContext {
 						sessionContext1, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, &data.symmetric, HashAlgorithmSHA256)

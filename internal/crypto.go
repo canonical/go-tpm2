@@ -107,20 +107,13 @@ func KDFe(hashAlg crypto.Hash, z, label, partyUInfo, partyVInfo []byte, sizeInBi
 }
 
 func XORObfuscation(hashAlg crypto.Hash, key []byte, contextU, contextV, data []byte) {
-	digestSize := hashAlg.Size()
+	context := make([]byte, len(contextU)+len(contextV))
+	copy(context, contextU)
+	copy(context[len(contextU):], contextV)
 
-	counter := 0
-	datasize := len(data)
-	remaining := datasize
-
-	for ; remaining > 0; remaining -= digestSize {
-		mask := internalKDFa(hashAlg, key, []byte("XOR"), contextU, contextV, datasize*8, &counter, true)
-		lim := remaining
-		if digestSize < remaining {
-			lim = digestSize
-		}
-		for i := 0; i < lim; i++ {
-			data[datasize-remaining+i] ^= mask[i]
-		}
+	dataSize := len(data)
+	mask := kdf.CounterModeKey(kdf.NewHMACPRF(hashAlg), key, []byte("XOR"), context, uint32(dataSize*8))
+	for i := 0; i < dataSize; i++ {
+		data[i] ^= mask[i]
 	}
 }
