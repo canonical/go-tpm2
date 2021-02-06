@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/cipher"
+	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rsa"
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
@@ -17,6 +19,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"math/big"
 	"reflect"
 	"sort"
 	"unsafe"
@@ -41,18 +44,7 @@ type ECCCurve uint16
 
 // GoCurve returns the equivalent elliptic.Curve for this ECC curve.
 func (c ECCCurve) GoCurve() elliptic.Curve {
-	switch c {
-	case ECCCurveNIST_P224:
-		return elliptic.P224()
-	case ECCCurveNIST_P256:
-		return elliptic.P256()
-	case ECCCurveNIST_P384:
-		return elliptic.P384()
-	case ECCCurveNIST_P521:
-		return elliptic.P521()
-	default:
-		return nil
-	}
+	return eccCurves[c]
 }
 
 // CommandCode corresponds to the TPM_CC type.
@@ -1505,6 +1497,29 @@ func (p *Public) ToTemplate() (Template, error) {
 		return nil, fmt.Errorf("cannot marshal object: %v", err)
 	}
 	return b, nil
+}
+
+// Public returns a corresponding public key for the TPM public area.
+// This will panic if the public area does not correspond to an asymmetric
+// key.
+func (p *Public) Public() crypto.PublicKey {
+	switch p.Type {
+	case ObjectTypeRSA:
+		exp := int(p.Params.RSADetail.Exponent)
+		if exp == 0 {
+			exp = DefaultRSAExponent
+		}
+		return &rsa.PublicKey{
+			N: new(big.Int).SetBytes(p.Unique.RSA),
+			E: exp}
+	case ObjectTypeECC:
+		return &ecdsa.PublicKey{
+			Curve: p.Params.ECCDetail.CurveID.GoCurve(),
+			X:     new(big.Int).SetBytes(p.Unique.ECC.X),
+			Y:     new(big.Int).SetBytes(p.Unique.ECC.Y)}
+	default:
+		panic("object is not a public key")
+	}
 }
 
 type publicSized struct {

@@ -7,6 +7,7 @@ package tpm2
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -29,6 +30,13 @@ type symmetricCipher struct {
 }
 
 var (
+	eccCurves = map[ECCCurve]elliptic.Curve{
+		ECCCurveNIST_P224: elliptic.P224(),
+		ECCCurveNIST_P256: elliptic.P256(),
+		ECCCurveNIST_P384: elliptic.P384(),
+		ECCCurveNIST_P521: elliptic.P521(),
+	}
+
 	symmetricAlgs = map[SymAlgorithmId]*symmetricCipher{
 		SymAlgorithmAES: &symmetricCipher{aes.NewCipher, aes.BlockSize},
 	}
@@ -114,72 +122,16 @@ func cryptSymmetricDecrypt(alg SymAlgorithmId, key, iv, data []byte) error {
 	}
 }
 
-func cryptEncryptRSA(public *Public, paddingOverride RSASchemeId, data, label []byte) ([]byte, error) {
-	if public.Type != ObjectTypeRSA {
-		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
-	}
+type bigInt big.Int
 
-	exp := int(public.Params.RSADetail.Exponent)
-	if exp == 0 {
-		exp = DefaultRSAExponent
-	}
-	pubKey := &rsa.PublicKey{N: new(big.Int).SetBytes(public.Unique.RSA), E: exp}
-
-	padding := public.Params.RSADetail.Scheme.Scheme
-	if paddingOverride != RSASchemeNull {
-		padding = paddingOverride
-	}
-
-	switch padding {
-	case RSASchemeOAEP:
-		schemeHashAlg := public.NameAlg
-		if paddingOverride == RSASchemeNull {
-			schemeHashAlg = public.Params.RSADetail.Scheme.Details.OAEP.HashAlg
-		}
-		if schemeHashAlg == HashAlgorithmNull {
-			schemeHashAlg = public.NameAlg
-		}
-		if !schemeHashAlg.Available() {
-			return nil, fmt.Errorf("unknown scheme hash algorithm or algorithm not linked in to binary: %v", schemeHashAlg)
-		}
-		hash := schemeHashAlg.NewHash()
-		labelCopy := make([]byte, len(label)+1)
-		copy(labelCopy, label)
-		return rsa.EncryptOAEP(hash, rand.Reader, pubKey, data, labelCopy)
-	case RSASchemeRSAES:
-		return rsa.EncryptPKCS1v15(rand.Reader, pubKey, data)
-	}
-	return nil, fmt.Errorf("unsupported RSA scheme: %v", padding)
+func (x *bigInt) ZeroExtendedBytes(l int) []byte {
+	buf := make([]byte, l)
+	tmp := (*big.Int)(x).Bytes()
+	copy(buf[len(buf)-len(tmp):], tmp)
+	return buf
 }
 
-func cryptGetECDHPoint(public *Public) (ECCParameter, *ECCPoint, error) {
-	if public.Type != ObjectTypeECC {
-		panic(fmt.Sprintf("Unsupported key type %v", public.Type))
-	}
-
-	curve := eccCurveToGoCurve(public.Params.ECCDetail.CurveID)
-	if curve == nil {
-		return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail.CurveID)
-	}
-
-	ephPriv, ephX, ephY, err := elliptic.GenerateKey(curve, rand.Reader)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot generate ephemeral ECC key: %v", err)
-	}
-
-	if !curve.IsOnCurve(ephX, ephY) {
-		return nil, nil, fmt.Errorf("ephemeral public key is not on curve")
-	}
-
-	tpmX := new(big.Int).SetBytes(public.Unique.ECC.X)
-	tpmY := new(big.Int).SetBytes(public.Unique.ECC.Y)
-
-	mulX, _ := curve.ScalarMult(tpmX, tpmY, ephPriv)
-
-	return mulX.Bytes(), &ECCPoint{X: ephX.Bytes(), Y: ephY.Bytes()}, nil
-}
-
-func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) {
+func cryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, error) {
 	if !public.NameAlg.Supported() {
 		return nil, nil, fmt.Errorf("cannot determine size of unknown nameAlg %v", public.NameAlg)
 	}
@@ -187,24 +139,52 @@ func cryptComputeEncryptedSalt(public *Public) (EncryptedSecret, []byte, error) 
 
 	switch public.Type {
 	case ObjectTypeRSA:
-		salt := make([]byte, digestSize)
-		if _, err := rand.Read(salt); err != nil {
-			return nil, nil, fmt.Errorf("cannot read random bytes for salt: %v", err)
+		if public.Params.RSADetail.Scheme.Scheme != RSASchemeNull &&
+			public.Params.RSADetail.Scheme.Scheme != RSASchemeOAEP {
+			return nil, nil, errors.New("unsupported RSA scheme")
 		}
-		encryptedSalt, err := cryptEncryptRSA(public, RSASchemeOAEP, salt, []byte("SECRET"))
-		return encryptedSalt, salt, err
-	case ObjectTypeECC:
-		z, q, err := cryptGetECDHPoint(public)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to compute secret: %v", err)
-		}
-		encryptedSalt, err := mu.MarshalToBytes(q)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to marshal ephemeral public key: %v", err)
-		}
-		salt := internal.KDFe(public.NameAlg.GetHash(), []byte(z), []byte("SECRET"), []byte(q.X), []byte(public.Unique.ECC.X), digestSize*8)
-		return encryptedSalt, salt, nil
-	}
+		pub := public.Public().(*rsa.PublicKey)
 
-	return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
+		secret := make([]byte, digestSize)
+		if _, err := rand.Read(secret); err != nil {
+			return nil, nil, fmt.Errorf("cannot read random bytes for secret: %v", err)
+		}
+
+		h := public.NameAlg.NewHash()
+		label0 := make([]byte, len(label)+1)
+		copy(label0, label)
+		encryptedSecret, err := rsa.EncryptOAEP(h, rand.Reader, pub, secret, label0)
+		return encryptedSecret, secret, err
+	case ObjectTypeECC:
+		pub := public.Public().(*ecdsa.PublicKey)
+		if pub.Curve == nil {
+			return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail.CurveID.GoCurve())
+		}
+		if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+			return nil, nil, fmt.Errorf("public key is not on curve")
+		}
+
+		ephPriv, ephX, ephY, err := elliptic.GenerateKey(pub.Curve, rand.Reader)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot generate ephemeral ECC key: %v", err)
+		}
+
+		sz := pub.Curve.Params().BitSize / 8
+
+		encryptedSecret, err := mu.MarshalToBytes(&ECCPoint{
+			X: (*bigInt)(ephX).ZeroExtendedBytes(sz),
+			Y: (*bigInt)(ephY).ZeroExtendedBytes(sz)})
+		if err != nil {
+			panic(fmt.Sprintf("failed to marshal secret: %v", err))
+		}
+
+		mulX, _ := pub.Curve.ScalarMult(pub.X, pub.Y, ephPriv)
+		secret := internal.KDFe(public.NameAlg.GetHash(),
+			(*bigInt)(mulX).ZeroExtendedBytes(sz), label,
+			(*bigInt)(ephX).ZeroExtendedBytes(sz),
+			(*bigInt)(pub.X).ZeroExtendedBytes(sz), digestSize*8)
+		return encryptedSecret, secret, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
+	}
 }
