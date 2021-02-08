@@ -5,6 +5,7 @@
 package tpm2
 
 import (
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
@@ -129,6 +130,40 @@ func (x *bigInt) ZeroExtendedBytes(l int) []byte {
 	tmp := (*big.Int)(x).Bytes()
 	copy(buf[len(buf)-len(tmp):], tmp)
 	return buf
+}
+
+func cryptSecretDecrypt(priv crypto.PrivateKey, hashAlg HashAlgorithmId, label []byte, secret EncryptedSecret) ([]byte, error) {
+	if !hashAlg.Supported() {
+		return nil, fmt.Errorf("cannot determine size of unknown hashAlg %v", hashAlg)
+	}
+
+	switch p := priv.(type) {
+	case *rsa.PrivateKey:
+		h := hashAlg.NewHash()
+		label0 := make([]byte, len(label)+1)
+		copy(label0, label)
+		return rsa.DecryptOAEP(h, rand.Reader, p, secret, label0)
+	case *ecdsa.PrivateKey:
+		var ephPoint ECCPoint
+		if _, err := mu.UnmarshalFromBytes(secret, &ephPoint); err != nil {
+			return nil, xerrors.Errorf("cannot unmarshal ephemeral point: %w", err)
+		}
+		ephX := new(big.Int).SetBytes(ephPoint.X)
+		ephY := new(big.Int).SetBytes(ephPoint.Y)
+
+		if !p.Curve.IsOnCurve(ephX, ephY) {
+			return nil, errors.New("ephemeral point is not on curve")
+		}
+
+		sz := p.Curve.Params().BitSize / 8
+
+		mulX, _ := p.Curve.ScalarMult(ephX, ephY, p.D.Bytes())
+		return internal.KDFe(hashAlg.GetHash(),
+			(*bigInt)(mulX).ZeroExtendedBytes(sz), label,
+			ephPoint.X, (*bigInt)(p.X).ZeroExtendedBytes(sz), hashAlg.Size()*8), nil
+	default:
+		return nil, errors.New("unsupported key type")
+	}
 }
 
 func cryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, error) {

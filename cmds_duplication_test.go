@@ -6,18 +6,12 @@ package tpm2_test
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/hmac"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"hash"
-	"math/big"
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/internal"
-	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
@@ -31,7 +25,7 @@ func TestDuplicate(t *testing.T) {
 	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyCommandCode(CommandDuplicate)
 
-	template := Public{
+	template := &Public{
 		Type:       ObjectTypeRSA,
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrSign,
@@ -42,8 +36,8 @@ func TestDuplicate(t *testing.T) {
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
 				Exponent:  0}}}
-	sensitive := SensitiveCreate{UserAuth: []byte("foo")}
-	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	sensitive := &SensitiveCreate{UserAuth: []byte("foo")}
+	priv, pub, _, _, _, err := tpm.Create(primary, sensitive, template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -59,7 +53,7 @@ func TestDuplicate(t *testing.T) {
 		t.Fatalf("GenerateKey failed: %v", err)
 	}
 
-	parentTemplate := Public{
+	parentPub := &Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
@@ -73,7 +67,7 @@ func TestDuplicate(t *testing.T) {
 				KeyBits:  2048,
 				Exponent: uint32(key.PublicKey.E)}},
 		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
-	parent, err := tpm.LoadExternal(nil, &parentTemplate, HandleOwner)
+	parent, err := tpm.LoadExternal(nil, parentPub, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
 	}
@@ -98,11 +92,19 @@ func TestDuplicate(t *testing.T) {
 		return encryptionKeyOut, duplicate, outSymSeed
 	}
 
-	verifyUnwrapped := func(t *testing.T, duplicate Private) {
-		var sensitiveDup *Sensitive
-		if _, err := mu.UnmarshalFromBytes(duplicate, &sensitiveDup); err != nil {
-			t.Fatalf("UnmarshalFromBytes failed: %v", err)
+	verifyDuplicate := func(t *testing.T, duplicate Private, outer bool, encryptionKey Data, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject) {
+		var privKey crypto.PrivateKey
+		var protector *Public
+		if outer {
+			privKey = key
+			protector = parentPub
 		}
+
+		sensitiveDup, err := UnwrapDuplicationObjectToSensitive(duplicate, pub, privKey, protector, encryptionKey, inSymSeed, symmetricAlg)
+		if err != nil {
+			t.Fatalf("Unwrap failed: %v", err)
+		}
+
 		if sensitiveDup.Type != template.Type {
 			t.Errorf("Unexpected duplicate type")
 		}
@@ -117,71 +119,6 @@ func TestDuplicate(t *testing.T) {
 		}
 	}
 
-	verifyInnerWrapper := func(t *testing.T, key Data, encSensitive Private) {
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			t.Fatalf("NewCipher failed: %v", err)
-		}
-		stream := cipher.NewCFBDecrypter(block, make([]byte, aes.BlockSize))
-		plainSensitive := make(Private, len(encSensitive))
-		stream.XORKeyStream(plainSensitive, encSensitive)
-
-		var innerIntegrity Digest
-		n, err := mu.UnmarshalFromBytes(plainSensitive, &innerIntegrity)
-		if err != nil {
-			t.Fatalf("UnmarshalFromBytes failed: %v", err)
-		}
-		plainSensitive = plainSensitive[n:]
-
-		h := template.NameAlg.NewHash()
-		h.Write(plainSensitive)
-		h.Write(object.Name())
-		if !bytes.Equal(h.Sum(nil), innerIntegrity) {
-			t.Errorf("Unexpected inner integrity")
-		}
-		var d Private
-		if _, err := mu.UnmarshalFromBytes(plainSensitive, &d); err != nil {
-			t.Fatalf("UnmarshalFromBytes failed: %v", err)
-		}
-		verifyUnwrapped(t, d)
-	}
-
-	verifyOuterWrapper := func(t *testing.T, seed []byte, duplicate Private, innerKey []byte) {
-		var outerHMAC Digest
-		n, err := mu.UnmarshalFromBytes(duplicate, &outerHMAC)
-		if err != nil {
-			t.Fatalf("UnmarshalFromBytes failed: %v", err)
-		}
-		dupSensitive := duplicate[n:]
-
-		hmacKey := internal.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentTemplate.NameAlg.Size()*8)
-		h := hmac.New(func() hash.Hash { return parentTemplate.NameAlg.NewHash() }, hmacKey)
-		h.Write(dupSensitive)
-		h.Write(object.Name())
-		if !bytes.Equal(h.Sum(nil), outerHMAC) {
-			t.Errorf("Unexpected outer HMAC")
-		}
-
-		symKey := internal.KDFa(parentTemplate.NameAlg.GetHash(), seed, []byte("STORAGE"), object.Name(), nil,
-			int(parentTemplate.Params.AsymDetail().Symmetric.KeyBits.Sym))
-		block, err := aes.NewCipher(symKey)
-		if err != nil {
-			t.Fatalf("NewCipher failed: %v", err)
-		}
-		stream := cipher.NewCFBDecrypter(block, make([]byte, aes.BlockSize))
-		plainSensitive := make([]byte, len(dupSensitive))
-		stream.XORKeyStream(plainSensitive, dupSensitive)
-		if len(innerKey) == 0 {
-			var d Private
-			if _, err := mu.UnmarshalFromBytes(plainSensitive, &d); err != nil {
-				t.Fatalf("UnmarshalFromBytes failed: %v", err)
-			}
-			verifyUnwrapped(t, d)
-		} else {
-			verifyInnerWrapper(t, innerKey, plainSensitive)
-		}
-	}
-
 	t.Run("NoWrappers", func(t *testing.T) {
 		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, nil, nil)
 		if len(encryptionKeyOut) > 0 {
@@ -190,19 +127,15 @@ func TestDuplicate(t *testing.T) {
 		if len(outSymSeed) > 0 {
 			t.Errorf("Unexpected outSymSeed")
 		}
-		var d Private
-		if _, err := mu.UnmarshalFromBytes(duplicate, &d); err != nil {
-			t.Fatalf("UnmarshalFromBytes failed: %v", err)
-		}
-		verifyUnwrapped(t, d)
+		verifyDuplicate(t, duplicate, false, nil, nil, nil)
 	})
 
 	t.Run("InnerWrapper", func(t *testing.T) {
-		symmetricAlg := SymDefObject{
+		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      &SymModeU{Sym: SymModeCFB}}
-		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, nil, &symmetricAlg)
+		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, nil, symmetricAlg)
 		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
 			t.Errorf("Unexpected encryption key size")
 		}
@@ -210,17 +143,17 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected outSymSeed")
 		}
 
-		verifyInnerWrapper(t, encryptionKeyOut, duplicate)
+		verifyDuplicate(t, duplicate, false, encryptionKeyOut, nil, symmetricAlg)
 	})
 
 	t.Run("InnerWrapperWithKey", func(t *testing.T) {
-		symmetricAlg := SymDefObject{
+		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      &SymModeU{Sym: SymModeCFB}}
 		encryptionKeyIn := make(Data, 16)
 		rand.Read(encryptionKeyIn)
-		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, encryptionKeyIn, &symmetricAlg)
+		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, encryptionKeyIn, symmetricAlg)
 		if len(encryptionKeyOut) > 0 {
 			t.Errorf("Unexpected encryption key")
 		}
@@ -228,7 +161,7 @@ func TestDuplicate(t *testing.T) {
 			t.Errorf("Unexpected outSymSeed")
 		}
 
-		verifyInnerWrapper(t, encryptionKeyIn, duplicate)
+		verifyDuplicate(t, duplicate, false, encryptionKeyIn, nil, symmetricAlg)
 	})
 
 	t.Run("OuterWrapper", func(t *testing.T) {
@@ -236,45 +169,27 @@ func TestDuplicate(t *testing.T) {
 		if len(encryptionKeyOut) > 0 {
 			t.Errorf("Unexpected encryption key")
 		}
-		if len(outSymSeed) != int(parentTemplate.Params.RSADetail.KeyBits)/8 {
+		if len(outSymSeed) != int(parentPub.Params.RSADetail.KeyBits)/8 {
 			t.Errorf("Unexpected outSymSeed size")
 		}
-		label := []byte("DUPLICATE")
-		label = append(label, 0)
-		seed, err := rsa.DecryptOAEP(parentTemplate.NameAlg.NewHash(), rand.Reader, key, outSymSeed, label)
-		if err != nil {
-			t.Fatalf("DecryptOAEP failed: %v", err)
-		}
-		if len(seed) != parentTemplate.NameAlg.Size() {
-			t.Errorf("Unexpected seed size")
-		}
 
-		verifyOuterWrapper(t, seed, duplicate, nil)
+		verifyDuplicate(t, duplicate, true, nil, outSymSeed, nil)
 	})
 
 	t.Run("OuterAndInnerWrapper", func(t *testing.T) {
-		symmetricAlg := SymDefObject{
+		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      &SymModeU{Sym: SymModeCFB}}
-		encryptionKeyOut, duplicate, outSymSeed := run(t, parent, nil, &symmetricAlg)
+		encryptionKeyOut, duplicate, outSymSeed := run(t, parent, nil, symmetricAlg)
 		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
 			t.Errorf("Unexpected encryption key size")
 		}
-		if len(outSymSeed) != int(parentTemplate.Params.RSADetail.KeyBits)/8 {
+		if len(outSymSeed) != int(parentPub.Params.RSADetail.KeyBits)/8 {
 			t.Errorf("Unexpected outSymSeed size")
 		}
-		label := []byte("DUPLICATE")
-		label = append(label, 0)
-		seed, err := rsa.DecryptOAEP(parentTemplate.NameAlg.NewHash(), rand.Reader, key, outSymSeed, label)
-		if err != nil {
-			t.Fatalf("DecryptOAEP failed: %v", err)
-		}
-		if len(seed) != parentTemplate.NameAlg.Size() {
-			t.Errorf("Unexpected seed size")
-		}
 
-		verifyOuterWrapper(t, seed, duplicate, encryptionKeyOut)
+		verifyDuplicate(t, duplicate, true, encryptionKeyOut, outSymSeed, symmetricAlg)
 	})
 }
 
@@ -294,7 +209,7 @@ func TestImport(t *testing.T) {
 		t.Fatalf("GenerateKey failed: %v", err)
 	}
 
-	objectPublic := Public{
+	objectPublic := &Public{
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrSign,
@@ -305,18 +220,17 @@ func TestImport(t *testing.T) {
 				KeyBits:   2048,
 				Exponent:  uint32(key.PublicKey.E)}},
 		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
-	objectSensitive := Sensitive{
+	objectSensitive := &Sensitive{
 		Type:      ObjectTypeRSA,
-		AuthValue: make(Auth, objectPublic.NameAlg.Size()),
+		AuthValue: []byte("foo"),
 		Sensitive: &SensitiveCompositeU{RSA: key.Primes[0].Bytes()}}
-	copy(objectSensitive.AuthValue, []byte("foo"))
 
 	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext) {
-		priv, err := tpm.Import(primary, encryptionKey, &objectPublic, duplicate, inSymSeed, symmetricAlg, parentContextAuthSession)
+		priv, err := tpm.Import(primary, encryptionKey, objectPublic, duplicate, inSymSeed, symmetricAlg, parentContextAuthSession)
 		if err != nil {
 			t.Fatalf("Import failed: %v", err)
 		}
-		object, err := tpm.Load(primary, priv, &objectPublic, parentContextAuthSession)
+		object, err := tpm.Load(primary, priv, objectPublic, parentContextAuthSession)
 		if err != nil {
 			t.Errorf("Load failed: %v", err)
 		}
@@ -324,83 +238,43 @@ func TestImport(t *testing.T) {
 	}
 
 	t.Run("NoWrappers", func(t *testing.T) {
-		duplicate, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
+		_, duplicate, _, err := CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
+		}
 		run(t, nil, duplicate, nil, nil, nil)
 	})
 
 	t.Run("InnerWrapper", func(t *testing.T) {
-		sensitive, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
-		name, _ := objectPublic.Name()
-
-		h := objectPublic.NameAlg.NewHash()
-		h.Write(sensitive)
-		h.Write(name)
-
-		b, _ := mu.MarshalToBytes(h.Sum(nil), mu.RawBytes(sensitive))
-
-		encryptionKey := make([]byte, 16)
-		rand.Read(encryptionKey)
-
-		block, err := aes.NewCipher(encryptionKey)
-		if err != nil {
-			t.Fatalf("NewCipher failed: %v", err)
-		}
-		stream := cipher.NewCFBEncrypter(block, make([]byte, aes.BlockSize))
-		encSensitive := make(Private, len(b))
-		stream.XORKeyStream(encSensitive, b)
-
-		symmetricAlg := SymDefObject{
+		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      &SymModeU{Sym: SymModeCFB}}
-		run(t, encryptionKey, encSensitive, nil, &symmetricAlg, nil)
+		encryptionKey, duplicate, _, err := CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, nil, nil, symmetricAlg)
+		if err != nil {
+			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
+		}
+		run(t, encryptionKey, duplicate, nil, symmetricAlg, nil)
 	})
 
 	t.Run("OuterWrapper", func(t *testing.T) {
-		sensitive, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
-		name, _ := objectPublic.Name()
-
 		primaryPublic, _, _, err := tpm.ReadPublic(primary)
 		if err != nil {
 			t.Fatalf("ReadPublic failed: %v", err)
 		}
 
-		seed := make([]byte, primary.Name().Algorithm().Size())
-		rand.Read(seed)
-
-		symKey := internal.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("STORAGE"), name, nil,
-			int(primaryPublic.Params.AsymDetail().Symmetric.KeyBits.Sym))
-
-		block, err := aes.NewCipher(symKey)
+		_, duplicate, outSymSeed, err := CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, primaryPublic, nil, nil)
 		if err != nil {
-			t.Fatalf("NewCipher failed: %v", err)
+			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
 		}
-		stream := cipher.NewCFBEncrypter(block, make([]byte, aes.BlockSize))
-		dupSensitive := make(Private, len(sensitive))
-		stream.XORKeyStream(dupSensitive, sensitive)
-
-		hmacKey := internal.KDFa(primary.Name().Algorithm().GetHash(), seed, []byte("INTEGRITY"), nil, nil, primary.Name().Algorithm().Size()*8)
-		h := hmac.New(func() hash.Hash { return primary.Name().Algorithm().NewHash() }, hmacKey)
-		h.Write(dupSensitive)
-		h.Write(name)
-
-		duplicate, _ := mu.MarshalToBytes(h.Sum(nil), mu.RawBytes(dupSensitive))
-
-		keyPublic := rsa.PublicKey{
-			N: new(big.Int).SetBytes(primaryPublic.Unique.RSA),
-			E: 65537}
-		label := []byte("DUPLICATE")
-		label = append(label, 0)
-		encSeed, err := rsa.EncryptOAEP(primary.Name().Algorithm().NewHash(), rand.Reader, &keyPublic, seed, label)
-		if err != nil {
-			t.Fatalf("EncryptOAEP failed: %v", err)
-		}
-
-		run(t, nil, duplicate, encSeed, nil, nil)
+		run(t, nil, duplicate, outSymSeed, nil, nil)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		duplicate, _ := mu.MarshalToBytes(sensitiveSized{&objectSensitive})
+		_, duplicate, _, err := CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
+		}
 
 		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {

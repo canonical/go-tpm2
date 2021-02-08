@@ -208,6 +208,24 @@ func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
 // SymObjectAlgorithmId corresponds to the TPMI_ALG_SYM_OBJECT type
 type SymObjectAlgorithmId AlgorithmId
 
+// Available indicates whether the TPM symmetric cipher has a registered go implementation.
+func (a SymObjectAlgorithmId) Available() bool {
+	return SymAlgorithmId(a).Available()
+}
+
+// BlockSize indicates the block size of the symmetric cipher. This will panic if there
+// is no registered go implementation of the cipher or the algorithm does not correspond
+// to a symmetric cipher.
+func (a SymObjectAlgorithmId) BlockSize() int {
+	return SymAlgorithmId(a).BlockSize()
+}
+
+// NewCipher constructs a new symmetric cipher with the supplied key, if there is a go
+// implementation registered.
+func (a SymObjectAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
+	return SymAlgorithmId(a).NewCipher(key)
+}
+
 // SymModeId corresponds to the TPMI_ALG_SYM_MODE type
 type SymModeId AlgorithmId
 
@@ -1497,6 +1515,15 @@ func (p *Public) ToTemplate() (Template, error) {
 		return nil, fmt.Errorf("cannot marshal object: %v", err)
 	}
 	return b, nil
+}
+
+func (p *Public) IsStorage() bool {
+	switch p.Type {
+	case ObjectTypeRSA, ObjectTypeECC:
+		return p.Attrs&(AttrRestricted|AttrDecrypt|AttrSign) == AttrRestricted|AttrDecrypt
+	default:
+		return false
+	}
 }
 
 // Public returns a corresponding public key for the TPM public area.

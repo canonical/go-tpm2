@@ -5,13 +5,23 @@
 package tpm2
 
 import (
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash"
+	"io/ioutil"
 	"sort"
 
+	"github.com/canonical/go-tpm2/internal"
 	"github.com/canonical/go-tpm2/mu"
+
+	"golang.org/x/xerrors"
 )
 
 // ComputeCpHash computes a command parameter digest from the specified command code and provided command parameters, using the
@@ -271,4 +281,251 @@ func (p *TrialAuthPolicy) PolicyNvWritten(writtenSet bool) {
 	h, end := p.beginUpdateForCommand(CommandPolicyNvWritten)
 	binary.Write(h, binary.BigEndian, writtenSet)
 	end()
+}
+
+// UnwrapDuplicationObjectToSensitive unwraps the supplied duplication object and returns the
+// corresponding sensitive area. If inSymSeed is supplied, then it is assumed that the object
+// has an outer wrapper, and both privKey and protector must be supplied - these correspond to
+// the key with which inSymSeed is protected.
+//
+// If symmetricAlg is supplied and the Algorithm field is not SymObjectAlgorithmNull, then it is
+// assumed that the object has an inner wrapper. In this case, the symmetric key for the inner
+// wrapper must be supplied using the encryptionKey argument.
+func UnwrapDuplicationObjectToSensitive(duplicate Private, public *Public, privKey crypto.PrivateKey, protector *Public, encryptionKey Data, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject) (*Sensitive, error) {
+	hasInnerWrapper := false
+	if symmetricAlg != nil && symmetricAlg.Algorithm != SymObjectAlgorithmNull {
+		hasInnerWrapper = true
+		if !symmetricAlg.Algorithm.Available() {
+			return nil, errors.New("symmetric algorithm for inner wrapper is not available")
+		}
+	}
+
+	var seed []byte
+	var outerSymmetric *SymDefObject
+	hasOuterWrapper := false
+	if len(inSymSeed) > 0 {
+		hasOuterWrapper = true
+		if privKey == nil || protector == nil {
+			return nil, errors.New("private key and protector public area is required for outer wrapper")
+		}
+
+		switch p := privKey.(type) {
+		case *rsa.PrivateKey:
+			if protector.Type != ObjectTypeRSA {
+				return nil, errors.New("inconsistent key types")
+			}
+			_ = p
+		case *ecdsa.PrivateKey:
+			if protector.Type != ObjectTypeECC {
+				return nil, errors.New("inconsistent key types")
+			}
+			_ = p
+		default:
+			return nil, errors.New("invalid private key type")
+		}
+
+		outerSymmetric = &protector.Params.AsymDetail().Symmetric
+		if !outerSymmetric.Algorithm.Available() {
+			return nil, errors.New("symmetric algorithm for outer wrapper is not available")
+		}
+		var err error
+		seed, err = cryptSecretDecrypt(privKey, protector.NameAlg, []byte("DUPLICATE"), inSymSeed)
+		if err != nil {
+			return nil, xerrors.Errorf("cannot decrypt symmetric seed: %w", err)
+		}
+	}
+
+	name, err := public.Name()
+	if err != nil {
+		return nil, xerrors.Errorf("cannot compute name: %w", err)
+	}
+
+	if hasOuterWrapper {
+		// Remove outer wrapper
+		r := bytes.NewReader(duplicate)
+
+		var outerIntegrity []byte
+		if _, err := mu.UnmarshalFromReader(r, &outerIntegrity); err != nil {
+			return nil, xerrors.Errorf("cannot unpack outer integrity digest: %w", err)
+		}
+
+		duplicate, err = ioutil.ReadAll(r)
+		if err != nil {
+			return nil, xerrors.Errorf("cannot unpack outer wrapper: %w", err)
+		}
+
+		hmacKey := internal.KDFa(protector.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, protector.NameAlg.Size()*8)
+		h := hmac.New(func() hash.Hash { return protector.NameAlg.NewHash() }, hmacKey)
+		h.Write(duplicate)
+		h.Write(name)
+
+		if !bytes.Equal(h.Sum(nil), outerIntegrity) {
+			return nil, errors.New("outer integrity digest is invalid")
+		}
+
+		symKey := internal.KDFa(protector.NameAlg.GetHash(), seed, []byte("STORAGE"), name, nil, int(outerSymmetric.KeyBits.Sym))
+
+		if err := cryptSymmetricDecrypt(SymAlgorithmId(outerSymmetric.Algorithm), symKey, make([]byte, outerSymmetric.Algorithm.BlockSize()), duplicate); err != nil {
+			return nil, xerrors.Errorf("cannot remove outer wrapper: %w", err)
+		}
+	}
+
+	if hasInnerWrapper {
+		// Remove inner wrapper
+		if err := cryptSymmetricDecrypt(SymAlgorithmId(symmetricAlg.Algorithm), encryptionKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+			return nil, xerrors.Errorf("cannot remove inner wrapper: %w", err)
+		}
+
+		r := bytes.NewReader(duplicate)
+
+		var innerIntegrity []byte
+		if _, err := mu.UnmarshalFromReader(r, &innerIntegrity); err != nil {
+			return nil, xerrors.Errorf("cannot unpack inner integrity digest: %w", err)
+		}
+
+		duplicate, err = ioutil.ReadAll(r)
+		if err != nil {
+			return nil, xerrors.Errorf("cannot unpack inner wrapper: %w", err)
+		}
+
+		h := public.NameAlg.NewHash()
+		h.Write(duplicate)
+		h.Write(name)
+
+		if !bytes.Equal(h.Sum(nil), innerIntegrity) {
+			return nil, errors.New("inner integrity digest is invalid")
+		}
+	}
+
+	var sensitive sensitiveSized
+	if _, err := mu.UnmarshalFromBytes(duplicate, &sensitive); err != nil {
+		return nil, xerrors.Errorf("cannot unmarhsal sensitive: %w", err)
+	}
+
+	return sensitive.Ptr, nil
+}
+
+// CreateDuplicationObjectFromSensitive creates a duplication object that can be imported in to a
+// TPM from the supplied sensitive area.
+//
+// If symmetricAlg is supplied and the Algorithm field is not SymObjectAlgorithmNull, this function
+// will apply an inner wrapper to the duplication object. If encryptionKeyIn is supplied, it will be
+// used as the symmetric key for the inner wrapper. It must have a size appropriate for the selected
+// symmetric algorithm. If encryptionKeyIn is not supplied, a symmetric key will be created and
+// returned
+//
+// If parentPublic is supplied, an outer wrapper will be applied to the duplication object. The
+// parentPublic argument should correspond to the public area of the storage key to which the
+// duplication object will be imported. When applying the outer wrapper, the seed used to derice the
+// symmetric key and HMAC key will be encrypted using parentPublic and returned.
+func CreateDuplicationObjectFromSensitive(sensitive *Sensitive, public, parentPublic *Public, encryptionKeyIn Data, symmetricAlg *SymDefObject) (encryptionKeyOut Data, duplicate Private, outSymSeed EncryptedSecret, err error) {
+	if public.Attrs&(AttrFixedTPM|AttrFixedParent) != 0 {
+		return nil, nil, nil, errors.New("object must be a duplication root")
+	}
+
+	if public.Attrs&AttrEncryptedDuplication != 0 {
+		if symmetricAlg == nil || symmetricAlg.Algorithm == SymObjectAlgorithmNull {
+			return nil, nil, nil, errors.New("symmetric algorithm must be supplied for an object with AttrEncryptedDuplication")
+		}
+		if parentPublic == nil {
+			return nil, nil, nil, errors.New("parent object must be supplied for an object with AttrEncryptedDuplication")
+		}
+	}
+
+	name, err := public.Name()
+	if err != nil {
+		return nil, nil, nil, xerrors.Errorf("cannot compute name: %w", err)
+	}
+
+	applyInnerWrapper := false
+	if symmetricAlg != nil && symmetricAlg.Algorithm != SymObjectAlgorithmNull {
+		applyInnerWrapper = true
+		if len(encryptionKeyIn) > 0 && len(encryptionKeyIn) != int(symmetricAlg.KeyBits.Sym/8) {
+			return nil, nil, nil, errors.New("the supplied symmetric key has the wrong length")
+		}
+
+		if !symmetricAlg.Algorithm.Available() {
+			return nil, nil, nil, errors.New("symmetric algorithm for inner wrapper is not available")
+		}
+	}
+
+	var seed []byte
+	var outerSymmetric *SymDefObject
+	applyOuterWrapper := false
+	if parentPublic != nil {
+		applyOuterWrapper = true
+		if !parentPublic.IsStorage() {
+			return nil, nil, nil, errors.New("parent object must be a storage key")
+		}
+		outerSymmetric = &parentPublic.Params.AsymDetail().Symmetric
+		if !outerSymmetric.Algorithm.Available() {
+			return nil, nil, nil, errors.New("symmetric algorithm for outer wrapper is not available")
+		}
+		outSymSeed, seed, err = cryptSecretEncrypt(parentPublic, []byte("DUPLICATE"))
+		if err != nil {
+			return nil, nil, nil, xerrors.Errorf("cannot create encrypted symmetric seed: %w", err)
+		}
+	}
+
+	authValue := sensitive.AuthValue
+	sensitive = &Sensitive{
+		Type:      sensitive.Type,
+		AuthValue: make(Auth, public.NameAlg.Size()),
+		SeedValue: sensitive.SeedValue,
+		Sensitive: sensitive.Sensitive}
+	copy(sensitive.AuthValue, authValue)
+
+	duplicate, err = mu.MarshalToBytes(sensitiveSized{sensitive})
+	if err != nil {
+		panic(fmt.Sprintf("cannot marshal sensitive: %v", err))
+	}
+
+	if applyInnerWrapper {
+		// Apply inner wrapper
+		h := public.NameAlg.NewHash()
+		h.Write(duplicate)
+		h.Write(name)
+
+		innerIntegrity := h.Sum(nil)
+
+		duplicate, err = mu.MarshalToBytes(innerIntegrity, mu.RawBytes(duplicate))
+		if err != nil {
+			panic(fmt.Sprintf("cannot prepend integrity: %v", err))
+		}
+
+		if len(encryptionKeyIn) == 0 {
+			encryptionKeyIn = make([]byte, symmetricAlg.KeyBits.Sym/8)
+			if _, err := rand.Read(encryptionKeyIn); err != nil {
+				return nil, nil, nil, xerrors.Errorf("cannot read random bytes for key for inner wrapper: %w", err)
+			}
+			encryptionKeyOut = encryptionKeyIn
+		}
+
+		if err := cryptSymmetricEncrypt(SymAlgorithmId(symmetricAlg.Algorithm), encryptionKeyIn, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+			return nil, nil, nil, xerrors.Errorf("cannot apply inner wrapper: %w", err)
+		}
+	}
+
+	if applyOuterWrapper {
+		// Apply outer wrapper
+		symKey := internal.KDFa(parentPublic.NameAlg.GetHash(), seed, []byte("STORAGE"), name, nil, int(outerSymmetric.KeyBits.Sym))
+
+		if err := cryptSymmetricEncrypt(SymAlgorithmId(outerSymmetric.Algorithm), symKey, make([]byte, outerSymmetric.Algorithm.BlockSize()), duplicate); err != nil {
+			return nil, nil, nil, xerrors.Errorf("cannot apply outer wrapper: %w", err)
+		}
+
+		hmacKey := internal.KDFa(parentPublic.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentPublic.NameAlg.Size()*8)
+		h := hmac.New(func() hash.Hash { return parentPublic.NameAlg.NewHash() }, hmacKey)
+		h.Write(duplicate)
+		h.Write(name)
+
+		outerIntegrity := h.Sum(nil)
+
+		duplicate, err = mu.MarshalToBytes(outerIntegrity, mu.RawBytes(duplicate))
+		if err != nil {
+			panic(fmt.Sprintf("cannot prepend outer integrity: %v", err))
+		}
+	}
+
+	return
 }

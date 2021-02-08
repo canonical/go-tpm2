@@ -3,14 +3,237 @@ package tpm2_test
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/binary"
 	"io"
+	"math/big"
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
+
+	. "gopkg.in/check.v1"
 )
+
+type bigInt big.Int
+
+func (x *bigInt) ZeroExtendedBytes(l int) []byte {
+	buf := make([]byte, l)
+	tmp := (*big.Int)(x).Bytes()
+	copy(buf[len(buf)-len(tmp):], tmp)
+	return buf
+}
+
+type utilsSuite struct{}
+
+var _ = Suite(&utilsSuite{})
+
+type testCreateUnwrapDuplicationObjectData struct {
+	parentPriv    crypto.PrivateKey
+	parentPublic  *Public
+	encryptionKey Data
+	symmetricAlg  *SymDefObject
+}
+
+func (s *utilsSuite) testCreateUnwrapDuplicationObject(c *C, data *testCreateUnwrapDuplicationObjectData) {
+	sensitiveIn := &Sensitive{
+		Type:      ObjectTypeKeyedHash,
+		AuthValue: []byte("foo"),
+		SeedValue: make([]byte, crypto.SHA256.Size()),
+		Sensitive: &SensitiveCompositeU{Bits: []byte("super secret data")}}
+
+	h := crypto.SHA256.New()
+	h.Write(sensitiveIn.SeedValue)
+	h.Write(sensitiveIn.Sensitive.Bits)
+
+	public := &Public{
+		Type:    ObjectTypeKeyedHash,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   AttrUserWithAuth,
+		Params: &PublicParamsU{
+			KeyedHashDetail: &KeyedHashParams{
+				Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull},
+			},
+		},
+		Unique: &PublicIDU{KeyedHash: h.Sum(nil)}}
+
+	encryptionKey, duplicate, symSeed, err := CreateDuplicationObjectFromSensitive(sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
+	c.Check(err, IsNil)
+	if data.symmetricAlg != nil && data.symmetricAlg.Algorithm != SymObjectAlgorithmNull && len(data.encryptionKey) == 0 {
+		c.Check(encryptionKey, HasLen, int(data.symmetricAlg.KeyBits.Sym/8))
+	} else {
+		c.Check(encryptionKey, IsNil)
+		encryptionKey = data.encryptionKey
+	}
+
+	sensitive, err := UnwrapDuplicationObjectToSensitive(duplicate, public, data.parentPriv, data.parentPublic, encryptionKey, symSeed, data.symmetricAlg)
+	c.Check(err, IsNil)
+	c.Assert(sensitive, NotNil)
+
+	c.Check(sensitive.Type, Equals, sensitiveIn.Type)
+	c.Check(sensitive.AuthValue, HasLen, crypto.SHA256.Size())
+	c.Check(sensitive.AuthValue[:len(sensitiveIn.AuthValue)], DeepEquals, sensitiveIn.AuthValue)
+	c.Check(sensitive.AuthValue[len(sensitiveIn.AuthValue):], DeepEquals, make(Auth, crypto.SHA256.Size()-len(sensitiveIn.AuthValue)))
+	c.Check(sensitive.SeedValue, DeepEquals, sensitiveIn.SeedValue)
+	c.Check(sensitive.Sensitive, DeepEquals, sensitiveIn.Sensitive)
+}
+
+func (s *utilsSuite) TestCreateUnwrapDuplicationObjectNoWrapper(c *C) {
+	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{})
+}
+
+func (s *utilsSuite) TestCreateUnwrapDuplicationObjectInnerWrapper1(c *C) {
+	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{
+		symmetricAlg: &SymDefObject{
+			Algorithm: SymObjectAlgorithmAES,
+			KeyBits:   &SymKeyBitsU{Sym: 256},
+			Mode:      &SymModeU{Sym: SymModeCFB}},
+	})
+}
+
+func (s *utilsSuite) TestCreateUnwrapDuplicationObjectInnerWrapper2(c *C) {
+	symKey := make([]byte, 16)
+	rand.Read(symKey)
+
+	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{
+		encryptionKey: symKey,
+		symmetricAlg: &SymDefObject{
+			Algorithm: SymObjectAlgorithmAES,
+			KeyBits:   &SymKeyBitsU{Sym: 128},
+			Mode:      &SymModeU{Sym: SymModeCFB}},
+	})
+}
+
+func (s *utilsSuite) TestCreateUnwrapDuplicationObjectOuterWrapperRSA(c *C) {
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	c.Assert(err, IsNil)
+
+	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{
+		parentPriv: privKey,
+		parentPublic: &Public{
+			Type:    ObjectTypeRSA,
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   AttrUserWithAuth | AttrRestricted | AttrDecrypt,
+			Params: &PublicParamsU{
+				RSADetail: &RSAParams{
+					Symmetric: SymDefObject{
+						Algorithm: SymObjectAlgorithmAES,
+						KeyBits:   &SymKeyBitsU{Sym: 256},
+						Mode:      &SymModeU{Sym: SymModeCFB},
+					},
+					Scheme:   RSAScheme{Scheme: RSASchemeNull},
+					KeyBits:  2048,
+					Exponent: uint32(privKey.E),
+				},
+			},
+			Unique: &PublicIDU{RSA: privKey.N.Bytes()},
+		},
+	})
+}
+
+func (s *utilsSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC1(c *C) {
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{
+		parentPriv: privKey,
+		parentPublic: &Public{
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   AttrUserWithAuth | AttrRestricted | AttrDecrypt,
+			Params: &PublicParamsU{
+				ECCDetail: &ECCParams{
+					Symmetric: SymDefObject{
+						Algorithm: SymObjectAlgorithmAES,
+						KeyBits:   &SymKeyBitsU{Sym: 128},
+						Mode:      &SymModeU{Sym: SymModeCFB},
+					},
+					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
+					CurveID: ECCCurveNIST_P256,
+					KDF:     KDFScheme{Scheme: KDFAlgorithmNull},
+				},
+			},
+			Unique: &PublicIDU{
+				ECC: &ECCPoint{
+					X: (*bigInt)(privKey.X).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+					Y: (*bigInt)(privKey.Y).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+				},
+			},
+		},
+	})
+}
+
+func (s *utilsSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC2(c *C) {
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{
+		parentPriv: privKey,
+		parentPublic: &Public{
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA1,
+			Attrs:   AttrUserWithAuth | AttrRestricted | AttrDecrypt,
+			Params: &PublicParamsU{
+				ECCDetail: &ECCParams{
+					Symmetric: SymDefObject{
+						Algorithm: SymObjectAlgorithmAES,
+						KeyBits:   &SymKeyBitsU{Sym: 128},
+						Mode:      &SymModeU{Sym: SymModeCFB},
+					},
+					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
+					CurveID: ECCCurveNIST_P256,
+					KDF:     KDFScheme{Scheme: KDFAlgorithmNull},
+				},
+			},
+			Unique: &PublicIDU{
+				ECC: &ECCPoint{
+					X: (*bigInt)(privKey.X).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+					Y: (*bigInt)(privKey.Y).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+				},
+			},
+		},
+	})
+}
+
+func (s *utilsSuite) TestCreateUnwrapDuplicationObjectBothWrappers(c *C) {
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{
+		symmetricAlg: &SymDefObject{
+			Algorithm: SymObjectAlgorithmAES,
+			KeyBits:   &SymKeyBitsU{Sym: 256},
+			Mode:      &SymModeU{Sym: SymModeCFB}},
+		parentPriv: privKey,
+		parentPublic: &Public{
+			Type:    ObjectTypeECC,
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   AttrUserWithAuth | AttrRestricted | AttrDecrypt,
+			Params: &PublicParamsU{
+				ECCDetail: &ECCParams{
+					Symmetric: SymDefObject{
+						Algorithm: SymObjectAlgorithmAES,
+						KeyBits:   &SymKeyBitsU{Sym: 256},
+						Mode:      &SymModeU{Sym: SymModeCFB},
+					},
+					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
+					CurveID: ECCCurveNIST_P256,
+					KDF:     KDFScheme{Scheme: KDFAlgorithmNull},
+				},
+			},
+			Unique: &PublicIDU{
+				ECC: &ECCPoint{
+					X: (*bigInt)(privKey.X).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+					Y: (*bigInt)(privKey.Y).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+				},
+			},
+		},
+	})
+}
 
 type mockHandleContext struct {
 	name Name
