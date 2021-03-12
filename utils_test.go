@@ -19,13 +19,11 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type bigInt big.Int
-
-func (x *bigInt) ZeroExtendedBytes(l int) []byte {
-	buf := make([]byte, l)
-	tmp := (*big.Int)(x).Bytes()
-	copy(buf[len(buf)-len(tmp):], tmp)
-	return buf
+func zeroExtendBytes(x *big.Int, l int) (out []byte) {
+	out = make([]byte, l)
+	tmp := x.Bytes()
+	copy(out[len(out)-len(tmp):], tmp)
+	return
 }
 
 type utilsSuite struct{}
@@ -159,8 +157,8 @@ func (s *utilsSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC1(c *C) {
 			},
 			Unique: &PublicIDU{
 				ECC: &ECCPoint{
-					X: (*bigInt)(privKey.X).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
-					Y: (*bigInt)(privKey.Y).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+					X: zeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
+					Y: zeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
 				},
 			},
 		},
@@ -191,8 +189,8 @@ func (s *utilsSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC2(c *C) {
 			},
 			Unique: &PublicIDU{
 				ECC: &ECCPoint{
-					X: (*bigInt)(privKey.X).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
-					Y: (*bigInt)(privKey.Y).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+					X: zeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
+					Y: zeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
 				},
 			},
 		},
@@ -227,8 +225,8 @@ func (s *utilsSuite) TestCreateUnwrapDuplicationObjectBothWrappers(c *C) {
 			},
 			Unique: &PublicIDU{
 				ECC: &ECCPoint{
-					X: (*bigInt)(privKey.X).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
-					Y: (*bigInt)(privKey.Y).ZeroExtendedBytes(elliptic.P256().Params().BitSize / 8),
+					X: zeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
+					Y: zeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
 				},
 			},
 		},
