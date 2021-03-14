@@ -123,13 +123,11 @@ func cryptSymmetricDecrypt(alg SymAlgorithmId, key, iv, data []byte) error {
 	}
 }
 
-type bigInt big.Int
-
-func (x *bigInt) ZeroExtendedBytes(l int) []byte {
-	buf := make([]byte, l)
-	tmp := (*big.Int)(x).Bytes()
-	copy(buf[len(buf)-len(tmp):], tmp)
-	return buf
+func zeroExtendBytes(x *big.Int, l int) (out []byte) {
+	out = make([]byte, l)
+	tmp := x.Bytes()
+	copy(out[len(out)-len(tmp):], tmp)
+	return
 }
 
 func cryptSecretDecrypt(priv crypto.PrivateKey, hashAlg HashAlgorithmId, label []byte, secret EncryptedSecret) ([]byte, error) {
@@ -158,9 +156,8 @@ func cryptSecretDecrypt(priv crypto.PrivateKey, hashAlg HashAlgorithmId, label [
 		sz := p.Curve.Params().BitSize / 8
 
 		mulX, _ := p.Curve.ScalarMult(ephX, ephY, p.D.Bytes())
-		return internal.KDFe(hashAlg.GetHash(),
-			(*bigInt)(mulX).ZeroExtendedBytes(sz), label,
-			ephPoint.X, (*bigInt)(p.X).ZeroExtendedBytes(sz), hashAlg.Size()*8), nil
+		return internal.KDFe(hashAlg.GetHash(), zeroExtendBytes(mulX, sz), label,
+			ephPoint.X, zeroExtendBytes(p.X, sz), hashAlg.Size()*8), nil
 	default:
 		return nil, errors.New("unsupported key type")
 	}
@@ -207,17 +204,16 @@ func cryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, 
 		sz := pub.Curve.Params().BitSize / 8
 
 		encryptedSecret, err := mu.MarshalToBytes(&ECCPoint{
-			X: (*bigInt)(ephX).ZeroExtendedBytes(sz),
-			Y: (*bigInt)(ephY).ZeroExtendedBytes(sz)})
+			X: zeroExtendBytes(ephX, sz),
+			Y: zeroExtendBytes(ephY, sz)})
 		if err != nil {
 			panic(fmt.Sprintf("failed to marshal secret: %v", err))
 		}
 
 		mulX, _ := pub.Curve.ScalarMult(pub.X, pub.Y, ephPriv)
 		secret := internal.KDFe(public.NameAlg.GetHash(),
-			(*bigInt)(mulX).ZeroExtendedBytes(sz), label,
-			(*bigInt)(ephX).ZeroExtendedBytes(sz),
-			(*bigInt)(pub.X).ZeroExtendedBytes(sz), digestSize*8)
+			zeroExtendBytes(mulX, sz), label, zeroExtendBytes(ephX, sz),
+			zeroExtendBytes(pub.X, sz), digestSize*8)
 		return encryptedSecret, secret, nil
 	default:
 		return nil, nil, fmt.Errorf("unsupported key type %v", public.Type)
