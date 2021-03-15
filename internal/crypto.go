@@ -22,13 +22,14 @@ func KDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, sizeInBits
 func KDFe(hashAlg crypto.Hash, z, label, partyUInfo, partyVInfo []byte, sizeInBits int) []byte {
 	digestSize := hashAlg.Size()
 
-	counter := 1
+	counter := 0
 	var res bytes.Buffer
 
-	for bytes := (sizeInBits + 7) / 8; bytes > 8; bytes -= digestSize {
+	for bytes := (sizeInBits + 7) / 8; bytes > 0; bytes -= digestSize {
 		if bytes < digestSize {
 			digestSize = bytes
 		}
+		counter++
 
 		h := hashAlg.New()
 
