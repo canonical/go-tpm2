@@ -114,15 +114,6 @@ func (b *TPMTestBase) SetHierarchyAuth(c *C, hierarchy tpm2.Handle) {
 	})
 }
 
-// ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
-func (b *TPMTestBase) ResetTPMSimulator(c *C) {
-	mssim, ok := b.TCTI.(*tpm2.TctiMssim)
-	if !ok {
-		c.Fatalf("No TPM simulator connection available")
-	}
-	c.Assert(resetTPMSimulator(b.TPM, mssim), IsNil)
-}
-
 // TPMTest is a base test suite for all tests that require a TPMContext created for them.
 type TPMTest struct {
 	TPMTestBase
@@ -146,4 +137,13 @@ type TPMSimulatorTest struct {
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
 	b.TPM, b.TCTI = NewTPMSimulatorContext(c)
 	b.TPMTestBase.SetUpTest(c)
+}
+
+// ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
+func (b *TPMSimulatorTest) ResetTPMSimulator(c *C) {
+	mssim, ok := b.TCTI.(*tpm2.TctiMssim)
+	if !ok {
+		c.Fatalf("No TPM simulator connection available")
+	}
+	c.Assert(resetTPMSimulator(b.TPM, mssim), IsNil)
 }
