@@ -7,11 +7,12 @@ package tpm2_test
 import (
 	"crypto/rand"
 	"testing"
-	//. "github.com/canonical/go-tpm2"
+
+	"github.com/canonical/go-tpm2/testutil"
 )
 
 func TestGetRandom(t *testing.T) {
-	tpm := openTPMForTesting(t, 0)
+	tpm, _ := testutil.NewTPMContextT(t, 0)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -48,7 +49,7 @@ func TestGetRandom(t *testing.T) {
 }
 
 func TestStirRandom(t *testing.T) {
-	tpm := openTPMForTesting(t, 0)
+	tpm, _ := testutil.NewTPMContextT(t, 0)
 	defer closeTPM(t, tpm)
 
 	inData := make([]byte, 128)

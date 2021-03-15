@@ -15,7 +15,7 @@ import (
 )
 
 func TestContextSave(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, rc HandleContext, savedHandle, hierarchy Handle) {
@@ -84,7 +84,7 @@ func TestContextSave(t *testing.T) {
 }
 
 func TestContextSaveAndLoad(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	t.Run("TransientObject", func(t *testing.T) {
@@ -203,7 +203,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 }
 
 func TestEvictControl(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerPersist|testutil.TPMFeatureChangeOwnerAuth)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerPersist|testutil.TPMFeatureChangeOwnerAuth)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession SessionContext) {
@@ -276,7 +276,7 @@ func TestEvictControl(t *testing.T) {
 }
 
 func TestFlushContext(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	context := createRSASrkForTesting(t, tpm, nil)

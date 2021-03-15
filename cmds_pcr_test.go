@@ -13,7 +13,7 @@ import (
 )
 
 func TestPCRExtend(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -90,7 +90,7 @@ func TestPCRExtend(t *testing.T) {
 }
 
 func TestPCREvent(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -176,10 +176,10 @@ func TestPCREvent(t *testing.T) {
 }
 
 func TestPCRRead(t *testing.T) {
-	tpm, tcti := openTPMSimulatorForTesting(t)
+	tpm, tcti := testutil.NewTPMSimulatorContextT(t)
 	defer closeTPM(t, tpm)
 
-	resetTPMSimulator(t, tpm, tcti)
+	testutil.ResetTPMSimulatorT(t, tpm, tcti)
 
 	expectedDigests := make(PCRValues)
 
@@ -334,7 +334,7 @@ func TestPCRRead(t *testing.T) {
 }
 
 func TestPCRReset(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {

@@ -19,7 +19,7 @@ import (
 )
 
 func TestHMACSequence(t *testing.T) {
-	tpm := openTPMForTesting(t, 0)
+	tpm, _ := testutil.NewTPMContextT(t, 0)
 	defer closeTPM(t, tpm)
 
 	key := make([]byte, 32)
@@ -156,7 +156,7 @@ func TestHMACSequence(t *testing.T) {
 }
 
 func TestHashSequence(t *testing.T) {
-	tpm := openTPMForTesting(t, 0)
+	tpm, _ := testutil.NewTPMContextT(t, 0)
 	defer closeTPM(t, tpm)
 
 	start := func(t *testing.T, auth Auth, hashAlg HashAlgorithmId) ResourceContext {
@@ -248,7 +248,7 @@ func TestHashSequence(t *testing.T) {
 }
 
 func TestEventSequence(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	start := func(t *testing.T, auth Auth) ResourceContext {
@@ -365,7 +365,7 @@ func TestEventSequence(t *testing.T) {
 }
 
 func TestHashSequenceExecute(t *testing.T) {
-	tpm := openTPMForTesting(t, 0)
+	tpm, _ := testutil.NewTPMContextT(t, 0)
 	defer closeTPM(t, tpm)
 
 	b := make([]byte, 2500)
@@ -447,7 +447,7 @@ func TestHashSequenceExecute(t *testing.T) {
 }
 
 func TestEventSequenceExecute(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
 	defer closeTPM(t, tpm)
 
 	data := make([]byte, 2500)

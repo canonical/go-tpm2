@@ -34,6 +34,7 @@ func (b *BaseTest) TearDownTest(c *C) {
 	}
 }
 
+// AddCleanup queues a function to be called at the end of the test.
 func (b *BaseTest) AddCleanup(fn func()) {
 	b.cleanupHandlers = append(b.cleanupHandlers, fn)
 }
@@ -119,7 +120,7 @@ func (b *TPMTestBase) ResetTPMSimulator(c *C) {
 	if !ok {
 		c.Fatalf("No TPM simulator connection available")
 	}
-	c.Assert(ResetTPMSimulator(b.TPM, mssim), IsNil)
+	c.Assert(resetTPMSimulator(b.TPM, mssim), IsNil)
 }
 
 // TPMTest is a base test suite for all tests that require a TPMContext created for them.
@@ -132,13 +133,7 @@ type TPMTest struct {
 }
 
 func (b *TPMTest) SetUpTest(c *C) {
-	tpm, tcti, err := NewTPMContext(b.TPMFeatures)
-	c.Assert(err, IsNil)
-	if tpm == nil {
-		c.Skip("no TPM available for the test")
-	}
-	b.TPM = tpm
-	b.TCTI = tcti
+	b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
 	b.TPMTestBase.SetUpTest(c)
 }
 
@@ -149,12 +144,6 @@ type TPMSimulatorTest struct {
 }
 
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
-	tpm, tcti, err := NewTPMSimulatorContext()
-	c.Assert(err, IsNil)
-	if tpm == nil {
-		c.Skip("no TPM available for the test")
-	}
-	b.TPM = tpm
-	b.TCTI = tcti
+	b.TPM, b.TCTI = NewTPMSimulatorContext(c)
 	b.TPMTestBase.SetUpTest(c)
 }

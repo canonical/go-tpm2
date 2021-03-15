@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/canonical/go-tpm2"
@@ -23,9 +24,13 @@ import (
 	"github.com/snapcore/snapd/snap"
 
 	"golang.org/x/xerrors"
+
+	. "gopkg.in/check.v1"
 )
 
-// TPMFeatureFlags indicates the TPM features required by a test.
+// TPMFeatureFlags indicates the TPM features required by a test. It allows the test
+// runner to restrict the features available to tests to make the tests more friendly
+// with real TPM devices.
 type TPMFeatureFlags uint32
 
 const (
@@ -146,7 +151,8 @@ var (
 	TPMBackend TPMBackendType = TPMBackendNone
 
 	// PermittedTPMFeatures defines the permitted feature set for tests that use a TPMContext
-	// and where TPMBackend is not TPMBackendMssim.
+	// and where TPMBackend is not TPMBackendMssim. Tests that require features that aren't
+	// permitted will be skipped.
 	PermittedTPMFeatures TPMFeatureFlags
 
 	// TPMDevicePath defines the path of the TPM character device where TPMBackend is TPMBackendDevice.
@@ -428,14 +434,7 @@ Loop:
 	return cleanup, nil
 }
 
-// NewTCTI returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
-// TPMContext. If TPMBackend is TPMBackendNone, no TCTI will be returned and the calling test should be skipped. If
-// TPMBackend is TPMBackendMssim, the returned TCTI will be of the type *tpm2.TctiMssim and will correspond to a
-// connection to the TPM simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice,
-// the returned TCTI will be of the type *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by
-// the PermittedTPMFeatures variable. In this case, the TCTI will correspond to a connection to the Linux character
-// device at the path specified by the TPMDevicePath variable.
-func NewTCTI(features TPMFeatureFlags) (tpm2.TCTI, error) {
+func newTCTI(features TPMFeatureFlags) (tpm2.TCTI, error) {
 	switch TPMBackend {
 	case TPMBackendNone:
 		return nil, nil
@@ -458,26 +457,65 @@ func NewTCTI(features TPMFeatureFlags) (tpm2.TCTI, error) {
 	panic("not reached")
 }
 
-// NewTPMContext returns a new TPMContext for testing. If TPMBackend is TPMBackendNone, no context will be returned
-// and the calling test should be skipped. If TPMBackend is TPMBackendMssim, the returned context will correspond to
-// a connection to the TPM simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice,
-// a TPMContext will only be returned if the requested features are permitted, as defined by the PermittedTPMFeatures
-// variable. In this case, the TPMContext will correspond to a connection to the Linux character device at the path
-// specified by the TPMDevicePath variable.
-func NewTPMContext(features TPMFeatureFlags) (*tpm2.TPMContext, tpm2.TCTI, error) {
-	tcti, err := NewTCTI(features)
+// NewTCTI returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
+// TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
+// the returned TCTI will be of the type *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on
+// the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will be of the
+// type *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable.
+// In this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
+// TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+func NewTCTI(c *C, features TPMFeatureFlags) tpm2.TCTI {
+	tcti, err := newTCTI(features)
+	c.Assert(err, IsNil)
 	if tcti == nil {
-		return nil, nil, err
+		c.Skip("no TPM available for the test")
 	}
-
-	tpm, _ := tpm2.NewTPMContext(tcti)
-	return tpm, tcti, nil
+	return tcti
 }
 
-// NewTPMSimulatorContext returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
-// on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim, then no TPMContext will be
-// returned and the calling test should be skipped.
-func NewTPMSimulatorContext() (*tpm2.TPMContext, *tpm2.TctiMssim, error) {
+// NewTCTIT returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
+// TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
+// the returned TCTI will be of the type *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on
+// the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will be of the
+// type *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable.
+// In this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
+// TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+func NewTCTIT(t *testing.T, features TPMFeatureFlags) tpm2.TCTI {
+	tcti, err := newTCTI(features)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if tcti == nil {
+		t.SkipNow()
+	}
+	return tcti
+}
+
+// NewTPMContext returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
+// skipped. If TPMBackend is TPMBackendMssim, the returned context will correspond to a connection to the TPM
+// simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, a TPMContext will
+// be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
+// case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
+// TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, tpm2.TCTI) {
+	tcti := NewTCTI(c, features)
+	tpm, _ := tpm2.NewTPMContext(tcti)
+	return tpm, tcti
+}
+
+// NewTPMContextT returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
+// skipped. If TPMBackend is TPMBackendMssim, the returned context will correspond to a connection to the TPM
+// simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, a TPMContext will
+// be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
+// case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
+// TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (*tpm2.TPMContext, tpm2.TCTI) {
+	tcti := NewTCTIT(t, features)
+	tpm, _ := tpm2.NewTPMContext(tcti)
+	return tpm, tcti
+}
+
+func newTPMSimulatorContext() (*tpm2.TPMContext, *tpm2.TctiMssim, error) {
 	if TPMBackend != TPMBackendMssim {
 		return nil, nil, nil
 	}
@@ -491,8 +529,33 @@ func NewTPMSimulatorContext() (*tpm2.TPMContext, *tpm2.TctiMssim, error) {
 	return tpm, tcti, nil
 }
 
-// ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
-func ResetTPMSimulator(tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) error {
+// NewTPMSimulatorContext returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
+// skipped.
+func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *tpm2.TctiMssim) {
+	tpm, tcti, err := newTPMSimulatorContext()
+	c.Assert(err, IsNil)
+	if tpm == nil {
+		c.Skip("no TPM available for the test")
+	}
+	return tpm, tcti
+}
+
+// NewTPMSimulatorContextT returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
+// skipped.
+func NewTPMSimulatorContextT(t *testing.T) (*tpm2.TPMContext, *tpm2.TctiMssim) {
+	tpm, tcti, err := newTPMSimulatorContext()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if tpm == nil {
+		t.SkipNow()
+	}
+	return tpm, tcti
+}
+
+func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) error {
 	if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
 		return err
 	}
@@ -500,4 +563,11 @@ func ResetTPMSimulator(tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) error {
 		return xerrors.Errorf("resetting the simulator failed: %v", err)
 	}
 	return tpm.Startup(tpm2.StartupClear)
+}
+
+// ResetTPMSimulatorT issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
+func ResetTPMSimulatorT(t *testing.T, tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) {
+	if err := resetTPMSimulator(tpm, tcti); err != nil {
+		t.Fatalf("%v", err)
+	}
 }

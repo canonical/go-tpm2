@@ -382,34 +382,6 @@ func verifyContextFlushed(t *testing.T, tpm *TPMContext, context HandleContext) 
 	flushContext(t, tpm, context)
 }
 
-func resetTPMSimulator(t *testing.T, tpm *TPMContext, tcti *TctiMssim) {
-	if err := testutil.ResetTPMSimulator(tpm, tcti); err != nil {
-		t.Fatalf("Cannot reset TPM simulator: %v", err)
-	}
-}
-
-func openTPMSimulatorForTesting(t *testing.T) (*TPMContext, *TctiMssim) {
-	tpm, tcti, err := testutil.NewTPMSimulatorContext()
-	if err != nil {
-		t.Fatalf("Cannot open TPM simulator: %v", err)
-	}
-	if tpm == nil {
-		t.SkipNow()
-	}
-	return tpm, tcti
-}
-
-func openTPMForTesting(t *testing.T, features testutil.TPMFeatureFlags) *TPMContext {
-	tpm, _, err := testutil.NewTPMContext(features)
-	if err != nil {
-		t.Fatalf("Cannot open TPM: %v", err)
-	}
-	if tpm == nil {
-		t.SkipNow()
-	}
-	return tpm
-}
-
 func closeTPM(t *testing.T, tpm *TPMContext) {
 	if err := tpm.Close(); err != nil {
 		t.Errorf("Close failed: %v", err)

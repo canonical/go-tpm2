@@ -12,7 +12,7 @@ import (
 )
 
 func TestSetCommandCodeAuditStatus(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureSetCommandCodeAuditStatus|testutil.TPMFeatureHierarchyChangeAuth)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureSetCommandCodeAuditStatus|testutil.TPMFeatureHierarchyChangeAuth)
 	defer closeTPM(t, tpm)
 
 	var allCommands CommandCodeList

@@ -18,7 +18,7 @@ import (
 )
 
 func TestCreate(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, parent, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session SessionContext) (*Public, Private) {
@@ -179,7 +179,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, parent ResourceContext, session SessionContext) {
@@ -244,7 +244,7 @@ func TestLoad(t *testing.T) {
 }
 
 func TestReadPublic(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -307,7 +307,7 @@ func TestReadPublic(t *testing.T) {
 }
 
 func TestLoadExternal(t *testing.T) {
-	tpm := openTPMForTesting(t, 0)
+	tpm, _ := testutil.NewTPMContextT(t, 0)
 	defer closeTPM(t, tpm)
 
 	run1 := func(t *testing.T, sensitive *Sensitive, template *Public, hierarchy Handle) ResourceContext {
@@ -487,7 +487,7 @@ func TestLoadExternal(t *testing.T) {
 }
 
 func TestUnseal(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -564,7 +564,7 @@ func TestUnseal(t *testing.T) {
 }
 
 func TestObjectChangeAuth(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
@@ -647,7 +647,7 @@ func TestObjectChangeAuth(t *testing.T) {
 }
 
 func TestMakeCredential(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureEndorsementHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	ek := createRSAEkForTesting(t, tpm)
@@ -689,7 +689,7 @@ func TestMakeCredential(t *testing.T) {
 }
 
 func TestActivateCredential(t *testing.T) {
-	tpm := openTPMForTesting(t, testutil.TPMFeatureEndorsementHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureEndorsementHierarchy)
 	defer closeTPM(t, tpm)
 
 	ek := createRSAEkForTesting(t, tpm)
