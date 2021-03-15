@@ -22,7 +22,7 @@ func (s *startupSuite) runStartupTest(c *C, shutdownType, startupType StartupTyp
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.Shutdown(shutdownType), IsNil)
-	c.Check(s.TCTI.(*TctiMssim).Reset(), IsNil)
+	c.Check(s.TCTI.Reset(), IsNil)
 	c.Check(s.TPM.Startup(startupType), IsNil)
 
 	time, err := s.TPM.ReadClock()

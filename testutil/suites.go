@@ -39,20 +39,42 @@ func (b *BaseTest) AddCleanup(fn func()) {
 	b.cleanupHandlers = append(b.cleanupHandlers, fn)
 }
 
-// TPMTestBase is a base test suite for all tests that require a TPMContext but want to implement
-// creation of the TPMContext themselves. This base test suite will take care of cleaning up all
-// flushable resources (transient objects and sessions) at the end of each test, as well as closing
-// the supplied TPMContext.
-type TPMTestBase struct {
+// TPMTest is a base test suite for all tests that use a TPMContext. This test suite will take care of
+// cleaning up all flushable resources (transient objects and sessions) at the end of each test, as well
+// as closing the TPMContext.
+//
+// A TPMContext will be created automatically for each test. For tests that want to implement creation
+// of the TPMContext, the TPM and TCTI members should be set before SetUpTest is called.
+type TPMTest struct {
 	BaseTest
-	TPM  *tpm2.TPMContext // Not anonymous because of TestParms. Should be set before SetUpTest is called
-	TCTI tpm2.TCTI        // Should be set before SetUpTest is called
+
+	// TPM is the TPM context for the test. Set this before SetUpTest is called in order to override
+	// the default context creation. Not anonymous because of TPMContext.TestParms.
+	TPM *tpm2.TPMContext
+
+	TCTI tpm2.TCTI
+
+	// TPMFeatures defines the features required by this suite. It should be set before SetUpTest
+	// is called if the test relies on the default context creation.
+	TPMFeatures TPMFeatureFlags
 }
 
-func (b *TPMTestBase) SetUpTest(c *C) {
+func (b *TPMTest) initTPMContextIfNeeded(c *C) {
+	if b.TPM != nil {
+		return
+	}
+	b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
+}
+
+func (b *TPMTest) SetUpTest(c *C) {
 	b.BaseTest.SetUpTest(c)
 
-	b.AddCleanup(func() { c.Assert(b.TPM.Close(), IsNil) })
+	b.initTPMContextIfNeeded(c)
+
+	b.AddCleanup(func() {
+		c.Assert(b.TPM.Close(), IsNil)
+		b.TPM = nil
+	})
 
 	getFlushableHandles := func() (out []tpm2.Handle) {
 		for _, t := range []tpm2.HandleType{tpm2.HandleTypeTransient, tpm2.HandleTypeLoadedSession, tpm2.HandleTypeSavedSession} {
@@ -99,7 +121,7 @@ func (b *TPMTestBase) SetUpTest(c *C) {
 
 // AddCleanupNVSpace ensures that the supplied NV index is undefined at the end of the test, using
 // the supplied authHandle for authorization.
-func (b *TPMTestBase) AddCleanupNVSpace(c *C, authHandle, index tpm2.ResourceContext) {
+func (b *TPMTest) AddCleanupNVSpace(c *C, authHandle, index tpm2.ResourceContext) {
 	b.AddCleanup(func() {
 		c.Check(b.TPM.NVUndefineSpace(authHandle, index, nil), IsNil)
 	})
@@ -107,43 +129,34 @@ func (b *TPMTestBase) AddCleanupNVSpace(c *C, authHandle, index tpm2.ResourceCon
 
 // SetHierarchyAuth sets the authorization value for the supplied hierarchy to TestAuth and automatically
 // clears it again at the end of the test.
-func (b *TPMTestBase) SetHierarchyAuth(c *C, hierarchy tpm2.Handle) {
+func (b *TPMTest) SetHierarchyAuth(c *C, hierarchy tpm2.Handle) {
 	c.Assert(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), TestAuth, nil), IsNil)
 	b.AddCleanup(func() {
 		c.Check(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), nil, nil), IsNil)
 	})
 }
 
-// TPMTest is a base test suite for all tests that require a TPMContext created for them.
-type TPMTest struct {
-	TPMTestBase
-
-	// TPMFeatures defines the features required by this suite. It should be set before
-	// SetUpTest is called.
-	TPMFeatures TPMFeatureFlags
-}
-
-func (b *TPMTest) SetUpTest(c *C) {
-	b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
-	b.TPMTestBase.SetUpTest(c)
-}
-
-// TPMSimulatorTest is a base test suite for all tests that require a TPMContext and TctiMssim
-// created for them.
+// TPMSimulatorTest is a base test suite for all tests that use the TPM simulator (TctiMssim).
 type TPMSimulatorTest struct {
-	TPMTestBase
+	TPMTest
+
+	TCTI *tpm2.TctiMssim
+}
+
+func (b *TPMSimulatorTest) initTPMSimulatorContextIfNeeded(c *C) {
+	if b.TPM != nil {
+		return
+	}
+	b.TPM, b.TCTI = NewTPMSimulatorContext(c)
+	b.TPMTest.TCTI = b.TCTI
 }
 
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
-	b.TPM, b.TCTI = NewTPMSimulatorContext(c)
-	b.TPMTestBase.SetUpTest(c)
+	b.initTPMSimulatorContextIfNeeded(c)
+	b.TPMTest.SetUpTest(c)
 }
 
 // ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
 func (b *TPMSimulatorTest) ResetTPMSimulator(c *C) {
-	mssim, ok := b.TCTI.(*tpm2.TctiMssim)
-	if !ok {
-		c.Fatalf("No TPM simulator connection available")
-	}
-	c.Assert(resetTPMSimulator(b.TPM, mssim), IsNil)
+	c.Assert(resetTPMSimulator(b.TPM, b.TCTI), IsNil)
 }
