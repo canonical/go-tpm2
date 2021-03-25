@@ -10,33 +10,56 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type sliceContainsChecker struct {
-	*CheckerInfo
+type inSliceChecker struct {
+	sub Checker
 }
 
-var SliceContains Checker = &sliceContainsChecker{
-	&CheckerInfo{Name: "SliceContains", Params: []string{"value", "slice"}}}
+func (checker *inSliceChecker) Info() *CheckerInfo {
+	info := *checker.sub.Info()
+	info.Name = "InSlice(" + info.Name + ")"
+	if len(info.Params) >= 2 {
+		info.Params[1] = "[]" + info.Params[1]
+	} else {
+		info.Params = append(info.Params, "[]expected")
+	}
+	info.Params = info.Params[:2]
+	return &info
+}
 
-func (checker *sliceContainsChecker) Check(params []interface{}, names []string) (result bool, error string) {
-	list := reflect.ValueOf(params[1])
-	if list.Kind() != reflect.Slice {
+func (checker *inSliceChecker) Check(params []interface{}, names []string) (result bool, error string) {
+	if len(params) != len(checker.sub.Info().Params) {
+		return false, "InSlice can only be used with checkers that require 2 parameters"
+	}
+
+	slice := reflect.ValueOf(params[1])
+	if slice.Kind() != reflect.Slice {
 		return false, names[1] + "has the wrong kind"
 	}
-	if reflect.TypeOf(params[0]) != list.Type().Elem() {
-		return false, names[0] + "has the wrong type"
-	}
-	for i := 0; i < list.Len(); i++ {
-		if params[0] == list.Index(i).Interface() {
+
+	for i := 0; i < slice.Len(); i++ {
+		if result, _ := checker.sub.Check([]interface{}{params[0], slice.Index(i).Interface()}, []string{names[0], checker.sub.Info().Params[1]}); result {
 			return true, ""
 		}
 	}
 	return false, ""
 }
 
+// InSlice determines whether a value is contained in the provided slice, using
+// the specified checker.
+//
+// For example:
+//
+//  c.Check(value, InSlice(Equals), []int{1, 2, 3})
+//
+func InSlice(checker Checker) Checker {
+	return &inSliceChecker{checker}
+}
+
 type isTrueChecker struct {
 	*CheckerInfo
 }
 
+// IsTrue determines whether a boolean value is true.
 var IsTrue Checker = &isTrueChecker{
 	&CheckerInfo{Name: "IsTrue", Params: []string{"value"}}}
 
@@ -48,13 +71,5 @@ func (checker *isTrueChecker) Check(params []interface{}, names []string) (resul
 	return value.Bool(), ""
 }
 
-type isFalseChecker struct {
-	Checker
-}
-
-var IsFalse Checker = &isFalseChecker{IsTrue}
-
-func (checker *isFalseChecker) Check(params []interface{}, names []string) (result bool, error string) {
-	r, err := checker.Checker.Check(params, names)
-	return !r, err
-}
+// IsFalse determines whether a boolean value is false.
+var IsFalse = Not(IsTrue)

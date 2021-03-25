@@ -402,7 +402,7 @@ func (s *capabilitiesSuite) TestGetCapabilityTPMProperties3(c *C) {
 func (s *capabilitiesSuite) TestGetManufacturer(c *C) {
 	id, err := s.TPM.GetManufacturer()
 	c.Check(err, IsNil)
-	c.Check(id, testutil.SliceContains, []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT})
+	c.Check(id, testutil.InSlice(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT})
 }
 
 func (s *capabilitiesSuite) testTestParms(c *C, params *PublicParams) {
