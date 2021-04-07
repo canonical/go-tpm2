@@ -17,6 +17,7 @@ type inSliceChecker struct {
 func (checker *inSliceChecker) Info() *CheckerInfo {
 	info := *checker.sub.Info()
 	info.Name = "InSlice(" + info.Name + ")"
+	info.Params = append([]string{}, info.Params...)
 	if len(info.Params) >= 2 {
 		info.Params[1] = "[]" + info.Params[1]
 	} else {
@@ -33,7 +34,7 @@ func (checker *inSliceChecker) Check(params []interface{}, names []string) (resu
 
 	slice := reflect.ValueOf(params[1])
 	if slice.Kind() != reflect.Slice {
-		return false, names[1] + "has the wrong kind"
+		return false, names[1] + " has the wrong kind"
 	}
 
 	for i := 0; i < slice.Len(); i++ {
@@ -66,10 +67,23 @@ var IsTrue Checker = &isTrueChecker{
 func (checker *isTrueChecker) Check(params []interface{}, names []string) (result bool, error string) {
 	value := reflect.ValueOf(params[0])
 	if value.Kind() != reflect.Bool {
-		return false, names[0] + "is not a bool"
+		return false, names[0] + " is not a bool"
 	}
 	return value.Bool(), ""
 }
 
+type isFalseChecker struct {
+	*CheckerInfo
+}
+
 // IsFalse determines whether a boolean value is false.
-var IsFalse = Not(IsTrue)
+var IsFalse Checker = &isFalseChecker{
+	&CheckerInfo{Name: "IsFalse", Params: []string{"value"}}}
+
+func (checker *isFalseChecker) Check(params []interface{}, names []string) (result bool, error string) {
+	value := reflect.ValueOf(params[0])
+	if value.Kind() != reflect.Bool {
+		return false, names[0] + " is not a bool"
+	}
+	return !value.Bool(), ""
+}
