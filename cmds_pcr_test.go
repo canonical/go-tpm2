@@ -179,7 +179,7 @@ func TestPCRRead(t *testing.T) {
 	tpm, tcti := testutil.NewTPMSimulatorContextT(t)
 	defer closeTPM(t, tpm)
 
-	testutil.ResetTPMSimulatorT(t, tpm, tcti)
+	testutil.ResetTPMSimulatorT(t, tpm, tcti.Unwrap().(*TctiMssim))
 
 	expectedDigests := make(PCRValues)
 

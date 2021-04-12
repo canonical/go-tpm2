@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -434,7 +435,7 @@ Loop:
 	return cleanup, nil
 }
 
-func newTCTI(features TPMFeatureFlags) (tpm2.TCTI, error) {
+func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
 	switch TPMBackend {
 	case TPMBackendNone:
 		return nil, nil
@@ -446,25 +447,25 @@ func newTCTI(features TPMFeatureFlags) (tpm2.TCTI, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &tctiFilter{tcti, features}, nil
+		return &TCTI{tcti, features}, nil
 	case TPMBackendMssim:
 		tcti, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
 		if err != nil {
 			return nil, err
 		}
-		return &tctiFilter{tcti, features}, nil
+		return &TCTI{tcti, features}, nil
 	}
 	panic("not reached")
 }
 
 // NewTCTI returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
-// the returned TCTI will be of the type *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on
-// the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will be of the
-// type *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable.
-// In this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
+// the returned TCTI will wrap a *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on the port
+// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will wrap a
+// *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
-func NewTCTI(c *C, features TPMFeatureFlags) tpm2.TCTI {
+func NewTCTI(c *C, features TPMFeatureFlags) *TCTI {
 	tcti, err := newTCTI(features)
 	c.Assert(err, IsNil)
 	if tcti == nil {
@@ -475,12 +476,12 @@ func NewTCTI(c *C, features TPMFeatureFlags) tpm2.TCTI {
 
 // NewTCTIT returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
-// the returned TCTI will be of the type *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on
-// the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will be of the
-// type *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable.
-// In this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
+// the returned TCTI will wrap a *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on the port
+// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will wrap a
+// *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
-func NewTCTIT(t *testing.T, features TPMFeatureFlags) tpm2.TCTI {
+func NewTCTIT(t *testing.T, features TPMFeatureFlags) *TCTI {
 	tcti, err := newTCTI(features)
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -497,7 +498,7 @@ func NewTCTIT(t *testing.T, features TPMFeatureFlags) tpm2.TCTI {
 // be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
-func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, tpm2.TCTI) {
+func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
 	tcti := NewTCTI(c, features)
 	tpm, _ := tpm2.NewTPMContext(tcti)
 	return tpm, tcti
@@ -509,21 +510,23 @@ func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, tpm2.TCTI)
 // be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
-func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (*tpm2.TPMContext, tpm2.TCTI) {
+func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
 	tcti := NewTCTIT(t, features)
 	tpm, _ := tpm2.NewTPMContext(tcti)
 	return tpm, tcti
 }
 
-func newTPMSimulatorContext() (*tpm2.TPMContext, *tpm2.TctiMssim, error) {
+func newTPMSimulatorContext() (*tpm2.TPMContext, *TCTI, error) {
 	if TPMBackend != TPMBackendMssim {
 		return nil, nil, nil
 	}
 
-	tcti, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
+	mssim, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	tcti := &TCTI{mssim, TPMFeatureFlags(math.MaxUint32)}
 
 	tpm, _ := tpm2.NewTPMContext(tcti)
 	return tpm, tcti, nil
@@ -532,7 +535,7 @@ func newTPMSimulatorContext() (*tpm2.TPMContext, *tpm2.TctiMssim, error) {
 // NewTPMSimulatorContext returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
 // skipped.
-func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *tpm2.TctiMssim) {
+func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
 	tpm, tcti, err := newTPMSimulatorContext()
 	c.Assert(err, IsNil)
 	if tpm == nil {
@@ -544,7 +547,7 @@ func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *tpm2.TctiMssim) {
 // NewTPMSimulatorContextT returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
 // skipped.
-func NewTPMSimulatorContextT(t *testing.T) (*tpm2.TPMContext, *tpm2.TctiMssim) {
+func NewTPMSimulatorContextT(t *testing.T) (*tpm2.TPMContext, *TCTI) {
 	tpm, tcti, err := newTPMSimulatorContext()
 	if err != nil {
 		t.Fatalf("%v", err)

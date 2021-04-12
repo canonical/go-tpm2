@@ -127,16 +127,17 @@ type commandHeader struct {
 	CommandCode tpm2.CommandCode
 }
 
-type tctiFilter struct {
+// TCTI is a special inteface used for testing, which wraps a real interface.
+type TCTI struct {
 	tcti              tpm2.TCTI
 	requestedFeatures TPMFeatureFlags
 }
 
-func (t *tctiFilter) Read(data []byte) (int, error) {
+func (t *TCTI) Read(data []byte) (int, error) {
 	return t.tcti.Read(data)
 }
 
-func (t *tctiFilter) Write(data []byte) (int, error) {
+func (t *TCTI) Write(data []byte) (int, error) {
 	r := bytes.NewReader(data)
 
 	var commandFeatures TPMFeatureFlags
@@ -201,14 +202,19 @@ func (t *tctiFilter) Write(data []byte) (int, error) {
 	return t.tcti.Write(data)
 }
 
-func (t *tctiFilter) Close() error {
+func (t *TCTI) Close() error {
 	return t.tcti.Close()
 }
 
-func (t *tctiFilter) SetLocality(locality uint8) error {
+func (t *TCTI) SetLocality(locality uint8) error {
 	return t.tcti.SetLocality(locality)
 }
 
-func (t *tctiFilter) MakeSticky(handle tpm2.Handle, sticky bool) error {
+func (t *TCTI) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return t.tcti.MakeSticky(handle, sticky)
+}
+
+// Unwrap returns the real interface that this one wraps.
+func (t *TCTI) Unwrap() tpm2.TCTI {
+	return t.tcti
 }

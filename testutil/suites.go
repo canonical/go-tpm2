@@ -52,7 +52,7 @@ type TPMTest struct {
 	// the default context creation. Not anonymous because of TPMContext.TestParms.
 	TPM *tpm2.TPMContext
 
-	TCTI tpm2.TCTI
+	TCTI *TCTI
 
 	// TPMFeatures defines the features required by this suite. It should be set before SetUpTest
 	// is called if the test relies on the default context creation.
@@ -147,8 +147,10 @@ func (b *TPMSimulatorTest) initTPMSimulatorContextIfNeeded(c *C) {
 	if b.TPM != nil {
 		return
 	}
-	b.TPM, b.TCTI = NewTPMSimulatorContext(c)
-	b.TPMTest.TCTI = b.TCTI
+	tpm, tcti := NewTPMSimulatorContext(c)
+	b.TPM = tpm
+	b.TCTI = tcti.Unwrap().(*tpm2.TctiMssim)
+	b.TPMTest.TCTI = tcti
 }
 
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
