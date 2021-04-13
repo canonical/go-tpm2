@@ -11,114 +11,106 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+
+	"golang.org/x/xerrors"
 )
 
-func commandMayModifyPersistentStorage(command tpm2.CommandCode) bool {
-	switch command {
-	case tpm2.CommandNVUndefineSpaceSpecial, tpm2.CommandNVUndefineSpace, tpm2.CommandNVDefineSpace, tpm2.CommandNVGlobalWriteLock,
-		tpm2.CommandNVIncrement, tpm2.CommandNVSetBits, tpm2.CommandNVExtend, tpm2.CommandNVWrite, tpm2.CommandNVWriteLock,
-		tpm2.CommandNVChangeAuth:
-		return true
-	case tpm2.CommandEvictControl:
-		return true
-	case tpm2.CommandClear:
-		return true
-	default:
-		return false
-	}
+type commandInfo struct {
+	authHandles int
+	cmdHandles  int
+
+	// canModifyPersistentStorage indicates that the command can make
+	// changes to data stored persistently in the device, such as persisting
+	// or evicting objects, and definining, undefining, modifying NV objects.
+	canModifyPersistentStorage bool
+
+	// canMakeStClearChange indicates that the command can make changes
+	// that persist until the next Startup(ST_CLEAR).
+	canMakeStClearChange bool
 }
 
-func commandMayMakeStClearChange(command tpm2.CommandCode) bool {
-	switch command {
-	case tpm2.CommandNVReadLock:
-		return true
-	default:
-		return false
-	}
-}
-
-var numberOfCommandAuthHandles = map[tpm2.CommandCode]int{
-	tpm2.CommandNVUndefineSpaceSpecial:     2,
-	tpm2.CommandEvictControl:               2,
-	tpm2.CommandHierarchyControl:           1,
-	tpm2.CommandNVUndefineSpace:            1, // 2 handles total
-	tpm2.CommandClear:                      1,
-	tpm2.CommandClearControl:               1,
-	tpm2.CommandHierarchyChangeAuth:        1,
-	tpm2.CommandNVDefineSpace:              1,
-	tpm2.CommandCreatePrimary:              1,
-	tpm2.CommandNVGlobalWriteLock:          1,
-	tpm2.CommandGetCommandAuditDigest:      2,
-	tpm2.CommandNVIncrement:                1, // 2 handles total
-	tpm2.CommandNVSetBits:                  1, // 2 handles total
-	tpm2.CommandNVExtend:                   1, // 2 handles total
-	tpm2.CommandNVWrite:                    1, // 2 handles total
-	tpm2.CommandNVWriteLock:                1, // 2 handles total
-	tpm2.CommandDictionaryAttackLockReset:  1,
-	tpm2.CommandDictionaryAttackParameters: 1,
-	tpm2.CommandNVChangeAuth:               1,
-	tpm2.CommandPCREvent:                   1,
-	tpm2.CommandPCRReset:                   1,
-	tpm2.CommandSequenceComplete:           1,
-	tpm2.CommandSetCommandCodeAuditStatus:  1,
-	tpm2.CommandIncrementalSelfTest:        0,
-	tpm2.CommandSelfTest:                   0,
-	tpm2.CommandStartup:                    0,
-	tpm2.CommandShutdown:                   0,
-	tpm2.CommandStirRandom:                 0,
-	tpm2.CommandActivateCredential:         2,
-	tpm2.CommandCertify:                    2,
-	tpm2.CommandPolicyNV:                   1, // 3 handles total
-	tpm2.CommandCertifyCreation:            1, // 2 handles total
-	tpm2.CommandDuplicate:                  1, // 2 handles total
-	tpm2.CommandGetTime:                    2,
-	tpm2.CommandGetSessionAuditDigest:      2, // 3 handles total
-	tpm2.CommandNVRead:                     1, // 2 handles total
-	tpm2.CommandNVReadLock:                 1, // 2 handles total
-	tpm2.CommandObjectChangeAuth:           1, // 2 handles total
-	tpm2.CommandPolicySecret:               1, // 2 hanldes total
-	tpm2.CommandCreate:                     1,
-	tpm2.CommandImport:                     1,
-	tpm2.CommandLoad:                       1,
-	tpm2.CommandQuote:                      1,
-	tpm2.CommandHMACStart:                  1,
-	tpm2.CommandSequenceUpdate:             1,
-	tpm2.CommandSign:                       1,
-	tpm2.CommandUnseal:                     1,
-	tpm2.CommandPolicySigned:               0, // 2 handles total
-	tpm2.CommandContextLoad:                0,
-	tpm2.CommandContextSave:                0, // 1 handle total
-	tpm2.CommandFlushContext:               0,
-	tpm2.CommandLoadExternal:               0,
-	tpm2.CommandMakeCredential:             0, // 1 handle total
-	tpm2.CommandNVReadPublic:               0, // 1 handle total
-	tpm2.CommandPolicyAuthorize:            0, // 1 handle total
-	tpm2.CommandPolicyAuthValue:            0, // 1 handle total
-	tpm2.CommandPolicyCommandCode:          0, // 1 handle total
-	tpm2.CommandPolicyCounterTimer:         0, // 1 handle total
-	tpm2.CommandPolicyCpHash:               0, // 1 handle total
-	tpm2.CommandPolicyNameHash:             0, // 1 handle total
-	tpm2.CommandPolicyOR:                   0, // 1 handle total
-	tpm2.CommandPolicyTicket:               0, // 1 handle total
-	tpm2.CommandReadPublic:                 0, // 1 handle total
-	tpm2.CommandStartAuthSession:           0, // 2 handles total
-	tpm2.CommandVerifySignature:            0, // 1 handle total
-	tpm2.CommandGetCapability:              0,
-	tpm2.CommandGetRandom:                  0,
-	tpm2.CommandGetTestResult:              0,
-	tpm2.CommandPCRRead:                    0,
-	tpm2.CommandPolicyPCR:                  0,
-	tpm2.CommandPolicyRestart:              0, // 1 handle total
-	tpm2.CommandReadClock:                  0,
-	tpm2.CommandPCRExtend:                  1,
-	tpm2.CommandEventSequenceComplete:      2,
-	tpm2.CommandHashSequenceStart:          0,
-	tpm2.CommandPolicyDuplicationSelect:    0, // 1 handle total
-	tpm2.CommandPolicyGetDigest:            0, // 1 handle total
-	tpm2.CommandTestParms:                  0,
-	tpm2.CommandPolicyPassword:             0, // 1 handle total
-	tpm2.CommandPolicyNvWritten:            0, // 1 handle total
-	tpm2.CommandCreateLoaded:               1,
+var commandInfoMap = map[tpm2.CommandCode]commandInfo{
+	tpm2.CommandNVUndefineSpaceSpecial:     commandInfo{2, 2, true, false},
+	tpm2.CommandEvictControl:               commandInfo{2, 2, true, false},
+	tpm2.CommandHierarchyControl:           commandInfo{1, 1, false, false},
+	tpm2.CommandNVUndefineSpace:            commandInfo{1, 2, true, false},
+	tpm2.CommandClear:                      commandInfo{1, 1, true, false},
+	tpm2.CommandClearControl:               commandInfo{1, 1, false, false},
+	tpm2.CommandHierarchyChangeAuth:        commandInfo{1, 1, false, false},
+	tpm2.CommandNVDefineSpace:              commandInfo{1, 1, true, false},
+	tpm2.CommandCreatePrimary:              commandInfo{1, 1, false, false},
+	tpm2.CommandNVGlobalWriteLock:          commandInfo{1, 1, true, false},
+	tpm2.CommandGetCommandAuditDigest:      commandInfo{2, 2, false, false},
+	tpm2.CommandNVIncrement:                commandInfo{1, 2, true, false},
+	tpm2.CommandNVSetBits:                  commandInfo{1, 2, true, false},
+	tpm2.CommandNVExtend:                   commandInfo{1, 2, true, false},
+	tpm2.CommandNVWrite:                    commandInfo{1, 2, true, false},
+	tpm2.CommandNVWriteLock:                commandInfo{1, 2, true, false},
+	tpm2.CommandDictionaryAttackLockReset:  commandInfo{1, 1, false, false},
+	tpm2.CommandDictionaryAttackParameters: commandInfo{1, 1, false, false},
+	tpm2.CommandNVChangeAuth:               commandInfo{1, 1, true, false},
+	tpm2.CommandPCREvent:                   commandInfo{1, 1, false, false},
+	tpm2.CommandPCRReset:                   commandInfo{1, 1, false, false},
+	tpm2.CommandSequenceComplete:           commandInfo{1, 1, false, false},
+	tpm2.CommandSetCommandCodeAuditStatus:  commandInfo{1, 1, false, false},
+	tpm2.CommandIncrementalSelfTest:        commandInfo{0, 0, false, false},
+	tpm2.CommandSelfTest:                   commandInfo{0, 0, false, false},
+	tpm2.CommandStartup:                    commandInfo{0, 0, false, false},
+	tpm2.CommandShutdown:                   commandInfo{0, 0, false, false},
+	tpm2.CommandStirRandom:                 commandInfo{0, 0, false, false},
+	tpm2.CommandActivateCredential:         commandInfo{2, 2, false, false},
+	tpm2.CommandCertify:                    commandInfo{2, 2, false, false},
+	tpm2.CommandPolicyNV:                   commandInfo{1, 3, false, false},
+	tpm2.CommandCertifyCreation:            commandInfo{1, 2, false, false},
+	tpm2.CommandDuplicate:                  commandInfo{1, 2, false, false},
+	tpm2.CommandGetTime:                    commandInfo{2, 2, false, false},
+	tpm2.CommandGetSessionAuditDigest:      commandInfo{2, 3, false, false},
+	tpm2.CommandNVRead:                     commandInfo{1, 2, false, false},
+	tpm2.CommandNVReadLock:                 commandInfo{1, 2, false, true},
+	tpm2.CommandObjectChangeAuth:           commandInfo{1, 2, false, false},
+	tpm2.CommandPolicySecret:               commandInfo{1, 2, false, false},
+	tpm2.CommandCreate:                     commandInfo{1, 1, false, false},
+	tpm2.CommandImport:                     commandInfo{1, 1, false, false},
+	tpm2.CommandLoad:                       commandInfo{1, 1, false, false},
+	tpm2.CommandQuote:                      commandInfo{1, 1, false, false},
+	tpm2.CommandHMACStart:                  commandInfo{1, 1, false, false},
+	tpm2.CommandSequenceUpdate:             commandInfo{1, 1, false, false},
+	tpm2.CommandSign:                       commandInfo{1, 1, false, false},
+	tpm2.CommandUnseal:                     commandInfo{1, 1, false, false},
+	tpm2.CommandPolicySigned:               commandInfo{0, 2, false, false},
+	tpm2.CommandContextLoad:                commandInfo{0, 0, false, false},
+	tpm2.CommandContextSave:                commandInfo{0, 1, false, false},
+	tpm2.CommandFlushContext:               commandInfo{0, 0, false, false},
+	tpm2.CommandLoadExternal:               commandInfo{0, 0, false, false},
+	tpm2.CommandMakeCredential:             commandInfo{0, 1, false, false},
+	tpm2.CommandNVReadPublic:               commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyAuthorize:            commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyAuthValue:            commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyCommandCode:          commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyCounterTimer:         commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyCpHash:               commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyNameHash:             commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyOR:                   commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyTicket:               commandInfo{0, 1, false, false},
+	tpm2.CommandReadPublic:                 commandInfo{0, 1, false, false},
+	tpm2.CommandStartAuthSession:           commandInfo{0, 2, false, false},
+	tpm2.CommandVerifySignature:            commandInfo{0, 1, false, false},
+	tpm2.CommandGetCapability:              commandInfo{0, 0, false, false},
+	tpm2.CommandGetRandom:                  commandInfo{0, 0, false, false},
+	tpm2.CommandGetTestResult:              commandInfo{0, 0, false, false},
+	tpm2.CommandPCRRead:                    commandInfo{0, 0, false, false},
+	tpm2.CommandPolicyPCR:                  commandInfo{0, 0, false, false},
+	tpm2.CommandPolicyRestart:              commandInfo{0, 1, false, false},
+	tpm2.CommandReadClock:                  commandInfo{0, 0, false, false},
+	tpm2.CommandPCRExtend:                  commandInfo{1, 1, false, false},
+	tpm2.CommandEventSequenceComplete:      commandInfo{2, 2, false, false},
+	tpm2.CommandHashSequenceStart:          commandInfo{0, 0, false, false},
+	tpm2.CommandPolicyDuplicationSelect:    commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyGetDigest:            commandInfo{0, 1, false, false},
+	tpm2.CommandTestParms:                  commandInfo{0, 0, false, false},
+	tpm2.CommandPolicyPassword:             commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyNvWritten:            commandInfo{0, 1, false, false},
+	tpm2.CommandCreateLoaded:               commandInfo{1, 1, false, false},
 }
 
 // TCTI is a special inteface used for testing, which wraps a real interface.
@@ -132,23 +124,43 @@ func (t *TCTI) Read(data []byte) (int, error) {
 }
 
 func (t *TCTI) Write(data []byte) (int, error) {
-	r := bytes.NewReader(data)
+	cmd := tpm2.CommandPacket(data)
+
+	commandCode, err := cmd.GetCommandCode()
+	if err != nil {
+		return 0, xerrors.Errorf("cannot determine command code: %w", err)
+	}
+
+	cmdInfo, ok := commandInfoMap[commandCode]
+	if !ok {
+		return 0, errors.New("unsupported command")
+	}
+
+	hBytes, _, _, err := cmd.UnmarshalPayload(cmdInfo.cmdHandles)
+	if err != nil {
+		return 0, xerrors.Errorf("invalid command payload: %w", err)
+	}
+
+	hr := bytes.NewReader(hBytes)
+	var handles tpm2.HandleList
+	for hr.Len() > 0 {
+		var handle tpm2.Handle
+		if _, err := mu.UnmarshalFromReader(hr, &handle); err != nil {
+			return 0, xerrors.Errorf("cannot unmarshal handle: %w", err)
+		}
+		handles = append(handles, handle)
+	}
 
 	var commandFeatures TPMFeatureFlags
 
-	var h tpm2.CommandHeader
-	if _, err := mu.UnmarshalFromReader(r, &h); err != nil {
-		return 0, err
-	}
-
-	if commandMayModifyPersistentStorage(h.CommandCode) {
+	if cmdInfo.canModifyPersistentStorage {
 		commandFeatures |= TPMFeaturePersist
 	}
-	if commandMayMakeStClearChange(h.CommandCode) {
+	if cmdInfo.canMakeStClearChange {
 		commandFeatures |= TPMFeatureStClearChange
 	}
 
-	switch h.CommandCode {
+	switch commandCode {
 	case tpm2.CommandDictionaryAttackParameters:
 		commandFeatures |= TPMFeatureDAParameters
 	case tpm2.CommandHierarchyChangeAuth:
@@ -165,16 +177,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		commandFeatures |= TPMFeatureHierarchyControl
 	}
 
-	numHandles, ok := numberOfCommandAuthHandles[h.CommandCode]
-	if !ok {
-		return 0, errors.New("unsupported command")
-	}
-
-	for i := 0; i < numHandles; i++ {
-		var h tpm2.Handle
-		if _, err := mu.UnmarshalFromReader(r, &h); err != nil {
-			return 0, err
-		}
+	for _, h := range handles {
 		switch {
 		case h == tpm2.HandleOwner:
 			commandFeatures |= TPMFeatureOwnerHierarchy
