@@ -126,7 +126,7 @@ func (p ResponsePacket) Unmarshal(numHandles int) (rc ResponseCode, handles []by
 		}
 
 		for buf.Len() > 0 {
-			if len(authArea) > 3 {
+			if len(authArea) >= 3 {
 				return 0, nil, nil, nil, fmt.Errorf("%d trailing byte(s)", buf.Len())
 			}
 
