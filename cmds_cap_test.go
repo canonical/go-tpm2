@@ -6,6 +6,7 @@ package tpm2_test
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 
@@ -531,7 +532,7 @@ func (t *mockTPM12Tcti) Read(data []byte) (int, error) {
 	// paramSize = 10
 	// returnCode = TPM_BAD_ORDINAL (10)
 	b, _ := mu.MarshalToBytes(uint16(0xc4), uint32(10), uint32(10))
-	return copy(data, b), nil
+	return copy(data, b), io.EOF
 }
 
 func (t *mockTPM12Tcti) Write(data []byte) (int, error) {

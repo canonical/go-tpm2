@@ -7,19 +7,12 @@ package tpm2
 import (
 	"bytes"
 	"crypto/hmac"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash"
-	"io"
-
-	"github.com/canonical/go-tpm2/mu"
-
-	"golang.org/x/xerrors"
 )
 
 type policyHMACType uint8
-type sessionAttrs uint8
 
 const (
 	policyHMACTypeNoAuth policyHMACType = iota
@@ -28,54 +21,6 @@ const (
 
 	policyHMACTypeMax = policyHMACTypePassword
 )
-
-const (
-	attrContinueSession sessionAttrs = 1 << iota
-	attrAuditExclusive
-	attrAuditReset
-	attrDecrypt = 1 << (iota + 2)
-	attrEncrypt
-	attrAudit
-)
-
-type authCommand struct {
-	SessionHandle Handle
-	Nonce         Nonce
-	SessionAttrs  sessionAttrs
-	HMAC          Auth
-}
-
-type commandAuthArea []authCommand
-
-type commandAuthAreaRawSlice struct {
-	Data []authCommand `tpm2:"raw"`
-}
-
-func (a commandAuthArea) Marshal(w io.Writer) error {
-	tmpBuf := new(bytes.Buffer)
-	if _, err := mu.MarshalToWriter(tmpBuf, commandAuthAreaRawSlice{[]authCommand(a)}); err != nil {
-		panic(fmt.Sprintf("cannot marshal raw command auth area to temporary buffer: %v", err))
-	}
-
-	if err := binary.Write(w, binary.BigEndian, uint32(tmpBuf.Len())); err != nil {
-		return xerrors.Errorf("cannot write size of auth area to buffer: %w", err)
-	}
-
-	if _, err := tmpBuf.WriteTo(w); err != nil {
-		return xerrors.Errorf("cannot write marshalled auth area to buffer: %w", err)
-	}
-	return nil
-}
-
-func (a *commandAuthArea) Unmarshal(r mu.Reader) error {
-	panic("no need to unmarshal a command's auth area")
-}
-
-type authResponse struct {
-	Nonce        Nonce
-	SessionAttrs sessionAttrs
-	HMAC         Auth
-}
 
 type sessionParam struct {
 	session           *sessionContext // The session instance used for this session parameter - will be nil for a password authorization
@@ -99,7 +44,7 @@ func (s *sessionParam) computeSessionHMACKey() []byte {
 	return key
 }
 
-func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce, attrs sessionAttrs) ([]byte, bool) {
+func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce, attrs SessionAttributes) ([]byte, bool) {
 	key := s.computeSessionHMACKey()
 	h := hmac.New(func() hash.Hash { return s.session.Data().HashAlg.NewHash() }, key)
 
@@ -116,11 +61,11 @@ func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDe
 func (s *sessionParam) computeCommandHMAC(commandCode CommandCode, commandHandles []Name, cpBytes []byte) []byte {
 	data := s.session.Data()
 	cpHash := cryptComputeCpHash(data.HashAlg, commandCode, commandHandles, cpBytes)
-	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.decryptNonce, s.encryptNonce, s.session.tpmAttrs())
+	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.decryptNonce, s.encryptNonce, s.session.attrs.canonicalize())
 	return h
 }
 
-func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *authCommand {
+func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *AuthCommand {
 	data := s.session.Data()
 
 	var hmac []byte
@@ -135,18 +80,18 @@ func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandH
 		hmac = s.computeCommandHMAC(commandCode, commandHandles, cpBytes)
 	}
 
-	return &authCommand{
-		SessionHandle: s.session.Handle(),
-		Nonce:         data.NonceCaller,
-		SessionAttrs:  s.session.tpmAttrs(),
-		HMAC:          hmac}
+	return &AuthCommand{
+		SessionHandle:     s.session.Handle(),
+		Nonce:             data.NonceCaller,
+		SessionAttributes: s.session.attrs.canonicalize(),
+		HMAC:              hmac}
 }
 
-func (s *sessionParam) buildCommandPasswordAuth() *authCommand {
-	return &authCommand{SessionHandle: HandlePW, SessionAttrs: attrContinueSession, HMAC: s.associatedContext.(resourceContextPrivate).GetAuthValue()}
+func (s *sessionParam) buildCommandPasswordAuth() *AuthCommand {
+	return &AuthCommand{SessionHandle: HandlePW, SessionAttributes: AttrContinueSession, HMAC: s.associatedContext.(resourceContextPrivate).GetAuthValue()}
 }
 
-func (s *sessionParam) buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *authCommand {
+func (s *sessionParam) buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *AuthCommand {
 	if s.session == nil {
 		// Cleartext password session
 		return s.buildCommandPasswordAuth()
@@ -155,21 +100,21 @@ func (s *sessionParam) buildCommandAuth(commandCode CommandCode, commandHandles 
 	return s.buildCommandSessionAuth(commandCode, commandHandles, cpBytes)
 }
 
-func (s *sessionParam) computeResponseHMAC(resp authResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) ([]byte, bool) {
+func (s *sessionParam) computeResponseHMAC(resp AuthResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) ([]byte, bool) {
 	data := s.session.Data()
 	rpHash := cryptComputeRpHash(data.HashAlg, responseCode, commandCode, rpBytes)
-	return s.computeHMAC(rpHash, data.NonceTPM, data.NonceCaller, nil, nil, resp.SessionAttrs)
+	return s.computeHMAC(rpHash, data.NonceTPM, data.NonceCaller, nil, nil, resp.SessionAttributes)
 }
 
-func (s *sessionParam) processResponseAuth(resp authResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) error {
+func (s *sessionParam) processResponseAuth(resp AuthResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) error {
 	if s.session == nil {
 		return nil
 	}
 
 	data := s.session.Data()
 	data.NonceTPM = resp.Nonce
-	data.IsAudit = resp.SessionAttrs&attrAudit > 0
-	data.IsExclusive = resp.SessionAttrs&attrAuditExclusive > 0
+	data.IsAudit = resp.SessionAttributes&AttrAudit > 0
+	data.IsExclusive = resp.SessionAttributes&AttrAuditExclusive > 0
 
 	if data.SessionType == SessionTypePolicy && data.PolicyHMACType == policyHMACTypePassword {
 		if len(resp.HMAC) != 0 {
@@ -210,7 +155,7 @@ func (p *sessionParams) findSessionWithAttr(attr SessionAttributes) (*sessionPar
 		if session.session == nil {
 			continue
 		}
-		if session.session.attrs&attr > 0 {
+		if session.session.attrs.canonicalize()&attr > 0 {
 			return session, i
 		}
 	}
@@ -295,7 +240,7 @@ func (p *sessionParams) computeCallerNonces() error {
 	return nil
 }
 
-func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte) (commandAuthArea, error) {
+func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte) ([]AuthCommand, error) {
 	if err := p.computeCallerNonces(); err != nil {
 		return nil, fmt.Errorf("cannot compute caller nonces: %v", err)
 	}
@@ -307,7 +252,7 @@ func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHan
 	p.computeEncryptNonce()
 	p.commandCode = commandCode
 
-	var area commandAuthArea
+	var area []AuthCommand
 	for _, s := range p.sessions {
 		a := s.buildCommandAuth(commandCode, commandHandles, cpBytes)
 		area = append(area, *a)
@@ -316,20 +261,20 @@ func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHan
 	return area, nil
 }
 
-func (p *sessionParams) invalidateSessionContexts(authResponses []authResponse) {
+func (p *sessionParams) invalidateSessionContexts(authResponses []AuthResponse) {
 	for i, resp := range authResponses {
 		session := p.sessions[i].session
 		if session == nil {
 			continue
 		}
-		if resp.SessionAttrs&attrContinueSession != 0 {
+		if resp.SessionAttributes&AttrContinueSession != 0 {
 			continue
 		}
 		session.invalidate()
 	}
 }
 
-func (p *sessionParams) processResponseAuthArea(authResponses []authResponse, responseCode ResponseCode, rpBytes []byte) error {
+func (p *sessionParams) processResponseAuthArea(authResponses []AuthResponse, responseCode ResponseCode, rpBytes []byte) error {
 	defer p.invalidateSessionContexts(authResponses)
 
 	for i, resp := range authResponses {

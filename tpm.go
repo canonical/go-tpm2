@@ -6,10 +6,10 @@ package tpm2
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"reflect"
 
 	"github.com/canonical/go-tpm2/mu"
@@ -49,28 +49,11 @@ func isSessionAllowed(commandCode CommandCode) bool {
 	}
 }
 
-type responseAuthAreaRawSlice struct {
-	Data []authResponse `tpm2:"raw"`
-}
-
-type commandHeader struct {
-	Tag         StructTag
-	CommandSize uint32
-	CommandCode CommandCode
-}
-
-type responseHeader struct {
-	Tag          StructTag
-	ResponseSize uint32
-	ResponseCode ResponseCode
-}
-
 type cmdContext struct {
 	commandCode      CommandCode
 	sessionParams    *sessionParams
 	responseCode     ResponseCode
-	responseTag      StructTag
-	responseAuthArea []authResponse
+	responseAuthArea []AuthResponse
 	rpBytes          []byte
 }
 
@@ -124,49 +107,22 @@ func (t *TPMContext) Close() error {
 	return nil
 }
 
-// RunCommandBytes is a low-level interface for executing the command defined by the specified commandCode. It will construct an
-// appropriate header, but the caller is responsible for providing the rest of the serialized command structure in commandBytes.
-// Valid values for tag are TagNoSessions if the authorization area is empty, else it must be TagSessions.
+// RunCommandBytes is a low-level interface for executing a command. The caller is responsible for supplying a properly
+// serialized command packet, which can be created with MarshalCommandPacket.
 //
-// If successful, this function will return the ResponseCode and StructTag from the response header along with the rest of the
-// response structure (everything except for the header). It will not return an error if the TPM responds with an error as long as
-// the returned response structure is correctly formed, but will return an error if marshalling of the command header or
-// unmarshalling of the response header fails, or the transmission interface returns an error.
-func (t *TPMContext) RunCommandBytes(tag StructTag, commandCode CommandCode, commandBytes []byte) (ResponseCode, StructTag, []byte, error) {
-	cHeader := commandHeader{tag, 0, commandCode}
-	cHeader.CommandSize = uint32(binary.Size(cHeader) + len(commandBytes))
-
-	cmd := new(bytes.Buffer)
-	if _, err := mu.MarshalToWriter(cmd, cHeader, mu.RawBytes(commandBytes)); err != nil {
-		panic(fmt.Sprintf("cannot marshal complete command packet bytes: %v", err))
+// If successful, this function will return the response packet. An error will only be returned if the transmission
+// interface returns an error.
+func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, error) {
+	if _, err := t.tcti.Write(packet); err != nil {
+		return nil, &TctiError{"write", err}
 	}
 
-	if _, err := cmd.WriteTo(t.tcti); err != nil {
-		return 0, 0, nil, &TctiError{"write", err}
+	resp, err := ioutil.ReadAll(t.tcti)
+	if err != nil {
+		return nil, &TctiError{"read", err}
 	}
 
-	var rHeader responseHeader
-	rHeaderSize := uint32(binary.Size(rHeader))
-	if n, err := mu.UnmarshalFromReader(t.tcti, &rHeader); err != nil {
-		if xerrors.Is(err, io.ErrUnexpectedEOF) {
-			return 0, 0, nil, &InvalidResponseError{commandCode, fmt.Sprintf("insufficient bytes for response header (got %d, expected %d)", n, rHeaderSize)}
-		}
-		return 0, 0, nil, &TctiError{"read", err}
-	}
-
-	if rHeader.ResponseSize < rHeaderSize {
-		return 0, 0, nil, &InvalidResponseError{commandCode, fmt.Sprintf("invalid responseSize value (%d)", rHeader.ResponseSize)}
-	}
-
-	responseBytes := make([]byte, rHeader.ResponseSize-rHeaderSize)
-	if n, err := io.ReadFull(t.tcti, responseBytes); err != nil {
-		if xerrors.Is(err, io.ErrUnexpectedEOF) {
-			return 0, 0, nil, &InvalidResponseError{commandCode, fmt.Sprintf("insufficient bytes for response payload (got %d, expected %d)", n, len(responseBytes))}
-		}
-		return 0, 0, nil, &TctiError{"read", err}
-	}
-
-	return rHeader.ResponseCode, rHeader.Tag, responseBytes, nil
+	return ResponsePacket(resp), nil
 }
 
 func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, resources, params, outHandles []interface{}) (*cmdContext, error) {
@@ -202,107 +158,72 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
 	}
 
-	cBytes := new(bytes.Buffer)
-
-	if _, err := mu.MarshalToWriter(cBytes, handles...); err != nil {
+	chBytes, err := mu.MarshalToBytes(handles...)
+	if err != nil {
 		panic(fmt.Sprintf("cannot marshal command handles: %v", err))
 	}
 
-	cpBytes := new(bytes.Buffer)
-	if _, err := mu.MarshalToWriter(cpBytes, params...); err != nil {
-		return nil, xerrors.Errorf("cannot marshal command parameters for command %s: %w", commandCode, err)
+	cpBytes, err := mu.MarshalToBytes(params...)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", commandCode, err)
 	}
 
-	tag := TagNoSessions
-	if len(sessionParams.sessions) > 0 {
-		tag = TagSessions
-		authArea, err := sessionParams.buildCommandAuthArea(commandCode, handleNames, cpBytes.Bytes())
-		if err != nil {
-			return nil, xerrors.Errorf("cannot build command auth area for command %s: %w", commandCode, err)
-		}
-		if _, err := mu.MarshalToWriter(cBytes, &authArea); err != nil {
-			panic(fmt.Sprintf("cannot marshal command auth area: %v", err))
-		}
+	cAuthArea, err := sessionParams.buildCommandAuthArea(commandCode, handleNames, cpBytes)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", commandCode, err)
 	}
 
-	if _, err := cpBytes.WriteTo(cBytes); err != nil {
-		panic(fmt.Sprintf("cannot write command parameter bytes to command buffer: %v", err))
-	}
+	cmd := MarshalCommandPacket(commandCode, chBytes, cAuthArea, cpBytes)
 
 	var responseCode ResponseCode
-	var responseTag StructTag
-	var responseBytes []byte
+	var rhBytes []byte
+	var rpBytes []byte
+	var rAuthArea []AuthResponse
 
 	for tries := uint(1); ; tries++ {
 		var err error
-		responseCode, responseTag, responseBytes, err = t.RunCommandBytes(tag, commandCode, cBytes.Bytes())
+		resp, err := t.RunCommandBytes(cmd)
 		if err != nil {
 			return nil, err
 		}
 
+		responseCode, rhBytes, rpBytes, rAuthArea, err = resp.Unmarshal(len(outHandles))
+		if err != nil {
+			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response packet: %v", err)}
+		}
+
 		err = DecodeResponseCode(commandCode, responseCode)
 		if err == nil {
+			if len(rAuthArea) != len(sessionParams.sessions) {
+				return nil, &InvalidResponseError{commandCode, fmt.Sprintf("unexpected number of auth responses (got %d, expected %d)",
+					len(rAuthArea), len(sessionParams.sessions))}
+			}
+
 			break
 		}
 
 		if tries >= t.maxSubmissions {
 			return nil, err
 		}
-		if e, ok := err.(*TPMWarning); !ok || !(e.Code == WarningYielded || e.Code == WarningTesting || e.Code == WarningRetry) {
+		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
 			return nil, err
 		}
 	}
 
-	buf := bytes.NewReader(responseBytes)
-
-	if len(outHandles) > 0 {
-		if _, err := mu.UnmarshalFromReader(buf, outHandles...); err != nil {
-			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response handles: %v", err)}
-		}
-	}
-
-	var authArea responseAuthAreaRawSlice
-	var rpBytes []byte
-
-	switch responseTag {
-	case TagSessions:
-		var parameterSize uint32
-		if _, err := mu.UnmarshalFromReader(buf, &parameterSize); err != nil {
-			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response parameterSize: %v", err)}
-		}
-		rpBytes = make([]byte, parameterSize)
-		if _, err := io.ReadFull(buf, rpBytes); err != nil {
-			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot read response parameter area: %v", err)}
-		}
-
-		authArea.Data = make([]authResponse, len(sessionParams.sessions))
-		if _, err := mu.UnmarshalFromReader(buf, &authArea); err != nil {
-			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response auth area: %v", err)}
-		}
-	case TagNoSessions:
-		rpBytes = make([]byte, buf.Len())
-		if _, err := io.ReadFull(buf, rpBytes); err != nil {
-			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot read response parameter area: %v", err)}
-		}
-	default:
-		return nil, &InvalidResponseError{commandCode, fmt.Sprintf("unexpected response tag: %v", responseTag)}
-	}
-
-	if buf.Len() > 0 {
-		return nil, &InvalidResponseError{commandCode, fmt.Sprintf("response payload contains %d trailing bytes", buf.Len())}
+	if _, err := mu.UnmarshalFromBytes(rhBytes, outHandles...); err != nil {
+		return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response handles: %v", err)}
 	}
 
 	return &cmdContext{
 		commandCode:      commandCode,
 		sessionParams:    sessionParams,
 		responseCode:     responseCode,
-		responseTag:      responseTag,
-		responseAuthArea: authArea.Data,
+		responseAuthArea: rAuthArea,
 		rpBytes:          rpBytes}, nil
 }
 
 func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) error {
-	if cmd.responseTag == TagSessions {
+	if len(cmd.responseAuthArea) > 0 {
 		if err := cmd.sessionParams.processResponseAuthArea(cmd.responseAuthArea, cmd.responseCode, cmd.rpBytes); err != nil {
 			return &InvalidResponseError{cmd.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
 		}
@@ -330,10 +251,8 @@ func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) 
 
 	rpBuf := bytes.NewReader(cmd.rpBytes)
 
-	if len(params) > 0 {
-		if _, err := mu.UnmarshalFromReader(rpBuf, params...); err != nil {
-			return &InvalidResponseError{cmd.commandCode, fmt.Sprintf("cannot unmarshal response parameters: %v", err)}
-		}
+	if _, err := mu.UnmarshalFromReader(rpBuf, params...); err != nil {
+		return &InvalidResponseError{cmd.commandCode, fmt.Sprintf("cannot unmarshal response parameters: %v", err)}
 	}
 
 	if rpBuf.Len() > 0 {

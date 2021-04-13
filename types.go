@@ -100,6 +100,19 @@ type AlgorithmAttributes uint32
 // ObjectAttributes corresponds to the TPMA_OBJECT type, and represents the attributes for an object.
 type ObjectAttributes uint32
 
+// SessionAttributes corresponds to the TPMA_SESSION type, and represents the attributes for a session.
+type SessionAttributes uint8
+
+func (a SessionAttributes) canonicalize() SessionAttributes {
+	if a&AttrAuditExclusive > 0 {
+		a |= AttrAudit
+	}
+	if a&AttrAuditReset > 0 {
+		a |= AttrAudit
+	}
+	return a
+}
+
 // Locality corresponds to the TPMA_LOCALITY type.
 type Locality uint8
 
@@ -823,6 +836,25 @@ type Attest struct {
 
 type attestSized struct {
 	Ptr *Attest `tpm2:"sized"`
+}
+
+// 10.13) Authorization Structures
+
+// AuthCommand corresppnds to the TPMS_AUTH_COMMAND type, and represents an authorization
+// for a command.
+type AuthCommand struct {
+	SessionHandle     Handle
+	Nonce             Nonce
+	SessionAttributes SessionAttributes
+	HMAC              Auth
+}
+
+// AuthResponse corresponds to the TPMS_AUTH_RESPONSE type, and represents an authorization
+// response for a command.
+type AuthResponse struct {
+	Nonce             Nonce
+	SessionAttributes SessionAttributes
+	HMAC              Auth
 }
 
 // 11) Algorithm Parameters and Structures

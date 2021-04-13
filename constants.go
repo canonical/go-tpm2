@@ -632,6 +632,50 @@ const (
 )
 
 const (
+	// AttrContinueSession corresponds to continueSession and specifies that the session should not be flushed
+	// from the TPM after it is used. If a session is used without this flag, it will be flushed from the TPM
+	// after the command completes successfully. In this case, the HandleContext associated with the session
+	// will be invalidated.
+	AttrContinueSession SessionAttributes = 1 << iota
+
+	// AttrAuditExclusive corresponds to auditExclusive and indicates that the command should only be executed
+	// if the session is exclusive at the start of the command. A session becomes exclusive when it is used for
+	// auditing for the first time, or if the AttrAuditReset attribute is provided. A session will remain
+	// exclusive until the TPM executes any command where the exclusive session isn't used for auditing, if
+	// that command allows for audit sessions to be provided.
+	//
+	// Setting this on SessionContext implies AttrAudit.
+	AttrAuditExclusive
+
+	// AttrAuditReset corresponds to auditReset and indicates that the audit digest of the session should be reset.
+	// The session will subsequently become exclusive. A session will remain exclusive until the TPM executes any
+	// command where the exclusive session isn't used for auditing, if that command allows for audit sessions to be
+	// provided.
+	//
+	// Setting this on SessionContext implies AttrAudit.
+	AttrAuditReset
+
+	// AttrCommandEncrypt corresponds to decrypt and specifies that the session should be used for encryption of the
+	// first command parameter before being sent from the host to the TPM. This can only be used for parameters that
+	// have types corresponding to TPM2B prefixed TCG types, and requires a session that was configured with a valid
+	// symmetric algorithm via the symmetric argument of TPMContext.StartAuthSession.
+	AttrCommandEncrypt = 1 << (iota + 2)
+
+	// AttrResponseEncrypt corresponds to encrypt and specifies that the session should be used for encryption of the
+	// first response parameter before being sent from the TPM to the host. This can only be used for parameters that
+	// have types corresponding to TPM2B prefixed TCG types, and requires a session that was configured with a valid
+	// symmetric algorithm via the symmetric argument of TPMContext.StartAuthSession. This package automatically
+	// decrypts the received encrypted response parameter.
+	AttrResponseEncrypt
+
+	// AttrAudit corresponds to audit and indicates that the session should be used for auditing. If this is the first
+	// time that the session is used for auditing, then this attribute will result in the session becoming exclusive.
+	// A session will remain exclusive until the TPM executes any command where the exclusive session isn't used for
+	// auditing, if that command allows for audit sessions to be provided.
+	AttrAudit
+)
+
+const (
 	AttrNVPPWrite        NVAttributes = 1 << 0  // TPMA_NV_PPWRITE
 	AttrNVOwnerWrite     NVAttributes = 1 << 1  // TPMA_NV_OWNERWRITE
 	AttrNVAuthWrite      NVAttributes = 1 << 2  // TPMA_NV_AUTHWRITE

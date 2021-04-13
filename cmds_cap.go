@@ -259,17 +259,24 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (manufacturer T
 // On success, this will return true if TPMContext is connected to a TPM2 device, or false if it is connected to a TPM1.2 device. An
 // error will be returned if communication with the device fails or the response packet is badly formed.
 func (t *TPMContext) IsTPM2() (isTpm2 bool, err error) {
-	cBytes, err := mu.MarshalToBytes(CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(1))
+	cpBytes, err := mu.MarshalToBytes(CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(0))
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal command parameter bytes: %v", err))
 	}
 
-	_, tag, _, err := t.RunCommandBytes(TagNoSessions, CommandGetCapability, cBytes)
+	cmd := MarshalCommandPacket(CommandGetCapability, nil, nil, cpBytes)
+
+	resp, err := t.RunCommandBytes(cmd)
 	if err != nil {
 		return false, err
 	}
 
-	if tag == TagNoSessions {
+	var rHeader ResponseHeader
+	if _, err := mu.UnmarshalFromBytes(resp, &rHeader); err != nil {
+		return false, &InvalidResponseError{CommandGetCapability, fmt.Sprintf("cannot unmarshal response header: %v", err)}
+	}
+
+	if rHeader.Tag == TagNoSessions {
 		return true, nil
 	}
 	return false, nil

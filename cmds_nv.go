@@ -259,7 +259,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 		for i, s := range sessions {
 			if s.(*sessionContext).attrs&AttrContinueSession == 0 {
 				return makeInvalidArgError("sessions",
-					fmt.Sprintf("the AttrContineSession attribute is required for session at index %d for writes larger than %d bytes", i, t.maxNVBufferSize))
+					fmt.Sprintf("the AttrContinueSession attribute is required for session at index %d for writes larger than %d bytes", i, t.maxNVBufferSize))
 			}
 		}
 	}

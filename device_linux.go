@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -46,13 +47,17 @@ func (d *TctiDeviceLinux) readMoreData() error {
 }
 
 func (d *TctiDeviceLinux) Read(data []byte) (int, error) {
-	if d.buf == nil || d.buf.Len() == 0 {
+	if d.buf == nil {
 		if err := d.readMoreData(); err != nil {
 			return 0, err
 		}
 	}
 
-	return d.buf.Read(data)
+	n, err := d.buf.Read(data)
+	if err == io.EOF {
+		d.buf = nil
+	}
+	return n, err
 }
 
 func (d *TctiDeviceLinux) Write(data []byte) (int, error) {

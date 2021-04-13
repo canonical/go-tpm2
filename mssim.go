@@ -67,12 +67,17 @@ func (t *TctiMssim) readMoreData() error {
 }
 
 func (t *TctiMssim) Read(data []byte) (int, error) {
-	if t.buf == nil || t.buf.Len() == 0 {
+	if t.buf == nil {
 		if err := t.readMoreData(); err != nil {
 			return 0, err
 		}
 	}
-	return t.buf.Read(data)
+
+	n, err := t.buf.Read(data)
+	if err == io.EOF {
+		t.buf = nil
+	}
+	return n, err
 }
 
 func (t *TctiMssim) Write(data []byte) (int, error) {
