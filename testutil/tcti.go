@@ -121,12 +121,6 @@ var numberOfCommandAuthHandles = map[tpm2.CommandCode]int{
 	tpm2.CommandCreateLoaded:               1,
 }
 
-type commandHeader struct {
-	Tag         tpm2.StructTag
-	CommandSize uint32
-	CommandCode tpm2.CommandCode
-}
-
 // TCTI is a special inteface used for testing, which wraps a real interface.
 type TCTI struct {
 	tcti              tpm2.TCTI
@@ -142,7 +136,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 
 	var commandFeatures TPMFeatureFlags
 
-	var h commandHeader
+	var h tpm2.CommandHeader
 	if _, err := mu.UnmarshalFromReader(r, &h); err != nil {
 		return 0, err
 	}
