@@ -103,18 +103,7 @@ func (b *TPMTest) SetUpTest(c *C) {
 			if found {
 				continue
 			}
-			var hc tpm2.HandleContext
-			switch h.Type() {
-			case tpm2.HandleTypeTransient:
-				var err error
-				hc, err = b.TPM.CreateResourceContextFromTPM(h)
-				c.Check(err, IsNil)
-			case tpm2.HandleTypeHMACSession:
-				hc = tpm2.CreateIncompleteSessionContext(h)
-			default:
-				c.Fatalf("Unexpected handle type")
-			}
-			c.Check(b.TPM.FlushContext(hc), IsNil)
+			c.Check(b.TPM.FlushContext(tpm2.CreatePartialHandleContext(h)), IsNil)
 		}
 	})
 }

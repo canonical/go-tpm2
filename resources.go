@@ -68,7 +68,7 @@ type resourceContextPrivate interface {
 type handleContextType uint8
 
 const (
-	handleContextTypeDummy handleContextType = iota
+	handleContextTypePartial handleContextType = iota
 	handleContextTypePermanent
 	handleContextTypeObject
 	handleContextTypeNvIndex
@@ -97,7 +97,7 @@ type handleContextU struct {
 
 func (d *handleContextU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(handleContextType) {
-	case handleContextTypeDummy, handleContextTypePermanent:
+	case handleContextTypePartial, handleContextTypePermanent:
 		return mu.NilUnionValue
 	case handleContextTypeObject:
 		return &d.Object
@@ -239,30 +239,13 @@ func (h *handleContext) checkConsistency() error {
 	return nil
 }
 
-type dummyContext struct {
-	handleContext
-}
-
-func (r *dummyContext) SerializeToBytes() []byte {
-	return nil
-}
-
-func (r *dummyContext) SerializeToWriter(io.Writer) error {
-	return nil
-}
-
-func (r *dummyContext) SetAuthValue([]byte) {}
-
-func (r *dummyContext) invalidate() {}
-
-func makeDummyContext(handle Handle) *dummyContext {
+func makePartialHandleContext(handle Handle) *handleContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &dummyContext{
-		handleContext: handleContext{
-			Type: handleContextTypeDummy,
-			H:    handle,
-			N:    name}}
+	return &handleContext{
+		Type: handleContextTypePartial,
+		H:    handle,
+		N:    name}
 }
 
 type resourceContext struct {
@@ -276,6 +259,16 @@ func (r *resourceContext) SetAuthValue(authValue []byte) {
 
 func (r *resourceContext) GetAuthValue() []byte {
 	return r.authValue
+}
+
+func makePartialResourceContext(handle Handle) *resourceContext {
+	name := make(Name, binary.Size(Handle(0)))
+	binary.BigEndian.PutUint32(name, uint32(handle))
+	return &resourceContext{
+		handleContext: handleContext{
+			Type: handleContextTypePartial,
+			H:    handle,
+			N:    name}}
 }
 
 type permanentContext struct {
@@ -456,7 +449,7 @@ func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...Ses
 		panic("invalid handle type")
 	}
 
-	var rc ResourceContext = makeDummyContext(handle)
+	var rc ResourceContext = makePartialResourceContext(handle)
 	var s []SessionContext
 	for i := 0; i < 2; i++ {
 		var err error
@@ -484,14 +477,14 @@ func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...Ses
 	return rc, nil
 }
 
-// CreateIncompleteSessionContext creates and returns a new SessionContext for the specified handle. The returned SessionContext will
-// not be complete and the session associated with it cannot be used in any command other than TPMContext.FlushContext.
+// CreatePartialHandleContext creates a new HandleContext for the specified handle. The returned HandleContext is partial
+// and cannot be used in any command other than TPMContext.FlushContext.
 //
-// This function will panic if handle doesn't correspond to a session.
-func CreateIncompleteSessionContext(handle Handle) SessionContext {
+// This function will panic if handle doesn't correspond to a session or transient object.
+func CreatePartialHandleContext(handle Handle) HandleContext {
 	switch handle.Type() {
-	case HandleTypeHMACSession, HandleTypePolicySession:
-		return makeSessionContext(handle, nil)
+	case HandleTypeHMACSession, HandleTypePolicySession, HandleTypeTransient:
+		return makePartialHandleContext(handle)
 	default:
 		panic("invalid handle type")
 	}

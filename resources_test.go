@@ -6,6 +6,7 @@ package tpm2_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
@@ -75,8 +76,8 @@ func TestCreateResourceContextFromTPM(t *testing.T) {
 	})
 }
 
-func TestCreateIncompleteSessionContext(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
+func TestCreatePartialHandleContext(t *testing.T) {
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
@@ -85,18 +86,31 @@ func TestCreateIncompleteSessionContext(t *testing.T) {
 	}
 	defer flushContext(t, tpm, context)
 
-	sc := CreateIncompleteSessionContext(context.Handle())
+	sc := CreatePartialHandleContext(context.Handle())
 	if sc == nil {
-		t.Fatalf("CreateIncompleteSessionContext returned a nil context")
-	}
-	if sc == context {
-		t.Errorf("CreateIncompleteSessionContext didn't return a new context")
+		t.Fatalf("CreatePartialHandleContext returned a nil context")
 	}
 	if sc.Handle() != context.Handle() {
-		t.Errorf("CreateIncompleteSessionContext returned a context with the wrong handle")
+		t.Errorf("CreatePartialHandleContext returned a context with the wrong handle")
 	}
 	if !bytes.Equal(sc.Name(), context.Name()) {
-		t.Errorf("CreateIncompleteSessionContext returned a context with the wrong name")
+		t.Errorf("CreatePartialHandleContext returned a context with the wrong name")
+	}
+
+	context2 := createRSASrkForTesting(t, tpm, nil)
+	defer flushContext(t, tpm, context2)
+
+	rc := CreatePartialHandleContext(context2.Handle())
+	if rc == nil {
+		t.Fatalf("CreatePartialHandleContext returned a nil context")
+	}
+	if rc.Handle() != context2.Handle() {
+		t.Errorf("CreatePartialHandleContext returned a context with the wrong handle")
+	}
+	name := make(Name, binary.Size(Handle(0)))
+	binary.BigEndian.PutUint32(name, uint32(context2.Handle()))
+	if !bytes.Equal(rc.Name(), name) {
+		t.Errorf("CreatePartialHandleContext returned a context with the wrong name")
 	}
 }
 

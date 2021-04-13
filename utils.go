@@ -49,7 +49,7 @@ func ComputeCpHash(hashAlg HashAlgorithmId, command CommandCode, params ...inter
 		i++
 		switch p := param.(type) {
 		case Handle:
-			handles = append(handles, makeDummyContext(p).Name())
+			handles = append(handles, makePartialHandleContext(p).Name())
 		case HandleContext:
 			handles = append(handles, p.Name())
 		default:

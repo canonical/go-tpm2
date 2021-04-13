@@ -72,12 +72,12 @@ func TestContextSave(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sc1)
 
-		sc2 := CreateIncompleteSessionContext(sc1.Handle())
+		sc2 := CreatePartialHandleContext(sc1.Handle())
 		_, err = tpm.ContextSave(sc2)
 		if err == nil {
 			t.Fatalf("Expected an error")
 		}
-		if err.Error() != "invalid saveContext argument: unusable session HandleContext" {
+		if err.Error() != "invalid saveContext argument: unusable partial HandleContext" {
 			t.Errorf("Unexpected error: %v", err)
 		}
 	})

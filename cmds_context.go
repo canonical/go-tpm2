@@ -33,9 +33,9 @@ import (
 // WarningContextGap will be returned.
 func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, err error) {
 	switch c := saveContext.(type) {
-	case *sessionContext:
-		if c.Data() == nil {
-			return nil, makeInvalidArgError("saveContext", "unusable session HandleContext")
+	case *handleContext:
+		if c.Type == handleContextTypePartial {
+			return nil, makeInvalidArgError("saveContext", "unusable partial HandleContext")
 		}
 	}
 

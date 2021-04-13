@@ -134,14 +134,14 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		case HandleContext:
 			if r == nil {
 				handles = append(handles, HandleNull)
-				handleNames = append(handleNames, makeDummyContext(HandleNull).Name())
+				handleNames = append(handleNames, makePartialHandleContext(HandleNull).Name())
 			} else {
 				handles = append(handles, r.Handle())
 				handleNames = append(handleNames, r.Name())
 			}
 		case nil:
 			handles = append(handles, HandleNull)
-			handleNames = append(handleNames, makeDummyContext(HandleNull).Name())
+			handleNames = append(handleNames, makePartialHandleContext(HandleNull).Name())
 		default:
 			return nil, fmt.Errorf("cannot process command handle context parameter for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(resource))
 		}
