@@ -5,6 +5,9 @@
 package testutil_test
 
 import (
+	"flag"
+	"fmt"
+	"os"
 	"testing"
 
 	. "github.com/canonical/go-tpm2/testutil"
@@ -17,3 +20,19 @@ func init() {
 }
 
 func Test(t *testing.T) { TestingT(t) }
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(func() int {
+		if TPMBackend == TPMBackendMssim {
+			simulatorCleanup, err := LaunchTPMSimulator(nil)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot launch TPM simulator: %v\n", err)
+				return 1
+			}
+			defer simulatorCleanup()
+		}
+
+		return m.Run()
+	}())
+}

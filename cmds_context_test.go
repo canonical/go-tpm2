@@ -203,7 +203,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 }
 
 func TestEvictControl(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerPersist|testutil.TPMFeatureChangeOwnerAuth)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, transient ResourceContext, persist Handle, authAuthSession SessionContext) {

@@ -35,78 +35,72 @@ import (
 type TPMFeatureFlags uint32
 
 const (
-	// TPMFeaturePersist indicates that the test wants to store, delete or modify persistent objects or NV indices.
-	TPMFeaturePersist = 1 << iota
-
-	// TPMFeatureOwnerHierarchy indicates that the test requires the use of the storage hierarchy.
-	TPMFeatureOwnerHierarchy
+	// TPMFeatureOwnerHierarchy indicates that the test requires the use of the storage hierarchy. The
+	// authorization value should be empty at the start of the test.
+	TPMFeatureOwnerHierarchy TPMFeatureFlags = (1 << iota)
 
 	// TPMFeatureEndorsementHierarchy indicates that the test requires the use of the endorsement hierarchy.
+	// The authorization value should be empty at the start of the test.
 	TPMFeatureEndorsementHierarchy
 
-	// TPMFeatureLockoutHierarchy indicates that the test requires the use of the lockout hierarchy.
+	// TPMFeatureLockoutHierarchy indicates that the test requires the use of the lockout hierarchy. The
+	// authorization value should be empty at the start of the test.
 	TPMFeatureLockoutHierarchy
 
-	// TPMFeaturePlatformHierarchy indicates that the test requires the use of the platform hierarchy.
+	// TPMFeaturePlatformHierarchy indicates that the test requires the use of the platform hierarchy. The
+	// authorization value should be empty at the start of the test.
 	TPMFeaturePlatformHierarchy
 
 	// TPMFeaturePCR indicates that the test requires the use of a PCR.
 	TPMFeaturePCR
 
-	// TPMFeatureStClearChange indicates that the test needs to make changes that can't be undone without a TPM2_Startup(CLEAR).
+	// TPMFeatureStClearChange indicates that the test needs to make changes that can't be undone without a
+	// TPM2_Startup(CLEAR). On a physical TPM device, these changes can only be undone with a platform
+	// reset or restart.
 	TPMFeatureStClearChange
 
-	// TPMFeatureDAParameters indicates that the test uses the TPM2_DictionaryAttackParameters command.
-	TPMFeatureDAParameters
-
-	// TPMFeatureHierarchyChangeAuth indicates that the test uses the TPM2_HierarchyChangeAuth command.
-	TPMFeatureHierarchyChangeAuth
-
-	// TPMFeatureSetCommandCodeAuditStatus indicates that the test uses the TPM2_SetCommandCodeAuditStatus command.
+	// TPMFeatureSetCommandCodeAuditStatus indicates that the test uses the TPM2_SetCommandCodeAuditStatus
+	// command. These changes can't be fully undone by the test harness because there isn't a way to obtain
+	// the current auditAlg.
 	TPMFeatureSetCommandCodeAuditStatus
 
-	// TPMFeatureClear indicates that the test uses the TPM2_Clear command.
+	// TPMFeatureClear indicates that the test uses the TPM2_Clear command. This also requires either
+	// TPMFeatureLockoutHierarchy or TPMFeaturePlatformHierarchy.
 	TPMFeatureClear
 
-	// TPMFeatureClearControl indicates that the test uses the TPM2_ClearControl command.
+	// TPMFeatureClearControl indicates that the test uses the TPM2_ClearControl command. Changes made by
+	// the test can only be undone with the use of the platform hierarchy, which on a proper implementation
+	// requires assistance from the platform firmware. This is not needed if TPMFeaturePlatformHierarchy
+	// is set, as the test harness will restore the value of disableClear automatically.
 	TPMFeatureClearControl
 
 	// TPMFeatureShutdown indicates that the test uses the TPM2_Shutdown command.
 	TPMFeatureShutdown
 
-	// TPMFeatureHierarchyControl indicates that the test uses the TPM2_HierarchyControl command.
-	TPMFeatureHierarchyControl
+	// TPMFeatureNVGlobalWriteLock indicates that the test uses the TPM2_NV_GlobalWriteLock command. This
+	// may make NV indices that weren't created by the test permanently read only if they define the
+	// TPMA_NV_GLOBALLOCK attribute.
+	TPMFeatureNVGlobalWriteLock
 
-	// TPMFeatureOwnerPersist indicates that the test wants to store, delete or modify persistent objects or NV indices using
-	// the storage hierarchy for authorization.
-	TPMFeatureOwnerPersist = TPMFeaturePersist | TPMFeatureOwnerHierarchy
+	// TPMFeatureDAProtectedCapability indicates that the test makes use of a DA protected resource. The
+	// test may cause the DA counter to be incremented either intentionally or in the event of a test
+	// failure, which may eventually cause the TPM to enter DA lockout mode. This is not needed if
+	// TPMFeatureLockoutHierarchy is provided, as this will cause the test harness to automatically
+	// reset the DA counter.
+	TPMFeatureDAProtectedCapability
 
-	// TPMFeaturePlatformPersist indicates that the test wants to store, delete or modify persistent objects or NV indices using
-	// the platform hierarchy for authorization.
-	TPMFeaturePlatformPersist = TPMFeaturePersist | TPMFeaturePlatformHierarchy
-
-	// TPMFeatureChangeOwnerAuth indicates that the test wants to modify the authorization value of the storage hierarchy.
-	TPMFeatureChangeOwnerAuth = TPMFeatureHierarchyChangeAuth | TPMFeatureOwnerHierarchy
-
-	// TPMFeatureChangeOwnerAuth indicates that the test wants to modify the authorization value of the endorsement hierarchy.
-	TPMFeatureChangeEndorsementAuth = TPMFeatureHierarchyChangeAuth | TPMFeatureEndorsementHierarchy
-
-	// TPMFeatureChangeOwnerAuth indicates that the test wants to modify the authorization value of the lockout hierarchy.
-	TPMFeatureChangeLockoutAuth = TPMFeatureHierarchyChangeAuth | TPMFeatureLockoutHierarchy
-
-	// TPMFeatureChangeOwnerAuth indicates that the test wants to modify the authorization value of the platform hierarchy.
-	TPMFeatureChangePlatformAuth = TPMFeatureHierarchyChangeAuth | TPMFeaturePlatformHierarchy
+	// TPMFeatureNV indicates that the test makes use of a command that uses NV resources (currently
+	// not implemented).
+	TPMFeatureNV
 )
 
-func (f *TPMFeatureFlags) String() string {
+func (f TPMFeatureFlags) String() string {
 	return ""
 }
 
 func (f *TPMFeatureFlags) Set(value string) error {
 	for _, value := range strings.Split(value, ",") {
 		switch value {
-		case "persist":
-			*f |= TPMFeaturePersist
 		case "ownerhierarchy":
 			*f |= TPMFeatureOwnerHierarchy
 		case "endorsementhierarchy":
@@ -117,11 +111,8 @@ func (f *TPMFeatureFlags) Set(value string) error {
 			*f |= TPMFeaturePlatformHierarchy
 		case "pcr":
 			*f |= TPMFeaturePCR
-		case "daparameters":
-			// DA parameters can only be changed with lockout auth, so implicitly require that.
-			*f |= (TPMFeatureDAParameters | TPMFeatureLockoutHierarchy)
-		case "hierarchychangeauth":
-			*f |= TPMFeatureHierarchyChangeAuth
+		case "stclearchange":
+			*f |= TPMFeatureStClearChange
 		case "setcommandcodeauditstatus":
 			*f |= TPMFeatureSetCommandCodeAuditStatus
 		case "clear":
@@ -130,8 +121,10 @@ func (f *TPMFeatureFlags) Set(value string) error {
 			*f |= TPMFeatureClearControl
 		case "shutdown":
 			*f |= TPMFeatureShutdown
-		case "hierarchycontrol":
-			*f |= TPMFeatureHierarchyControl
+		case "daprotectedcap":
+			*f |= TPMFeatureDAProtectedCapability
+		case "nv":
+			*f |= TPMFeatureNV
 		default:
 			return fmt.Errorf("unrecognized option %s", value)
 		}
@@ -153,7 +146,8 @@ var (
 
 	// PermittedTPMFeatures defines the permitted feature set for tests that use a TPMContext
 	// and where TPMBackend is not TPMBackendMssim. Tests that require features that aren't
-	// permitted will be skipped.
+	// permitted will be skipped. This is to facilitate testing on real TPM devices where it
+	// might not be desirable to perform certain actions.
 	PermittedTPMFeatures TPMFeatureFlags
 
 	// TPMDevicePath defines the path of the TPM character device where TPMBackend is TPMBackendDevice.
@@ -161,6 +155,8 @@ var (
 
 	// MssimPort defines the port number of the TPM simulator command port where TPMBackend is TPMBackendMssim.
 	MssimPort uint = 2321
+
+	wrapMssimTCTI = WrapTCTI
 )
 
 type tpmBackendFlagValue struct {
@@ -447,13 +443,13 @@ func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &TCTI{tcti, features}, nil
+		return WrapTCTI(tcti, features)
 	case TPMBackendMssim:
 		tcti, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
 		if err != nil {
 			return nil, err
 		}
-		return &TCTI{tcti, features}, nil
+		return WrapTCTI(tcti, features)
 	}
 	panic("not reached")
 }
@@ -526,7 +522,10 @@ func newTPMSimulatorContext() (*tpm2.TPMContext, *TCTI, error) {
 		return nil, nil, err
 	}
 
-	tcti := &TCTI{mssim, TPMFeatureFlags(math.MaxUint32)}
+	tcti, err := wrapMssimTCTI(mssim, TPMFeatureFlags(math.MaxUint32))
+	if err != nil {
+		return nil, nil, err
+	}
 
 	tpm, _ := tpm2.NewTPMContext(tcti)
 	return tpm, tcti, nil

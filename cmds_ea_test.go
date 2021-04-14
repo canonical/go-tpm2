@@ -1053,7 +1053,7 @@ func TestPolicyPassword(t *testing.T) {
 }
 
 func TestPolicyNV(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerPersist)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)
