@@ -144,9 +144,9 @@ type ResponseHeader struct {
 type ResponsePacket []byte
 
 // Unmarshal deserializes the response packet and returns the response code, handles, parameters
-// and auth area. Both the handles and parameters will still be in the TPM wire format. The
-// number of response handles associated with the command must be supplied by the caller.
-func (p ResponsePacket) Unmarshal(numHandles int) (rc ResponseCode, handles []byte, parameters []byte, authArea []AuthResponse, err error) {
+// and auth area. Both the handle and parameters will still be in the TPM wire format. The
+// caller must specify whether the associated command returns a handle.
+func (p ResponsePacket) Unmarshal(rspHandle bool) (rc ResponseCode, handle []byte, parameters []byte, authArea []AuthResponse, err error) {
 	if len(p) > maxResponseSize {
 		return 0, nil, nil, nil, fmt.Errorf("packet too large (%d bytes)", len(p))
 	}
@@ -169,9 +169,11 @@ func (p ResponsePacket) Unmarshal(numHandles int) (rc ResponseCode, handles []by
 		return header.ResponseCode, nil, nil, nil, nil
 	}
 
-	handles = make([]byte, numHandles*binary.Size(Handle(0)))
-	if _, err := io.ReadFull(buf, handles); err != nil {
-		return 0, nil, nil, nil, xerrors.Errorf("cannot read handles: %w", err)
+	if rspHandle {
+		handle = make([]byte, binary.Size(Handle(0)))
+		if _, err := io.ReadFull(buf, handle); err != nil {
+			return 0, nil, nil, nil, xerrors.Errorf("cannot read handle: %w", err)
+		}
 	}
 
 	switch header.Tag {
@@ -207,5 +209,5 @@ func (p ResponsePacket) Unmarshal(numHandles int) (rc ResponseCode, handles []by
 		return 0, nil, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
 	}
 
-	return Success, handles, parameters, authArea, nil
+	return Success, handle, parameters, authArea, nil
 }

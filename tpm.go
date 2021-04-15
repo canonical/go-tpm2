@@ -125,7 +125,7 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 	return ResponsePacket(resp), nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, resources, params, outHandles []interface{}) (*cmdContext, error) {
+func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, resources, params []interface{}, outHandle interface{}) (*cmdContext, error) {
 	handles := make([]interface{}, 0, len(resources))
 	handleNames := make([]Name, 0, len(resources))
 
@@ -143,14 +143,14 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 			handles = append(handles, HandleNull)
 			handleNames = append(handleNames, makePartialHandleContext(HandleNull).Name())
 		default:
-			return nil, fmt.Errorf("cannot process command handle context parameter for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(resource))
+			return nil, fmt.Errorf("cannot process command handle context argument for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(resource))
 		}
 	}
 
-	for i, handle := range outHandles {
-		_, isHandle := handle.(*Handle)
+	if outHandle != nil {
+		_, isHandle := outHandle.(*Handle)
 		if !isHandle {
-			return nil, fmt.Errorf("cannot process response handle parameter for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(handle))
+			return nil, fmt.Errorf("cannot process response handle argument for command %s: invalid type (%s)", commandCode, reflect.TypeOf(outHandle))
 		}
 	}
 
@@ -187,7 +187,7 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 			return nil, err
 		}
 
-		responseCode, rhBytes, rpBytes, rAuthArea, err = resp.Unmarshal(len(outHandles))
+		responseCode, rhBytes, rpBytes, rAuthArea, err = resp.Unmarshal(outHandle != nil)
 		if err != nil {
 			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response packet: %v", err)}
 		}
@@ -210,8 +210,10 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		}
 	}
 
-	if _, err := mu.UnmarshalFromBytes(rhBytes, outHandles...); err != nil {
-		return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response handles: %v", err)}
+	if outHandle != nil {
+		if _, err := mu.UnmarshalFromBytes(rhBytes, outHandle); err != nil {
+			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response handle: %v", err)}
+		}
 	}
 
 	return &cmdContext{
@@ -298,7 +300,7 @@ func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) 
 func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, sessions []SessionContext, responseCb func(), params ...interface{}) error {
 	var commandHandles []interface{}
 	var commandParams []interface{}
-	var responseHandles []interface{}
+	var responseHandle interface{}
 	var responseParams []interface{}
 	var sessionParams sessionParams
 
@@ -323,7 +325,10 @@ func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, ses
 		case 1:
 			commandParams = append(commandParams, param)
 		case 2:
-			responseHandles = append(responseHandles, param)
+			if responseHandle != nil {
+				return errors.New("only one response handle argument can be supplied")
+			}
+			responseHandle = param
 		case 3:
 			responseParams = append(responseParams, param)
 		}
@@ -333,7 +338,7 @@ func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, ses
 		return fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", commandCode, err)
 	}
 
-	ctx, err := t.runCommandWithoutProcessingAuthResponse(commandCode, &sessionParams, commandHandles, commandParams, responseHandles)
+	ctx, err := t.runCommandWithoutProcessingAuthResponse(commandCode, &sessionParams, commandHandles, commandParams, responseHandle)
 	if err != nil {
 		return err
 	}
