@@ -125,42 +125,19 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 	return ResponsePacket(resp), nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, resources, params []interface{}, outHandle interface{}) (*cmdContext, error) {
-	handles := make([]interface{}, 0, len(resources))
-	handleNames := make([]Name, 0, len(resources))
+func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, handles []HandleContext, params []interface{}, outHandle *Handle) (*cmdContext, error) {
+	handleNames := make([]Name, 0, len(handles))
 
-	for i, resource := range resources {
-		switch r := resource.(type) {
-		case HandleContext:
-			if r == nil {
-				handles = append(handles, HandleNull)
-				handleNames = append(handleNames, makePartialHandleContext(HandleNull).Name())
-			} else {
-				handles = append(handles, r.Handle())
-				handleNames = append(handleNames, r.Name())
-			}
-		case nil:
-			handles = append(handles, HandleNull)
-			handleNames = append(handleNames, makePartialHandleContext(HandleNull).Name())
-		default:
-			return nil, fmt.Errorf("cannot process command handle context argument for command %s at index %d: invalid type (%s)", commandCode, i, reflect.TypeOf(resource))
-		}
-	}
-
-	if outHandle != nil {
-		_, isHandle := outHandle.(*Handle)
-		if !isHandle {
-			return nil, fmt.Errorf("cannot process response handle argument for command %s: invalid type (%s)", commandCode, reflect.TypeOf(outHandle))
+	chBytes := new(bytes.Buffer)
+	for _, h := range handles {
+		handleNames = append(handleNames, h.Name())
+		if _, err := mu.MarshalToWriter(chBytes, h.Handle()); err != nil {
+			panic(fmt.Sprintf("cannot marshal command handle: %v", err))
 		}
 	}
 
 	if sessionParams.hasDecryptSession() && (len(params) == 0 || !isParamEncryptable(params[0])) {
 		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
-	}
-
-	chBytes, err := mu.MarshalToBytes(handles...)
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal command handles: %v", err))
 	}
 
 	cpBytes, err := mu.MarshalToBytes(params...)
@@ -173,7 +150,7 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", commandCode, err)
 	}
 
-	cmd := MarshalCommandPacket(commandCode, chBytes, cAuthArea, cpBytes)
+	cmd := MarshalCommandPacket(commandCode, chBytes.Bytes(), cAuthArea, cpBytes)
 
 	var responseCode ResponseCode
 	var rhBytes []byte
@@ -298,9 +275,9 @@ func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) 
 // In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
 // this function will also return an error if the TPM responds with any ResponseCode other than Success.
 func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, sessions []SessionContext, responseCb func(), params ...interface{}) error {
-	var commandHandles []interface{}
+	var commandHandles []HandleContext
 	var commandParams []interface{}
-	var responseHandle interface{}
+	var responseHandle *Handle
 	var responseParams []interface{}
 	var sessionParams sessionParams
 
@@ -313,22 +290,34 @@ func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, ses
 
 		switch sentinels {
 		case 0:
+			var handle HandleContext
 			switch p := param.(type) {
 			case ResourceContextWithSession:
-				commandHandles = append(commandHandles, p.Context)
+				handle = p.Context
 				if err := sessionParams.validateAndAppendAuth(p); err != nil {
 					return fmt.Errorf("cannot process ResourceContextWithSession for command %s at index %d: %v", commandCode, len(commandHandles), err)
 				}
+			case HandleContext:
+				handle = p
+			case nil:
 			default:
-				commandHandles = append(commandHandles, param)
+				return fmt.Errorf("cannot process command handle argument for command %s at index %d: invalid type (%s)", commandCode, len(commandHandles), reflect.TypeOf(param))
 			}
+			if handle == nil {
+				handle = makePermanentContext(HandleNull)
+			}
+			commandHandles = append(commandHandles, handle)
 		case 1:
 			commandParams = append(commandParams, param)
 		case 2:
 			if responseHandle != nil {
 				return errors.New("only one response handle argument can be supplied")
 			}
-			responseHandle = param
+			handle, isHandle := param.(*Handle)
+			if !isHandle {
+				return fmt.Errorf("cannot process response handle argument for command %s: invalid type (%s)", commandCode, reflect.TypeOf(param))
+			}
+			responseHandle = handle
 		case 3:
 			responseParams = append(responseParams, param)
 		}
