@@ -40,9 +40,9 @@ func (p CommandPacket) GetCommandCode() (CommandCode, error) {
 }
 
 // UnmarshalPayload unmarshals this command packet, returning the handles, auth area and
-// parameters. The handles and parameters will still be in the TPM wire format. The number
-// of command handles associated with the command must be supplied by the caller.
-func (p CommandPacket) UnmarshalPayload(numHandles int) (handles []byte, authArea []AuthCommand, parameters []byte, err error) {
+// parameters. The parameters will still be in the TPM wire format. The number of command
+// handles associated with the command must be supplied by the caller.
+func (p CommandPacket) UnmarshalPayload(numHandles int) (handles HandleList, authArea []AuthCommand, parameters []byte, err error) {
 	buf := bytes.NewReader(p)
 
 	var header CommandHeader
@@ -54,9 +54,12 @@ func (p CommandPacket) UnmarshalPayload(numHandles int) (handles []byte, authAre
 		return nil, nil, nil, fmt.Errorf("invalid commandSize value (got %d, packet length %d)", header.CommandSize, len(p))
 	}
 
-	handles = make([]byte, numHandles*binary.Size(Handle(0)))
-	if _, err := io.ReadFull(buf, handles); err != nil {
-		return nil, nil, nil, xerrors.Errorf("cannot read handles: %w", err)
+	for i := 0; i < numHandles; i++ {
+		var handle Handle
+		if _, err := mu.UnmarshalFromReader(buf, &handle); err != nil {
+			return nil, nil, nil, xerrors.Errorf("cannot unmarshal handles: %w", err)
+		}
+		handles = append(handles, handle)
 	}
 
 	switch header.Tag {
@@ -92,10 +95,17 @@ func (p CommandPacket) UnmarshalPayload(numHandles int) (handles []byte, authAre
 }
 
 // MarshalCommandPacket serializes a complete TPM packet from the provided arguments. The
-// handles and parameters arguments must already be serialized to the TPM wire format.
-func MarshalCommandPacket(command CommandCode, handles []byte, authArea []AuthCommand, parameters []byte) CommandPacket {
+// parameters argument must already be serialized to the TPM wire format.
+func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []AuthCommand, parameters []byte) CommandPacket {
 	header := CommandHeader{CommandCode: command}
 	var payload []byte
+
+	hBytes := new(bytes.Buffer)
+	for _, h := range handles {
+		if _, err := mu.MarshalToWriter(hBytes, h); err != nil {
+			panic(fmt.Sprintf("cannot marshal command handle: %v", err))
+		}
+	}
 
 	switch {
 	case len(authArea) > 0:
@@ -109,7 +119,7 @@ func MarshalCommandPacket(command CommandCode, handles []byte, authArea []AuthCo
 		}
 
 		var err error
-		payload, err = mu.MarshalToBytes(mu.RawBytes(handles), uint32(aBytes.Len()), mu.RawBytes(aBytes.Bytes()), mu.RawBytes(parameters))
+		payload, err = mu.MarshalToBytes(mu.RawBytes(hBytes.Bytes()), uint32(aBytes.Len()), mu.RawBytes(aBytes.Bytes()), mu.RawBytes(parameters))
 		if err != nil {
 			panic(fmt.Sprintf("cannot marshal command payload: %v", err))
 		}
@@ -117,7 +127,7 @@ func MarshalCommandPacket(command CommandCode, handles []byte, authArea []AuthCo
 		header.Tag = TagNoSessions
 
 		var err error
-		payload, err = mu.MarshalToBytes(mu.RawBytes(handles), mu.RawBytes(parameters))
+		payload, err = mu.MarshalToBytes(mu.RawBytes(hBytes.Bytes()), mu.RawBytes(parameters))
 		if err != nil {
 			panic(fmt.Sprintf("cannot marshal command payload: %v", err))
 		}
@@ -143,36 +153,37 @@ type ResponseHeader struct {
 // ResponsePacket corresponds to a complete response packet including header and payload.
 type ResponsePacket []byte
 
-// Unmarshal deserializes the response packet and returns the response code, handles, parameters
-// and auth area. Both the handle and parameters will still be in the TPM wire format. The
-// caller must specify whether the associated command returns a handle.
-func (p ResponsePacket) Unmarshal(rspHandle bool) (rc ResponseCode, handle []byte, parameters []byte, authArea []AuthResponse, err error) {
+// Unmarshal deserializes the response packet and returns the response code, handle, parameters
+// and auth area. The parameters will still be in the TPM wire format. The caller supplies a
+// pointer to which the response handle will be written. The pointer must be supplied if the
+// command returns a handle, and must be nil if the command does not return a handle, else
+// the response will be incorrectly unmarshalled.
+func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters []byte, authArea []AuthResponse, err error) {
 	if len(p) > maxResponseSize {
-		return 0, nil, nil, nil, fmt.Errorf("packet too large (%d bytes)", len(p))
+		return 0, nil, nil, fmt.Errorf("packet too large (%d bytes)", len(p))
 	}
 
 	buf := bytes.NewReader(p)
 
 	var header ResponseHeader
 	if _, err := mu.UnmarshalFromReader(buf, &header); err != nil {
-		return 0, nil, nil, nil, xerrors.Errorf("cannot unmarshal header: %w", err)
+		return 0, nil, nil, xerrors.Errorf("cannot unmarshal header: %w", err)
 	}
 
 	if header.ResponseSize != uint32(len(p)) {
-		return 0, nil, nil, nil, fmt.Errorf("invalid responseSize value (got %d, packet length %d)", header.ResponseSize, len(p))
+		return 0, nil, nil, fmt.Errorf("invalid responseSize value (got %d, packet length %d)", header.ResponseSize, len(p))
 	}
 
 	if header.ResponseCode != Success {
 		if buf.Len() != 0 {
-			return header.ResponseCode, nil, nil, nil, fmt.Errorf("%d trailing byte(s)", buf.Len())
+			return header.ResponseCode, nil, nil, fmt.Errorf("%d trailing byte(s)", buf.Len())
 		}
-		return header.ResponseCode, nil, nil, nil, nil
+		return header.ResponseCode, nil, nil, nil
 	}
 
-	if rspHandle {
-		handle = make([]byte, binary.Size(Handle(0)))
-		if _, err := io.ReadFull(buf, handle); err != nil {
-			return 0, nil, nil, nil, xerrors.Errorf("cannot read handle: %w", err)
+	if handle != nil {
+		if _, err := mu.UnmarshalFromReader(buf, handle); err != nil {
+			return 0, nil, nil, xerrors.Errorf("cannot unmarshal handle: %w", err)
 		}
 	}
 
@@ -180,22 +191,22 @@ func (p ResponsePacket) Unmarshal(rspHandle bool) (rc ResponseCode, handle []byt
 	case TagSessions:
 		var parameterSize uint32
 		if _, err := mu.UnmarshalFromReader(buf, &parameterSize); err != nil {
-			return 0, nil, nil, nil, xerrors.Errorf("cannot unmarshal parameterSize: %w", err)
+			return 0, nil, nil, xerrors.Errorf("cannot unmarshal parameterSize: %w", err)
 		}
 
 		parameters = make([]byte, parameterSize)
 		if _, err := io.ReadFull(buf, parameters); err != nil {
-			return 0, nil, nil, nil, xerrors.Errorf("cannot read parameters: %w", err)
+			return 0, nil, nil, xerrors.Errorf("cannot read parameters: %w", err)
 		}
 
 		for buf.Len() > 0 {
 			if len(authArea) >= 3 {
-				return 0, nil, nil, nil, fmt.Errorf("%d trailing byte(s)", buf.Len())
+				return 0, nil, nil, fmt.Errorf("%d trailing byte(s)", buf.Len())
 			}
 
 			var auth AuthResponse
 			if _, err := mu.UnmarshalFromReader(buf, &auth); err != nil {
-				return 0, nil, nil, nil, xerrors.Errorf("cannot unmarshal auth: %w", err)
+				return 0, nil, nil, xerrors.Errorf("cannot unmarshal auth: %w", err)
 			}
 
 			authArea = append(authArea, auth)
@@ -203,11 +214,11 @@ func (p ResponsePacket) Unmarshal(rspHandle bool) (rc ResponseCode, handle []byt
 	case TagNoSessions:
 		parameters, err = ioutil.ReadAll(buf)
 		if err != nil {
-			return 0, nil, nil, nil, xerrors.Errorf("cannot read parameters: %w", err)
+			return 0, nil, nil, xerrors.Errorf("cannot read parameters: %w", err)
 		}
 	default:
-		return 0, nil, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
+		return 0, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
 	}
 
-	return Success, handle, parameters, authArea, nil
+	return Success, parameters, authArea, nil
 }

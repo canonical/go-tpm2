@@ -5,12 +5,10 @@
 package testutil
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/mu"
 
 	"golang.org/x/xerrors"
 )
@@ -136,19 +134,9 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		return 0, errors.New("unsupported command")
 	}
 
-	hBytes, _, _, err := cmd.UnmarshalPayload(cmdInfo.cmdHandles)
+	handles, _, _, err := cmd.UnmarshalPayload(cmdInfo.cmdHandles)
 	if err != nil {
 		return 0, xerrors.Errorf("invalid command payload: %w", err)
-	}
-
-	hr := bytes.NewReader(hBytes)
-	var handles tpm2.HandleList
-	for hr.Len() > 0 {
-		var handle tpm2.Handle
-		if _, err := mu.UnmarshalFromReader(hr, &handle); err != nil {
-			return 0, xerrors.Errorf("cannot unmarshal handle: %w", err)
-		}
-		handles = append(handles, handle)
 	}
 
 	var commandFeatures TPMFeatureFlags

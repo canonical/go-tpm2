@@ -125,15 +125,13 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 	return ResponsePacket(resp), nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, handles []HandleContext, params []interface{}, outHandle *Handle) (*cmdContext, error) {
-	handleNames := make([]Name, 0, len(handles))
+func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, inHandles []HandleContext, params []interface{}, outHandle *Handle) (*cmdContext, error) {
+	handles := make(HandleList, 0, len(inHandles))
+	handleNames := make([]Name, 0, len(inHandles))
 
-	chBytes := new(bytes.Buffer)
-	for _, h := range handles {
+	for _, h := range inHandles {
+		handles = append(handles, h.Handle())
 		handleNames = append(handleNames, h.Name())
-		if _, err := mu.MarshalToWriter(chBytes, h.Handle()); err != nil {
-			panic(fmt.Sprintf("cannot marshal command handle: %v", err))
-		}
 	}
 
 	if sessionParams.hasDecryptSession() && (len(params) == 0 || !isParamEncryptable(params[0])) {
@@ -150,10 +148,9 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", commandCode, err)
 	}
 
-	cmd := MarshalCommandPacket(commandCode, chBytes.Bytes(), cAuthArea, cpBytes)
+	cmd := MarshalCommandPacket(commandCode, handles, cAuthArea, cpBytes)
 
 	var responseCode ResponseCode
-	var rhBytes []byte
 	var rpBytes []byte
 	var rAuthArea []AuthResponse
 
@@ -164,7 +161,7 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 			return nil, err
 		}
 
-		responseCode, rhBytes, rpBytes, rAuthArea, err = resp.Unmarshal(outHandle != nil)
+		responseCode, rpBytes, rAuthArea, err = resp.Unmarshal(outHandle)
 		if err != nil {
 			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response packet: %v", err)}
 		}
@@ -184,12 +181,6 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		}
 		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
 			return nil, err
-		}
-	}
-
-	if outHandle != nil {
-		if _, err := mu.UnmarshalFromBytes(rhBytes, outHandle); err != nil {
-			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response handle: %v", err)}
 		}
 	}
 
