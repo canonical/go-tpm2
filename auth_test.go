@@ -119,7 +119,7 @@ func TestPolicySessions(t *testing.T) {
 	template := Public{
 		Type:       ObjectTypeKeyedHash,
 		NameAlg:    HashAlgorithmSHA256,
-		Attrs:      AttrFixedTPM | AttrFixedParent,
+		Attrs:      AttrFixedTPM | AttrFixedParent | AttrNoDA,
 		AuthPolicy: make([]byte, 32),
 		Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}

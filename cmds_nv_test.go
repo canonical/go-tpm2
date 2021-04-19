@@ -110,7 +110,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA1,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 			Size:    32}
 		rc, err := tpm.NVDefineSpace(owner, testAuth, &pub, nil)
 		if err != nil {
@@ -147,7 +147,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 		pub := NVPublic{
 			Index:      0x0141ffff,
 			NameAlg:    HashAlgorithmSHA256,
-			Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVPlatformCreate | AttrNVPolicyDelete),
+			Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVPlatformCreate | AttrNVPolicyDelete | AttrNVNoDA),
 			AuthPolicy: authPolicy,
 			Size:       8}
 		context, err := tpm.NVDefineSpace(platform, testAuth, &pub, nil)
@@ -221,7 +221,7 @@ func TestNVWriteZeroSized(t *testing.T) {
 	pub := NVPublic{
 		Index:   Handle(0x0181ffff),
 		NameAlg: HashAlgorithmSHA256,
-		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    0}
 	rc, err := tpm.NVDefineSpace(owner, nil, &pub, nil)
 	if err != nil {
@@ -256,12 +256,12 @@ func TestNVReadAndWrite(t *testing.T) {
 	pub1 := NVPublic{
 		Index:   Handle(0x0181ffff),
 		NameAlg: HashAlgorithmSHA256,
-		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    64}
 	pub2 := NVPublic{
 		Index:   Handle(0x0181ffff),
 		NameAlg: HashAlgorithmSHA256,
-		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    1600}
 
 	define := func(t *testing.T, pub *NVPublic, authValue Auth) ResourceContext {
@@ -406,7 +406,7 @@ func TestNVIncrement(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+			Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 			Size:    8}
 
 		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
@@ -467,7 +467,7 @@ func TestNVReadCounter(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+			Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 			Size:    8}
 
 		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
@@ -534,7 +534,7 @@ func TestNVExtend(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeExtend.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+			Attrs:   NVTypeExtend.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 			Size:    32}
 
 		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
@@ -612,7 +612,7 @@ func TestNVSetBits(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181ffff),
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeBits.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+			Attrs:   NVTypeBits.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 			Size:    8}
 
 		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
@@ -686,7 +686,7 @@ func TestNVWriteLock(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181fff0),
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteDefine | AttrNVAuthRead),
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteDefine | AttrNVAuthRead | AttrNVNoDA),
 			Size:    8}
 
 		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
@@ -747,7 +747,7 @@ func TestNVReadLock(t *testing.T) {
 		pub := NVPublic{
 			Index:   Handle(0x0181fff0),
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVReadStClear),
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVReadStClear | AttrNVNoDA),
 			Size:    8}
 
 		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
@@ -915,7 +915,7 @@ func TestNVChangeAuth(t *testing.T) {
 			pub := NVPublic{
 				Index:      Handle(0x0181ffff),
 				NameAlg:    HashAlgorithmSHA256,
-				Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+				Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 				AuthPolicy: authPolicy,
 				Size:       8}
 			rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)

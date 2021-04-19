@@ -36,7 +36,7 @@ func TestHMACSequence(t *testing.T) {
 		public := Public{
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign | AttrNoDA,
 			Params:  &PublicParamsU{KeyedHashDetail: params},
 			Unique:  &PublicIDU{KeyedHash: unique}}
 		if params.Scheme.Scheme == KeyedHashSchemeNull {

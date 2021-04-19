@@ -89,7 +89,7 @@ func TestCreate(t *testing.T) {
 		template := Public{
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt | AttrNoDA,
 			Params: &PublicParamsU{
 				RSADetail: &RSAParams{
 					Symmetric: SymDefObject{
@@ -443,7 +443,7 @@ func TestLoadExternal(t *testing.T) {
 		public := Public{
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth,
+			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA,
 			Params:  &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}},
 			Unique:  &PublicIDU{KeyedHash: unique}}
 
@@ -499,7 +499,7 @@ func TestUnseal(t *testing.T) {
 		template := Public{
 			Type:       ObjectTypeKeyedHash,
 			NameAlg:    HashAlgorithmSHA256,
-			Attrs:      AttrFixedTPM | AttrFixedParent | extraAttrs,
+			Attrs:      AttrFixedTPM | AttrFixedParent | AttrNoDA | extraAttrs,
 			AuthPolicy: authPolicy,
 			Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
@@ -575,7 +575,7 @@ func TestObjectChangeAuth(t *testing.T) {
 		template := Public{
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth | AttrNoDA,
 			Params:  &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 
 		outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
@@ -647,7 +647,7 @@ func TestObjectChangeAuth(t *testing.T) {
 }
 
 func TestMakeCredential(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureEndorsementHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureDAProtectedCapability)
 	defer closeTPM(t, tpm)
 
 	ek := createRSAEkForTesting(t, tpm)
@@ -689,7 +689,7 @@ func TestMakeCredential(t *testing.T) {
 }
 
 func TestActivateCredential(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureEndorsementHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureDAProtectedCapability)
 	defer closeTPM(t, tpm)
 
 	ek := createRSAEkForTesting(t, tpm)

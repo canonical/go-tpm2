@@ -68,7 +68,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 						template := Public{
 							Type:    ObjectTypeKeyedHash,
 							NameAlg: HashAlgorithmSHA256,
-							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
+							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth | AttrNoDA,
 							Params: &PublicParamsU{
 								KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
@@ -197,7 +197,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 					template := Public{
 						Type:    ObjectTypeKeyedHash,
 						NameAlg: HashAlgorithmSHA256,
-						Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
+						Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth | AttrNoDA,
 						Params: &PublicParamsU{
 							KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 					sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
@@ -297,7 +297,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 						template := Public{
 							Type:    ObjectTypeKeyedHash,
 							NameAlg: HashAlgorithmSHA256,
-							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth,
+							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth | AttrNoDA,
 							Params: &PublicParamsU{
 								KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}

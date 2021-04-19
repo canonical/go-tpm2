@@ -234,7 +234,7 @@ func TestPolicySecret(t *testing.T) {
 		template := Public{
 			Type:       ObjectTypeKeyedHash,
 			NameAlg:    HashAlgorithmSHA256,
-			Attrs:      AttrFixedTPM | AttrFixedParent,
+			Attrs:      AttrFixedTPM | AttrFixedParent | AttrNoDA,
 			AuthPolicy: trial.GetDigest(),
 			Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive := SensitiveCreate{Data: secret}
@@ -269,7 +269,7 @@ func TestPolicySecret(t *testing.T) {
 		template := Public{
 			Type:       ObjectTypeKeyedHash,
 			NameAlg:    HashAlgorithmSHA256,
-			Attrs:      AttrFixedTPM | AttrFixedParent,
+			Attrs:      AttrFixedTPM | AttrFixedParent | AttrNoDA,
 			AuthPolicy: trial.GetDigest(),
 			Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 		sensitive1 := SensitiveCreate{Data: secret1}
@@ -931,7 +931,7 @@ func TestPolicyAuthValue(t *testing.T) {
 	template := Public{
 		Type:       ObjectTypeKeyedHash,
 		NameAlg:    HashAlgorithmSHA256,
-		Attrs:      AttrFixedTPM | AttrFixedParent,
+		Attrs:      AttrFixedTPM | AttrFixedParent | AttrNoDA,
 		AuthPolicy: authPolicy,
 		Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
@@ -1012,7 +1012,7 @@ func TestPolicyPassword(t *testing.T) {
 	template := Public{
 		Type:       ObjectTypeKeyedHash,
 		NameAlg:    HashAlgorithmSHA256,
-		Attrs:      AttrFixedTPM | AttrFixedParent,
+		Attrs:      AttrFixedTPM | AttrFixedParent | AttrNoDA,
 		AuthPolicy: authPolicy,
 		Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
 	sensitive := SensitiveCreate{Data: []byte("secret"), UserAuth: testAuth}
@@ -1083,7 +1083,7 @@ func TestPolicyNV(t *testing.T) {
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
 				NameAlg: HashAlgorithmSHA256,
-				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
 				if err := tpm.NVWrite(index, index, twentyFiveUint64, 0, authSession); err != nil {
@@ -1099,7 +1099,7 @@ func TestPolicyNV(t *testing.T) {
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
 				NameAlg: HashAlgorithmSHA256,
-				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
 				if err := tpm.NVWrite(index, index, twentyFiveUint64, 0, authSession); err != nil {
@@ -1115,7 +1115,7 @@ func TestPolicyNV(t *testing.T) {
 			pub: NVPublic{
 				Index:   Handle(0x0181ffff),
 				NameAlg: HashAlgorithmSHA256,
-				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 				Size:    8},
 			prepare: func(t *testing.T, index ResourceContext, authSession SessionContext) {
 				if err := tpm.NVWrite(index, index, fortyUint32, 4, authSession); err != nil {

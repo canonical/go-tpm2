@@ -28,7 +28,7 @@ func TestSign(t *testing.T) {
 			template := Public{
 				Type:    ObjectTypeRSA,
 				NameAlg: HashAlgorithmSHA256,
-				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign | AttrNoDA,
 				Params: &PublicParamsU{
 					RSADetail: &RSAParams{
 						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
@@ -169,7 +169,7 @@ func TestSign(t *testing.T) {
 		template := Public{
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
+			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign | AttrNoDA,
 			Params: &PublicParamsU{
 				ECCDetail: &ECCParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
