@@ -40,8 +40,7 @@ func (b *BaseTest) AddCleanup(fn func()) {
 }
 
 // TPMTest is a base test suite for all tests that use a TPMContext. This test suite will take care of
-// cleaning up all flushable resources (transient objects and sessions) at the end of each test, as well
-// as closing the TPMContext.
+// restoring the TPM state at the end of each test, as well as closing the TPMContext.
 //
 // A TPMContext will be created automatically for each test. For tests that want to implement creation
 // of the TPMContext, the TPM and TCTI members should be set before SetUpTest is called.
@@ -55,7 +54,9 @@ type TPMTest struct {
 	TCTI *TCTI
 
 	// TPMFeatures defines the features required by this suite. It should be set before SetUpTest
-	// is called if the test relies on the default context creation.
+	// is called if the test relies on the default context creation. If the test requires
+	// access to features that currently aren't permitted by the test environment, then the
+	// test will be skipped.
 	TPMFeatures TPMFeatureFlags
 }
 
@@ -74,37 +75,6 @@ func (b *TPMTest) SetUpTest(c *C) {
 	b.AddCleanup(func() {
 		c.Assert(b.TPM.Close(), IsNil)
 		b.TPM = nil
-	})
-
-	getFlushableHandles := func() (out []tpm2.Handle) {
-		for _, t := range []tpm2.HandleType{tpm2.HandleTypeTransient, tpm2.HandleTypeLoadedSession, tpm2.HandleTypeSavedSession} {
-			h, err := b.TPM.GetCapabilityHandles(t.BaseHandle(), tpm2.CapabilityMaxProperties, nil)
-			c.Assert(err, IsNil)
-			out = append(out, h...)
-		}
-		for i, h := range out {
-			if h.Type() == tpm2.HandleTypePolicySession {
-				out[i] = (h & 0xffffff) | (tpm2.Handle(tpm2.HandleTypeHMACSession) << 24)
-			}
-		}
-		return
-	}
-	startFlushableHandles := getFlushableHandles()
-
-	b.AddCleanup(func() {
-		for _, h := range getFlushableHandles() {
-			found := false
-			for _, sh := range startFlushableHandles {
-				if sh == h {
-					found = true
-					break
-				}
-			}
-			if found {
-				continue
-			}
-			c.Check(b.TPM.FlushContext(tpm2.CreatePartialHandleContext(h)), IsNil)
-		}
 	})
 }
 
