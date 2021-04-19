@@ -78,14 +78,6 @@ func (b *TPMTest) SetUpTest(c *C) {
 	})
 }
 
-// AddCleanupNVSpace ensures that the supplied NV index is undefined at the end of the test, using
-// the supplied authHandle for authorization.
-func (b *TPMTest) AddCleanupNVSpace(c *C, authHandle, index tpm2.ResourceContext) {
-	b.AddCleanup(func() {
-		c.Check(b.TPM.NVUndefineSpace(authHandle, index, nil), IsNil)
-	})
-}
-
 // SetHierarchyAuth sets the authorization value for the supplied hierarchy to TestAuth and automatically
 // clears it again at the end of the test.
 func (b *TPMTest) SetHierarchyAuth(c *C, hierarchy tpm2.Handle) {
