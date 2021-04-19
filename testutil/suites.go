@@ -10,10 +10,6 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-var (
-	TestAuth = []byte("1234")
-)
-
 // BaseTest is a base test suite for all tests.
 type BaseTest struct {
 	cleanupHandlers []func()
@@ -78,13 +74,10 @@ func (b *TPMTest) SetUpTest(c *C) {
 	})
 }
 
-// SetHierarchyAuth sets the authorization value for the supplied hierarchy to TestAuth and automatically
-// clears it again at the end of the test.
-func (b *TPMTest) SetHierarchyAuth(c *C, hierarchy tpm2.Handle) {
-	c.Assert(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), TestAuth, nil), IsNil)
-	b.AddCleanup(func() {
-		c.Check(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), nil, nil), IsNil)
-	})
+// SetHierarchyAuth sets the authorization value for the supplied hierarchy to auth. It is
+// restored automatically at the end of the test.
+func (b *TPMTest) SetHierarchyAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Auth) {
+	c.Assert(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), auth, nil), IsNil)
 }
 
 // TPMSimulatorTest is a base test suite for all tests that use the TPM simulator (TctiMssim).
