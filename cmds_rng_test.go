@@ -49,7 +49,7 @@ func TestGetRandom(t *testing.T) {
 }
 
 func TestStirRandom(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	inData := make([]byte, 128)

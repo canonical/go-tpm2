@@ -434,7 +434,7 @@ func TestPublicName(t *testing.T) {
 }
 
 func TestNVPublicName(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()

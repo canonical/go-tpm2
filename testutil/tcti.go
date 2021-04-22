@@ -28,90 +28,92 @@ type commandInfo struct {
 	authHandles int
 	cmdHandles  int
 	rspHandle   bool
+
+	nv bool
 }
 
 var commandInfoMap = map[tpm2.CommandCode]commandInfo{
-	tpm2.CommandNVUndefineSpaceSpecial:     commandInfo{2, 2, false},
-	tpm2.CommandEvictControl:               commandInfo{2, 2, false},
-	tpm2.CommandHierarchyControl:           commandInfo{1, 1, false},
-	tpm2.CommandNVUndefineSpace:            commandInfo{1, 2, false},
-	tpm2.CommandClear:                      commandInfo{1, 1, false},
-	tpm2.CommandClearControl:               commandInfo{1, 1, false},
-	tpm2.CommandHierarchyChangeAuth:        commandInfo{1, 1, false},
-	tpm2.CommandNVDefineSpace:              commandInfo{1, 1, false},
-	tpm2.CommandCreatePrimary:              commandInfo{1, 1, true},
-	tpm2.CommandNVGlobalWriteLock:          commandInfo{1, 1, false},
-	tpm2.CommandGetCommandAuditDigest:      commandInfo{2, 2, false},
-	tpm2.CommandNVIncrement:                commandInfo{1, 2, false},
-	tpm2.CommandNVSetBits:                  commandInfo{1, 2, false},
-	tpm2.CommandNVExtend:                   commandInfo{1, 2, false},
-	tpm2.CommandNVWrite:                    commandInfo{1, 2, false},
-	tpm2.CommandNVWriteLock:                commandInfo{1, 2, false},
-	tpm2.CommandDictionaryAttackLockReset:  commandInfo{1, 1, false},
-	tpm2.CommandDictionaryAttackParameters: commandInfo{1, 1, false},
-	tpm2.CommandNVChangeAuth:               commandInfo{1, 1, false},
-	tpm2.CommandPCREvent:                   commandInfo{1, 1, false},
-	tpm2.CommandPCRReset:                   commandInfo{1, 1, false},
-	tpm2.CommandSequenceComplete:           commandInfo{1, 1, false},
-	tpm2.CommandSetCommandCodeAuditStatus:  commandInfo{1, 1, false},
-	tpm2.CommandIncrementalSelfTest:        commandInfo{0, 0, false},
-	tpm2.CommandSelfTest:                   commandInfo{0, 0, false},
-	tpm2.CommandStartup:                    commandInfo{0, 0, false},
-	tpm2.CommandShutdown:                   commandInfo{0, 0, false},
-	tpm2.CommandStirRandom:                 commandInfo{0, 0, false},
-	tpm2.CommandActivateCredential:         commandInfo{2, 2, false},
-	tpm2.CommandCertify:                    commandInfo{2, 2, false},
-	tpm2.CommandPolicyNV:                   commandInfo{1, 3, false},
-	tpm2.CommandCertifyCreation:            commandInfo{1, 2, false},
-	tpm2.CommandDuplicate:                  commandInfo{1, 2, false},
-	tpm2.CommandGetTime:                    commandInfo{2, 2, false},
-	tpm2.CommandGetSessionAuditDigest:      commandInfo{2, 3, false},
-	tpm2.CommandNVRead:                     commandInfo{1, 2, false},
-	tpm2.CommandNVReadLock:                 commandInfo{1, 2, false},
-	tpm2.CommandObjectChangeAuth:           commandInfo{1, 2, false},
-	tpm2.CommandPolicySecret:               commandInfo{1, 2, false},
-	tpm2.CommandCreate:                     commandInfo{1, 1, false},
-	tpm2.CommandImport:                     commandInfo{1, 1, false},
-	tpm2.CommandLoad:                       commandInfo{1, 1, true},
-	tpm2.CommandQuote:                      commandInfo{1, 1, false},
-	tpm2.CommandHMACStart:                  commandInfo{1, 1, true},
-	tpm2.CommandSequenceUpdate:             commandInfo{1, 1, false},
-	tpm2.CommandSign:                       commandInfo{1, 1, false},
-	tpm2.CommandUnseal:                     commandInfo{1, 1, false},
-	tpm2.CommandPolicySigned:               commandInfo{0, 2, false},
-	tpm2.CommandContextLoad:                commandInfo{0, 0, true},
-	tpm2.CommandContextSave:                commandInfo{0, 1, false},
-	tpm2.CommandFlushContext:               commandInfo{0, 0, false},
-	tpm2.CommandLoadExternal:               commandInfo{0, 0, true},
-	tpm2.CommandMakeCredential:             commandInfo{0, 1, false},
-	tpm2.CommandNVReadPublic:               commandInfo{0, 1, false},
-	tpm2.CommandPolicyAuthorize:            commandInfo{0, 1, false},
-	tpm2.CommandPolicyAuthValue:            commandInfo{0, 1, false},
-	tpm2.CommandPolicyCommandCode:          commandInfo{0, 1, false},
-	tpm2.CommandPolicyCounterTimer:         commandInfo{0, 1, false},
-	tpm2.CommandPolicyCpHash:               commandInfo{0, 1, false},
-	tpm2.CommandPolicyNameHash:             commandInfo{0, 1, false},
-	tpm2.CommandPolicyOR:                   commandInfo{0, 1, false},
-	tpm2.CommandPolicyTicket:               commandInfo{0, 1, false},
-	tpm2.CommandReadPublic:                 commandInfo{0, 1, false},
-	tpm2.CommandStartAuthSession:           commandInfo{0, 2, true},
-	tpm2.CommandVerifySignature:            commandInfo{0, 1, false},
-	tpm2.CommandGetCapability:              commandInfo{0, 0, false},
-	tpm2.CommandGetRandom:                  commandInfo{0, 0, false},
-	tpm2.CommandGetTestResult:              commandInfo{0, 0, false},
-	tpm2.CommandPCRRead:                    commandInfo{0, 0, false},
-	tpm2.CommandPolicyPCR:                  commandInfo{0, 0, false},
-	tpm2.CommandPolicyRestart:              commandInfo{0, 1, false},
-	tpm2.CommandReadClock:                  commandInfo{0, 0, false},
-	tpm2.CommandPCRExtend:                  commandInfo{1, 1, false},
-	tpm2.CommandEventSequenceComplete:      commandInfo{2, 2, false},
-	tpm2.CommandHashSequenceStart:          commandInfo{0, 0, true},
-	tpm2.CommandPolicyDuplicationSelect:    commandInfo{0, 1, false},
-	tpm2.CommandPolicyGetDigest:            commandInfo{0, 1, false},
-	tpm2.CommandTestParms:                  commandInfo{0, 0, false},
-	tpm2.CommandPolicyPassword:             commandInfo{0, 1, false},
-	tpm2.CommandPolicyNvWritten:            commandInfo{0, 1, false},
-	tpm2.CommandCreateLoaded:               commandInfo{1, 1, true},
+	tpm2.CommandNVUndefineSpaceSpecial:     commandInfo{2, 2, false, true},
+	tpm2.CommandEvictControl:               commandInfo{2, 2, false, true},
+	tpm2.CommandHierarchyControl:           commandInfo{1, 1, false, true},
+	tpm2.CommandNVUndefineSpace:            commandInfo{1, 2, false, true},
+	tpm2.CommandClear:                      commandInfo{1, 1, false, true},
+	tpm2.CommandClearControl:               commandInfo{1, 1, false, true},
+	tpm2.CommandHierarchyChangeAuth:        commandInfo{1, 1, false, true},
+	tpm2.CommandNVDefineSpace:              commandInfo{1, 1, false, true},
+	tpm2.CommandCreatePrimary:              commandInfo{1, 1, true, false},
+	tpm2.CommandNVGlobalWriteLock:          commandInfo{1, 1, false, true},
+	tpm2.CommandGetCommandAuditDigest:      commandInfo{2, 2, false, true},
+	tpm2.CommandNVIncrement:                commandInfo{1, 2, false, true},
+	tpm2.CommandNVSetBits:                  commandInfo{1, 2, false, true},
+	tpm2.CommandNVExtend:                   commandInfo{1, 2, false, true},
+	tpm2.CommandNVWrite:                    commandInfo{1, 2, false, true},
+	tpm2.CommandNVWriteLock:                commandInfo{1, 2, false, true},
+	tpm2.CommandDictionaryAttackLockReset:  commandInfo{1, 1, false, true},
+	tpm2.CommandDictionaryAttackParameters: commandInfo{1, 1, false, true},
+	tpm2.CommandNVChangeAuth:               commandInfo{1, 1, false, true},
+	tpm2.CommandPCREvent:                   commandInfo{1, 1, false, true},
+	tpm2.CommandPCRReset:                   commandInfo{1, 1, false, true},
+	tpm2.CommandSequenceComplete:           commandInfo{1, 1, false, false},
+	tpm2.CommandSetCommandCodeAuditStatus:  commandInfo{1, 1, false, true},
+	tpm2.CommandIncrementalSelfTest:        commandInfo{0, 0, false, true},
+	tpm2.CommandSelfTest:                   commandInfo{0, 0, false, true},
+	tpm2.CommandStartup:                    commandInfo{0, 0, false, true},
+	tpm2.CommandShutdown:                   commandInfo{0, 0, false, true},
+	tpm2.CommandStirRandom:                 commandInfo{0, 0, false, true},
+	tpm2.CommandActivateCredential:         commandInfo{2, 2, false, false},
+	tpm2.CommandCertify:                    commandInfo{2, 2, false, false},
+	tpm2.CommandPolicyNV:                   commandInfo{1, 3, false, false},
+	tpm2.CommandCertifyCreation:            commandInfo{1, 2, false, false},
+	tpm2.CommandDuplicate:                  commandInfo{1, 2, false, false},
+	tpm2.CommandGetTime:                    commandInfo{2, 2, false, false},
+	tpm2.CommandGetSessionAuditDigest:      commandInfo{2, 3, false, false},
+	tpm2.CommandNVRead:                     commandInfo{1, 2, false, false},
+	tpm2.CommandNVReadLock:                 commandInfo{1, 2, false, true},
+	tpm2.CommandObjectChangeAuth:           commandInfo{1, 2, false, false},
+	tpm2.CommandPolicySecret:               commandInfo{1, 2, false, false},
+	tpm2.CommandCreate:                     commandInfo{1, 1, false, false},
+	tpm2.CommandImport:                     commandInfo{1, 1, false, false},
+	tpm2.CommandLoad:                       commandInfo{1, 1, true, false},
+	tpm2.CommandQuote:                      commandInfo{1, 1, false, false},
+	tpm2.CommandHMACStart:                  commandInfo{1, 1, true, false},
+	tpm2.CommandSequenceUpdate:             commandInfo{1, 1, false, false},
+	tpm2.CommandSign:                       commandInfo{1, 1, false, false},
+	tpm2.CommandUnseal:                     commandInfo{1, 1, false, false},
+	tpm2.CommandPolicySigned:               commandInfo{0, 2, false, false},
+	tpm2.CommandContextLoad:                commandInfo{0, 0, true, false},
+	tpm2.CommandContextSave:                commandInfo{0, 1, false, false},
+	tpm2.CommandFlushContext:               commandInfo{0, 0, false, false},
+	tpm2.CommandLoadExternal:               commandInfo{0, 0, true, false},
+	tpm2.CommandMakeCredential:             commandInfo{0, 1, false, false},
+	tpm2.CommandNVReadPublic:               commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyAuthorize:            commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyAuthValue:            commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyCommandCode:          commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyCounterTimer:         commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyCpHash:               commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyNameHash:             commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyOR:                   commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyTicket:               commandInfo{0, 1, false, false},
+	tpm2.CommandReadPublic:                 commandInfo{0, 1, false, false},
+	tpm2.CommandStartAuthSession:           commandInfo{0, 2, true, false},
+	tpm2.CommandVerifySignature:            commandInfo{0, 1, false, false},
+	tpm2.CommandGetCapability:              commandInfo{0, 0, false, false},
+	tpm2.CommandGetRandom:                  commandInfo{0, 0, false, false},
+	tpm2.CommandGetTestResult:              commandInfo{0, 0, false, false},
+	tpm2.CommandPCRRead:                    commandInfo{0, 0, false, false},
+	tpm2.CommandPolicyPCR:                  commandInfo{0, 0, false, false},
+	tpm2.CommandPolicyRestart:              commandInfo{0, 1, false, false},
+	tpm2.CommandReadClock:                  commandInfo{0, 0, false, false},
+	tpm2.CommandPCRExtend:                  commandInfo{1, 1, false, true},
+	tpm2.CommandEventSequenceComplete:      commandInfo{2, 2, false, true},
+	tpm2.CommandHashSequenceStart:          commandInfo{0, 0, true, false},
+	tpm2.CommandPolicyDuplicationSelect:    commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyGetDigest:            commandInfo{0, 1, false, false},
+	tpm2.CommandTestParms:                  commandInfo{0, 0, false, false},
+	tpm2.CommandPolicyPassword:             commandInfo{0, 1, false, false},
+	tpm2.CommandPolicyNvWritten:            commandInfo{0, 1, false, false},
+	tpm2.CommandCreateLoaded:               commandInfo{1, 1, true, false},
 }
 
 type objectInfo struct {
@@ -458,6 +460,10 @@ func (t *TCTI) Write(data []byte) (int, error) {
 
 	var commandFeatures TPMFeatureFlags
 
+	if cmdInfo.nv {
+		commandFeatures |= TPMFeatureNV
+	}
+
 	switch commandCode {
 	case tpm2.CommandHierarchyControl:
 		commandFeatures |= TPMFeatureStClearChange
@@ -476,14 +482,24 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		}
 	case tpm2.CommandClear:
 		commandFeatures |= TPMFeatureClear
+		// Make TPMFeatureClear imply TPMFeatureNV for this command.
+		permittedFeatures |= TPMFeatureNV
 	case tpm2.CommandClearControl:
 		commandFeatures |= TPMFeatureClearControl
+		// Make TPMFeatureClearControl imply TPMFeatureNV for this command.
+		permittedFeatures |= TPMFeatureNV
 	case tpm2.CommandNVGlobalWriteLock:
 		commandFeatures |= TPMFeatureNVGlobalWriteLock
+		// Make TPMFeatureNVGlobalWriteLock imply TPMFeatureNV for this command.
+		permittedFeatures |= TPMFeatureNV
 	case tpm2.CommandSetCommandCodeAuditStatus:
 		commandFeatures |= TPMFeatureSetCommandCodeAuditStatus
+		// Make TPMFeatureSetCommandCodeAuditStatus imply TPMFeatureNV for this command.
+		permittedFeatures |= TPMFeatureNV
 	case tpm2.CommandShutdown:
 		commandFeatures |= TPMFeatureShutdown
+		// Make TPMFeatureShutdown imply TPMFeatureNV for this command.
+		permittedFeatures |= TPMFeatureNV
 	}
 
 	for _, h := range handles[:cmdInfo.authHandles] {
@@ -506,7 +522,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 	}
 
 	if ^permittedFeatures&commandFeatures != 0 {
-		return 0, fmt.Errorf("command is trying to use a non-requested feature (missing: 0x%08x)", uint32(^permittedFeatures&commandFeatures))
+		return 0, fmt.Errorf("command %v is trying to use a non-requested feature (missing: 0x%08x)", commandCode, uint32(^permittedFeatures&commandFeatures))
 	}
 
 	t.currentCmd = &cmdContext{

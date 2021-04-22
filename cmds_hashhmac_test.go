@@ -248,7 +248,7 @@ func TestHashSequence(t *testing.T) {
 }
 
 func TestEventSequence(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	start := func(t *testing.T, auth Auth) ResourceContext {
@@ -447,7 +447,7 @@ func TestHashSequenceExecute(t *testing.T) {
 }
 
 func TestEventSequenceExecute(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	data := make([]byte, 2500)

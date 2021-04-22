@@ -508,7 +508,7 @@ func TestPolicyOR(t *testing.T) {
 }
 
 func TestPolicyPCR(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	for _, data := range []struct {
@@ -1053,7 +1053,7 @@ func TestPolicyPassword(t *testing.T) {
 }
 
 func TestPolicyNV(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	primary := createRSASrkForTesting(t, tpm, nil)

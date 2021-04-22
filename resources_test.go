@@ -14,7 +14,7 @@ import (
 )
 
 func TestCreateResourceContextFromTPM(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	runCreate := func(t *testing.T, context ResourceContext) {
@@ -115,7 +115,7 @@ func TestCreatePartialHandleContext(t *testing.T) {
 }
 
 func TestCreateHandleContextFromBytes(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, context ResourceContext) {
@@ -168,7 +168,7 @@ func TestCreateHandleContextFromBytes(t *testing.T) {
 }
 
 func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	run := func(t *testing.T, context ResourceContext) {
@@ -220,7 +220,7 @@ func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
 }
 
 func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	pub := NVPublic{

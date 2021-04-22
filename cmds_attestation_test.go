@@ -387,7 +387,7 @@ func TestCertifyCreation(t *testing.T) {
 }
 
 func TestQuote(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePCR|testutil.TPMFeatureDAProtectedCapability)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePCR|testutil.TPMFeatureDAProtectedCapability|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	for i := 0; i < 8; i++ {
@@ -504,7 +504,7 @@ func TestQuote(t *testing.T) {
 }
 
 func TestGetTime(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureDAProtectedCapability)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureDAProtectedCapability|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	prepare := func(t *testing.T, auth Auth) ResourceContext {

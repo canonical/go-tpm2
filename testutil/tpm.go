@@ -89,8 +89,8 @@ const (
 	// reset the DA counter.
 	TPMFeatureDAProtectedCapability
 
-	// TPMFeatureNV indicates that the test makes use of a command that uses NV resources (currently
-	// not implemented).
+	// TPMFeatureNV indicates that the test makes use of a command that may write to NV. Physical
+	// TPMs may employ rate limiting on these commands.
 	TPMFeatureNV
 )
 

@@ -16,7 +16,7 @@ import (
 )
 
 func TestNVDefineAndUndefineSpace(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -133,7 +133,7 @@ func TestNVDefineAndUndefineSpace(t *testing.T) {
 }
 
 func TestNVUndefineSpaceSpecial(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePlatformHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
@@ -213,7 +213,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 }
 
 func TestNVWriteZeroSized(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -248,7 +248,7 @@ func TestNVWriteZeroSized(t *testing.T) {
 }
 
 func TestNVReadAndWrite(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -397,7 +397,7 @@ func TestNVReadAndWrite(t *testing.T) {
 }
 
 func TestNVIncrement(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -458,7 +458,7 @@ func TestNVIncrement(t *testing.T) {
 }
 
 func TestNVReadCounter(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -525,7 +525,7 @@ func TestNVReadCounter(t *testing.T) {
 }
 
 func TestNVExtend(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -603,7 +603,7 @@ func TestNVExtend(t *testing.T) {
 }
 
 func TestNVSetBits(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -677,7 +677,7 @@ func TestNVSetBits(t *testing.T) {
 }
 
 func TestNVWriteLock(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -738,7 +738,7 @@ func TestNVWriteLock(t *testing.T) {
 }
 
 func TestNVReadLock(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -799,7 +799,7 @@ func TestNVReadLock(t *testing.T) {
 }
 
 func TestNVGlobalLock(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNVGlobalWriteLock)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNVGlobalWriteLock|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	owner := tpm.OwnerHandleContext()
@@ -867,7 +867,7 @@ func TestNVGlobalLock(t *testing.T) {
 }
 
 func TestNVChangeAuth(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM(t, tpm)
 
 	executePolicy := func(context SessionContext) {
