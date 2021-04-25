@@ -25,7 +25,16 @@ import (
 
 // TCTI represents a communication channel to a TPM implementation.
 type TCTI interface {
-	io.ReadWriteCloser
+	// Read is used to receive a response to a previously transmitted command. The
+	// implementation must support partial reading of a response, and must return io.EOF
+	// when there are no more bytes of a response left to read.
+	Read(p []byte) (int, error)
+
+	// Write is used to transmit a serialized command to the TPM implementation.
+	// A command must be transmitted in a single write.
+	Write(p []byte) (int, error)
+
+	Close() error
 
 	// SetLocality sets the locality that will be used for subsequent commands.
 	SetLocality(locality uint8) error
