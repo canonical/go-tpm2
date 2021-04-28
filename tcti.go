@@ -4,10 +4,6 @@
 
 package tpm2
 
-import (
-	"io"
-)
-
 // XXX: Note that the "TCG TSS 2.0 TPM Command Transmission Interface (TCTI) API Specification"
 // defines the following callbacks:
 // - transmit, which is equivalent to io.Writer.
