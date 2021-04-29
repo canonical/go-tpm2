@@ -1549,12 +1549,28 @@ func (p *Public) ToTemplate() (Template, error) {
 	return b, nil
 }
 
+// IsStorage indicates that this public area is associated with an object that can
+// be the target of a duplication operation.
 func (p *Public) IsStorage() bool {
 	switch p.Type {
 	case ObjectTypeRSA, ObjectTypeECC:
 		return p.Attrs&(AttrRestricted|AttrDecrypt|AttrSign) == AttrRestricted|AttrDecrypt
 	default:
 		return false
+	}
+}
+
+// IsParent indicates that this public area is associated with an object that can be
+// a storage parent.
+func (p *Public) IsParent() bool {
+	switch p.Type {
+	case ObjectTypeKeyedHash:
+		return false
+	default:
+		if p.NameAlg == HashAlgorithmNull {
+			return false
+		}
+		return p.Attrs&(AttrRestricted|AttrDecrypt) == AttrRestricted|AttrDecrypt
 	}
 }
 
