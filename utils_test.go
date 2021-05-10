@@ -68,7 +68,14 @@ func (s *utilsSuite) testCreateUnwrapDuplicationObject(c *C, data *testCreateUnw
 		encryptionKey = data.encryptionKey
 	}
 
-	sensitive, err := UnwrapDuplicationObjectToSensitive(duplicate, public, data.parentPriv, data.parentPublic, encryptionKey, symSeed, data.symmetricAlg)
+	parentNameAlg := HashAlgorithmNull
+	var parentSymmetricAlg *SymDefObject
+	if data.parentPublic != nil {
+		parentNameAlg = data.parentPublic.NameAlg
+		parentSymmetricAlg = &data.parentPublic.Params.AsymDetail().Symmetric
+	}
+
+	sensitive, err := UnwrapDuplicationObjectToSensitive(duplicate, public, data.parentPriv, parentNameAlg, parentSymmetricAlg, encryptionKey, symSeed, data.symmetricAlg)
 	c.Check(err, IsNil)
 	c.Assert(sensitive, NotNil)
 

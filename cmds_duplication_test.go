@@ -94,13 +94,15 @@ func TestDuplicate(t *testing.T) {
 
 	verifyDuplicate := func(t *testing.T, duplicate Private, outer bool, encryptionKey Data, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject) {
 		var privKey crypto.PrivateKey
-		var protector *Public
+		parentNameAlg := HashAlgorithmNull
+		var parentSymmetricAlg *SymDefObject
 		if outer {
 			privKey = key
-			protector = parentPub
+			parentNameAlg = parentPub.NameAlg
+			parentSymmetricAlg = &parentPub.Params.AsymDetail().Symmetric
 		}
 
-		sensitiveDup, err := UnwrapDuplicationObjectToSensitive(duplicate, pub, privKey, protector, encryptionKey, inSymSeed, symmetricAlg)
+		sensitiveDup, err := UnwrapDuplicationObjectToSensitive(duplicate, pub, privKey, parentNameAlg, parentSymmetricAlg, encryptionKey, inSymSeed, symmetricAlg)
 		if err != nil {
 			t.Fatalf("Unwrap failed: %v", err)
 		}

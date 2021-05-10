@@ -7,10 +7,8 @@ package tpm2
 import (
 	"bytes"
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/rsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -285,13 +283,16 @@ func (p *TrialAuthPolicy) PolicyNvWritten(writtenSet bool) {
 
 // UnwrapDuplicationObjectToSensitive unwraps the supplied duplication object and returns the
 // corresponding sensitive area. If inSymSeed is supplied, then it is assumed that the object
-// has an outer wrapper, and both privKey and protector must be supplied - these correspond to
-// the key with which inSymSeed is protected.
+// has an outer wrapper. In this case, privKey, parentNameAlg and parentSymmetricAlg must be
+// supplied - privKey is the key with which inSymSeed is protected, parentNameAlg is the name
+// algorithm for the parent key (and must not be HashAlgorithmNull), and parentSymmetricAlg
+// defines the symmetric algorithm for the parent key (and the Algorithm field must not be
+// SymObjectAlgorithmNull).
 //
 // If symmetricAlg is supplied and the Algorithm field is not SymObjectAlgorithmNull, then it is
 // assumed that the object has an inner wrapper. In this case, the symmetric key for the inner
 // wrapper must be supplied using the encryptionKey argument.
-func UnwrapDuplicationObjectToSensitive(duplicate Private, public *Public, privKey crypto.PrivateKey, protector *Public, encryptionKey Data, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject) (*Sensitive, error) {
+func UnwrapDuplicationObjectToSensitive(duplicate Private, public *Public, privKey crypto.PrivateKey, parentNameAlg HashAlgorithmId, parentSymmetricAlg *SymDefObject, encryptionKey Data, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject) (*Sensitive, error) {
 	hasInnerWrapper := false
 	if symmetricAlg != nil && symmetricAlg.Algorithm != SymObjectAlgorithmNull {
 		hasInnerWrapper = true
@@ -301,35 +302,24 @@ func UnwrapDuplicationObjectToSensitive(duplicate Private, public *Public, privK
 	}
 
 	var seed []byte
-	var outerSymmetric *SymDefObject
 	hasOuterWrapper := false
 	if len(inSymSeed) > 0 {
 		hasOuterWrapper = true
-		if privKey == nil || protector == nil {
-			return nil, errors.New("private key and protector public area is required for outer wrapper")
+		if privKey == nil {
+			return nil, errors.New("parent private key is required for outer wrapper")
 		}
-
-		switch p := privKey.(type) {
-		case *rsa.PrivateKey:
-			if protector.Type != ObjectTypeRSA {
-				return nil, errors.New("inconsistent key types")
-			}
-			_ = p
-		case *ecdsa.PrivateKey:
-			if protector.Type != ObjectTypeECC {
-				return nil, errors.New("inconsistent key types")
-			}
-			_ = p
-		default:
-			return nil, errors.New("invalid private key type")
+		if parentNameAlg == HashAlgorithmNull {
+			return nil, errors.New("invalid parent name algorithm")
 		}
-
-		outerSymmetric = &protector.Params.AsymDetail().Symmetric
-		if !outerSymmetric.Algorithm.Available() {
+		if parentSymmetricAlg == nil || parentSymmetricAlg.Algorithm == SymObjectAlgorithmNull {
+			return nil, errors.New("invalid symmetric algorithm for outer wrapper")
+		}
+		if !parentSymmetricAlg.Algorithm.Available() {
 			return nil, errors.New("symmetric algorithm for outer wrapper is not available")
 		}
+
 		var err error
-		seed, err = cryptSecretDecrypt(privKey, protector.NameAlg, []byte("DUPLICATE"), inSymSeed)
+		seed, err = cryptSecretDecrypt(privKey, parentNameAlg, []byte("DUPLICATE"), inSymSeed)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot decrypt symmetric seed: %w", err)
 		}
@@ -354,8 +344,8 @@ func UnwrapDuplicationObjectToSensitive(duplicate Private, public *Public, privK
 			return nil, xerrors.Errorf("cannot unpack outer wrapper: %w", err)
 		}
 
-		hmacKey := internal.KDFa(protector.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, protector.NameAlg.Size()*8)
-		h := hmac.New(func() hash.Hash { return protector.NameAlg.NewHash() }, hmacKey)
+		hmacKey := internal.KDFa(parentNameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentNameAlg.Size()*8)
+		h := hmac.New(func() hash.Hash { return parentNameAlg.NewHash() }, hmacKey)
 		h.Write(duplicate)
 		h.Write(name)
 
@@ -363,9 +353,9 @@ func UnwrapDuplicationObjectToSensitive(duplicate Private, public *Public, privK
 			return nil, errors.New("outer integrity digest is invalid")
 		}
 
-		symKey := internal.KDFa(protector.NameAlg.GetHash(), seed, []byte("STORAGE"), name, nil, int(outerSymmetric.KeyBits.Sym))
+		symKey := internal.KDFa(parentNameAlg.GetHash(), seed, []byte("STORAGE"), name, nil, int(parentSymmetricAlg.KeyBits.Sym))
 
-		if err := cryptSymmetricDecrypt(SymAlgorithmId(outerSymmetric.Algorithm), symKey, make([]byte, outerSymmetric.Algorithm.BlockSize()), duplicate); err != nil {
+		if err := cryptSymmetricDecrypt(SymAlgorithmId(parentSymmetricAlg.Algorithm), symKey, make([]byte, parentSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, xerrors.Errorf("cannot remove outer wrapper: %w", err)
 		}
 	}
