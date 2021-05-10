@@ -65,12 +65,13 @@ func (s *typesSuite) TestPublicIsStorageRSASign(c *C) {
 		Attrs:   AttrRestricted | AttrSign,
 		Params: &PublicParamsU{
 			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+				Scheme: RSAScheme{
+					Scheme: RSASchemeRSAPSS,
+					Details: &AsymSchemeU{
+						RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256},
+					},
 				},
-				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	c.Check(pub.IsStorage(), testutil.IsFalse)
@@ -181,12 +182,13 @@ func (s *typesSuite) TestPublicIsParentRSASign(c *C) {
 		Attrs:   AttrRestricted | AttrSign,
 		Params: &PublicParamsU{
 			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
+				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
+				Scheme: RSAScheme{
+					Scheme: RSASchemeRSAPSS,
+					Details: &AsymSchemeU{
+						RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256},
+					},
 				},
-				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	c.Check(pub.IsParent(), testutil.IsFalse)
