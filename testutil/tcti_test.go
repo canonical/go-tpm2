@@ -479,6 +479,19 @@ func (s *tctiSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryption(
 		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for session 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)\n`)
 }
 
+func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
+	// Test that Close() fails if the owner hierarchy auth cannot be restored
+	// because both it and the platform hierarchy have been disabled.
+	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+
+	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
+
+	c.Check(tpm.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+}
+
 func (s *tctiSuite) TestRestoreDisableClear(c *C) {
 	// Test that disableClear is restored correctly if the test can
 	// use the platform hierarchy.
