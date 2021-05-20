@@ -718,7 +718,7 @@ func (t *TCTI) Unwrap() tpm2.TCTI {
 	return t.tcti
 }
 
-// WrapTCTI wraps the
+// WrapTCTI wraps the supplied TCTI and authorizes it to use the specified features.
 func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) {
 	tpm, _ := tpm2.NewTPMContext(tcti)
 

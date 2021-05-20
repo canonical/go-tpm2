@@ -51,8 +51,8 @@ type TPMTest struct {
 
 	// TPMFeatures defines the features required by this suite. It should be set before SetUpTest
 	// is called if the test relies on the default context creation. If the test requires
-	// access to features that currently aren't permitted by the test environment, then the
-	// test will be skipped.
+	// access to features that currently aren't permitted by the current test environment (as
+	// defined by the value of the PermittedTPMFeatures variable), then the test will be skipped.
 	TPMFeatures TPMFeatureFlags
 }
 
