@@ -416,6 +416,29 @@ func (s *tctiSuite) TestRestoreHierarchyControlPlatformNV(c *C) {
 		attr:   tpm2.AttrPhEnableNV})
 }
 
+func (s *tctiSuite) TestRestoreHierarchyControlAfterPlatformAuthChange(c *C) {
+	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+
+	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
+	c.Check(tpm.HierarchyChangeAuth(tpm.PlatformHandleContext(), []byte("foo"), nil), IsNil)
+
+	props, err := rawTpm.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
+	c.Check(err, IsNil)
+	c.Assert(props, HasLen, 1)
+	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
+	enabled := tpm2.StartupClearAttributes(props[0].Value)&tpm2.AttrShEnable > 0
+	c.Check(enabled, IsFalse)
+
+	c.Check(tpm.Close(), IsNil)
+
+	props, err = rawTpm.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
+	c.Check(err, IsNil)
+	c.Assert(props, HasLen, 1)
+	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
+	enabled = tpm2.StartupClearAttributes(props[0].Value)&tpm2.AttrShEnable > 0
+	c.Check(enabled, IsTrue)
+}
+
 type testRestoreHierarhcyAuthData struct {
 	handle tpm2.Handle
 }
@@ -487,6 +510,18 @@ func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
 	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
 	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
+
+	c.Check(tpm.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+}
+
+func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
+	// Test that Close() fails if the owner hierarchy auth cannot be restored
+	// because it has been disabled.
+	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+
+	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 
 	c.Check(tpm.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)

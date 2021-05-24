@@ -449,15 +449,6 @@ func (t *TCTI) Write(data []byte) (int, error) {
 	}
 
 	permittedFeatures := t.permittedFeatures
-	if permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
-		// We can revert changes to disableClear
-		permittedFeatures |= TPMFeatureClearControl
-	}
-	if permittedFeatures&TPMFeatureLockoutHierarchy > 0 {
-		// We can reset the DA counter
-		permittedFeatures |= TPMFeatureDAProtectedCapability
-	}
-
 	var commandFeatures TPMFeatureFlags
 
 	if cmdInfo.nv {
@@ -476,7 +467,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 				return 0, xerrors.Errorf("cannot unmarshal parameters: %w", err)
 			}
 
-			if enable != tpm2.HandlePlatform || state {
+			if enable != tpm2.HandlePlatform {
 				permittedFeatures |= TPMFeatureStClearChange
 			}
 		}
@@ -488,6 +479,10 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		commandFeatures |= TPMFeatureClearControl
 		// Make TPMFeatureClearControl imply TPMFeatureNV for this command.
 		permittedFeatures |= TPMFeatureNV
+		if permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
+			// We can revert changes to disableClear
+			permittedFeatures |= TPMFeatureClearControl
+		}
 	case tpm2.CommandNVGlobalWriteLock:
 		commandFeatures |= TPMFeatureNVGlobalWriteLock
 		// Make TPMFeatureNVGlobalWriteLock imply TPMFeatureNV for this command.
@@ -518,6 +513,10 @@ func (t *TCTI) Write(data []byte) (int, error) {
 
 		if !t.isDAExcempt(h) {
 			commandFeatures |= TPMFeatureDAProtectedCapability
+			if permittedFeatures&TPMFeatureLockoutHierarchy > 0 {
+				// We can reset the DA counter
+				permittedFeatures |= TPMFeatureDAProtectedCapability
+			}
 		}
 	}
 
@@ -537,6 +536,26 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		t.currentCmd = nil
 	}
 	return n, err
+}
+
+func (t *TCTI) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
+	auth, changed := t.hierarchyAuths[tpm2.HandlePlatform]
+	if !changed {
+		return nil
+	}
+	delete(t.hierarchyAuths, tpm2.HandlePlatform)
+
+	if t.didDisablePlatformHierarchy {
+		// Permitted via TPMFeaturesStClearChange
+		return nil
+	}
+
+	platform := tpm.PlatformHandleContext()
+	platform.SetAuthValue(auth)
+	if err := tpm.HierarchyChangeAuth(platform, nil, nil); err != nil {
+		return xerrors.Errorf("cannot clear auth value for %v: %w", tpm2.HandlePlatform, err)
+	}
+	return nil
 }
 
 func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
@@ -575,10 +594,6 @@ func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 
 func (t *TCTI) restoreHierarchyAuths(errs []error, tpm *tpm2.TPMContext) []error {
 	for hierarchy, auth := range t.hierarchyAuths {
-		if hierarchy == tpm2.HandlePlatform && t.didDisablePlatformHierarchy {
-			// Permitted via TPMFeatureStClearChange
-			continue
-		}
 		rc := tpm.GetPermanentContext(hierarchy)
 		rc.SetAuthValue(auth)
 		if err := tpm.HierarchyChangeAuth(rc, nil, nil); err != nil {
@@ -677,7 +692,13 @@ func (t *TCTI) Close() error {
 
 	var errs []error
 
-	// First restore enabled hierarchies
+	// First, restore the auth value for the platform hierarchy
+	if err := t.restorePlatformHierarchyAuth(tpm); err != nil {
+		errs = append(errs, err)
+	}
+
+	// ...then use the platform hierarchy, if permitted, to reenable disabled
+	// hierarchies.
 	errs = t.restoreHierarchies(errs, tpm)
 
 	errs = t.restoreHierarchyAuths(errs, tpm)
