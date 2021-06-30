@@ -448,7 +448,6 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		return 0, xerrors.Errorf("invalid command payload: %w", err)
 	}
 
-	permittedFeatures := t.permittedFeatures
 	var commandFeatures TPMFeatureFlags
 
 	if cmdInfo.nv {
@@ -458,7 +457,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 	switch commandCode {
 	case tpm2.CommandHierarchyControl:
 		commandFeatures |= TPMFeatureStClearChange
-		if permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
+		if t.permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
 			// We can reenable hierarchies, as long as the platform hierarchy
 			// isn't being disabled.
 			var enable tpm2.Handle
@@ -468,33 +467,33 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			}
 
 			if enable != tpm2.HandlePlatform {
-				permittedFeatures |= TPMFeatureStClearChange
+				commandFeatures &^= TPMFeatureStClearChange
 			}
 		}
 	case tpm2.CommandClear:
 		commandFeatures |= TPMFeatureClear
 		// Make TPMFeatureClear imply TPMFeatureNV for this command.
-		permittedFeatures |= TPMFeatureNV
+		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandClearControl:
 		commandFeatures |= TPMFeatureClearControl
 		// Make TPMFeatureClearControl imply TPMFeatureNV for this command.
-		permittedFeatures |= TPMFeatureNV
-		if permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
+		commandFeatures &^= TPMFeatureNV
+		if t.permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
 			// We can revert changes to disableClear
-			permittedFeatures |= TPMFeatureClearControl
+			commandFeatures &^= TPMFeatureClearControl
 		}
 	case tpm2.CommandNVGlobalWriteLock:
 		commandFeatures |= TPMFeatureNVGlobalWriteLock
 		// Make TPMFeatureNVGlobalWriteLock imply TPMFeatureNV for this command.
-		permittedFeatures |= TPMFeatureNV
+		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandSetCommandCodeAuditStatus:
 		commandFeatures |= TPMFeatureSetCommandCodeAuditStatus
 		// Make TPMFeatureSetCommandCodeAuditStatus imply TPMFeatureNV for this command.
-		permittedFeatures |= TPMFeatureNV
+		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandShutdown:
 		commandFeatures |= TPMFeatureShutdown
 		// Make TPMFeatureShutdown imply TPMFeatureNV for this command.
-		permittedFeatures |= TPMFeatureNV
+		commandFeatures &^= TPMFeatureNV
 	}
 
 	for _, h := range handles[:cmdInfo.authHandles] {
@@ -511,17 +510,14 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			commandFeatures |= TPMFeaturePCR
 		}
 
-		if !t.isDAExcempt(h) {
+		if !t.isDAExcempt(h) && t.permittedFeatures&TPMFeatureLockoutHierarchy == 0 {
+			// We can't reset the DA counter
 			commandFeatures |= TPMFeatureDAProtectedCapability
-			if permittedFeatures&TPMFeatureLockoutHierarchy > 0 {
-				// We can reset the DA counter
-				permittedFeatures |= TPMFeatureDAProtectedCapability
-			}
 		}
 	}
 
-	if ^permittedFeatures&commandFeatures != 0 {
-		return 0, fmt.Errorf("command %v is trying to use a non-requested feature (missing: 0x%08x)", commandCode, uint32(^permittedFeatures&commandFeatures))
+	if ^t.permittedFeatures&commandFeatures != 0 {
+		return 0, fmt.Errorf("command %v is trying to use a non-requested feature (missing: 0x%08x)", commandCode, uint32(^t.permittedFeatures&commandFeatures))
 	}
 
 	t.currentCmd = &cmdContext{
