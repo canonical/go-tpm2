@@ -776,7 +776,10 @@ func (t *TCTI) Unwrap() tpm2.TCTI {
 	return t.tcti
 }
 
-// WrapTCTI wraps the supplied TCTI and authorizes it to use the specified features.
+// WrapTCTI wraps the supplied TCTI and authorizes it to use the specified features. If
+// the supplied TCTI corresponds to a real TPM device, the caller should verify that the
+// specified features are permitted by the current test execution, by checking the value
+// of the PermittedTPMFeatures variable.
 func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) {
 	tpm, _ := tpm2.NewTPMContext(tcti)
 

@@ -141,12 +141,12 @@ const (
 )
 
 var (
-	// TPMBackend defines the type of TPM connection that will be used for tests.
+	// TPMBackend defines the type of TPM connection that should be used for tests.
 	TPMBackend TPMBackendType = TPMBackendNone
 
 	// PermittedTPMFeatures defines the permitted feature set for tests that use a TPMContext
 	// and where TPMBackend is not TPMBackendMssim. Tests that require features that aren't
-	// permitted will be skipped. This is to facilitate testing on real TPM devices where it
+	// permitted should be skipped. This is to facilitate testing on real TPM devices where it
 	// might not be desirable to perform certain actions.
 	PermittedTPMFeatures TPMFeatureFlags
 
