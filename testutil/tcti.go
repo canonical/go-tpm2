@@ -157,7 +157,7 @@ var savedObjects []savedObject
 // TCTI is a special proxy inteface used for testing, which wraps a real interface.
 // It tracks changes to the TPM state and restores it when the connection is closed,
 // and also performs some permission checks to ensure that a test does not access
-// functionality that it has not requested to use.
+// functionality that it has not declared as permitted.
 type TCTI struct {
 	tcti              tpm2.TCTI
 	permittedFeatures TPMFeatureFlags
@@ -683,6 +683,47 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 	return errs
 }
 
+// Close will attempt to restore the state of the TPM and then close the connection.
+//
+// If any hierarchies were disabled by a test, they will be re-enabled if
+// TPMFeaturePlatformHierarchy is permitted and the platform hierarchy hasn't been
+// disabled. If TPMFeaturePlatformHierarchy isn't permitted or the platform hierarchy
+// has been disabled, then disabled hierarchies cannot be re-enabled and
+// TPMFeatureStClearChange must be permitted in order to disable the hierarchies in
+// the first place.
+//
+// If any hierarchy authorization values are set by a test, they will be cleared.
+// If the authorization value for the owner or endorsement hierarchy cannot be
+// cleared because the test disabled the hierarchy and it cannot be re-enabled, an
+// error will be returned. If an authorization value cannot be cleared because it
+// was set by a command using command parameter encryption, an error will be returned.
+// The test must clear the authorization value itself in this case.
+//
+// If the TPM2_ClearControl command was used to disable the TPM2_Clear command, it
+// will be re-enabled if TPMFeaturePlatformHierarchy is permitted. If
+// TPMFeaturePlatformHierarchy isn't permitted, then the TPM2_Clear command won't be
+// re-enabled. The TPMFeatureClearControl must be permitted in order to use the
+// TPM2_ClearControl command in this case. If TPMFeaturePlatformHierarchy is permitted
+// and TPMFeatureClearControl is not permitted, but the TPM2_Clear command cannot be
+// re-enabled (eg, because the platform hierarchy was disabled), then an error will
+// be returned.
+//
+// If TPMFeatureLockoutHierarchy is permitted, the DA counter will be reset. If
+// TPMFeatureLockoutHierarchy is not permitted then the DA counter will not be reset.
+// In this case, TPMFeatureDAProtectedCapability must be permitted in order to use any
+// DA protected resource which might cause the DA counter to be incremented.
+//
+// Changes made by the TPM2_DictionaryAttackParameters command will be reverted.
+//
+// Any transient objects or sessions loaded into the TPM will be flushed.
+//
+// Any persistent resources created by the test will be evicted or undefined. If a
+// persistent resource cannot be evicted or undefined (eg, because the corresponding
+// hierarchy has been disabled and cannot be re-enabled), an error will be returned.
+// If a NV index is defined with the TPMA_NV_POLICY_DELETE attribute set, an error
+// will be returned. The test must undefine the index itself in this case. It is not
+// possible for resources created by a test to remain in the TPM after calling this
+// function without returning an error.
 func (t *TCTI) Close() error {
 	tpm, _ := tpm2.NewTPMContext(t.tcti)
 
