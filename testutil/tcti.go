@@ -144,15 +144,41 @@ type daParams struct {
 }
 
 type cmdContext struct {
-	command  tpm2.CommandCode
-	handles  tpm2.HandleList
-	authArea []tpm2.AuthCommand
-	params   []byte
-
+	command  tpm2.CommandPacket
 	response *bytes.Buffer
 }
 
 var savedObjects []savedObject
+
+// CommandRecord provides information about a command executed via
+// the TCTI interface.
+type CommandRecord struct {
+	commandPacket  tpm2.CommandPacket
+	responsePacket tpm2.ResponsePacket
+}
+
+// GetCommandCode returns the command code associated with this record.
+func (r CommandRecord) GetCommandCode() (tpm2.CommandCode, error) {
+	return r.commandPacket.GetCommandCode()
+}
+
+// UnmarshalCommand unmarshals the command packet associated with this
+// record, returning the handles, auth area and parameters. The parameters
+// will still be in the TPM wire format. The number of command handles
+// associated with the command must be supplied by the caller.
+func (r CommandRecord) UnmarshalCommand(numHandles int) (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte, err error) {
+	return r.commandPacket.UnmarshalPayload(numHandles)
+}
+
+// UnmarshalResponse unmarshals the response packet associated with this
+// record, returning the response code, handle, parameters and auth area.
+// The parameters will still be in the TPM wire format. The caller supplies
+// a pointer to which the response handle will be written. The pointer must
+// be supplied if the command returns a handle, and must be nil if the command
+// does not return a handle, else the response will be incorrectly unmarshalled.
+func (r CommandRecord) UnmarshalResponse(handle *tpm2.Handle) (rc tpm2.ResponseCode, parameters []byte, authArea []tpm2.AuthResponse, err error) {
+	return r.responsePacket.Unmarshal(handle)
+}
 
 // TCTI is a special proxy inteface used for testing, which wraps a real interface.
 // It tracks changes to the TPM state and restores it when the connection is closed,
@@ -178,24 +204,31 @@ type TCTI struct {
 	didHierarchyControl         bool
 	didDisablePlatformHierarchy bool
 	didSetDaParams              bool
+
+	// CommandLog keeps a record of all of the commands executed via
+	// this interface
+	CommandLog []CommandRecord
 }
 
 func (t *TCTI) processCommandDone() error {
-	defer func() {
-		t.currentCmd = nil
-	}()
+	currentCmd := t.currentCmd
+	t.currentCmd = nil
 
-	cmdInfo := commandInfoMap[t.currentCmd.command]
+	t.CommandLog = append(t.CommandLog, CommandRecord{currentCmd.command, tpm2.ResponsePacket(currentCmd.response.Bytes())})
 
-	var handle tpm2.Handle
+	commandCode, _ := currentCmd.command.GetCommandCode()
+	cmdInfo := commandInfoMap[commandCode]
+	cmdHandles, authArea, cpBytes, _ := currentCmd.command.UnmarshalPayload(cmdInfo.cmdHandles)
+
+	var rHandle tpm2.Handle
 	var pHandle *tpm2.Handle
 
 	// Unpack the response packet
 	if cmdInfo.rspHandle {
-		pHandle = &handle
+		pHandle = &rHandle
 	}
-	resp := tpm2.ResponsePacket(t.currentCmd.response.Bytes())
-	rc, pBytes, _, err := resp.Unmarshal(pHandle)
+	resp := tpm2.ResponsePacket(currentCmd.response.Bytes())
+	rc, rpBytes, _, err := resp.Unmarshal(pHandle)
 	if err != nil {
 		return xerrors.Errorf("cannot unmarshal response: %w", err)
 	}
@@ -204,20 +237,20 @@ func (t *TCTI) processCommandDone() error {
 	}
 
 	// Record new transient objects or sessions
-	switch handle.Type() {
+	switch rHandle.Type() {
 	case tpm2.HandleTypeHMACSession, tpm2.HandleTypePolicySession:
-		handle = canonicalizeHandle(handle)
-		t.sessions[canonicalizeHandle(handle)] = sessionInfo{}
+		rHandle = canonicalizeHandle(rHandle)
+		t.sessions[canonicalizeHandle(rHandle)] = sessionInfo{}
 	case tpm2.HandleTypeTransient:
 		var attrs tpm2.ObjectAttributes
 
-		switch t.currentCmd.command {
+		switch commandCode {
 		case tpm2.CommandCreatePrimary:
 			var inSensitive []byte
 			var inPublic struct {
 				Ptr *tpm2.Public `tpm2:"sized"`
 			}
-			if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &inSensitive, &inPublic); err != nil {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inSensitive, &inPublic); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
 			attrs = inPublic.Ptr.Attrs
@@ -226,7 +259,7 @@ func (t *TCTI) processCommandDone() error {
 			var inPublic struct {
 				Ptr *tpm2.Public `tpm2:"sized"`
 			}
-			if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &inPrivate, &inPublic); err != nil {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, &inPublic); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
 			attrs = inPublic.Ptr.Attrs
@@ -234,7 +267,7 @@ func (t *TCTI) processCommandDone() error {
 			attrs = tpm2.AttrNoDA
 		case tpm2.CommandContextLoad:
 			var context tpm2.Context
-			if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &context); err != nil {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &context); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
 			for _, s := range savedObjects {
@@ -248,7 +281,7 @@ func (t *TCTI) processCommandDone() error {
 			var inPublic struct {
 				Ptr *tpm2.Public `tpm2:"sized"`
 			}
-			if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &inPrivate, &inPublic); err != nil {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, &inPublic); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
 			attrs = inPublic.Ptr.Attrs
@@ -258,19 +291,19 @@ func (t *TCTI) processCommandDone() error {
 			return errors.New("not supported yet")
 		}
 
-		t.transientObjects[handle] = objectInfo{attrs: attrs}
+		t.transientObjects[rHandle] = objectInfo{attrs: attrs}
 	}
 
 	// Command specific updates
-	switch t.currentCmd.command {
+	switch commandCode {
 	case tpm2.CommandNVUndefineSpaceSpecial:
 		// Drop undefined NV index
-		delete(t.nvIndexes, t.currentCmd.handles[0])
+		delete(t.nvIndexes, cmdHandles[0])
 	case tpm2.CommandEvictControl:
-		auth := t.currentCmd.handles[0]
-		object := t.currentCmd.handles[1]
+		auth := cmdHandles[0]
+		object := cmdHandles[1]
 		var persistent tpm2.Handle
-		if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &persistent); err != nil {
+		if _, err := mu.UnmarshalFromBytes(cpBytes, &persistent); err != nil {
 			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		switch object.Type() {
@@ -292,7 +325,7 @@ func (t *TCTI) processCommandDone() error {
 
 		var enable tpm2.Handle
 		var state bool
-		if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &enable, &state); err != nil {
+		if _, err := mu.UnmarshalFromBytes(cpBytes, &enable, &state); err != nil {
 			return xerrors.Errorf("cannot unmarshal params: %w", err)
 		}
 
@@ -301,7 +334,7 @@ func (t *TCTI) processCommandDone() error {
 		}
 	case tpm2.CommandNVUndefineSpace:
 		// Drop undefined NV index
-		delete(t.nvIndexes, t.currentCmd.handles[1])
+		delete(t.nvIndexes, cmdHandles[1])
 	case tpm2.CommandClear:
 		delete(t.hierarchyAuths, tpm2.HandleOwner)
 		delete(t.hierarchyAuths, tpm2.HandleEndorsement)
@@ -327,23 +360,23 @@ func (t *TCTI) processCommandDone() error {
 		// command is encrypted, then the test needs to manually restore. Note that the
 		// auth value was changed though so that the test harness will fail if it's not restored
 		// manually.
-		if t.currentCmd.authArea[0].SessionAttributes&tpm2.AttrCommandEncrypt == 0 {
-			if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &newAuth); err != nil {
+		if authArea[0].SessionAttributes&tpm2.AttrCommandEncrypt == 0 {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &newAuth); err != nil {
 				return xerrors.Errorf("cannot unmarshal parameters: %w", err)
 			}
 		}
-		t.hierarchyAuths[t.currentCmd.handles[0]] = newAuth
+		t.hierarchyAuths[cmdHandles[0]] = newAuth
 	case tpm2.CommandNVDefineSpace:
 		// Record newly defined NV index
 		var auth tpm2.Auth
 		var nvPublic struct {
 			Ptr *tpm2.NVPublic `tpm2:"sized"`
 		}
-		if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &auth, &nvPublic); err != nil {
+		if _, err := mu.UnmarshalFromBytes(cpBytes, &auth, &nvPublic); err != nil {
 			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		index := nvPublic.Ptr.Index
-		authHandle := t.currentCmd.handles[0]
+		authHandle := cmdHandles[0]
 		attrs := nvPublic.Ptr.Attrs
 		t.nvIndexes[index] = nvIndexInfo{auth: authHandle, attrs: attrs}
 	case tpm2.CommandDictionaryAttackParameters:
@@ -351,7 +384,7 @@ func (t *TCTI) processCommandDone() error {
 	case tpm2.CommandStartup:
 		t.didDisablePlatformHierarchy = false
 		var startupType tpm2.StartupType
-		if _, err := mu.UnmarshalFromBytes(t.currentCmd.params, &startupType); err != nil {
+		if _, err := mu.UnmarshalFromBytes(cpBytes, &startupType); err != nil {
 			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		if startupType != tpm2.StartupState {
@@ -359,12 +392,12 @@ func (t *TCTI) processCommandDone() error {
 			t.didHierarchyControl = false
 		}
 	case tpm2.CommandContextSave:
-		handle := t.currentCmd.handles[0]
+		handle := cmdHandles[0]
 		switch handle.Type() {
 		case tpm2.HandleTypeHMACSession, tpm2.HandleTypePolicySession:
 		case tpm2.HandleTypeTransient:
 			var context tpm2.Context
-			if _, err := mu.UnmarshalFromBytes(pBytes, &context); err != nil {
+			if _, err := mu.UnmarshalFromBytes(rpBytes, &context); err != nil {
 				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			info, _ := t.transientObjects[handle]
@@ -443,7 +476,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		return 0, errors.New("unsupported command")
 	}
 
-	handles, authArea, pBytes, err := cmd.UnmarshalPayload(cmdInfo.cmdHandles)
+	handles, _, pBytes, err := cmd.UnmarshalPayload(cmdInfo.cmdHandles)
 	if err != nil {
 		return 0, xerrors.Errorf("invalid command payload: %w", err)
 	}
@@ -521,10 +554,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 	}
 
 	t.currentCmd = &cmdContext{
-		command:  commandCode,
-		handles:  handles,
-		authArea: authArea,
-		params:   pBytes,
+		command:  cmd,
 		response: new(bytes.Buffer)}
 
 	n, err := t.tcti.Write(data)

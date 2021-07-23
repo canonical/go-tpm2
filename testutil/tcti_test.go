@@ -10,10 +10,11 @@ import (
 	"errors"
 	"math"
 
-	"github.com/canonical/go-tpm2"
-	. "github.com/canonical/go-tpm2/testutil"
-
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mu"
+	. "github.com/canonical/go-tpm2/testutil"
 )
 
 type mockTcti struct {
@@ -51,7 +52,7 @@ type tctiSuite struct {
 
 var _ = Suite(&tctiSuite{})
 
-func (s *tctiSuite) newTPMContext(c *C, permittedFeatures TPMFeatureFlags) (*tpm2.TPMContext, *tpm2.TPMContext) {
+func (s *tctiSuite) newTPMContext(c *C, permittedFeatures TPMFeatureFlags) (*tpm2.TPMContext, *TCTI, *tpm2.TPMContext) {
 	restore := MockWrapMssimTCTI(func(tcti tpm2.TCTI, _ TPMFeatureFlags) (*TCTI, error) {
 		return WrapTCTI(&mockTcti{tcti: tcti}, permittedFeatures)
 	})
@@ -71,7 +72,7 @@ func (s *tctiSuite) newTPMContext(c *C, permittedFeatures TPMFeatureFlags) (*tpm
 		c.Check(rawTpm.Close(), IsNil)
 	})
 
-	return tpm, rawTpm
+	return tpm, tcti, rawTpm
 }
 
 func (s *tctiSuite) deferCloseTpm(c *C, tpm *tpm2.TPMContext) {
@@ -80,13 +81,111 @@ func (s *tctiSuite) deferCloseTpm(c *C, tpm *tpm2.TPMContext) {
 	})
 }
 
+func (s *tctiSuite) TestCommandLog(c *C) {
+	tpm, tcti, _ := s.newTPMContext(c, 0)
+	s.deferCloseTpm(c, tpm)
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	c.Assert(err, IsNil)
+
+	public := tpm2.Public{
+		Type:    tpm2.ObjectTypeRSA,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrDecrypt | tpm2.AttrSign,
+		Params: &tpm2.PublicParamsU{
+			RSADetail: &tpm2.RSAParams{
+				Symmetric: tpm2.SymDefObject{
+					Algorithm: tpm2.SymObjectAlgorithmNull,
+					KeyBits:   &tpm2.SymKeyBitsU{},
+					Mode:      &tpm2.SymModeU{}},
+				Scheme: tpm2.RSAScheme{
+					Scheme:  tpm2.RSASchemeNull,
+					Details: &tpm2.AsymSchemeU{}},
+				KeyBits:  2048,
+				Exponent: uint32(key.PublicKey.E)}},
+		Unique: &tpm2.PublicIDU{RSA: key.PublicKey.N.Bytes()}}
+	object, err := tpm.LoadExternal(nil, &public, tpm2.HandleOwner)
+	c.Assert(err, IsNil)
+
+	props, err := tpm.GetCapabilityHandles(object.Handle(), 1)
+	c.Check(err, IsNil)
+	c.Check(props, HasLen, 1)
+	c.Check(props[0], Equals, object.Handle())
+
+	c.Check(tcti.CommandLog, HasLen, 2)
+
+	cmd, err := tcti.CommandLog[0].GetCommandCode()
+	c.Check(err, IsNil)
+	c.Check(cmd, Equals, tpm2.CommandLoadExternal)
+	cmdHandles, cmdAuthArea, cpBytes, err := tcti.CommandLog[0].UnmarshalCommand(0)
+	c.Check(err, IsNil)
+	c.Check(cmdHandles, HasLen, 0)
+	c.Check(cmdAuthArea, HasLen, 0)
+
+	var inSensitiveBytes []byte
+	var inPublicBytes []byte
+	var hierarchy tpm2.Handle
+	_, err = mu.UnmarshalFromBytes(cpBytes, &inSensitiveBytes, &inPublicBytes, &hierarchy)
+	c.Check(err, IsNil)
+	var inPublic *tpm2.Public
+	_, err = mu.UnmarshalFromBytes(inPublicBytes, &inPublic)
+	c.Assert(err, IsNil)
+	c.Check(inSensitiveBytes, HasLen, 0)
+	c.Check(inPublic, DeepEquals, &public)
+	c.Check(hierarchy, Equals, tpm2.HandleOwner)
+
+	var rHandle tpm2.Handle
+	rc, rpBytes, rspAuthArea, err := tcti.CommandLog[0].UnmarshalResponse(&rHandle)
+	c.Check(err, IsNil)
+	c.Check(rHandle, Equals, object.Handle())
+	c.Check(rc, Equals, tpm2.Success)
+	c.Check(rspAuthArea, HasLen, 0)
+
+	var name tpm2.Name
+	_, err = mu.UnmarshalFromBytes(rpBytes, &name)
+	c.Check(err, IsNil)
+	c.Check(name, DeepEquals, object.Name())
+
+	cmd, err = tcti.CommandLog[1].GetCommandCode()
+	c.Check(err, IsNil)
+	c.Check(cmd, Equals, tpm2.CommandGetCapability)
+	cmdHandles, cmdAuthArea, cpBytes, err = tcti.CommandLog[1].UnmarshalCommand(0)
+	c.Check(err, IsNil)
+	c.Check(cmdHandles, HasLen, 0)
+	c.Check(cmdAuthArea, HasLen, 0)
+
+	var capability tpm2.Capability
+	var property uint32
+	var propertyCount uint32
+	_, err = mu.UnmarshalFromBytes(cpBytes, &capability, &property, &propertyCount)
+	c.Check(err, IsNil)
+	c.Check(capability, Equals, tpm2.CapabilityHandles)
+	c.Check(property, Equals, uint32(object.Handle()))
+	c.Check(propertyCount, Equals, uint32(1))
+
+	rc, rpBytes, rspAuthArea, err = tcti.CommandLog[1].UnmarshalResponse(nil)
+	c.Check(err, IsNil)
+	c.Check(rc, Equals, tpm2.Success)
+	c.Check(rspAuthArea, HasLen, 0)
+
+	var moreData bool
+	var capabilityData tpm2.CapabilityData
+	_, err = mu.UnmarshalFromBytes(rpBytes, &moreData, &capabilityData)
+	c.Check(err, IsNil)
+	c.Check(moreData, Equals, false)
+	c.Check(capabilityData, DeepEquals, tpm2.CapabilityData{
+		Capability: tpm2.CapabilityHandles,
+		Data: &tpm2.CapabilitiesU{
+			Handles: tpm2.HandleList{object.Handle()}}})
+}
+
 type testHierarchyAllowedData struct {
 	hierarchy         tpm2.Handle
 	permittedFeatures TPMFeatureFlags
 }
 
 func (s *tctiSuite) testHierarchyAllowed(c *C, data *testHierarchyAllowedData) {
-	tpm, _ := s.newTPMContext(c, data.permittedFeatures)
+	tpm, _, _ := s.newTPMContext(c, data.permittedFeatures)
 	s.deferCloseTpm(c, tpm)
 
 	template := tpm2.Public{
@@ -120,11 +219,12 @@ func (s *tctiSuite) TestPlatformHierarchyAllowed(c *C) {
 
 type testHierarchyDisallowedData struct {
 	hierarchy tpm2.Handle
-	err       string
+
+	err string
 }
 
 func (s *tctiSuite) testHierarchyDisallowed(c *C, data *testHierarchyDisallowedData) {
-	tpm, _ := s.newTPMContext(c, 0)
+	tpm, _, _ := s.newTPMContext(c, 0)
 	s.deferCloseTpm(c, tpm)
 
 	template := tpm2.Public{
@@ -163,14 +263,14 @@ func (s *tctiSuite) TestPlatformHierarchyDisallowed(c *C) {
 }
 
 func (s *tctiSuite) TestLockoutHierarchyAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.DictionaryAttackLockReset(tpm.LockoutHandleContext(), nil), IsNil)
 }
 
 func (s *tctiSuite) TestLockoutHierarchyDisallowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.DictionaryAttackLockReset(tpm.LockoutHandleContext(), nil)
@@ -178,7 +278,7 @@ func (s *tctiSuite) TestLockoutHierarchyDisallowed(c *C) {
 }
 
 func (s *tctiSuite) TestPCRAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeaturePCR|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeaturePCR|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	_, _, err := tpm.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0}}})
@@ -188,7 +288,7 @@ func (s *tctiSuite) TestPCRAllowed(c *C) {
 }
 
 func (s *tctiSuite) TestPCRDisallowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	_, _, err := tpm.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0}}})
@@ -198,14 +298,14 @@ func (s *tctiSuite) TestPCRDisallowed(c *C) {
 }
 
 func (s *tctiSuite) TestStClearChangeAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 }
 
 func (s *tctiSuite) TestStClearChangeDisllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil)
@@ -213,14 +313,14 @@ func (s *tctiSuite) TestStClearChangeDisllowed(c *C) {
 }
 
 func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureSetCommandCodeAuditStatus)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureSetCommandCodeAuditStatus)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.SetCommandCodeAuditStatus(tpm.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
 }
 
 func (s *tctiSuite) TestSetCommandCodeAuditStatusDisallowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.SetCommandCodeAuditStatus(tpm.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
@@ -228,14 +328,14 @@ func (s *tctiSuite) TestSetCommandCodeAuditStatusDisallowed(c *C) {
 }
 
 func (s *tctiSuite) TestClearAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureClear)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureClear)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.Clear(tpm.LockoutHandleContext(), nil), IsNil)
 }
 
 func (s *tctiSuite) TestClearDisallowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.Clear(tpm.LockoutHandleContext(), nil)
@@ -243,14 +343,14 @@ func (s *tctiSuite) TestClearDisallowed(c *C) {
 }
 
 func (s *tctiSuite) TestClearControlAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureClearControl)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureClearControl)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.ClearControl(tpm.LockoutHandleContext(), true, nil), IsNil)
 }
 
 func (s *tctiSuite) TestClearControlDisallowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.ClearControl(tpm.LockoutHandleContext(), true, nil)
@@ -258,14 +358,14 @@ func (s *tctiSuite) TestClearControlDisallowed(c *C) {
 }
 
 func (s *tctiSuite) TestFeatureShutdownAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureShutdown)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureShutdown)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.Shutdown(tpm2.StartupState), IsNil)
 }
 
 func (s *tctiSuite) TestFeatureShutdownDisallowed(c *C) {
-	tpm, _ := s.newTPMContext(c, 0)
+	tpm, _, _ := s.newTPMContext(c, 0)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.Shutdown(tpm2.StartupState)
@@ -273,14 +373,14 @@ func (s *tctiSuite) TestFeatureShutdownDisallowed(c *C) {
 }
 
 func (s *tctiSuite) TestNVGlobalWriteLockAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNVGlobalWriteLock)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNVGlobalWriteLock)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.NVGlobalWriteLock(tpm.OwnerHandleContext(), nil), IsNil)
 }
 
 func (s *tctiSuite) TestNVGlobalWriteLockDisllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.NVGlobalWriteLock(tpm.OwnerHandleContext(), nil)
@@ -288,7 +388,7 @@ func (s *tctiSuite) TestNVGlobalWriteLockDisllowed(c *C) {
 }
 
 func (s *tctiSuite) TestDAProtectedCapabilityAllowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	nvPublic := tpm2.NVPublic{
@@ -303,7 +403,7 @@ func (s *tctiSuite) TestDAProtectedCapabilityAllowed(c *C) {
 }
 
 func (s *tctiSuite) TestDAProtectedCapabilityDisallowed(c *C) {
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	nvPublic := tpm2.NVPublic{
@@ -321,7 +421,7 @@ func (s *tctiSuite) TestDAProtectedCapabilityDisallowed(c *C) {
 func (s *tctiSuite) TestDisablePlatformHierarchyAllowed(c *C) {
 	// Test that the platform hierarchy can be disabled if TPMFeatureStClearChange
 	// is specified.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureClearControl|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureClearControl|TPMFeatureNV)
 
 	// Set disableClear - this can't be undone, but we shouldn't see an error
 	// because of TPMFeatureClearControl
@@ -354,7 +454,7 @@ func (s *tctiSuite) TestDisablePlatformHierarchyAllowed(c *C) {
 func (s *tctiSuite) TestDisablePlatformHierarchyDisallowed(c *C) {
 	// Test that disabling the platform hierarchy isn't allowed without
 	// TPMFeatureStClearChange.
-	tpm, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil)
@@ -369,7 +469,7 @@ type testRestoreHierarchyControlData struct {
 }
 
 func (s *tctiSuite) testRestoreHierarchyControl(c *C, data *testRestoreHierarchyControlData) {
-	tpm, rawTpm := s.newTPMContext(c, data.permittedFeatures|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, data.permittedFeatures|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	c.Check(tpm.HierarchyControl(tpm.GetPermanentContext(data.auth), data.enable, false, nil), IsNil)
 
@@ -417,7 +517,7 @@ func (s *tctiSuite) TestRestoreHierarchyControlPlatformNV(c *C) {
 }
 
 func (s *tctiSuite) TestRestoreHierarchyControlAfterPlatformAuthChange(c *C) {
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 	c.Check(tpm.HierarchyChangeAuth(tpm.PlatformHandleContext(), []byte("foo"), nil), IsNil)
@@ -444,7 +544,7 @@ type testRestoreHierarhcyAuthData struct {
 }
 
 func (s *tctiSuite) testRestoreHierarchyAuth(c *C, handle tpm2.Handle) {
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureFlags(math.MaxUint32))
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureFlags(math.MaxUint32))
 
 	c.Check(tpm.HierarchyChangeAuth(tpm.GetPermanentContext(handle), []byte("foo"), nil), IsNil)
 
@@ -471,7 +571,7 @@ func (s *tctiSuite) TestRestoreLockoutHierarchyAuth(c *C) {
 func (s *tctiSuite) TestManualRestoreHierarchyAuthChangeWithCommandEncrypt(c *C) {
 	// Test that Close() succeeds if the hierarchy auth is manually restored
 	// after initially changing it with command encryption.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	sym := tpm2.SymDef{
@@ -488,7 +588,7 @@ func (s *tctiSuite) TestManualRestoreHierarchyAuthChangeWithCommandEncrypt(c *C)
 func (s *tctiSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryption(c *C) {
 	// Test that Close() fails if the hierarchy auth is not manually restored
 	// after changing it with command encryption.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 
 	sym := tpm2.SymDef{
 		Algorithm: tpm2.SymAlgorithmAES,
@@ -505,7 +605,7 @@ func (s *tctiSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryption(
 func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
 	// Test that Close() fails if the owner hierarchy auth cannot be restored
 	// because both it and the platform hierarchy have been disabled.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
 	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
 	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
@@ -518,7 +618,7 @@ func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
 func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
 	// Test that Close() fails if the owner hierarchy auth cannot be restored
 	// because it has been disabled.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
 	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
 	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
@@ -530,7 +630,7 @@ func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
 func (s *tctiSuite) TestRestoreDisableClear(c *C) {
 	// Test that disableClear is restored correctly if the test can
 	// use the platform hierarchy.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	c.Check(tpm.ClearControl(tpm.PlatformHandleContext(), true, nil), IsNil)
 
@@ -554,7 +654,7 @@ func (s *tctiSuite) TestRestoreDisableClear(c *C) {
 func (s *tctiSuite) TestRestoreDisableClearFailsIfPlatformIsDisabled(c *C) {
 	// Test that Close() fails if it cannot restore disableClear because the
 	// platform hierarchy was disabled and TPMFeatureClearControl isn't defined.
-	tpm, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
 	c.Check(tpm.ClearControl(tpm.PlatformHandleContext(), true, nil), IsNil)
 	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
@@ -567,7 +667,7 @@ func (s *tctiSuite) TestRestoreDACounter(c *C) {
 	// Test that we can access a DA protected resource and that the DA counter
 	// is reset if we don't have TPMFeatureDAProtectedCapability but we do have
 	// TPMFeatureLockoutHierarchy.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureLockoutHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureLockoutHierarchy|TPMFeatureNV)
 
 	nvPublic := tpm2.NVPublic{
 		Index:   0x01800000,
@@ -596,7 +696,7 @@ func (s *tctiSuite) TestRestoreDACounter(c *C) {
 
 func (s *tctiSuite) TestRestoreDAParams(c *C) {
 	// Test that DA parameters are restored properly.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureNV)
 
 	origProps, err := rawTpm.GetCapabilityTPMProperties(tpm2.PropertyMaxAuthFail, 3)
 	c.Check(err, IsNil)
@@ -613,7 +713,7 @@ func (s *tctiSuite) TestRestoreDAParams(c *C) {
 
 func (s *tctiSuite) TestCreateAndFlushPrimaryObject(c *C) {
 	// Test that transient objects created with CreatePrimary are flushed from the TPM.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
@@ -645,7 +745,7 @@ func (s *tctiSuite) TestCreateAndFlushPrimaryObject(c *C) {
 
 func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
 	// Test that transient objects loaded in to the TPM are flushed.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
@@ -691,7 +791,7 @@ func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
 
 func (s *tctiSuite) TestCreateAndFlushHMACObject(c *C) {
 	// Test that HMAC sequence objects are flushed from the TPM.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeKeyedHash,
@@ -723,7 +823,7 @@ func (s *tctiSuite) TestCreateAndFlushHMACObject(c *C) {
 
 func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
 	// Test that restored transient objects are flushed from the TPM.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
@@ -761,7 +861,7 @@ func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
 
 func (s *tctiSuite) TestLoadAndFlushExternalObject(c *C) {
 	// Test that external objects are flushed from the TPM.
-	tpm, rawTpm := s.newTPMContext(c, 0)
+	tpm, _, rawTpm := s.newTPMContext(c, 0)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
@@ -794,7 +894,7 @@ func (s *tctiSuite) TestLoadAndFlushExternalObject(c *C) {
 
 func (s *tctiSuite) TestCreateAndFlushHashObject(c *C) {
 	// Test that has sequence objects are flushed from the TPM.
-	tpm, rawTpm := s.newTPMContext(c, 0)
+	tpm, _, rawTpm := s.newTPMContext(c, 0)
 
 	seq, err := tpm.HashSequenceStart(nil, tpm2.HashAlgorithmSHA256, nil)
 	c.Assert(err, IsNil)
@@ -813,7 +913,7 @@ func (s *tctiSuite) TestCreateAndFlushHashObject(c *C) {
 
 func (s *tctiSuite) TestStartAndFlushSession(c *C) {
 	// Test that sessions are flushed from the TPM.
-	tpm, rawTpm := s.newTPMContext(c, 0)
+	tpm, _, rawTpm := s.newTPMContext(c, 0)
 
 	session, err := tpm.StartAuthSession(nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
@@ -831,7 +931,7 @@ func (s *tctiSuite) TestStartAndFlushSession(c *C) {
 }
 
 func (s *tctiSuite) TestLoadAndFlushRestoredSession(c *C) {
-	tpm, rawTpm := s.newTPMContext(c, 0)
+	tpm, _, rawTpm := s.newTPMContext(c, 0)
 
 	session, err := tpm.StartAuthSession(nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
@@ -856,7 +956,7 @@ func (s *tctiSuite) TestLoadAndFlushRestoredSession(c *C) {
 
 func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 	// Test that persistent objects are evicted from the TPM.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
@@ -891,7 +991,7 @@ func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 
 func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
 	// Test that a failure to evict a persistent object results in an error.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
@@ -922,7 +1022,7 @@ func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
 
 func (s *tctiSuite) TestUndefineNVIndex(c *C) {
 	// Test that NV indexes are undefined.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 
 	nvPublic := tpm2.NVPublic{
 		Index:   0x01800000,
@@ -946,7 +1046,7 @@ func (s *tctiSuite) TestUndefineNVIndex(c *C) {
 
 func (s *tctiSuite) TestUndefineNVIndexError(c *C) {
 	// Test that a failure to undefine a NV index results in an error.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
 	nvPublic := tpm2.NVPublic{
 		Index:   0x01800000,
@@ -967,7 +1067,7 @@ func (s *tctiSuite) TestUndefineNVIndexError(c *C) {
 func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
 	// Test that Close() fails with an error if a test doesn't undefine a
 	// TPMA_NV_POLICY_DELETE index.
-	tpm, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	trial, _ := tpm2.ComputeAuthPolicy(tpm2.HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
@@ -988,7 +1088,7 @@ func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
 
 func (s *tctiSuite) TestNVUndefineSpaceSpecial(c *C) {
 	// Test that a NV index being undefined by the test is handled correctly.
-	tpm, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	trial, _ := tpm2.ComputeAuthPolicy(tpm2.HashAlgorithmSHA256)
@@ -1014,7 +1114,7 @@ func (s *tctiSuite) TestNVUndefineSpaceSpecial(c *C) {
 
 func (s *tctiSuite) TestEvictControl(c *C) {
 	// Test that a persistent object being evicted by the test is handled correctly.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	template := tpm2.Public{
@@ -1042,7 +1142,7 @@ func (s *tctiSuite) TestEvictControl(c *C) {
 
 func (s *tctiSuite) TestNVUndefineSpace(c *C) {
 	// Test that a NV index being undefined by the test is handled correctly.
-	tpm, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	nvPublic := tpm2.NVPublic{
@@ -1059,7 +1159,7 @@ func (s *tctiSuite) TestNVUndefineSpace(c *C) {
 func (s *tctiSuite) TestClear(c *C) {
 	// Test that TPM_CC_Clear works correctly and that the test cleans
 	// up the platform hierarchy at the end of the test.
-	tpm, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureClear|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureClear|TPMFeatureNV)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
