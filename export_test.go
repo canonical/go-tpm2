@@ -19,7 +19,7 @@ func (r *TestSessionContext) Attrs() SessionAttributes {
 	return r.attrs
 }
 
-var TestComputeBindName = computeBindName
+var ComputeBindName = computeBindName
 
 type SessionContextData = sessionContextData
 

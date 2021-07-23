@@ -144,7 +144,7 @@ func TestStartAuthSession(t *testing.T) {
 					if !scData.IsBound {
 						t.Errorf("The returned session context should be bound")
 					}
-					boundEntity := TestComputeBindName(data.bind.Name(), data.bindAuth)
+					boundEntity := ComputeBindName(data.bind.Name(), data.bindAuth)
 					if !bytes.Equal(boundEntity, scData.BoundEntity) {
 						t.Errorf("The returned session context has the wrong bound resource")
 					}
