@@ -117,7 +117,7 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	cmd, err := tcti.CommandLog[0].GetCommandCode()
 	c.Check(err, IsNil)
 	c.Check(cmd, Equals, tpm2.CommandLoadExternal)
-	cmdHandles, cmdAuthArea, cpBytes, err := tcti.CommandLog[0].UnmarshalCommand(0)
+	cmdHandles, cmdAuthArea, cpBytes, err := tcti.CommandLog[0].UnmarshalCommand()
 	c.Check(err, IsNil)
 	c.Check(cmdHandles, HasLen, 0)
 	c.Check(cmdAuthArea, HasLen, 0)
@@ -134,8 +134,7 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	c.Check(inPublic, DeepEquals, &public)
 	c.Check(hierarchy, Equals, tpm2.HandleOwner)
 
-	var rHandle tpm2.Handle
-	rc, rpBytes, rspAuthArea, err := tcti.CommandLog[0].UnmarshalResponse(&rHandle)
+	rc, rHandle, rpBytes, rspAuthArea, err := tcti.CommandLog[0].UnmarshalResponse()
 	c.Check(err, IsNil)
 	c.Check(rHandle, Equals, object.Handle())
 	c.Check(rc, Equals, tpm2.Success)
@@ -149,7 +148,7 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	cmd, err = tcti.CommandLog[1].GetCommandCode()
 	c.Check(err, IsNil)
 	c.Check(cmd, Equals, tpm2.CommandGetCapability)
-	cmdHandles, cmdAuthArea, cpBytes, err = tcti.CommandLog[1].UnmarshalCommand(0)
+	cmdHandles, cmdAuthArea, cpBytes, err = tcti.CommandLog[1].UnmarshalCommand()
 	c.Check(err, IsNil)
 	c.Check(cmdHandles, HasLen, 0)
 	c.Check(cmdAuthArea, HasLen, 0)
@@ -163,9 +162,10 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	c.Check(property, Equals, uint32(object.Handle()))
 	c.Check(propertyCount, Equals, uint32(1))
 
-	rc, rpBytes, rspAuthArea, err = tcti.CommandLog[1].UnmarshalResponse(nil)
+	rc, rHandle, rpBytes, rspAuthArea, err = tcti.CommandLog[1].UnmarshalResponse()
 	c.Check(err, IsNil)
 	c.Check(rc, Equals, tpm2.Success)
+	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
 	c.Check(rspAuthArea, HasLen, 0)
 
 	var moreData bool

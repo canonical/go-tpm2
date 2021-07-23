@@ -153,31 +153,39 @@ var savedObjects []savedObject
 // CommandRecord provides information about a command executed via
 // the TCTI interface.
 type CommandRecord struct {
+	cmdInfo        *commandInfo
 	commandPacket  tpm2.CommandPacket
 	responsePacket tpm2.ResponsePacket
 }
 
 // GetCommandCode returns the command code associated with this record.
-func (r CommandRecord) GetCommandCode() (tpm2.CommandCode, error) {
+func (r *CommandRecord) GetCommandCode() (tpm2.CommandCode, error) {
 	return r.commandPacket.GetCommandCode()
 }
 
 // UnmarshalCommand unmarshals the command packet associated with this
 // record, returning the handles, auth area and parameters. The parameters
-// will still be in the TPM wire format. The number of command handles
-// associated with the command must be supplied by the caller.
-func (r CommandRecord) UnmarshalCommand(numHandles int) (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte, err error) {
-	return r.commandPacket.Unmarshal(numHandles)
+// will still be in the TPM wire format.
+func (r *CommandRecord) UnmarshalCommand() (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte, err error) {
+	return r.commandPacket.Unmarshal(r.cmdInfo.cmdHandles)
 }
 
 // UnmarshalResponse unmarshals the response packet associated with this
 // record, returning the response code, handle, parameters and auth area.
-// The parameters will still be in the TPM wire format. The caller supplies
-// a pointer to which the response handle will be written. The pointer must
-// be supplied if the command returns a handle, and must be nil if the command
-// does not return a handle, else the response will be incorrectly unmarshalled.
-func (r CommandRecord) UnmarshalResponse(handle *tpm2.Handle) (rc tpm2.ResponseCode, parameters []byte, authArea []tpm2.AuthResponse, err error) {
-	return r.responsePacket.Unmarshal(handle)
+// The parameters will still be in the TPM wire format. For commands that
+// don't respond with a handle, the returned handle will be
+// tpm2.HandleUnassigned.
+func (r *CommandRecord) UnmarshalResponse() (rc tpm2.ResponseCode, handle tpm2.Handle, parameters []byte, authArea []tpm2.AuthResponse, err error) {
+	handle = tpm2.HandleUnassigned
+	var pHandle *tpm2.Handle
+	if r.cmdInfo.rspHandle {
+		pHandle = &handle
+	}
+	rc, parameters, authArea, err = r.responsePacket.Unmarshal(pHandle)
+	if err != nil {
+		return 0, handle, nil, nil, err
+	}
+	return rc, handle, parameters, authArea, nil
 }
 
 // TCTI is a special proxy inteface used for testing, which wraps a real interface.
@@ -207,17 +215,17 @@ type TCTI struct {
 
 	// CommandLog keeps a record of all of the commands executed via
 	// this interface
-	CommandLog []CommandRecord
+	CommandLog []*CommandRecord
 }
 
 func (t *TCTI) processCommandDone() error {
 	currentCmd := t.currentCmd
 	t.currentCmd = nil
 
-	t.CommandLog = append(t.CommandLog, CommandRecord{currentCmd.command, tpm2.ResponsePacket(currentCmd.response.Bytes())})
-
 	commandCode, _ := currentCmd.command.GetCommandCode()
 	cmdInfo := commandInfoMap[commandCode]
+	t.CommandLog = append(t.CommandLog, &CommandRecord{&cmdInfo, currentCmd.command, tpm2.ResponsePacket(currentCmd.response.Bytes())})
+
 	cmdHandles, authArea, cpBytes, _ := currentCmd.command.Unmarshal(cmdInfo.cmdHandles)
 
 	var rHandle tpm2.Handle

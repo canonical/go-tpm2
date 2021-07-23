@@ -52,6 +52,29 @@ func (b *BaseTest) AddFixtureCleanup(fn func(c *C)) {
 	b.fixtureCleanupHandlers = append(b.fixtureCleanupHandlers, fn)
 }
 
+// CommandRecordC is a helper for CommandRecord that integrates with *check.C.
+type CommandRecordC struct {
+	*CommandRecord
+}
+
+func (r *CommandRecordC) GetCommandCode(c *C) tpm2.CommandCode {
+	code, err := r.CommandRecord.GetCommandCode()
+	c.Assert(err, IsNil)
+	return code
+}
+
+func (r *CommandRecordC) UnmarshalCommand(c *C) (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte) {
+	handles, authArea, parameters, err := r.CommandRecord.UnmarshalCommand()
+	c.Assert(err, IsNil)
+	return handles, authArea, parameters
+}
+
+func (r *CommandRecordC) UnmarshalResponse(c *C) (rc tpm2.ResponseCode, handle tpm2.Handle, parameters []byte, authArea []tpm2.AuthResponse) {
+	rc, handle, parameters, authArea, err := r.CommandRecord.UnmarshalResponse()
+	c.Assert(err, IsNil)
+	return rc, handle, parameters, authArea
+}
+
 // TPMTest is a base test suite for all tests that use a TPMContext. This test suite will take care of
 // restoring the TPM state at the end of each test, as well as closing the TPMContext.
 //
@@ -89,6 +112,28 @@ func (b *TPMTest) SetUpTest(c *C) {
 		c.Assert(b.TPM.Close(), IsNil)
 		b.TPM = nil
 	})
+}
+
+// CommandLog returns a log of TPM commands that have been executed since
+// the start of the test, or since the last call to ForgetCommands.
+func (b *TPMTest) CommandLog() (log []*CommandRecordC) {
+	for _, r := range b.TCTI.CommandLog {
+		log = append(log, &CommandRecordC{r})
+	}
+	return log
+}
+
+// LastCommand returns a record of the last TPM command that was executed.
+// It asserts if no command has been executed.
+func (b *TPMTest) LastCommand(c *C) *CommandRecordC {
+	c.Assert(b.TCTI.CommandLog, Not(HasLen), 0)
+	return &CommandRecordC{b.TCTI.CommandLog[len(b.TCTI.CommandLog)-1]}
+}
+
+// ForgetCommands forgets the log of TPM commands that have been executed
+// since the start of the test or since the last call to ForgetCommands.
+func (b *TPMTest) ForgetCommands() {
+	b.TCTI.CommandLog = nil
 }
 
 // SetHierarchyAuth sets the authorization value for the supplied hierarchy to auth. It is
