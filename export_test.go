@@ -13,9 +13,9 @@ import (
 type ResourceContextPrivate = resourceContextPrivate
 type ObjectContext = objectContext
 type NvIndexContext = nvIndexContext
-type TestSessionContext = sessionContext
+type SessionContextImpl = sessionContext // We already have a SessionContext interface
 
-func (r *TestSessionContext) Attrs() SessionAttributes {
+func (r *SessionContextImpl) Attrs() SessionAttributes {
 	return r.attrs
 }
 

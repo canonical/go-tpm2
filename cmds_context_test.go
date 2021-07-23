@@ -136,7 +136,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		}
 		defer flushContext(t, tpm, sc)
 
-		origData := sc.(*TestSessionContext).Data()
+		origData := sc.(*SessionContextImpl).Data()
 
 		context, err := tpm.ContextSave(sc)
 		if err != nil {
@@ -160,7 +160,7 @@ func TestContextSaveAndLoad(t *testing.T) {
 		if !bytes.Equal(restored.Name(), sc.Name()) {
 			t.Errorf("ContextLoad returned a handle with the wrong name")
 		}
-		restoredData := restored.(*TestSessionContext).Data()
+		restoredData := restored.(*SessionContextImpl).Data()
 
 		origBytes, _ := mu.MarshalToBytes(origData)
 		restoredBytes, _ := mu.MarshalToBytes(restoredData)

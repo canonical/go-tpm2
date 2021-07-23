@@ -190,11 +190,11 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesSession(c *C) {
 
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Assert(session2, testutil.ConvertibleTo, &TestSessionContext{})
+	c.Assert(session2, testutil.ConvertibleTo, &SessionContextImpl{})
 
-	data := session.(*TestSessionContext).Data()
+	data := session.(*SessionContextImpl).Data()
 	c.Check(Canonicalize(&data), IsNil)
-	c.Check(session2.(*TestSessionContext).Data(), DeepEquals, data)
+	c.Check(session2.(*SessionContextImpl).Data(), DeepEquals, data)
 }
 
 type testCreateResourceContextFromTPMWithSessionData struct {
@@ -269,41 +269,41 @@ func (s *resourcesSuite) TestCreateObjectResourceContextFromPublic(c *C) {
 	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
 }
 
-func (s *resourcesSuite) TestSessionContextSetAttrs(c *C) {
+func (s *resourcesSuite) SessionContextImplSetAttrs(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 
 	session.SetAttrs(AttrContinueSession)
-	c.Check(session.(*TestSessionContext).Attrs(), Equals, AttrContinueSession)
+	c.Check(session.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession)
 }
 
-func (s *resourcesSuite) TestSessionContextWithAttrs(c *C) {
+func (s *resourcesSuite) SessionContextImplWithAttrs(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 
 	session2 := session.WithAttrs(AttrAudit)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(*TestSessionContext).Attrs(), Equals, SessionAttributes(0))
-	c.Check(session2.(*TestSessionContext).Attrs(), Equals, AttrAudit)
+	c.Check(session.(*SessionContextImpl).Attrs(), Equals, SessionAttributes(0))
+	c.Check(session2.(*SessionContextImpl).Attrs(), Equals, AttrAudit)
 }
 
-func (s *resourcesSuite) TestSessionContextIncludeAttrs(c *C) {
+func (s *resourcesSuite) SessionContextImplIncludeAttrs(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 	session.SetAttrs(AttrContinueSession)
 
 	session2 := session.IncludeAttrs(AttrResponseEncrypt)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(*TestSessionContext).Attrs(), Equals, AttrContinueSession)
-	c.Check(session2.(*TestSessionContext).Attrs(), Equals, AttrContinueSession|AttrResponseEncrypt)
+	c.Check(session.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession)
+	c.Check(session2.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession|AttrResponseEncrypt)
 }
 
-func (s *resourcesSuite) TestSessionContextExcludeAttrs(c *C) {
+func (s *resourcesSuite) SessionContextImplExcludeAttrs(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 	session.SetAttrs(AttrAudit | AttrContinueSession | AttrCommandEncrypt)
 
 	session2 := session.ExcludeAttrs(AttrAudit)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(*TestSessionContext).Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
-	c.Check(session2.(*TestSessionContext).Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
+	c.Check(session.(*SessionContextImpl).Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
+	c.Check(session2.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
 }
