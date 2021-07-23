@@ -136,10 +136,56 @@ func (b *TPMTest) ForgetCommands() {
 	b.TCTI.CommandLog = nil
 }
 
-// SetHierarchyAuth sets the authorization value for the supplied hierarchy to auth. It is
-// restored automatically at the end of the test.
-func (b *TPMTest) SetHierarchyAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Auth) {
+// HierarchyChangeAuth calls the tpm2.TPMContext.HierarchyChangeAuth function and
+// asserts if it is not successful.
+func (b *TPMTest) HierarchyChangeAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Auth) {
 	c.Assert(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), auth, nil), IsNil)
+}
+
+// EvictControl calls the tpm2.TPMContext.EvictControl function and asserts if it
+// is not successful.
+func (b *TPMTest) EvictControl(c *C, auth tpm2.Handle, object tpm2.ResourceContext, persistentHandle tpm2.Handle) tpm2.ResourceContext {
+	p, err := b.TPM.EvictControl(b.TPM.GetPermanentContext(auth), object, persistentHandle, nil)
+	c.Assert(err, IsNil)
+	return p
+}
+
+// NVDefineSpace calls the tpm2.TPMContext.NVDefineSpace function and asserts if
+// it is not successful.
+func (b *TPMTest) NVDefineSpace(c *C, authContext tpm2.ResourceContext, auth tpm2.Auth, publicInfo *tpm2.NVPublic) tpm2.ResourceContext {
+	n, err := b.TPM.NVDefineSpace(authContext, auth, publicInfo, nil)
+	c.Assert(err, IsNil)
+	return n
+}
+
+// StartAuthSession calls the tpm2.TPMContext.StartAuthSession function and asserts
+// if it is not successful.
+func (b *TPMTest) StartAuthSession(c *C, tpmKey, bind tpm2.ResourceContext, sessionType tpm2.SessionType, symmetric *tpm2.SymDef, authHash tpm2.HashAlgorithmId) tpm2.SessionContext {
+	session, err := b.TPM.StartAuthSession(tpmKey, bind, sessionType, symmetric, authHash)
+	c.Assert(err, IsNil)
+	return session
+}
+
+// CreateStoragePrimaryKeyRSA creates a primary storage key in the storage
+// hierarchy, with the standard SRK template. On success, it returns the context
+// for the newly created object. It asserts if it is not successful.
+func (b *TPMTest) CreateStoragePrimaryKeyRSA(c *C) tpm2.ResourceContext {
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeRSA,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrNoDA | tpm2.AttrRestricted | tpm2.AttrDecrypt,
+		Params: &tpm2.PublicParamsU{
+			RSADetail: &tpm2.RSAParams{
+				Symmetric: tpm2.SymDefObject{
+					Algorithm: tpm2.SymObjectAlgorithmAES,
+					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
+					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
+				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	rc, _, _, _, _, err := b.TPM.CreatePrimary(b.TPM.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+	return rc
 }
 
 // TPMSimulatorTest is a base test suite for all tests that use the TPM simulator (TctiMssim).

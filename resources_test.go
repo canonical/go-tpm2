@@ -5,357 +5,305 @@
 package tpm2_test
 
 import (
-	"bytes"
 	"encoding/binary"
-	"testing"
+	"fmt"
+
+	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
-func TestCreateResourceContextFromTPM(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
-
-	runCreate := func(t *testing.T, context ResourceContext) {
-		rc, err := tpm.CreateResourceContextFromTPM(context.Handle())
-		if err != nil {
-			t.Errorf("CreateResourceContextFromTPM failed: %v", err)
-		}
-		if rc == nil {
-			t.Fatalf("CreateResourceContextFromTPM returned a nil context")
-		}
-		if rc == context {
-			t.Errorf("CreateResourceContextFromTPM didn't return a new context")
-		}
-		if rc.Handle() != context.Handle() {
-			t.Errorf("CreateResourceContextFromTPM returned a context with the wrong handle")
-		}
-		if !bytes.Equal(rc.Name(), context.Name()) {
-			t.Errorf("CreateResourceContextFromTPM returned a context with the wrong name")
-		}
-	}
-
-	runCreateUnavailable := func(t *testing.T, handle Handle) {
-		rc, err := tpm.CreateResourceContextFromTPM(handle)
-		if rc != nil {
-			t.Errorf("CreateResourceContextFromTPM returned a non-nil context for a resource that doesn't exist")
-		}
-		if !IsResourceUnavailableError(err, handle) {
-			t.Errorf("CreateResourceContextFromTPM returned an unexpected error for a resource that doesn't exist: %v", err)
-		}
-	}
-
-	t.Run("Transient", func(t *testing.T) {
-		rc := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, rc)
-		runCreate(t, rc)
-		runCreateUnavailable(t, rc.Handle()+1)
-	})
-	t.Run("Persistent", func(t *testing.T) {
-		trc := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, trc)
-		rc := persistObjectForTesting(t, tpm, tpm.OwnerHandleContext(), trc, Handle(0x81000008))
-		defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), rc)
-		runCreate(t, rc)
-		runCreateUnavailable(t, rc.Handle()+1)
-	})
-	t.Run("NV", func(t *testing.T) {
-		pub := NVPublic{
-			Index:   0x018100ff,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
-			Size:    8}
-		rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext())
-		runCreate(t, rc)
-		runCreateUnavailable(t, rc.Handle()+1)
-	})
+type resourcesSuite struct {
+	testutil.TPMTest
 }
 
-func TestCreatePartialHandleContext(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
-
-	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, context)
-
-	sc := CreatePartialHandleContext(context.Handle())
-	if sc == nil {
-		t.Fatalf("CreatePartialHandleContext returned a nil context")
-	}
-	if sc.Handle() != context.Handle() {
-		t.Errorf("CreatePartialHandleContext returned a context with the wrong handle")
-	}
-	if !bytes.Equal(sc.Name(), context.Name()) {
-		t.Errorf("CreatePartialHandleContext returned a context with the wrong name")
-	}
-
-	context2 := createRSASrkForTesting(t, tpm, nil)
-	defer flushContext(t, tpm, context2)
-
-	rc := CreatePartialHandleContext(context2.Handle())
-	if rc == nil {
-		t.Fatalf("CreatePartialHandleContext returned a nil context")
-	}
-	if rc.Handle() != context2.Handle() {
-		t.Errorf("CreatePartialHandleContext returned a context with the wrong handle")
-	}
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(context2.Handle()))
-	if !bytes.Equal(rc.Name(), name) {
-		t.Errorf("CreatePartialHandleContext returned a context with the wrong name")
-	}
+func (s *resourcesSuite) SetUpTest(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureNV
+	s.TPMTest.SetUpTest(c)
 }
 
-func TestCreateHandleContextFromBytes(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+var _ = Suite(&resourcesSuite{})
 
-	run := func(t *testing.T, context ResourceContext) {
-		b := context.SerializeToBytes()
-		rc, n, err := CreateHandleContextFromBytes(b)
-		if err != nil {
-			t.Errorf("CreateHandleContextFromBytes failed: %v", err)
-		}
-		if n != len(b) {
-			t.Errorf("CreateHandleContextFromBytes consumed the wrong number of bytes")
-		}
-		if rc == nil {
-			t.Fatalf("CreateHandleContextFromBytes returned a nil context")
-		}
-		if rc.Handle() != context.Handle() {
-			t.Errorf("CreateHandleContextFromBytes returned a context with the wrong handle")
-		}
-		if !bytes.Equal(rc.Name(), context.Name()) {
-			t.Errorf("CreateHandleContextFromBytes returned a context with the wrong name")
-		}
-		if _, ok := rc.(ResourceContext); !ok {
-			t.Fatalf("CreateHandleContextFromBytes returned the wrong HandleContext type")
-		}
-	}
-	t.Run("Transient", func(t *testing.T) {
-		rc := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, rc)
-		run(t, rc)
-	})
-	t.Run("Persistent", func(t *testing.T) {
-		trc := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, trc)
-		rc := persistObjectForTesting(t, tpm, tpm.OwnerHandleContext(), trc, Handle(0x81000008))
-		defer evictPersistentObject(t, tpm, tpm.OwnerHandleContext(), rc)
-		run(t, rc)
-	})
-	t.Run("NV", func(t *testing.T) {
-		pub := NVPublic{
-			Index:   0x018100ff,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
-			Size:    8}
-		rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext())
-		run(t, rc)
-	})
+type testCreateObjectResourceContextFromTPMData struct {
+	handle Handle
+	public *Public
+	name   Name
 }
 
-func TestCreateResourceContextFromTPMWithSession(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
-
-	run := func(t *testing.T, context ResourceContext) {
-		sc, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sc)
-
-		rc, err := tpm.CreateResourceContextFromTPM(context.Handle(), sc.WithAttrs(AttrContinueSession|AttrAudit))
-		if err != nil {
-			t.Errorf("CreateResourceContextFromTPM failed: %v", err)
-		}
-		if rc == nil {
-			t.Fatalf("CreateResourceContextFromTPM returned a nil context")
-		}
-		if rc == context {
-			t.Errorf("CreateResourceContextFromTPM didn't return a new context")
-		}
-		if rc.Handle() != context.Handle() {
-			t.Errorf("CreateResourceContextFromTPM returned a context with the wrong handle")
-		}
-		if !bytes.Equal(rc.Name(), context.Name()) {
-			t.Errorf("CreateResourceContextFromTPM returned a context with the wrong name")
-		}
-		if !sc.IsAudit() {
-			t.Errorf("CreateResourceContextFromTPM didn't use the provided session")
-		}
-	}
-
-	t.Run("Transient", func(t *testing.T) {
-		rc := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, rc)
-		run(t, rc)
-	})
-	t.Run("NV", func(t *testing.T) {
-		pub := NVPublic{
-			Index:   0x018100ff,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
-			Size:    8}
-		rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext())
-		run(t, rc)
-	})
+func (s *resourcesSuite) testCreateObjectResourceContextFromTPM(c *C, data *testCreateObjectResourceContextFromTPMData) {
+	rc, err := s.TPM.CreateResourceContextFromTPM(data.handle)
+	c.Assert(err, IsNil)
+	c.Assert(rc, NotNil)
+	c.Check(rc.Handle(), Equals, data.handle)
+	c.Check(rc.Name(), DeepEquals, data.name)
+	c.Assert(rc, testutil.ConvertibleTo, &ObjectContext{})
+	c.Check(rc.(*ObjectContext).GetPublic(), DeepEquals, data.public)
 }
 
-func TestCreateNVIndexResourceContextFromPublic(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+func (s *resourcesSuite) TestCreateResourceContextFromTPMTransient(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	s.testCreateObjectResourceContextFromTPM(c, &testCreateObjectResourceContextFromTPMData{
+		handle: rc.Handle(),
+		public: rc.(*ObjectContext).GetPublic(),
+		name:   rc.Name()})
+}
 
+func (s *resourcesSuite) TestCreateResourceContextFromTPMPersistent(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	rc = s.EvictControl(c, HandleOwner, rc, 0x81000008)
+	s.testCreateObjectResourceContextFromTPM(c, &testCreateObjectResourceContextFromTPMData{
+		handle: rc.Handle(),
+		public: rc.(*ObjectContext).GetPublic(),
+		name:   rc.Name()})
+}
+
+func (s *resourcesSuite) TestCreateResourceContextFromTPMNV(c *C) {
 	pub := NVPublic{
 		Index:   0x018100ff,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
-	rc1, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
-	if err != nil {
-		t.Fatalf("NVDefineSpace failed: %v", err)
-	}
-	defer undefineNVSpace(t, tpm, rc1, tpm.OwnerHandleContext())
+	rc := s.NVDefineSpace(c, s.TPM.OwnerHandleContext(), nil, &pub)
 
-	rc2, err := CreateNVIndexResourceContextFromPublic(&pub)
-	if err != nil {
-		t.Errorf("CreateNVIndexResourceContextFromPublic failed: %v", err)
-	}
-	if rc2 == nil {
-		t.Fatalf("CreateNVIndexResourceContextFromPublic returned a nil context")
-	}
-	if rc2 == rc1 {
-		t.Errorf("CreateNVIndexResourceContextFromPublic didn't return a new context")
-	}
-	if rc2.Handle() != rc1.Handle() {
-		t.Errorf("CreateNVIndexResourceContextFromPublic returned a context with the wrong handle")
-	}
-	if !bytes.Equal(rc2.Name(), rc1.Name()) {
-		t.Errorf("CreateNVIndexResourceContextFromPublic returned a context with the wrong name")
-	}
+	rc2, err := s.TPM.CreateResourceContextFromTPM(rc.Handle())
+	c.Assert(err, IsNil)
+	c.Assert(rc, NotNil)
+	c.Check(rc2.Handle(), Equals, rc.Handle())
+	c.Check(rc2.Name(), DeepEquals, rc.Name())
+	c.Assert(rc, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Check(rc2.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
 }
 
-func TestCreateObjectResourceContextFromPublic(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
-
-	rc1 := createRSASrkForTesting(t, tpm, nil)
-	defer flushContext(t, tpm, rc1)
-
-	pub, _, _, err := tpm.ReadPublic(rc1)
-	if err != nil {
-		t.Fatalf("ReadPublic failed: %v", err)
-	}
-
-	rc2, err := CreateObjectResourceContextFromPublic(rc1.Handle(), pub)
-	if err != nil {
-		t.Errorf("CreateObjectResourceContextFromPublic failed: %v", err)
-	}
-	if rc2 == nil {
-		t.Fatalf("CreateObjectResourceContextFromPublic returned a nil context")
-	}
-	if rc2 == rc1 {
-		t.Errorf("CreateObjectResourceContextFromPublic didn't return a new context")
-	}
-	if rc2.Handle() != rc1.Handle() {
-		t.Errorf("CreateObjectResourceContextFromPublic returned a context with the wrong handle")
-	}
-	if !bytes.Equal(rc2.Name(), rc1.Name()) {
-		t.Errorf("CreateObjectResourceContextFromPublic returned a context with the wrong name")
-	}
+func (s *resourcesSuite) testCreateResourceContextFromTPMUnavailable(c *C, handle Handle) {
+	rc, err := s.TPM.CreateResourceContextFromTPM(handle)
+	c.Check(rc, IsNil)
+	c.Check(err, ErrorMatches, fmt.Sprintf("a resource at handle 0x%08x is not available on the TPM", handle))
 }
 
-func TestSessionContextSetAttrs(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
-
-	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, context)
-
-	context.SetAttrs(AttrContinueSession)
-	if context.(*TestSessionContext).Attrs() != AttrContinueSession {
-		t.Errorf("SessionContext.SetAttrs didn't work")
-	}
+func (s *resourcesSuite) TestCreateResourceContextFromTPMUnavailableTransient(c *C) {
+	s.testCreateResourceContextFromTPMUnavailable(c, 0x80000000)
 }
 
-func TestSessionContextWithAttrs(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
-
-	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	context2 := context.WithAttrs(AttrAudit)
-	defer verifyContextFlushed(t, tpm, context)
-	defer flushContext(t, tpm, context2)
-
-	if context.(*TestSessionContext).Attrs() != 0 {
-		t.Errorf("SessionContext.WithAttrs set attributes on the wrong context")
-	}
-	if context2.(*TestSessionContext).Attrs() != AttrAudit {
-		t.Errorf("SessionContext.WithAttrs didn't work")
-	}
+func (s *resourcesSuite) TestCreateResourceContextFromTPMUnavailablePersistent(c *C) {
+	s.testCreateResourceContextFromTPMUnavailable(c, 0x8100ff00)
 }
 
-func TestSessionContextIncludeAttrs(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
-
-	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	context.SetAttrs(AttrContinueSession)
-	context2 := context.IncludeAttrs(AttrResponseEncrypt)
-	defer verifyContextFlushed(t, tpm, context)
-	defer flushContext(t, tpm, context2)
-
-	if context.(*TestSessionContext).Attrs() != AttrContinueSession {
-		t.Errorf("SessionContext.IncludeAttrs set attributes on the wrong context")
-	}
-	if context2.(*TestSessionContext).Attrs() != AttrContinueSession|AttrResponseEncrypt {
-		t.Errorf("SessionContext.IncludeAttrs didn't work")
-	}
+func (s *resourcesSuite) TestCreateResourceContextFromTPMUnavailableNV(c *C) {
+	s.testCreateResourceContextFromTPMUnavailable(c, 0x018100ff)
 }
 
-func TestSessionContextExcludeAttrs(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+func (s *resourcesSuite) TestCreateResourceContextFromTPMPanicsForWrongType(c *C) {
+	c.Check(func() { s.TPM.CreateResourceContextFromTPM(HandleOwner) }, PanicMatches, "invalid handle type")
+}
 
-	context, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	context.SetAttrs(AttrAudit | AttrContinueSession | AttrCommandEncrypt)
-	context2 := context.ExcludeAttrs(AttrAudit)
-	defer verifyContextFlushed(t, tpm, context)
-	defer flushContext(t, tpm, context2)
+func (s *resourcesSuite) testCreatePartialHandleContext(c *C, handle Handle) {
+	hc := CreatePartialHandleContext(handle)
+	c.Assert(hc, NotNil)
+	c.Check(hc.Handle(), Equals, handle)
 
-	if context.(*TestSessionContext).Attrs() != AttrAudit|AttrContinueSession|AttrCommandEncrypt {
-		t.Errorf("SessionContext.ExcludeAttrs set attributes on the wrong context")
-	}
-	if context2.(*TestSessionContext).Attrs() != AttrContinueSession|AttrCommandEncrypt {
-		t.Errorf("SessionContext.ExcludeAttrs didn't work")
-	}
+	name := make(Name, binary.Size(Handle(0)))
+	binary.BigEndian.PutUint32(name, uint32(handle))
+	c.Check(hc.Name(), DeepEquals, name)
+}
+
+func (s *resourcesSuite) TestCreatePartialHandleContextSession(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	s.testCreatePartialHandleContext(c, session.Handle())
+}
+
+func (s *resourcesSuite) TestCreatePartialHandleContextTransient(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	s.testCreatePartialHandleContext(c, rc.Handle())
+}
+
+func (s *resourcesSuite) TestCreatePartialHandleContextForWrongType(c *C) {
+	c.Check(func() { CreatePartialHandleContext(0x81000000) }, PanicMatches, "invalid handle type")
+}
+
+type testCreateObjectHandleContextFromBytesData struct {
+	b      []byte
+	handle Handle
+	public *Public
+	name   Name
+}
+
+func (s *resourcesSuite) testCreateObjectHandleContextFromBytes(c *C, data *testCreateObjectHandleContextFromBytesData) {
+	context, n, err := CreateHandleContextFromBytes(data.b)
+	c.Assert(err, IsNil)
+	c.Check(n, Equals, len(data.b))
+	c.Assert(context, NotNil)
+
+	c.Check(context.Handle(), Equals, data.handle)
+	c.Check(context.Name(), DeepEquals, data.name)
+	c.Assert(context, testutil.ConvertibleTo, &ObjectContext{})
+	c.Check(context.(*ObjectContext).GetPublic(), DeepEquals, data.public)
+}
+
+func (s *resourcesSuite) TestCreateHandleContextFromBytesTransient(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	s.testCreateObjectHandleContextFromBytes(c, &testCreateObjectHandleContextFromBytesData{
+		b:      rc.SerializeToBytes(),
+		handle: rc.Handle(),
+		public: rc.(*ObjectContext).GetPublic(),
+		name:   rc.Name()})
+}
+
+func (s *resourcesSuite) TestCreateHandleContextFromBytesPersistent(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	rc = s.EvictControl(c, HandleOwner, rc, 0x81000008)
+	s.testCreateObjectHandleContextFromBytes(c, &testCreateObjectHandleContextFromBytesData{
+		b:      rc.SerializeToBytes(),
+		handle: rc.Handle(),
+		public: rc.(*ObjectContext).GetPublic(),
+		name:   rc.Name()})
+}
+
+func (s *resourcesSuite) TestCreateHandleContextFromBytesNV(c *C) {
+	pub := NVPublic{
+		Index:   0x018100ff,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
+		Size:    8}
+	rc := s.NVDefineSpace(c, s.TPM.OwnerHandleContext(), nil, &pub)
+	b := rc.SerializeToBytes()
+
+	rc2, n, err := CreateHandleContextFromBytes(b)
+	c.Assert(err, IsNil)
+	c.Check(n, Equals, len(b))
+	c.Assert(rc2, NotNil)
+
+	c.Check(rc2.Handle(), Equals, rc.Handle())
+	c.Check(rc2.Name(), DeepEquals, rc.Name())
+	c.Assert(rc2, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Check(rc2.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+}
+
+func (s *resourcesSuite) TestCreateHandleContextFromBytesSession(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	b := session.SerializeToBytes()
+
+	session2, n, err := CreateHandleContextFromBytes(b)
+	c.Assert(err, IsNil)
+	c.Check(n, Equals, len(b))
+	c.Assert(session2, NotNil)
+
+	c.Check(session2.Handle(), Equals, session.Handle())
+	c.Check(session2.Name(), DeepEquals, session.Name())
+	c.Assert(session2, testutil.ConvertibleTo, &TestSessionContext{})
+
+	data := session.(*TestSessionContext).Data()
+	c.Check(Canonicalize(&data), IsNil)
+	c.Check(session2.(*TestSessionContext).Data(), DeepEquals, data)
+}
+
+type testCreateResourceContextFromTPMWithSessionData struct {
+	handle Handle
+	name   Name
+}
+
+func (s *resourcesSuite) testCreateResourceContextFromTPMWithSession(c *C, data *testCreateResourceContextFromTPMWithSessionData) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+
+	rc, err := s.TPM.CreateResourceContextFromTPM(data.handle, session.WithAttrs(AttrContinueSession|AttrAudit))
+	c.Assert(err, IsNil)
+	c.Assert(rc, NotNil)
+	c.Check(rc.Handle(), Equals, data.handle)
+	c.Check(rc.Name(), DeepEquals, data.name)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, HasLen, 1)
+	c.Check(authArea[0].SessionHandle, Equals, session.Handle())
+}
+
+func (s *resourcesSuite) TestCreateResourceContextFromTPMWithSessionTransient(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	s.testCreateResourceContextFromTPMWithSession(c, &testCreateResourceContextFromTPMWithSessionData{
+		handle: rc.Handle(),
+		name:   rc.Name()})
+}
+
+func (s *resourcesSuite) TestCreateResourceContextFromTPMWithSessionNV(c *C) {
+	pub := NVPublic{
+		Index:   0x018100ff,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
+		Size:    8}
+	rc := s.NVDefineSpace(c, s.TPM.OwnerHandleContext(), nil, &pub)
+	s.testCreateResourceContextFromTPMWithSession(c, &testCreateResourceContextFromTPMWithSessionData{
+		handle: rc.Handle(),
+		name:   rc.Name()})
+}
+
+func (s *resourcesSuite) TestCreateNVIndexResourceContextFromPublic(c *C) {
+	pub := NVPublic{
+		Index:   0x018100ff,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
+		Size:    8}
+	rc, err := CreateNVIndexResourceContextFromPublic(&pub)
+	c.Assert(err, IsNil)
+	c.Assert(rc, NotNil)
+	c.Check(rc.Handle(), Equals, pub.Index)
+
+	name, err := pub.Name()
+	c.Check(err, IsNil)
+
+	c.Check(rc.Name(), DeepEquals, name)
+	c.Check(rc, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+}
+
+func (s *resourcesSuite) TestCreateObjectResourceContextFromPublic(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+
+	pub, _, _, err := s.TPM.ReadPublic(rc)
+	c.Assert(err, IsNil)
+
+	rc2, err := CreateObjectResourceContextFromPublic(rc.Handle(), pub)
+	c.Assert(err, IsNil)
+	c.Assert(rc2, NotNil)
+	c.Check(rc2.Handle(), Equals, rc.Handle())
+	c.Check(rc2.Name(), DeepEquals, rc.Name())
+	c.Check(rc2, testutil.ConvertibleTo, &ObjectContext{})
+	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
+}
+
+func (s *resourcesSuite) TestSessionContextSetAttrs(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+
+	session.SetAttrs(AttrContinueSession)
+	c.Check(session.(*TestSessionContext).Attrs(), Equals, AttrContinueSession)
+}
+
+func (s *resourcesSuite) TestSessionContextWithAttrs(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+
+	session2 := session.WithAttrs(AttrAudit)
+	c.Check(session2.Handle(), Equals, session.Handle())
+	c.Check(session2.Name(), DeepEquals, session.Name())
+	c.Check(session.(*TestSessionContext).Attrs(), Equals, SessionAttributes(0))
+	c.Check(session2.(*TestSessionContext).Attrs(), Equals, AttrAudit)
+}
+
+func (s *resourcesSuite) TestSessionContextIncludeAttrs(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	session.SetAttrs(AttrContinueSession)
+
+	session2 := session.IncludeAttrs(AttrResponseEncrypt)
+	c.Check(session2.Handle(), Equals, session.Handle())
+	c.Check(session2.Name(), DeepEquals, session.Name())
+	c.Check(session.(*TestSessionContext).Attrs(), Equals, AttrContinueSession)
+	c.Check(session2.(*TestSessionContext).Attrs(), Equals, AttrContinueSession|AttrResponseEncrypt)
+}
+
+func (s *resourcesSuite) TestSessionContextExcludeAttrs(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	session.SetAttrs(AttrAudit | AttrContinueSession | AttrCommandEncrypt)
+
+	session2 := session.ExcludeAttrs(AttrAudit)
+	c.Check(session2.Handle(), Equals, session.Handle())
+	c.Check(session2.Name(), DeepEquals, session.Name())
+	c.Check(session.(*TestSessionContext).Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
+	c.Check(session2.(*TestSessionContext).Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
 }

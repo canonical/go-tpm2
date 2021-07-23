@@ -659,7 +659,7 @@ const (
 	// first command parameter before being sent from the host to the TPM. This can only be used for parameters that
 	// have types corresponding to TPM2B prefixed TCG types, and requires a session that was configured with a valid
 	// symmetric algorithm via the symmetric argument of TPMContext.StartAuthSession.
-	AttrCommandEncrypt = 1 << (iota + 2)
+	AttrCommandEncrypt SessionAttributes = 1 << (iota + 2)
 
 	// AttrResponseEncrypt corresponds to encrypt and specifies that the session should be used for encryption of the
 	// first response parameter before being sent from the TPM to the host. This can only be used for parameters that

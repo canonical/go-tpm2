@@ -4,6 +4,12 @@
 
 package tpm2
 
+import (
+	"bytes"
+
+	"github.com/canonical/go-tpm2/mu"
+)
+
 type ResourceContextPrivate = resourceContextPrivate
 type ObjectContext = objectContext
 type NvIndexContext = nvIndexContext
@@ -16,3 +22,12 @@ func (r *TestSessionContext) Attrs() SessionAttributes {
 var TestComputeBindName = computeBindName
 
 type SessionContextData = sessionContextData
+
+func Canonicalize(vals ...interface{}) error {
+	b := new(bytes.Buffer)
+	if _, err := mu.MarshalToWriter(b, vals...); err != nil {
+		return err
+	}
+	_, err := mu.UnmarshalFromReader(b, vals...)
+	return err
+}

@@ -87,3 +87,31 @@ func (checker *isFalseChecker) Check(params []interface{}, names []string) (resu
 	}
 	return !value.Bool(), ""
 }
+
+type convertibleToChecker struct {
+	*CheckerInfo
+}
+
+// ConvertibleTo determines whether a value of one type can
+// be converted to another type.
+//
+// For example:
+//
+//  c.Check(err, ConvertibleTo, *os.PathError{})
+//
+var ConvertibleTo Checker = &convertibleToChecker{
+	&CheckerInfo{Name: "ConvertibleTo", Params: []string{"value", "sample"}}}
+
+func (checker *convertibleToChecker) Check(params []interface{}, names []string) (result bool, error string) {
+	value := reflect.ValueOf(params[0])
+	sample := reflect.ValueOf(params[1])
+
+	if !value.IsValid() {
+		return false, ""
+	}
+	if !sample.IsValid() {
+		return false, "invalid sample value"
+	}
+
+	return value.Type().ConvertibleTo(sample.Type()), ""
+}

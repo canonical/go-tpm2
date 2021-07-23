@@ -5,6 +5,8 @@
 package testutil_test
 
 import (
+	"errors"
+	"os"
 	"reflect"
 
 	. "github.com/canonical/go-tpm2/testutil"
@@ -63,4 +65,23 @@ func (s *checkersSuite) TestIsFalse(c *C) {
 	testCheck(c, IsFalse, true, "", false)
 	testCheck(c, IsFalse, false, "", true)
 	testCheck(c, IsFalse, false, "value is not a bool", 1)
+}
+
+type testError struct{}
+
+func (e testError) Error() string { return "error" }
+
+func (s *checkersSuite) TestConvertibleTo(c *C) {
+	testInfo(c, ConvertibleTo, "ConvertibleTo", []string{"value", "sample"})
+	testCheck(c, ConvertibleTo, true, "", testError{}, testError{})
+	testCheck(c, ConvertibleTo, false, "", &testError{}, testError{})
+	testCheck(c, ConvertibleTo, false, "", testError{}, &testError{})
+
+	var e error = testError{}
+	testCheck(c, ConvertibleTo, true, "", e, testError{})
+	testCheck(c, ConvertibleTo, false, "", e, errors.New(""))
+
+	e = new(os.PathError)
+	testCheck(c, ConvertibleTo, true, "", e, &os.PathError{})
+	testCheck(c, ConvertibleTo, false, "", e, testError{})
 }
