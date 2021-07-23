@@ -12,11 +12,12 @@ import (
 
 // BaseTest is a base test suite for all tests.
 type BaseTest struct {
-	cleanupHandlers []func()
+	cleanupHandlers        []func()
+	fixtureCleanupHandlers []func(c *C)
 }
 
 func (b *BaseTest) SetUpTest(c *C) {
-	if len(b.cleanupHandlers) > 0 {
+	if len(b.cleanupHandlers) > 0 || len(b.fixtureCleanupHandlers) > 0 {
 		panic("cleanup handlers were not executed at the end of the previous test, missing BaseTest.TearDownTest call?")
 	}
 }
@@ -28,11 +29,27 @@ func (b *BaseTest) TearDownTest(c *C) {
 		b.cleanupHandlers = b.cleanupHandlers[:l-1]
 		fn()
 	}
+
+	for len(b.fixtureCleanupHandlers) > 0 {
+		l := len(b.fixtureCleanupHandlers)
+		fn := b.fixtureCleanupHandlers[l-1]
+		b.fixtureCleanupHandlers = b.fixtureCleanupHandlers[:l-1]
+		fn(c)
+	}
 }
 
 // AddCleanup queues a function to be called at the end of the test.
 func (b *BaseTest) AddCleanup(fn func()) {
 	b.cleanupHandlers = append(b.cleanupHandlers, fn)
+}
+
+// AddFixtureCleanup queues a function to be called at the end of
+// the test, and is intended to be called during SetUpTest. The
+// function is called with the TearDownTest *check.C which allows
+// failures to result in a fixture panic, as failures recorded to
+// the originating *check.C are ignored at this stage.
+func (b *BaseTest) AddFixtureCleanup(fn func(c *C)) {
+	b.fixtureCleanupHandlers = append(b.fixtureCleanupHandlers, fn)
 }
 
 // TPMTest is a base test suite for all tests that use a TPMContext. This test suite will take care of
@@ -68,7 +85,7 @@ func (b *TPMTest) SetUpTest(c *C) {
 
 	b.initTPMContextIfNeeded(c)
 
-	b.AddCleanup(func() {
+	b.AddFixtureCleanup(func(c *C) {
 		c.Assert(b.TPM.Close(), IsNil)
 		b.TPM = nil
 	})
