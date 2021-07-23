@@ -167,7 +167,7 @@ func (r CommandRecord) GetCommandCode() (tpm2.CommandCode, error) {
 // will still be in the TPM wire format. The number of command handles
 // associated with the command must be supplied by the caller.
 func (r CommandRecord) UnmarshalCommand(numHandles int) (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte, err error) {
-	return r.commandPacket.UnmarshalPayload(numHandles)
+	return r.commandPacket.Unmarshal(numHandles)
 }
 
 // UnmarshalResponse unmarshals the response packet associated with this
@@ -218,7 +218,7 @@ func (t *TCTI) processCommandDone() error {
 
 	commandCode, _ := currentCmd.command.GetCommandCode()
 	cmdInfo := commandInfoMap[commandCode]
-	cmdHandles, authArea, cpBytes, _ := currentCmd.command.UnmarshalPayload(cmdInfo.cmdHandles)
+	cmdHandles, authArea, cpBytes, _ := currentCmd.command.Unmarshal(cmdInfo.cmdHandles)
 
 	var rHandle tpm2.Handle
 	var pHandle *tpm2.Handle
@@ -476,7 +476,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		return 0, errors.New("unsupported command")
 	}
 
-	handles, _, pBytes, err := cmd.UnmarshalPayload(cmdInfo.cmdHandles)
+	handles, _, pBytes, err := cmd.Unmarshal(cmdInfo.cmdHandles)
 	if err != nil {
 		return 0, xerrors.Errorf("invalid command payload: %w", err)
 	}

@@ -39,10 +39,10 @@ func (p CommandPacket) GetCommandCode() (CommandCode, error) {
 	return header.CommandCode, nil
 }
 
-// UnmarshalPayload unmarshals this command packet, returning the handles, auth area and
+// Unmarshal unmarshals this command packet, returning the handles, auth area and
 // parameters. The parameters will still be in the TPM wire format. The number of command
 // handles associated with the command must be supplied by the caller.
-func (p CommandPacket) UnmarshalPayload(numHandles int) (handles HandleList, authArea []AuthCommand, parameters []byte, err error) {
+func (p CommandPacket) Unmarshal(numHandles int) (handles HandleList, authArea []AuthCommand, parameters []byte, err error) {
 	buf := bytes.NewReader(p)
 
 	var header CommandHeader
