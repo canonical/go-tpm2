@@ -215,7 +215,8 @@ type TCTI struct {
 
 	// CommandLog keeps a record of all of the commands executed via
 	// this interface
-	CommandLog []*CommandRecord
+	CommandLog            []*CommandRecord
+	disableCommandLogging bool
 }
 
 func (t *TCTI) processCommandDone() error {
@@ -224,7 +225,9 @@ func (t *TCTI) processCommandDone() error {
 
 	commandCode, _ := currentCmd.command.GetCommandCode()
 	cmdInfo := commandInfoMap[commandCode]
-	t.CommandLog = append(t.CommandLog, &CommandRecord{&cmdInfo, currentCmd.command, tpm2.ResponsePacket(currentCmd.response.Bytes())})
+	if !t.disableCommandLogging {
+		t.CommandLog = append(t.CommandLog, &CommandRecord{&cmdInfo, currentCmd.command, tpm2.ResponsePacket(currentCmd.response.Bytes())})
+	}
 
 	cmdHandles, authArea, cpBytes, _ := currentCmd.command.Unmarshal(cmdInfo.cmdHandles)
 

@@ -139,12 +139,18 @@ func (b *TPMTest) ForgetCommands() {
 // HierarchyChangeAuth calls the tpm2.TPMContext.HierarchyChangeAuth function and
 // asserts if it is not successful.
 func (b *TPMTest) HierarchyChangeAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Auth) {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
 	c.Assert(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), auth, nil), IsNil)
 }
 
 // EvictControl calls the tpm2.TPMContext.EvictControl function and asserts if it
 // is not successful.
 func (b *TPMTest) EvictControl(c *C, auth tpm2.Handle, object tpm2.ResourceContext, persistentHandle tpm2.Handle) tpm2.ResourceContext {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
 	p, err := b.TPM.EvictControl(b.TPM.GetPermanentContext(auth), object, persistentHandle, nil)
 	c.Assert(err, IsNil)
 	return p
@@ -153,6 +159,9 @@ func (b *TPMTest) EvictControl(c *C, auth tpm2.Handle, object tpm2.ResourceConte
 // NVDefineSpace calls the tpm2.TPMContext.NVDefineSpace function and asserts if
 // it is not successful.
 func (b *TPMTest) NVDefineSpace(c *C, authContext tpm2.ResourceContext, auth tpm2.Auth, publicInfo *tpm2.NVPublic) tpm2.ResourceContext {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
 	n, err := b.TPM.NVDefineSpace(authContext, auth, publicInfo, nil)
 	c.Assert(err, IsNil)
 	return n
@@ -161,6 +170,9 @@ func (b *TPMTest) NVDefineSpace(c *C, authContext tpm2.ResourceContext, auth tpm
 // StartAuthSession calls the tpm2.TPMContext.StartAuthSession function and asserts
 // if it is not successful.
 func (b *TPMTest) StartAuthSession(c *C, tpmKey, bind tpm2.ResourceContext, sessionType tpm2.SessionType, symmetric *tpm2.SymDef, authHash tpm2.HashAlgorithmId) tpm2.SessionContext {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
 	session, err := b.TPM.StartAuthSession(tpmKey, bind, sessionType, symmetric, authHash)
 	c.Assert(err, IsNil)
 	return session
@@ -170,6 +182,9 @@ func (b *TPMTest) StartAuthSession(c *C, tpmKey, bind tpm2.ResourceContext, sess
 // hierarchy, with the standard SRK template. On success, it returns the context
 // for the newly created object. It asserts if it is not successful.
 func (b *TPMTest) CreateStoragePrimaryKeyRSA(c *C) tpm2.ResourceContext {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
