@@ -6,12 +6,15 @@ package testutil_test
 
 import (
 	"errors"
+	"io"
 	"os"
 	"reflect"
 
-	. "github.com/canonical/go-tpm2/testutil"
+	"golang.org/x/xerrors"
 
 	. "gopkg.in/check.v1"
+
+	. "github.com/canonical/go-tpm2/testutil"
 )
 
 func testInfo(c *C, checker Checker, name string, paramNames []string) {
@@ -67,9 +70,12 @@ func (s *checkersSuite) TestIsFalse(c *C) {
 	testCheck(c, IsFalse, false, "value is not a bool", 1)
 }
 
-type testError struct{}
+type testError struct {
+	err error
+}
 
-func (e testError) Error() string { return "error" }
+func (e testError) Error() string { return "error: " + e.err.Error() }
+func (e testError) Unwrap() error { return e.err }
 
 func (s *checkersSuite) TestConvertibleTo(c *C) {
 	testInfo(c, ConvertibleTo, "ConvertibleTo", []string{"value", "sample"})
@@ -84,4 +90,28 @@ func (s *checkersSuite) TestConvertibleTo(c *C) {
 	e = new(os.PathError)
 	testCheck(c, ConvertibleTo, true, "", e, &os.PathError{})
 	testCheck(c, ConvertibleTo, false, "", e, testError{})
+}
+
+func (s *checkersSuite) TestErrorIs(c *C) {
+	testInfo(c, ErrorIs, "ErrorIs", []string{"value", "expected"})
+	testCheck(c, ErrorIs, true, "", os.ErrNotExist, os.ErrNotExist)
+	testCheck(c, ErrorIs, false, "", os.ErrNotExist, io.EOF)
+	testCheck(c, ErrorIs, false, "value is not an error", "foo", io.EOF)
+	testCheck(c, ErrorIs, false, "expected is not an error", io.EOF, "foo")
+}
+
+func (s *checkersSuite) TestErrorAs(c *C) {
+	testInfo(c, ErrorAs, "ErrorAs", []string{"value", "target"})
+
+	var e testError
+	testCheck(c, ErrorAs, true, "", testError{io.EOF}, &e)
+	c.Check(e, ErrorIs, io.EOF)
+
+	testCheck(c, ErrorAs, true, "", xerrors.Errorf(": %w", testError{io.EOF}), &e)
+	c.Check(e, ErrorIs, io.EOF)
+
+	var e2 *os.PathError
+	testCheck(c, ErrorAs, false, "", testError{io.EOF}, &e2)
+
+	testCheck(c, ErrorAs, false, "value is not an error", "foo", &e)
 }

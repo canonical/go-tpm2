@@ -7,6 +7,8 @@ package testutil
 import (
 	"reflect"
 
+	"golang.org/x/xerrors"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -109,4 +111,57 @@ func (checker *convertibleToChecker) Check(params []interface{}, names []string)
 	}
 
 	return value.Type().ConvertibleTo(sample.Type()), ""
+}
+
+type errorIsChecker struct {
+	*CheckerInfo
+}
+
+// ErrorIs determines whether any error in a chain has a specific
+// value, using xerrors.Is
+//
+// For example:
+//
+//  c.Check(err, ErrorIs, io.EOF)
+//
+var ErrorIs Checker = &errorIsChecker{
+	&CheckerInfo{Name: "ErrorIs", Params: []string{"value", "expected"}}}
+
+func (checker *errorIsChecker) Check(params []interface{}, names []string) (result bool, errStr string) {
+	err, ok := params[0].(error)
+	if !ok {
+		return false, "value is not an error"
+	}
+
+	expected, ok := params[1].(error)
+	if !ok {
+		return false, "expected is not an error"
+	}
+
+	return xerrors.Is(err, expected), ""
+}
+
+type errorAsChecker struct {
+	*CheckerInfo
+}
+
+// ErrorAs determines whether any error in a chain has a specific
+// type, using xerrors.As.
+//
+// For example:
+//
+//  var e *os.PathError
+//  c.Check(err, ErrorAs, &e)
+//  c.Check(e.Path, Equals, "/foo/bar")
+//
+var ErrorAs Checker = &errorAsChecker{
+	&CheckerInfo{Name: "ErrorAs", Params: []string{"value", "target"}}}
+
+func (checker *errorAsChecker) Check(params []interface{}, names []string) (result bool, errStr string) {
+	err, ok := params[0].(error)
+	if !ok {
+		return false, "value is not an error"
+	}
+
+	return xerrors.As(err, params[1]), ""
 }

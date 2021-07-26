@@ -78,6 +78,11 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMNV(c *C) {
 func (s *resourcesSuite) testCreateResourceContextFromTPMUnavailable(c *C, handle Handle) {
 	rc, err := s.TPM.CreateResourceContextFromTPM(handle)
 	c.Check(rc, IsNil)
+
+	c.Check(err, testutil.ConvertibleTo, ResourceUnavailableError{})
+	var e ResourceUnavailableError
+	c.Check(err, testutil.ErrorAs, &e)
+	c.Check(e.Handle, Equals, handle)
 	c.Check(err, ErrorMatches, fmt.Sprintf("a resource at handle 0x%08x is not available on the TPM", handle))
 }
 
