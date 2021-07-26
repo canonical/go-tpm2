@@ -65,11 +65,11 @@ var IsTrue Checker = &isTrueChecker{
 	&CheckerInfo{Name: "IsTrue", Params: []string{"value"}}}
 
 func (checker *isTrueChecker) Check(params []interface{}, names []string) (result bool, error string) {
-	value := reflect.ValueOf(params[0])
-	if value.Kind() != reflect.Bool {
+	value, ok := params[0].(bool)
+	if !ok {
 		return false, names[0] + " is not a bool"
 	}
-	return value.Bool(), ""
+	return value, ""
 }
 
 type isFalseChecker struct {
@@ -81,11 +81,11 @@ var IsFalse Checker = &isFalseChecker{
 	&CheckerInfo{Name: "IsFalse", Params: []string{"value"}}}
 
 func (checker *isFalseChecker) Check(params []interface{}, names []string) (result bool, error string) {
-	value := reflect.ValueOf(params[0])
-	if value.Kind() != reflect.Bool {
+	value, ok := params[0].(bool)
+	if !ok {
 		return false, names[0] + " is not a bool"
 	}
-	return !value.Bool(), ""
+	return !value, ""
 }
 
 type convertibleToChecker struct {
