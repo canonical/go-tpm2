@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"reflect"
 
@@ -19,19 +18,6 @@ import (
 
 func makeInvalidArgError(name, msg string) error {
 	return fmt.Errorf("invalid %s argument: %s", name, msg)
-}
-
-func wrapMarshallingError(commandCode CommandCode, context string, err error) error {
-	return fmt.Errorf("cannot marshal %s for command %s: %v", context, commandCode, err)
-}
-
-func handleUnmarshallingError(commandCode CommandCode, context string, err error) error {
-	var s *mu.InvalidSelectorError
-	if xerrors.Is(err, io.EOF) || xerrors.Is(err, io.ErrUnexpectedEOF) || xerrors.As(err, &s) {
-		return &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal %s: %v", context, err)}
-	}
-
-	return fmt.Errorf("cannot unmarshal %s for command %s: %v", context, commandCode, err)
 }
 
 func isSessionAllowed(commandCode CommandCode) bool {
