@@ -5,6 +5,8 @@
 package testutil
 
 import (
+	"math"
+
 	"github.com/canonical/go-tpm2"
 
 	. "gopkg.in/check.v1"
@@ -134,6 +136,39 @@ func (b *TPMTest) LastCommand(c *C) *CommandRecordC {
 // since the start of the test or since the last call to ForgetCommands.
 func (b *TPMTest) ForgetCommands() {
 	b.TCTI.CommandLog = nil
+}
+
+// NextAvailableHandle returns the next unused handle starting from
+// the supplied handle. This upper 17-bits of the returned handle
+// will match the upper 17-bits of the supplied handle - ie, if the
+// supplied handle is in a reserved group as defined by the "Registry
+// of reserved TPM 2.0 handles and localities" specification, the
+// returned handle will be in the same reserved group.
+//
+// It asserts if no handle is available.
+func (b *TPMTest) NextAvailableHandle(c *C, handle tpm2.Handle) tpm2.Handle {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	group := handle & 0xffff8000
+
+	handles, err := b.TPM.GetCapabilityHandles(handle, math.MaxUint32)
+	c.Assert(err, IsNil)
+
+	for handle&0xffff8000 == group {
+		if len(handles) == 0 {
+			return handle
+		}
+		if handle != handles[0] {
+			return handle
+		}
+
+		handle += 1
+		handles = handles[1:]
+	}
+
+	c.Fatal("no available handle")
+	return tpm2.HandleUnassigned
 }
 
 // HierarchyChangeAuth calls the tpm2.TPMContext.HierarchyChangeAuth function and

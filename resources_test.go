@@ -51,7 +51,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMTransient(c *C) {
 
 func (s *resourcesSuite) TestCreateResourceContextFromTPMPersistent(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
-	rc = s.EvictControl(c, HandleOwner, rc, 0x81000008)
+	rc = s.EvictControl(c, HandleOwner, rc, s.NextAvailableHandle(c, 0x81000008))
 	s.testCreateObjectResourceContextFromTPM(c, &testCreateObjectResourceContextFromTPMData{
 		handle: rc.Handle(),
 		public: rc.(*ObjectContext).GetPublic(),
@@ -60,7 +60,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMPersistent(c *C) {
 
 func (s *resourcesSuite) TestCreateResourceContextFromTPMNV(c *C) {
 	pub := NVPublic{
-		Index:   0x018100ff,
+		Index:   s.NextAvailableHandle(c, 0x018100ff),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
@@ -151,7 +151,7 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesTransient(c *C) {
 
 func (s *resourcesSuite) TestCreateHandleContextFromBytesPersistent(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
-	rc = s.EvictControl(c, HandleOwner, rc, 0x81000008)
+	rc = s.EvictControl(c, HandleOwner, rc, s.NextAvailableHandle(c, 0x81000008))
 	s.testCreateObjectHandleContextFromBytes(c, &testCreateObjectHandleContextFromBytesData{
 		b:      rc.SerializeToBytes(),
 		handle: rc.Handle(),
@@ -161,7 +161,7 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesPersistent(c *C) {
 
 func (s *resourcesSuite) TestCreateHandleContextFromBytesNV(c *C) {
 	pub := NVPublic{
-		Index:   0x018100ff,
+		Index:   s.NextAvailableHandle(c, 0x018100ff),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
@@ -225,7 +225,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMWithSessionTransient(c 
 
 func (s *resourcesSuite) TestCreateResourceContextFromTPMWithSessionNV(c *C) {
 	pub := NVPublic{
-		Index:   0x018100ff,
+		Index:   s.NextAvailableHandle(c, 0x018100ff),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
@@ -237,7 +237,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMWithSessionNV(c *C) {
 
 func (s *resourcesSuite) TestCreateNVIndexResourceContextFromPublic(c *C) {
 	pub := NVPublic{
-		Index:   0x018100ff,
+		Index:   s.NextAvailableHandle(c, 0x018100ff),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
