@@ -111,9 +111,10 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
 
 	b.AddFixtureCleanup(func(c *C) {
-		c.Assert(b.TPM.Close(), IsNil)
+		tpm := b.TPM
 		b.TCTI = nil
 		b.TPM = nil
+		c.Assert(tpm.Close(), IsNil)
 	})
 }
 
@@ -267,10 +268,11 @@ func (b *TPMSimulatorTest) initTPMSimulatorContextIfNeeded(c *C) (cleanup func(*
 	b.TPMTest.TCTI = tcti
 
 	return func(c *C) {
-		c.Assert(b.TPM.Close(), IsNil)
+		tpm := b.TPM
 		b.TPMTest.TCTI = nil
 		b.TCTI = nil
 		b.TPM = nil
+		c.Assert(tpm.Close(), IsNil)
 	}
 }
 
