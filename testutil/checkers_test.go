@@ -49,7 +49,7 @@ func (s *checkersSuite) TestInSlice(c *C) {
 	testCheck(c, InSlice(Equals), true, "", "foo", []string{"foo", "bar"})
 	testCheck(c, InSlice(Equals), false, "", "baz", []string{"foo", "bar"})
 
-	testCheck(c, InSlice(IsNil), false, "InSlice can only be used with checkers that require 2 parameters", nil, nil)
+	c.Check(func() { testCheck(c, InSlice(IsNil), false, "") }, Panics, "InSlice must be used with a checker that requires 2 parameters")
 	testCheck(c, InSlice(Equals), false, "[]expected has the wrong kind", 1, 1)
 }
 
