@@ -77,11 +77,13 @@ func (r *CommandRecordC) UnmarshalResponse(c *C) (rc tpm2.ResponseCode, handle t
 	return rc, handle, parameters, authArea
 }
 
-// TPMTest is a base test suite for all tests that use a TPMContext. This test suite will take care of
-// restoring the TPM state at the end of each test, as well as closing the TPMContext.
+// TPMTest is a base test suite for all tests that use a TPMContext. This test suite requires the use
+// of the transmission interface from this package, which takes care of restoring the TPM state when it
+// is closed. The test suite will close the TPMContext at the end of the test.
 //
 // A TPMContext will be created automatically for each test. For tests that want to implement creation
-// of the TPMContext, the TPM and TCTI members should be set before SetUpTest is called.
+// of the TPMContext, the TPM and TCTI members should be set before SetUpTest is called. In this case,
+// the test is responsible for closing the TPMContext at the end of the test.
 type TPMTest struct {
 	BaseTest
 
@@ -100,20 +102,24 @@ type TPMTest struct {
 
 func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	if b.TPM != nil {
+		c.Assert(b.TCTI, NotNil)
 		return
 	}
+
+	c.Assert(b.TCTI, IsNil)
+
 	b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
+
+	b.AddFixtureCleanup(func(c *C) {
+		c.Assert(b.TPM.Close(), IsNil)
+		b.TCTI = nil
+		b.TPM = nil
+	})
 }
 
 func (b *TPMTest) SetUpTest(c *C) {
 	b.BaseTest.SetUpTest(c)
-
 	b.initTPMContextIfNeeded(c)
-
-	b.AddFixtureCleanup(func(c *C) {
-		c.Assert(b.TPM.Close(), IsNil)
-		b.TPM = nil
-	})
 }
 
 // CommandLog returns a log of TPM commands that have been executed since
@@ -245,19 +251,35 @@ type TPMSimulatorTest struct {
 	TCTI *tpm2.TctiMssim
 }
 
-func (b *TPMSimulatorTest) initTPMSimulatorContextIfNeeded(c *C) {
+func (b *TPMSimulatorTest) initTPMSimulatorContextIfNeeded(c *C) (cleanup func(*C)) {
 	if b.TPM != nil {
-		return
+		c.Assert(b.TCTI, NotNil)
+		c.Assert(b.TPMTest.TCTI, NotNil)
+		return nil
 	}
+
+	c.Assert(b.TCTI, IsNil)
+	c.Assert(b.TPMTest.TCTI, IsNil)
+
 	tpm, tcti := NewTPMSimulatorContext(c)
 	b.TPM = tpm
 	b.TCTI = tcti.Unwrap().(*tpm2.TctiMssim)
 	b.TPMTest.TCTI = tcti
+
+	return func(c *C) {
+		c.Assert(b.TPM.Close(), IsNil)
+		b.TPMTest.TCTI = nil
+		b.TCTI = nil
+		b.TPM = nil
+	}
 }
 
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
-	b.initTPMSimulatorContextIfNeeded(c)
+	cleanup := b.initTPMSimulatorContextIfNeeded(c)
 	b.TPMTest.SetUpTest(c)
+	if cleanup != nil {
+		b.AddFixtureCleanup(cleanup)
+	}
 }
 
 // ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
