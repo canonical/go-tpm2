@@ -512,34 +512,51 @@ func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (*tpm2.TPMContext, *
 	return tpm, tcti
 }
 
-func newTPMSimulatorContext() (*tpm2.TPMContext, *TCTI, error) {
+func newSimulatorTCTI() (*TCTI, error) {
 	if TPMBackend != TPMBackendMssim {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	mssim, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	tcti, err := wrapMssimTCTI(mssim, TPMFeatureFlags(math.MaxUint32))
+	return wrapMssimTCTI(mssim, TPMFeatureFlags(math.MaxUint32))
+}
+
+// NewSimulatorTCTI returns a new TCTI for testing that corresponds to a connection to the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
+// will be skipped.
+func NewSimulatorTCTI(c *C) *TCTI {
+	tcti, err := newSimulatorTCTI()
+	c.Assert(err, IsNil)
+	if tcti == nil {
+		c.Skip("no TPM available for the test")
+	}
+	return tcti
+}
+
+// NewSimulatorTCTIT returns a new TCTI for testing that corresponds to a connection to the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
+// will be skipped.
+func NewSimulatorTCTIT(t *testing.T) *TCTI {
+	tcti, err := newSimulatorTCTI()
 	if err != nil {
-		return nil, nil, err
+		t.Fatalf("%v", err)
 	}
-
-	tpm, _ := tpm2.NewTPMContext(tcti)
-	return tpm, tcti, nil
+	if tcti == nil {
+		t.SkipNow()
+	}
+	return tcti
 }
 
 // NewTPMSimulatorContext returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
 // skipped.
 func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
-	tpm, tcti, err := newTPMSimulatorContext()
-	c.Assert(err, IsNil)
-	if tpm == nil {
-		c.Skip("no TPM available for the test")
-	}
+	tcti := NewSimulatorTCTI(c)
+	tpm, _ := tpm2.NewTPMContext(tcti)
 	return tpm, tcti
 }
 
@@ -547,13 +564,8 @@ func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
 // skipped.
 func NewTPMSimulatorContextT(t *testing.T) (*tpm2.TPMContext, *TCTI) {
-	tpm, tcti, err := newTPMSimulatorContext()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if tpm == nil {
-		t.SkipNow()
-	}
+	tcti := NewSimulatorTCTIT(t)
+	tpm, _ := tpm2.NewTPMContext(tcti)
 	return tpm, tcti
 }
 
