@@ -165,18 +165,18 @@ func (t *TctiMssim) Stop() (out error) {
 	return nil
 }
 
-// OpenMssim attempts to open a connection to a TPM simulator on the specified host. tpmPort is the port on which the TPM command
-// server is listening. platformPort is the port on which the platform server is listening. If host is an empty string, it defaults
-// to "localhost".
+// OpenMssim attempts to open a connection to a TPM simulator on the specified host and port. The port
+// argument corresponds to the TPM command server. The simulator will also provide a platform server on
+// port+1. If host is an empty string, it defaults to "localhost".
 //
 // If successful, it returns a new TctiMssim instance which can be passed to NewTPMContext.
-func OpenMssim(host string, tpmPort, platformPort uint) (*TctiMssim, error) {
+func OpenMssim(host string, port uint) (*TctiMssim, error) {
 	if host == "" {
 		host = "localhost"
 	}
 
-	tpmAddress := fmt.Sprintf("%s:%d", host, tpmPort)
-	platformAddress := fmt.Sprintf("%s:%d", host, platformPort)
+	tpmAddress := fmt.Sprintf("%s:%d", host, port)
+	platformAddress := fmt.Sprintf("%s:%d", host, port+1)
 
 	tcti := new(TctiMssim)
 	tcti.locality = 3

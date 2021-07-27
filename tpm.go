@@ -427,7 +427,7 @@ func NewTPMContext(tcti TCTI) (*TPMContext, error) {
 		}
 	}
 	if tcti == nil {
-		tcti, _ = OpenMssim("localhost", 2321, 2322)
+		tcti, _ = OpenMssim("localhost", 2321)
 	}
 
 	if tcti == nil {

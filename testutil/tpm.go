@@ -337,7 +337,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 				}
 			}()
 
-			tcti, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
+			tcti, err := tpm2.OpenMssim("", MssimPort)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Cannot open TPM simulator connection for shutdown: %v\n", err)
 				return
@@ -409,7 +409,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 Loop:
 	for i := 0; ; i++ {
 		var err error
-		tcti, err = tpm2.OpenMssim("", MssimPort, MssimPort+1)
+		tcti, err = tpm2.OpenMssim("", MssimPort)
 		switch {
 		case err != nil && i == 4:
 			return nil, xerrors.Errorf("cannot open simulator connection: %w", err)
@@ -445,7 +445,7 @@ func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
 		}
 		return WrapTCTI(tcti, features)
 	case TPMBackendMssim:
-		tcti, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
+		tcti, err := tpm2.OpenMssim("", MssimPort)
 		if err != nil {
 			return nil, err
 		}
@@ -530,7 +530,7 @@ func newSimulatorTCTI() (*TCTI, error) {
 		return nil, nil
 	}
 
-	mssim, err := tpm2.OpenMssim("", MssimPort, MssimPort+1)
+	mssim, err := tpm2.OpenMssim("", MssimPort)
 	if err != nil {
 		return nil, err
 	}
