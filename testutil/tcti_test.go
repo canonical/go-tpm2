@@ -188,20 +188,7 @@ func (s *tctiSuite) testHierarchyAllowed(c *C, data *testHierarchyAllowedData) {
 	tpm, _, _ := s.newTPMContext(c, data.permittedFeatures)
 	s.deferCloseTpm(c, tpm)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	_, _, _, _, _, err := tpm.CreatePrimary(tpm.GetPermanentContext(data.hierarchy), nil, &template, nil, nil, nil)
+	_, _, _, _, _, err := tpm.CreatePrimary(tpm.GetPermanentContext(data.hierarchy), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Check(err, IsNil)
 }
 
@@ -227,20 +214,7 @@ func (s *tctiSuite) testHierarchyDisallowed(c *C, data *testHierarchyDisallowedD
 	tpm, _, _ := s.newTPMContext(c, 0)
 	s.deferCloseTpm(c, tpm)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	_, _, _, _, _, err := tpm.CreatePrimary(tpm.GetPermanentContext(data.hierarchy), nil, &template, nil, nil, nil)
+	_, _, _, _, _, err := tpm.CreatePrimary(tpm.GetPermanentContext(data.hierarchy), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Check(err, ErrorMatches, data.err)
 }
 
@@ -738,20 +712,7 @@ func (s *tctiSuite) TestCreateAndFlushPrimaryObject(c *C) {
 	// Test that transient objects created with CreatePrimary are flushed from the TPM.
 	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	props, err := rawTpm.GetCapabilityHandles(object.Handle(), 1)
@@ -770,24 +731,11 @@ func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
 	// Test that transient objects loaded in to the TPM are flushed.
 	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
-	template = tpm2.Public{
+	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrNoDA,
@@ -848,20 +796,7 @@ func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
 	// Test that restored transient objects are flushed from the TPM.
 	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	context, err := tpm.ContextSave(object)
@@ -981,20 +916,7 @@ func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 	// Test that persistent objects are evicted from the TPM.
 	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	persistent, err := tpm.EvictControl(tpm.OwnerHandleContext(), object, 0x81000001, nil)
@@ -1021,20 +943,7 @@ func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
 	// Test that a failure to evict a persistent object results in an error.
 	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	_, err = tpm.EvictControl(tpm.OwnerHandleContext(), object, 0x81000001, nil)
@@ -1150,20 +1059,7 @@ func (s *tctiSuite) TestEvictControl(c *C) {
 	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	persistent, err := tpm.EvictControl(tpm.OwnerHandleContext(), object, 0x81000001, nil)
@@ -1208,7 +1104,7 @@ func (s *tctiSuite) TestClear(c *C) {
 				KeyBits:  2048,
 				Exponent: 0}}}
 
-	oObject, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	oObject, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 	_, err = tpm.EvictControl(tpm.OwnerHandleContext(), oObject, 0x81000001, nil)
 	c.Check(err, IsNil)
