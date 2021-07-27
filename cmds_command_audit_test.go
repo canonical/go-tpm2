@@ -5,160 +5,97 @@
 package tpm2_test
 
 import (
-	"testing"
+	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
-func TestSetCommandCodeAuditStatus(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureSetCommandCodeAuditStatus|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+type commandCodeAuditSuite struct {
+	testutil.TPMTest
+}
 
-	var allCommands CommandCodeList
-	if commands, err := tpm.GetCapabilityCommands(CommandFirst, CapabilityMaxProperties); err != nil {
-		t.Fatalf("GetCapability failed: %v", err)
-	} else {
-		for _, c := range commands {
-			allCommands = append(allCommands, c.CommandCode())
-		}
-	}
+type commandCodeAuditSuiteOwner struct {
+	commandCodeAuditSuite
+}
 
-	initialCommands, err := tpm.GetCapabilityAuditCommands(CommandFirst, CapabilityMaxProperties)
-	if err != nil {
-		t.Fatalf("GetCapability failed: %v", err)
-	}
+func (s *commandCodeAuditSuiteOwner) SetUpTest(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeatureNV
+	s.TPMTest.SetUpTest(c)
+}
 
-	auditInfo, _, err := tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("GetCommandAuditDigest failed: %v", err)
-	}
+type commandCodeAuditSuitePlatform struct {
+	commandCodeAuditSuite
+}
 
-	initialAlgorithm := HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg)
+func (s *commandCodeAuditSuitePlatform) SetUpTest(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeaturePlatformHierarchy | testutil.TPMFeatureNV
+	s.TPMTest.SetUpTest(c)
+}
 
-	var alg HashAlgorithmId
-	switch initialAlgorithm {
-	case HashAlgorithmSHA256:
-		alg = HashAlgorithmSHA1
-	default:
-		alg = HashAlgorithmSHA256
-	}
+var _ = Suite(&commandCodeAuditSuiteOwner{})
+var _ = Suite(&commandCodeAuditSuitePlatform{})
 
-	var commands CommandCodeList
-	i := 0
-Next:
-	for _, c := range allCommands {
-		if i >= 10 {
-			break
-		}
-		for _, a := range initialCommands {
-			if a == c {
-				continue Next
-			}
-		}
-		commands = append(commands, c)
-		i++
-	}
+type testSetCommandCodeAuditStatusData struct {
+	auth        ResourceContext
+	alg         HashAlgorithmId
+	setList     CommandCodeList
+	clearList   CommandCodeList
+	authSession SessionContext
 
-	defer func() {
-		owner := tpm.OwnerHandleContext()
-		if err := tpm.SetCommandCodeAuditStatus(owner, initialAlgorithm, nil, nil, nil); err != nil {
-			t.Errorf("Cannot restore command audit algorithm: %v", err)
-		}
-		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, nil, allCommands, nil); err != nil {
-			t.Errorf("Cannot clear command audit commands: %v", err)
-		}
-		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, initialCommands, nil, nil); err != nil {
-			t.Errorf("Cannot restore command audit commands: %v", err)
-		}
-	}()
+	expectedCommands CommandCodeList
+}
 
-	run := func(t *testing.T, authAuthSession SessionContext) {
-		checkAuditDigest := func(alg HashAlgorithmId) {
-			auditInfo, _, err = tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
-			if err != nil {
-				t.Fatalf("GetCommandAuditDigest failed: %v", err)
-			}
+func (s *commandCodeAuditSuite) testSetCommandCodeAuditStatus(c *C, data *testSetCommandCodeAuditStatusData) {
+	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, data.alg, nil, nil, data.authSession), IsNil)
+	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, HashAlgorithmNull, data.setList, nil, data.authSession), IsNil)
+	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, data.alg, nil, data.clearList, data.authSession), IsNil)
 
-			if HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg) != alg {
-				t.Errorf("Failed to set command audit digest")
-			}
-		}
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, HasLen, 1)
+	c.Check(authArea[0].SessionHandle, Equals, authSessionHandle(data.authSession))
 
-		owner := tpm.OwnerHandleContext()
-		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, nil, authAuthSession); err != nil {
-			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
-		}
+	commands, err := s.TPM.GetCapabilityAuditCommands(CommandFirst, CapabilityMaxProperties)
+	c.Assert(err, IsNil)
+	c.Check(commands, DeepEquals, data.expectedCommands)
 
-		checkAuditDigest(alg)
+	auditInfo, _, err := s.TPM.GetCommandAuditDigest(s.TPM.EndorsementHandleContext(), nil, nil, nil, nil, nil)
+	c.Assert(err, IsNil)
+	c.Check(auditInfo.Attested.CommandAudit.DigestAlg, Equals, AlgorithmId(data.alg))
+}
 
-		checkAuditCommands := func(expectedCommands CommandCodeList) {
-			expected := make(map[CommandCode]struct{})
-			var empty struct{}
-			for _, c := range expectedCommands {
-				expected[c] = empty
-			}
+func (s *commandCodeAuditSuiteOwner) TestSetCommandCodeAuditStatus1(c *C) {
+	s.testSetCommandCodeAuditStatus(c, &testSetCommandCodeAuditStatusData{
+		auth:             s.TPM.OwnerHandleContext(),
+		alg:              HashAlgorithmSHA256,
+		setList:          CommandCodeList{CommandClockSet, CommandStirRandom, CommandGetRandom},
+		clearList:        CommandCodeList{CommandGetRandom},
+		expectedCommands: CommandCodeList{CommandClockSet, CommandSetCommandCodeAuditStatus, CommandStirRandom}})
+}
 
-			commands, err := tpm.GetCapabilityAuditCommands(CommandFirst, CapabilityMaxProperties)
-			if err != nil {
-				t.Fatalf("GetCapability failed: %v", err)
-			}
+func (s *commandCodeAuditSuiteOwner) TestSetCommandCodeAuditStatus2(c *C) {
+	s.testSetCommandCodeAuditStatus(c, &testSetCommandCodeAuditStatusData{
+		auth:             s.TPM.OwnerHandleContext(),
+		alg:              HashAlgorithmSHA1,
+		setList:          CommandCodeList{CommandClockSet, CommandStirRandom, CommandGetRandom},
+		expectedCommands: CommandCodeList{CommandClockSet, CommandSetCommandCodeAuditStatus, CommandStirRandom, CommandGetRandom}})
+}
 
-			for _, c := range commands {
-				if _, ok := expected[c]; !ok {
-					t.Errorf("Unexpected command code %v returned from GetCapabilityAuditCommands", c)
-				} else {
-					delete(expected, c)
-				}
-			}
+func (s *commandCodeAuditSuiteOwner) TestSetCommandCodeAuditStatusAuthSession(c *C) {
+	s.testSetCommandCodeAuditStatus(c, &testSetCommandCodeAuditStatusData{
+		auth:             s.TPM.OwnerHandleContext(),
+		alg:              HashAlgorithmSHA256,
+		setList:          CommandCodeList{CommandClockSet, CommandStirRandom, CommandGetRandom},
+		clearList:        CommandCodeList{CommandGetRandom},
+		authSession:      s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession),
+		expectedCommands: CommandCodeList{CommandClockSet, CommandSetCommandCodeAuditStatus, CommandStirRandom}})
+}
 
-			if len(expected) > 0 {
-				t.Errorf("Missing command codes")
-			}
-		}
-
-		if err := tpm.SetCommandCodeAuditStatus(owner, HashAlgorithmNull, commands, nil, authAuthSession); err != nil {
-			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
-		}
-
-		expectedCommands := make(CommandCodeList, 0, len(initialCommands)+len(commands))
-		expectedCommands = append(expectedCommands, initialCommands...)
-		expectedCommands = append(expectedCommands, commands...)
-		checkAuditCommands(expectedCommands)
-
-		if err := tpm.SetCommandCodeAuditStatus(owner, alg, nil, commands, authAuthSession); err != nil {
-			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
-		}
-
-		checkAuditCommands(initialCommands)
-
-		if err := tpm.SetCommandCodeAuditStatus(owner, initialAlgorithm, nil, nil, authAuthSession); err != nil {
-			t.Errorf("SetCommandCodeAuditStatus failed: %v", err)
-		}
-
-		checkAuditDigest(initialAlgorithm)
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		run(t, nil)
-	})
-
-	t.Run("WithPasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-		run(t, nil)
-	})
-
-	t.Run("WithSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-
-		run(t, sessionContext.WithAttrs(AttrContinueSession))
-	})
+func (s *commandCodeAuditSuitePlatform) TestSetCommandCodeAuditStatus(c *C) {
+	s.testSetCommandCodeAuditStatus(c, &testSetCommandCodeAuditStatusData{
+		auth:             s.TPM.PlatformHandleContext(),
+		alg:              HashAlgorithmSHA256,
+		setList:          CommandCodeList{CommandClockSet, CommandStirRandom, CommandGetRandom},
+		clearList:        CommandCodeList{CommandGetRandom},
+		expectedCommands: CommandCodeList{CommandClockSet, CommandSetCommandCodeAuditStatus, CommandStirRandom}})
 }
