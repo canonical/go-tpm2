@@ -187,6 +187,17 @@ func (b *TPMTest) HierarchyChangeAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Aut
 	c.Assert(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), auth, nil), IsNil)
 }
 
+// CreatePrimary calls the tpm2.TPMContext.CreatePrimary function and asserts
+// if it is not succesful.
+func (b *TPMTest) CreatePrimary(c *C, hierarchy tpm2.Handle, template *tpm2.Public) tpm2.ResourceContext {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	object, _, _, _, _, err := b.TPM.CreatePrimary(b.TPM.GetPermanentContext(hierarchy), nil, template, nil, nil, nil)
+	c.Assert(err, IsNil)
+	return object
+}
+
 // EvictControl calls the tpm2.TPMContext.EvictControl function and asserts if it
 // is not successful.
 func (b *TPMTest) EvictControl(c *C, auth tpm2.Handle, object tpm2.ResourceContext, persistentHandle tpm2.Handle) tpm2.ResourceContext {
@@ -221,28 +232,17 @@ func (b *TPMTest) StartAuthSession(c *C, tpmKey, bind tpm2.ResourceContext, sess
 }
 
 // CreateStoragePrimaryKeyRSA creates a primary storage key in the storage
-// hierarchy, with the standard SRK template. On success, it returns the context
-// for the newly created object. It asserts if it is not successful.
+// hierarchy, with the template returned from StorageKeyRSATemplate. On success,
+// it returns the context for the newly created object. It asserts if it is not successful.
 func (b *TPMTest) CreateStoragePrimaryKeyRSA(c *C) tpm2.ResourceContext {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	return b.CreatePrimary(c, tpm2.HandleOwner, StorageKeyRSATemplate())
+}
 
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrNoDA | tpm2.AttrRestricted | tpm2.AttrDecrypt,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	rc, _, _, _, _, err := b.TPM.CreatePrimary(b.TPM.OwnerHandleContext(), nil, &template, nil, nil, nil)
-	c.Assert(err, IsNil)
-	return rc
+// CreateSigningPrimaryKeyRSA creates a primary signing key in the specified
+// hierarchy using the template returned from SigningKeyRSATemplate. On success,
+// it returns the context for the newly created object. It asserts if it is not successful.
+func (b *TPMTest) CreateSigningPrimaryKeyRSA(c *C, hierarchy tpm2.Handle, restricted bool, scheme *tpm2.RSAScheme) tpm2.ResourceContext {
+	return b.CreatePrimary(c, hierarchy, SigningKeyRSATemplate(restricted, scheme))
 }
 
 // TPMSimulatorTest is a base test suite for all tests that use the TPM simulator (TctiMssim).

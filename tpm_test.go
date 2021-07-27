@@ -34,6 +34,13 @@ var (
 	testAuth  = []byte("1234")
 )
 
+func authSessionHandle(sc SessionContext) Handle {
+	if sc == nil {
+		return HandlePW
+	}
+	return sc.Handle()
+}
+
 // Set the hierarchy auth to testAuth. Fatal on failure
 func setHierarchyAuthForTest(t *testing.T, tpm *TPMContext, hierarchy ResourceContext) {
 	if err := tpm.HierarchyChangeAuth(hierarchy, Auth(testAuth), nil); err != nil {

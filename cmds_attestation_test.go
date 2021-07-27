@@ -5,645 +5,470 @@
 package tpm2_test
 
 import (
-	"bytes"
-	"fmt"
-	"reflect"
-	"testing"
+	"crypto/ecdsa"
+	"crypto/rsa"
+	"math/big"
+
+	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
-func verifyAttest(t *testing.T, tpm *TPMContext, attest *Attest, tag StructTag, signContext ResourceContext, signHierarchy Handle, qualifyingData Data) {
-	if attest == nil {
-		t.Fatalf("attestation is empty")
-	}
-	if attest.Magic != TPMGeneratedValue {
-		t.Errorf("attestation has the wrong magic value")
-	}
-	if attest.Type != tag {
-		t.Errorf("attestation has the wrong type")
-	}
-	if signContext == nil {
-		if !attest.QualifiedSigner.IsHandle() || attest.QualifiedSigner.Handle() != HandleNull {
-			t.Errorf("certifyInfo has the wrong qualifiedSigner")
-		}
+type attestationSuite struct {
+	testutil.TPMTest
+}
+
+func (s *attestationSuite) SetUpTest(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeatureDAProtectedCapability
+	s.TPMTest.SetUpTest(c)
+}
+
+func (s *attestationSuite) checkAttestCommon(c *C, attest *Attest, tag StructTag, sign ResourceContext, signHierarchy Handle, qualifyingData Data) {
+	c.Assert(attest, NotNil)
+	c.Check(attest.Magic, Equals, TPMGeneratedValue)
+	c.Check(attest.Type, Equals, tag)
+
+	if sign == nil {
+		c.Assert(attest.QualifiedSigner.IsHandle(), testutil.IsTrue)
+		c.Check(attest.QualifiedSigner.Handle(), Equals, HandleNull)
 	} else {
-		_, _, qn, err := tpm.ReadPublic(signContext)
-		if err != nil {
-			t.Fatalf("ReadPublic failed: %v", err)
-		}
-		if !bytes.Equal(qn, attest.QualifiedSigner) {
-			t.Errorf("attestation has the wrong qualifiedSigner")
-		}
+		_, _, qn, err := s.TPM.ReadPublic(sign)
+		c.Assert(err, IsNil)
+		c.Check(attest.QualifiedSigner, DeepEquals, qn)
 	}
-	if !bytes.Equal(attest.ExtraData, qualifyingData) {
-		t.Errorf("attestation has the wrong extraData")
-	}
-	if signContext != nil && signHierarchy == HandleEndorsement {
-		time, err := tpm.ReadClock()
-		if err != nil {
-			t.Fatalf("ReadClock failed: %v", err)
-		}
-		if attest.ClockInfo.ResetCount != time.ClockInfo.ResetCount {
-			t.Errorf("attestation has the wrong clockInfo.resetCount")
-		}
-		if attest.ClockInfo.RestartCount != time.ClockInfo.RestartCount {
-			t.Errorf("attestation has the wrong clockInfo.restartCount")
-		}
-		if attest.ClockInfo.Safe != time.ClockInfo.Safe {
-			t.Errorf("attestation has the wrong clockInfo.safe")
-		}
+
+	c.Check(attest.ExtraData, DeepEquals, qualifyingData)
+
+	if sign != nil && signHierarchy == HandleEndorsement {
+		time, err := s.TPM.ReadClock()
+		c.Assert(err, IsNil)
+		c.Check(attest.ClockInfo.ResetCount, Equals, time.ClockInfo.ResetCount)
+		c.Check(attest.ClockInfo.RestartCount, Equals, time.ClockInfo.RestartCount)
+		c.Check(attest.ClockInfo.Safe, Equals, time.ClockInfo.Safe)
 	}
 }
 
-func verifyAttestSignature(t *testing.T, tpm *TPMContext, signContext ResourceContext, attest *Attest, signature *Signature, scheme SigSchemeId, hash HashAlgorithmId) {
-	if signature == nil {
-		t.Fatalf("nil signature")
-	}
-	if signContext == nil {
-		if signature.SigAlg != SigSchemeAlgNull {
-			t.Errorf("Unexpected signature algorithm")
+func (s *attestationSuite) checkSignature(c *C, signature *Signature, digest []byte, key *Public) {
+	// TODO: Share this with cmds_signature_test.go
+
+	c.Assert(key.Type, testutil.InSlice(Equals), []ObjectTypeId{ObjectTypeRSA, ObjectTypeECC})
+
+	pubKey := key.Public()
+
+	switch key.Type {
+	case ObjectTypeRSA:
+		c.Assert(signature.SigAlg, testutil.InSlice(Equals), []SigSchemeId{SigSchemeAlgRSASSA, SigSchemeAlgRSAPSS})
+		switch signature.SigAlg {
+		case SigSchemeAlgRSASSA:
+			sig := (*SignatureRSA)(signature.Signature.RSASSA)
+			c.Assert(sig.Hash.Available(), testutil.IsTrue)
+			c.Check(rsa.VerifyPKCS1v15(pubKey.(*rsa.PublicKey), sig.Hash.GetHash(), digest, sig.Sig), IsNil)
+		case SigSchemeAlgRSAPSS:
+			sig := (*SignatureRSA)(signature.Signature.RSAPSS)
+			c.Assert(sig.Hash.Available(), testutil.IsTrue)
+			c.Check(rsa.VerifyPSS(pubKey.(*rsa.PublicKey), sig.Hash.GetHash(), digest, sig.Sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}), IsNil)
 		}
+	case ObjectTypeECC:
+		c.Assert(signature.SigAlg, Equals, SigSchemeAlgECDSA)
+		sig := signature.Signature.ECDSA
+		c.Check(ecdsa.Verify(pubKey.(*ecdsa.PublicKey), digest, new(big.Int).SetBytes(sig.SignatureR), new(big.Int).SetBytes(sig.SignatureS)), testutil.IsTrue)
+	}
+
+}
+
+func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign ResourceContext, attest *Attest, scheme *SigScheme) {
+	c.Assert(signature, NotNil)
+
+	if sign == nil {
+		c.Check(signature.SigAlg, Equals, SigSchemeAlgNull)
 	} else {
-		h := hash.NewHash()
+		c.Check(signature.SigAlg, Equals, scheme.Scheme)
+		c.Check(signature.Signature.Any().HashAlg, Equals, scheme.Details.Any().HashAlg)
+
+		h := scheme.Details.Any().HashAlg.NewHash()
 		mu.MarshalToWriter(h, attest)
 		digest := h.Sum(nil)
 
-		if signature.SigAlg != scheme {
-			t.Errorf("Signature has the wrong scheme")
-		}
-		if signature.Signature.Any().HashAlg != hash {
-			t.Errorf("Signature has the wrong hash algorithm")
-		}
+		pub, _, _, err := s.TPM.ReadPublic(sign)
+		c.Assert(err, IsNil)
 
-		pub, _, _, err := tpm.ReadPublic(signContext)
-		if err != nil {
-			t.Fatalf("ReadPublic failed: %v", err)
-		}
-
-		verifySignature(t, pub, digest, signature)
+		s.checkSignature(c, signature, digest, pub)
 	}
 }
 
-func TestCertify(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureDAProtectedCapability)
-	defer closeTPM(t, tpm)
+var _ = Suite(&attestationSuite{})
 
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
-		ek := createRSAEkForTesting(t, tpm)
-		defer flushContext(t, tpm, ek)
-		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
-	}
+type testCertifyData struct {
+	sign              ResourceContext
+	qualifyingData    Data
+	inScheme          *SigScheme
+	objectAuthSession SessionContext
+	signAuthSession   SessionContext
 
-	run := func(t *testing.T, objectContext, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, objectContextAuthSession, signContextAuthSession SessionContext) {
-		certifyInfo, signature, err := tpm.Certify(objectContext, signContext, qualifyingData, inScheme, objectContextAuthSession, signContextAuthSession)
-		if err != nil {
-			t.Fatalf("Certify failed: %v", err)
-		}
-
-		verifyAttest(t, tpm, certifyInfo, TagAttestCertify, signContext, signHierarchy, qualifyingData)
-
-		_, name, qn, err := tpm.ReadPublic(objectContext)
-		if err != nil {
-			t.Fatalf("ReadPublic failed: %v", err)
-		}
-		if !bytes.Equal(certifyInfo.Attested.Certify.Name, name) {
-			t.Errorf("certifyInfo has the wrong name")
-		}
-		if !bytes.Equal(certifyInfo.Attested.Certify.QualifiedName, qn) {
-			t.Errorf("certifyInfo has the wrong qualifiedName")
-		}
-
-		verifyAttestSignature(t, tpm, signContext, certifyInfo, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
-	}
-
-	t.Run("NoSignature", func(t *testing.T) {
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-		run(t, primary, nil, HandleNull, nil, nil, nil, nil)
-	})
-
-	t.Run("WithSignature", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-		run(t, primary, ak, HandleEndorsement, nil, nil, nil, nil)
-	})
-
-	t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
-		run(t, primary, ak, HandleEndorsement, nil, &scheme, nil, nil)
-	})
-
-	t.Run("UseInScheme", func(t *testing.T) {
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-					Scheme:    RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:   2048,
-					Exponent:  0}}}
-		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Fatalf("Create failed: %v", err)
-		}
-
-		key, err := tpm.Load(primary, priv, pub, nil)
-		if err != nil {
-			t.Fatalf("Load failed: %v", err)
-		}
-		defer flushContext(t, tpm, key)
-
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
-		run(t, primary, key, HandleOwner, nil, &scheme, nil, nil)
-	})
-
-	t.Run("WithExtraData", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-		run(t, primary, ak, HandleEndorsement, []byte("foo"), nil, nil, nil)
-	})
-
-	t.Run("UsePasswordAuthForKey", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-		run(t, primary, ak, HandleEndorsement, nil, nil, nil, nil)
-	})
-
-	t.Run("UseSessionAuthForKey", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		run(t, primary, ak, HandleEndorsement, nil, nil, nil, sessionContext)
-	})
-
-	t.Run("UsePasswordAuthForObject", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		primary := createRSASrkForTesting(t, tpm, testAuth)
-		defer flushContext(t, tpm, primary)
-		run(t, primary, ak, HandleEndorsement, nil, nil, nil, nil)
-	})
-
-	t.Run("UseSessionAuthForObject", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		primary := createRSASrkForTesting(t, tpm, testAuth)
-		defer flushContext(t, tpm, primary)
-
-		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		run(t, primary, ak, HandleEndorsement, nil, nil, sessionContext, nil)
-	})
+	signHierarchy Handle
+	signScheme    *SigScheme
 }
 
-func TestCertifyCreation(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureDAProtectedCapability)
-	defer closeTPM(t, tpm)
+func (s *attestationSuite) testCertify(c *C, data *testCertifyData) {
+	sessionHandles := []Handle{authSessionHandle(data.objectAuthSession), authSessionHandle(data.signAuthSession)}
 
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
-		ek := createRSAEkForTesting(t, tpm)
-		defer flushContext(t, tpm, ek)
-		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
-	}
+	object := s.CreateStoragePrimaryKeyRSA(c)
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, signContextAuthSession SessionContext) {
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
+	certifyInfo, signature, err := s.TPM.Certify(object, data.sign, data.qualifyingData, data.inScheme, data.objectAuthSession, data.signAuthSession)
+	c.Assert(err, IsNil)
 
-		objectHandle, _, _, creationHash, creationTicket, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Fatalf("CreatePrimary failed: %v", err)
-		}
-		defer flushContext(t, tpm, objectHandle)
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, HasLen, 2)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
+	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 
-		certifyInfo, signature, err :=
-			tpm.CertifyCreation(signContext, objectHandle, qualifyingData, creationHash, inScheme, creationTicket, signContextAuthSession)
-		if err != nil {
-			t.Fatalf("CertifyCreation failed: %v", err)
-		}
+	s.checkAttestCommon(c, certifyInfo, TagAttestCertify, data.sign, data.signHierarchy, data.qualifyingData)
+	_, name, qn, err := s.TPM.ReadPublic(object)
+	c.Assert(err, IsNil)
+	c.Check(certifyInfo.Attested.Certify.Name, DeepEquals, name)
+	c.Check(certifyInfo.Attested.Certify.QualifiedName, DeepEquals, qn)
 
-		verifyAttest(t, tpm, certifyInfo, TagAttestCreation, signContext, signHierarchy, qualifyingData)
-
-		if !bytes.Equal(certifyInfo.Attested.Creation.ObjectName, objectHandle.Name()) {
-			t.Errorf("certifyInfo has the wrong objectName")
-		}
-		if !bytes.Equal(certifyInfo.Attested.Creation.CreationHash, creationHash) {
-			t.Errorf("certifyInfo has the wrong creationHash")
-		}
-
-		verifyAttestSignature(t, tpm, signContext, certifyInfo, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
-	}
-
-	t.Run("NoSignature", func(t *testing.T) {
-		run(t, nil, HandleNull, nil, nil, nil)
-	})
-
-	t.Run("WithSignature", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, nil, nil, nil)
-	})
-
-	t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
-		run(t, ak, HandleEndorsement, nil, &scheme, nil)
-	})
-
-	t.Run("UseInScheme", func(t *testing.T) {
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-					Scheme:    RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:   2048,
-					Exponent:  0}}}
-		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Fatalf("Create failed: %v", err)
-		}
-
-		key, err := tpm.Load(primary, priv, pub, nil)
-		if err != nil {
-			t.Fatalf("Load failed: %v", err)
-		}
-		defer flushContext(t, tpm, key)
-
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
-		run(t, key, HandleOwner, nil, &scheme, nil)
-	})
-
-	t.Run("WithExtraData", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, []byte("foo"), nil, nil)
-	})
-
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, nil, nil, nil)
-	})
-
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
-
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		run(t, ak, HandleEndorsement, nil, nil, sessionContext)
-	})
-
-	t.Run("InvalidTicket", func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-
-		objectHandle, _, _, creationHash, creationTicket, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Fatalf("CreatePrimary failed: %v", err)
-		}
-		defer flushContext(t, tpm, objectHandle)
-
-		creationTicket.Hierarchy = HandleEndorsement
-
-		_, _, err = tpm.CertifyCreation(nil, objectHandle, nil, creationHash, nil, creationTicket, nil)
-		if !IsTPMParameterError(err, ErrorTicket, CommandCertifyCreation, 4) {
-			t.Errorf("Unexpected error: %v", err)
-		}
-	})
+	s.checkAttestSignature(c, signature, data.sign, certifyInfo, data.signScheme)
 }
 
-func TestQuote(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePCR|testutil.TPMFeatureDAProtectedCapability|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
-
-	for i := 0; i < 8; i++ {
-		if _, err := tpm.PCREvent(tpm.PCRHandleContext(i), Event(fmt.Sprintf("event%d", i)), nil); err != nil {
-			t.Fatalf("PCREvent failed: %v", err)
-		}
-	}
-
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
-		ek := createRSAEkForTesting(t, tpm)
-		defer flushContext(t, tpm, ek)
-		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
-	}
-
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, alg HashAlgorithmId, signContextAuthSession SessionContext) {
-		quoted, signature, err := tpm.Quote(signContext, qualifyingData, inScheme, pcrs, signContextAuthSession)
-		if err != nil {
-			t.Fatalf("Quote failed: %v", err)
-		}
-
-		verifyAttest(t, tpm, quoted, TagAttestQuote, signContext, signHierarchy, qualifyingData)
-
-		pcrDigest := computePCRDigestFromTPM(t, tpm, alg, pcrs)
-		if !reflect.DeepEqual(quoted.Attested.Quote.PCRSelect, pcrs) {
-			t.Errorf("quoted has the wrong pcrSelect")
-		}
-		if !bytes.Equal(quoted.Attested.Quote.PCRDigest, pcrDigest) {
-			t.Errorf("quoted has the wrong pcrDigest")
-		}
-
-		verifyAttestSignature(t, tpm, signContext, quoted, signature, SigSchemeAlgRSASSA, alg)
-	}
-
-	t.Run("WithSignature", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-
-		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, nil)
-	})
-
-	t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
-		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{2, 4, 7}}}
-		run(t, ak, HandleEndorsement, nil, &scheme, pcrs, HashAlgorithmSHA256, nil)
-	})
-
-	t.Run("UseInScheme", func(t *testing.T) {
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
-
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-					Scheme:    RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:   2048,
-					Exponent:  0}}}
-		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Fatalf("Create failed: %v", err)
-		}
-
-		key, err := tpm.Load(primary, priv, pub, nil)
-		if err != nil {
-			t.Fatalf("Load failed: %v", err)
-		}
-		defer flushContext(t, tpm, key)
-
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}}
-		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{4, 7}}}
-		run(t, key, HandleOwner, nil, &scheme, pcrs, HashAlgorithmSHA1, nil)
-	})
-
-	t.Run("WithExtraData", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-
-		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}}
-		run(t, ak, HandleEndorsement, []byte("bar"), nil, pcrs, HashAlgorithmSHA256, nil)
-	})
-
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
-
-		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{1, 7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, nil)
-	})
-
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
-
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		pcrs := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{1, 7}}}
-		run(t, ak, HandleEndorsement, nil, nil, pcrs, HashAlgorithmSHA256, sessionContext)
-	})
+func (s *attestationSuite) TestCertifyNoSignature(c *C) {
+	s.testCertify(c, &testCertifyData{})
 }
 
-func TestGetTime(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureDAProtectedCapability|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+func (s *attestationSuite) TestCertifyWithSignature(c *C) {
+	s.testCertify(c, &testCertifyData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		signHierarchy: HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
 
-	prepare := func(t *testing.T, auth Auth) ResourceContext {
-		ek := createRSAEkForTesting(t, tpm)
-		defer flushContext(t, tpm, ek)
-		return createAndLoadRSAAkForTesting(t, tpm, ek, auth)
-	}
+func (s *attestationSuite) TestCertifyExtraData(c *C) {
+	s.testCertify(c, &testCertifyData{
+		qualifyingData: []byte("foo")})
+}
 
-	run := func(t *testing.T, signContext ResourceContext, signHierarchy Handle, qualifyingData Data, inScheme *SigScheme, privacyAdminHandleAuthSession, signContextAuthSession SessionContext) {
-		timeInfo, signature, err := tpm.GetTime(tpm.EndorsementHandleContext(), signContext, qualifyingData, inScheme, privacyAdminHandleAuthSession, signContextAuthSession)
-		if err != nil {
-			t.Fatalf("GetTime failed: %v", err)
-		}
+func (s *attestationSuite) TestCertifyInScheme(c *C) {
+	data := &testCertifyData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		inScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}},
+		signHierarchy: HandleEndorsement}
+	data.signScheme = data.inScheme
+	s.testCertify(c, data)
+}
 
-		verifyAttest(t, tpm, timeInfo, TagAttestTime, signContext, signHierarchy, qualifyingData)
+func (s *attestationSuite) TestCertifyObjectAuthSession(c *C) {
+	s.testCertify(c, &testCertifyData{
+		objectAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
 
-		time, err := tpm.ReadClock()
-		if err != nil {
-			t.Fatalf("ReadClock failed: %v", err)
-		}
-		if timeInfo.Attested.Time.Time.ClockInfo.ResetCount != time.ClockInfo.ResetCount {
-			t.Errorf("timeInfo.attested.time.time.clockInfo.resetCount is unexpected")
-		}
-		if timeInfo.Attested.Time.Time.ClockInfo.RestartCount != time.ClockInfo.RestartCount {
-			t.Errorf("timeInfo.attested.time.time.clockInfo.restartCount is unexpected")
-		}
-		if timeInfo.Attested.Time.Time.ClockInfo.Safe != time.ClockInfo.Safe {
-			t.Errorf("timeInfo.attested.time.time.clockInfo.safe is unexpected")
-		}
+func (s *attestationSuite) TestCertifySignAuthSession(c *C) {
+	s.testCertify(c, &testCertifyData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+		signHierarchy:   HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
 
-		if timeInfo.Attested.Time.Time.ClockInfo.Clock != timeInfo.ClockInfo.Clock {
-			t.Errorf("timeInfo.attested.time.time.clockInfo.clock is unexpected")
-		}
-		if timeInfo.Attested.Time.Time.ClockInfo.Safe != timeInfo.ClockInfo.Safe {
-			t.Errorf("timeInfo.attested.time.time.clockInfo.safe is unexpected")
-		}
+type testCertifyCreationData struct {
+	sign            ResourceContext
+	qualifyingData  Data
+	inScheme        *SigScheme
+	signAuthSession SessionContext
 
-		verifyAttestSignature(t, tpm, signContext, timeInfo, signature, SigSchemeAlgRSASSA, HashAlgorithmSHA256)
-	}
+	signHierarchy Handle
+	signScheme    *SigScheme
+}
 
-	t.Run("NoSignature", func(t *testing.T) {
-		run(t, nil, HandleNull, nil, nil, nil, nil)
-	})
+func (s *attestationSuite) testCertifyCreation(c *C, data *testCertifyCreationData) {
+	sessionHandle := authSessionHandle(data.signAuthSession)
 
-	t.Run("WithSignature", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, nil, nil, nil, nil)
-	})
+	object, _, _, creationHash, creationTicket, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, testutil.StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
 
-	t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
+	certifyInfo, signature, err := s.TPM.CertifyCreation(data.sign, object, data.qualifyingData, creationHash, data.inScheme, creationTicket, data.signAuthSession)
+	c.Assert(err, IsNil)
 
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
-		run(t, ak, HandleEndorsement, nil, &scheme, nil, nil)
-	})
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, HasLen, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
-	t.Run("UseInScheme", func(t *testing.T) {
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
+	s.checkAttestCommon(c, certifyInfo, TagAttestCreation, data.sign, data.signHierarchy, data.qualifyingData)
+	c.Check(certifyInfo.Attested.Creation.ObjectName, DeepEquals, object.Name())
+	c.Check(certifyInfo.Attested.Creation.CreationHash, DeepEquals, creationHash)
 
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-					Scheme:    RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:   2048,
-					Exponent:  0}}}
-		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Fatalf("Create failed: %v", err)
-		}
+	s.checkAttestSignature(c, signature, data.sign, certifyInfo, data.signScheme)
+}
 
-		key, err := tpm.Load(primary, priv, pub, nil)
-		if err != nil {
-			t.Fatalf("Load failed: %v", err)
-		}
-		defer flushContext(t, tpm, key)
+func (s *attestationSuite) TestCertifyCreationNoSignature(c *C) {
+	s.testCertifyCreation(c, &testCertifyCreationData{})
+}
 
-		scheme := SigScheme{
-			Scheme:  SigSchemeAlgRSASSA,
-			Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
-		run(t, key, HandleOwner, nil, &scheme, nil, nil)
-	})
+func (s *attestationSuite) TestCertifyCreationWithSignature(c *C) {
+	s.testCertifyCreation(c, &testCertifyCreationData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		signHierarchy: HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
 
-	t.Run("WithExtraData", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, []byte("foo"), nil, nil, nil)
-	})
+func (s *attestationSuite) TestCertifyCreationExtraData(c *C) {
+	s.testCertifyCreation(c, &testCertifyCreationData{
+		qualifyingData: []byte("foo")})
+}
 
-	t.Run("UsePasswordAuthForKey", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
-		run(t, ak, HandleEndorsement, nil, nil, nil, nil)
-	})
+func (s *attestationSuite) TestCertifyCreationInScheme(c *C) {
+	data := &testCertifyCreationData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		inScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}},
+		signHierarchy: HandleEndorsement}
+	data.signScheme = data.inScheme
+	s.testCertifyCreation(c, data)
+}
 
-	t.Run("UseSessionAuthForKey", func(t *testing.T) {
-		ak := prepare(t, testAuth)
-		defer flushContext(t, tpm, ak)
+func (s *attestationSuite) TestCertifyCreationSignAuthSession(c *C) {
+	s.testCertifyCreation(c, &testCertifyCreationData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+		signHierarchy:   HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
 
-		sessionContext, err := tpm.StartAuthSession(nil, ak, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
+func (s *attestationSuite) TestCertifyCreationInvalidTicket(c *C) {
+	template := Public{
+		Type:    ObjectTypeRSA,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
+				Symmetric: SymDefObject{
+					Algorithm: SymObjectAlgorithmAES,
+					KeyBits:   &SymKeyBitsU{Sym: 128},
+					Mode:      &SymModeU{Sym: SymModeCFB}},
+				Scheme:   RSAScheme{Scheme: RSASchemeNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+	object, _, _, creationHash, creationTicket, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
 
-		run(t, ak, HandleEndorsement, nil, nil, nil, sessionContext)
-	})
+	creationTicket.Hierarchy = HandleEndorsement
 
-	t.Run("UsePasswordAuthForPrivacyAdmin", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
+	_, _, err = s.TPM.CertifyCreation(nil, object, nil, creationHash, nil, creationTicket, nil)
+	c.Check(IsTPMParameterError(err, ErrorTicket, CommandCertifyCreation, 4), testutil.IsTrue)
+}
 
-		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
+type testQuoteData struct {
+	sign            ResourceContext
+	qualifyingData  Data
+	inScheme        *SigScheme
+	pcrs            PCRSelectionList
+	signAuthSession SessionContext
 
-		run(t, ak, HandleEndorsement, nil, nil, nil, nil)
-	})
+	signHierarchy Handle
+	alg           HashAlgorithmId
+	signScheme    *SigScheme
+}
 
-	t.Run("UseSessionAuthForPrivacyAdmin", func(t *testing.T) {
-		ak := prepare(t, nil)
-		defer flushContext(t, tpm, ak)
+func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
+	sessionHandle := authSessionHandle(data.signAuthSession)
 
-		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
+	quoted, signature, err := s.TPM.Quote(data.sign, data.qualifyingData, data.inScheme, data.pcrs, data.signAuthSession)
+	c.Assert(err, IsNil)
 
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, HasLen, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
-		run(t, ak, HandleEndorsement, nil, nil, sessionContext, nil)
-	})
+	s.checkAttestCommon(c, quoted, TagAttestQuote, data.sign, data.signHierarchy, data.qualifyingData)
+	_, pcrValues, err := s.TPM.PCRRead(data.pcrs)
+	c.Assert(err, IsNil)
+	digest, err := ComputePCRDigest(data.alg, data.pcrs, pcrValues)
+	c.Check(err, IsNil)
+	c.Check(quoted.Attested.Quote.PCRSelect, DeepEquals, data.pcrs)
+	c.Check(quoted.Attested.Quote.PCRDigest, DeepEquals, digest)
+
+	s.checkAttestSignature(c, signature, data.sign, quoted, data.signScheme)
+}
+
+func (s *attestationSuite) TestQuote(c *C) {
+	s.testQuote(c, &testQuoteData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
+		signHierarchy: HandleEndorsement,
+		alg:           HashAlgorithmSHA256,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestQuoteWithExtraData(c *C) {
+	s.testQuote(c, &testQuoteData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		qualifyingData: []byte("bar"),
+		pcrs:           PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
+		signHierarchy:  HandleEndorsement,
+		alg:            HashAlgorithmSHA256,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestQuoteInScheme(c *C) {
+	data := &testQuoteData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		inScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}},
+		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
+		signHierarchy: HandleEndorsement,
+		alg:           HashAlgorithmSHA1}
+	data.signScheme = data.inScheme
+	s.testQuote(c, data)
+}
+
+func (s *attestationSuite) TestQuoteDifferentPCRs(c *C) {
+	s.testQuote(c, &testQuoteData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0}}, {Hash: HashAlgorithmSHA256, Select: []int{1, 2}}},
+		signHierarchy: HandleEndorsement,
+		alg:           HashAlgorithmSHA256,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestQuoteSignAuthSession(c *C) {
+	s.testQuote(c, &testQuoteData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		pcrs:            PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
+		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+		signHierarchy:   HandleEndorsement,
+		alg:             HashAlgorithmSHA256,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+type testGetTimeData struct {
+	sign                    ResourceContext
+	qualifyingData          Data
+	inScheme                *SigScheme
+	privacyAdminAuthSession SessionContext
+	signAuthSession         SessionContext
+
+	signHierarchy Handle
+	signScheme    *SigScheme
+}
+
+func (s *attestationSuite) testGetTime(c *C, data *testGetTimeData) {
+	sessionHandles := []Handle{authSessionHandle(data.privacyAdminAuthSession), authSessionHandle(data.signAuthSession)}
+
+	timeInfo, signature, err := s.TPM.GetTime(s.TPM.EndorsementHandleContext(), data.sign, data.qualifyingData, data.inScheme, data.privacyAdminAuthSession, data.signAuthSession)
+	c.Assert(err, IsNil)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, HasLen, 2)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
+	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
+
+	s.checkAttestCommon(c, timeInfo, TagAttestTime, data.sign, data.signHierarchy, data.qualifyingData)
+	time, err := s.TPM.ReadClock()
+	c.Assert(err, IsNil)
+	c.Check(timeInfo.Attested.Time.Time.ClockInfo.ResetCount, Equals, time.ClockInfo.ResetCount)
+	c.Check(timeInfo.Attested.Time.Time.ClockInfo.RestartCount, Equals, time.ClockInfo.RestartCount)
+	c.Check(timeInfo.Attested.Time.Time.ClockInfo.Safe, Equals, time.ClockInfo.Safe)
+	c.Check(timeInfo.Attested.Time.Time.ClockInfo.Clock, Equals, timeInfo.ClockInfo.Clock)
+	c.Check(timeInfo.Attested.Time.Time.ClockInfo.Safe, Equals, timeInfo.ClockInfo.Safe)
+
+	s.checkAttestSignature(c, signature, data.sign, timeInfo, data.signScheme)
+}
+
+func (s *attestationSuite) TestGetTimeNoSignature(c *C) {
+	s.testGetTime(c, &testGetTimeData{})
+}
+
+func (s *attestationSuite) TestGetTimeWithSignature(c *C) {
+	s.testGetTime(c, &testGetTimeData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		signHierarchy: HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestGetTimeExtraData(c *C) {
+	s.testGetTime(c, &testGetTimeData{
+		qualifyingData: []byte("foo")})
+}
+
+func (s *attestationSuite) TestGetTimeInScheme(c *C) {
+	data := &testGetTimeData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		inScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA1}}},
+		signHierarchy: HandleEndorsement}
+	data.signScheme = data.inScheme
+	s.testGetTime(c, data)
+}
+
+func (s *attestationSuite) TestGetTimePrivacyAdminAuthSession(c *C) {
+	s.testGetTime(c, &testGetTimeData{
+		privacyAdminAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+func (s *attestationSuite) TestGetTimeSignAuthSession(c *C) {
+	s.testGetTime(c, &testGetTimeData{
+		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
+			Scheme:  RSASchemeRSASSA,
+			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+		signHierarchy:   HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSASSA,
+			Details: &SigSchemeU{
+				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
 }
