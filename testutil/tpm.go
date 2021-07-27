@@ -580,8 +580,12 @@ func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) error {
 }
 
 // ResetTPMSimulatorT issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
-func ResetTPMSimulatorT(t *testing.T, tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) {
-	if err := resetTPMSimulator(tpm, tcti); err != nil {
-		t.Fatalf("%v", err)
+func ResetTPMSimulatorT(t *testing.T, tpm *tpm2.TPMContext, tcti *TCTI) {
+	mssim, ok := tcti.Unwrap().(*tpm2.TctiMssim)
+	if !ok {
+		t.Fatal("not a simulator")
+	}
+	if err := resetTPMSimulator(tpm, mssim); err != nil {
+		t.Fatal(err)
 	}
 }
