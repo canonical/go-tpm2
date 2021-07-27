@@ -111,10 +111,11 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
 
 	b.AddFixtureCleanup(func(c *C) {
-		tpm := b.TPM
-		b.TCTI = nil
-		b.TPM = nil
-		c.Assert(tpm.Close(), IsNil)
+		defer func() {
+			b.TCTI = nil
+			b.TPM = nil
+		}()
+		c.Check(b.TPM.Close(), IsNil)
 	})
 }
 
@@ -178,13 +179,23 @@ func (b *TPMTest) NextAvailableHandle(c *C, handle tpm2.Handle) tpm2.Handle {
 	return tpm2.HandleUnassigned
 }
 
+// ClearTPMUsingPlatformHierarchy enables the TPM2_Clear command and then
+// clears the TPM using the platform hierarchy. It causes the test to fail
+// if it isn't successful.
+func (b *TPMTest) ClearTPMUsingPlatformHierarchy(c *C) {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	c.Check(clearTPMUsingPlatform(b.TPM), IsNil)
+}
+
 // HierarchyChangeAuth calls the tpm2.TPMContext.HierarchyChangeAuth function and
-// asserts if it is not successful.
+// causes the test to fail if it is not successful.
 func (b *TPMTest) HierarchyChangeAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Auth) {
 	b.TCTI.disableCommandLogging = true
 	defer func() { b.TCTI.disableCommandLogging = false }()
 
-	c.Assert(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), auth, nil), IsNil)
+	c.Check(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), auth, nil), IsNil)
 }
 
 // CreatePrimary calls the tpm2.TPMContext.CreatePrimary function and asserts
@@ -268,11 +279,13 @@ func (b *TPMSimulatorTest) initTPMSimulatorContextIfNeeded(c *C) (cleanup func(*
 	b.TPMTest.TCTI = tcti
 
 	return func(c *C) {
-		tpm := b.TPM
-		b.TPMTest.TCTI = nil
-		b.TCTI = nil
-		b.TPM = nil
-		c.Assert(tpm.Close(), IsNil)
+		defer func() {
+			b.TPMTest.TCTI = nil
+			b.TCTI = nil
+			b.TPM = nil
+		}()
+		b.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
+		c.Check(tpm.Close(), IsNil)
 	}
 }
 
@@ -284,7 +297,20 @@ func (b *TPMSimulatorTest) SetUpTest(c *C) {
 	}
 }
 
-// ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
+// ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator
+// and causes the test to fail if it is not successful.
 func (b *TPMSimulatorTest) ResetTPMSimulator(c *C) {
-	c.Assert(resetTPMSimulator(b.TPM, b.TCTI), IsNil)
+	b.TPMTest.TCTI.disableCommandLogging = true
+	defer func() { b.TPMTest.TCTI.disableCommandLogging = false }()
+
+	c.Check(resetTPMSimulator(b.TPM, b.TCTI), IsNil)
+}
+
+// ResetAndClearTPMSimulatorUsingPlatformHierarchy issues a Shutdown -> Reset ->
+// Startup cycle of the TPM simulator which ensures that the platform hierarchy is
+// enabled, and then enables the TPM2_Clear command and clears the TPM using the
+// platform hierarchy.
+func (b *TPMSimulatorTest) ResetAndClearTPMSimulatorUsingPlatformHierarchy(c *C) {
+	b.ResetTPMSimulator(c)
+	b.ClearTPMUsingPlatformHierarchy(c)
 }

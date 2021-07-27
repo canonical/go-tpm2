@@ -389,12 +389,6 @@ func verifyContextFlushed(t *testing.T, tpm *TPMContext, context HandleContext) 
 	flushContext(t, tpm, context)
 }
 
-func closeTPM(t *testing.T, tpm *TPMContext) {
-	if err := tpm.Close(); err != nil {
-		t.Errorf("Close failed: %v", err)
-	}
-}
-
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(func() int {

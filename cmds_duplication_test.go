@@ -16,8 +16,8 @@ import (
 )
 
 func TestDuplicate(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -200,8 +200,8 @@ type sensitiveSized struct {
 }
 
 func TestImport(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)
 	defer flushContext(t, tpm, primary)

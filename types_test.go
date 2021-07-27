@@ -607,8 +607,8 @@ func TestTaggedHash(t *testing.T) {
 }
 
 func TestPublicName(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -630,8 +630,8 @@ func TestPublicName(t *testing.T) {
 }
 
 func TestNVPublicName(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	owner := tpm.OwnerHandleContext()
 

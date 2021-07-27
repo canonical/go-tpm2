@@ -12,8 +12,8 @@ import (
 )
 
 func TestHMACSessions(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	owner := tpm.OwnerHandleContext()
 
@@ -108,8 +108,8 @@ func TestHMACSessions(t *testing.T) {
 }
 
 func TestPolicySessions(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	primary := createRSASrkForTesting(t, tpm, testAuth)
 	defer flushContext(t, tpm, primary)

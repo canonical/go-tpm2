@@ -13,8 +13,8 @@ import (
 )
 
 func TestCreatePrimary(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	run := func(t *testing.T, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session SessionContext) (ResourceContext, *Public) {
 		objectContext, outPublic, creationData, creationHash, creationTicket, err := tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
@@ -254,8 +254,8 @@ func TestCreatePrimary(t *testing.T) {
 }
 
 func TestHierarchyControl(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	run := func(t *testing.T, authContext ResourceContext, enable Handle, state bool, session SessionContext) {
 		if err := tpm.HierarchyControl(authContext, enable, state, session); err != nil {
@@ -318,8 +318,8 @@ func TestHierarchyControl(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureLockoutHierarchy|testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureClear|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureLockoutHierarchy|testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureClear|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	run := func(t *testing.T, authSession SessionContext) {
 		cleared := false
@@ -403,8 +403,8 @@ func TestClear(t *testing.T) {
 }
 
 func TestHierarchyChangeAuth(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	setAuth := func(t *testing.T, hierarchy ResourceContext, session SessionContext, testHierarchy func(t *testing.T)) {
 		if err := tpm.HierarchyChangeAuth(hierarchy, testAuth, session); err != nil {

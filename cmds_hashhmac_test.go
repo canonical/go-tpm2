@@ -19,8 +19,8 @@ import (
 )
 
 func TestHMACSequence(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	key := make([]byte, 32)
 	rand.Read(key)
@@ -156,8 +156,8 @@ func TestHMACSequence(t *testing.T) {
 }
 
 func TestHashSequence(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	start := func(t *testing.T, auth Auth, hashAlg HashAlgorithmId) ResourceContext {
 		seq, err := tpm.HashSequenceStart(auth, hashAlg)
@@ -248,8 +248,8 @@ func TestHashSequence(t *testing.T) {
 }
 
 func TestEventSequence(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	start := func(t *testing.T, auth Auth) ResourceContext {
 		seq, err := tpm.HashSequenceStart(auth, HashAlgorithmNull)
@@ -365,8 +365,8 @@ func TestEventSequence(t *testing.T) {
 }
 
 func TestHashSequenceExecute(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	b := make([]byte, 2500)
 	rand.Read(b[4:])
@@ -447,8 +447,8 @@ func TestHashSequenceExecute(t *testing.T) {
 }
 
 func TestEventSequenceExecute(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	data := make([]byte, 2500)
 	rand.Read(data)

@@ -12,8 +12,8 @@ import (
 )
 
 func TestGetRandom(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc  string
@@ -49,8 +49,8 @@ func TestGetRandom(t *testing.T) {
 }
 
 func TestStirRandom(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	inData := make([]byte, 128)
 	rand.Read(inData)

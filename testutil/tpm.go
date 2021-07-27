@@ -461,6 +461,8 @@ func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
 // *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
 // this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+//
+// The returned TCTI must be closed when it is no longer required.
 func NewTCTI(c *C, features TPMFeatureFlags) *TCTI {
 	tcti, err := newTCTI(features)
 	c.Assert(err, IsNil)
@@ -477,6 +479,8 @@ func NewTCTI(c *C, features TPMFeatureFlags) *TCTI {
 // *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
 // this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+//
+// The returned TCTI must be closed when it is no longer required.
 func NewTCTIT(t *testing.T, features TPMFeatureFlags) *TCTI {
 	tcti, err := newTCTI(features)
 	if err != nil {
@@ -494,6 +498,8 @@ func NewTCTIT(t *testing.T, features TPMFeatureFlags) *TCTI {
 // be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+//
+// The returned TPMContext must be closed when it is no longer required.
 func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
 	tcti := NewTCTI(c, features)
 	tpm, _ := tpm2.NewTPMContext(tcti)
@@ -506,10 +512,17 @@ func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
 // be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
-func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
-	tcti := NewTCTIT(t, features)
-	tpm, _ := tpm2.NewTPMContext(tcti)
-	return tpm, tcti
+//
+// The returned TPMContext must be closed when it is no longer required. This can be done with the returned
+// close callback, which will cause the test to fail if closing doesn't succeed.
+func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (tpm *tpm2.TPMContext, tcti *TCTI, close func()) {
+	tcti = NewTCTIT(t, features)
+	tpm, _ = tpm2.NewTPMContext(tcti)
+	return tpm, tcti, func() {
+		if err := tpm.Close(); err != nil {
+			t.Errorf("close failed: %v", err)
+		}
+	}
 }
 
 func newSimulatorTCTI() (*TCTI, error) {
@@ -528,6 +541,8 @@ func newSimulatorTCTI() (*TCTI, error) {
 // NewSimulatorTCTI returns a new TCTI for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
 // will be skipped.
+//
+// The returned TCTI must be closed when it is no longer required.
 func NewSimulatorTCTI(c *C) *TCTI {
 	tcti, err := newSimulatorTCTI()
 	c.Assert(err, IsNil)
@@ -540,6 +555,8 @@ func NewSimulatorTCTI(c *C) *TCTI {
 // NewSimulatorTCTIT returns a new TCTI for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
 // will be skipped.
+//
+// The returned TCTI must be closed when it is no longer required.
 func NewSimulatorTCTIT(t *testing.T) *TCTI {
 	tcti, err := newSimulatorTCTI()
 	if err != nil {
@@ -554,6 +571,8 @@ func NewSimulatorTCTIT(t *testing.T) *TCTI {
 // NewTPMSimulatorContext returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
 // skipped.
+//
+// The returned TPMContext must be closed when it is no longer required.
 func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
 	tcti := NewSimulatorTCTI(c)
 	tpm, _ := tpm2.NewTPMContext(tcti)
@@ -563,10 +582,32 @@ func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
 // NewTPMSimulatorContextT returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test will be
 // skipped.
-func NewTPMSimulatorContextT(t *testing.T) (*tpm2.TPMContext, *TCTI) {
-	tcti := NewSimulatorTCTIT(t)
-	tpm, _ := tpm2.NewTPMContext(tcti)
-	return tpm, tcti
+//
+// The returned TPMContext must be closed when it is no longer required. This can be done with the returned
+// close callback, which will cause the test to fail if closing doesn't succeed.
+func NewTPMSimulatorContextT(t *testing.T) (tpm *tpm2.TPMContext, tcti *TCTI, close func()) {
+	tcti = NewSimulatorTCTIT(t)
+	tpm, _ = tpm2.NewTPMContext(tcti)
+	return tpm, tcti, func() {
+		if err := tpm.Close(); err != nil {
+			t.Errorf("close failed: %v", err)
+		}
+	}
+}
+
+func clearTPMUsingPlatform(tpm *tpm2.TPMContext) error {
+	if err := tpm.ClearControl(tpm.PlatformHandleContext(), false, nil); err != nil {
+		return err
+	}
+	return tpm.Clear(tpm.PlatformHandleContext(), nil)
+}
+
+// ClearTPMUsingPlatformHierarchyT enables the TPM2_Clear command and then
+// clears the TPM using the platform hierarchy.
+func ClearTPMUsingPlatformHierarchyT(t *testing.T, tpm *tpm2.TPMContext) {
+	if err := clearTPMUsingPlatform(tpm); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) error {

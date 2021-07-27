@@ -15,8 +15,8 @@ import (
 )
 
 func TestSign(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	msg := []byte("this is a message to sign")
 
@@ -211,8 +211,8 @@ func TestSign(t *testing.T) {
 }
 
 func TestVerifySignature(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	msg := []byte("this is a message for signing")
 

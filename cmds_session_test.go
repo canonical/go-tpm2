@@ -14,8 +14,8 @@ import (
 )
 
 func TestStartAuthSession(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer tpm.Close()
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	auth := []byte("foo")
 	primary := createRSASrkForTesting(t, tpm, auth)
@@ -176,8 +176,8 @@ func TestStartAuthSession(t *testing.T) {
 }
 
 func TestPolicyRestart(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer tpm.Close()
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	sc, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 	if err != nil {

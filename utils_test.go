@@ -502,8 +502,8 @@ func TestComputePCRDigestSimple(t *testing.T) {
 }
 
 func TestTrialPolicySigned(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -570,8 +570,8 @@ func TestTrialPolicySigned(t *testing.T) {
 }
 
 func TestTrialPolicySecret(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
+	defer closeTPM()
 
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
@@ -625,8 +625,8 @@ func TestTrialPolicySecret(t *testing.T) {
 }
 
 func TestTrialPolicyOR(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	digests := make(map[HashAlgorithmId]DigestList)
 	for _, d := range []string{"foo", "bar", "xyz"} {
@@ -694,8 +694,8 @@ func TestTrialPolicyOR(t *testing.T) {
 }
 
 func TestTrialPolicyPCR(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	digests := make(map[HashAlgorithmId]Digest)
 	for _, a := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
@@ -763,8 +763,8 @@ func TestTrialPolicyPCR(t *testing.T) {
 }
 
 func TestTrialPolicyNV(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	owner := tpm.OwnerHandleContext()
 
@@ -847,8 +847,8 @@ func TestTrialPolicyNV(t *testing.T) {
 }
 
 func TestTrialPolicyCounterTimer(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	uint64a := make(Operand, 8)
 	binary.BigEndian.PutUint64(uint64a, 1603123)
@@ -921,8 +921,8 @@ func TestTrialPolicyCounterTimer(t *testing.T) {
 	}
 }
 func TestTrialPolicyCommandCode(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc string
@@ -975,8 +975,8 @@ func TestTrialPolicyCommandCode(t *testing.T) {
 }
 
 func TestTrialPolicyCpHash(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc string
@@ -1025,8 +1025,8 @@ func TestTrialPolicyCpHash(t *testing.T) {
 }
 
 func TestTrialPolicyNameHash(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc string
@@ -1075,8 +1075,8 @@ func TestTrialPolicyNameHash(t *testing.T) {
 }
 
 func TestTrialPolicyDuplicationSelect(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc          string
@@ -1137,8 +1137,8 @@ func TestTrialPolicyDuplicationSelect(t *testing.T) {
 }
 
 func TestTrialPolicyAuthorize(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	var keySignSHA1 Name
 	var keySignSHA256 Name
@@ -1204,8 +1204,8 @@ func TestTrialPolicyAuthorize(t *testing.T) {
 }
 
 func TestTrialPolicyAuthValue(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc string
@@ -1250,8 +1250,8 @@ func TestTrialPolicyAuthValue(t *testing.T) {
 }
 
 func TestTrialPolicyPassword(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc string
@@ -1296,8 +1296,8 @@ func TestTrialPolicyPassword(t *testing.T) {
 }
 
 func TestTrialPolicyNvWritten(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, 0)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc       string

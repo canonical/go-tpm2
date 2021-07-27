@@ -13,8 +13,8 @@ import (
 )
 
 func TestPCRExtend(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc       string
@@ -90,8 +90,8 @@ func TestPCRExtend(t *testing.T) {
 }
 
 func TestPCREvent(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc  string
@@ -176,8 +176,8 @@ func TestPCREvent(t *testing.T) {
 }
 
 func TestPCRRead(t *testing.T) {
-	tpm, tcti := testutil.NewTPMSimulatorContextT(t)
-	defer closeTPM(t, tpm)
+	tpm, tcti, closeTPM := testutil.NewTPMSimulatorContextT(t)
+	defer closeTPM()
 
 	testutil.ResetTPMSimulatorT(t, tpm, tcti)
 
@@ -334,8 +334,8 @@ func TestPCRRead(t *testing.T) {
 }
 
 func TestPCRReset(t *testing.T) {
-	tpm, _ := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
-	defer closeTPM(t, tpm)
+	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
+	defer closeTPM()
 
 	for _, data := range []struct {
 		desc string
