@@ -734,15 +734,7 @@ func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
 	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
-	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
-	template := tpm2.Public{
-		Type:    tpm2.ObjectTypeKeyedHash,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
-	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	priv, pub, _, _, _, err := tpm.Create(primary, nil, StorageKeyRSATemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	object, err := tpm.Load(primary, priv, pub, nil)
@@ -1231,4 +1223,271 @@ func (s *tctiSuite) TestRestoreCommandCodeAuditStatusIgnoresErrorWhenPermitted(c
 	// Disable the endorsement and platform hierarchies.
 	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandleEndorsement, false, nil), IsNil)
 	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
+}
+
+func (s *tctiSuite) testUseCreatedPrimaryNoDA(c *C, extraFeatures TPMFeatureFlags) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
+
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	_, _, _, _, _, err = tpm.Create(object, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestUseCreatedPrimaryNoDAPermitDA(c *C) {
+	s.testUseCreatedPrimaryNoDA(c, TPMFeatureDAProtectedCapability)
+}
+
+func (s *tctiSuite) TestUseCreatedPrimaryNoDAForbidDA(c *C) {
+	s.testUseCreatedPrimaryNoDA(c, 0)
+}
+
+func (s *tctiSuite) TestUseCreatedPrimaryDAPermitted(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
+
+	template := StorageKeyRSATemplate()
+	template.Attrs &^= tpm2.AttrNoDA
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	_, _, _, _, _, err = tpm.Create(object, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestUseCreatedPrimaryDAForbidden(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+
+	template := StorageKeyRSATemplate()
+	template.Attrs &^= tpm2.AttrNoDA
+	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	_, _, _, _, _, err = tpm.Create(object, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Create is trying to use a non-requested feature \(missing: 0x00000800\)`)
+}
+
+func (s *tctiSuite) testUseLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
+
+	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeKeyedHash,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrNoDA | tpm2.AttrUserWithAuth,
+		Params: &tpm2.PublicParamsU{
+			KeyedHashDetail: &tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object, err := tpm.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	_, err = tpm.Unseal(object, nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestUseLoadedObjectNoDAPermitDA(c *C) {
+	s.testUseLoadedObjectNoDA(c, TPMFeatureDAProtectedCapability)
+}
+
+func (s *tctiSuite) TestUseLoadedObjectNoDAForbidDA(c *C) {
+	s.testUseLoadedObjectNoDA(c, 0)
+}
+
+func (s *tctiSuite) TestUseLoadedObjectDAPermitted(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
+
+	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeKeyedHash,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
+		Params: &tpm2.PublicParamsU{
+			KeyedHashDetail: &tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object, err := tpm.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	_, err = tpm.Unseal(object, nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestUseLoadedObjectDAForbidden(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+
+	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeKeyedHash,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
+		Params: &tpm2.PublicParamsU{
+			KeyedHashDetail: &tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object, err := tpm.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	_, err = tpm.Unseal(object, nil)
+	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
+}
+
+func (s *tctiSuite) testUseHMACObject(c *C, extraFeatures TPMFeatureFlags) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
+
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeKeyedHash,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrNoDA,
+		Params: &tpm2.PublicParamsU{
+			KeyedHashDetail: &tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{
+					Scheme: tpm2.KeyedHashSchemeHMAC,
+					Details: &tpm2.SchemeKeyedHashU{
+						HMAC: &tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256}}}}}}
+	key, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	seq, err := tpm.HMACStart(key, nil, tpm2.HashAlgorithmSHA256, nil)
+	c.Assert(err, IsNil)
+
+	c.Check(tpm.SequenceUpdate(seq, []byte("foo"), nil), IsNil)
+}
+
+func (s *tctiSuite) TestUseHMACObjectDAForbidden(c *C) {
+	s.testUseHMACObject(c, 0)
+}
+
+func (s *tctiSuite) TestUseHMACObjectDAPermitted(c *C) {
+	s.testUseHMACObject(c, TPMFeatureDAProtectedCapability)
+}
+
+func (s *tctiSuite) testUseHashObject(c *C, extraFeatures TPMFeatureFlags) {
+	tpm, _, _ := s.newTPMContext(c, extraFeatures)
+
+	seq, err := tpm.HashSequenceStart(nil, tpm2.HashAlgorithmSHA256, nil)
+	c.Assert(err, IsNil)
+
+	c.Check(tpm.SequenceUpdate(seq, []byte("foo"), nil), IsNil)
+}
+
+func (s *tctiSuite) TestUseHashObjectDAForbidden(c *C) {
+	s.testUseHashObject(c, 0)
+}
+
+func (s *tctiSuite) TestUseHashObjectDAPermitted(c *C) {
+	s.testUseHashObject(c, TPMFeatureDAProtectedCapability)
+}
+
+func (s *tctiSuite) testUseContextLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
+
+	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeKeyedHash,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrNoDA | tpm2.AttrUserWithAuth,
+		Params: &tpm2.PublicParamsU{
+			KeyedHashDetail: &tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object, err := tpm.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	context, err := tpm.ContextSave(object)
+	c.Assert(err, IsNil)
+
+	o, err := tpm.ContextLoad(context)
+	c.Assert(err, IsNil)
+
+	_, err = tpm.Unseal(o.(tpm2.ResourceContext), nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestUseContextLoadedObjectNoDAPermitDA(c *C) {
+	s.testUseContextLoadedObjectNoDA(c, TPMFeatureDAProtectedCapability)
+}
+
+func (s *tctiSuite) TestUseContextLoadedObjectNoDAForbidDA(c *C) {
+	s.testUseContextLoadedObjectNoDA(c, 0)
+}
+
+func (s *tctiSuite) TestUseContextLoadedObjectDAPermitted(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
+
+	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeKeyedHash,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
+		Params: &tpm2.PublicParamsU{
+			KeyedHashDetail: &tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object, err := tpm.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	context, err := tpm.ContextSave(object)
+	c.Assert(err, IsNil)
+
+	o, err := tpm.ContextLoad(context)
+	c.Assert(err, IsNil)
+
+	_, err = tpm.Unseal(o.(tpm2.ResourceContext), nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy)
+
+	primary, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
+	template := tpm2.Public{
+		Type:    tpm2.ObjectTypeKeyedHash,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
+		Params: &tpm2.PublicParamsU{
+			KeyedHashDetail: &tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object, err := tpm.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	context, err := tpm.ContextSave(object)
+	c.Assert(err, IsNil)
+
+	o, err := tpm.ContextLoad(context)
+	c.Assert(err, IsNil)
+
+	_, err = tpm.Unseal(o.(tpm2.ResourceContext), nil)
+	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
