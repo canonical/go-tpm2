@@ -21,7 +21,7 @@ type attestationSuite struct {
 }
 
 func (s *attestationSuite) SetUpTest(c *C) {
-	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeatureDAProtectedCapability
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy
 	s.TPMTest.SetUpTest(c)
 }
 
