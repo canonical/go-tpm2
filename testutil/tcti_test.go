@@ -297,19 +297,26 @@ func (s *tctiSuite) TestPCRDisallowed(c *C) {
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_PCR_Event is trying to use a non-requested feature \(missing: 0x00000010\)`)
 }
 
-func (s *tctiSuite) TestStClearChangeAllowed(c *C) {
+func (s *tctiSuite) TestHierarchyControlAllowed(c *C) {
 	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 }
 
-func (s *tctiSuite) TestStClearChangeDisllowed(c *C) {
+func (s *tctiSuite) TestHierarchyControlDisallowed(c *C) {
 	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c, tpm)
 
 	err := tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil)
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_HierarchyControl is trying to use a non-requested feature \(missing: 0x00000020\)`)
+}
+
+func (s *tctiSuite) TestHierarchyControlAllowedWithPlatform(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c, tpm)
+
+	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 }
 
 func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowed(c *C) {
@@ -325,6 +332,28 @@ func (s *tctiSuite) TestSetCommandCodeAuditStatusDisallowed(c *C) {
 
 	err := tpm.SetCommandCodeAuditStatus(tpm.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00000040\)`)
+}
+
+func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureEndorsementHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c, tpm)
+
+	c.Check(tpm.SetCommandCodeAuditStatus(tpm.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
+}
+
+func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndPlatform(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureEndorsementHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c, tpm)
+
+	c.Check(tpm.SetCommandCodeAuditStatus(tpm.PlatformHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
+}
+
+func (s *tctiSuite) TestSetCommandCodeAuditStatusWithEndorsementAndOwnerRequiresNV(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureEndorsementHierarchy)
+	s.deferCloseTpm(c, tpm)
+
+	err := tpm.SetCommandCodeAuditStatus(tpm.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
+	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001000\)`)
 }
 
 func (s *tctiSuite) TestClearAllowed(c *C) {
@@ -355,6 +384,21 @@ func (s *tctiSuite) TestClearControlDisallowed(c *C) {
 
 	err := tpm.ClearControl(tpm.LockoutHandleContext(), true, nil)
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00000100\)`)
+}
+
+func (s *tctiSuite) TestClearControlAllowedWithPlatform(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c, tpm)
+
+	c.Check(tpm.ClearControl(tpm.LockoutHandleContext(), true, nil), IsNil)
+}
+
+func (s *tctiSuite) TestClearControlWithPlatformRequiresNV(c *C) {
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy)
+	s.deferCloseTpm(c, tpm)
+
+	err := tpm.ClearControl(tpm.LockoutHandleContext(), true, nil)
+	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001000\)`)
 }
 
 func (s *tctiSuite) TestFeatureShutdownAllowed(c *C) {
@@ -418,47 +462,26 @@ func (s *tctiSuite) TestDAProtectedCapabilityDisallowed(c *C) {
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_NV_Write is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
-func (s *tctiSuite) TestDisablePlatformHierarchyAllowed(c *C) {
-	// Test that the platform hierarchy can be disabled if TPMFeatureStClearChange
-	// is specified.
-	tpm, _, rawTpm := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureClearControl|TPMFeatureNV)
+func (s *tctiSuite) TestRestorePlatformHierarchyAuth(c *C) {
+	// Test that changes to the platform hierarchy authorization value are undone.
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
-	// Set disableClear - this can't be undone, but we shouldn't see an error
-	// because of TPMFeatureClearControl
-	c.Check(tpm.ClearControl(tpm.PlatformHandleContext(), true, nil), IsNil)
-
-	// Change the platform hierarchy auth - this can't be undone, but we shouldn't
-	// see an error because of TPMFeatureStClearChange (it's undone on a
-	// TPM_CC_Startup(CLEAR)).
 	c.Check(tpm.HierarchyChangeAuth(tpm.PlatformHandleContext(), []byte("foo"), nil), IsNil)
-
-	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
-
-	props, err := rawTpm.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
-	c.Check(err, IsNil)
-	c.Assert(props, HasLen, 1)
-	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
-	enabled := tpm2.StartupClearAttributes(props[0].Value)&tpm2.AttrPhEnable > 0
-	c.Check(enabled, IsFalse)
 
 	c.Check(tpm.Close(), IsNil)
 
-	props, err = rawTpm.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
-	c.Check(err, IsNil)
-	c.Assert(props, HasLen, 1)
-	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
-	enabled = tpm2.StartupClearAttributes(props[0].Value)&tpm2.AttrPhEnable > 0
-	c.Check(enabled, IsFalse)
+	c.Check(rawTpm.HierarchyChangeAuth(rawTpm.PlatformHandleContext(), nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestDisablePlatformHierarchyDisallowed(c *C) {
-	// Test that disabling the platform hierarchy isn't allowed without
-	// TPMFeatureStClearChange.
-	tpm, _, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
-	s.deferCloseTpm(c, tpm)
+func (s *tctiSuite) TestRestorePlatformHierarchyAuthAfterDisablePlatform(c *C) {
+	// Test that Close() succeeds if we can't restore the platform hierarchy
+	// authorization value because the platform hierarchy was disabled.
+	tpm, _, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
-	err := tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_HierarchyControl is trying to use a non-requested feature \(missing: 0x00000020\)`)
+	c.Check(tpm.HierarchyChangeAuth(tpm.PlatformHandleContext(), []byte("foo"), nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
+
+	c.Check(tpm.Close(), IsNil)
 }
 
 type testRestoreHierarchyControlData struct {
@@ -472,6 +495,10 @@ func (s *tctiSuite) testRestoreHierarchyControl(c *C, data *testRestoreHierarchy
 	tpm, _, rawTpm := s.newTPMContext(c, data.permittedFeatures|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	c.Check(tpm.HierarchyControl(tpm.GetPermanentContext(data.auth), data.enable, false, nil), IsNil)
+
+	// Note that restoring this hierarchy requires the use of the platform hierarchy. Change its auth
+	// value to make sure this isn't a problem.
+	c.Check(tpm.HierarchyChangeAuth(tpm.PlatformHandleContext(), []byte("foo"), nil), IsNil)
 
 	props, err := rawTpm.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
 	c.Check(err, IsNil)
@@ -516,37 +543,16 @@ func (s *tctiSuite) TestRestoreHierarchyControlPlatformNV(c *C) {
 		attr:   tpm2.AttrPhEnableNV})
 }
 
-func (s *tctiSuite) TestRestoreHierarchyControlAfterPlatformAuthChange(c *C) {
-	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
-
-	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
-	c.Check(tpm.HierarchyChangeAuth(tpm.PlatformHandleContext(), []byte("foo"), nil), IsNil)
-
-	props, err := rawTpm.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
-	c.Check(err, IsNil)
-	c.Assert(props, HasLen, 1)
-	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
-	enabled := tpm2.StartupClearAttributes(props[0].Value)&tpm2.AttrShEnable > 0
-	c.Check(enabled, IsFalse)
-
-	c.Check(tpm.Close(), IsNil)
-
-	props, err = rawTpm.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
-	c.Check(err, IsNil)
-	c.Assert(props, HasLen, 1)
-	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
-	enabled = tpm2.StartupClearAttributes(props[0].Value)&tpm2.AttrShEnable > 0
-	c.Check(enabled, IsTrue)
-}
-
-type testRestoreHierarhcyAuthData struct {
-	handle tpm2.Handle
-}
-
 func (s *tctiSuite) testRestoreHierarchyAuth(c *C, handle tpm2.Handle) {
 	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureFlags(math.MaxUint32))
 
 	c.Check(tpm.HierarchyChangeAuth(tpm.GetPermanentContext(handle), []byte("foo"), nil), IsNil)
+
+	if handle != tpm2.HandleLockout {
+		// Note that restoring this auth value requires that the hierarchy is enabled. Disable it
+		// to make sure this isn't a problem.
+		c.Check(tpm.HierarchyControl(tpm.GetPermanentContext(handle), handle, false, nil), IsNil)
+	}
 
 	c.Check(tpm.Close(), IsNil)
 
@@ -617,7 +623,8 @@ func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
 
 func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
 	// Test that Close() fails if the owner hierarchy auth cannot be restored
-	// because it has been disabled.
+	// because it has been disabled and use of the platform hierarchy is not
+	// permitted in order to reenable it.
 	tpm, _, _ := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
 	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
@@ -660,7 +667,17 @@ func (s *tctiSuite) TestRestoreDisableClearFailsIfPlatformIsDisabled(c *C) {
 	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(tpm.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot restore disableClear because the platform hierarchy was disabled\n`)
+		`- cannot restore disableClear: TPM returned an error for handle 1 whilst executing command TPM_CC_ClearControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+}
+
+func (s *tctiSuite) TestRestoreDisableClearIgnoresErrorWhenPermitted(c *C) {
+	// Test that Close() succeeds if it cannot restore disableClear but
+	// TPMFeatureClearControl is defined.
+	tpm, _, _ := s.newTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureClearControl|TPMFeatureNV)
+	s.deferCloseTpm(c, tpm)
+
+	c.Check(tpm.ClearControl(tpm.PlatformHandleContext(), true, nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 }
 
 func (s *tctiSuite) TestRestoreDACounter(c *C) {
@@ -686,6 +703,9 @@ func (s *tctiSuite) TestRestoreDACounter(c *C) {
 	c.Assert(props, HasLen, 1)
 	c.Check(props[0].Value, Equals, uint32(1))
 
+	// Check that changing the lockout hierarchy auth value isn't a problem.
+	c.Check(tpm.HierarchyChangeAuth(tpm.LockoutHandleContext(), []byte("foo"), nil), IsNil)
+
 	c.Check(tpm.Close(), IsNil)
 
 	props, err = rawTpm.GetCapabilityTPMProperties(tpm2.PropertyLockoutCounter, 1)
@@ -703,6 +723,9 @@ func (s *tctiSuite) TestRestoreDAParams(c *C) {
 	c.Assert(origProps, HasLen, 3)
 
 	c.Check(tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), math.MaxUint32, math.MaxUint32, math.MaxUint32, nil), IsNil)
+
+	// Check that changing the lockout hierarchy auth value isn't a problem.
+	c.Check(tpm.HierarchyChangeAuth(tpm.LockoutHandleContext(), []byte("foo"), nil), IsNil)
 
 	c.Check(tpm.Close(), IsNil)
 
@@ -956,7 +979,7 @@ func (s *tctiSuite) TestLoadAndFlushRestoredSession(c *C) {
 
 func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 	// Test that persistent objects are evicted from the TPM.
-	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	template := tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
@@ -981,6 +1004,11 @@ func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 	c.Check(err, IsNil)
 	c.Check(props, HasLen, 1)
 	c.Check(props[0], Equals, persistent.Handle())
+
+	// Check that changing the owner hierarchy auth value and then disabling the hierarchy
+	// isn't a problem.
+	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 
 	c.Check(tpm.Close(), IsNil)
 
@@ -1022,7 +1050,7 @@ func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
 
 func (s *tctiSuite) TestUndefineNVIndex(c *C) {
 	// Test that NV indexes are undefined.
-	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	nvPublic := tpm2.NVPublic{
 		Index:   0x01800000,
@@ -1036,6 +1064,11 @@ func (s *tctiSuite) TestUndefineNVIndex(c *C) {
 	c.Check(err, IsNil)
 	c.Assert(props, HasLen, 1)
 	c.Check(props[0], Equals, nvPublic.Index)
+
+	// Check that changing the owner hierarchy auth value and then disabling the hierarchy
+	// isn't a problem.
+	c.Check(tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 
 	c.Check(tpm.Close(), IsNil)
 
@@ -1214,4 +1247,92 @@ func (s *tctiSuite) TestClear(c *C) {
 	props, err = rawTpm.GetCapabilityHandles(nvPublic.Index, 1)
 	c.Check(err, IsNil)
 	c.Check(props, HasLen, 0)
+}
+
+type testRestoreCommandCodeAuditStatusData struct {
+	handle           tpm2.Handle
+	disableHierarchy bool
+	permission       TPMFeatureFlags
+}
+
+func (s *tctiSuite) testRestoreCommandCodeAuditStatus(c *C, data *testRestoreCommandCodeAuditStatusData) {
+	tpm, _, rawTpm := s.newTPMContext(c, TPMFeatureEndorsementHierarchy|TPMFeatureNV|data.permission)
+
+	restoreCommands, err := rawTpm.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
+	c.Assert(err, IsNil)
+	auditInfo, _, err := rawTpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
+	c.Assert(err, IsNil)
+	restoreAlg := auditInfo.Attested.CommandAudit.DigestAlg
+
+	c.Check(tpm.SetCommandCodeAuditStatus(tpm.GetPermanentContext(data.handle), tpm2.HashAlgorithmSHA1, nil, nil, nil), IsNil)
+	c.Check(tpm.SetCommandCodeAuditStatus(tpm.GetPermanentContext(data.handle), tpm2.HashAlgorithmNull, tpm2.CommandCodeList{tpm2.CommandStirRandom}, restoreCommands, nil), IsNil)
+
+	commands, err := rawTpm.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
+	c.Assert(err, IsNil)
+	c.Check(commands, DeepEquals, tpm2.CommandCodeList{tpm2.CommandSetCommandCodeAuditStatus, tpm2.CommandStirRandom})
+	auditInfo, _, err = rawTpm.GetCommandAuditDigest(rawTpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
+	c.Assert(err, IsNil)
+	c.Check(auditInfo.Attested.CommandAudit.DigestAlg, Equals, tpm2.AlgorithmSHA1)
+
+	// Check that changing the endorsement hierarchy auth value and then disabling the hierarchy
+	// isn't a problem.
+	c.Check(tpm.HierarchyChangeAuth(tpm.EndorsementHandleContext(), []byte("foo"), nil), IsNil)
+	if data.disableHierarchy {
+		c.Check(tpm.HierarchyControl(tpm.EndorsementHandleContext(), tpm2.HandleEndorsement, false, nil), IsNil)
+	}
+
+	c.Check(tpm.Close(), IsNil)
+
+	commands, err = rawTpm.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
+	c.Assert(err, IsNil)
+	c.Check(commands, DeepEquals, restoreCommands)
+	auditInfo, _, err = rawTpm.GetCommandAuditDigest(rawTpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
+	c.Assert(err, IsNil)
+	c.Check(auditInfo.Attested.CommandAudit.DigestAlg, Equals, restoreAlg)
+}
+
+func (s *tctiSuite) TestRestoreCommandCodeAuditStatusOwner(c *C) {
+	// Test that changes made with TPM2_SetCommandCodeAuditStatus are reverted when use of the owner
+	// hierarchy is permitted.
+	s.testRestoreCommandCodeAuditStatus(c, &testRestoreCommandCodeAuditStatusData{
+		handle:     tpm2.HandleOwner,
+		permission: TPMFeatureOwnerHierarchy})
+}
+
+func (s *tctiSuite) TestRestoreCommandCodeAuditStatusPlatform(c *C) {
+	// Test that changes made with TPM2_SetCommandCodeAuditStatus are reverted when use of the platform
+	// hierarchy is permitted.
+	s.testRestoreCommandCodeAuditStatus(c, &testRestoreCommandCodeAuditStatusData{
+		handle:           tpm2.HandlePlatform,
+		disableHierarchy: true,
+		permission:       TPMFeaturePlatformHierarchy})
+}
+
+func (s *tctiSuite) TestRestoreCommandCodeAuditStatusFailsIfPlatformIsDisabled(c *C) {
+	// Test that Close() returns an error if changes made with TPM2_SetCommandCodeAuditStatus can't
+	// be reverted because the endorsement hierarchy has been disabled and can't be re-enabled.
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureEndorsementHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+
+	c.Check(tpm.SetCommandCodeAuditStatus(tpm.PlatformHandleContext(), tpm2.HashAlgorithmSHA1, nil, nil, nil), IsNil)
+
+	// Disable the endorsement and platform hierarchies.
+	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandleEndorsement, false, nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
+
+	c.Check(tpm.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+		`- cannot restore command code audit alg: TPM returned an error for handle 1 whilst executing command TPM_CC_SetCommandCodeAuditStatus: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
+}
+
+func (s *tctiSuite) TestRestoreCommandCodeAuditStatusIgnoresErrorWhenPermitted(c *C) {
+	// Test that Close() succeeds if changes made with TPM2_SetCommandCodeAuditStatus can't
+	// be reverted because the endorsement hierarchy has been disabled and can't be re-enabled,
+	// but TPMFeatureSetCommandCodeAuditStatus is defined.
+	tpm, _, _ := s.newTPMContext(c, TPMFeatureEndorsementHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureSetCommandCodeAuditStatus|TPMFeatureNV)
+	s.deferCloseTpm(c, tpm)
+
+	c.Check(tpm.SetCommandCodeAuditStatus(tpm.PlatformHandleContext(), tpm2.HashAlgorithmSHA1, nil, nil, nil), IsNil)
+
+	// Disable the endorsement and platform hierarchies.
+	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandleEndorsement, false, nil), IsNil)
+	c.Check(tpm.HierarchyControl(tpm.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 }

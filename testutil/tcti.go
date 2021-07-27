@@ -148,6 +148,11 @@ type cmdContext struct {
 	response *bytes.Buffer
 }
 
+type cmdAuditStatus struct {
+	alg      tpm2.HashAlgorithmId
+	commands tpm2.CommandCodeList
+}
+
 var savedObjects []savedObject
 
 // CommandRecord provides information about a command executed via
@@ -199,6 +204,7 @@ type TCTI struct {
 	restorePermanentAttrs tpm2.PermanentAttributes
 	restoreStClearAttrs   tpm2.StartupClearAttributes
 	restoreDaParams       daParams
+	restoreCmdAuditStatus cmdAuditStatus
 
 	currentCmd *cmdContext
 
@@ -208,10 +214,10 @@ type TCTI struct {
 	sessions          map[tpm2.Handle]sessionInfo
 	nvIndexes         map[tpm2.Handle]nvIndexInfo
 
-	didClearControl             bool
-	didHierarchyControl         bool
-	didDisablePlatformHierarchy bool
-	didSetDaParams              bool
+	didClearControl      bool
+	didHierarchyControl  bool
+	didSetDaParams       bool
+	didSetCmdAuditStatus bool
 
 	// CommandLog keeps a record of all of the commands executed via
 	// this interface
@@ -333,16 +339,6 @@ func (t *TCTI) processCommandDone() error {
 		}
 	case tpm2.CommandHierarchyControl:
 		t.didHierarchyControl = true
-
-		var enable tpm2.Handle
-		var state bool
-		if _, err := mu.UnmarshalFromBytes(cpBytes, &enable, &state); err != nil {
-			return xerrors.Errorf("cannot unmarshal params: %w", err)
-		}
-
-		if enable == tpm2.HandlePlatform && !state {
-			t.didDisablePlatformHierarchy = true
-		}
 	case tpm2.CommandNVUndefineSpace:
 		// Drop undefined NV index
 		delete(t.nvIndexes, cmdHandles[1])
@@ -392,8 +388,9 @@ func (t *TCTI) processCommandDone() error {
 		t.nvIndexes[index] = nvIndexInfo{auth: authHandle, attrs: attrs}
 	case tpm2.CommandDictionaryAttackParameters:
 		t.didSetDaParams = true
+	case tpm2.CommandSetCommandCodeAuditStatus:
+		t.didSetCmdAuditStatus = true
 	case tpm2.CommandStartup:
-		t.didDisablePlatformHierarchy = false
 		var startupType tpm2.StartupType
 		if _, err := mu.UnmarshalFromBytes(cpBytes, &startupType); err != nil {
 			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
@@ -520,11 +517,12 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandClearControl:
 		commandFeatures |= TPMFeatureClearControl
-		// Make TPMFeatureClearControl imply TPMFeatureNV for this command.
-		commandFeatures &^= TPMFeatureNV
 		if t.permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
 			// We can revert changes to disableClear
 			commandFeatures &^= TPMFeatureClearControl
+		} else {
+			// Make TPMFeatureClearControl imply TPMFeatureNV for this command.
+			commandFeatures &^= TPMFeatureNV
 		}
 	case tpm2.CommandNVGlobalWriteLock:
 		commandFeatures |= TPMFeatureNVGlobalWriteLock
@@ -532,8 +530,14 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandSetCommandCodeAuditStatus:
 		commandFeatures |= TPMFeatureSetCommandCodeAuditStatus
-		// Make TPMFeatureSetCommandCodeAuditStatus imply TPMFeatureNV for this command.
-		commandFeatures &^= TPMFeatureNV
+		if t.permittedFeatures&TPMFeatureEndorsementHierarchy > 0 {
+			// We can revert changes to this. Note that reverting requires the use
+			// of the storage or platform hierarchy too, which is checked implicitly.
+			commandFeatures &^= TPMFeatureSetCommandCodeAuditStatus
+		} else {
+			// Make TPMFeatureSetCommandCodeAuditStatus imply TPMFeatureNV for this command.
+			commandFeatures &^= TPMFeatureNV
+		}
 	case tpm2.CommandShutdown:
 		commandFeatures |= TPMFeatureShutdown
 		// Make TPMFeatureShutdown imply TPMFeatureNV for this command.
@@ -582,14 +586,14 @@ func (t *TCTI) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
 	}
 	delete(t.hierarchyAuths, tpm2.HandlePlatform)
 
-	if t.didDisablePlatformHierarchy {
-		// Permitted via TPMFeaturesStClearChange
-		return nil
-	}
-
 	platform := tpm.PlatformHandleContext()
 	platform.SetAuthValue(auth)
 	if err := tpm.HierarchyChangeAuth(platform, nil, nil); err != nil {
+		if tpm2.IsTPMHandleError(err, tpm2.ErrorHierarchy, tpm2.CommandHierarchyChangeAuth, 1) {
+			// Hierarchy was disabled which was permitted with TPMFeatureStClearChange, so
+			// this is ok as it will be restored on the next TPM2_Startup(CLEAR).
+			return nil
+		}
 		return xerrors.Errorf("cannot clear auth value for %v: %w", tpm2.HandlePlatform, err)
 	}
 	return nil
@@ -597,11 +601,6 @@ func (t *TCTI) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
 
 func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 	if !t.didHierarchyControl {
-		return errs
-	}
-
-	if t.didDisablePlatformHierarchy {
-		// Permitted via TPMFeatureStClearChange
 		return errs
 	}
 
@@ -622,6 +621,11 @@ func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 		}
 
 		if err := tpm.HierarchyControl(tpm.PlatformHandleContext(), hierarchy, state, nil); err != nil {
+			if tpm2.IsTPMHandleError(err, tpm2.ErrorHierarchy, tpm2.CommandHierarchyControl, 1) {
+				// The platform hierarchy was disabled which was permitted with TPMFeatureStClearChange,
+				// so this is ok as it will be restored on the next TPM2_Startup(CLEAR).
+				break
+			}
 			errs = append(errs, xerrors.Errorf("cannot restore hierarchy %v: %w", hierarchy, err))
 		}
 	}
@@ -651,15 +655,11 @@ func (t *TCTI) restoreDisableClear(tpm *tpm2.TPMContext) error {
 		return nil
 	}
 
-	if t.didDisablePlatformHierarchy {
+	disable := t.restorePermanentAttrs&tpm2.AttrDisableClear > 0
+	if err := tpm.ClearControl(tpm.PlatformHandleContext(), disable, nil); err != nil {
 		if t.permittedFeatures&TPMFeatureClearControl > 0 {
 			return nil
 		}
-		return errors.New("cannot restore disableClear because the platform hierarchy was disabled")
-	}
-
-	disable := t.restorePermanentAttrs&tpm2.AttrDisableClear > 0
-	if err := tpm.ClearControl(tpm.PlatformHandleContext(), disable, nil); err != nil {
 		return xerrors.Errorf("cannot restore disableClear: %w", err)
 	}
 
@@ -722,6 +722,58 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 	}
 
 	return errs
+}
+
+func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
+	if !t.didSetCmdAuditStatus {
+		return nil
+	}
+
+	if t.permittedFeatures&TPMFeatureEndorsementHierarchy == 0 {
+		// Permitted via TPMFeatureSetCommandCodeAuditStatus
+		return nil
+	}
+
+	var auth tpm2.ResourceContext
+	switch {
+	case t.permittedFeatures&TPMFeatureOwnerHierarchy > 0:
+		auth = tpm.OwnerHandleContext()
+	case t.permittedFeatures&TPMFeaturePlatformHierarchy > 0:
+		auth = tpm.PlatformHandleContext()
+	default:
+		panic("no appropriate permssion for TPM2_SetCommandCodeAuditStatus")
+	}
+
+	if err := tpm.SetCommandCodeAuditStatus(auth, t.restoreCmdAuditStatus.alg, nil, nil, nil); err != nil {
+		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
+			return nil
+		}
+		return xerrors.Errorf("cannot restore command code audit alg: %w", err)
+	}
+
+	clearList, err := tpm.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
+	if err != nil {
+		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
+			return nil
+		}
+		return xerrors.Errorf("cannot obtain current audit commands: %w", err)
+	}
+
+	if err := tpm.SetCommandCodeAuditStatus(auth, tpm2.HashAlgorithmNull, nil, clearList, nil); err != nil {
+		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
+			return nil
+		}
+		return xerrors.Errorf("cannot clear audit commands: %w", err)
+	}
+
+	if err := tpm.SetCommandCodeAuditStatus(auth, tpm2.HashAlgorithmNull, t.restoreCmdAuditStatus.commands, nil, nil); err != nil {
+		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
+			return nil
+		}
+		return xerrors.Errorf("cannot restore audit commands: %w", err)
+	}
+
+	return nil
 }
 
 // Close will attempt to restore the state of the TPM and then close the connection.
@@ -789,6 +841,10 @@ func (t *TCTI) Close() error {
 
 	errs = t.removeResources(errs, tpm)
 
+	if err := t.restoreCommandCodeAuditStatus(tpm); err != nil {
+		errs = append(errs, err)
+	}
+
 	if err := t.tcti.Close(); err != nil {
 		return err
 	}
@@ -848,12 +904,27 @@ func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) 
 		}
 	}
 
+	var cmdAuditStatus cmdAuditStatus
+	if permittedFeatures&TPMFeatureEndorsementHierarchy > 0 {
+		commands, err := tpm.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
+		if err != nil {
+			return nil, xerrors.Errorf("cannot request audit commands from TPM: %w", err)
+		}
+		auditInfo, _, err := tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
+		if err != nil {
+			return nil, xerrors.Errorf("cannot request audit info from TPM: %w", err)
+		}
+		cmdAuditStatus.alg = tpm2.HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg)
+		cmdAuditStatus.commands = commands
+	}
+
 	return &TCTI{
 		tcti:                  tcti,
 		permittedFeatures:     permittedFeatures,
 		restorePermanentAttrs: permanentAttrs,
 		restoreStClearAttrs:   stClearAttrs,
 		restoreDaParams:       daParams,
+		restoreCmdAuditStatus: cmdAuditStatus,
 		hierarchyAuths:        make(map[tpm2.Handle]tpm2.Auth),
 		transientObjects:      make(map[tpm2.Handle]objectInfo),
 		persistentObjects:     make(map[tpm2.Handle]persistentObjectInfo),

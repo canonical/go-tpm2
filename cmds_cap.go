@@ -159,7 +159,7 @@ func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount ui
 	return data.Data.PPCommands, nil
 }
 
-// GetCapabilityPPCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that are
+// GetCapabilityAuditCommands is a helper function that wraps around TPMContext.GetCapability, and returns a list of commands that are
 // currently set for command audit. The first parameter indicates the command code at which the returned list should start. The
 // propertyCount parameter indicates the maximum number of command codes to return.
 func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount uint32, sessions ...SessionContext) (auditCommands CommandCodeList, err error) {
