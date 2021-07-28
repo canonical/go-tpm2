@@ -6,8 +6,6 @@ package testutil_test
 
 import (
 	"io/ioutil"
-	"net"
-	"os"
 
 	. "gopkg.in/check.v1"
 
@@ -80,7 +78,9 @@ func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), InSlice(ErrorIs), []error{os.ErrClosed, net.ErrClosed})
+	c.Check(tpm.Close(), InSlice(ErrorMatches), []string{
+		`.*use of closed network connection$`,
+		`.*file already closed$`})
 }
 
 func (s *tpmTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
@@ -98,7 +98,9 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, Equals, tcti)
-	c.Check(tpm.Close(), InSlice(ErrorIs), []error{os.ErrClosed, net.ErrClosed})
+	c.Check(tpm.Close(), InSlice(ErrorMatches), []string{
+		`.*use of closed network connection$`,
+		`.*file already closed$`})
 }
 
 func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
@@ -285,7 +287,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), ErrorIs, net.ErrClosed)
+	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
 	s.AddCleanup(func() {
@@ -316,7 +318,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, Equals, tcti)
-	c.Check(tpm.Close(), ErrorIs, net.ErrClosed)
+	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
 	s.AddCleanup(func() {
