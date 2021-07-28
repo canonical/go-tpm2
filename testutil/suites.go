@@ -282,6 +282,8 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) (cleanup fun
 	switch {
 	case b.TCTI != nil:
 		c.Assert(b.TPMTest.TCTI, NotNil)
+		c.Assert(b.TPMTest.TCTI.Unwrap(), ConvertibleTo, &tpm2.TctiMssim{})
+		c.Assert(b.TPMTest.TCTI.Unwrap().(*tpm2.TctiMssim), Equals, b.TCTI)
 		// TPMTest.SetUpTest will create a TPMContext if one is not
 		// already created
 		return func() {}
