@@ -781,9 +781,9 @@ func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 // If any hierarchies were disabled by a test, they will be re-enabled if
 // TPMFeaturePlatformHierarchy is permitted and the platform hierarchy hasn't been
 // disabled. If TPMFeaturePlatformHierarchy isn't permitted or the platform hierarchy
-// has been disabled, then disabled hierarchies cannot be re-enabled and
-// TPMFeatureStClearChange must be permitted in order to disable the hierarchies in
-// the first place.
+// has been disabled, then disabled hierarchies cannot be re-enabled. Note that
+// TPMFeatureStClearChange must be permitted in order to disable hierarchies
+// without being able to reenable them again.
 //
 // If any hierarchy authorization values are set by a test, they will be cleared.
 // If the authorization value for the owner or endorsement hierarchy cannot be
@@ -817,6 +817,15 @@ func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 // will be returned. The test must undefine the index itself in this case. It is not
 // possible for resources created by a test to remain in the TPM after calling this
 // function without returning an error.
+//
+// If the TPM2_SetCommandCodeAuditStatus command was used and
+// TPMFeatureEndorsementHierarchy is permitted, changes made by that command will
+// be undone. If TPMFeatureEndorsementHierarchy is not permitted, then
+// TPMFeatureSetCommandCodeAuditStatus must be permitted in order to use that
+// command and in this case, changes made by it won't be undone. If changes
+// can't be undone because, eg, the endorsement hierarchy was disabled and cannot
+// be reenabled, and TPMFeatureSetCommandCodeAuditStatus is not permitted, then an
+// error will be returned.
 func (t *TCTI) Close() error {
 	tpm, _ := tpm2.NewTPMContext(t.tcti)
 
@@ -875,8 +884,9 @@ func (t *TCTI) Unwrap() tpm2.TCTI {
 
 // WrapTCTI wraps the supplied TCTI and authorizes it to use the specified features. If
 // the supplied TCTI corresponds to a real TPM device, the caller should verify that the
-// specified features are permitted by the current test execution, by checking the value
-// of the PermittedTPMFeatures variable.
+// specified features are permitted by the current test environment by checking the value
+// of the PermittedTPMFeatures variable before calling this, and should skip the current
+// test if it needs to use features that are not permitted.
 func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) {
 	tpm, _ := tpm2.NewTPMContext(tcti)
 

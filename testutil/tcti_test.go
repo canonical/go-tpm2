@@ -71,10 +71,8 @@ func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 	})
 	defer restore()
 
-	tpm, tcti := NewTPMSimulatorContext(c)
-	s.TCTI = tcti.Unwrap().(*ignoreCloseTcti).tcti.(*tpm2.TctiMssim)
-	s.TPM = tpm
-	s.TPMTest.TCTI = tcti
+	s.TPM, s.TPMTest.TCTI = NewTPMSimulatorContext(c)
+	s.TCTI = s.TPMTest.TCTI.Unwrap().(*ignoreCloseTcti).tcti.(*tpm2.TctiMssim)
 
 	s.AddCleanup(func() {
 		defer func() {
