@@ -99,24 +99,16 @@ func (t *TctiMssim) Write(data []byte) (int, error) {
 	return n, nil
 }
 
-func sendSessionEnd(conn net.Conn) error {
-	return binary.Write(conn, binary.BigEndian, cmdSessionEnd)
-}
-
-func (t *TctiMssim) Close() (out error) {
-	if err := sendSessionEnd(t.platform); err != nil {
-		out = xerrors.Errorf("cannot send session end command on platform channel: %w", err)
+func (t *TctiMssim) Close() (err error) {
+	binary.Write(t.platform, binary.BigEndian, cmdSessionEnd)
+	binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd)
+	if e := t.platform.Close(); e != nil {
+		err = xerrors.Errorf("cannot close platform channel: %w", e)
 	}
-	if err := sendSessionEnd(t.tpm); err != nil {
-		out = xerrors.Errorf("cannot send session end command on TPM command channel: %w", err)
+	if e := t.tpm.Close(); e != nil {
+		err = xerrors.Errorf("cannot close TPM command channel: %w", e)
 	}
-	if err := t.platform.Close(); err != nil {
-		out = xerrors.Errorf("cannot close platform channel: %w", err)
-	}
-	if err := t.tpm.Close(); err != nil {
-		out = xerrors.Errorf("cannot close TPM command channel: %w", err)
-	}
-	return
+	return err
 }
 
 func (t *TctiMssim) SetLocality(locality uint8) error {
@@ -150,19 +142,12 @@ func (t *TctiMssim) Reset() error {
 	return t.platformCommand(cmdReset)
 }
 
-func sendStop(conn net.Conn) error {
-	return binary.Write(conn, binary.BigEndian, cmdStop)
-}
-
 // Stop submits a stop command on both the TPM command and platform channels, which initiates a shutdown of the TPM simulator.
 func (t *TctiMssim) Stop() (out error) {
-	if err := sendStop(t.platform); err != nil {
-		out = xerrors.Errorf("cannot send stop command on platform channel: %w", err)
+	if err := binary.Write(t.platform, binary.BigEndian, cmdStop); err != nil {
+		return err
 	}
-	if err := sendStop(t.tpm); err != nil {
-		out = xerrors.Errorf("cannot send stop command on TPM command channel: %w", err)
-	}
-	return nil
+	return binary.Write(t.tpm, binary.BigEndian, cmdStop)
 }
 
 // OpenMssim attempts to open a connection to a TPM simulator on the specified host and port. The port
