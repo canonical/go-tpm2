@@ -52,6 +52,10 @@ func (t *ignoreCloseTcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return t.tcti.MakeSticky(handle, sticky)
 }
 
+func (t *ignoreCloseTcti) Unwrap() tpm2.TCTI {
+	return t.tcti
+}
+
 type tctiSuite struct {
 	TPMSimulatorTest
 }
@@ -71,29 +75,27 @@ func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 	})
 	defer restore()
 
-	s.TPM, s.TPMTest.TCTI = NewTPMSimulatorContext(c)
-	s.TCTI = s.TPMTest.TCTI.Unwrap().(*ignoreCloseTcti).tcti.(*tpm2.TctiMssim)
+	s.TPM, s.TCTI = NewTPMSimulatorContext(c)
 
 	s.AddCleanup(func() {
 		defer func() {
-			s.TPMTest.TCTI = nil
 			s.TPM = nil
 			s.TCTI = nil
 		}()
 		// The test has to call Close()
-		c.Check(s.TPMTest.TCTI.Unwrap().(*ignoreCloseTcti).closed, IsTrue)
+		c.Check(s.TCTI.Unwrap().(*ignoreCloseTcti).closed, IsTrue)
 
-		tpm, _ := tpm2.NewTPMContext(s.TCTI)
+		tpm, _ := tpm2.NewTPMContext(s.Mssim(c))
 		s.TPM = tpm
 
 		s.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
-		c.Check(s.TCTI.Close(), IsNil)
+		c.Check(s.TCTI.Unwrap().(TCTIWrapper).Unwrap().Close(), IsNil)
 	})
 }
 
 func (s *tctiSuite) rawTpm(c *C) *tpm2.TPMContext {
 	c.Assert(s.TCTI, NotNil)
-	tpm, _ := tpm2.NewTPMContext(s.TCTI)
+	tpm, _ := tpm2.NewTPMContext(s.Mssim(c))
 	return tpm
 }
 

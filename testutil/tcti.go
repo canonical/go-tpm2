@@ -17,6 +17,10 @@ import (
 	"golang.org/x/xerrors"
 )
 
+type TCTIWrapper interface {
+	Unwrap() tpm2.TCTI
+}
+
 func canonicalizeHandle(h tpm2.Handle) tpm2.Handle {
 	if h.Type() != tpm2.HandleTypePolicySession {
 		return h

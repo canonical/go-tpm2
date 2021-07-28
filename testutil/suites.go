@@ -274,37 +274,28 @@ func (b *TPMTest) CreateSigningPrimaryKeyRSA(c *C, hierarchy tpm2.Handle, restri
 // TPMSimulatorTest is a base test suite for all tests that use the TPM simulator (TctiMssim).
 type TPMSimulatorTest struct {
 	TPMTest
-
-	TCTI *tpm2.TctiMssim // The simulator transmission interface for this test
 }
 
-func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) (cleanup func()) {
+func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) (cleanup func(*C)) {
 	switch {
+	case b.TPM != nil:
+		c.Assert(b.TCTI, NotNil)
+		fallthrough
 	case b.TCTI != nil:
-		c.Assert(b.TPMTest.TCTI, NotNil)
-		c.Assert(b.TPMTest.TCTI.Unwrap(), ConvertibleTo, &tpm2.TctiMssim{})
-		c.Assert(b.TPMTest.TCTI.Unwrap().(*tpm2.TctiMssim), Equals, b.TCTI)
-		// TPMTest.SetUpTest will create a TPMContext if one is not
-		// already created
-		return func() {}
-	case b.TPMTest.TCTI != nil:
-		// This is odd, but try to handle it anyway.
-		c.Assert(b.TPMTest.TCTI.Unwrap(), ConvertibleTo, &tpm2.TctiMssim{})
-		b.TCTI = b.TPMTest.TCTI.Unwrap().(*tpm2.TctiMssim)
-		return func() { b.TCTI = nil }
-		// TPMTest.SetUpTest will create a TPMContext if one is not
-		// already created
+		// Assert that it is a simulator
+		b.Mssim(c)
+		return func(_ *C) {}
+		// TPMTest.SetUpTest will create a TPMContext.
 	default:
 		// No connection was created prior to calling SetUpTest.
-		c.Assert(b.TPM, IsNil)
-		b.TPMTest.TCTI = NewSimulatorTCTI(c)
-		b.TCTI = b.TPMTest.TCTI.Unwrap().(*tpm2.TctiMssim)
-		return func() {
-			b.TCTI = nil
-			b.TPMTest.TCTI = nil
+		b.TPM, b.TCTI = NewTPMSimulatorContext(c)
+		return func(c *C) {
+			defer func() {
+				b.TCTI = nil
+				b.TPM = nil
+			}()
+			c.Check(b.TPM.Close(), IsNil)
 		}
-		// TPMTest.SetUpTest will create a TPMContext and close it
-		// during TearDownTest.
 	}
 }
 
@@ -331,17 +322,31 @@ func (b *TPMSimulatorTest) SetUpTest(c *C) {
 	b.TPMTest.SetUpTest(c)
 	b.AddFixtureCleanup(func(c *C) {
 		b.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
-		cleanup()
+		cleanup(c)
 	})
+}
+
+// Mssim returns the underlying simulator connection.
+func (b *TPMSimulatorTest) Mssim(c *C) *tpm2.TctiMssim {
+	var tcti tpm2.TCTI = b.TCTI
+	for {
+		wrapper, isWrapper := tcti.(TCTIWrapper)
+		if !isWrapper {
+			break
+		}
+		tcti = wrapper.Unwrap()
+	}
+	c.Assert(tcti, ConvertibleTo, &tpm2.TctiMssim{})
+	return tcti.(*tpm2.TctiMssim)
 }
 
 // ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator
 // and causes the test to fail if it is not successful.
 func (b *TPMSimulatorTest) ResetTPMSimulator(c *C) {
-	b.TPMTest.TCTI.disableCommandLogging = true
-	defer func() { b.TPMTest.TCTI.disableCommandLogging = false }()
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
 
-	c.Check(resetTPMSimulator(b.TPM, b.TCTI), IsNil)
+	c.Check(resetTPMSimulator(b.TPM, b.Mssim(c)), IsNil)
 }
 
 // ResetAndClearTPMSimulatorUsingPlatformHierarchy issues a Shutdown -> Reset ->

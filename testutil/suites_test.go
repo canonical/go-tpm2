@@ -273,8 +273,8 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
-	c.Assert(suite.TPMTest.TCTI, NotNil)
-	c.Check(suite.TCTI, Equals, suite.TPMTest.TCTI.Unwrap())
+	c.Assert(suite.TCTI, NotNil)
+	c.Check(suite.TCTI.Unwrap(), ConvertibleTo, &tpm2.TctiMssim{})
 
 	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
 	c.Check(suite.TPM.ClearControl(suite.TPM.PlatformHandleContext(), true, nil), IsNil)
@@ -285,7 +285,6 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(suite.TPMTest.TCTI, IsNil)
 	c.Check(tpm.Close(), ErrorIs, net.ErrClosed)
 
 	tpm, _ = NewTPMSimulatorContext(c)
@@ -302,13 +301,11 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	suite := new(TPMSimulatorTest)
 
 	tcti := NewSimulatorTCTI(c)
-	suite.TPMTest.TCTI = tcti
-	suite.TCTI = tcti.Unwrap().(*tpm2.TctiMssim)
+	suite.TCTI = tcti
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
-	c.Check(suite.TPMTest.TCTI, Equals, tcti)
-	c.Check(suite.TCTI, Equals, tcti.Unwrap().(*tpm2.TctiMssim))
+	c.Check(suite.TCTI, Equals, tcti)
 
 	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
 	c.Check(suite.TPM.ClearControl(suite.TPM.PlatformHandleContext(), true, nil), IsNil)
@@ -318,8 +315,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
-	c.Check(suite.TPMTest.TCTI, Equals, tcti)
-	c.Check(suite.TCTI, Equals, tcti.Unwrap().(*tpm2.TctiMssim))
+	c.Check(suite.TCTI, Equals, tcti)
 	c.Check(tpm.Close(), ErrorIs, net.ErrClosed)
 
 	tpm, _ = NewTPMSimulatorContext(c)
@@ -349,20 +345,7 @@ func (s *tpmSimulatorTestSuite) TestSkipNoTPM(c *C) {
 	c.Check(result.Skipped, Equals, 1)
 }
 
-func (s *tpmSimulatorTestSuite) TestInvalidSetUp1(c *C) {
-	suite := new(mockTPMSimulatorTestSuite)
-
-	tcti := NewSimulatorTCTI(c)
-	s.AddCleanup(func() {
-		c.Check(tcti.Close(), IsNil)
-	})
-	suite.TCTI = tcti.Unwrap().(*tpm2.TctiMssim)
-
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
-	c.Check(result.Missed, Equals, 1)
-}
-
-func (s *tpmSimulatorTestSuite) TestInvalidSetUp2(c *C) {
+func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
 	suite := new(mockTPMSimulatorTestSuite)
 
 	tpm, _ := NewTPMSimulatorContext(c)
