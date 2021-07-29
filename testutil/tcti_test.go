@@ -966,7 +966,7 @@ func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot create ResourceContext for persistent object: a resource at handle 0x81000001 is not available on the TPM\n`)
+		`- cannot evict 0x81000001: TPM returned an error for handle 1 whilst executing command TPM_CC_EvictControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *tctiSuite) TestUndefineNVIndex(c *C) {
@@ -1015,7 +1015,7 @@ func (s *tctiSuite) TestUndefineNVIndexError(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
-		`- cannot create ResourceContext for NV index: a resource at handle 0x01800000 is not available on the TPM\n`)
+		`- cannot undefine 0x01800000: TPM returned an error for handle 1 whilst executing command TPM_CC_NV_UndefineSpace: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
 func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
@@ -1033,8 +1033,15 @@ func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
 		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVOwnerRead | tpm2.AttrNVOwnerWrite | tpm2.AttrNVNoDA | tpm2.AttrNVPolicyDelete | tpm2.AttrNVPlatformCreate),
 		AuthPolicy: trial.GetDigest(),
 		Size:       8}
-	_, err := s.TPM.NVDefineSpace(s.TPM.PlatformHandleContext(), nil, &nvPublic, nil)
+	index, err := s.TPM.NVDefineSpace(s.TPM.PlatformHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
+	s.AddCleanup(func() {
+		session, err := s.rawTpm(c).StartAuthSession(nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+		c.Assert(err, IsNil)
+		c.Check(s.rawTpm(c).PolicyAuthValue(session), IsNil)
+		c.Check(s.rawTpm(c).PolicyCommandCode(session, tpm2.CommandNVUndefineSpaceSpecial), IsNil)
+		c.Check(s.rawTpm(c).NVUndefineSpaceSpecial(index, s.rawTpm(c).PlatformHandleContext(), session, nil), IsNil)
+	})
 
 	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
 		`- the test needs to undefine index 0x01800000 which has the TPMA_NV_POLICY_DELETE attribute set\n`)
@@ -1521,4 +1528,92 @@ func (s *tctiSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
 
 	_, err = s.TPM.Unseal(o.(tpm2.ResourceContext), nil)
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
+}
+
+func (s *tctiSuite) TestUseExistingObject(c *C) {
+	// Test that we can use a persistent object that we didn't create
+	// because TPM2_ReadPublic saves the public area.
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
+	s.deferCloseTpm(c)
+
+	primary, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	persist, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), primary, 0x81000001, nil)
+	c.Assert(err, IsNil)
+
+	rc, err := s.TPM.CreateResourceContextFromTPM(persist.Handle())
+	c.Check(err, IsNil)
+
+	_, _, _, _, _, err = s.TPM.Create(rc, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestDontEvictExistingObject(c *C) {
+	// Test that Close() doesn't evict an object that we didn't create,
+	// but which the fixture is aware of (via TPM2_ReadPublic).
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
+
+	primary, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	persist, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), primary, 0x81000001, nil)
+	c.Assert(err, IsNil)
+
+	_, err = s.TPM.CreateResourceContextFromTPM(persist.Handle())
+	c.Check(err, IsNil)
+
+	c.Check(s.TPM.Close(), IsNil)
+
+	props, err := s.rawTpm(c).GetCapabilityHandles(persist.Handle(), 1)
+	c.Check(err, IsNil)
+	c.Check(props, HasLen, 1)
+	c.Check(props[0], Equals, persist.Handle())
+}
+
+func (s *tctiSuite) TestUseExistingIndex(c *C) {
+	// Test that we can use a NV index that we didn't create
+	// because TPM2_NV_ReadPublic saves the public area.
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	index, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.rawTpm(c).NVWrite(index, index, []byte("foo"), 0, nil), IsNil)
+
+	rc, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Check(err, IsNil)
+
+	_, err = s.TPM.NVRead(rc, rc, 8, 0, nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestDontEvictExistingIndex(c *C) {
+	// Test that Close() doesn't evict a NV index that we didn't create,
+	// but which the fixture is aware of (via TPM2_NV_ReadPublic).
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	index, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.rawTpm(c).NVWrite(index, index, []byte("foo"), 0, nil), IsNil)
+
+	_, err = s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Check(err, IsNil)
+
+	c.Check(s.TPM.Close(), IsNil)
+
+	props, err := s.rawTpm(c).GetCapabilityHandles(nvPublic.Index, 1)
+	c.Check(err, IsNil)
+	c.Check(props, HasLen, 1)
+	c.Check(props[0], Equals, nvPublic.Index)
 }

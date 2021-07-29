@@ -121,24 +121,26 @@ var commandInfoMap = map[tpm2.CommandCode]commandInfo{
 }
 
 type objectInfo struct {
-	attrs tpm2.ObjectAttributes
+	pub *tpm2.Public
+	seq bool
 }
 
 type persistentObjectInfo struct {
-	objectInfo
-	auth tpm2.Handle
+	auth    tpm2.Handle
+	pub     *tpm2.Public
+	created bool
 }
 
 type sessionInfo struct{}
 
 type nvIndexInfo struct {
-	auth  tpm2.Handle
-	attrs tpm2.NVAttributes
+	pub     *tpm2.NVPublic
+	created bool
 }
 
 type savedObject struct {
 	data tpm2.ContextData
-	info objectInfo
+	info *objectInfo
 }
 
 type daParams struct {
@@ -213,10 +215,10 @@ type TCTI struct {
 	currentCmd *cmdContext
 
 	hierarchyAuths    map[tpm2.Handle]tpm2.Auth
-	transientObjects  map[tpm2.Handle]objectInfo
-	persistentObjects map[tpm2.Handle]persistentObjectInfo
+	transientObjects  map[tpm2.Handle]*objectInfo
+	persistentObjects map[tpm2.Handle]*persistentObjectInfo
 	sessions          map[tpm2.Handle]sessionInfo
-	nvIndexes         map[tpm2.Handle]nvIndexInfo
+	nvIndexes         map[tpm2.Handle]*nvIndexInfo
 
 	didClearControl      bool
 	didHierarchyControl  bool
@@ -263,7 +265,7 @@ func (t *TCTI) processCommandDone() error {
 		rHandle = canonicalizeHandle(rHandle)
 		t.sessions[canonicalizeHandle(rHandle)] = sessionInfo{}
 	case tpm2.HandleTypeTransient:
-		var attrs tpm2.ObjectAttributes
+		var info objectInfo
 
 		switch commandCode {
 		case tpm2.CommandCreatePrimary:
@@ -274,7 +276,7 @@ func (t *TCTI) processCommandDone() error {
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &inSensitive, &inPublic); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
-			attrs = inPublic.Ptr.Attrs
+			info = objectInfo{pub: inPublic.Ptr}
 		case tpm2.CommandLoad:
 			var inPrivate tpm2.Private
 			var inPublic struct {
@@ -283,9 +285,9 @@ func (t *TCTI) processCommandDone() error {
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, &inPublic); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
-			attrs = inPublic.Ptr.Attrs
+			info = objectInfo{pub: inPublic.Ptr}
 		case tpm2.CommandHMACStart:
-			attrs = tpm2.AttrNoDA
+			info = objectInfo{seq: true}
 		case tpm2.CommandContextLoad:
 			var context tpm2.Context
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &context); err != nil {
@@ -293,7 +295,7 @@ func (t *TCTI) processCommandDone() error {
 			}
 			for _, s := range savedObjects {
 				if bytes.Equal(s.data, context.Blob) {
-					attrs = s.info.attrs
+					info = *s.info
 					break
 				}
 			}
@@ -305,14 +307,14 @@ func (t *TCTI) processCommandDone() error {
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, &inPublic); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
-			attrs = inPublic.Ptr.Attrs
+			info = objectInfo{pub: inPublic.Ptr}
 		case tpm2.CommandHashSequenceStart:
-			attrs = tpm2.AttrNoDA
+			info = objectInfo{seq: true}
 		case tpm2.CommandCreateLoaded:
-			return errors.New("not supported yet")
+			fmt.Fprintf(os.Stderr, "TPM2_CreateLoaded is not supported yet")
 		}
 
-		t.transientObjects[rHandle] = objectInfo{attrs: attrs}
+		t.transientObjects[rHandle] = &info
 	}
 
 	// Command specific updates
@@ -330,11 +332,13 @@ func (t *TCTI) processCommandDone() error {
 		switch object.Type() {
 		case tpm2.HandleTypeTransient:
 			// Record newly persisted object
-			info, ok := t.transientObjects[object]
-			if !ok {
-				fmt.Fprintf(os.Stderr, "New persistent object %v was created from transient object %v which was not created by this test. Cannot determine object attributes\n", persistent, object)
+			var pub *tpm2.Public
+			if info, ok := t.transientObjects[object]; ok {
+				pub = info.pub
+			} else {
+				fmt.Fprintf(os.Stderr, "New persistent object %v was created from transient object %v not known to the test fixture\n", persistent, object)
 			}
-			t.persistentObjects[persistent] = persistentObjectInfo{objectInfo: info, auth: auth}
+			t.persistentObjects[persistent] = &persistentObjectInfo{auth: auth, pub: pub, created: true}
 		case tpm2.HandleTypePersistent:
 			// Drop evicted object
 			delete(t.persistentObjects, persistent)
@@ -351,13 +355,14 @@ func (t *TCTI) processCommandDone() error {
 		delete(t.hierarchyAuths, tpm2.HandleEndorsement)
 		delete(t.hierarchyAuths, tpm2.HandleLockout)
 
-		for h, p := range t.persistentObjects {
-			if p.auth == tpm2.HandleOwner {
+		for h, info := range t.persistentObjects {
+			if info.auth == tpm2.HandleOwner {
 				delete(t.persistentObjects, h)
 			}
 		}
-		for h, n := range t.nvIndexes {
-			if n.auth == tpm2.HandleOwner {
+		for h, info := range t.nvIndexes {
+			if info.pub.Attrs&tpm2.AttrNVPlatformCreate == 0 {
+				// This is an owner object
 				delete(t.nvIndexes, h)
 			}
 		}
@@ -387,9 +392,7 @@ func (t *TCTI) processCommandDone() error {
 			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		index := nvPublic.Ptr.Index
-		authHandle := cmdHandles[0]
-		attrs := nvPublic.Ptr.Attrs
-		t.nvIndexes[index] = nvIndexInfo{auth: authHandle, attrs: attrs}
+		t.nvIndexes[index] = &nvIndexInfo{pub: nvPublic.Ptr, created: true}
 	case tpm2.CommandDictionaryAttackParameters:
 		t.didSetDaParams = true
 	case tpm2.CommandSetCommandCodeAuditStatus:
@@ -412,10 +415,43 @@ func (t *TCTI) processCommandDone() error {
 			if _, err := mu.UnmarshalFromBytes(rpBytes, &context); err != nil {
 				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
 			}
-			info, _ := t.transientObjects[handle]
-			savedObjects = append(savedObjects, savedObject{info: info, data: context.Blob})
+			if info, ok := t.transientObjects[handle]; ok {
+				savedObjects = append(savedObjects, savedObject{data: context.Blob, info: info})
+			}
 		default:
 			panic("invalid handle type")
+		}
+	case tpm2.CommandNVReadPublic:
+		nvIndex := cmdHandles[0]
+		var nvPublic struct {
+			Ptr *tpm2.NVPublic `tpm2:"sized"`
+		}
+		if _, err := mu.UnmarshalFromBytes(rpBytes, &nvPublic); err != nil {
+			return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
+		}
+		if _, ok := t.nvIndexes[nvIndex]; !ok {
+			t.nvIndexes[nvIndex] = &nvIndexInfo{}
+		}
+		t.nvIndexes[nvIndex].pub = nvPublic.Ptr
+	case tpm2.CommandReadPublic:
+		object := cmdHandles[0]
+		if object.Type() == tpm2.HandleTypePersistent {
+			var outPublic struct {
+				Ptr *tpm2.Public `tpm2:"sized"`
+			}
+			if _, err := mu.UnmarshalFromBytes(rpBytes, &outPublic); err != nil {
+				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
+			}
+			if _, ok := t.persistentObjects[object]; !ok {
+				var auth tpm2.Handle
+				if object < 0x81800000 {
+					auth = tpm2.HandleOwner
+				} else {
+					auth = tpm2.HandlePlatform
+				}
+				t.persistentObjects[object] = &persistentObjectInfo{auth: auth}
+			}
+			t.persistentObjects[object].pub = outPublic.Ptr
 		}
 	}
 
@@ -435,43 +471,40 @@ func (t *TCTI) Read(data []byte) (int, error) {
 	return n, err
 }
 
-func (t *TCTI) isDAExcempt(handle tpm2.Handle) bool {
+func (t *TCTI) isDAExcempt(handle tpm2.Handle) (bool, error) {
 	switch handle.Type() {
 	case tpm2.HandleTypePCR:
-		return true
+		return true, nil
 	case tpm2.HandleTypeNVIndex:
-		n, ok := t.nvIndexes[handle]
+		info, ok := t.nvIndexes[handle]
 		if !ok {
-			// This is an index not created by the test. Assume not excempt.
-			fmt.Fprintf(os.Stderr, "Authorizing with NV index %v not created by this test - cannot determine if DA excempt\n", handle)
-			return false
+			// This is an index not created by the test.
+			return false, fmt.Errorf("authorizing with NV index %v not known to the test fixture - cannot determine if DA excempt", handle)
 		}
-		return n.attrs&tpm2.AttrNVNoDA > 0
+		return info.pub.Attrs&tpm2.AttrNVNoDA > 0, nil
 	case tpm2.HandleTypePermanent:
 		if handle == tpm2.HandleLockout {
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	case tpm2.HandleTypeTransient:
-		o, ok := t.transientObjects[handle]
-		if !ok {
-			// This is an object not created by the test. Assume not excempt.
-			fmt.Fprintf(os.Stderr, "Authorizing with object %v not created by this test - cannot determine if DA excempt\n", handle)
-			return false
+		info, ok := t.transientObjects[handle]
+		if !ok || (!info.seq && info.pub == nil) {
+			// This is an object not created by the test.
+			return false, fmt.Errorf("authorizing with object %v not known to the test fixture - cannot determine if DA excempt", handle)
 		}
-		return o.attrs&tpm2.AttrNoDA > 0
+		return info.seq || info.pub.Attrs&tpm2.AttrNoDA > 0, nil
 	case tpm2.HandleTypePersistent:
-		p, ok := t.persistentObjects[handle]
-		if !ok {
-			// This is an object not created by the test. Assume not excempt.
-			fmt.Fprintf(os.Stderr, "Authorizing with object %v not created by this test - cannot determine if DA excempt\n", handle)
-			return false
+		info, ok := t.persistentObjects[handle]
+		if !ok || info.pub == nil {
+			// This is an object not created by the test.
+			return false, fmt.Errorf("authorizing with object %v not known to the test fixture - cannot determine if DA excempt", handle)
 		}
-		return p.attrs&tpm2.AttrNoDA > 0
+		return info.pub.Attrs&tpm2.AttrNoDA > 0, nil
 	default:
 		// This is really an error, but just pass the command to the
 		// TPM and let it fail.
-		return true
+		return true, nil
 	}
 }
 
@@ -562,7 +595,11 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			commandFeatures |= TPMFeaturePCR
 		}
 
-		if !t.isDAExcempt(h) && t.permittedFeatures&TPMFeatureLockoutHierarchy == 0 {
+		daExcempt, err := t.isDAExcempt(h)
+		if err != nil {
+			return 0, err
+		}
+		if !daExcempt && t.permittedFeatures&TPMFeatureLockoutHierarchy == 0 {
 			// We can't reset the DA counter
 			commandFeatures |= TPMFeatureDAProtectedCapability
 		}
@@ -694,9 +731,13 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 		tpm.FlushContext(tpm2.CreatePartialHandleContext(h))
 	}
 
-	for h, p := range t.persistentObjects {
-		auth := tpm.GetPermanentContext(p.auth)
-		object, err := tpm.CreateResourceContextFromTPM(h)
+	for h, info := range t.persistentObjects {
+		if !info.created {
+			continue
+		}
+
+		auth := tpm.GetPermanentContext(info.auth)
+		object, err := tpm2.CreateObjectResourceContextFromPublic(h, info.pub)
 		if err != nil {
 			errs = append(errs, xerrors.Errorf("cannot create ResourceContext for persistent object: %w", err))
 			continue
@@ -707,14 +748,23 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 		}
 	}
 
-	for h, n := range t.nvIndexes {
-		if n.attrs&tpm2.AttrNVPolicyDelete > 0 {
+	for h, info := range t.nvIndexes {
+		if !info.created {
+			continue
+		}
+
+		if info.pub.Attrs&tpm2.AttrNVPolicyDelete > 0 {
 			errs = append(errs, fmt.Errorf("the test needs to undefine index %v which has the TPMA_NV_POLICY_DELETE attribute set", h))
 			continue
 		}
 
-		auth := tpm.GetPermanentContext(n.auth)
-		index, err := tpm.CreateResourceContextFromTPM(h)
+		var auth tpm2.ResourceContext
+		if info.pub.Attrs&tpm2.AttrNVPlatformCreate > 0 {
+			auth = tpm.PlatformHandleContext()
+		} else {
+			auth = tpm.OwnerHandleContext()
+		}
+		index, err := tpm2.CreateNVIndexResourceContextFromPublic(info.pub)
 		if err != nil {
 			errs = append(errs, xerrors.Errorf("cannot create ResourceContext for NV index: %w", err))
 			continue
@@ -940,8 +990,8 @@ func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) 
 		restoreDaParams:       daParams,
 		restoreCmdAuditStatus: cmdAuditStatus,
 		hierarchyAuths:        make(map[tpm2.Handle]tpm2.Auth),
-		transientObjects:      make(map[tpm2.Handle]objectInfo),
-		persistentObjects:     make(map[tpm2.Handle]persistentObjectInfo),
+		transientObjects:      make(map[tpm2.Handle]*objectInfo),
+		persistentObjects:     make(map[tpm2.Handle]*persistentObjectInfo),
 		sessions:              make(map[tpm2.Handle]sessionInfo),
-		nvIndexes:             make(map[tpm2.Handle]nvIndexInfo)}, nil
+		nvIndexes:             make(map[tpm2.Handle]*nvIndexInfo)}, nil
 }
