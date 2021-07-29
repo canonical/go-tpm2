@@ -38,7 +38,7 @@ type commandInfo struct {
 
 var commandInfoMap = map[tpm2.CommandCode]commandInfo{
 	tpm2.CommandNVUndefineSpaceSpecial:     commandInfo{2, 2, false, true},
-	tpm2.CommandEvictControl:               commandInfo{2, 2, false, true},
+	tpm2.CommandEvictControl:               commandInfo{1, 2, false, true},
 	tpm2.CommandHierarchyControl:           commandInfo{1, 1, false, true},
 	tpm2.CommandNVUndefineSpace:            commandInfo{1, 2, false, true},
 	tpm2.CommandClear:                      commandInfo{1, 1, false, true},
