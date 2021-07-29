@@ -77,10 +77,10 @@ func (r *CommandRecordC) UnmarshalResponse(c *C) (rc tpm2.ResponseCode, handle t
 	return rc, handle, parameters, authArea
 }
 
-// TPMTest is a base test suite for all tests require a TPM and are able to execute on
-// a real TPM or a simulator. This test suite requires the use of the transmission
-// interface from this package, which takes care of restoring the TPM state when it
-// is closed.
+// TPMTest is a base test suite for all tests that require a TPM and are able to
+// execute on a real TPM or a simulator. This test suite requires the use of the
+// transmission interface from this package, which takes care of restoring the TPM
+// state when it is closed.
 type TPMTest struct {
 	BaseTest
 
@@ -120,7 +120,7 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 // TPMContext will be created automatically. In this case, the TPMFeatures member
 // should be set prior to calling SetUpTest in order to declare the features that
 // the test will require. If the test requires any features that are not included
-// in PermittedTPMFeatures, the test will be skipped. If TPMBackend is TPMBakendNone,
+// in PermittedTPMFeatures, the test will be skipped. If TPMBackend is TPMBackendNone,
 // then the test will be skipped.
 //
 // If the TCTI member is set prior to calling SetUpTest, a TPMContext is created
@@ -273,6 +273,8 @@ func (b *TPMTest) CreateSigningPrimaryKeyRSA(c *C, hierarchy tpm2.Handle, restri
 }
 
 // TPMSimulatorTest is a base test suite for all tests that require a TPM simulator.
+// This test suite requires the use of the transmission interface from this package,
+// which takes care of restoring the TPM state when it is closed.
 type TPMSimulatorTest struct {
 	TPMTest
 }
@@ -306,8 +308,10 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) (cleanup fun
 // not TPMBackendMssim, then the test will be skipped.
 //
 // If the TCTI member is set prior to calling SetUpTest, then a TPMContext is
-// created using this connection if necessary. The TPMTest.TCTI must also be
-// set prior to calling SetUpTest in this case.
+// created using this connection if necessary.
+//
+// The TPM simulator will be reset and cleared automatically when TearDownTest
+// is called.
 //
 // Any TPMContext created by SetUpTest is closed automatically when TearDownTest
 // is called.
