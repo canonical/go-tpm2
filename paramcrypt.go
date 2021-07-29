@@ -21,7 +21,7 @@ func isParamEncryptable(param interface{}) bool {
 func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
 	key = append(key, s.session.Data().SessionKey...)
-	if s.isAuth() {
+	if s.IsAuth() {
 		key = append(key, s.associatedContext.(resourceContextPrivate).GetAuthValue()...)
 	}
 	return key
@@ -42,7 +42,7 @@ func (p *sessionParams) hasDecryptSession() bool {
 
 func (p *sessionParams) computeEncryptNonce() {
 	s, i := p.findEncryptSession()
-	if s == nil || i == 0 || !p.sessions[0].isAuth() {
+	if s == nil || i == 0 || !p.sessions[0].IsAuth() {
 		return
 	}
 	ds, di := p.findDecryptSession()
@@ -88,7 +88,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
-	if i > 0 && p.sessions[0].isAuth() {
+	if i > 0 && p.sessions[0].IsAuth() {
 		p.sessions[0].decryptNonce = sessionData.NonceTPM
 	}
 

@@ -1,15 +1,121 @@
-// Copyright 2019 Canonical Ltd.
+// Copyright 2019-2021 Canonical Ltd.
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
 package tpm2_test
 
 import (
+	"io"
 	"testing"
+
+	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/testutil"
 )
+
+type authSuite struct{}
+
+var _ = Suite(&authSuite{})
+
+type mockResourceContext struct {
+	handle    Handle
+	name      Name
+	authValue []byte
+}
+
+func (r *mockResourceContext) Handle() Handle                      { return r.handle }
+func (r *mockResourceContext) Name() Name                          { return r.name }
+func (r *mockResourceContext) SerializeToBytes() []byte            { return nil }
+func (r *mockResourceContext) SerializeToWriter(w io.Writer) error { return nil }
+func (r *mockResourceContext) SetAuthValue(authValue []byte)       { r.authValue = authValue }
+func (r *mockResourceContext) GetAuthValue() []byte                { return r.authValue }
+
+func (s *authSuite) TestSessionParamIsAuthFalse(c *C) {
+	p := MakeMockSessionParam(nil, nil, false, nil, nil)
+	c.Check(p.IsAuth(), testutil.IsFalse)
+}
+
+func (s *authSuite) TestSessionParamIsAuthTrue(c *C) {
+	p := MakeMockSessionParam(nil, new(mockResourceContext), false, nil, nil)
+	c.Check(p.IsAuth(), testutil.IsTrue)
+}
+
+type testSessionParamComputeSessionHMACKeyData struct {
+	sessionKey       []byte
+	resource         ResourceContext
+	includeAuthValue bool
+	expected         []byte
+}
+
+func (s *authSuite) testSessionParamComputeSessionHMACKey(c *C, data *testSessionParamComputeSessionHMACKeyData) {
+	session := MakeMockSessionContext(0x02000000, &SessionContextData{SessionKey: data.sessionKey})
+	p := MakeMockSessionParam(session, data.resource, data.includeAuthValue, nil, nil)
+	c.Check(p.ComputeSessionHMACKey(), DeepEquals, data.expected)
+}
+
+func (s *authSuite) TestSessionParamComputeSessionHMACKeyNoIncludeAuthValue(c *C) {
+	resource := new(mockResourceContext)
+	resource.SetAuthValue([]byte("bar"))
+
+	s.testSessionParamComputeSessionHMACKey(c, &testSessionParamComputeSessionHMACKeyData{
+		sessionKey:       []byte("foo"),
+		resource:         resource,
+		includeAuthValue: false,
+		expected:         []byte("foo")})
+}
+
+func (s *authSuite) TestSessionParamComputeSessionHMACKeyIncludeAuthValue(c *C) {
+	resource := new(mockResourceContext)
+	resource.SetAuthValue([]byte("bar"))
+
+	s.testSessionParamComputeSessionHMACKey(c, &testSessionParamComputeSessionHMACKeyData{
+		sessionKey:       []byte("foo"),
+		resource:         resource,
+		includeAuthValue: true,
+		expected:         []byte("foobar")})
+}
+
+func (s *authSuite) TestSessionParamComputeSessionHMACKeyNoSessionKeyNoIncludeAuthValue(c *C) {
+	resource := new(mockResourceContext)
+	resource.SetAuthValue([]byte("bar"))
+
+	s.testSessionParamComputeSessionHMACKey(c, &testSessionParamComputeSessionHMACKeyData{
+		resource:         resource,
+		includeAuthValue: false,
+		expected:         []byte(nil)})
+}
+
+func (s *authSuite) TestSessionParamComputeSessionHMACKeyNoSessionKeyIncludeAuthValue(c *C) {
+	resource := new(mockResourceContext)
+	resource.SetAuthValue([]byte("bar"))
+
+	s.testSessionParamComputeSessionHMACKey(c, &testSessionParamComputeSessionHMACKeyData{
+		resource:         resource,
+		includeAuthValue: true,
+		expected:         []byte("bar")})
+}
+
+func (s *authSuite) TestSessionParamComputeSessionHMACKeyIncludeEmptyAuthValue(c *C) {
+	resource := new(mockResourceContext)
+
+	s.testSessionParamComputeSessionHMACKey(c, &testSessionParamComputeSessionHMACKeyData{
+		sessionKey:       []byte("foo"),
+		resource:         resource,
+		includeAuthValue: true,
+		expected:         []byte("foo")})
+}
+
+func (s *authSuite) TestSessionParamComputeSessionHMACKeyIncludeAuthValueWithTrailingZeroes(c *C) {
+	resource := new(mockResourceContext)
+	resource.SetAuthValue([]byte("\x00bar\x00\x00\x00"))
+
+	s.testSessionParamComputeSessionHMACKey(c, &testSessionParamComputeSessionHMACKeyData{
+		sessionKey:       []byte("foo"),
+		resource:         resource,
+		includeAuthValue: true,
+		expected:         []byte("foo\x00bar")})
+}
 
 func TestHMACSessions(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)

@@ -31,21 +31,21 @@ type sessionParam struct {
 	encryptNonce Nonce
 }
 
-func (s *sessionParam) isAuth() bool {
+func (s *sessionParam) IsAuth() bool {
 	return s.associatedContext != nil
 }
 
-func (s *sessionParam) computeSessionHMACKey() []byte {
+func (s *sessionParam) ComputeSessionHMACKey() []byte {
 	var key []byte
 	key = append(key, s.session.Data().SessionKey...)
 	if s.includeAuthValue {
-		key = append(key, s.associatedContext.(resourceContextPrivate).GetAuthValue()...)
+		key = append(key, bytes.TrimRight(s.associatedContext.(resourceContextPrivate).GetAuthValue(), "\x00")...)
 	}
 	return key
 }
 
 func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce, attrs SessionAttributes) ([]byte, bool) {
-	key := s.computeSessionHMACKey()
+	key := s.ComputeSessionHMACKey()
 	h := hmac.New(func() hash.Hash { return s.session.Data().HashAlg.NewHash() }, key)
 
 	h.Write(pHash)
@@ -73,7 +73,7 @@ func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandH
 	if data.SessionType == SessionTypePolicy && data.PolicyHMACType == policyHMACTypePassword {
 		// Policy session that contains a TPM2_PolicyPassword assertion. The HMAC is just the authorization value
 		// of the resource being authorized.
-		if s.isAuth() {
+		if s.IsAuth() {
 			hmac = s.associatedContext.(resourceContextPrivate).GetAuthValue()
 		}
 	} else {
@@ -176,7 +176,7 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 		switch data.SessionType {
 		case SessionTypeHMAC:
 			switch {
-			case !s.isAuth():
+			case !s.IsAuth():
 				// HMAC session not used for authorization
 			case !data.IsBound:
 				// A non-bound HMAC session used for authorization. Include the auth value of the associated
@@ -192,7 +192,7 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 			// A policy session that includes a TPM2_PolicyAuthValue assertion. Include the auth value of the associated
 			// ResourceContext.
 			switch {
-			case !s.isAuth():
+			case !s.IsAuth():
 				// This is actually an invalid case, but just let the TPM return the appropriate error
 			default:
 				s.includeAuthValue = data.PolicyHMACType == policyHMACTypeAuth

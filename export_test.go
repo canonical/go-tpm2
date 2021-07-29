@@ -13,15 +13,16 @@ import (
 type ResourceContextPrivate = resourceContextPrivate
 type ObjectContext = objectContext
 type NvIndexContext = nvIndexContext
+type SessionContextData = sessionContextData
 type SessionContextImpl = sessionContext // We already have a SessionContext interface
 
 func (r *SessionContextImpl) Attrs() SessionAttributes {
 	return r.attrs
 }
 
-var ComputeBindName = computeBindName
+type SessionParam = sessionParam
 
-type SessionContextData = sessionContextData
+var ComputeBindName = computeBindName
 
 func Canonicalize(vals ...interface{}) error {
 	b := new(bytes.Buffer)
@@ -30,4 +31,22 @@ func Canonicalize(vals ...interface{}) error {
 	}
 	_, err := mu.UnmarshalFromReader(b, vals...)
 	return err
+}
+
+func MakeMockSessionContext(handle Handle, data *SessionContextData) SessionContext {
+	return makeSessionContext(handle, data)
+}
+
+func MakeMockSessionParam(session SessionContext, associatedContext ResourceContext, includeAuthValue bool, decryptNonce, encryptNonce Nonce) *SessionParam {
+	var s *sessionContext
+	if session != nil {
+		s = session.(*sessionContext)
+	}
+
+	return &sessionParam{
+		session:           s,
+		associatedContext: associatedContext,
+		includeAuthValue:  includeAuthValue,
+		decryptNonce:      decryptNonce,
+		encryptNonce:      encryptNonce}
 }
