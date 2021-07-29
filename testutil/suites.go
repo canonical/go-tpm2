@@ -77,8 +77,9 @@ func (r *CommandRecordC) UnmarshalResponse(c *C) (rc tpm2.ResponseCode, handle t
 	return rc, handle, parameters, authArea
 }
 
-// TPMTest is a base test suite for all tests that use a TPMContext. This test suite requires the use
-// of the transmission interface from this package, which takes care of restoring the TPM state when it
+// TPMTest is a base test suite for all tests require a TPM and are able to execute on
+// a real TPM or a simulator. This test suite requires the use of the transmission
+// interface from this package, which takes care of restoring the TPM state when it
 // is closed.
 type TPMTest struct {
 	BaseTest
@@ -271,7 +272,7 @@ func (b *TPMTest) CreateSigningPrimaryKeyRSA(c *C, hierarchy tpm2.Handle, restri
 	return b.CreatePrimary(c, hierarchy, SigningKeyRSATemplate(restricted, scheme))
 }
 
-// TPMSimulatorTest is a base test suite for all tests that use the TPM simulator (TctiMssim).
+// TPMSimulatorTest is a base test suite for all tests that require a TPM simulator.
 type TPMSimulatorTest struct {
 	TPMTest
 }

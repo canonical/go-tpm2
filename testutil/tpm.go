@@ -60,8 +60,8 @@ const (
 	TPMFeatureStClearChange
 
 	// TPMFeatureSetCommandCodeAuditStatus indicates that the test uses the TPM2_SetCommandCodeAuditStatus
-	// command. These changes can't be fully undone by the test harness because there isn't a way to obtain
-	// the current auditAlg.
+	// command. This isn't required if TPMFeatureEndorsementHierarchy is set, as changes made by this
+	// command can be undone.
 	TPMFeatureSetCommandCodeAuditStatus
 
 	// TPMFeatureClear indicates that the test uses the TPM2_Clear command. This also requires either
