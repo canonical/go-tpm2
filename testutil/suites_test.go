@@ -97,7 +97,7 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
-	c.Check(suite.TCTI, Equals, tcti)
+	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), InSlice(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`})
@@ -115,8 +115,8 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
 	c.Check(suite.TCTI, Equals, tcti)
 
 	suite.TearDownTest(c)
-	c.Check(suite.TPM, Equals, tpm)
-	c.Check(suite.TCTI, Equals, tcti)
+	c.Check(suite.TPM, IsNil)
+	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), IsNil)
 }
 
@@ -317,7 +317,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
-	c.Check(suite.TCTI, Equals, tcti)
+	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)

@@ -97,19 +97,12 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 		// Create a TPMContext from the supplied TCTI
 		b.TPM, _ = tpm2.NewTPMContext(b.TCTI)
 		b.AddFixtureCleanup(func(c *C) {
-			defer func() {
-				b.TPM = nil
-			}()
 			c.Check(b.TPM.Close(), IsNil)
 		})
 	default:
 		// Create a new connection
 		b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
 		b.AddFixtureCleanup(func(c *C) {
-			defer func() {
-				b.TCTI = nil
-				b.TPM = nil
-			}()
 			c.Check(b.TPM.Close(), IsNil)
 		})
 	}
@@ -132,11 +125,12 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 // If both TPM and TCTI are set prior to calling SetUpTest, then these will be
 // used by the test. In this case, the test is responsible for closing the
 // TPMContext.
-//
-// When either the TPM or TCTI members are set prior to calling SetUpTest, the
-// test should clear them again at the end of the test.
 func (b *TPMTest) SetUpTest(c *C) {
 	b.BaseTest.SetUpTest(c)
+	b.AddFixtureCleanup(func(_ *C) {
+		b.TCTI = nil
+		b.TPM = nil
+	})
 	b.initTPMContextIfNeeded(c)
 }
 
@@ -293,10 +287,6 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) (cleanup fun
 		// No connection was created prior to calling SetUpTest.
 		b.TPM, b.TCTI = NewTPMSimulatorContext(c)
 		return func(c *C) {
-			defer func() {
-				b.TCTI = nil
-				b.TPM = nil
-			}()
 			c.Check(b.TPM.Close(), IsNil)
 		}
 	}
