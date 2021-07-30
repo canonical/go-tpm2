@@ -26,9 +26,8 @@ type mockBaseTestCleanupSuite struct {
 }
 
 func (s *mockBaseTestCleanupSuite) SetUpTest(c *C) {
-	s.BaseTest.SetUpTest(c)
-	s.AddFixtureCleanup(func(c *C) { s.log = append(s.log, "fixture1") })
-	s.AddFixtureCleanup(func(c *C) { s.log = append(s.log, "fixture2") })
+	s.AddFixtureCleanup(c, func(c *C) { s.log = append(s.log, "fixture1") })
+	s.AddFixtureCleanup(c, func(c *C) { s.log = append(s.log, "fixture2") })
 	if s.fixtureCb != nil {
 		s.fixtureCb(c)
 	}
@@ -39,12 +38,12 @@ func (s *mockBaseTestCleanupSuite) Test(c *C) {}
 func (s *baseTestSuite) TestCleanup(c *C) {
 	suite := new(mockBaseTestCleanupSuite)
 	suite.SetUpTest(c)
-	suite.AddCleanup(func() { suite.log = append(suite.log, "foo1") })
-	suite.AddCleanup(func() { suite.log = append(suite.log, "bar1") })
+	suite.AddCleanup(c, func() { suite.log = append(suite.log, "foo1") })
+	suite.AddCleanup(c, func() { suite.log = append(suite.log, "bar1") })
 	suite.TearDownTest(c)
 	suite.SetUpTest(c)
-	suite.AddCleanup(func() { suite.log = append(suite.log, "bar2") })
-	suite.AddCleanup(func() { suite.log = append(suite.log, "foo2") })
+	suite.AddCleanup(c, func() { suite.log = append(suite.log, "bar2") })
+	suite.AddCleanup(c, func() { suite.log = append(suite.log, "foo2") })
 	suite.TearDownTest(c)
 	c.Check(suite.log, DeepEquals, []string{"bar1", "foo1", "fixture2", "fixture1", "foo2", "bar2", "fixture2", "fixture1"})
 }
@@ -52,7 +51,7 @@ func (s *baseTestSuite) TestCleanup(c *C) {
 func (s *baseTestSuite) TestFixtureCleanupError(c *C) {
 	suite := new(mockBaseTestCleanupSuite)
 	suite.fixtureCb = func(c *C) {
-		suite.AddFixtureCleanup(func(c *C) { c.Error("error") })
+		suite.AddFixtureCleanup(c, func(c *C) { c.Error("error") })
 	}
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
@@ -147,7 +146,7 @@ func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
 	suite := new(mockTPMTestSuite)
 
 	tpm, _ := NewTPMContext(c, 0)
-	s.AddCleanup(func() {
+	s.AddCleanup(c, func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 	suite.TPM = tpm
@@ -290,7 +289,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
-	s.AddCleanup(func() {
+	s.AddCleanup(c, func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 
@@ -321,7 +320,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
-	s.AddCleanup(func() {
+	s.AddCleanup(c, func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 
@@ -351,7 +350,7 @@ func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
 	suite := new(mockTPMSimulatorTestSuite)
 
 	tpm, _ := NewTPMSimulatorContext(c)
-	s.AddCleanup(func() {
+	s.AddCleanup(c, func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 	suite.TPM = tpm

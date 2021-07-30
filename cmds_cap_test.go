@@ -559,7 +559,6 @@ type capabilitiesMockTPM12Suite struct {
 func (s *capabilitiesMockTPM12Suite) SetUpTest(c *C) {
 	tpm, _ := NewTPMContext(&mockTPM12Tcti{})
 	s.tpm = tpm
-	s.BaseTest.SetUpTest(c)
 }
 
 var _ = Suite(&capabilitiesMockTPM12Suite{})
