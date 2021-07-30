@@ -22,42 +22,119 @@ type mockBaseTestCleanupSuite struct {
 	BaseTest
 	log []string
 
-	fixtureCb func(*C)
+	setupCb func(*C)
+	testCb  func(*C)
 }
 
 func (s *mockBaseTestCleanupSuite) SetUpTest(c *C) {
-	s.AddFixtureCleanup(c, func(c *C) { s.log = append(s.log, "fixture1") })
-	s.AddFixtureCleanup(c, func(c *C) { s.log = append(s.log, "fixture2") })
-	if s.fixtureCb != nil {
-		s.fixtureCb(c)
-	}
+	s.setupCb(c)
 }
 
-func (s *mockBaseTestCleanupSuite) Test(c *C) {}
+func (s *mockBaseTestCleanupSuite) Test1(c *C) {
+	s.testCb(c)
+}
+
+func (s *mockBaseTestCleanupSuite) Test2(c *C) {
+	s.testCb(c)
+}
 
 func (s *baseTestSuite) TestCleanup(c *C) {
 	suite := new(mockBaseTestCleanupSuite)
-	suite.SetUpTest(c)
-	suite.AddCleanup(c, func() { suite.log = append(suite.log, "foo1") })
-	suite.AddCleanup(c, func() { suite.log = append(suite.log, "bar1") })
-	suite.TearDownTest(c)
-	suite.SetUpTest(c)
-	suite.AddCleanup(c, func() { suite.log = append(suite.log, "bar2") })
-	suite.AddCleanup(c, func() { suite.log = append(suite.log, "foo2") })
-	suite.TearDownTest(c)
-	c.Check(suite.log, DeepEquals, []string{"bar1", "foo1", "fixture2", "fixture1", "foo2", "bar2", "fixture2", "fixture1"})
-}
-
-func (s *baseTestSuite) TestFixtureCleanupError(c *C) {
-	suite := new(mockBaseTestCleanupSuite)
-	suite.fixtureCb = func(c *C) {
-		suite.AddFixtureCleanup(c, func(c *C) { c.Error("error") })
+	suite.setupCb = func(c *C) {
+		suite.InitCleanup(c)
+		suite.AddFixtureCleanup(func(c *C) { suite.log = append(suite.log, c.TestName()+".fixture1") })
+		suite.AddFixtureCleanup(func(c *C) { suite.log = append(suite.log, c.TestName()+".fixture2") })
+		suite.BaseTest.SetUpTest(c)
+	}
+	suite.testCb = func(c *C) {
+		suite.AddCleanup(func() { suite.log = append(suite.log, c.TestName()+".test1") })
+		suite.AddCleanup(func() { suite.log = append(suite.log, c.TestName()+".test2") })
 	}
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
-	c.Check(result.Passed(), IsFalse)
-	c.Check(result.Failed, Equals, 1)
-	c.Check(result.Missed, Equals, 1)
+	c.Check(result.String(), Equals, "OK: 2 passed")
+	c.Check(suite.log, DeepEquals, []string{
+		"mockBaseTestCleanupSuite.Test1.test2",
+		"mockBaseTestCleanupSuite.Test1.test1",
+		"mockBaseTestCleanupSuite.Test1.fixture2",
+		"mockBaseTestCleanupSuite.Test1.fixture1",
+		"mockBaseTestCleanupSuite.Test2.test2",
+		"mockBaseTestCleanupSuite.Test2.test1",
+		"mockBaseTestCleanupSuite.Test2.fixture2",
+		"mockBaseTestCleanupSuite.Test2.fixture1"})
+}
+
+func (s *baseTestSuite) TestSkipTests(c *C) {
+	// Cleanup handlers should run if a test is skipped.
+	suite := new(mockBaseTestCleanupSuite)
+	suite.setupCb = func(c *C) {
+		suite.BaseTest.SetUpTest(c)
+		suite.AddFixtureCleanup(func(c *C) { suite.log = append(suite.log, c.TestName()+".fixture1") })
+		suite.AddFixtureCleanup(func(c *C) { suite.log = append(suite.log, c.TestName()+".fixture2") })
+	}
+	suite.testCb = func(c *C) {
+		suite.AddCleanup(func() { suite.log = append(suite.log, c.TestName()+".test1") })
+		c.Skip("test skipped")
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 2 skipped")
+	c.Check(suite.log, DeepEquals, []string{
+		"mockBaseTestCleanupSuite.Test1.test1",
+		"mockBaseTestCleanupSuite.Test1.fixture2",
+		"mockBaseTestCleanupSuite.Test1.fixture1",
+		"mockBaseTestCleanupSuite.Test2.test1",
+		"mockBaseTestCleanupSuite.Test2.fixture2",
+		"mockBaseTestCleanupSuite.Test2.fixture1"})
+}
+
+func (s *baseTestSuite) TestSkipTestsFromFixture(c *C) {
+	suite := new(mockBaseTestCleanupSuite)
+	suite.setupCb = func(c *C) {
+		suite.BaseTest.SetUpTest(c)
+		c.Skip("test skipped")
+	}
+	suite.testCb = func(c *C) {}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 2 skipped")
+	c.Check(suite.log, DeepEquals, []string(nil))
+}
+
+func (s *baseTestSuite) TestFixtureCleanupError(c *C) {
+	// Functions registered in SetUpTest with AddFixtureCleanup should be able to make the
+	// fixture panic if they fail.
+	suite := new(mockBaseTestCleanupSuite)
+	suite.setupCb = func(c *C) {
+		suite.BaseTest.SetUpTest(c)
+		suite.AddFixtureCleanup(func(c *C) { suite.log = append(suite.log, c.TestName()+".fixture1") })
+		suite.AddFixtureCleanup(func(c *C) { c.Error("error") })
+	}
+	suite.testCb = func(c *C) {
+		suite.AddCleanup(func() { suite.log = append(suite.log, c.TestName()+".test1") })
+		c.Skip("test skipped")
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 2 MISSED")
+	c.Check(suite.log, DeepEquals, []string{"mockBaseTestCleanupSuite.Test1.test1", "mockBaseTestCleanupSuite.Test1.fixture1"})
+}
+
+func (s *baseTestSuite) TestSkipTestFromFixtureAfterAddCleanup(c *C) {
+	// If a test is skipped in SetUpTest, TearDownTest isn't called and no
+	// cleanup handlers run. Make sure this results in a failure if a test is
+	// skipped after calling AddFixtureCleanup.
+	suite := new(mockBaseTestCleanupSuite)
+	suite.setupCb = func(c *C) {
+		suite.BaseTest.SetUpTest(c)
+		suite.AddFixtureCleanup(func(c *C) { suite.log = append(suite.log, c.TestName()+".fixture1") })
+		c.Skip("test skipped")
+	}
+	suite.testCb = func(c *C) {}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 skipped, 2 FAILED, 1 MISSED")
+	c.Check(suite.log, DeepEquals, []string(nil))
 }
 
 type tpmTestSuite struct {
@@ -146,7 +223,7 @@ func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
 	suite := new(mockTPMTestSuite)
 
 	tpm, _ := NewTPMContext(c, 0)
-	s.AddCleanup(c, func() {
+	s.AddCleanup(func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 	suite.TPM = tpm
@@ -289,7 +366,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
-	s.AddCleanup(c, func() {
+	s.AddCleanup(func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 
@@ -320,7 +397,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
-	s.AddCleanup(c, func() {
+	s.AddCleanup(func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 
@@ -350,7 +427,7 @@ func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
 	suite := new(mockTPMSimulatorTestSuite)
 
 	tpm, _ := NewTPMSimulatorContext(c)
-	s.AddCleanup(c, func() {
+	s.AddCleanup(func() {
 		c.Check(tpm.Close(), IsNil)
 	})
 	suite.TPM = tpm

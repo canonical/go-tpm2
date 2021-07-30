@@ -12,14 +12,37 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-// BaseTest is a base test suite for all tests.
+// BaseTest is a base test suite for all tests. It has the ability to run callbacks
+// to perform cleanup actions at the end of each test.
 type BaseTest struct {
 	currentTestName        string
 	cleanupHandlers        []func()
 	fixtureCleanupHandlers []func(c *C)
 }
 
+// InitCleanup should be called before any call to AddCleanup or AddFixtureCleanup.
+// It is called by SetUpTest, but can be called prior to this, If InitCleanup is
+// called for the first time in a test after a cleanup handler has already been
+// registered, it will assert. This is to detect a missing call to TearDownTest,
+// which might happen because the fixture decides a test should be skipped after
+// registering a cleanup handler.
+//
+// InitCleanup can be called multiple times in the same test.
+func (b *BaseTest) InitCleanup(c *C) {
+	if c.TestName() != b.currentTestName {
+		c.Assert(b.cleanupHandlers, HasLen, 0)        // missing BaseTest.TearDownTest call?
+		c.Assert(b.fixtureCleanupHandlers, HasLen, 0) // missing BaseTest.TearDownTest call?
+	}
+	b.currentTestName = c.TestName()
+}
+
+func (b *BaseTest) SetUpTest(c *C) {
+	b.InitCleanup(c)
+}
+
 func (b *BaseTest) TearDownTest(c *C) {
+	c.Assert(c.TestName(), Equals, b.currentTestName) // missing BaseTest.SetUpTest call?
+
 	for len(b.cleanupHandlers) > 0 {
 		l := len(b.cleanupHandlers)
 		fn := b.cleanupHandlers[l-1]
@@ -38,11 +61,7 @@ func (b *BaseTest) TearDownTest(c *C) {
 }
 
 // AddCleanup queues a function to be called at the end of the test.
-func (b *BaseTest) AddCleanup(c *C, fn func()) {
-	if b.currentTestName == "" {
-		b.currentTestName = c.TestName()
-	}
-	c.Assert(c.TestName(), Equals, b.currentTestName) // missing a call to TearDownTest?
+func (b *BaseTest) AddCleanup(fn func()) {
 	b.cleanupHandlers = append(b.cleanupHandlers, fn)
 }
 
@@ -51,11 +70,7 @@ func (b *BaseTest) AddCleanup(c *C, fn func()) {
 // function is called with the TearDownTest *check.C which allows
 // failures to result in a fixture panic, as failures recorded to
 // the originating *check.C are ignored at this stage.
-func (b *BaseTest) AddFixtureCleanup(c *C, fn func(c *C)) {
-	if b.currentTestName == "" {
-		b.currentTestName = c.TestName()
-	}
-	c.Assert(c.TestName(), Equals, b.currentTestName) // missing a call to TearDownTest?
+func (b *BaseTest) AddFixtureCleanup(fn func(c *C)) {
 	b.fixtureCleanupHandlers = append(b.fixtureCleanupHandlers, fn)
 }
 
@@ -101,13 +116,13 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	case b.TCTI != nil:
 		// Create a TPMContext from the supplied TCTI
 		b.TPM, _ = tpm2.NewTPMContext(b.TCTI)
-		b.AddFixtureCleanup(c, func(c *C) {
+		b.AddFixtureCleanup(func(c *C) {
 			c.Check(b.TPM.Close(), IsNil)
 		})
 	default:
 		// Create a new connection
 		b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
-		b.AddFixtureCleanup(c, func(c *C) {
+		b.AddFixtureCleanup(func(c *C) {
 			c.Check(b.TPM.Close(), IsNil)
 		})
 	}
@@ -131,7 +146,8 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 // used by the test. In this case, the test is responsible for closing the
 // TPMContext.
 func (b *TPMTest) SetUpTest(c *C) {
-	b.AddFixtureCleanup(c, func(_ *C) {
+	b.BaseTest.SetUpTest(c)
+	b.AddFixtureCleanup(func(_ *C) {
 		b.TCTI = nil
 		b.TPM = nil
 	})
@@ -313,7 +329,7 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) {
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
 	b.initTPMSimulatorConnectionIfNeeded(c)
 	b.TPMTest.SetUpTest(c)
-	b.AddFixtureCleanup(c, func(c *C) {
+	b.AddFixtureCleanup(func(c *C) {
 		b.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
 	})
 }

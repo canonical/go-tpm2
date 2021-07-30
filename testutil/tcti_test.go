@@ -62,6 +62,7 @@ type tctiSuite struct {
 
 func (s *tctiSuite) SetUpTest(c *C) {
 	// Skip TPMSimulatorTest.SetUpTest and TPMTest.SetUpTest
+	s.BaseTest.SetUpTest(c)
 	c.Assert(s.TCTI, IsNil)
 	c.Assert(s.TPM, IsNil)
 }
@@ -74,7 +75,7 @@ func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 
 	s.TPM, s.TCTI = NewTPMSimulatorContext(c)
 
-	s.AddCleanup(c, func() {
+	s.AddCleanup(func() {
 		// The test has to call Close()
 		c.Check(s.TCTI.Unwrap().(*ignoreCloseTcti).closed, IsTrue)
 
@@ -98,7 +99,7 @@ func (s *tctiSuite) rawTpm(c *C) *tpm2.TPMContext {
 var _ = Suite(&tctiSuite{})
 
 func (s *tctiSuite) deferCloseTpm(c *C) {
-	s.AddCleanup(c, func() {
+	s.AddCleanup(func() {
 		c.Check(s.TPM.Close(), IsNil)
 	})
 }
@@ -1031,7 +1032,7 @@ func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
 		Size:       8}
 	index, err := s.TPM.NVDefineSpace(s.TPM.PlatformHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
-	s.AddCleanup(c, func() {
+	s.AddCleanup(func() {
 		// We test that the fixture can't undefine this index, but we should actually undefine it
 		// after completing the test.
 		session, err := s.rawTpm(c).StartAuthSession(nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
