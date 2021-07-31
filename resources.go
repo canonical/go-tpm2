@@ -258,7 +258,7 @@ func (r *resourceContext) SetAuthValue(authValue []byte) {
 }
 
 func (r *resourceContext) GetAuthValue() []byte {
-	return r.authValue
+	return bytes.TrimRight(r.authValue, "\x00")
 }
 
 func makePartialResourceContext(handle Handle) *resourceContext {

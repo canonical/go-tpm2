@@ -312,3 +312,15 @@ func (s *resourcesSuite) SessionContextImplExcludeAttrs(c *C) {
 	c.Check(session.(*SessionContextImpl).Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
 	c.Check(session2.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
 }
+
+func (s *resourcesSuite) TestResourceContextGetAuth(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	rc.SetAuthValue([]byte("foo"))
+	c.Check(rc.(ResourceContextPrivate).GetAuthValue(), DeepEquals, []byte("foo"))
+}
+
+func (s *resourcesSuite) TestResourceContextGetAuthWithTrailingZeroes(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+	rc.SetAuthValue([]byte("foo\x00bar\x00\x00"))
+	c.Check(rc.(ResourceContextPrivate).GetAuthValue(), DeepEquals, []byte("foo\x00bar"))
+}

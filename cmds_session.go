@@ -7,7 +7,6 @@ package tpm2
 // Section 11 - Session Commands
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/canonical/go-tpm2/internal"
@@ -96,7 +95,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	bindHandle := HandleNull
 	if bind != nil {
 		bindHandle = bind.Handle()
-		authValue = bytes.TrimRight(bind.(resourceContextPrivate).GetAuthValue(), "\x00")
+		authValue = bind.(resourceContextPrivate).GetAuthValue()
 	}
 
 	var isBound bool = false

@@ -39,7 +39,7 @@ func (s *sessionParam) ComputeSessionHMACKey() []byte {
 	var key []byte
 	key = append(key, s.session.Data().SessionKey...)
 	if s.includeAuthValue {
-		key = append(key, bytes.TrimRight(s.associatedContext.(resourceContextPrivate).GetAuthValue(), "\x00")...)
+		key = append(key, s.associatedContext.(resourceContextPrivate).GetAuthValue()...)
 	}
 	return key
 }
@@ -185,7 +185,7 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 			default:
 				// A bound HMAC session used for authorization. Include the auth value of the associated
 				// ResourceContext only if it is not the bind entity.
-				bindName := computeBindName(s.associatedContext.Name(), bytes.TrimRight(s.associatedContext.(resourceContextPrivate).GetAuthValue(), "\x00"))
+				bindName := computeBindName(s.associatedContext.Name(), s.associatedContext.(resourceContextPrivate).GetAuthValue())
 				s.includeAuthValue = !bytes.Equal(bindName, data.BoundEntity)
 			}
 		case SessionTypePolicy:

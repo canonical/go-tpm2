@@ -106,17 +106,6 @@ func (s *authSuite) TestSessionParamComputeSessionHMACKeyIncludeEmptyAuthValue(c
 		expected:         []byte("foo")})
 }
 
-func (s *authSuite) TestSessionParamComputeSessionHMACKeyIncludeAuthValueWithTrailingZeroes(c *C) {
-	resource := new(mockResourceContext)
-	resource.SetAuthValue([]byte("\x00bar\x00\x00\x00"))
-
-	s.testSessionParamComputeSessionHMACKey(c, &testSessionParamComputeSessionHMACKeyData{
-		sessionKey:       []byte("foo"),
-		resource:         resource,
-		includeAuthValue: true,
-		expected:         []byte("foo\x00bar")})
-}
-
 func TestHMACSessions(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM()
