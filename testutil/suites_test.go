@@ -216,7 +216,7 @@ func (s *tpmTestSuite) TestSkipNoTPM(c *C) {
 	defer func() { TPMBackend = origBackend }()
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
-	c.Check(result.Skipped, Equals, 1)
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
 func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
@@ -229,17 +229,21 @@ func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
 	suite.TPM = tpm
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
-	c.Check(result.Missed, Equals, 1)
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 1 MISSED")
 }
 
 func (s *tpmTestSuite) TestLastCommandWithNoCommands(c *C) {
+	if TPMBackend == TPMBackendNone {
+		c.Skip("no tpm available")
+	}
+
 	suite := new(mockTPMTestSuite)
 	suite.cb = func(c *C) {
 		suite.LastCommand(c)
 	}
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
-	c.Check(result.Failed, Equals, 1)
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED")
 }
 
 type tpmTestSuiteProper struct {
@@ -420,7 +424,7 @@ func (s *tpmSimulatorTestSuite) TestSkipNoTPM(c *C) {
 	defer func() { TPMBackend = origBackend }()
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
-	c.Check(result.Skipped, Equals, 1)
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
 func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
@@ -433,7 +437,7 @@ func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
 	suite.TPM = tpm
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
-	c.Check(result.Missed, Equals, 1)
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 2 FAILED, 1 MISSED")
 }
 
 type tpmSimulatorTestSuiteProper struct {

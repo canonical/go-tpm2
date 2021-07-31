@@ -113,17 +113,25 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	switch {
 	case b.TPM != nil:
 		c.Assert(b.TCTI, NotNil)
+		b.AddFixtureCleanup(func(c *C) {
+			b.TCTI = nil
+			b.TPM = nil
+		})
 	case b.TCTI != nil:
 		// Create a TPMContext from the supplied TCTI
 		b.TPM, _ = tpm2.NewTPMContext(b.TCTI)
 		b.AddFixtureCleanup(func(c *C) {
 			c.Check(b.TPM.Close(), IsNil)
+			b.TCTI = nil
+			b.TPM = nil
 		})
 	default:
 		// Create a new connection
 		b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
 		b.AddFixtureCleanup(func(c *C) {
 			c.Check(b.TPM.Close(), IsNil)
+			b.TCTI = nil
+			b.TPM = nil
 		})
 	}
 }
@@ -147,10 +155,6 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 // TPMContext.
 func (b *TPMTest) SetUpTest(c *C) {
 	b.BaseTest.SetUpTest(c)
-	b.AddFixtureCleanup(func(_ *C) {
-		b.TCTI = nil
-		b.TPM = nil
-	})
 	b.initTPMContextIfNeeded(c)
 }
 
