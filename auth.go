@@ -185,7 +185,7 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 			default:
 				// A bound HMAC session used for authorization. Include the auth value of the associated
 				// ResourceContext only if it is not the bind entity.
-				bindName := computeBindName(s.associatedContext.Name(), s.associatedContext.(resourceContextPrivate).GetAuthValue())
+				bindName := computeBindName(s.associatedContext.Name(), bytes.TrimRight(s.associatedContext.(resourceContextPrivate).GetAuthValue(), "\x00"))
 				s.includeAuthValue = !bytes.Equal(bindName, data.BoundEntity)
 			}
 		case SessionTypePolicy:
