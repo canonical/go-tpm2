@@ -5,7 +5,6 @@
 package tpm2
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -43,40 +42,29 @@ type TctiMssim struct {
 	tpm      net.Conn
 	platform net.Conn
 
-	buf *bytes.Reader
-}
-
-func (t *TctiMssim) readMoreData() error {
-	var size uint32
-	if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
-		return xerrors.Errorf("cannot read response size from TPM command channel: %w", err)
-	}
-
-	buf := make([]byte, size)
-	if _, err := io.ReadFull(t.tpm, buf); err != nil {
-		return xerrors.Errorf("cannot read response from TPM command channel: %w", err)
-	}
-
-	t.buf = bytes.NewReader(buf)
-
-	var trash uint32
-	if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
-		return xerrors.Errorf("cannot read zero bytes from TPM command channel after response: %w", err)
-	}
-	return nil
+	r io.Reader
 }
 
 func (t *TctiMssim) Read(data []byte) (int, error) {
-	if t.buf == nil {
-		if err := t.readMoreData(); err != nil {
-			return 0, err
+	if t.r == nil {
+		var size uint32
+		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
+			return 0, xerrors.Errorf("cannot read response size from TPM command channel: %w", err)
+		}
+
+		t.r = io.LimitReader(t.tpm, int64(size))
+	}
+
+	n, err := t.r.Read(data)
+	if err == io.EOF {
+		t.r = nil
+
+		var trash uint32
+		if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
+			return n, xerrors.Errorf("cannot read zero bytes from TPM command channel after response: %w", err)
 		}
 	}
 
-	n, err := t.buf.Read(data)
-	if err == io.EOF {
-		t.buf = nil
-	}
 	return n, err
 }
 
