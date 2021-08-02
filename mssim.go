@@ -74,17 +74,11 @@ func (t *TctiMssim) Write(data []byte) (int, error) {
 		panic(fmt.Sprintf("cannot marshal command: %v", err))
 	}
 	n, err := t.tpm.Write(buf)
-	if err != nil {
-		return 0, err
-	}
 	n -= (len(buf) - len(data))
 	if n < 0 {
 		n = 0
 	}
-	if n < len(data) {
-		return n, io.ErrShortWrite
-	}
-	return n, nil
+	return n, err
 }
 
 func (t *TctiMssim) Close() (err error) {
