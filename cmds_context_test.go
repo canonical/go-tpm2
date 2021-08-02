@@ -52,7 +52,7 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 
 	// XXX: Make ReadPublic work with HandleContext and use that directly here
 	_, err = s.TPM.CreateResourceContextFromTPM(data.handle)
-	c.Check(IsResourceUnavailableError(err, data.handle), testutil.IsTrue)
+	c.Check(err, DeepEquals, ResourceUnavailableError{data.handle})
 }
 
 type contextSuite struct {
@@ -139,7 +139,7 @@ func (s *contextSuite) TestContextSaveSavedSession(c *C) {
 	c.Check(err, IsNil)
 
 	_, err = s.TPM.ContextSave(session)
-	c.Check(IsTPMWarning(err, WarningReferenceH0, CommandContextSave), testutil.IsTrue)
+	c.Check(err, DeepEquals, &TPMWarning{Command: CommandContextSave, Code: WarningReferenceH0})
 }
 
 func (s *contextSuite) TestContextSaveAndLoadTransient(c *C) {
@@ -227,7 +227,7 @@ func (s *contextSuite) TestFlushContextTransient(c *C) {
 
 	// XXX: Make ReadPublic work with HandleContext and use that directly here
 	_, err := s.TPM.CreateResourceContextFromTPM(handle)
-	c.Check(IsResourceUnavailableError(err, handle), testutil.IsTrue)
+	c.Check(err, DeepEquals, ResourceUnavailableError{handle})
 }
 
 func (s *contextSuite) TestFlushContextSession(c *C) {
