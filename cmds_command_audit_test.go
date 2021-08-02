@@ -50,7 +50,7 @@ func (s *commandCodeAuditSuiteBase) testSetCommandCodeAuditStatus(c *C, data *te
 	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, data.alg, nil, data.clearList, data.authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, HasLen, 1)
+	c.Assert(authArea, testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, authSessionHandle(data.authSession))
 
 	commands, err := s.TPM.GetCapabilityAuditCommands(CommandFirst, CapabilityMaxProperties)

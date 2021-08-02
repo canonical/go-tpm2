@@ -119,7 +119,7 @@ func (s *attestationSuite) testCertify(c *C, data *testCertifyData) {
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, HasLen, 2)
+	c.Assert(authArea, testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 
@@ -203,7 +203,7 @@ func (s *attestationSuite) testCertifyCreation(c *C, data *testCertifyCreationDa
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, HasLen, 1)
+	c.Assert(authArea, testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	s.checkAttestCommon(c, certifyInfo, TagAttestCreation, data.sign, data.signHierarchy, data.qualifyingData)
@@ -301,7 +301,7 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, HasLen, 1)
+	c.Assert(authArea, testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	s.checkAttestCommon(c, quoted, TagAttestQuote, data.sign, data.signHierarchy, data.qualifyingData)
@@ -405,7 +405,7 @@ func (s *attestationSuite) testGetTime(c *C, data *testGetTimeData) {
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, HasLen, 2)
+	c.Assert(authArea, testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 

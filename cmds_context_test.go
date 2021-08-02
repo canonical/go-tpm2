@@ -36,7 +36,7 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	c.Check(persist.(*ObjectContext).GetPublic(), DeepEquals, object.(*ObjectContext).GetPublic())
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, HasLen, 1)
+	c.Assert(authArea, testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, _, err := s.TPM.ReadPublic(persist)

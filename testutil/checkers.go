@@ -5,6 +5,7 @@
 package testutil
 
 import (
+	"fmt"
 	"reflect"
 
 	"golang.org/x/xerrors"
@@ -378,3 +379,33 @@ var UintGreater Checker = &uintChecker{
 //
 var UintGreaterEqual Checker = &uintChecker{
 	&CheckerInfo{Name: "UintGreaterEqual", Params: []string{"x", "y"}}}
+
+type hasLenChecker struct {
+	*CheckerInfo
+	cmp Checker
+}
+
+func (checker *hasLenChecker) Check(params []interface{}, names []string) (result bool, error string) {
+	value := reflect.ValueOf(params[0])
+	switch value.Kind() {
+	case reflect.Array, reflect.Chan, reflect.Map, reflect.Slice, reflect.String:
+	default:
+		return false, "value doesn't have a length"
+	}
+
+	result, error = checker.cmp.Check([]interface{}{value.Len(), params[1]}, []string{"len", names[1]})
+	if !result && error == "" {
+		error = fmt.Sprintf("actual length: %d", value.Len())
+	}
+	return result, error
+}
+
+// LenEquals checks that the value has the specified length. This differs from
+// check.HasLen in that it returns an error string containing the actual length
+// if the check fails.
+//
+// For example:
+//  c.Check(value, LenEquals, 5)
+//
+var LenEquals Checker = &hasLenChecker{
+	&CheckerInfo{Name: "LenEquals", Params: []string{"value", "n"}}, IntEqual}

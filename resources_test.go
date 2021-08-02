@@ -217,7 +217,7 @@ func (s *resourcesSuite) testCreateResourceContextFromTPMWithSession(c *C, data 
 	c.Check(rc.Name(), DeepEquals, data.name)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, HasLen, 1)
+	c.Assert(authArea, testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, session.Handle())
 }
 

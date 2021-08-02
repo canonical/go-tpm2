@@ -261,12 +261,12 @@ func (s *tpmTestSuiteProper) TestCommandLog(c *C) {
 	outData, testResult, err := s.TPM.GetTestResult()
 	c.Check(err, IsNil)
 
-	c.Assert(s.CommandLog(), HasLen, 2)
+	c.Assert(s.CommandLog(), LenEquals, 2)
 
 	c.Check(s.CommandLog()[0].GetCommandCode(c), Equals, tpm2.CommandSelfTest)
 	cHandles, cAuthArea, cpBytes := s.CommandLog()[0].UnmarshalCommand(c)
-	c.Check(cHandles, HasLen, 0)
-	c.Check(cAuthArea, HasLen, 0)
+	c.Check(cHandles, LenEquals, 0)
+	c.Check(cAuthArea, LenEquals, 0)
 
 	var fullTest bool
 	_, err = mu.UnmarshalFromBytes(cpBytes, &fullTest)
@@ -276,19 +276,19 @@ func (s *tpmTestSuiteProper) TestCommandLog(c *C) {
 	rc, rHandle, rpBytes, rAuthArea := s.CommandLog()[0].UnmarshalResponse(c)
 	c.Check(rc, Equals, tpm2.Success)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rpBytes, HasLen, 0)
-	c.Check(rAuthArea, HasLen, 0)
+	c.Check(rpBytes, LenEquals, 0)
+	c.Check(rAuthArea, LenEquals, 0)
 
 	c.Check(s.CommandLog()[1].GetCommandCode(c), Equals, tpm2.CommandGetTestResult)
 	cHandles, cAuthArea, cpBytes = s.CommandLog()[1].UnmarshalCommand(c)
-	c.Check(cHandles, HasLen, 0)
-	c.Check(cAuthArea, HasLen, 0)
-	c.Check(cpBytes, HasLen, 0)
+	c.Check(cHandles, LenEquals, 0)
+	c.Check(cAuthArea, LenEquals, 0)
+	c.Check(cpBytes, LenEquals, 0)
 
 	rc, rHandle, rpBytes, rAuthArea = s.CommandLog()[1].UnmarshalResponse(c)
 	c.Check(rc, Equals, tpm2.Success)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rAuthArea, HasLen, 0)
+	c.Check(rAuthArea, LenEquals, 0)
 
 	var outData2 tpm2.MaxBuffer
 	var testResult2 tpm2.ResponseCode
@@ -312,7 +312,7 @@ func (s *tpmTestSuiteProper) TestForgetCommands(c *C) {
 	c.Check(err, IsNil)
 
 	s.ForgetCommands()
-	c.Check(s.CommandLog(), HasLen, 0)
+	c.Check(s.CommandLog(), LenEquals, 0)
 }
 
 func (s *tpmTestSuiteProper) TestNextAvailableHandle(c *C) {
@@ -333,13 +333,13 @@ func (s *tpmTestSuiteProper) TestClearTPMUsingPlatformHierarchy(c *C) {
 
 	s.ForgetCommands()
 	s.ClearTPMUsingPlatformHierarchy(c)
-	c.Check(s.CommandLog(), HasLen, 0)
+	c.Check(s.CommandLog(), LenEquals, 0)
 
 	c.Check(s.CreateStoragePrimaryKeyRSA(c), Not(DeepEquals), name)
 
 	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyPermanent, 1)
 	c.Assert(err, IsNil)
-	c.Assert(props, HasLen, 1)
+	c.Assert(props, LenEquals, 1)
 	c.Check(props[0].Property, Equals, tpm2.PropertyPermanent)
 	c.Check(tpm2.PermanentAttributes(props[0].Value)&tpm2.AttrDisableClear, Equals, tpm2.PermanentAttributes(0))
 }

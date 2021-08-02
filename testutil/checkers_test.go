@@ -215,3 +215,13 @@ func (s *checkersSuite) TestUintChecker(c *C) {
 	testCheck(c, UintEqual, false, "y cannot be represented by the type of x", uint8(10), 256)
 	testCheck(c, UintEqual, true, "", uint64(math.MaxUint64), uint64(math.MaxUint64))
 }
+
+func (s *checkersSuite) TestLenEquals(c *C) {
+	testInfo(c, LenEquals, "LenEquals", []string{"value", "n"})
+	testCheck(c, LenEquals, true, "", []int{0, 0, 0, 0}, 4)
+	testCheck(c, LenEquals, true, "", map[int]int{0: 0, 1: 1}, 2)
+	testCheck(c, LenEquals, true, "", "foo", 3)
+	testCheck(c, LenEquals, true, "", [2]int{0, 0}, 2)
+	testCheck(c, LenEquals, false, "actual length: 3", "foo", 4)
+	testCheck(c, LenEquals, false, "value doesn't have a length", 4, 4)
+}
