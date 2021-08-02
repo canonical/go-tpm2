@@ -7,6 +7,7 @@ package testutil_test
 import (
 	"errors"
 	"io"
+	"math"
 	"os"
 	"reflect"
 
@@ -114,4 +115,103 @@ func (s *checkersSuite) TestErrorAs(c *C) {
 	testCheck(c, ErrorAs, false, "", testError{io.EOF}, &e2)
 
 	testCheck(c, ErrorAs, false, "value is not an error", "foo", &e)
+}
+
+func (s *checkersSuite) TestIntLess(c *C) {
+	testInfo(c, IntLess, "IntLess", []string{"x", "y"})
+	testCheck(c, IntLess, true, "", 5, 10)
+	testCheck(c, IntLess, false, "", 10, 10)
+	testCheck(c, IntLess, false, "", 10, 5)
+	testCheck(c, IntLess, true, "", math.MinInt64, math.MaxInt64)
+}
+
+func (s *checkersSuite) TestIntLessEqual(c *C) {
+	testInfo(c, IntLessEqual, "IntLessEqual", []string{"x", "y"})
+	testCheck(c, IntLessEqual, true, "", 5, 10)
+	testCheck(c, IntLessEqual, true, "", 10, 10)
+	testCheck(c, IntLessEqual, false, "", 10, 5)
+}
+
+func (s *checkersSuite) TestIntEqual(c *C) {
+	testInfo(c, IntEqual, "IntEqual", []string{"x", "y"})
+	testCheck(c, IntEqual, false, "", 5, 10)
+	testCheck(c, IntEqual, true, "", 10, 10)
+	testCheck(c, IntEqual, false, "", 10, 5)
+}
+
+func (s *checkersSuite) TestIntNotEqual(c *C) {
+	testInfo(c, IntNotEqual, "IntNotEqual", []string{"x", "y"})
+	testCheck(c, IntNotEqual, true, "", 5, 10)
+	testCheck(c, IntNotEqual, false, "", 10, 10)
+	testCheck(c, IntNotEqual, true, "", 10, 5)
+}
+
+func (s *checkersSuite) TestIntGreater(c *C) {
+	testInfo(c, IntGreater, "IntGreater", []string{"x", "y"})
+	testCheck(c, IntGreater, false, "", 5, 10)
+	testCheck(c, IntGreater, false, "", 10, 10)
+	testCheck(c, IntGreater, true, "", 10, 5)
+	testCheck(c, IntGreater, true, "", math.MaxInt64, math.MinInt64)
+}
+
+func (s *checkersSuite) TestIntGreaterEqual(c *C) {
+	testInfo(c, IntGreaterEqual, "IntGreaterEqual", []string{"x", "y"})
+	testCheck(c, IntGreaterEqual, false, "", 5, 10)
+	testCheck(c, IntGreaterEqual, true, "", 10, 10)
+	testCheck(c, IntGreaterEqual, true, "", 10, 5)
+}
+
+func (s *checkersSuite) TestIntChecker(c *C) {
+	testCheck(c, IntEqual, false, "x has invalid kind (must be an int)", uint(10), 10)
+	testCheck(c, IntEqual, false, "y has invalid kind (must be an int)", 10, uint(10))
+	testCheck(c, IntEqual, false, "y cannot be represented by the type of x", int8(10), 128)
+}
+
+func (s *checkersSuite) TestUintLess(c *C) {
+	testInfo(c, UintLess, "UintLess", []string{"x", "y"})
+	testCheck(c, UintLess, true, "", uint(5), 10)
+	testCheck(c, UintLess, false, "", uint(10), 10)
+	testCheck(c, UintLess, false, "", uint(10), 5)
+}
+
+func (s *checkersSuite) TestUintLessEqual(c *C) {
+	testInfo(c, UintLessEqual, "UintLessEqual", []string{"x", "y"})
+	testCheck(c, UintLessEqual, true, "", uint(5), 10)
+	testCheck(c, UintLessEqual, true, "", uint(10), 10)
+	testCheck(c, UintLessEqual, false, "", uint(10), 5)
+}
+
+func (s *checkersSuite) TestUintEqual(c *C) {
+	testInfo(c, UintEqual, "UintEqual", []string{"x", "y"})
+	testCheck(c, UintEqual, false, "", uint(5), 10)
+	testCheck(c, UintEqual, true, "", uint(10), 10)
+	testCheck(c, UintEqual, false, "", uint(10), 5)
+}
+
+func (s *checkersSuite) TestUintNotEqual(c *C) {
+	testInfo(c, UintNotEqual, "UintNotEqual", []string{"x", "y"})
+	testCheck(c, UintNotEqual, true, "", uint(5), 10)
+	testCheck(c, UintNotEqual, false, "", uint(10), 10)
+	testCheck(c, UintNotEqual, true, "", uint(10), 5)
+}
+
+func (s *checkersSuite) TestUintGreater(c *C) {
+	testInfo(c, UintGreater, "UintGreater", []string{"x", "y"})
+	testCheck(c, UintGreater, false, "", uint(5), 10)
+	testCheck(c, UintGreater, false, "", uint(10), 10)
+	testCheck(c, UintGreater, true, "", uint(10), 5)
+}
+
+func (s *checkersSuite) TestUintGreaterEqual(c *C) {
+	testInfo(c, UintGreaterEqual, "UintGreaterEqual", []string{"x", "y"})
+	testCheck(c, UintGreaterEqual, false, "", uint(5), 10)
+	testCheck(c, UintGreaterEqual, true, "", uint(10), 10)
+	testCheck(c, UintGreaterEqual, true, "", uint(10), 5)
+}
+
+func (s *checkersSuite) TestUintChecker(c *C) {
+	testCheck(c, UintEqual, false, "x has invalid kind (must be an unsigned int)", 10, 10)
+	testCheck(c, UintEqual, false, "y has invalid kind (must be an unsigned int or a plain int)", uint(10), int64(10))
+	testCheck(c, UintEqual, false, "y cannot be represented by the type of x", uint8(10), 256)
+	testCheck(c, UintEqual, true, "", uint64(math.MaxUint64), uint64(math.MaxUint64))
 }

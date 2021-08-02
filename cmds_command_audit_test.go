@@ -11,26 +11,24 @@ import (
 	"github.com/canonical/go-tpm2/testutil"
 )
 
-type commandCodeAuditSuite struct {
+type commandCodeAuditSuiteBase struct {
 	testutil.TPMTest
 }
 
 type commandCodeAuditSuiteOwner struct {
-	commandCodeAuditSuite
+	commandCodeAuditSuiteBase
 }
 
-func (s *commandCodeAuditSuiteOwner) SetUpTest(c *C) {
+func (s *commandCodeAuditSuiteOwner) SetUpSuite(c *C) {
 	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeatureNV
-	s.TPMTest.SetUpTest(c)
 }
 
 type commandCodeAuditSuitePlatform struct {
-	commandCodeAuditSuite
+	commandCodeAuditSuiteBase
 }
 
-func (s *commandCodeAuditSuitePlatform) SetUpTest(c *C) {
+func (s *commandCodeAuditSuitePlatform) SetUpSuite(c *C) {
 	s.TPMFeatures = testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeaturePlatformHierarchy | testutil.TPMFeatureNV
-	s.TPMTest.SetUpTest(c)
 }
 
 var _ = Suite(&commandCodeAuditSuiteOwner{})
@@ -46,7 +44,7 @@ type testSetCommandCodeAuditStatusData struct {
 	expectedCommands CommandCodeList
 }
 
-func (s *commandCodeAuditSuite) testSetCommandCodeAuditStatus(c *C, data *testSetCommandCodeAuditStatusData) {
+func (s *commandCodeAuditSuiteBase) testSetCommandCodeAuditStatus(c *C, data *testSetCommandCodeAuditStatusData) {
 	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, data.alg, nil, nil, data.authSession), IsNil)
 	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, HashAlgorithmNull, data.setList, nil, data.authSession), IsNil)
 	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, data.alg, nil, data.clearList, data.authSession), IsNil)

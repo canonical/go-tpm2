@@ -20,9 +20,8 @@ type attestationSuite struct {
 	testutil.TPMTest
 }
 
-func (s *attestationSuite) SetUpTest(c *C) {
+func (s *attestationSuite) SetUpSuite(c *C) {
 	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy
-	s.TPMTest.SetUpTest(c)
 }
 
 func (s *attestationSuite) checkAttestCommon(c *C, attest *Attest, tag StructTag, sign ResourceContext, signHierarchy Handle, qualifyingData Data) {
