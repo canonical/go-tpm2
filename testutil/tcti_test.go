@@ -205,7 +205,7 @@ func (s *tctiSuite) testHierarchyAllowed(c *C, data *testHierarchyAllowedData) {
 	s.initTPMContext(c, data.permittedFeatures)
 	s.deferCloseTpm(c)
 
-	_, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.GetPermanentContext(data.hierarchy), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	_, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.GetPermanentContext(data.hierarchy), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Check(err, IsNil)
 }
 
@@ -231,7 +231,7 @@ func (s *tctiSuite) testHierarchyDisallowed(c *C, data *testHierarchyDisallowedD
 	s.initTPMContext(c, 0)
 	s.deferCloseTpm(c)
 
-	_, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.GetPermanentContext(data.hierarchy), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	_, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.GetPermanentContext(data.hierarchy), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Check(err, ErrorMatches, data.err)
 }
 
@@ -729,7 +729,7 @@ func (s *tctiSuite) TestCreateAndFlushPrimaryObject(c *C) {
 	// Test that transient objects created with CreatePrimary are flushed from the TPM.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
-	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	props, err := s.TPM.GetCapabilityHandles(object.Handle(), 1)
@@ -748,10 +748,10 @@ func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
 	// Test that transient objects loaded in to the TPM are flushed.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
-	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
-	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	object, err := s.TPM.Load(primary, priv, pub, nil)
@@ -805,7 +805,7 @@ func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
 	// Test that restored transient objects are flushed from the TPM.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
-	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	context, err := s.TPM.ContextSave(object)
@@ -925,7 +925,7 @@ func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 	// Test that persistent objects are evicted from the TPM.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
-	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	persistent, err := s.TPM.EvictControl(s.TPM.OwnerHandleContext(), object, 0x81000001, nil)
@@ -952,7 +952,7 @@ func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
 	// Test that a failure to evict a persistent object results in an error.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
-	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), object, 0x81000001, nil)
@@ -1077,7 +1077,7 @@ func (s *tctiSuite) TestEvictControl(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
-	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	persistent, err := s.TPM.EvictControl(s.TPM.OwnerHandleContext(), object, 0x81000001, nil)
@@ -1122,7 +1122,7 @@ func (s *tctiSuite) TestClear(c *C) {
 				KeyBits:  2048,
 				Exponent: 0}}}
 
-	oObject, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	oObject, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), oObject, 0x81000001, nil)
 	c.Check(err, IsNil)
@@ -1255,10 +1255,10 @@ func (s *tctiSuite) testUseCreatedPrimaryNoDA(c *C, extraFeatures TPMFeatureFlag
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
 	s.deferCloseTpm(c)
 
-	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
-	_, _, _, _, _, err = s.TPM.Create(object, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	_, _, _, _, _, err = s.TPM.Create(object, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Check(err, IsNil)
 }
 
@@ -1274,12 +1274,12 @@ func (s *tctiSuite) TestUseCreatedPrimaryDAPermitted(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
 	s.deferCloseTpm(c)
 
-	template := StorageKeyRSATemplate()
+	template := NewRSAStorageKeyTemplate()
 	template.Attrs &^= tpm2.AttrNoDA
 	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
-	_, _, _, _, _, err = s.TPM.Create(object, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	_, _, _, _, _, err = s.TPM.Create(object, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Check(err, IsNil)
 }
 
@@ -1287,12 +1287,12 @@ func (s *tctiSuite) TestUseCreatedPrimaryDAForbidden(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
-	template := StorageKeyRSATemplate()
+	template := NewRSAStorageKeyTemplate()
 	template.Attrs &^= tpm2.AttrNoDA
 	object, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
-	_, _, _, _, _, err = s.TPM.Create(object, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	_, _, _, _, _, err = s.TPM.Create(object, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Create is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
@@ -1300,7 +1300,7 @@ func (s *tctiSuite) testUseLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags)
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
 	s.deferCloseTpm(c)
 
-	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
@@ -1333,7 +1333,7 @@ func (s *tctiSuite) TestUseLoadedObjectDAPermitted(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
 	s.deferCloseTpm(c)
 
-	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
@@ -1358,7 +1358,7 @@ func (s *tctiSuite) TestUseLoadedObjectDAForbidden(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
-	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
@@ -1432,7 +1432,7 @@ func (s *tctiSuite) testUseContextLoadedObjectNoDA(c *C, extraFeatures TPMFeatur
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
 	s.deferCloseTpm(c)
 
-	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
@@ -1471,7 +1471,7 @@ func (s *tctiSuite) TestUseContextLoadedObjectDAPermitted(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
 	s.deferCloseTpm(c)
 
-	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
@@ -1502,7 +1502,7 @@ func (s *tctiSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
-	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	sensitive := tpm2.SensitiveCreate{Data: []byte("foo")}
@@ -1535,7 +1535,7 @@ func (s *tctiSuite) TestUseExistingObject(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
-	primary, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	persist, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), primary, 0x81000001, nil)
@@ -1544,7 +1544,7 @@ func (s *tctiSuite) TestUseExistingObject(c *C) {
 	rc, err := s.TPM.CreateResourceContextFromTPM(persist.Handle())
 	c.Check(err, IsNil)
 
-	_, _, _, _, _, err = s.TPM.Create(rc, nil, StorageKeyRSATemplate(), nil, nil, nil)
+	_, _, _, _, _, err = s.TPM.Create(rc, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Check(err, IsNil)
 }
 
@@ -1553,7 +1553,7 @@ func (s *tctiSuite) TestDontEvictExistingObject(c *C) {
 	// but which the fixture is aware of (via TPM2_ReadPublic).
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
-	primary, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, StorageKeyRSATemplate(), nil, nil, nil)
+	primary, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	persist, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), primary, 0x81000001, nil)

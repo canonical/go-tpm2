@@ -294,14 +294,7 @@ func (b *TPMTest) StartAuthSession(c *C, tpmKey, bind tpm2.ResourceContext, sess
 // hierarchy, with the template returned from StorageKeyRSATemplate. On success,
 // it returns the context for the newly created object. It asserts if it is not successful.
 func (b *TPMTest) CreateStoragePrimaryKeyRSA(c *C) tpm2.ResourceContext {
-	return b.CreatePrimary(c, tpm2.HandleOwner, StorageKeyRSATemplate())
-}
-
-// CreateSigningPrimaryKeyRSA creates a primary signing key in the specified
-// hierarchy using the template returned from SigningKeyRSATemplate. On success,
-// it returns the context for the newly created object. It asserts if it is not successful.
-func (b *TPMTest) CreateSigningPrimaryKeyRSA(c *C, hierarchy tpm2.Handle, restricted bool, scheme *tpm2.RSAScheme) tpm2.ResourceContext {
-	return b.CreatePrimary(c, hierarchy, SigningKeyRSATemplate(restricted, scheme))
+	return b.CreatePrimary(c, tpm2.HandleOwner, NewRSAStorageKeyTemplate())
 }
 
 // TPMSimulatorTest is a base test suite for all tests that require a TPM simulator.

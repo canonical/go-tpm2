@@ -13,6 +13,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
@@ -138,9 +139,7 @@ func (s *attestationSuite) TestCertifyNoSignature(c *C) {
 
 func (s *attestationSuite) TestCertifyWithSignature(c *C) {
 	s.testCertify(c, &testCertifyData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
@@ -155,7 +154,7 @@ func (s *attestationSuite) TestCertifyExtraData(c *C) {
 
 func (s *attestationSuite) TestCertifyInScheme(c *C) {
 	data := &testCertifyData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -172,9 +171,7 @@ func (s *attestationSuite) TestCertifyObjectAuthSession(c *C) {
 
 func (s *attestationSuite) TestCertifySignAuthSession(c *C) {
 	s.testCertify(c, &testCertifyData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:            s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
 		signScheme: &SigScheme{
@@ -196,7 +193,7 @@ type testCertifyCreationData struct {
 func (s *attestationSuite) testCertifyCreation(c *C, data *testCertifyCreationData) {
 	sessionHandle := authSessionHandle(data.signAuthSession)
 
-	object, _, _, creationHash, creationTicket, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, testutil.StorageKeyRSATemplate(), nil, nil, nil)
+	object, _, _, creationHash, creationTicket, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, testutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	certifyInfo, signature, err := s.TPM.CertifyCreation(data.sign, object, data.qualifyingData, creationHash, data.inScheme, creationTicket, data.signAuthSession)
@@ -219,9 +216,7 @@ func (s *attestationSuite) TestCertifyCreationNoSignature(c *C) {
 
 func (s *attestationSuite) TestCertifyCreationWithSignature(c *C) {
 	s.testCertifyCreation(c, &testCertifyCreationData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
@@ -236,7 +231,7 @@ func (s *attestationSuite) TestCertifyCreationExtraData(c *C) {
 
 func (s *attestationSuite) TestCertifyCreationInScheme(c *C) {
 	data := &testCertifyCreationData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -248,9 +243,7 @@ func (s *attestationSuite) TestCertifyCreationInScheme(c *C) {
 
 func (s *attestationSuite) TestCertifyCreationSignAuthSession(c *C) {
 	s.testCertifyCreation(c, &testCertifyCreationData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:            s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
 		signScheme: &SigScheme{
@@ -317,9 +310,7 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 
 func (s *attestationSuite) TestQuote(c *C) {
 	s.testQuote(c, &testQuoteData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
 		signHierarchy: HandleEndorsement,
 		alg:           HashAlgorithmSHA256,
@@ -331,9 +322,7 @@ func (s *attestationSuite) TestQuote(c *C) {
 
 func (s *attestationSuite) TestQuoteWithExtraData(c *C) {
 	s.testQuote(c, &testQuoteData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:           s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		qualifyingData: []byte("bar"),
 		pcrs:           PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
 		signHierarchy:  HandleEndorsement,
@@ -346,7 +335,7 @@ func (s *attestationSuite) TestQuoteWithExtraData(c *C) {
 
 func (s *attestationSuite) TestQuoteInScheme(c *C) {
 	data := &testQuoteData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -360,9 +349,7 @@ func (s *attestationSuite) TestQuoteInScheme(c *C) {
 
 func (s *attestationSuite) TestQuoteDifferentPCRs(c *C) {
 	s.testQuote(c, &testQuoteData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0}}, {Hash: HashAlgorithmSHA256, Select: []int{1, 2}}},
 		signHierarchy: HandleEndorsement,
 		alg:           HashAlgorithmSHA256,
@@ -374,9 +361,7 @@ func (s *attestationSuite) TestQuoteDifferentPCRs(c *C) {
 
 func (s *attestationSuite) TestQuoteSignAuthSession(c *C) {
 	s.testQuote(c, &testQuoteData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:            s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		pcrs:            PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
@@ -427,9 +412,7 @@ func (s *attestationSuite) TestGetTimeNoSignature(c *C) {
 
 func (s *attestationSuite) TestGetTimeWithSignature(c *C) {
 	s.testGetTime(c, &testGetTimeData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
@@ -444,7 +427,7 @@ func (s *attestationSuite) TestGetTimeExtraData(c *C) {
 
 func (s *attestationSuite) TestGetTimeInScheme(c *C) {
 	data := &testGetTimeData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, false, &RSAScheme{Scheme: RSASchemeNull}),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -461,9 +444,7 @@ func (s *attestationSuite) TestGetTimePrivacyAdminAuthSession(c *C) {
 
 func (s *attestationSuite) TestGetTimeSignAuthSession(c *C) {
 	s.testGetTime(c, &testGetTimeData{
-		sign: s.CreateSigningPrimaryKeyRSA(c, HandleEndorsement, true, &RSAScheme{
-			Scheme:  RSASchemeRSASSA,
-			Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}),
+		sign:            s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
 		signScheme: &SigScheme{

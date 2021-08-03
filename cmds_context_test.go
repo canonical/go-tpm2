@@ -25,7 +25,7 @@ type testEvictControlData struct {
 func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	sessionHandle := authSessionHandle(data.authAuthSession)
 
-	object := s.CreatePrimary(c, data.auth.Handle(), testutil.StorageKeyRSATemplate())
+	object := s.CreatePrimary(c, data.auth.Handle(), testutil.NewRSAStorageKeyTemplate())
 
 	persist, err := s.TPM.EvictControl(data.auth, object, data.handle, data.authAuthSession)
 	c.Assert(err, IsNil)
@@ -92,7 +92,7 @@ func (s *contextSuite) TestContextSaveTransient(c *C) {
 func (s *contextSuite) TestContextSaveStClear(c *C) {
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	template := testutil.StorageKeyRSATemplate()
+	template := testutil.NewRSAStorageKeyTemplate()
 	template.Attrs |= AttrStClear
 
 	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, template, nil, nil, nil)
