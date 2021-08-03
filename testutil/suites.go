@@ -5,6 +5,7 @@
 package testutil
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/canonical/go-tpm2"
@@ -211,6 +212,19 @@ func (b *TPMTest) NextAvailableHandle(c *C, handle tpm2.Handle) tpm2.Handle {
 
 	c.Fatal("no available handle")
 	return tpm2.HandleUnassigned
+}
+
+// RequireAlgorithm checks if the required algorithm is supported by the
+// TPM and skips the test if it isn't.
+func (b *TPMTest) RequireAlgorithm(c *C, alg tpm2.AlgorithmId) {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	algs, err := b.TPM.GetCapabilityAlgs(alg, 1)
+	c.Assert(err, IsNil)
+	if len(algs) == 0 || algs[0].Alg != alg {
+		c.Skip(fmt.Sprintf("unsupported algorithm %v", alg))
+	}
 }
 
 // ClearTPMUsingPlatformHierarchy enables the TPM2_Clear command and then

@@ -246,6 +246,26 @@ func (s *tpmTestSuite) TestLastCommandWithNoCommands(c *C) {
 	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED")
 }
 
+func (s *tpmTestSuite) TestRequireAlgorithm(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireAlgorithm(c, tpm2.AlgorithmRSA)
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 1 passed")
+}
+
+func (s *tpmTestSuite) TestRequireMissingAlgorithm(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireAlgorithm(c, tpm2.AlgorithmError)
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
+}
+
 type tpmTestSuiteProper struct {
 	TPMTest
 }
