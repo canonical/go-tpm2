@@ -257,7 +257,7 @@ func (s *utilsSuiteTPM) TestComputeQualifiedName(c *C) {
 	_, _, primaryQn, err := s.TPM.ReadPublic(primary)
 	c.Assert(err, IsNil)
 
-	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, templates.NewRSAKeyWithDefaults(templates.KeyUsageSign|templates.KeyUsageDecrypt), nil, nil, nil)
+	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, templates.NewRSAKeyWithDefaults(0), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	object, err := s.TPM.Load(primary, priv, pub, nil)
@@ -278,7 +278,7 @@ func (s *utilsSuiteTPM) TestComputeQualifiedNameFull(c *C) {
 	object1, err := s.TPM.Load(primary, priv, pub, nil)
 	c.Assert(err, IsNil)
 
-	priv, pub, _, _, _, err = s.TPM.Create(object1, nil, templates.NewRSAKeyWithDefaults(templates.KeyUsageSign|templates.KeyUsageDecrypt), nil, nil, nil)
+	priv, pub, _, _, _, err = s.TPM.Create(object1, nil, templates.NewRSAKeyWithDefaults(0), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	object2, err := s.TPM.Load(object1, priv, pub, nil)
