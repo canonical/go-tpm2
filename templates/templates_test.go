@@ -489,6 +489,19 @@ func (s *templatesSuite) TestNewRSAKeyWithDefaultsDecrypt(c *C) {
 					Exponent:  0}}}})
 }
 
+func (s *templatesSuite) TestNewRSAKeyWithDefaults(c *C) {
+	s.testNewRSAKeyWithDefaults(c, &testNewRSAKeyWithDefaultsData{
+		expected: &tpm2.Public{
+			Type:    tpm2.ObjectTypeRSA,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrDecrypt,
+			Params: &tpm2.PublicParamsU{
+				RSADetail: &tpm2.RSAParams{
+					Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
+					Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
+					KeyBits:   2048,
+					Exponent:  0}}}})
+}
 type testNewSealedObjectData struct {
 	nameAlg tpm2.HashAlgorithmId
 
@@ -1014,6 +1027,20 @@ func (s *templatesSuite) TestNewECCKeyWithDefaultsDecrypt(c *C) {
 					KDF:       tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull}}}}})
 }
 
+func (s *templatesSuite) TestNewECCKeyWithDefaults(c *C) {
+	s.testNewECCKeyWithDefaults(c, &testNewECCKeyWithDefaultsData{
+		expected: &tpm2.Public{
+			Type:    tpm2.ObjectTypeECC,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrDecrypt,
+			Params: &tpm2.PublicParamsU{
+				ECCDetail: &tpm2.ECCParams{
+					Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
+					Scheme:    tpm2.ECCScheme{Scheme: tpm2.ECCSchemeNull},
+					CurveID:   tpm2.ECCCurveNIST_P256,
+					KDF:       tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull}}}}})
+}
+
 type testNewSymmetricStorageKeyData struct {
 	nameAlg   tpm2.HashAlgorithmId
 	algorithm tpm2.SymObjectAlgorithmId
@@ -1330,6 +1357,20 @@ func (s *templatesSuite) TestNewSymmetricKeyWithDefaultsDecrypt(c *C) {
 			Type:    tpm2.ObjectTypeSymCipher,
 			NameAlg: tpm2.HashAlgorithmSHA256,
 			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrDecrypt,
+			Params: &tpm2.PublicParamsU{
+				SymDetail: &tpm2.SymCipherParams{
+					Sym: tpm2.SymDefObject{
+						Algorithm: tpm2.SymObjectAlgorithmAES,
+						KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
+						Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}}}}})
+}
+
+func (s *templatesSuite) TestNewSymmetricKeyWithDefaults(c *C) {
+	s.testNewSymmetricKeyWithDefaults(c, &testNewSymmetricKeyWithDefaultsData{
+		expected: &tpm2.Public{
+			Type:    tpm2.ObjectTypeSymCipher,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrDecrypt,
 			Params: &tpm2.PublicParamsU{
 				SymDetail: &tpm2.SymCipherParams{
 					Sym: tpm2.SymDefObject{

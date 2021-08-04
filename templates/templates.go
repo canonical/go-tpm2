@@ -143,7 +143,8 @@ func NewRestrictedRSASigningKeyWithDefaults() *tpm2.Public {
 // NewRSAKey returns a template for a general purpose RSA key for the specified
 // usage, with the specified name algorithm, RSA scheme and RSA key size. If nameAlg
 // is HashAlgorithmNull, then HashAlgorithmSHA256 is used. If keyBits is zero, then
-// 2048 is used.
+// 2048 is used. If no usage is specified, the template will include both sign and
+// decrypt attributes.
 //
 // The template cannot be used to create a key in a duplication group. In order to create
 // a key in a duplication group, remove the AttrFixedTPM attribute. In order to create
@@ -157,6 +158,9 @@ func NewRestrictedRSASigningKeyWithDefaults() *tpm2.Public {
 // remove the AttrUserWithAuth attribute.
 func NewRSAKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.RSAScheme, keyBits uint16) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
+	if usage == 0 {
+		usage = KeyUsageSign|KeyUsageDecrypt
+	}
 	if usage&KeyUsageSign != 0 {
 		attrs |= tpm2.AttrSign
 	}
@@ -188,7 +192,8 @@ func NewRSAKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.RSASch
 
 // NewRSAKeyWithDefaults returns a template for a general purpose RSA key for the
 // specified usage, with SHA256 as the name algorithm, the scheme unset and 2048 bits
-// as the key size.
+// as the key size. If no usage is specified, the template will include both sign and
+// decrypt attributes.
 //
 // The template cannot be used to create a key in a duplication group. In order to create
 // a key in a duplication group, remove the AttrFixedTPM attribute. In order to create
@@ -347,7 +352,8 @@ func NewRestrictedECCSigningKeyWithDefaults() *tpm2.Public {
 
 // NewECCKey returns a template for a general purpose ECC key for the specified
 // usage, with the specified name algorithm, ECC scheme and elliptic curve. If nameAlg
-// is HashAlgorithmNull, then HashAlgorithmSHA256 is used.
+// is HashAlgorithmNull, then HashAlgorithmSHA256 is used. If no usage is specified,
+// the template will include both sign and decrypt attributes.
 //
 // The template cannot be used to create a key in a duplication group. In order to create
 // a key in a duplication group, remove the AttrFixedTPM attribute. In order to create
@@ -361,6 +367,9 @@ func NewRestrictedECCSigningKeyWithDefaults() *tpm2.Public {
 // remove the AttrUserWithAuth attribute.
 func NewECCKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.ECCScheme, curve tpm2.ECCCurve) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
+	if usage == 0 {
+		usage = KeyUsageSign|KeyUsageDecrypt
+	}
 	if usage&KeyUsageSign != 0 {
 		attrs |= tpm2.AttrSign
 	}
@@ -389,7 +398,8 @@ func NewECCKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.ECCSch
 
 // NewECCKeyWithDefaults returns a template for a general purpose ECC key for the
 // specified usage, with SHA256 as the name algorithm, the scheme unset and NIST-P256
-// as the curve.
+// as the curve. If no usage is specified, the template will include both sign and
+// decrypt attributes.
 //
 // The template cannot be used to create a key in a duplication group. In order to create
 // a key in a duplication group, remove the AttrFixedTPM attribute. In order to create
@@ -471,7 +481,8 @@ func NewSymmetricStorageKeyWithDefaults() *tpm2.Public {
 // the specified name algorithm, key usage, symmetic algorithm, symmetric key size
 // and symmetric mode. If nameAlg is HashAlgorithmNull, then HashAlgorithmSHA256
 // is used. If algorithm is SymObjectAlgorithmNull, then SymObjectAlgorithmAES is
-// used. If keyBits is zero, then 128 is used.
+// used. If keyBits is zero, then 128 is used. If no usage is specified, the template
+// will include both sign and decrypt attributes.
 //
 // The template cannot be used to create a key in a duplication group. In order to create
 // a key in a duplication group, remove the AttrFixedTPM attribute. In order to create
@@ -488,6 +499,9 @@ func NewSymmetricStorageKeyWithDefaults() *tpm2.Public {
 // remove the AttrUserWithAuth attribute.
 func NewSymmetricKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, algorithm tpm2.SymObjectAlgorithmId, keyBits uint16, mode tpm2.SymModeId) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
+	if usage == 0 {
+		usage = KeyUsageEncrypt|KeyUsageDecrypt
+	}
 	if usage&KeyUsageEncrypt != 0 {
 		attrs |= tpm2.AttrSign
 	}
@@ -519,7 +533,8 @@ func NewSymmetricKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, algorithm tpm
 
 // NewSymmetricKeyWithDefaults returns a template for a general purpose symmetric
 // key for the specified usage with SHA256 as the name algorithm, AES-128 as the
-// cipher and CFB as the cipher mode.
+// cipher and CFB as the cipher mode. If no usage is specified, the template will
+// include both sign and decrypt attributes.
 //
 // The template cannot be used to create a key in a duplication group. In order to create
 // a key in a duplication group, remove the AttrFixedTPM attribute. In order to create
