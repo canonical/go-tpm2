@@ -647,3 +647,10 @@ func (s *muSuite) TestMashalErrorList(c *C) {
 		[]uint32{0},
 		"cannot marshal argument at index 0: cannot process list type \\[\\]uint32: cannot write length of list: io: read/write on closed pipe"})
 }
+
+func (s *muSuite) TestCopyValue(c *C) {
+	src := testStruct{A: 10, C: true, D: []uint32{54353, 431}}
+	var dst testStruct
+	c.Check(CopyValue(&dst, src), IsNil)
+	c.Check(dst, DeepEquals, testStruct{A: 10, B: new(uint32), C: true, D: []uint32{54353, 431}})
+}

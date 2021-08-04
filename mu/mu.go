@@ -770,11 +770,14 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 }
 
 // MarshalToWriter marshals vals to w in the TPM wire format, according to the rules specified in the package description. A nil
-// pointer encountered during marshalling causes the zero value for the type to be marshalled, unless the pointer is to a sized
-// structure.
+// pointer encountered during marshalling causes the zero value for the type to be marshalled, unless the pointer is to a zero
+// sized structure.
 //
 // The number of bytes written to w are returned. If this function does not complete successfully, it will return an error and
 // the number of bytes written.
+//
+// This function only returns an error if a sized value (sized buffer, sized structure or list) is too large for its corresponding
+// size field, or if the supplied io.Writer returns an error.
 func MarshalToWriter(w io.Writer, vals ...interface{}) (int, error) {
 	var totalBytes int
 	for i, val := range vals {
@@ -788,17 +791,39 @@ func MarshalToWriter(w io.Writer, vals ...interface{}) (int, error) {
 	return totalBytes, nil
 }
 
+// MustMarshalToWriter is the same as MarshalToWriter, except that it panics if it encounters an error.
+func MustMarshalToWriter(w io.Writer, vals ...interface{}) int {
+	n, err := MarshalToWriter(w, vals...)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
 // MarshalToBytes marshals vals to the TPM wire format, according to the rules specified in the package description. A nil pointer
-// encountered during marshalling causes the zero value for the type to be marshalled, unless the pointer is to a sized structure.
+// encountered during marshalling causes the zero value for the type to be marshalled, unless the pointer is to a zero sized
+// structure.
 //
 // If successful, this function returns the marshalled data. If this function does not complete successfully, it will return an error.
 // In this case, no data will be returned.
+//
+// This function only returns an error if a sized value (sized buffer, sized structure or list) is too large for its corresponding
+// size field.
 func MarshalToBytes(vals ...interface{}) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if _, err := MarshalToWriter(buf, vals...); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// MustMarshalToBytes is the same as MarshalToBytes, except that it panics if it encounters an error.
+func MustMarshalToBytes(vals ...interface{}) []byte {
+	b, err := MarshalToBytes(vals...)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // UnmarshalFromReader unmarshals data in the TPM wire format from r to vals, according to the rules specified in the package
@@ -846,4 +871,26 @@ func UnmarshalFromReader(r io.Reader, vals ...interface{}) (int, error) {
 func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 	buf := bytes.NewReader(b)
 	return UnmarshalFromReader(buf, vals...)
+}
+
+// CopyValue copies the value of src to dst. The destination must be a pointer to the actual
+// destination value. This works by serializing the source value in the TPM wire format
+// and the deserializing it again into the destination.
+//
+// This will return an error for any reason that would cause MarshalToBytes or
+// UnmarshalFromBytes to return an error.
+func CopyValue(dst, src interface{}) error {
+	buf := new(bytes.Buffer)
+	if _, err := MarshalToWriter(buf, src); err != nil {
+		return err
+	}
+	_, err := UnmarshalFromReader(buf, dst)
+	return err
+}
+
+// MustCopyValue is the same as CopyValue except that it panics if it encounters an error.
+func MustCopyValue(dst, src interface{}) {
+	if err := CopyValue(dst, src); err != nil {
+		panic(err)
+	}
 }
