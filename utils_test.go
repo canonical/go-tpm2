@@ -14,6 +14,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 
 	. "gopkg.in/check.v1"
@@ -238,6 +239,55 @@ func (s *utilsSuite) TestCreateUnwrapDuplicationObjectBothWrappers(c *C) {
 			},
 		},
 	})
+}
+
+type utilsSuiteTPM struct {
+	testutil.TPMTest
+}
+
+func (s *utilsSuiteTPM) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy
+}
+
+var _ = Suite(&utilsSuiteTPM{})
+
+func (s *utilsSuiteTPM) TestComputeQualifiedName(c *C) {
+	primary := s.CreateStoragePrimaryKeyRSA(c)
+
+	_, _, primaryQn, err := s.TPM.ReadPublic(primary)
+	c.Assert(err, IsNil)
+
+	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, templates.NewRSAKeyWithDefaults(templates.KeyUsageSign|templates.KeyUsageDecrypt), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object, err := s.TPM.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	_, _, expectedQn, err := s.TPM.ReadPublic(object)
+	c.Assert(err, IsNil)
+
+	c.Check(ComputeQualifiedName(object.Name(), primaryQn), DeepEquals, expectedQn)
+}
+
+func (s *utilsSuiteTPM) TestComputeQualifiedNameFull(c *C) {
+	primary := s.CreateStoragePrimaryKeyRSA(c)
+
+	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, testutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object1, err := s.TPM.Load(primary, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	priv, pub, _, _, _, err = s.TPM.Create(object1, nil, templates.NewRSAKeyWithDefaults(templates.KeyUsageSign|templates.KeyUsageDecrypt), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	object2, err := s.TPM.Load(object1, priv, pub, nil)
+	c.Assert(err, IsNil)
+
+	_, _, expectedQn, err := s.TPM.ReadPublic(object2)
+	c.Assert(err, IsNil)
+
+	c.Check(ComputeQualifiedNameFull(object2.Name(), HandleOwner, primary.Name(), object1.Name()), DeepEquals, expectedQn)
 }
 
 type mockHandleContext struct {

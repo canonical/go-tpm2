@@ -519,3 +519,32 @@ func CreateDuplicationObjectFromSensitive(sensitive *Sensitive, public, parentPu
 
 	return
 }
+
+// ComputeQualifiedName can compute the qualified name of an object with
+// the specified name that is protected by a parent with the specified
+// qualified name.
+func ComputeQualifiedName(name, parentQn Name) Name {
+	h := name.Algorithm().NewHash()
+	h.Write(parentQn)
+	h.Write(name)
+
+	b, _ := mu.MarshalToBytes(name.Algorithm(), mu.RawBytes(h.Sum(nil)))
+	return Name(b)
+}
+
+// ComputeQualifiedNameFull can compute the qualified name of an object with
+// the specified name that is protected in the specified hierarchy by the chain
+// of parent objects with the specified names. The ancestor names are ordered
+// from the primary key towards the immediate parent.
+func ComputeQualifiedNameFull(name Name, hierarchy Handle, ancestors ...Name) Name {
+	lastQn := make(Name, 4)
+	binary.BigEndian.PutUint32(lastQn, uint32(hierarchy))
+
+	for len(ancestors) > 0 {
+		current := ancestors[0]
+		ancestors = ancestors[1:]
+		lastQn = ComputeQualifiedName(current, lastQn)
+	}
+
+	return ComputeQualifiedName(name, lastQn)
+}
