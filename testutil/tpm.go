@@ -159,35 +159,32 @@ var (
 	wrapMssimTCTI = WrapTCTI
 )
 
-type tpmBackendFlagValue struct {
-	v      TPMBackendType
-	target *TPMBackendType
-}
+type tpmBackendFlag TPMBackendType
 
-func (v *tpmBackendFlagValue) Set(s string) error {
+func (v tpmBackendFlag) Set(s string) error {
 	b, err := strconv.ParseBool(s)
 	if err != nil {
 		return err
 	}
 	if b {
-		*v.target = v.v
-	} else if *v.target == v.v {
-		*v.target = TPMBackendNone
+		TPMBackend = TPMBackendType(v)
+	} else if TPMBackend == TPMBackendType(v) {
+		TPMBackend = TPMBackendNone
 	}
 	return nil
 }
 
-func (v *tpmBackendFlagValue) String() string {
-	return strconv.FormatBool(*v.target == v.v)
+func (v tpmBackendFlag) String() string {
+	return strconv.FormatBool(TPMBackend == TPMBackendType(v))
 }
 
-func (v *tpmBackendFlagValue) IsBoolFlag() bool { return true }
+func (v tpmBackendFlag) IsBoolFlag() bool { return true }
 
 // AddCommandLineFlags adds various command line flags to the current executable, which can be used for
 // setting test parameters. This should be called from inside of the init function for a package.
 func AddCommandLineFlags() {
-	flag.Var(&tpmBackendFlagValue{v: TPMBackendDevice, target: &TPMBackend}, "use-tpm", "Whether to use a TPM character device for testing (eg, /dev/tpm0)")
-	flag.Var(&tpmBackendFlagValue{v: TPMBackendMssim, target: &TPMBackend}, "use-mssim", "Whether to use the TPM simulator for testing")
+	flag.Var(tpmBackendFlag(TPMBackendDevice), "use-tpm", "Whether to use a TPM character device for testing (eg, /dev/tpm0)")
+	flag.Var(tpmBackendFlag(TPMBackendMssim), "use-mssim", "Whether to use the TPM simulator for testing")
 	flag.Var(&PermittedTPMFeatures, "tpm-permitted-features", "Comma-separated list of features that tests can use on a TPM character device")
 
 	flag.StringVar(&TPMDevicePath, "tpm-path", "/dev/tpm0", "The path of the TPM character device to use for testing (default: /dev/tpm0)")

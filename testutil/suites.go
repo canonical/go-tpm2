@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/templates"
 
 	. "gopkg.in/check.v1"
 )
@@ -214,7 +215,7 @@ func (b *TPMTest) NextAvailableHandle(c *C, handle tpm2.Handle) tpm2.Handle {
 	return tpm2.HandleUnassigned
 }
 
-// RequireAlgorithm checks if the required algorithm is supported by the
+// RequireAlgorithm checks if the required algorithm is known to the
 // TPM and skips the test if it isn't.
 func (b *TPMTest) RequireAlgorithm(c *C, alg tpm2.AlgorithmId) {
 	b.TCTI.disableCommandLogging = true
@@ -224,6 +225,46 @@ func (b *TPMTest) RequireAlgorithm(c *C, alg tpm2.AlgorithmId) {
 	c.Assert(err, IsNil)
 	if len(algs) == 0 || algs[0].Alg != alg {
 		c.Skip(fmt.Sprintf("unsupported algorithm %v", alg))
+	}
+}
+
+// RequireRSAKeySize checks if a RSA object can be created with the
+// specified key size and skips the test if it can't.
+func (b *TPMTest) RequireRSAKeySize(c *C, keyBits uint16) {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	template := templates.NewRSAKey(tpm2.HashAlgorithmNull, 0, nil, keyBits)
+	if err := b.TPM.TestParms(&tpm2.PublicParams{Type: template.Type, Parameters: template.Params}); err != nil {
+		c.Skip(fmt.Sprintf("unsupported RSA key size %d", keyBits))
+	}
+}
+
+// RequireECCCurve checks if the specified elliptic curve is known
+// to the TPM and skips the test if it isn't.
+func (b *TPMTest) RequireECCCurve(c *C, curve tpm2.ECCCurve) {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	curves, err := b.TPM.GetCapabilityECCCurves()
+	c.Assert(err, IsNil)
+	for _, supported := range curves {
+		if supported == curve {
+			return
+		}
+	}
+	c.Skip(fmt.Sprintf("unsupported elliptic curve %v", curve))
+}
+
+// RequireSymmetricAlgorithm checks if an object with the specified
+// symmetric algorithm can be created and skips the test if it can't.
+func (b *TPMTest) RequireSymmetricAlgorithm(c *C, algorithm tpm2.SymObjectAlgorithmId, keyBits uint16) {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	template := templates.NewSymmetricKey(tpm2.HashAlgorithmNull, 0, algorithm, keyBits, tpm2.SymModeCFB)
+	if err := b.TPM.TestParms(&tpm2.PublicParams{Type: template.Type, Parameters: template.Params}); err != nil {
+		c.Skip(fmt.Sprintf("unsupported symmetric algorithm %v-%d", algorithm, keyBits))
 	}
 }
 

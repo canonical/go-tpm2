@@ -141,6 +141,13 @@ type tpmTestSuite struct {
 	BaseTest
 }
 
+func (s *tpmTestSuite) SetUpTest(c *C) {
+	s.BaseTest.SetUpTest(c)
+	if TPMBackend == TPMBackendNone {
+		c.Skip("no tpm available")
+	}
+}
+
 var _ = Suite(&tpmTestSuite{})
 
 func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
@@ -233,10 +240,6 @@ func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
 }
 
 func (s *tpmTestSuite) TestLastCommandWithNoCommands(c *C) {
-	if TPMBackend == TPMBackendNone {
-		c.Skip("no tpm available")
-	}
-
 	suite := new(mockTPMTestSuite)
 	suite.cb = func(c *C) {
 		suite.LastCommand(c)
@@ -260,6 +263,66 @@ func (s *tpmTestSuite) TestRequireMissingAlgorithm(c *C) {
 	suite := new(mockTPMTestSuite)
 	suite.cb = func(c *C) {
 		suite.RequireAlgorithm(c, tpm2.AlgorithmError)
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
+}
+
+func (s *tpmTestSuite) TestRequireRSAKeySize(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireRSAKeySize(c, 2048)
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 1 passed")
+}
+
+func (s *tpmTestSuite) TestRequireMissingRSAKeySize(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireRSAKeySize(c, 2047)
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
+}
+
+func (s *tpmTestSuite) TestRequireECCCurve(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireECCCurve(c, tpm2.ECCCurveNIST_P256)
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 1 passed")
+}
+
+func (s *tpmTestSuite) TestRequireMissingECCCurve(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireECCCurve(c, tpm2.ECCCurve(0))
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
+}
+
+func (s *tpmTestSuite) TestRequireSymmetricAlgorithm(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmAES, 128)
+	}
+
+	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	c.Check(result.String(), Equals, "OK: 1 passed")
+}
+
+func (s *tpmTestSuite) TestRequireMissingSymmetricAlgorithm(c *C) {
+	suite := new(mockTPMTestSuite)
+	suite.cb = func(c *C) {
+		suite.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmId(tpm2.AlgorithmError), 128)
 	}
 
 	result := Run(suite, &RunConf{Output: ioutil.Discard})
@@ -366,6 +429,13 @@ func (s *tpmTestSuiteProper) TestClearTPMUsingPlatformHierarchy(c *C) {
 
 type tpmSimulatorTestSuite struct {
 	BaseTest
+}
+
+func (s *tpmSimulatorTestSuite) SetUpTest(c *C) {
+	s.BaseTest.SetUpTest(c)
+	if TPMBackend != TPMBackendMssim {
+		c.Skip("no tpm available")
+	}
 }
 
 var _ = Suite(&tpmSimulatorTestSuite{})

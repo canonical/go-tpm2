@@ -89,7 +89,7 @@ func (s *templatesSuite) TestNewRSAStorageKeyDefaultSpecified(c *C) {
 }
 
 func (s *templatesSuite) TestNewRSAStorageKeyDifferentAlgorithm(c *C) {
-	s.RequireAlgorithm(c, tpm2.AlgorithmCamellia)
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmCamellia, 128)
 
 	s.testNewRSAStorageKey(c, &testNewRSAStorageKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
@@ -110,6 +110,8 @@ func (s *templatesSuite) TestNewRSAStorageKeyDifferentAlgorithm(c *C) {
 }
 
 func (s *templatesSuite) TestNewRSAStorageKeyDefaultDifferentSymKeyBits(c *C) {
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmAES, 256)
+
 	s.testNewRSAStorageKey(c, &testNewRSAStorageKeyData{
 		nameAlg:    tpm2.HashAlgorithmNull,
 		algorithm:  tpm2.SymObjectAlgorithmNull,
@@ -129,25 +131,27 @@ func (s *templatesSuite) TestNewRSAStorageKeyDefaultDifferentSymKeyBits(c *C) {
 					Exponent: 0}}}})
 }
 
-//func (s *templatesSuite) TestNewRSAStorageKeyDefaultDifferentAsymKeyBits(c *C) {
-//	s.testNewRSAStorageKey(c, &testNewRSAStorageKeyData{
-//		nameAlg: tpm2.HashAlgorithmNull,
-//		algorithm: tpm2.SymObjectAlgorithmNull,
-//		asymKeyBits: 3072,
-//		expected: &tpm2.Public{
-//			Type:    tpm2.ObjectTypeRSA,
-//			NameAlg: tpm2.HashAlgorithmSHA256,
-//			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt,
-//			Params: &tpm2.PublicParamsU{
-//				RSADetail: &tpm2.RSAParams{
-//					Symmetric: tpm2.SymDefObject{
-//						Algorithm: tpm2.SymObjectAlgorithmAES,
-//						KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-//						Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
-//					Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-//					KeyBits:  3072,
-//					Exponent: 0}}}})
-//}
+func (s *templatesSuite) TestNewRSAStorageKeyDefaultDifferentAsymKeyBits(c *C) {
+	s.RequireRSAKeySize(c, 1024)
+
+	s.testNewRSAStorageKey(c, &testNewRSAStorageKeyData{
+		nameAlg:     tpm2.HashAlgorithmNull,
+		algorithm:   tpm2.SymObjectAlgorithmNull,
+		asymKeyBits: 1024,
+		expected: &tpm2.Public{
+			Type:    tpm2.ObjectTypeRSA,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt,
+			Params: &tpm2.PublicParamsU{
+				RSADetail: &tpm2.RSAParams{
+					Symmetric: tpm2.SymDefObject{
+						Algorithm: tpm2.SymObjectAlgorithmAES,
+						KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
+						Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
+					Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
+					KeyBits:  1024,
+					Exponent: 0}}}})
+}
 
 func (s *templatesSuite) TestNewRSAStorageKeyDifferentNameAlg(c *C) {
 	s.testNewRSAStorageKey(c, &testNewRSAStorageKeyData{
@@ -281,24 +285,26 @@ func (s *templatesSuite) TestNewRestrictedRSASigningKeyDifferentScheme(c *C) {
 					Exponent: 0}}}})
 }
 
-//func (s *templatesSuite) TestNewRestrictedRSASigningKeyDifferentKeyBits(c *C) {
-//	s.testNewRestrictedRSASigningKey(c, &testNewRestrictedRSASigningKeyData{
-//		nameAlg: tpm2.HashAlgorithmNull,
-//		keyBits: 3072,
-//		expected: &tpm2.Public{
-//			Type:    tpm2.ObjectTypeRSA,
-//			NameAlg: tpm2.HashAlgorithmSHA256,
-//			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrRestricted,
-//			Params: &tpm2.PublicParamsU{
-//				RSADetail: &tpm2.RSAParams{
-//					Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
-//					Scheme:    tpm2.RSAScheme{
-//						Scheme: tpm2.RSASchemeRSASSA,
-//						Details: &tpm2.AsymSchemeU{
-//							RSASSA: &tpm2.SigSchemeRSASSA{HashAlg: tpm2.HashAlgorithmSHA256}}},
-//					KeyBits:   3072,
-//					Exponent:  0}}}})
-//}
+func (s *templatesSuite) TestNewRestrictedRSASigningKeyDifferentKeyBits(c *C) {
+	s.RequireRSAKeySize(c, 1024)
+
+	s.testNewRestrictedRSASigningKey(c, &testNewRestrictedRSASigningKeyData{
+		nameAlg: tpm2.HashAlgorithmNull,
+		keyBits: 1024,
+		expected: &tpm2.Public{
+			Type:    tpm2.ObjectTypeRSA,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrRestricted,
+			Params: &tpm2.PublicParamsU{
+				RSADetail: &tpm2.RSAParams{
+					Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
+					Scheme: tpm2.RSAScheme{
+						Scheme: tpm2.RSASchemeRSASSA,
+						Details: &tpm2.AsymSchemeU{
+							RSASSA: &tpm2.SigSchemeRSASSA{HashAlg: tpm2.HashAlgorithmSHA256}}},
+					KeyBits:  1024,
+					Exponent: 0}}}})
+}
 
 func (s *templatesSuite) TestNewRestrictedRSASigningKeyWithDefaults(c *C) {
 	template := NewRestrictedRSASigningKeyWithDefaults()
@@ -422,22 +428,24 @@ func (s *templatesSuite) TestNewRSAKeyDifferentScheme(c *C) {
 					Exponent: 0}}}})
 }
 
-//func (s *templatesSuite) TestNewRSAKeyDifferentKeyBits(c *C) {
-//	s.testNewRSAKey(c, &testNewRSAKeyData{
-//		nameAlg: tpm2.HashAlgorithmNull,
-//		usage: KeyUsageSign | KeyUsageDecrypt,
-//		keyBits: 3072,
-//		expected: &tpm2.Public{
-//			Type:    tpm2.ObjectTypeRSA,
-//			NameAlg: tpm2.HashAlgorithmSHA256,
-//			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrDecrypt,
-//			Params: &tpm2.PublicParamsU{
-//				RSADetail: &tpm2.RSAParams{
-//					Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
-//					Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-//					KeyBits:   3072,
-//					Exponent:  0}}}})
-//}
+func (s *templatesSuite) TestNewRSAKeyDifferentKeyBits(c *C) {
+	s.RequireRSAKeySize(c, 1024)
+
+	s.testNewRSAKey(c, &testNewRSAKeyData{
+		nameAlg: tpm2.HashAlgorithmNull,
+		usage:   KeyUsageSign | KeyUsageDecrypt,
+		keyBits: 1024,
+		expected: &tpm2.Public{
+			Type:    tpm2.ObjectTypeRSA,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrDecrypt,
+			Params: &tpm2.PublicParamsU{
+				RSADetail: &tpm2.RSAParams{
+					Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
+					Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
+					KeyBits:   1024,
+					Exponent:  0}}}})
+}
 
 type testNewRSAKeyWithDefaultsData struct {
 	usage KeyUsage
@@ -614,7 +622,7 @@ func (s *templatesSuite) TestNewECCStorageKeyDifferentNameAlg(c *C) {
 }
 
 func (s *templatesSuite) TestNewECCStorageKeyDifferentAlgorithm(c *C) {
-	s.RequireAlgorithm(c, tpm2.AlgorithmCamellia)
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmCamellia, 128)
 
 	s.testNewECCStorageKey(c, &testNewECCStorageKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
@@ -636,6 +644,8 @@ func (s *templatesSuite) TestNewECCStorageKeyDifferentAlgorithm(c *C) {
 }
 
 func (s *templatesSuite) TestNewECCStorageKeyDifferentKeyBits(c *C) {
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmAES, 256)
+
 	s.testNewECCStorageKey(c, &testNewECCStorageKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
 		algorithm: tpm2.SymObjectAlgorithmNull,
@@ -657,6 +667,8 @@ func (s *templatesSuite) TestNewECCStorageKeyDifferentKeyBits(c *C) {
 }
 
 func (s *templatesSuite) TestNewECCStorageKeyDifferentCurve(c *C) {
+	s.RequireECCCurve(c, tpm2.ECCCurveNIST_P384)
+
 	s.testNewECCStorageKey(c, &testNewECCStorageKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
 		algorithm: tpm2.SymObjectAlgorithmNull,
@@ -795,6 +807,8 @@ func (s *templatesSuite) TestNewRestrictedECCSigningKeyDifferentScheme(c *C) {
 }
 
 func (s *templatesSuite) TestNewRestrictedECCSigningKeyDifferentCurve(c *C) {
+	s.RequireECCCurve(c, tpm2.ECCCurveNIST_P384)
+
 	s.testNewRestrictedECCSigningKey(c, &testNewRestrictedECCSigningKeyData{
 		nameAlg: tpm2.HashAlgorithmNull,
 		curve:   tpm2.ECCCurveNIST_P384,
@@ -940,6 +954,8 @@ func (s *templatesSuite) TestNewECCKeyDifferentScheme(c *C) {
 }
 
 func (s *templatesSuite) TestNewECCKeyDifferentCurve(c *C) {
+	s.RequireECCCurve(c, tpm2.ECCCurveNIST_P384)
+
 	s.testNewECCKey(c, &testNewECCKeyData{
 		nameAlg: tpm2.HashAlgorithmNull,
 		usage:   KeyUsageSign | KeyUsageDecrypt,
@@ -1061,7 +1077,7 @@ func (s *templatesSuite) TestNewSymmetricStorageKeyDifferentNameAlg(c *C) {
 }
 
 func (s *templatesSuite) TestNewSymmetricStorageKeyDifferentAlgorithm(c *C) {
-	s.RequireAlgorithm(c, tpm2.AlgorithmCamellia)
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmCamellia, 128)
 
 	s.testNewSymmetricStorageKey(c, &testNewSymmetricStorageKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
@@ -1079,6 +1095,8 @@ func (s *templatesSuite) TestNewSymmetricStorageKeyDifferentAlgorithm(c *C) {
 }
 
 func (s *templatesSuite) TestNewSymmetricStorageKeyDifferentKeyBits(c *C) {
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmAES, 256)
+
 	s.testNewSymmetricStorageKey(c, &testNewSymmetricStorageKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
 		algorithm: tpm2.SymObjectAlgorithmNull,
@@ -1218,7 +1236,7 @@ func (s *templatesSuite) TestNewSymmetricKeyDifferentNameAlg(c *C) {
 }
 
 func (s *templatesSuite) TestNewSymmetricKeyDifferentAlgorithm(c *C) {
-	s.RequireAlgorithm(c, tpm2.AlgorithmCamellia)
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmCamellia, 128)
 
 	s.testNewSymmetricKey(c, &testNewSymmetricKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
@@ -1238,6 +1256,8 @@ func (s *templatesSuite) TestNewSymmetricKeyDifferentAlgorithm(c *C) {
 }
 
 func (s *templatesSuite) TestNewSymmetricKeyDifferentKeyBits(c *C) {
+	s.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmAES, 256)
+
 	s.testNewSymmetricKey(c, &testNewSymmetricKeyData{
 		nameAlg:   tpm2.HashAlgorithmNull,
 		usage:     KeyUsageEncrypt | KeyUsageDecrypt,
