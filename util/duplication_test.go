@@ -38,26 +38,7 @@ type testCreateUnwrapDuplicationObjectData struct {
 }
 
 func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCreateUnwrapDuplicationObjectData) {
-	sensitiveIn := &tpm2.Sensitive{
-		Type:      tpm2.ObjectTypeKeyedHash,
-		AuthValue: []byte("foo"),
-		SeedValue: make([]byte, crypto.SHA256.Size()),
-		Sensitive: &tpm2.SensitiveCompositeU{Bits: []byte("super secret data")}}
-
-	h := crypto.SHA256.New()
-	h.Write(sensitiveIn.SeedValue)
-	h.Write(sensitiveIn.Sensitive.Bits)
-
-	public := &tpm2.Public{
-		Type:    tpm2.ObjectTypeKeyedHash,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
-			},
-		},
-		Unique: &tpm2.PublicIDU{KeyedHash: h.Sum(nil)}}
+	public, sensitiveIn := NewSealedObject(tpm2.HashAlgorithmSHA256, []byte("foo"), []byte("super secret data"))
 
 	encryptionKey, duplicate, symSeed, err := CreateDuplicationObjectFromSensitive(sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
 	c.Check(err, IsNil)
@@ -91,7 +72,7 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectNoWrapper(c *C) {
 	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{})
 }
 
-func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectInnerWrapper1(c *C) {
+func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithInnerWrapper(c *C) {
 	s.testCreateUnwrapDuplicationObject(c, &testCreateUnwrapDuplicationObjectData{
 		symmetricAlg: &tpm2.SymDefObject{
 			Algorithm: tpm2.SymObjectAlgorithmAES,
@@ -100,7 +81,7 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectInnerWrapper1(c *C) 
 	})
 }
 
-func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectInnerWrapper2(c *C) {
+func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithInnerWrapperAndSuppliedKey(c *C) {
 	symKey := make([]byte, 16)
 	rand.Read(symKey)
 
@@ -113,7 +94,7 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectInnerWrapper2(c *C) 
 	})
 }
 
-func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectOuterWrapperRSA(c *C) {
+func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithOuterWrapperRSA(c *C) {
 	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
 
@@ -140,7 +121,7 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectOuterWrapperRSA(c *C
 	})
 }
 
-func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC1(c *C) {
+func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithOuterWrapperECC1(c *C) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
@@ -172,7 +153,7 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC1(c *
 	})
 }
 
-func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC2(c *C) {
+func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithOuterWrapperECCAndSHA1(c *C) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
@@ -204,7 +185,7 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectOuterWrapperECC2(c *
 	})
 }
 
-func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectBothWrappers(c *C) {
+func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithBothWrappers(c *C) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
