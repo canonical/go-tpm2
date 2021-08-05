@@ -566,7 +566,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 		return nil, xerrors.Errorf("cannot unpack context blob and checksum: %w", err)
 	}
 
-	if !integrityAlg.Supported() {
+	if !integrityAlg.Available() {
 		return nil, errors.New("invalid checksum algorithm")
 	}
 	h := integrityAlg.NewHash()
