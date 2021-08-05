@@ -59,7 +59,7 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 		}
 
 		var err error
-		seed, err = CryptSecretDecrypt(privKey, parentNameAlg.GetHash(), []byte("DUPLICATE"), inSymSeed)
+		seed, err = CryptSecretDecrypt(privKey, parentNameAlg.GetHash(), []byte(tpm2.DuplicateString), inSymSeed)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot decrypt symmetric seed: %w", err)
 		}
@@ -84,7 +84,7 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 			return nil, xerrors.Errorf("cannot unpack outer wrapper: %w", err)
 		}
 
-		hmacKey := internal.KDFa(parentNameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentNameAlg.Size()*8)
+		hmacKey := internal.KDFa(parentNameAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, parentNameAlg.Size()*8)
 		h := hmac.New(func() hash.Hash { return parentNameAlg.NewHash() }, hmacKey)
 		h.Write(duplicate)
 		h.Write(name)
@@ -93,7 +93,7 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 			return nil, errors.New("outer integrity digest is invalid")
 		}
 
-		symKey := internal.KDFa(parentNameAlg.GetHash(), seed, []byte("STORAGE"), name, nil, int(parentSymmetricAlg.KeyBits.Sym))
+		symKey := internal.KDFa(parentNameAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(parentSymmetricAlg.KeyBits.Sym))
 
 		if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(parentSymmetricAlg.Algorithm), symKey, make([]byte, parentSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, xerrors.Errorf("cannot remove outer wrapper: %w", err)
@@ -193,7 +193,7 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 		if !outerSymmetric.Algorithm.Available() {
 			return nil, nil, nil, errors.New("symmetric algorithm for outer wrapper is not available")
 		}
-		outSymSeed, seed, err = tpm2.CryptSecretEncrypt(parentPublic, []byte("DUPLICATE"))
+		outSymSeed, seed, err = tpm2.CryptSecretEncrypt(parentPublic, []byte(tpm2.DuplicateString))
 		if err != nil {
 			return nil, nil, nil, xerrors.Errorf("cannot create encrypted symmetric seed: %w", err)
 		}
@@ -243,13 +243,13 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 
 	if applyOuterWrapper {
 		// Apply outer wrapper
-		symKey := internal.KDFa(parentPublic.NameAlg.GetHash(), seed, []byte("STORAGE"), name, nil, int(outerSymmetric.KeyBits.Sym))
+		symKey := internal.KDFa(parentPublic.NameAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(outerSymmetric.KeyBits.Sym))
 
 		if err := tpm2.CryptSymmetricEncrypt(tpm2.SymAlgorithmId(outerSymmetric.Algorithm), symKey, make([]byte, outerSymmetric.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, nil, nil, xerrors.Errorf("cannot apply outer wrapper: %w", err)
 		}
 
-		hmacKey := internal.KDFa(parentPublic.NameAlg.GetHash(), seed, []byte("INTEGRITY"), nil, nil, parentPublic.NameAlg.Size()*8)
+		hmacKey := internal.KDFa(parentPublic.NameAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, parentPublic.NameAlg.Size()*8)
 		h := hmac.New(func() hash.Hash { return parentPublic.NameAlg.NewHash() }, hmacKey)
 		h.Write(duplicate)
 		h.Write(name)

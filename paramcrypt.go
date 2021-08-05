@@ -74,7 +74,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 		if symmetric.Mode.Sym != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
-		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceCaller, sessionData.NonceTPM,
+		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
@@ -116,7 +116,7 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 		if symmetric.Mode.Sym != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
-		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte("CFB"), sessionData.NonceTPM, sessionData.NonceCaller,
+		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceTPM, sessionData.NonceCaller,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
