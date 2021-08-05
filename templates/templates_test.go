@@ -502,6 +502,7 @@ func (s *templatesSuite) TestNewRSAKeyWithDefaults(c *C) {
 					KeyBits:   2048,
 					Exponent:  0}}}})
 }
+
 type testNewSealedObjectData struct {
 	nameAlg tpm2.HashAlgorithmId
 

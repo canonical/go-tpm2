@@ -60,7 +60,7 @@ func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDe
 
 func (s *sessionParam) computeCommandHMAC(commandCode CommandCode, commandHandles []Name, cpBytes []byte) []byte {
 	data := s.session.Data()
-	cpHash := cryptComputeCpHash(data.HashAlg, commandCode, commandHandles, cpBytes)
+	cpHash := ComputeCpHash(data.HashAlg.GetHash(), commandCode, commandHandles, cpBytes)
 	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.decryptNonce, s.encryptNonce, s.session.attrs.canonicalize())
 	return h
 }

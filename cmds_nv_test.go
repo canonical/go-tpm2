@@ -6,6 +6,7 @@ package tpm2_test
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
@@ -13,6 +14,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/testutil"
+	"github.com/canonical/go-tpm2/util"
 )
 
 func TestNVDefineAndUndefineSpace(t *testing.T) {
@@ -136,7 +138,7 @@ func TestNVUndefineSpaceSpecial(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureNV)
 	defer closeTPM()
 
-	trial, _ := ComputeAuthPolicy(HashAlgorithmSHA256)
+	trial := util.ComputeAuthPolicy(crypto.SHA256)
 	trial.PolicyAuthValue()
 	trial.PolicyCommandCode(CommandNVUndefineSpaceSpecial)
 	authPolicy := trial.GetDigest()

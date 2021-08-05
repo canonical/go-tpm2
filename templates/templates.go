@@ -2,6 +2,9 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
+/*
+Package template contains helpers for constructing templates to create objects with go-tpm2.
+*/
 package templates
 
 import (
@@ -159,7 +162,7 @@ func NewRestrictedRSASigningKeyWithDefaults() *tpm2.Public {
 func NewRSAKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.RSAScheme, keyBits uint16) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
 	if usage == 0 {
-		usage = KeyUsageSign|KeyUsageDecrypt
+		usage = KeyUsageSign | KeyUsageDecrypt
 	}
 	if usage&KeyUsageSign != 0 {
 		attrs |= tpm2.AttrSign
@@ -368,7 +371,7 @@ func NewRestrictedECCSigningKeyWithDefaults() *tpm2.Public {
 func NewECCKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.ECCScheme, curve tpm2.ECCCurve) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
 	if usage == 0 {
-		usage = KeyUsageSign|KeyUsageDecrypt
+		usage = KeyUsageSign | KeyUsageDecrypt
 	}
 	if usage&KeyUsageSign != 0 {
 		attrs |= tpm2.AttrSign
@@ -500,7 +503,7 @@ func NewSymmetricStorageKeyWithDefaults() *tpm2.Public {
 func NewSymmetricKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, algorithm tpm2.SymObjectAlgorithmId, keyBits uint16, mode tpm2.SymModeId) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
 	if usage == 0 {
-		usage = KeyUsageEncrypt|KeyUsageDecrypt
+		usage = KeyUsageEncrypt | KeyUsageDecrypt
 	}
 	if usage&KeyUsageEncrypt != 0 {
 		attrs |= tpm2.AttrSign

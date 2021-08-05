@@ -79,7 +79,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := cryptSymmetricEncrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
+		if err := CryptSymmetricEncrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
@@ -121,7 +121,7 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := cryptSymmetricDecrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
+		if err := CryptSymmetricDecrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:

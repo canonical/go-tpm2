@@ -63,15 +63,20 @@ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 	return nil
 }
 
-func cryptComputeCpHash(hashAlg HashAlgorithmId, commandCode CommandCode, commandHandles []Name,
-	cpBytes []byte) []byte {
-	hash := hashAlg.NewHash()
+// ComputeCpHash computes a command parameter digest from the specified command code, the supplied
+// handles (identified by their names) and parameter buffer using the specified digest algorithm.
+//
+// The result of this is useful for extended authorization commands that bind an authorization to
+// a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
+// TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
+func ComputeCpHash(alg crypto.Hash, command CommandCode, handles []Name, parameters []byte) Digest {
+	hash := alg.New()
 
-	binary.Write(hash, binary.BigEndian, commandCode)
-	for _, name := range commandHandles {
+	binary.Write(hash, binary.BigEndian, command)
+	for _, name := range handles {
 		hash.Write([]byte(name))
 	}
-	hash.Write(cpBytes)
+	hash.Write(parameters)
 
 	return hash.Sum(nil)
 }
@@ -91,7 +96,9 @@ func cryptComputeNonce(nonce []byte) error {
 	return err
 }
 
-func cryptSymmetricEncrypt(alg SymAlgorithmId, key, iv, data []byte) error {
+// CryptSymmetricEncrypt performs in place symmetric encryption of the supplied
+// data with the specified algorithm using CFB mode.
+func CryptSymmetricEncrypt(alg SymAlgorithmId, key, iv, data []byte) error {
 	switch alg {
 	case SymAlgorithmXOR, SymAlgorithmNull:
 		return errors.New("unsupported symmetric algorithm")
@@ -107,7 +114,9 @@ func cryptSymmetricEncrypt(alg SymAlgorithmId, key, iv, data []byte) error {
 	}
 }
 
-func cryptSymmetricDecrypt(alg SymAlgorithmId, key, iv, data []byte) error {
+// CryptSymmetricDecrypt performs in place symmetric decryption of the supplied
+// data with the specified algorithm using CFB mode.
+func CryptSymmetricDecrypt(alg SymAlgorithmId, key, iv, data []byte) error {
 	switch alg {
 	case SymAlgorithmXOR, SymAlgorithmNull:
 		return errors.New("unsupported symmetric algorithm")
@@ -130,42 +139,14 @@ func zeroExtendBytes(x *big.Int, l int) (out []byte) {
 	return
 }
 
-func cryptSecretDecrypt(priv crypto.PrivateKey, hashAlg HashAlgorithmId, label []byte, secret EncryptedSecret) ([]byte, error) {
-	if !hashAlg.Supported() {
-		return nil, fmt.Errorf("cannot determine size of unknown hashAlg %v", hashAlg)
-	}
-
-	switch p := priv.(type) {
-	case *rsa.PrivateKey:
-		h := hashAlg.NewHash()
-		label0 := make([]byte, len(label)+1)
-		copy(label0, label)
-		return rsa.DecryptOAEP(h, rand.Reader, p, secret, label0)
-	case *ecdsa.PrivateKey:
-		var ephPoint ECCPoint
-		if _, err := mu.UnmarshalFromBytes(secret, &ephPoint); err != nil {
-			return nil, xerrors.Errorf("cannot unmarshal ephemeral point: %w", err)
-		}
-		ephX := new(big.Int).SetBytes(ephPoint.X)
-		ephY := new(big.Int).SetBytes(ephPoint.Y)
-
-		if !p.Curve.IsOnCurve(ephX, ephY) {
-			return nil, errors.New("ephemeral point is not on curve")
-		}
-
-		sz := p.Curve.Params().BitSize / 8
-
-		mulX, _ := p.Curve.ScalarMult(ephX, ephY, p.D.Bytes())
-		return internal.KDFe(hashAlg.GetHash(), zeroExtendBytes(mulX, sz), label,
-			ephPoint.X, zeroExtendBytes(p.X, sz), hashAlg.Size()*8), nil
-	default:
-		return nil, errors.New("unsupported key type")
-	}
-}
-
-func cryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, error) {
-	if !public.NameAlg.Supported() {
-		return nil, nil, fmt.Errorf("cannot determine size of unknown nameAlg %v", public.NameAlg)
+// CryptSecretEncrypt creates a secret value and its associated secret structure using
+// the asymmetric algorithm defined by public. This is useful for sharing secrets with
+// the TPM via the TPMContext.Import and TPMContext.ActivateCredential functions.
+//
+// It is also used internally by TPMContext.StartAuthSession.
+func CryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, error) {
+	if !public.NameAlg.Available() {
+		return nil, nil, fmt.Errorf("nameAlg %v is not available", public.NameAlg)
 	}
 	digestSize := public.NameAlg.Size()
 
