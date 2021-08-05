@@ -89,7 +89,7 @@ func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign
 		c.Check(signature.Signature.Any().HashAlg, Equals, scheme.Details.Any().HashAlg)
 
 		h := scheme.Details.Any().HashAlg.NewHash()
-		mu.MarshalToWriter(h, attest)
+		mu.MustMarshalToWriter(h, attest)
 		digest := h.Sum(nil)
 
 		pub, _, _, err := s.TPM.ReadPublic(sign)
@@ -254,20 +254,7 @@ func (s *attestationSuite) TestCertifyCreationSignAuthSession(c *C) {
 }
 
 func (s *attestationSuite) TestCertifyCreationInvalidTicket(c *C) {
-	template := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
-				Scheme:   RSAScheme{Scheme: RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	object, _, _, creationHash, creationTicket, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	object, _, _, creationHash, creationTicket, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, testutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	creationTicket.Hierarchy = HandleEndorsement

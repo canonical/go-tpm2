@@ -95,11 +95,11 @@ func TestDuplicate(t *testing.T) {
 
 	verifyDuplicate := func(t *testing.T, duplicate Private, outer bool, encryptionKey Data, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject) {
 		var privKey crypto.PrivateKey
-		parentNameAlg := HashAlgorithmNull
+		var parentNameAlg crypto.Hash
 		var parentSymmetricAlg *SymDefObject
 		if outer {
 			privKey = key
-			parentNameAlg = parentPub.NameAlg
+			parentNameAlg = parentPub.NameAlg.GetHash()
 			parentSymmetricAlg = &parentPub.Params.AsymDetail().Symmetric
 		}
 

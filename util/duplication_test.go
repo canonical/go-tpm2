@@ -49,10 +49,10 @@ func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCre
 		encryptionKey = data.encryptionKey
 	}
 
-	parentNameAlg := tpm2.HashAlgorithmNull
+	var parentNameAlg crypto.Hash
 	var parentSymmetricAlg *tpm2.SymDefObject
 	if data.parentPublic != nil {
-		parentNameAlg = data.parentPublic.NameAlg
+		parentNameAlg = data.parentPublic.NameAlg.GetHash()
 		parentSymmetricAlg = &data.parentPublic.Params.AsymDetail().Symmetric
 	}
 

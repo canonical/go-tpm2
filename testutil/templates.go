@@ -33,3 +33,11 @@ func NewRSAKeyTemplate(usage templates.KeyUsage, scheme *tpm2.RSAScheme) *tpm2.P
 	template.Attrs |= tpm2.AttrNoDA
 	return template
 }
+
+// NewSealedObject is a wrapper around templates.NewSealedObject that defines the noDA
+// attribute.
+func NewSealedObjectTemplate() *tpm2.Public {
+	template := templates.NewSealedObject(tpm2.HashAlgorithmSHA256)
+	template.Attrs |= tpm2.AttrNoDA
+	return template
+}
