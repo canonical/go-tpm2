@@ -496,12 +496,7 @@ func (s *objectSuite) testActivateCredential(c *C, data *testActivateCredentialD
 
 	credential := []byte("secret credential")
 
-	secret, seed, err := CryptSecretEncrypt(primaryPub, []byte(IdentityKey))
-	c.Check(err, IsNil)
-
-	credentialBlob := mu.MustMarshalToBytes(credential)
-
-	credentialBlob, err = util.ProduceOuterWrap(primaryPub, object.Name(), seed, credentialBlob)
+	credentialBlob, secret, err := util.MakeCredential(primaryPub, credential, object.Name())
 	c.Check(err, IsNil)
 
 	sessionHandles := HandleList{authSessionHandle(data.activateAuthSession), authSessionHandle(data.keyAuthSession)}
