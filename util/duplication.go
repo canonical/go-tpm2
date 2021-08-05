@@ -36,8 +36,8 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 		if privKey == nil {
 			return nil, errors.New("parent private key is required for outer wrapper")
 		}
-		if parentNameAlg == 0 {
-			return nil, errors.New("invalid parent name algorithm")
+		if !parentNameAlg.Available() {
+			return nil, errors.New("parent name algorithm is not available")
 		}
 		if parentSymmetricAlg == nil || parentSymmetricAlg.Algorithm == tpm2.SymObjectAlgorithmNull {
 			return nil, errors.New("invalid symmetric algorithm for outer wrapper")
@@ -108,6 +108,9 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 	if parentPublic != nil {
 		if !parentPublic.IsStorage() {
 			return nil, nil, nil, errors.New("parent object must be a storage key")
+		}
+		if !parentPublic.NameAlg.Available() {
+			return nil, nil, nil, errors.New("name algorithm for parent object is not available")
 		}
 		outerSymmetric = &parentPublic.Params.AsymDetail().Symmetric
 		if !outerSymmetric.Algorithm.Available() {
