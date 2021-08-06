@@ -63,7 +63,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMNV(c *C) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
-	rc := s.NVDefineSpace(c, s.TPM.OwnerHandleContext(), nil, &pub)
+	rc := s.NVDefineSpace(c, HandleOwner, nil, &pub)
 
 	rc2, err := s.TPM.CreateResourceContextFromTPM(rc.Handle())
 	c.Assert(err, IsNil)
@@ -164,7 +164,7 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesNV(c *C) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
-	rc := s.NVDefineSpace(c, s.TPM.OwnerHandleContext(), nil, &pub)
+	rc := s.NVDefineSpace(c, HandleOwner, nil, &pub)
 	b := rc.SerializeToBytes()
 
 	rc2, n, err := CreateHandleContextFromBytes(b)
@@ -228,7 +228,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMWithSessionNV(c *C) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
-	rc := s.NVDefineSpace(c, s.TPM.OwnerHandleContext(), nil, &pub)
+	rc := s.NVDefineSpace(c, HandleOwner, nil, &pub)
 	s.testCreateResourceContextFromTPMWithSession(c, &testCreateResourceContextFromTPMWithSessionData{
 		handle: rc.Handle(),
 		name:   rc.Name()})

@@ -311,11 +311,11 @@ func (b *TPMTest) EvictControl(c *C, auth tpm2.Handle, object tpm2.ResourceConte
 
 // NVDefineSpace calls the tpm2.TPMContext.NVDefineSpace function and asserts if
 // it is not successful.
-func (b *TPMTest) NVDefineSpace(c *C, authContext tpm2.ResourceContext, auth tpm2.Auth, publicInfo *tpm2.NVPublic) tpm2.ResourceContext {
+func (b *TPMTest) NVDefineSpace(c *C, authHandle tpm2.Handle, auth tpm2.Auth, publicInfo *tpm2.NVPublic) tpm2.ResourceContext {
 	b.TCTI.disableCommandLogging = true
 	defer func() { b.TCTI.disableCommandLogging = false }()
 
-	n, err := b.TPM.NVDefineSpace(authContext, auth, publicInfo, nil)
+	n, err := b.TPM.NVDefineSpace(b.TPM.GetPermanentContext(authHandle), auth, publicInfo, nil)
 	c.Assert(err, IsNil)
 	return n
 }

@@ -235,7 +235,7 @@ type testPolicyNVData struct {
 }
 
 func (s *policySuite) testPolicyNV(c *C, data *testPolicyNVData) {
-	index := s.NVDefineSpace(c, s.TPM.OwnerHandleContext(), nil, data.nvPub)
+	index := s.NVDefineSpace(c, tpm2.HandleOwner, nil, data.nvPub)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypeTrial, nil, data.alg)
 	c.Check(s.TPM.PolicyNV(index, index, session, data.operandB, data.offset, data.operation, nil), IsNil)
