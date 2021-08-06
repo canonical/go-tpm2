@@ -8,6 +8,8 @@ package tpm2
 
 import (
 	"fmt"
+
+	"github.com/canonical/go-tpm2/mu"
 )
 
 // CreatePrimary executes the TPM2_CreatePrimary command to create a new primary object in the hierarchy corresponding to
@@ -126,8 +128,8 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 			"name and public area returned from TPM are not consistent"}
 	}
 
-	public, err := outPublicSized.Ptr.copy()
-	if err != nil {
+	var public *Public
+	if err := mu.CopyValue(&public, outPublicSized.Ptr); err != nil {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
 	}

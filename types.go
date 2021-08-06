@@ -555,31 +555,19 @@ type TaggedHashList []TaggedHash
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
 
-func (l PCRSelectionList) copy() (out PCRSelectionList) {
-	b, _ := mu.MarshalToBytes(l)
-	mu.UnmarshalFromBytes(b, &out)
-	return
-}
-
 // Equal indicates whether l and r contain the same PCR selections. Equal selections will marshal to the same bytes in the TPM
 // wire format. To be considered equal, each set of selections must be identical length, contain the same PCR banks in the same
 // order, and each PCR bank must contain the same set of PCRs - the order of the PCRs listed in each bank are not important because
 // that ordering is not preserved on the wire and PCRs are selected in ascending numerical order.
 func (l PCRSelectionList) Equal(r PCRSelectionList) bool {
-	lb, err := mu.MarshalToBytes(l)
-	if err != nil {
-		panic(err)
-	}
-	rb, err := mu.MarshalToBytes(r)
-	if err != nil {
-		panic(err)
-	}
+	lb := mu.MustMarshalToBytes(l)
+	rb := mu.MustMarshalToBytes(r)
 	return bytes.Equal(lb, rb)
 }
 
 // Sort will sort the list of PCR selections in order of ascending algorithm ID. A new list of selections is returned.
 func (l PCRSelectionList) Sort() (out PCRSelectionList) {
-	out = l.copy()
+	mu.MustCopyValue(&out, l)
 	sort.Slice(out, func(i, j int) bool { return out[i].Hash < out[j].Hash })
 	return
 }
@@ -588,8 +576,8 @@ func (l PCRSelectionList) Sort() (out PCRSelectionList) {
 // combination of both. For each PCR found in r that isn't found in l, it will be added to the first occurence of the corresponding
 // PCR bank found in l if that exists, or otherwise a selection for that PCR bank will be appended to the result.
 func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
-	out = l.copy()
-	r = r.copy()
+	mu.MustCopyValue(&out, l)
+	mu.MustCopyValue(&r, r)
 
 	for _, sr := range r {
 		for _, pr := range sr.Select {
@@ -627,13 +615,15 @@ func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
 			}
 		}
 	}
-	return out.copy()
+
+	mu.MustCopyValue(&out, out)
+	return out
 }
 
 // Remove will remove the PCR selections in r from the PCR selections in l, and return a new set of selections.
 func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
-	out = l.copy()
-	r = r.copy()
+	mu.MustCopyValue(&out, l)
+	mu.MustCopyValue(&r, r)
 
 	for _, sr := range r {
 		for _, pr := range sr.Select {
@@ -1559,19 +1549,6 @@ func (p *Public) Name() (Name, error) {
 	return name, nil
 }
 
-func (p *Public) copy() (*Public, error) {
-	b, err := mu.MarshalToBytes(p)
-	if err != nil {
-		return nil, err
-	}
-	var out *Public
-	_, err = mu.UnmarshalFromBytes(b, &out)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (p *Public) compareName(name Name) bool {
 	n, err := p.Name()
 	if err != nil {
@@ -1817,19 +1794,6 @@ func (p *NVPublic) compareName(name Name) bool {
 		return false
 	}
 	return bytes.Equal(n, name)
-}
-
-func (p *NVPublic) copy() (*NVPublic, error) {
-	b, err := mu.MarshalToBytes(p)
-	if err != nil {
-		return nil, err
-	}
-	var out *NVPublic
-	_, err = mu.UnmarshalFromBytes(b, &out)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 type nvPublicSized struct {

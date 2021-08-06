@@ -8,6 +8,8 @@ package tpm2
 
 import (
 	"fmt"
+
+	"github.com/canonical/go-tpm2/mu"
 )
 
 // Create executes the TPM2_Create command to create a new ordinary object as a child of the storage parent associated with
@@ -209,7 +211,9 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 		return nil, &InvalidResponseError{CommandLoad, "name returned from TPM not consistent with loaded public area"}
 	}
 
-	public, _ := inPublic.copy() // inPublic already marshalled successfully, so ignore errors here
+	var public *Public
+	// inPublic already marshalled successfully, so this can't fail.
+	mu.MustCopyValue(&public, inPublic)
 	return makeObjectContext(objectHandle, name, public), nil
 }
 
@@ -294,7 +298,9 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 		return nil, &InvalidResponseError{CommandLoadExternal, "name returned from TPM not consistent with loaded public area"}
 	}
 
-	public, _ := inPublic.copy() // inPublic already marshalled successfully, so ignore errors here
+	var public *Public
+	// inPublic already marshalled succesfully, so this can't fail.
+	mu.MustCopyValue(&public, inPublic)
 	rc := makeObjectContext(objectHandle, name, public)
 	if inPrivate != nil {
 		rc.authValue = make([]byte, len(inPrivate.AuthValue))
@@ -594,8 +600,8 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
-	public, err := outPublicSized.Ptr.copy()
-	if err != nil {
+	var public *Public
+	if err := mu.CopyValue(&public, outPublicSized.Ptr); err != nil {
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
