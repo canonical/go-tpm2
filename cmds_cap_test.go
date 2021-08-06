@@ -120,6 +120,25 @@ func (s *capabilitiesSuite) TestGetCapabilityAlgs3(c *C) {
 		expected:      AlgorithmPropertyList{{Alg: AlgorithmRSA, Properties: AttrAsymmetric | AttrObject}}})
 }
 
+func (s *capabilitiesSuite) TestGetCapabilityAlg(c *C) {
+	alg, err := s.TPM.GetCapabilityAlg(AlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(alg.Properties, Equals, AttrHash)
+}
+
+func (s *capabilitiesSuite) TestGetCapabilityAlgMissing(c *C) {
+	_, err := s.TPM.GetCapabilityAlg(AlgorithmError)
+	c.Check(err, ErrorMatches, `algorithm 0x0000 does not exist`)
+}
+
+func (s *capabilitiesSuite) TestIsAlgorithmSupported(c *C) {
+	c.Check(s.TPM.IsAlgorithmSupported(AlgorithmRSA), testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestIsAlgorithmNotSupported(c *C) {
+	c.Check(s.TPM.IsAlgorithmSupported(AlgorithmError), testutil.IsFalse)
+}
+
 func makeCommandAttributes(code CommandCode, attrs CommandAttributes, handles int) CommandAttributes {
 	return CommandAttributes(code) | CommandAttributes((handles&0x7)<<25) | attrs
 }
@@ -259,6 +278,25 @@ func (s *capabilitiesSuite) TestGetCapabilityCommands3(c *C) {
 		expected:      CommandAttributesList{makeCommandAttributes(CommandNVUndefineSpaceSpecial, AttrNV, 2)}})
 }
 
+func (s *capabilitiesSuite) TestGetCapabilityCommand(c *C) {
+	command, err := s.TPM.GetCapabilityCommand(CommandUnseal)
+	c.Check(err, IsNil)
+	c.Check(command, Equals, makeCommandAttributes(CommandUnseal, 0, 1))
+}
+
+func (s *capabilitiesSuite) TestGetCapabilityMissingCommand(c *C) {
+	_, err := s.TPM.GetCapabilityCommand(CommandFirst)
+	c.Check(err, ErrorMatches, `command 0x0000011a does not exist`)
+}
+
+func (s *capabilitiesSuite) TestIsCommandSupported(c *C) {
+	c.Check(s.TPM.IsCommandSupported(CommandCreatePrimary), testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestIsCommandIsNotSupported(c *C) {
+	c.Check(s.TPM.IsCommandSupported(CommandFirst), testutil.IsFalse)
+}
+
 type testGetCapabilityHandlesData struct {
 	firstHandle   Handle
 	propertyCount uint32
@@ -297,6 +335,18 @@ func (s *capabilitiesSuite) TestGetCapabilityHandles3(c *C) {
 		firstHandle:   HandleTypePermanent.BaseHandle(),
 		propertyCount: 1,
 		expected:      HandleList{HandleOwner}})
+}
+
+func (s *capabilitiesSuite) TestDoesHandleExist1(c *C) {
+	c.Check(s.TPM.DoesHandleExist(HandleOwner), testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestDoesHandleExist2(c *C) {
+	c.Check(s.TPM.DoesHandleExist(0), testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestDoesHandleNotExist(c *C) {
+	c.Check(s.TPM.DoesHandleExist(0x40000000), testutil.IsFalse)
 }
 
 func (s *capabilitiesSuite) TestGetCapabilityPCRs(c *C) {
@@ -340,26 +390,28 @@ func (checker *propsValidChecker) Check(params []interface{}, names []string) (r
 			valid = p.Value == 0x322E3000
 		case PropertyLevel:
 			valid = p.Value == 0
-		case PropertyHRTransientMin:
-			valid = p.Value >= 3
-		case PropertyHRLoadedMin:
-			valid = p.Value >= 3
-		case PropertyActiveSessionsMax:
-			valid = p.Value >= 64
-		case PropertyPCRCount:
-			valid = p.Value >= 24
-		case PropertyPCRSelectMin:
-			valid = p.Value >= 3
-		case PropertyNVIndexMax:
-			valid = p.Value >= 1600
-		case PropertyPSLevel:
-			valid = p.Value == 0
-		case PropertyNVBufferMax:
-			valid = p.Value >= 512
+		case PropertyInputBuffer:
+			valid = p.Value >= 1024
+		case PropertyContextGapMax:
+			valid = p.Value == 65535 || p.Value == 255
 		case PropertyContextHash:
 			valid = p.Value == uint32(AlgorithmSHA1) || p.Value == uint32(AlgorithmSHA256) || p.Value == uint32(AlgorithmSHA384) || p.Value == uint32(AlgorithmSHA512)
+		case PropertyContextSym:
+			valid = p.Value == uint32(AlgorithmAES)
+		case PropertyContextSymSize:
+			valid = p.Value == 128 || p.Value == 192 || p.Value == 256
+		case PropertyOrderlyCount:
+			for i := uint8(1); i <= 32; i++ {
+				n := uint32((uint64(1) << i) - 1)
+				if p.Value == n {
+					valid = true
+					break
+				}
+			}
 		case PropertyMaxDigest:
-			valid = p.Value >= 20 && p.Value <= 64
+			valid = p.Value == 20 || p.Value == 32 || p.Value == 48 || p.Value == 64
+		case PropertyNVBufferMax:
+			valid = p.Value >= 512
 		default:
 			valid = true
 		}
@@ -400,10 +452,21 @@ func (s *capabilitiesSuite) TestGetCapabilityTPMProperties3(c *C) {
 		propertyCount: 1})
 }
 
+func (s *capabilitiesSuite) TestGetCapabilityTPMProperty(c *C) {
+	value, err := s.TPM.GetCapabilityTPMProperty(PropertyFamilyIndicator)
+	c.Check(err, IsNil)
+	c.Check(value, Equals, uint32(0x322E3000))
+}
+
+func (s *capabilitiesSuite) TestGetCapabilityTPMPropertyInvalid(c *C) {
+	_, err := s.TPM.GetCapabilityTPMProperty(0x115)
+	c.Check(err, ErrorMatches, `property 277 does not exist`)
+}
+
 func (s *capabilitiesSuite) TestGetManufacturer(c *C) {
 	id, err := s.TPM.GetManufacturer()
 	c.Check(err, IsNil)
-	c.Check(id, testutil.InSlice(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT})
+	c.Check(id, testutil.InSlice(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT, TPMManufacturerNTC, TPMManufacturerSTM})
 }
 
 func (s *capabilitiesSuite) testTestParms(c *C, params *PublicParams) {
@@ -464,8 +527,7 @@ func (s *capabilitiesSuite) TestTestParmsErrValue(c *C) {
 }
 
 func (s *capabilitiesSuite) TestIsTPM2(c *C) {
-	isTpm2, err := s.TPM.IsTPM2()
-	c.Check(err, IsNil)
+	isTpm2 := s.TPM.IsTPM2()
 	c.Check(isTpm2, testutil.IsTrue)
 }
 
@@ -565,7 +627,6 @@ func (s *capabilitiesMockTPM12Suite) SetUpTest(c *C) {
 var _ = Suite(&capabilitiesMockTPM12Suite{})
 
 func (s *capabilitiesMockTPM12Suite) TestIsTPM2(c *C) {
-	isTpm2, err := s.tpm.IsTPM2()
-	c.Check(err, IsNil)
+	isTpm2 := s.tpm.IsTPM2()
 	c.Check(isTpm2, testutil.IsFalse)
 }

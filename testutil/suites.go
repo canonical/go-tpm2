@@ -9,7 +9,6 @@ import (
 	"math"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/templates"
 
 	. "gopkg.in/check.v1"
 )
@@ -221,9 +220,7 @@ func (b *TPMTest) RequireAlgorithm(c *C, alg tpm2.AlgorithmId) {
 	b.TCTI.disableCommandLogging = true
 	defer func() { b.TCTI.disableCommandLogging = false }()
 
-	algs, err := b.TPM.GetCapabilityAlgs(alg, 1)
-	c.Assert(err, IsNil)
-	if len(algs) == 0 || algs[0].Alg != alg {
+	if !b.TPM.IsAlgorithmSupported(alg) {
 		c.Skip(fmt.Sprintf("unsupported algorithm %v", alg))
 	}
 }
@@ -234,8 +231,7 @@ func (b *TPMTest) RequireRSAKeySize(c *C, keyBits uint16) {
 	b.TCTI.disableCommandLogging = true
 	defer func() { b.TCTI.disableCommandLogging = false }()
 
-	template := templates.NewRSAKey(tpm2.HashAlgorithmNull, 0, nil, keyBits)
-	if err := b.TPM.TestParms(&tpm2.PublicParams{Type: template.Type, Parameters: template.Params}); err != nil {
+	if !b.TPM.IsRSAKeySizeSupported(keyBits) {
 		c.Skip(fmt.Sprintf("unsupported RSA key size %d", keyBits))
 	}
 }
@@ -246,14 +242,9 @@ func (b *TPMTest) RequireECCCurve(c *C, curve tpm2.ECCCurve) {
 	b.TCTI.disableCommandLogging = true
 	defer func() { b.TCTI.disableCommandLogging = false }()
 
-	curves, err := b.TPM.GetCapabilityECCCurves()
-	c.Assert(err, IsNil)
-	for _, supported := range curves {
-		if supported == curve {
-			return
-		}
+	if !b.TPM.IsECCCurveSupported(curve) {
+		c.Skip(fmt.Sprintf("unsupported elliptic curve %v", curve))
 	}
-	c.Skip(fmt.Sprintf("unsupported elliptic curve %v", curve))
 }
 
 // RequireSymmetricAlgorithm checks if an object with the specified
@@ -262,8 +253,7 @@ func (b *TPMTest) RequireSymmetricAlgorithm(c *C, algorithm tpm2.SymObjectAlgori
 	b.TCTI.disableCommandLogging = true
 	defer func() { b.TCTI.disableCommandLogging = false }()
 
-	template := templates.NewSymmetricKey(tpm2.HashAlgorithmNull, 0, algorithm, keyBits, tpm2.SymModeCFB)
-	if err := b.TPM.TestParms(&tpm2.PublicParams{Type: template.Type, Parameters: template.Params}); err != nil {
+	if !b.TPM.IsSymmetricAlgorithmSupported(algorithm, keyBits) {
 		c.Skip(fmt.Sprintf("unsupported symmetric algorithm %v-%d", algorithm, keyBits))
 	}
 }
