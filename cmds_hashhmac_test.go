@@ -289,7 +289,7 @@ func TestEventSequence(t *testing.T) {
 		expectedPcrValues := make(PCRValues)
 		checked := false
 		for _, r := range results {
-			if !r.HashAlg.Supported() {
+			if !r.HashAlg.Available() {
 				continue
 			}
 			checked = true
@@ -485,7 +485,7 @@ func TestEventSequenceExecute(t *testing.T) {
 		expectedPcrValues := make(PCRValues)
 		checked := false
 		for _, r := range results {
-			if !r.HashAlg.Supported() {
+			if !r.HashAlg.Available() {
 				continue
 			}
 			checked = true

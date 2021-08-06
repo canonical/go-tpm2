@@ -43,9 +43,6 @@ func (v PCRValues) ToListAndSelection() (pcrs PCRSelectionList, digests DigestLi
 func (v PCRValues) SetValuesFromListAndSelection(pcrs PCRSelectionList, digests DigestList) (int, error) {
 	i := 0
 	for _, p := range pcrs {
-		if !p.Hash.Supported() {
-			return 0, errors.New("unsupported digest algorithm")
-		}
 		if _, ok := v[p.Hash]; !ok {
 			v[p.Hash] = make(map[int]Digest)
 		}

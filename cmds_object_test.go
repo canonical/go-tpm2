@@ -100,7 +100,7 @@ func (s *objectSuite) checkCreationTicket(c *C, ticket *TkCreation, hierarchy Ha
 	c.Check(props[0].Property, Equals, PropertyContextHash)
 
 	contextHash := HashAlgorithmId(props[0].Value)
-	c.Check(contextHash.Supported(), testutil.IsTrue)
+	c.Check(contextHash.IsValid(), testutil.IsTrue)
 
 	c.Check(ticket.Digest, testutil.LenEquals, contextHash.Size())
 }

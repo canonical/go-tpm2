@@ -171,16 +171,16 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 		switch signature.SigAlg {
 		case SigSchemeAlgRSASSA:
 			sig := (*SignatureRSA)(signature.Signature.RSASSA)
-			if !sig.Hash.Supported() {
-				t.Fatalf("Signature has unknown digest")
+			if !sig.Hash.Available() {
+				t.Fatalf("Signature has unavailable digest")
 			}
 			if err := rsa.VerifyPKCS1v15(&pubKey, sig.Hash.GetHash(), digest, sig.Sig); err != nil {
 				t.Errorf("Signature is invalid")
 			}
 		case SigSchemeAlgRSAPSS:
 			sig := (*SignatureRSA)(signature.Signature.RSAPSS)
-			if !sig.Hash.Supported() {
-				t.Fatalf("Signature has unknown digest")
+			if !sig.Hash.Available() {
+				t.Fatalf("Signature has unavailable digest")
 			}
 			if err := rsa.VerifyPSS(&pubKey, sig.Hash.GetHash(), digest, sig.Sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}); err != nil {
 				t.Errorf("Signature is invalid")

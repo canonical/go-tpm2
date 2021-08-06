@@ -166,9 +166,24 @@ func (a HashAlgorithmId) GetHash() crypto.Hash {
 	}
 }
 
-// Supported determines if the TPM digest algorithm has an equivalent go crypto.Hash.
-func (a HashAlgorithmId) Supported() bool {
-	return a.GetHash() != crypto.Hash(0)
+// IsValid determines if the digest algorithm is valid. This should be
+// checked by code that deserializes an algorithm before calling Size
+// if it does not want to panic.
+func (a HashAlgorithmId) IsValid() bool {
+	switch a {
+	case HashAlgorithmSHA1:
+	case HashAlgorithmSHA256:
+	case HashAlgorithmSHA384:
+	case HashAlgorithmSHA512:
+	case HashAlgorithmSM3_256:
+	case HashAlgorithmSHA3_256:
+	case HashAlgorithmSHA3_384:
+	case HashAlgorithmSHA3_512:
+	default:
+		return false
+	}
+
+	return true
 }
 
 // Available determines if the TPM digest algorithm has an equivalent go crypto.Hash
@@ -183,9 +198,28 @@ func (a HashAlgorithmId) NewHash() hash.Hash {
 	return a.GetHash().New()
 }
 
-// Size returns the size of the algorithm. It will panic if HashAlgorithmId.Supported returns false.
+// Size returns the size of the algorithm. It will panic if IsValid returns false.
 func (a HashAlgorithmId) Size() int {
-	return a.GetHash().Size()
+	switch a {
+	case HashAlgorithmSHA1:
+		return 20
+	case HashAlgorithmSHA256:
+		return 32
+	case HashAlgorithmSHA384:
+		return 48
+	case HashAlgorithmSHA512:
+		return 64
+	case HashAlgorithmSM3_256:
+		return 32
+	case HashAlgorithmSHA3_256:
+		return 32
+	case HashAlgorithmSHA3_384:
+		return 48
+	case HashAlgorithmSHA3_512:
+		return 64
+	default:
+		panic("unknown hash algorithm")
+	}
 }
 
 // SymAlgorithmId corresponds to the TPMI_ALG_SYM type
@@ -197,25 +231,31 @@ func (a SymAlgorithmId) Available() bool {
 	return ok
 }
 
-// BlockSize indicates the block size of the symmetric cipher. This will panic if there
-// is no registered go implementation of the cipher or the algorithm does not correspond
-// to a symmetric cipher.
+// BlockSize indicates the block size of the symmetric cipher. This will panic if the
+// algorithm does not correspond to a symmetric cipher.
 func (a SymAlgorithmId) BlockSize() int {
-	c, ok := symmetricAlgs[a]
-	if !ok {
-		panic("unsupported cipher")
+	switch a {
+	case SymAlgorithmTDES:
+		return 8
+	case SymAlgorithmAES:
+		return 16
+	case SymAlgorithmSM4:
+		return 16
+	case SymAlgorithmCamellia:
+		return 16
+	default:
+		panic("invalid symmetric algorithm")
 	}
-	return c.blockSize
 }
 
 // NewCipher constructs a new symmetric cipher with the supplied key, if there is a go
 // implementation registered.
 func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
-	c, ok := symmetricAlgs[a]
+	fn, ok := symmetricAlgs[a]
 	if !ok {
 		return nil, errors.New("unavailable cipher")
 	}
-	return c.fn(key)
+	return fn(key)
 }
 
 // SymObjectAlgorithmId corresponds to the TPMI_ALG_SYM_OBJECT type
@@ -226,9 +266,8 @@ func (a SymObjectAlgorithmId) Available() bool {
 	return SymAlgorithmId(a).Available()
 }
 
-// BlockSize indicates the block size of the symmetric cipher. This will panic if there
-// is no registered go implementation of the cipher or the algorithm does not correspond
-// to a symmetric cipher.
+// BlockSize indicates the block size of the symmetric cipher. This will panic if the
+// algorithm does not correspond to a symmetric cipher.
 func (a SymObjectAlgorithmId) BlockSize() int {
 	return SymAlgorithmId(a).BlockSize()
 }
@@ -267,7 +306,7 @@ func (p TaggedHash) Marshal(w io.Writer) error {
 	if err := binary.Write(w, binary.BigEndian, p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
 	}
-	if !p.HashAlg.Supported() {
+	if !p.HashAlg.IsValid() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
@@ -285,7 +324,7 @@ func (p *TaggedHash) Unmarshal(r mu.Reader) error {
 	if err := binary.Read(r, binary.BigEndian, &p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
-	if !p.HashAlg.Supported() {
+	if !p.HashAlg.IsValid() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
 	}
 
@@ -354,7 +393,7 @@ func (n Name) Algorithm() HashAlgorithmId {
 		return HashAlgorithmNull
 	}
 	a := HashAlgorithmId(binary.BigEndian.Uint16(n))
-	if !a.Supported() {
+	if !a.IsValid() {
 		return HashAlgorithmNull
 	}
 	if a.Size() != len(n)-binary.Size(HashAlgorithmId(0)) {

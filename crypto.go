@@ -25,11 +25,6 @@ import (
 
 type NewCipherFunc func([]byte) (cipher.Block, error)
 
-type symmetricCipher struct {
-	fn        NewCipherFunc
-	blockSize int
-}
-
 var (
 	eccCurves = map[ECCCurve]elliptic.Curve{
 		ECCCurveNIST_P224: elliptic.P224(),
@@ -38,15 +33,15 @@ var (
 		ECCCurveNIST_P521: elliptic.P521(),
 	}
 
-	symmetricAlgs = map[SymAlgorithmId]*symmetricCipher{
-		SymAlgorithmAES: &symmetricCipher{aes.NewCipher, aes.BlockSize},
+	symmetricAlgs = map[SymAlgorithmId]NewCipherFunc{
+		SymAlgorithmAES: aes.NewCipher,
 	}
 )
 
 // RegisterCipher allows a go block cipher implementation to be registered for the
 // specified algorithm, so binaries don't need to link against every implementation.
-func RegisterCipher(alg SymAlgorithmId, fn NewCipherFunc, blockSize int) {
-	symmetricAlgs[alg] = &symmetricCipher{fn, blockSize}
+func RegisterCipher(alg SymAlgorithmId, fn NewCipherFunc) {
+	symmetricAlgs[alg] = fn
 }
 
 func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
