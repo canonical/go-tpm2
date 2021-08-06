@@ -5,8 +5,6 @@
 package util
 
 import (
-	"encoding/binary"
-
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -19,8 +17,7 @@ func ComputeQualifiedName(name, parentQn tpm2.Name) tpm2.Name {
 	h.Write(parentQn)
 	h.Write(name)
 
-	b, _ := mu.MarshalToBytes(name.Algorithm(), mu.RawBytes(h.Sum(nil)))
-	return tpm2.Name(b)
+	return mu.MustMarshalToBytes(name.Algorithm(), mu.RawBytes(h.Sum(nil)))
 }
 
 // ComputeQualifiedNameFull can compute the qualified name of an object with
@@ -28,8 +25,7 @@ func ComputeQualifiedName(name, parentQn tpm2.Name) tpm2.Name {
 // of parent objects with the specified names. The ancestor names are ordered
 // from the primary key towards the immediate parent.
 func ComputeQualifiedNameFull(name tpm2.Name, hierarchy tpm2.Handle, ancestors ...tpm2.Name) tpm2.Name {
-	lastQn := make(tpm2.Name, 4)
-	binary.BigEndian.PutUint32(lastQn, uint32(hierarchy))
+	lastQn := tpm2.Name(mu.MustMarshalToBytes(hierarchy))
 
 	for len(ancestors) > 0 {
 		current := ancestors[0]

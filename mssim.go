@@ -69,10 +69,8 @@ func (t *TctiMssim) Read(data []byte) (int, error) {
 }
 
 func (t *TctiMssim) Write(data []byte) (int, error) {
-	buf, err := mu.MarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal command: %v", err))
-	}
+	buf := mu.MustMarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
+
 	n, err := t.tpm.Write(buf)
 	n -= (len(buf) - len(data))
 	if n < 0 {

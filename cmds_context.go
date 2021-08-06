@@ -47,10 +47,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 		return nil, err
 	}
 
-	blob, err := mu.MarshalToBytes(saveContext.SerializeToBytes(), context.Blob)
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal context blob: %v", err))
-	}
+	blob := mu.MustMarshalToBytes(saveContext.SerializeToBytes(), context.Blob)
 	context.Blob = blob
 
 	switch c := saveContext.(type) {

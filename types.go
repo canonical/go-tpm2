@@ -1555,11 +1555,7 @@ func (p *Public) Name() (Name, error) {
 	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := mu.MarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil)))
-	if err != nil {
-		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
-	}
-	return name, nil
+	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil))), nil
 }
 
 func (p *Public) compareName(name Name) bool {
@@ -1652,11 +1648,7 @@ func (p *PublicDerived) Name() (Name, error) {
 	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := mu.MarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil)))
-	if err != nil {
-		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
-	}
-	return name, nil
+	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil))), nil
 }
 
 func (p *PublicDerived) ToTemplate() (Template, error) {
@@ -1794,11 +1786,7 @@ func (p *NVPublic) Name() (Name, error) {
 	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	name, err := mu.MarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil)))
-	if err != nil {
-		return nil, fmt.Errorf("cannot marshal algorithm and digest to name: %v", err)
-	}
-	return name, nil
+	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil))), nil
 }
 
 func (p *NVPublic) compareName(name Name) bool {

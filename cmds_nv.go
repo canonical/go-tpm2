@@ -312,10 +312,7 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 	if context.Attrs().Type() != NVTypePinPass && context.Attrs().Type() != NVTypePinFail {
 		return errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
-	data, err := mu.MarshalToBytes(params)
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal PIN counter parameters: %v", err))
-	}
+	data := mu.MustMarshalToBytes(params)
 	return t.NVWrite(authContext, nvIndex, data, 0, authContextAuthSession, sessions...)
 }
 

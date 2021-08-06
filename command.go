@@ -102,9 +102,7 @@ func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []Au
 
 	hBytes := new(bytes.Buffer)
 	for _, h := range handles {
-		if _, err := mu.MarshalToWriter(hBytes, h); err != nil {
-			panic(fmt.Sprintf("cannot marshal command handle: %v", err))
-		}
+		mu.MustMarshalToWriter(hBytes, h)
 	}
 
 	switch {
@@ -113,34 +111,19 @@ func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []Au
 
 		aBytes := new(bytes.Buffer)
 		for _, auth := range authArea {
-			if _, err := mu.MarshalToWriter(aBytes, auth); err != nil {
-				panic(fmt.Sprintf("cannot marshal command auth area: %v", err))
-			}
+			mu.MustMarshalToWriter(aBytes, auth)
 		}
 
-		var err error
-		payload, err = mu.MarshalToBytes(mu.RawBytes(hBytes.Bytes()), uint32(aBytes.Len()), mu.RawBytes(aBytes.Bytes()), mu.RawBytes(parameters))
-		if err != nil {
-			panic(fmt.Sprintf("cannot marshal command payload: %v", err))
-		}
+		payload = mu.MustMarshalToBytes(mu.RawBytes(hBytes.Bytes()), uint32(aBytes.Len()), mu.RawBytes(aBytes.Bytes()), mu.RawBytes(parameters))
 	case len(authArea) == 0:
 		header.Tag = TagNoSessions
 
-		var err error
-		payload, err = mu.MarshalToBytes(mu.RawBytes(hBytes.Bytes()), mu.RawBytes(parameters))
-		if err != nil {
-			panic(fmt.Sprintf("cannot marshal command payload: %v", err))
-		}
-
+		payload = mu.MustMarshalToBytes(mu.RawBytes(hBytes.Bytes()), mu.RawBytes(parameters))
 	}
 
 	header.CommandSize = uint32(binary.Size(header) + len(payload))
 
-	cmd, err := mu.MarshalToBytes(header, mu.RawBytes(payload))
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal complete command packet: %v", err))
-	}
-	return cmd
+	return mu.MustMarshalToBytes(header, mu.RawBytes(payload))
 }
 
 // ResponseHeader is the header for the TPM's response to a command.

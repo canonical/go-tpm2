@@ -126,27 +126,19 @@ func (h *handleContext) Name() Name {
 }
 
 func (h *handleContext) SerializeToBytes() []byte {
-	data, err := mu.MarshalToBytes(h)
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal context data: %v", err))
-	}
+	data := mu.MustMarshalToBytes(h)
+
 	hash := crypto.SHA256.New()
 	hash.Write(data)
-	data, err = mu.MarshalToBytes(HashAlgorithmSHA256, hash.Sum(nil), data)
-	if err != nil {
-		panic(fmt.Sprintf("cannot pack context blob and checksum: %v", err))
-	}
-	return data
+	return mu.MustMarshalToBytes(HashAlgorithmSHA256, hash.Sum(nil), data)
 }
 
 func (h *handleContext) SerializeToWriter(w io.Writer) error {
-	data, err := mu.MarshalToBytes(h)
-	if err != nil {
-		panic(fmt.Sprintf("cannot marshal context data: %v", err))
-	}
+	data := mu.MustMarshalToBytes(h)
+
 	hash := crypto.SHA256.New()
 	hash.Write(data)
-	_, err = mu.MarshalToWriter(w, HashAlgorithmSHA256, hash.Sum(nil), data)
+	_, err := mu.MarshalToWriter(w, HashAlgorithmSHA256, hash.Sum(nil), data)
 	return err
 }
 
