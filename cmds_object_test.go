@@ -298,7 +298,7 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 
 	pub, name, _, err := s.TPM.ReadPublic(object)
 	c.Assert(err, IsNil)
-	c.Check(pub, DeepEquals, data.inPublic)
+	c.Check(pub, DeepEquals, public)
 	c.Check(name, DeepEquals, expectedName)
 
 	return object
