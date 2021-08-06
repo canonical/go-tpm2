@@ -365,8 +365,21 @@ type MaxBuffer []byte
 // calling TPMContext.GetNVBufferMax.
 type MaxNVBuffer []byte
 
-// Timeout corresponds to the TPM2B_TIMEOUT type.
+// Timeout corresponds to the TPM2B_TIMEOUT type. The spec defines this
+// as having a maximum size of 8 bytes. It is always 8 bytes in the
+// reference implementation and so could be represented as a uint64,
+// but we have to preserve the original buffer because there is no
+// guarantees that it is always 8 bytes, and the actual TPM buffer
+// must be recreated accurately in order for ticket validation to
+// work correctly in TPMContext.PolicyTicket.
 type Timeout []byte
+
+// Value returns the value as a uint64. The spec defines the TPM2B_TIMEOUT
+// type as having a size of up to 8 bytes. If an implementation creates a
+// larger value then the result of this is undefined.
+func (t Timeout) Value() uint64 {
+	return new(big.Int).SetBytes(t).Uint64()
+}
 
 // 10.5) Names
 
