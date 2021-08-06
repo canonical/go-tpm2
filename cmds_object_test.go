@@ -242,6 +242,11 @@ func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
 	c.Check(object.Name(), DeepEquals, expectedName)
 	c.Assert(object, testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(object.(*ObjectContext).GetPublic(), DeepEquals, pub)
+
+	pub2, name, _, err := s.TPM.ReadPublic(object)
+	c.Assert(err, IsNil)
+	c.Check(pub2, DeepEquals, pub)
+	c.Check(name, DeepEquals, expectedName)
 }
 
 func (s *objectSuite) TestLoad(c *C) {
@@ -291,6 +296,11 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 	c.Assert(object, testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(object.(*ObjectContext).GetPublic(), DeepEquals, public)
 
+	pub, name, _, err := s.TPM.ReadPublic(object)
+	c.Assert(err, IsNil)
+	c.Check(pub, DeepEquals, data.inPublic)
+	c.Check(name, DeepEquals, expectedName)
+
 	return object
 }
 
@@ -325,11 +335,15 @@ func (s *objectSuite) TestLoadExternalWithPrivate(c *C) {
 		inPublic:  public,
 		hierarchy: HandleNull})
 
-	object.SetAuthValue(authValue)
-
+	// LoadExternal should set the auth value on the returned
+	// context.
 	unsealedKey, err := s.TPM.Unseal(object, nil)
 	c.Check(err, IsNil)
 	c.Check(unsealedKey, DeepEquals, SensitiveData(key))
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].HMAC, DeepEquals, Auth(authValue))
 }
 
 type testUnsealData struct {

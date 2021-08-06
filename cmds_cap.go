@@ -343,6 +343,17 @@ func (t *TPMContext) GetNVBufferMax(sessions ...SessionContext) (int, error) {
 	return int(n), nil
 }
 
+// GetNVIndexMax is a convenience function for TPMContext.GetCapability that returns
+// the value of the PropertyNVIndexMax property, which indicates the maximum size of a
+// single NV index.
+func (t *TPMContext) GetNVIndexMax(sessions ...SessionContext) (int, error) {
+	n, err := t.GetCapabilityTPMProperty(PropertyNVIndexMax, sessions...)
+	if err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
 // GetCapabilityPCRProperties is a convenience function for TPMContext.GetCapability, and returns
 // the values of PCR properties. The first parameter indicates the first property for which to
 // return a value. If the property does not exist, then the value of the next available property

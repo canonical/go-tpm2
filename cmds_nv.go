@@ -285,7 +285,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 	return nil
 }
 
-// NVSetPinCounterParams is a helper function for NVWrite for updating the contents of the NV pin pass or NV pin fail index associated
+// NVSetPinCounterParams is a convenience function for NVWrite for updating the contents of the NV pin pass or NV pin fail index associated
 // with nvIndex. If the type of nvIndex is not NVTypePinPass of NVTypePinFail, an error will be returned.
 //
 // The command requires authorization, defined by the state of the AttrNVPPWrite, AttrNVOwnerWrite, AttrNVAuthWrite and
@@ -569,7 +569,51 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 	return data, nil
 }
 
-// NVReadCounter is a helper function for NVRead for reading the contents of the NV counter index associated with nvIndex. If the
+func (t *TPMContext) nvReadUint64(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
+	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
+	if err != nil {
+		return 0, err
+	}
+	if len(data) != binary.Size(uint64(0)) {
+		return 0, &InvalidResponseError{CommandNVRead, fmt.Sprintf("unexpected number of bytes returned (got %d)", len(data))}
+	}
+	return binary.BigEndian.Uint64(data), nil
+}
+
+// NVReadBits is a convenience function for NVRead for reading the contents of the NV bit field index associated with nvIndex. If
+// the type of nvIndex is not NVTypeBits, an error will be returned.
+//
+// The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead and AttrNVPolicyRead
+// attributes. The handle used for authorization is specified via authContext. If the NV index has the AttrNVPPRead attribute,
+// authorization can be satisfied with HandlePlatform. If the NV index has the AttrNVOwnerRead attribute, authorization can be
+// satisfied with HandleOwner. If the NV index has the AttrNVAuthRead or AttrNVPolicyRead attribute, authorization can be satisfied
+// with nvIndex. The command requires authorization with the user auth role for authContext, with session based authorization provided
+// via authContextAuthSession. If the resource associated with authContext is not permitted to authorize this access, a *TPMError
+// error with an error code of ErrorNVAuthorization will be returned.
+//
+// If nvIndex is being used for authorization and the AttrNVAuthRead attribute is defined, the authorization can be satisfied by
+// demonstrating knowledge of the authorization value, either via cleartext or HMAC authorization. If nvIndex is being used for
+// authorization and the AttrNVPolicyRead attribute is defined, the authorization can be satisfied using a policy session with a
+// digest that matches the authorization policy for the index.
+//
+// If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
+//
+// If the index has not been initialized (ie, the AttrNVWritten attribute is not set), a *TPMError error with an error code of
+// ErrorNVUninitialized will be returned.
+//
+// On successful completion, the current bitfield value will be returned.
+func (t *TPMContext) NVReadBits(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
+	context, isNv := nvIndex.(*nvIndexContext)
+	if !isNv {
+		return 0, errors.New("nvIndex does not correspond to a NV index")
+	}
+	if context.Attrs().Type() != NVTypeBits {
+		return 0, errors.New("nvIndex does not correspond to a bit field")
+	}
+	return t.nvReadUint64(authContext, nvIndex, authContextAuthSession, sessions...)
+}
+
+// NVReadCounter is a convenience function for NVRead for reading the contents of the NV counter index associated with nvIndex. If the
 // type of nvIndex is not NVTypeCounter, an error will be returned.
 //
 // The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead and AttrNVPolicyRead
@@ -599,17 +643,10 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 	if context.Attrs().Type() != NVTypeCounter {
 		return 0, errors.New("nvIndex does not correspond to a counter")
 	}
-	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
-	if err != nil {
-		return 0, err
-	}
-	if len(data) != binary.Size(uint64(0)) {
-		return 0, &InvalidResponseError{CommandNVRead, fmt.Sprintf("unexpected number of bytes returned (got %d)", len(data))}
-	}
-	return binary.BigEndian.Uint64(data), nil
+	return t.nvReadUint64(authContext, nvIndex, authContextAuthSession, sessions...)
 }
 
-// NVReadPinCounterParams is a helper function for NVRead for reading the contents of the NV pin pass or NV pin fail index associated
+// NVReadPinCounterParams is a convenienc function for NVRead for reading the contents of the NV pin pass or NV pin fail index associated
 // with nvIndex. If the type of nvIndex is not NVTypePinPass of NVTypePinFail, an error will be returned.
 //
 // The command requires authorization, defined by the state of the AttrNVPPRead, AttrNVOwnerRead, AttrNVAuthRead and AttrNVPolicyRead

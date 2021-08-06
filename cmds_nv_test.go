@@ -5,867 +5,685 @@
 package tpm2_test
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/binary"
 	"testing"
+
+	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
 
-func TestNVDefineAndUndefineSpace(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	owner := tpm.OwnerHandleContext()
-
-	run := func(t *testing.T, auth Auth, publicInfo *NVPublic, ownerAuthSession SessionContext) {
-		nvContext, err := tpm.NVDefineSpace(owner, auth, publicInfo, ownerAuthSession)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		defer func() {
-			handle := nvContext.Handle()
-			if err := tpm.NVUndefineSpace(owner, nvContext, ownerAuthSession); err != nil {
-				t.Errorf("NVUndefineSpace failed: %v", err)
-			}
-			if nvContext.Handle() != HandleUnassigned {
-				t.Errorf("Context should be invalid after NVUndefineSpace")
-			}
-			_, err := tpm.CreateResourceContextFromTPM(handle)
-			if err == nil {
-				t.Fatalf("NVUndefineSpace didn't execute properly")
-			}
-			if !IsResourceUnavailableError(err, handle) {
-				t.Errorf("Unexpected error: %v", err)
-			}
-		}()
-
-		nvPub := nvContext.(*NvIndexContext).GetPublic()
-
-		if nvPub.Index != publicInfo.Index {
-			t.Errorf("Unexpected index")
-		}
-		if nvPub.NameAlg != publicInfo.NameAlg {
-			t.Errorf("Unexpected nameAlg")
-		}
-		if nvPub.Attrs != publicInfo.Attrs {
-			t.Errorf("Unexpected attrs")
-		}
-		if !bytes.Equal(nvPub.AuthPolicy, publicInfo.AuthPolicy) {
-			t.Errorf("Unexpected authPolicy")
-		}
-		if nvPub.Size != publicInfo.Size {
-			t.Errorf("Unexpected size (%d)", nvPub.Size)
-		}
-
-		rc, err := tpm.CreateResourceContextFromTPM(publicInfo.Index)
-		if err != nil {
-			t.Fatalf("CreateResourceContextFromTPM failed: %v", err)
-		}
-		if !bytes.Equal(rc.Name(), nvContext.Name()) {
-			t.Errorf("Unexpected name")
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		pub := NVPublic{
-			Index:   Handle(0x0181ffff),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead),
-			Size:    64}
-		run(t, nil, &pub, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		pub := NVPublic{
-			Index:   Handle(0x0181fff0),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead | AttrNVOwnerRead),
-			Size:    32}
-		run(t, nil, &pub, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		sessionContext, err := tpm.StartAuthSession(nil, owner, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-
-		pub := NVPublic{
-			Index:   Handle(0x0181fff0),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead | AttrNVOwnerRead),
-			Size:    64}
-		run(t, nil, &pub, sessionContext.WithAttrs(AttrContinueSession))
-	})
-	t.Run("DefineWithAuthValue", func(t *testing.T) {
-		pub := NVPublic{
-			Index:   Handle(0x0181ffff),
-			NameAlg: HashAlgorithmSHA1,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-			Size:    32}
-		rc, err := tpm.NVDefineSpace(owner, testAuth, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		defer undefineNVSpace(t, tpm, rc, owner)
-
-		// We shouldn't have to call ResourceContext.SetAuthValue
-		if err := tpm.NVWrite(rc, rc, []byte{0}, 0, nil); err != nil {
-			t.Errorf("Failed to write to NV index with authValue: %v", err)
-		}
-
-		// Try again after calling ResourceContext.SetAuthValue to make sure that NVDefineSpace actually
-		// created the index with the specified auth value.
-		rc.SetAuthValue(testAuth)
-		if err := tpm.NVWrite(rc, rc, []byte{0}, 0, nil); err != nil {
-			t.Errorf("Failed to write to NV index with authValue: %v", err)
-		}
-	})
+type nvSuiteBase struct {
+	testutil.TPMTest
 }
 
-func TestNVUndefineSpaceSpecial(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
+type nvSuite struct {
+	nvSuiteBase
+}
 
+func (s *nvSuite) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureNV
+}
+
+type nvSuitePlatform struct {
+	nvSuiteBase
+}
+
+func (s *nvSuitePlatform) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeaturePlatformHierarchy | testutil.TPMFeatureNV
+}
+
+type nvGlobalLockSuiteBase struct {
+	testutil.TPMTest
+}
+
+type nvGlobalLockSuite struct {
+	nvGlobalLockSuiteBase
+}
+
+func (s *nvGlobalLockSuite) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureNVGlobalWriteLock | testutil.TPMFeatureNV
+}
+
+type nvGlobalLockSuitePlatform struct {
+	nvGlobalLockSuiteBase
+}
+
+func (s *nvGlobalLockSuitePlatform) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeaturePlatformHierarchy | testutil.TPMFeatureNVGlobalWriteLock | testutil.TPMFeatureNV
+}
+
+var _ = Suite(&nvSuite{})
+var _ = Suite(&nvSuitePlatform{})
+var _ = Suite(&nvGlobalLockSuite{})
+var _ = Suite(&nvGlobalLockSuitePlatform{})
+
+type testNVDefineAndUndefineSpaceData struct {
+	authContext            ResourceContext
+	auth                   Auth
+	publicInfo             *NVPublic
+	authContextAuthSession SessionContext
+
+	cb func(ResourceContext)
+}
+
+func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUndefineSpaceData) {
+	sessionHandle := authSessionHandle(data.authContextAuthSession)
+
+	index, err := s.TPM.NVDefineSpace(data.authContext, data.auth, data.publicInfo, data.authContextAuthSession)
+	c.Assert(err, IsNil)
+
+	c.Check(index.Handle(), Equals, data.publicInfo.Index)
+
+	expectedName, err := data.publicInfo.Name()
+	c.Check(err, IsNil)
+
+	c.Check(index.Name(), DeepEquals, expectedName)
+
+	c.Assert(index, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, data.publicInfo)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	pub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(pub, DeepEquals, data.publicInfo)
+	c.Check(name, DeepEquals, expectedName)
+
+	if data.cb != nil {
+		data.cb(index)
+	}
+
+	c.Check(s.TPM.NVUndefineSpace(data.authContext, index, data.authContextAuthSession), IsNil)
+	c.Check(index.Handle(), Equals, HandleUnassigned)
+
+	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	// XXX: Make NVReadPublic work with HandleContext and use that directly here
+	_, err = s.TPM.CreateResourceContextFromTPM(data.publicInfo.Index)
+	c.Check(err, DeepEquals, ResourceUnavailableError{data.publicInfo.Index})
+}
+
+func (s *nvSuite) TestDefineAndUndefineSpace(c *C) {
+	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
+		authContext: s.TPM.OwnerHandleContext(),
+		publicInfo: &NVPublic{
+			Index:   s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead),
+			Size:    64}})
+}
+
+func (s *nvSuitePlatform) TestDefineAndUndefineSpaceWithPlatform(c *C) {
+	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
+		authContext: s.TPM.PlatformHandleContext(),
+		publicInfo: &NVPublic{
+			Index:   s.NextAvailableHandle(c, 0x0141f000),
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead | AttrNVPlatformCreate),
+			Size:    64}})
+}
+
+func (s *nvSuite) TestDefineAndUndefineSpaceDifferentPublic(c *C) {
+	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
+		authContext: s.TPM.OwnerHandleContext(),
+		publicInfo: &NVPublic{
+			Index:   s.NextAvailableHandle(c, 0x01bff000),
+			NameAlg: HashAlgorithmSHA1,
+			Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVOwnerRead | AttrNVAuthRead),
+			Size:    8}})
+}
+
+func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthValue(c *C) {
+	auth := []byte("12345678")
+
+	testAuthValue := func(index ResourceContext) {
+		// NVDefineSpace should set the auth value on the returned
+		// context.
+		c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
+		_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+		c.Assert(authArea, testutil.LenEquals, 1)
+		c.Check(authArea[0].HMAC, DeepEquals, Auth(auth))
+	}
+
+	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
+		authContext: s.TPM.OwnerHandleContext(),
+		auth:        auth,
+		publicInfo: &NVPublic{
+			Index:   s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
+			Size:    64},
+		cb: testAuthValue})
+}
+
+func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthContextSession(c *C) {
+	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
+		authContext: s.TPM.OwnerHandleContext(),
+		publicInfo: &NVPublic{
+			Index:   s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead),
+			Size:    64},
+		authContextAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession)})
+}
+
+type testNVUndefineSpaceSpecialData struct {
+	skipTest            bool
+	platformAuthSession SessionContext
+}
+
+func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpaceSpecialData) ResourceContext {
 	trial := util.ComputeAuthPolicy(crypto.SHA256)
 	trial.PolicyAuthValue()
 	trial.PolicyCommandCode(CommandNVUndefineSpaceSpecial)
-	authPolicy := trial.GetDigest()
-
-	platform := tpm.PlatformHandleContext()
-
-	define := func(t *testing.T) ResourceContext {
-		pub := NVPublic{
-			Index:      0x0141ffff,
-			NameAlg:    HashAlgorithmSHA256,
-			Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVPlatformCreate | AttrNVPolicyDelete | AttrNVNoDA),
-			AuthPolicy: authPolicy,
-			Size:       8}
-		context, err := tpm.NVDefineSpace(platform, testAuth, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		return context
-	}
-
-	run := func(t *testing.T, context ResourceContext, platformAuthSession SessionContext) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		if err := tpm.PolicyAuthValue(sessionContext); err != nil {
-			t.Errorf("PolicyAuthValue failed: %v", err)
-		}
-		if err := tpm.PolicyCommandCode(sessionContext, CommandNVUndefineSpaceSpecial); err != nil {
-			t.Errorf("PolicyCommandCode failed: %v", err)
-		}
-
-		if err := tpm.NVUndefineSpaceSpecial(context, platform, sessionContext, platformAuthSession); err != nil {
-			t.Errorf("NVUndefineSpaceSpecial failed: %v", err)
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		context := define(t)
-		run(t, context, nil)
-	})
-
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		context := define(t)
-		setHierarchyAuthForTest(t, tpm, tpm.PlatformHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.PlatformHandleContext())
-		run(t, context, nil)
-	})
-
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		context := define(t)
-		setHierarchyAuthForTest(t, tpm, tpm.PlatformHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.PlatformHandleContext())
-
-		sessionContext, err := tpm.StartAuthSession(nil, platform, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		run(t, context, sessionContext)
-	})
-
-	t.Run("MissingPolicySession", func(t *testing.T) {
-		context := define(t)
-		err := tpm.NVUndefineSpaceSpecial(context, platform, nil, nil)
-		if !IsTPMError(err, ErrorAuthType, CommandNVUndefineSpaceSpecial) {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		run(t, context, nil)
-	})
-}
-
-func TestNVWriteZeroSized(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	owner := tpm.OwnerHandleContext()
 
 	pub := NVPublic{
-		Index:   Handle(0x0181ffff),
+		Index:      s.NextAvailableHandle(c, 0x0141f000),
+		NameAlg:    HashAlgorithmSHA256,
+		Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVPlatformCreate | AttrNVPolicyDelete | AttrNVNoDA),
+		AuthPolicy: trial.GetDigest(),
+		Size:       8}
+	index := s.NVDefineSpace(c, HandlePlatform, nil, &pub)
+
+	if data.skipTest {
+		return index
+	}
+
+	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
+	c.Check(s.TPM.PolicyAuthValue(session), IsNil)
+	c.Check(s.TPM.PolicyCommandCode(session, CommandNVUndefineSpaceSpecial), IsNil)
+
+	sessionHandles := []Handle{session.Handle(), authSessionHandle(data.platformAuthSession)}
+
+	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, data.platformAuthSession), IsNil)
+	c.Check(index.Handle(), Equals, HandleUnassigned)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 2)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
+	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
+
+	// XXX: Make NVReadPublic work with HandleContext and use that directly here
+	_, err := s.TPM.CreateResourceContextFromTPM(pub.Index)
+	c.Check(err, DeepEquals, ResourceUnavailableError{pub.Index})
+
+	return nil
+}
+
+func (s *nvSuitePlatform) TestUndefineSpaceSpecial(c *C) {
+	s.testUndefineSpaceSpecial(c, &testNVUndefineSpaceSpecialData{})
+}
+
+func (s *nvSuitePlatform) TestUndefineSpaceSpecialWithPlatformAuthSession(c *C) {
+	s.testUndefineSpaceSpecial(c, &testNVUndefineSpaceSpecialData{
+		platformAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+func (s *nvSuitePlatform) TestUndefineSpaceSpecialMissingSession(c *C) {
+	index := s.testUndefineSpaceSpecial(c, &testNVUndefineSpaceSpecialData{skipTest: true})
+	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), nil, nil), DeepEquals,
+		&TPMError{Command: CommandNVUndefineSpaceSpecial, Code: ErrorAuthType})
+
+	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
+	c.Check(s.TPM.PolicyAuthValue(session), IsNil)
+	c.Check(s.TPM.PolicyCommandCode(session, CommandNVUndefineSpaceSpecial), IsNil)
+	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, nil), IsNil)
+}
+
+func (s *nvSuite) TestWriteZeroSized(c *C) {
+	pub := NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181f000),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    0}
-	rc, err := tpm.NVDefineSpace(owner, nil, &pub, nil)
-	if err != nil {
-		t.Fatalf("NVDefineSpace failed: %v", err)
-	}
-	defer undefineNVSpace(t, tpm, rc, owner)
+	index := s.NVDefineSpace(c, HandleOwner, nil, &pub)
 
-	if err := tpm.NVWrite(rc, rc, nil, 0, nil); err != nil {
-		t.Fatalf("NVWrite failed: %v", err)
-	}
+	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 
-	pub2, name, err := tpm.NVReadPublic(rc)
-	if err != nil {
-		t.Fatalf("NVReadPublic failed: %v", err)
-	}
-
-	if pub2.Attrs&AttrNVWritten == 0 {
-		t.Errorf("Unexpected attributes")
-	}
-
-	if !bytes.Equal(name, rc.Name()) {
-		t.Errorf("Name of NV resource context should have been refreshed")
-	}
+	updatedPub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(updatedPub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
+	c.Check(index.Name(), DeepEquals, name)
 }
 
-func TestNVReadAndWrite(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
+type testNVWriteAndReadData struct {
+	size uint16
 
-	owner := tpm.OwnerHandleContext()
+	writeData   []byte
+	writeOffset uint16
 
-	pub1 := NVPublic{
-		Index:   Handle(0x0181ffff),
+	authSession SessionContext
+
+	readSize   uint16
+	readOffset uint16
+	expected   []byte
+}
+
+func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
+	pub := &NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181f000),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-		Size:    64}
-	pub2 := NVPublic{
-		Index:   Handle(0x0181ffff),
+		Size:    data.size}
+	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
+
+	sessionHandle := authSessionHandle(data.authSession)
+
+	c.Check(s.TPM.NVWrite(index, index, data.writeData, data.writeOffset, data.authSession), IsNil)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	pub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
+	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.Name(), DeepEquals, name)
+
+	b, err := s.TPM.NVRead(index, index, data.readSize, data.readOffset, data.authSession)
+	c.Check(err, IsNil)
+	c.Check(b, DeepEquals, data.expected)
+
+	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+}
+
+func (s *nvSuite) TestWriteAndRead(c *C) {
+	s.testWriteAndRead(c, &testNVWriteAndReadData{
+		size:      8,
+		writeData: []byte("zyxwvuts"),
+		readSize:  8,
+		expected:  []byte("zyxwvuts")})
+}
+
+func (s *nvSuite) TestWriteAndReadPartialWrite(c *C) {
+	s.testWriteAndRead(c, &testNVWriteAndReadData{
+		size:        8,
+		writeData:   []byte("abcd"),
+		writeOffset: 2,
+		readSize:    8,
+		expected:    []byte("\xff\xffabcd\xff\xff")})
+}
+
+func (s *nvSuite) TestWriteAndReadPartialRead(c *C) {
+	s.testWriteAndRead(c, &testNVWriteAndReadData{
+		size:       8,
+		writeData:  []byte("zyxwvuts"),
+		readSize:   5,
+		readOffset: 3,
+		expected:   []byte("wvuts")})
+}
+
+func (s *nvSuite) TestWriteAndReadWithAuthSession(c *C) {
+	s.testWriteAndRead(c, &testNVWriteAndReadData{
+		size:        8,
+		writeData:   []byte("zyxwvuts"),
+		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession),
+		readSize:    8,
+		expected:    []byte("zyxwvuts")})
+}
+
+func (s *nvSuite) TestWriteAndReadLargerThanNVBufferMax(c *C) {
+	bufferMax, err := s.TPM.GetNVBufferMax()
+	c.Check(err, IsNil)
+
+	indexMax, err := s.TPM.GetNVIndexMax()
+	c.Check(err, IsNil)
+
+	if indexMax <= bufferMax {
+		c.Skip("TPM_PT_NV_INDEX_MAX not larger than TPM_PT_NV_BUFFER_MAX")
+	}
+
+	data := make([]byte, indexMax)
+	rand.Read(data)
+
+	s.testWriteAndRead(c, &testNVWriteAndReadData{
+		size:      uint16(indexMax),
+		writeData: data,
+		readSize:  uint16(indexMax),
+		expected:  data})
+}
+
+func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
+	s.RequireCommand(c, CommandNVIncrement)
+
+	pub := &NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181f000),
 		NameAlg: HashAlgorithmSHA256,
-		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-		Size:    1600}
+		Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
+		Size:    8}
+	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
 
-	define := func(t *testing.T, pub *NVPublic, authValue Auth) ResourceContext {
-		rc, err := tpm.NVDefineSpace(owner, authValue, pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-		return rc
+	sessionHandle := authSessionHandle(authSession)
+
+	c.Check(s.TPM.NVIncrement(index, index, authSession), IsNil)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	pub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
+	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.Name(), DeepEquals, name)
+
+	initialValue, err := s.TPM.NVReadCounter(index, index, authSession)
+	c.Check(err, IsNil)
+
+	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	c.Check(s.TPM.NVIncrement(index, index, authSession), IsNil)
+	value, err := s.TPM.NVReadCounter(index, index, authSession)
+	c.Check(err, IsNil)
+	c.Check(value, Equals, initialValue+1)
+}
+
+func (s *nvSuite) TestIncrementAndRead(c *C) {
+	s.testIncrementAndRead(c, nil)
+}
+
+func (s *nvSuite) TestIncrementAndReadWithAuthSession(c *C) {
+	s.testIncrementAndRead(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession))
+}
+
+type testNVExtendData struct {
+	data        []byte
+	authSession SessionContext
+}
+
+func (s *nvSuite) testExtend(c *C, data *testNVExtendData) {
+	s.RequireCommand(c, CommandNVExtend)
+
+	pub := &NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeExtend.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
+		Size:    32}
+	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
+
+	sessionHandle := authSessionHandle(data.authSession)
+
+	c.Check(s.TPM.NVExtend(index, index, data.data, data.authSession), IsNil)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	pub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
+	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.Name(), DeepEquals, name)
+
+	h := crypto.SHA256.New()
+	h.Write(make([]byte, 32))
+	h.Write(data.data)
+
+	value, err := s.TPM.NVRead(index, index, 32, 0, nil)
+	c.Check(err, IsNil)
+	c.Check(value, DeepEquals, h.Sum(nil))
+}
+
+func (s *nvSuite) TestExtend(c *C) {
+	s.testExtend(c, &testNVExtendData{data: []byte("foo")})
+}
+
+func (s *nvSuite) TestExtendDifferentData(c *C) {
+	s.testExtend(c, &testNVExtendData{data: []byte("bar")})
+}
+
+func (s *nvSuite) TestExtendWithAuthSession(c *C) {
+	s.testExtend(c, &testNVExtendData{
+		data:        []byte("foo"),
+		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+type testNVSetBitsAndReadData struct {
+	bits        []uint64
+	authSession SessionContext
+}
+
+func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
+	s.RequireCommand(c, CommandNVSetBits)
+
+	pub := &NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeBits.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
+		Size:    8}
+	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
+
+	sessionHandle := authSessionHandle(data.authSession)
+
+	var expected uint64
+	for _, b := range data.bits {
+		c.Check(s.TPM.NVSetBits(index, index, b, data.authSession), IsNil)
+		expected |= b
 	}
 
-	runWrite := func(t *testing.T, rc ResourceContext, data []byte, offset uint16, authSession SessionContext) {
-		if err := tpm.NVWrite(rc, rc, data, offset, authSession); err != nil {
-			t.Fatalf("NVWrite failed: %v", err)
-		}
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
-		pub, name, err := tpm.NVReadPublic(rc)
-		if err != nil {
-			t.Fatalf("NVReadPublic failed: %v", err)
-		}
+	pub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
+	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.Name(), DeepEquals, name)
 
-		if pub.Attrs&AttrNVWritten == 0 {
-			t.Errorf("Unexpected attributes")
-		}
-		if !bytes.Equal(name, rc.Name()) {
-			t.Errorf("Name of NV resource context should have been refreshed")
-		}
-	}
+	value, err := s.TPM.NVReadBits(index, index, data.authSession)
+	c.Check(err, IsNil)
+	c.Check(value, Equals, expected)
 
-	runRead := func(t *testing.T, rc ResourceContext, pub *NVPublic, data []byte, offset uint16, authSession SessionContext) {
-		d, err := tpm.NVRead(rc, rc, uint16(len(data)), offset, authSession)
-		if err != nil {
-			t.Fatalf("NVRead failed: %v", err)
-		}
+	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+}
 
-		if !bytes.Equal(d, data) {
-			t.Errorf("Unexpected data read back")
-		}
+func (s *nvSuite) TestSetBitsAndRead(c *C) {
+	s.testSetBitsAndRead(c, &testNVSetBitsAndReadData{
+		bits: []uint64{0x3a293e8e64736c75, 0xe89dc5bfff5bad0f}})
+}
 
-		d, err = tpm.NVRead(rc, rc, pub.Size, 0, authSession)
-		if err != nil {
-			t.Fatalf("NVRead failed: %v", err)
-		}
+func (s *nvSuite) TestSetBitsAndReadWithAuthSession(c *C) {
+	s.testSetBitsAndRead(c, &testNVSetBitsAndReadData{
+		bits:        []uint64{0x3a293e8e64736c75, 0xe89dc5bfff5bad0f, 0x0f77ffc72a0d78e1},
+		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession)})
+}
 
-		expected := make([]byte, pub.Size)
-		for i := range expected {
-			expected[i] = 0xff
-		}
-		copy(expected[offset:], data)
+func (s *nvSuite) testWriteLock(c *C, authSession SessionContext) {
+	pub := &NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181ff00),
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteDefine | AttrNVAuthRead | AttrNVNoDA),
+		Size:    8}
+	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
 
-		if !bytes.Equal(d, expected) {
-			t.Errorf("Unexpected data read back")
-		}
-	}
+	sessionHandle := authSessionHandle(authSession)
 
-	t.Run("Full", func(t *testing.T) {
-		rc := define(t, &pub1, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		d := make([]byte, pub1.Size)
-		rand.Read(d)
-		runWrite(t, rc, d, 0, nil)
-		runRead(t, rc, &pub1, d, 0, nil)
-	})
-	t.Run("Partial", func(t *testing.T) {
-		rc := define(t, &pub1, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		d := []byte{1, 2, 3, 4}
-		runWrite(t, rc, d, 10, nil)
-		runRead(t, rc, &pub1, d, 10, nil)
-	})
+	c.Check(s.TPM.NVWriteLock(index, index, authSession), IsNil)
 
-	for _, data := range []struct {
-		desc string
-		pub  *NVPublic
-	}{
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	pub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(pub.Attrs&AttrNVWriteLocked, Equals, AttrNVWriteLocked)
+	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.Name(), DeepEquals, name)
+}
+
+func (s *nvSuite) TestWriteLock(c *C) {
+	s.testWriteLock(c, nil)
+}
+
+func (s *nvSuite) TestWriteLockWithAuthSession(c *C) {
+	s.testWriteLock(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
+}
+
+func (s *nvSuite) testReadLock(c *C, authSession SessionContext) {
+	pub := &NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181ff00),
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVReadStClear | AttrNVNoDA),
+		Size:    8}
+	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
+
+	sessionHandle := authSessionHandle(authSession)
+
+	c.Check(s.TPM.NVReadLock(index, index, authSession), IsNil)
+
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+
+	pub, name, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+	c.Check(pub.Attrs&AttrNVReadLocked, Equals, AttrNVReadLocked)
+	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.Name(), DeepEquals, name)
+}
+
+func (s *nvSuite) TestReadLock(c *C) {
+	s.testReadLock(c, nil)
+}
+
+func (s *nvSuite) TestReadLockWithAuthSession(c *C) {
+	s.testReadLock(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
+}
+
+type testNVGlobalWriteLockData struct {
+	auth        ResourceContext
+	authSession SessionContext
+}
+
+func (s *nvGlobalLockSuiteBase) testGlobalWriteLock(c *C, data *testNVGlobalWriteLockData) {
+	var indices []ResourceContext
+
+	for _, pub := range []NVPublic{
 		{
-			desc: "Small",
-			pub:  &pub1,
+			Index:   s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
+			Size:    8,
 		},
 		{
-			desc: "Large",
-			pub:  &pub2,
+			Index:   s.NextAvailableHandle(c, 0x0181e000),
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVGlobalLock | AttrNVAuthRead),
+			Size:    8,
 		},
 	} {
-		t.Run(data.desc+"/UsePasswordAuth", func(t *testing.T) {
-			rc := define(t, data.pub, testAuth)
-			defer undefineNVSpace(t, tpm, rc, owner)
-			d := make([]byte, data.pub.Size)
-			rand.Read(d)
-			runWrite(t, rc, d, 0, nil)
-			runRead(t, rc, data.pub, d, 0, nil)
-		})
+		indices = append(indices, s.NVDefineSpace(c, HandleOwner, nil, &pub))
+	}
 
-		t.Run(data.desc+"/UseSessionAuthBound1", func(t *testing.T) {
-			rc := define(t, data.pub, testAuth)
-			defer undefineNVSpace(t, tpm, rc, owner)
-			sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-			if err != nil {
-				t.Fatalf("StartAuthSession failed: %v", err)
-			}
-			defer flushContext(t, tpm, sessionContext)
-			sessionContext.SetAttrs(AttrContinueSession)
-			d := make([]byte, data.pub.Size)
-			rand.Read(d)
-			runWrite(t, rc, d, 0, sessionContext)
+	sessionHandle := authSessionHandle(data.authSession)
 
-			// Writing updates the NV index's attributes which also changes the name. This means that the
-			// session is no longer bound to it
-			runRead(t, rc, data.pub, d, 0, sessionContext)
-		})
+	c.Check(s.TPM.NVGlobalWriteLock(data.auth, data.authSession), IsNil)
 
-		t.Run(data.desc+"/UseSessionAuthBound2", func(t *testing.T) {
-			rc := define(t, data.pub, testAuth)
-			defer undefineNVSpace(t, tpm, rc, owner)
-			sessionContext1, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-			if err != nil {
-				t.Fatalf("StartAuthSession failed: %v", err)
-			}
-			defer flushContext(t, tpm, sessionContext1)
-			d := make([]byte, data.pub.Size)
-			rand.Read(d)
-			runWrite(t, rc, d, 0, sessionContext1.WithAttrs(AttrContinueSession))
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
-			// Writing updates the NV index's attributes which also changes the name. This means that the
-			// session is no longer bound to it. Create a new bound session
-			sessionContext2, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-			if err != nil {
-				t.Fatalf("StartAuthSession failed: %v", err)
-			}
-			defer flushContext(t, tpm, sessionContext2)
-			runRead(t, rc, data.pub, d, 0, sessionContext2.WithAttrs(AttrContinueSession))
-		})
+	for _, index := range indices {
+		pub, _, err := s.TPM.NVReadPublic(index)
+		c.Assert(err, IsNil)
+
+		if pub.Attrs&AttrNVGlobalLock != 0 {
+			c.Check(pub.Attrs&AttrNVWriteLocked, Equals, AttrNVWriteLocked)
+		} else {
+			c.Check(pub.Attrs&AttrNVWriteLocked, Equals, NVAttributes(0))
+		}
 	}
 }
 
-func TestNVIncrement(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	owner := tpm.OwnerHandleContext()
-
-	define := func(t *testing.T, authValue Auth) ResourceContext {
-		pub := NVPublic{
-			Index:   Handle(0x0181ffff),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-			Size:    8}
-
-		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-
-		return rc
-	}
-
-	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
-		if err := tpm.NVIncrement(rc, rc, authSession); err != nil {
-			t.Fatalf("NVIncrement failed: %v", err)
-		}
-
-		pub, name, err := tpm.NVReadPublic(rc)
-		if err != nil {
-			t.Fatalf("NVReadPublic failed: %v", err)
-		}
-
-		if pub.Attrs&AttrNVWritten == 0 {
-			t.Errorf("Unexpected attributes")
-		}
-		if !bytes.Equal(name, rc.Name()) {
-			t.Errorf("Name of NV resource context should have been refreshed")
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		rc := define(t, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, rc, sessionContext)
-	})
+func (s *nvGlobalLockSuite) TestGlobalWriteLock(c *C) {
+	s.testGlobalWriteLock(c, &testNVGlobalWriteLockData{auth: s.TPM.OwnerHandleContext()})
 }
 
-func TestNVReadCounter(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	owner := tpm.OwnerHandleContext()
-
-	define := func(t *testing.T, authValue Auth) ResourceContext {
-		pub := NVPublic{
-			Index:   Handle(0x0181ffff),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-			Size:    8}
-
-		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-
-		return rc
-	}
-
-	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
-		if err := tpm.NVIncrement(rc, rc, authSession); err != nil {
-			t.Fatalf("NVIncrement failed: %v", err)
-		}
-
-		count1, err := tpm.NVReadCounter(rc, rc, authSession)
-		if err != nil {
-			t.Fatalf("NVReadCounter failed: %v", err)
-		}
-
-		if err := tpm.NVIncrement(rc, rc, authSession); err != nil {
-			t.Fatalf("NVIncrement failed: %v", err)
-		}
-
-		count2, err := tpm.NVReadCounter(rc, rc, authSession)
-		if err != nil {
-			t.Fatalf("NVReadCounter failed: %v", err)
-		}
-
-		if count2-count1 != 1 {
-			t.Errorf("Unexpected count values (%d and %d)", count1, count2)
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		rc := define(t, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-		run(t, rc, sessionContext.WithAttrs(AttrContinueSession))
-	})
+func (s *nvGlobalLockSuite) TestGlobalWriteLockWithAuthSession(c *C) {
+	s.testGlobalWriteLock(c, &testNVGlobalWriteLockData{
+		auth:        s.TPM.OwnerHandleContext(),
+		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
 }
 
-func TestNVExtend(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	owner := tpm.OwnerHandleContext()
-
-	define := func(t *testing.T, authValue Auth) ResourceContext {
-		pub := NVPublic{
-			Index:   Handle(0x0181ffff),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeExtend.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-			Size:    32}
-
-		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-
-		return rc
-	}
-
-	run := func(t *testing.T, rc ResourceContext, data []byte, authSession SessionContext) {
-		h := sha256.New()
-		h.Write(data)
-		dataH := h.Sum(nil)
-
-		if err := tpm.NVExtend(rc, rc, dataH, authSession); err != nil {
-			t.Fatalf("NVExtend failed: %v", err)
-		}
-
-		pub, name, err := tpm.NVReadPublic(rc)
-		if err != nil {
-			t.Fatalf("NVReadPublic failed: %v", err)
-		}
-
-		if pub.Attrs&AttrNVWritten == 0 {
-			t.Errorf("Unexpected attributes")
-		}
-		if !bytes.Equal(name, rc.Name()) {
-			t.Errorf("Name of NV resource context should have been refreshed")
-		}
-
-		h = sha256.New()
-		h.Write(make([]byte, 32))
-		h.Write(dataH)
-
-		d, err := tpm.NVRead(rc, rc, 32, 0, nil)
-		if err != nil {
-			t.Fatalf("NVRead failed: %v", err)
-		}
-
-		if !bytes.Equal(d, h.Sum(nil)) {
-			t.Errorf("Unexpected data returned from NV index")
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		rc := define(t, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, []byte("foo"), nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, []byte("bar"), nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, rc, []byte("foo"), sessionContext)
-	})
+func (s *nvGlobalLockSuitePlatform) TestGlobalWriteLockPlatform(c *C) {
+	s.testGlobalWriteLock(c, &testNVGlobalWriteLockData{auth: s.TPM.PlatformHandleContext()})
 }
 
-func TestNVSetBits(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
+func (s *nvSuite) testChangeAuth(c *C, authSession SessionContext) {
+	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial.PolicyAuthValue()
+	trial.PolicyCommandCode(CommandNVChangeAuth)
 
-	owner := tpm.OwnerHandleContext()
+	pub := &NVPublic{
+		Index:      s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg:    HashAlgorithmSHA256,
+		Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
+		AuthPolicy: trial.GetDigest(),
+		Size:       8}
+	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
 
-	define := func(t *testing.T, authValue Auth) ResourceContext {
-		pub := NVPublic{
-			Index:   Handle(0x0181ffff),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeBits.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-			Size:    8}
+	sessionHandle := authSession.Handle()
 
-		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
+	c.Check(s.TPM.PolicyAuthValue(authSession), IsNil)
+	c.Check(s.TPM.PolicyCommandCode(authSession, CommandNVChangeAuth), IsNil)
 
-		return rc
-	}
+	newAuth := []byte("1234")
 
-	run := func(t *testing.T, rc ResourceContext, bits []uint64, authSession SessionContext) {
-		var expected uint64
-		for _, b := range bits {
-			if err := tpm.NVSetBits(rc, rc, b, authSession); err != nil {
-				t.Fatalf("NVSetBits failed: %v", err)
-			}
-			expected |= b
-		}
+	c.Check(s.TPM.NVChangeAuth(index, newAuth, authSession), IsNil)
 
-		pub, name, err := tpm.NVReadPublic(rc)
-		if err != nil {
-			t.Fatalf("NVReadPublic failed: %v", err)
-		}
+	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
-		if pub.Attrs&AttrNVWritten == 0 {
-			t.Errorf("Unexpected attributes")
-		}
-		if !bytes.Equal(name, rc.Name()) {
-			t.Errorf("Name of NV resource context should have been refreshed")
-		}
+	// NVChangeAuth sets the auth value on index.
+	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 
-		d, err := tpm.NVRead(rc, rc, 8, 0, authSession)
-		if err != nil {
-			t.Fatalf("NVRead failed: %v", err)
-		}
-
-		if binary.BigEndian.Uint64(d) != expected {
-			t.Errorf("Unexpected data returned from NV index")
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		rc := define(t, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, []uint64{0x1, 0x4000000000000}, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, []uint64{0x2, 0xf2610ea91007d0}, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-		run(t, rc, []uint64{0xde45670980, 0x456, 0xe}, sessionContext.WithAttrs(AttrContinueSession))
-	})
+	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Check(authArea[0].HMAC, DeepEquals, Auth(newAuth))
 }
 
-func TestNVWriteLock(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	owner := tpm.OwnerHandleContext()
-
-	define := func(t *testing.T, authValue Auth) ResourceContext {
-		pub := NVPublic{
-			Index:   Handle(0x0181fff0),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteDefine | AttrNVAuthRead | AttrNVNoDA),
-			Size:    8}
-
-		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-
-		return rc
-	}
-
-	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
-		if err := tpm.NVWriteLock(rc, rc, authSession); err != nil {
-			t.Fatalf("NVWriteLock failed: %v", err)
-		}
-
-		pub, name, err := tpm.NVReadPublic(rc)
-		if err != nil {
-			t.Fatalf("NVReadPublic failed: %v", err)
-		}
-
-		if pub.Attrs&AttrNVWriteLocked == 0 {
-			t.Errorf("Unexpected attributes")
-		}
-		if !bytes.Equal(name, rc.Name()) {
-			t.Errorf("Name of NV resource context should have been refreshed")
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		rc := define(t, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, rc, sessionContext)
-	})
+func (s *nvSuite) TestChangeAuth(c *C) {
+	// It's important that this test is performed with a session that isn't
+	// bound to the index that we're using it on. An unbound session appends
+	// the auth value to the session key to produce the HMAC key, and the
+	// command / response HMAC keys are different because the auth value changes.
+	// An unbound session tests the code in NVChangeAuth that updates the auth
+	// value on the ResourceContext before processing the response.
+	//
+	// A session that is bound to the index we're using it on includes the auth
+	// value in the session key, and as long as it's still bound when the session
+	// is used, the auth value is not appended to the session key for either the
+	// command or response HMAC keys.
+	s.testChangeAuth(c, s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256))
 }
 
-func TestNVReadLock(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
+func (s *nvSuite) TestChangeAuthSalted(c *C) {
+	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	owner := tpm.OwnerHandleContext()
-
-	define := func(t *testing.T, authValue Auth) ResourceContext {
-		pub := NVPublic{
-			Index:   Handle(0x0181fff0),
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVReadStClear | AttrNVNoDA),
-			Size:    8}
-
-		rc, err := tpm.NVDefineSpace(owner, authValue, &pub, nil)
-		if err != nil {
-			t.Fatalf("NVDefineSpace failed: %v", err)
-		}
-
-		return rc
-	}
-
-	run := func(t *testing.T, rc ResourceContext, authSession SessionContext) {
-		if err := tpm.NVReadLock(rc, rc, authSession); err != nil {
-			t.Fatalf("NVWriteLock failed: %v", err)
-		}
-
-		pub, name, err := tpm.NVReadPublic(rc)
-		if err != nil {
-			t.Fatalf("NVReadPublic failed: %v", err)
-		}
-
-		if pub.Attrs&AttrNVReadLocked == 0 {
-			t.Errorf("Unexpected attributes")
-		}
-		if !bytes.Equal(name, rc.Name()) {
-			t.Errorf("Name of NV resource context should have been refreshed")
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		rc := define(t, nil)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		run(t, rc, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		rc := define(t, testAuth)
-		defer undefineNVSpace(t, tpm, rc, owner)
-		sessionContext, err := tpm.StartAuthSession(nil, rc, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, rc, sessionContext)
-	})
-}
-
-func TestNVGlobalLock(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNVGlobalWriteLock|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	owner := tpm.OwnerHandleContext()
-
-	run := func(t *testing.T, authSession SessionContext) {
-		var rcs []ResourceContext
-		for _, data := range []NVPublic{
-			{
-				Index:   Handle(0x0181fff0),
-				NameAlg: HashAlgorithmSHA256,
-				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead),
-				Size:    8,
-			},
-			{
-				Index:   Handle(0x0181ffe0),
-				NameAlg: HashAlgorithmSHA256,
-				Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVGlobalLock | AttrNVAuthRead),
-				Size:    8,
-			},
-		} {
-			rc, err := tpm.NVDefineSpace(owner, nil, &data, nil)
-			if err != nil {
-				t.Fatalf("NVDefineSpace failed: %v", err)
-			}
-			defer undefineNVSpace(t, tpm, rc, owner)
-			rcs = append(rcs, rc)
-		}
-
-		if err := tpm.NVGlobalWriteLock(owner, authSession); err != nil {
-			t.Fatalf("NVGlobalWriteLock failed: %v", err)
-		}
-
-		for _, rc := range rcs {
-			pub, _, err := tpm.NVReadPublic(rc)
-			if err != nil {
-				t.Fatalf("NVReadPublic failed: %v", err)
-			}
-
-			if pub.Attrs&AttrNVGlobalLock > 0 && pub.Attrs&AttrNVWriteLocked == 0 {
-				t.Errorf("NV index with TPMA_NV_GLOBALLOCK set wasn't write locked")
-			} else if pub.Attrs&AttrNVGlobalLock == 0 && pub.Attrs&AttrNVWriteLocked > 0 {
-				t.Errorf("NV index without TPMA_NV_GLOBALLOCK set was write locked")
-			}
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		run(t, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-		run(t, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, sessionContext)
-	})
+	// This test highlights a bug where we didn't preserve the value of
+	// Session.includeAuthValue (which should be true) before computing the response HMAC.
+	// It's not caught by the "Unsalted" test because the lack of session key combined with
+	// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth
+	// to bail out early (the HMAC check is optional if the HMAC key is zero length which is
+	// the case where includeAuthValue is false and there is no session key).
+	s.testChangeAuth(c, s.StartAuthSession(c, primary, nil, SessionTypePolicy, nil, HashAlgorithmSHA256))
 }
 
 func TestNVChangeAuth(t *testing.T) {
@@ -904,11 +722,6 @@ func TestNVChangeAuth(t *testing.T) {
 			desc: "Unsalted",
 		},
 		{
-			// This test highlights a bug where we didn't preserve the value of
-			// Session.includeAuthValue (which should be true) before computing the response HMAC.
-			// It's not caught by the "Unsalted" test because the lack of session key combined with
-			// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth
-			// to bail out early
 			desc:   "Salted",
 			tpmKey: primary,
 		},

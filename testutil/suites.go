@@ -214,6 +214,17 @@ func (b *TPMTest) NextAvailableHandle(c *C, handle tpm2.Handle) tpm2.Handle {
 	return tpm2.HandleUnassigned
 }
 
+// RequireCommand checks if the required command is supported
+// by the TPM and skips the test if it isn't.
+func (b *TPMTest) RequireCommand(c *C, code tpm2.CommandCode) {
+	b.TCTI.disableCommandLogging = true
+	defer func() { b.TCTI.disableCommandLogging = false }()
+
+	if !b.TPM.IsCommandSupported(code) {
+		c.Skip(fmt.Sprintf("unsupported command %v", code))
+	}
+}
+
 // RequireAlgorithm checks if the required algorithm is known to the
 // TPM and skips the test if it isn't.
 func (b *TPMTest) RequireAlgorithm(c *C, alg tpm2.AlgorithmId) {
