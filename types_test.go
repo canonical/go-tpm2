@@ -291,9 +291,10 @@ func TestPublicIDUnion(t *testing.T) {
 			in: TestPublicIDUContainer{Alg: ObjectTypeId(AlgorithmNull),
 				Unique: &PublicIDU{Sym: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
-			err: "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestPublicIDUContainer: cannot process field " +
-				"Unique from struct type tpm2_test.TestPublicIDUContainer: cannot process union type tpm2.PublicIDU, inside container type " +
-				"tpm2_test.TestPublicIDUContainer: invalid selector value: TPM_ALG_NULL",
+			err: "cannot unmarshal argument whilst processing element of type tpm2.PublicIDU: invalid selector value: TPM_ALG_NULL\n\n" +
+				"=== BEGIN STACK ===\n" +
+				"... tpm2_test.TestPublicIDUContainer field Unique\n" +
+				"=== END STACK ===\n",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -359,9 +360,10 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			desc: "InvalidSelector",
 			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
 			out:  []byte{0x00, 0x0b},
-			err: "cannot unmarshal argument at index 0: cannot process struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot " +
-				"process field Details from struct type tpm2_test.TestSchemeKeyedHashUContainer: cannot process union type " +
-				"tpm2.SchemeKeyedHashU, inside container type tpm2_test.TestSchemeKeyedHashUContainer: invalid selector value: TPM_ALG_SHA256",
+			err: "cannot unmarshal argument whilst processing element of type tpm2.SchemeKeyedHashU: invalid selector value: TPM_ALG_SHA256\n\n" +
+				"=== BEGIN STACK ===\n" +
+				"... tpm2_test.TestSchemeKeyedHashUContainer field Details\n" +
+				"=== END STACK ===\n",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -503,12 +505,12 @@ func TestTaggedHash(t *testing.T) {
 		{
 			desc: "WrongDigestSize",
 			in:   TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument at index 0: cannot process custom type tpm2.TaggedHash: invalid digest size 20",
+			err:  "cannot marshal argument whilst processing element of type tpm2.TaggedHash: invalid digest size 20",
 		},
 		{
 			desc: "UnknownAlg",
 			in:   TaggedHash{HashAlg: HashAlgorithmNull, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument at index 0: cannot process custom type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
+			err:  "cannot marshal argument whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -558,7 +560,7 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
 		}
-		if err.Error() != "cannot unmarshal argument at index 0: cannot process custom type tpm2.TaggedHash: cannot read digest: unexpected EOF" {
+		if err.Error() != "cannot unmarshal argument whilst processing element of type *tpm2.TaggedHash: cannot read digest: unexpected EOF" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})
@@ -599,8 +601,7 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
 		}
-		if err.Error() != "cannot unmarshal argument at index 0: cannot process custom type tpm2.TaggedHash: cannot determine digest size "+
-			"for unknown algorithm TPM_ALG_HMAC" {
+		if err.Error() != "cannot unmarshal argument whilst processing element of type *tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_HMAC" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})
