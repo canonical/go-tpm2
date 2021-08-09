@@ -690,7 +690,11 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 		return newError(v, u.context, err)
 	}
 
-	s, err := u.unmarshalRawList(reflect.MakeSlice(v.Type(), 0, 0), int(length))
+	if v.IsNil() || v.Cap() < int(length) {
+		v.Set(reflect.MakeSlice(v.Type(), 0, int(length)))
+	}
+
+	s, err := u.unmarshalRawList(v.Slice(0, 0), int(length))
 	if err != nil {
 		return err
 	}
@@ -776,9 +780,11 @@ func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 	return u.nbytes, nil
 }
 
-// MarshalToWriter marshals vals to w in the TPM wire format, according to the rules specified in the package description. A nil
-// pointer encountered during marshalling causes the zero value for the type to be marshalled, unless the pointer is to a zero
-// sized structure.
+// MarshalToWriter marshals vals to w in the TPM wire format, according to the rules specified in the package description.
+//
+// Pointers are automatically dereferenced. Nil pointers are marshalled to the zero value for the pointed to type, unless
+// the pointer is to a sized structure (a struct field with the 'tpm2:"sized"` tag pointing to another struct), in which case
+// a value of zero size is marshalled.
 //
 // The number of bytes written to w are returned. If this function does not complete successfully, it will return an error and
 // the number of bytes written.
@@ -799,12 +805,14 @@ func MustMarshalToWriter(w io.Writer, vals ...interface{}) int {
 	return n
 }
 
-// MarshalToBytes marshals vals to the TPM wire format, according to the rules specified in the package description. A nil pointer
-// encountered during marshalling causes the zero value for the type to be marshalled, unless the pointer is to a zero sized
-// structure.
+// MarshalToBytes marshals vals to TPM wire format, according to the rules specified in the package description.
 //
-// If successful, this function returns the marshalled data. If this function does not complete successfully, it will return an error.
-// In this case, no data will be returned.
+// Pointers are automatically dereferenced. Nil pointers are marshalled to the zero value for the pointed to type, unless
+// the pointer is to a sized structure (a struct field with the 'tpm2:"sized"` tag pointing to another struct), in which case
+// a value of zero size is marshalled.
+//
+// The number of bytes written to w are returned. If this function does not complete successfully, it will return an error and
+// the number of bytes written.
 //
 // This function only returns an error if a sized value (sized buffer, sized structure or list) is too large for its corresponding
 // size field.
@@ -826,10 +834,19 @@ func MustMarshalToBytes(vals ...interface{}) []byte {
 }
 
 // UnmarshalFromReader unmarshals data in the TPM wire format from r to vals, according to the rules specified in the package
-// description. The values supplied to this function must be pointers to the destination values. Nil pointers encountered during
-// unmarshalling will be initialized to point to newly allocated memory, unless the pointer represents a zero-sized structure. New
-// slices will always be created - even if the caller pre-allocates them, unless it is a RawBytes type or a struct field with the
-// `tpm2:"raw"` tag. In this case, the slice must be preallocated to the expected size.
+// description. The values supplied to this function must be pointers to the destination values.
+//
+// Pointers are automatically dererefenced. If a pointer is nil, then memory is allocated for the values and the pointer
+// is initialized accordingly, unless the pointer is to a sized structure (a struct field with the 'tpm2:"sized"' tag pointing
+// to another struct) and the values being unmarshalled has a zero size, in which case the pointer is not initialized. If
+// a pointer is already initialized by the caller, then this function will unmarshal to the already allocated memory.
+//
+// Slices are allocated automatically, unless the caller has already allocated a slice that has a large enough capacity
+// to hold the unmarshalled values, in which case the already allocated slice will be used and its length set accordingly.
+//
+// This can unmarshal raw slices (those without a corresponding size or length fields, represented by the RawBytes type or
+// a slice value referenced from a struct field with the 'tpm2:"raw"' tag), but the caller must pre-allocate a slice of the
+// correct size first. This function cannot allocate a slice because it doesn't have a way to determine the size to allocate.
 //
 // The number of bytes read from r are returned. If this function does not complete successfully, it will return an error and
 // the number of bytes read. In this case, partial results may have been unmarshalled to the supplied destination values.
@@ -852,15 +869,23 @@ func UnmarshalFromReader(r io.Reader, vals ...interface{}) (int, error) {
 	return u.unmarshal(vals...)
 }
 
-// UnmarshalFromBytes unmarshals data in the TPM wire format from b to vals, according to the rules specified in the package
-// description. The values supplied to this function must be pointers to the destination values. Nil pointers encountered during
-// unmarshalling will be initialized to point to newly allocated memory, unless the pointer represents a zero-sized structure. New
-// slices will always be created - even if the caller pre-allocates them, unless it is a RawBytes type or a struct field with the
-// `tpm2:"raw"` tag. In this case, the slice must be preallocated to the expected size.
+// UnmarshalFromReader unmarshals data in the TPM wire format from b to vals, according to the rules specified in the package
+// description. The values supplied to this function must be pointers to the destination values.
 //
-// If successful, this function returns the number of bytes consumed from b. If this function does not complete successfully, it will
-// return an error and the number of bytes consumed. In this case, partial results may have been unmarshalled to the supplied
-// destination values.
+// Pointers are automatically dererefenced. If a pointer is nil, then memory is allocated for the value and the pointer
+// is initialized accordingly, unless the pointer is to a sized structure (a struct field with the 'tpm2:"sized"' tag pointing
+// to another struct) and the value being unmarshalled has a zero size, in which case the pointer is not initialized. If
+// a pointer is already initialized by the caller, then this function will unmarshal to the already allocated memory.
+//
+// Slices are allocated automatically, unless the caller has already allocated a slice that has a large enough capacity
+// to hold the unmarshalled values, in which case the already allocated slice will be used and its length set accordingly.
+//
+// This can unmarshal raw slices (those without a corresponding size or length fields, represented by the RawBytes type or
+// a slice value referenced from a struct field with the 'tpm2:"raw"' tag), but the caller must pre-allocate a slice of the
+// correct size first. This function cannot allocate a slice because it doesn't have a way to determine the size to allocate.
+//
+// The number of bytes consumed from b are returned. If this function does not complete successfully, it will return an error and
+// the number of bytes consumed. In this case, partial results may have been unmarshalled to the supplied destination values.
 func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 	buf := bytes.NewReader(b)
 	return UnmarshalFromReader(buf, vals...)

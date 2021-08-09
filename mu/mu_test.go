@@ -186,19 +186,25 @@ func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
 	values := []interface{}{[]uint32{46, 4563421, 678, 12390}, []uint64{}, []uint16{59747, 22875}}
 	expected := testutil.DecodeHexString(c, "000000040000002e0045a1dd000002a6000030660000000000000002e963595b")
 
-	var ua []uint32
+	ua := make([]uint32, 1)
+	ua2 := ua
 	var ub []uint64
-	uc := make([]uint16, 1)
+	uc := make([]uint16, 2)
 	uc2 := uc
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:         values,
 		expected:       expected,
 		unmarshalDests: []interface{}{&ua, &ub, &uc}})
-	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
-	c.Check(uc2, DeepEquals, make([]uint16, 1))
+	// Test that a preallocated slice is used if it is large enough
+	c.Check(uc2, DeepEquals, uc)
 
-	ua = nil
+	// Test that a preallocated slice is reallocated if it isn't
+	// large enough
+	c.Check(ua2, DeepEquals, make([]uint32, 1))
+
+	ua = make([]uint32, 1)
+	ua2 = ua
 	ub = nil
 	uc = make([]uint16, 10)
 	uc2 = uc
@@ -207,8 +213,12 @@ func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
 		values:         values,
 		expected:       expected,
 		unmarshalDests: []interface{}{&ua, &ub, &uc}})
-	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
-	c.Check(uc2, DeepEquals, make([]uint16, 10))
+	// Test that a preallocated slice is used if it is large enough
+	c.Check(uc2, DeepEquals, append(uc, make([]uint16, 8)...))
+
+	// Test that a preallocated slice is reallocated if it isn't
+	// large enough
+	c.Check(ua2, DeepEquals, make([]uint32, 1))
 }
 
 type testStruct struct {
@@ -229,7 +239,7 @@ func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 	var uc_b uint32
 	var ua testStruct
 	var ub testStruct
-	uc := testStruct{B: &uc_b, D: make([]uint32, 1)}
+	uc := testStruct{B: &uc_b, D: make([]uint32, 4)}
 	uc_d := uc.D
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
@@ -239,8 +249,8 @@ func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 		unmarshalExpectedVals: []interface{}{a, testStruct{34963, &u32_0, false, []uint32{}}, a}})
 	// Make sure that unmashal didn't allocate a new value when it was passed a non-nil pointer
 	c.Check(uc_b, Equals, u32)
-	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
-	c.Check(uc_d, DeepEquals, make([]uint32, 1))
+	// Test that a preallocated slice is used if it is large enough
+	c.Check(uc_d, DeepEquals, append(uc.D, make([]uint32, 2)...))
 
 	uc_b = 0
 	ua = testStruct{}
@@ -255,8 +265,8 @@ func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 		unmarshalExpectedVals: []interface{}{a, testStruct{34963, &u32_0, false, []uint32{}}, a}})
 	// Make sure that unmashal didn't allocate a new value when it was passed a non-nil pointer
 	c.Check(uc_b, Equals, u32)
-	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
-	c.Check(uc_d, DeepEquals, make([]uint32, 10))
+	// Test that a preallocated slice is used if it is large enough
+	c.Check(uc_d, DeepEquals, append(uc.D, make([]uint32, 8)...))
 }
 
 type testStructWithRawTagFields struct {
