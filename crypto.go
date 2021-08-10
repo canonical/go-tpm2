@@ -63,6 +63,8 @@ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 // The result of this is useful for extended authorization commands that bind an authorization to
 // a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
 // TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
+//
+// This will panic if alg is not available.
 func ComputeCpHash(alg HashAlgorithmId, command CommandCode, handles []Name, parameters []byte) Digest {
 	hash := alg.NewHash()
 

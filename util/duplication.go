@@ -25,25 +25,10 @@ import (
 // assumed that the object has an inner wrapper. In this case, the symmetric key for the inner
 // wrapper must be supplied using the encryptionKey argument.
 func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, encryptionKey tpm2.Data, inSymSeed tpm2.EncryptedSecret, symmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
-	if symmetricAlg != nil && symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
-		if !symmetricAlg.Algorithm.Available() {
-			return nil, errors.New("symmetric algorithm for inner wrapper is not available")
-		}
-	}
-
 	var seed []byte
 	if len(inSymSeed) > 0 {
 		if privKey == nil {
 			return nil, errors.New("parent private key is required for outer wrapper")
-		}
-		if !parentNameAlg.Available() {
-			return nil, errors.New("parent name algorithm is not available")
-		}
-		if parentSymmetricAlg == nil || parentSymmetricAlg.Algorithm == tpm2.SymObjectAlgorithmNull {
-			return nil, errors.New("invalid symmetric algorithm for outer wrapper")
-		}
-		if !parentSymmetricAlg.Algorithm.Available() {
-			return nil, errors.New("symmetric algorithm for outer wrapper is not available")
 		}
 
 		var err error
@@ -93,28 +78,10 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 		return nil, nil, nil, xerrors.Errorf("cannot compute name: %w", err)
 	}
 
-	if symmetricAlg != nil && symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
-		if len(encryptionKeyIn) > 0 && len(encryptionKeyIn) != int(symmetricAlg.KeyBits.Sym/8) {
-			return nil, nil, nil, errors.New("the supplied symmetric key has the wrong length")
-		}
-
-		if !symmetricAlg.Algorithm.Available() {
-			return nil, nil, nil, errors.New("symmetric algorithm for inner wrapper is not available")
-		}
-	}
-
 	var seed []byte
-	var outerSymmetric *tpm2.SymDefObject
 	if parentPublic != nil {
 		if !parentPublic.IsStorage() {
 			return nil, nil, nil, errors.New("parent object must be a storage key")
-		}
-		if !parentPublic.NameAlg.Available() {
-			return nil, nil, nil, errors.New("name algorithm for parent object is not available")
-		}
-		outerSymmetric = &parentPublic.Params.AsymDetail().Symmetric
-		if !outerSymmetric.Algorithm.Available() {
-			return nil, nil, nil, errors.New("symmetric algorithm for outer wrapper is not available")
 		}
 		outSymSeed, seed, err = tpm2.CryptSecretEncrypt(parentPublic, []byte(tpm2.DuplicateString))
 		if err != nil {

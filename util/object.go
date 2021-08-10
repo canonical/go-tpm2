@@ -28,11 +28,15 @@ import (
 // It then decrypts the data blob using the specified symmetric algorithm and a
 // key derived from the supplied seed and name.
 func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed []byte, useIV bool, data []byte) ([]byte, error) {
+	if !hashAlg.Available() {
+		return nil, errors.New("digest algorithm is not available")
+	}
+
 	r := bytes.NewReader(data)
 
 	var integrity []byte
 	if _, err := mu.UnmarshalFromReader(r, &integrity); err != nil {
-		return nil, xerrors.Errorf("cannot unpack integrity digest: %w", err)
+		return nil, xerrors.Errorf("cannot unmarshal integrity digest: %w", err)
 	}
 
 	data, _ = ioutil.ReadAll(r)
@@ -51,7 +55,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 	iv := make([]byte, symmetricAlg.Algorithm.BlockSize())
 	if useIV {
 		if _, err := mu.UnmarshalFromReader(r, &iv); err != nil {
-			return nil, xerrors.Errorf("cannot unpack IV: %w", err)
+			return nil, xerrors.Errorf("cannot unmarshal IV: %w", err)
 		}
 		if len(iv) != symmetricAlg.Algorithm.BlockSize() {
 			return nil, errors.New("IV has the wrong size")
@@ -63,7 +67,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 	symKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
 	if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, iv, data); err != nil {
-		return nil, xerrors.Errorf("cannot remove wrapper: %w", err)
+		return nil, xerrors.Errorf("cannot decrypt: %w", err)
 	}
 
 	return data, nil
@@ -79,6 +83,10 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 // name using the specified digest algorithm and a key derived from the supplied
 // seed.
 func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed []byte, useIV bool, data []byte) ([]byte, error) {
+	if !hashAlg.Available() {
+		return nil, errors.New("digest algorithm is not available")
+	}
+
 	iv := make([]byte, symmetricAlg.Algorithm.BlockSize())
 	if useIV {
 		if _, err := rand.Read(iv); err != nil {
@@ -89,7 +97,7 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 	symKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
 	if err := tpm2.CryptSymmetricEncrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, iv, data); err != nil {
-		return nil, xerrors.Errorf("cannot apply wrapper: %w", err)
+		return nil, xerrors.Errorf("cannot encrypt: %w", err)
 	}
 
 	if useIV {
@@ -152,6 +160,10 @@ func SensitiveToPrivate(sensitive *tpm2.Sensitive, name tpm2.Name, hashAlg tpm2.
 func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (*tpm2.Sensitive, error) {
 	if len(seed) > 0 {
 		// Remove outer wrapper
+		if parentSymmetricAlg == nil {
+			return nil, errors.New("missing parent symmetric algorithm")
+		}
+
 		var err error
 		duplicate, err = UnwrapOuter(parentNameAlg, parentSymmetricAlg, name, seed, false, duplicate)
 		if err != nil {
@@ -161,22 +173,25 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 
 	if symmetricAlg != nil && symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
 		// Remove inner wrapper
+		if name.Algorithm() == tpm2.HashAlgorithmNull {
+			return nil, errors.New("invalid name")
+		}
+		if !name.Algorithm().Available() {
+			return nil, errors.New("name algorithm is not available")
+		}
+
 		if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
-			return nil, xerrors.Errorf("cannot remove inner wrapper: %w", err)
+			return nil, xerrors.Errorf("cannot decrypt inner wrapper: %w", err)
 		}
 
 		r := bytes.NewReader(duplicate)
 
 		var innerIntegrity []byte
 		if _, err := mu.UnmarshalFromReader(r, &innerIntegrity); err != nil {
-			return nil, xerrors.Errorf("cannot unpack inner integrity digest: %w", err)
+			return nil, xerrors.Errorf("cannot unmarshal inner integrity digest: %w", err)
 		}
 
-		var err error
-		duplicate, err = ioutil.ReadAll(r)
-		if err != nil {
-			return nil, xerrors.Errorf("cannot unpack inner wrapper: %w", err)
-		}
+		duplicate, _ = ioutil.ReadAll(r)
 
 		h := name.Algorithm().NewHash()
 		h.Write(duplicate)
@@ -227,6 +242,13 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 	}
 
 	if applyInnerWrapper {
+		if name.Algorithm() == tpm2.HashAlgorithmNull {
+			return nil, nil, errors.New("invalid name")
+		}
+		if !name.Algorithm().Available() {
+			return nil, nil, errors.New("name algorithm is not available")
+		}
+
 		// Apply inner wrapper
 		h := name.Algorithm().NewHash()
 		h.Write(duplicate)
@@ -239,9 +261,11 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 		if len(innerSymKey) == 0 {
 			innerSymKey = make([]byte, symmetricAlg.KeyBits.Sym/8)
 			if _, err := rand.Read(innerSymKey); err != nil {
-				return nil, nil, xerrors.Errorf("cannot read random bytes for key for inner wrapper: %w", err)
+				return nil, nil, xerrors.Errorf("cannot obtain symmetric key for inner wrapper: %w", err)
 			}
 			innerSymKeyOut = innerSymKey
+		} else if len(innerSymKey) != int(symmetricAlg.KeyBits.Sym/8) {
+			return nil, nil, errors.New("the supplied symmetric key for inner wrapper has the wrong length")
 		}
 
 		if err := tpm2.CryptSymmetricEncrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
@@ -254,7 +278,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 		var err error
 		duplicate, err = ProduceOuterWrap(parent.NameAlg, &parent.Params.AsymDetail().Symmetric, name, seed, false, duplicate)
 		if err != nil {
-			return nil, nil, xerrors.Errorf("cannot produce outer wrapper: %w", err)
+			return nil, nil, xerrors.Errorf("cannot apply outer wrapper: %w", err)
 		}
 	}
 

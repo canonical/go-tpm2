@@ -38,7 +38,9 @@ func (s *qnSuite) TestComputeQualifiedName(c *C) {
 	_, _, expectedQn, err := s.TPM.ReadPublic(object)
 	c.Assert(err, IsNil)
 
-	c.Check(ComputeQualifiedName(object.Name(), primaryQn), DeepEquals, expectedQn)
+	qn, err := ComputeQualifiedName(object.Name(), primaryQn)
+	c.Check(err, IsNil)
+	c.Check(qn, DeepEquals, expectedQn)
 }
 
 func (s *qnSuite) TestComputeQualifiedNameFull(c *C) {
@@ -59,5 +61,7 @@ func (s *qnSuite) TestComputeQualifiedNameFull(c *C) {
 	_, _, expectedQn, err := s.TPM.ReadPublic(object2)
 	c.Assert(err, IsNil)
 
-	c.Check(ComputeQualifiedNameFull(object2.Name(), tpm2.HandleOwner, primary.Name(), object1.Name()), DeepEquals, expectedQn)
+	qn, err := ComputeQualifiedNameFull(object2.Name(), tpm2.HandleOwner, primary.Name(), object1.Name())
+	c.Check(err, IsNil)
+	c.Check(qn, DeepEquals, expectedQn)
 }

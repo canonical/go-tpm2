@@ -5,6 +5,7 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/canonical/go-tpm2"
@@ -15,9 +16,11 @@ import (
 // values and the provided PCR selections. The digest is computed the same way as PCRComputeCurrentDigest
 // as defined in the TPM reference implementation. It is most useful for computing an input to
 // TPMContext.PolicyPCR or TrialAuthPolicy.PolicyPCR, and for validating quotes and creation data.
-//
-// This will panic if the specified digest algorithm is not available.
 func ComputePCRDigest(alg tpm2.HashAlgorithmId, pcrs tpm2.PCRSelectionList, values tpm2.PCRValues) (tpm2.Digest, error) {
+	if !alg.Available() {
+		return nil, errors.New("algorithm is not available")
+	}
+
 	h := alg.NewHash()
 
 	mu.MustCopyValue(&pcrs, pcrs)
@@ -47,7 +50,7 @@ func ComputePCRDigestSimple(alg tpm2.HashAlgorithmId, values tpm2.PCRValues) (tp
 	pcrs := values.SelectionList()
 	digest, err := ComputePCRDigest(alg, pcrs, values)
 	if err != nil {
-		panic(fmt.Sprintf("ComputePCRDigest failed: %v", err))
+		panic(err)
 	}
 
 	return pcrs, digest

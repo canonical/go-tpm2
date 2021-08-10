@@ -5,6 +5,8 @@
 package util
 
 import (
+	"errors"
+
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -19,6 +21,10 @@ import (
 // a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
 // TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
 func ComputeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles []tpm2.Name, params ...interface{}) (tpm2.Digest, error) {
+	if !alg.Available() {
+		return nil, errors.New("algorithm is not available")
+	}
+
 	cpBytes, err := mu.MarshalToBytes(params...)
 	if err != nil {
 		return nil, err

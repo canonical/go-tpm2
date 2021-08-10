@@ -270,7 +270,10 @@ func (s *objectSuite) TestReadPublic(c *C) {
 	c.Check(err, IsNil)
 	c.Check(pub, DeepEquals, expectedPub)
 	c.Check(name, DeepEquals, object.Name())
-	c.Check(qn, DeepEquals, util.ComputeQualifiedNameFull(object.Name(), HandleOwner, primary.Name()))
+
+	expectedQn, err := util.ComputeQualifiedNameFull(object.Name(), HandleOwner, primary.Name())
+	c.Check(err, IsNil)
+	c.Check(qn, DeepEquals, expectedQn)
 }
 
 type testLoadExternalData struct {
