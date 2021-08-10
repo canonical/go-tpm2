@@ -66,7 +66,7 @@ func (s *objectSuite) checkCreationData(c *C, data *CreationData, hash Digest, t
 
 	_, pcrValues, err := s.TPM.PCRRead(creationPCR)
 	c.Assert(err, IsNil)
-	pcrDigest, err := util.ComputePCRDigest(template.NameAlg.GetHash(), creationPCR, pcrValues)
+	pcrDigest, err := util.ComputePCRDigest(template.NameAlg, creationPCR, pcrValues)
 	c.Check(err, IsNil)
 
 	c.Check(data, NotNil)
@@ -396,7 +396,7 @@ func (s *objectSuite) TestUnsealWithItemAuthHMACSession(c *C) {
 }
 
 func (s *objectSuite) TestUnsealWithItemAuthPolicySession(c *C) {
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 
 	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
@@ -409,7 +409,7 @@ func (s *objectSuite) TestUnsealWithItemAuthPolicySession(c *C) {
 }
 
 func (s *objectSuite) TestUnsealWithEncryptSession(c *C) {
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 
 	symmetric := SymDef{
@@ -480,10 +480,10 @@ func (s *objectSuite) TestMakeCredential(c *C) {
 	credentialBlob, secret, err := s.TPM.MakeCredential(ek, credential, name)
 	c.Check(err, IsNil)
 
-	seed, err := util.CryptSecretDecrypt(key, crypto.SHA256, []byte(IdentityKey), secret)
+	seed, err := util.CryptSecretDecrypt(key, HashAlgorithmSHA256, []byte(IdentityKey), secret)
 	c.Check(err, IsNil)
 
-	recoveredCredential, err := util.UnwrapOuter(crypto.SHA256, &ekPub.Params.RSADetail.Symmetric, name, seed, credentialBlob)
+	recoveredCredential, err := util.UnwrapOuter(HashAlgorithmSHA256, &ekPub.Params.RSADetail.Symmetric, name, seed, credentialBlob)
 	c.Check(err, IsNil)
 
 	_, err = mu.UnmarshalFromBytes(recoveredCredential, &recoveredCredential)

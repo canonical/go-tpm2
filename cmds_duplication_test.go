@@ -23,7 +23,7 @@ func TestDuplicate(t *testing.T) {
 	primary := createRSASrkForTesting(t, tpm, nil)
 	defer flushContext(t, tpm, primary)
 
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyCommandCode(CommandDuplicate)
 
 	template := &Public{
@@ -95,11 +95,11 @@ func TestDuplicate(t *testing.T) {
 
 	verifyDuplicate := func(t *testing.T, duplicate Private, outer bool, encryptionKey Data, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject) {
 		var privKey crypto.PrivateKey
-		var parentNameAlg crypto.Hash
+		parentNameAlg := HashAlgorithmNull
 		var parentSymmetricAlg *SymDefObject
 		if outer {
 			privKey = key
-			parentNameAlg = parentPub.NameAlg.GetHash()
+			parentNameAlg = parentPub.NameAlg
 			parentSymmetricAlg = &parentPub.Params.AsymDetail().Symmetric
 		}
 

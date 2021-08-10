@@ -20,7 +20,7 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-func UnwrapOuter(hashAlg crypto.Hash, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed, data []byte) ([]byte, error) {
+func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed, data []byte) ([]byte, error) {
 	r := bytes.NewReader(data)
 
 	var integrity []byte
@@ -33,8 +33,8 @@ func UnwrapOuter(hashAlg crypto.Hash, symmetricAlg *tpm2.SymDefObject, name tpm2
 		return nil, xerrors.Errorf("cannot unpack wrapper: %w", err)
 	}
 
-	hmacKey := internal.KDFa(hashAlg, seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
-	h := hmac.New(func() hash.Hash { return hashAlg.New() }, hmacKey)
+	hmacKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
+	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
 	h.Write(data)
 	h.Write(name)
 
@@ -42,7 +42,7 @@ func UnwrapOuter(hashAlg crypto.Hash, symmetricAlg *tpm2.SymDefObject, name tpm2
 		return nil, errors.New("integrity digest is invalid")
 	}
 
-	symKey := internal.KDFa(hashAlg, seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
+	symKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
 	if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), data); err != nil {
 		return nil, xerrors.Errorf("cannot remove wrapper: %w", err)
@@ -70,7 +70,7 @@ func ProduceOuterWrap(protector *tpm2.Public, name tpm2.Name, seed, data []byte)
 	return mu.MustMarshalToBytes(integrity, mu.RawBytes(data)), nil
 }
 
-func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parent crypto.PrivateKey, parentNameAlg crypto.Hash, parentSymmetricAlg *tpm2.SymDefObject, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (*tpm2.Sensitive, error) {
+func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parent crypto.PrivateKey, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (*tpm2.Sensitive, error) {
 	if len(seed) > 0 {
 		// Remove outer wrapper
 		var err error

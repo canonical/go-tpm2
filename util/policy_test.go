@@ -74,7 +74,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testPolicySignedData) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicySigned(pubKey.Name(), data.policyRef)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -111,7 +111,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testPolicySecretData) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicySecret(primary.Name(), data.policyRef)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -145,7 +145,7 @@ func (s *policySuite) testPolicyOR(c *C, data *testPolicyORData) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyOR(data.pHashList)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -190,7 +190,7 @@ func (s *policySuite) testPolicyPCR(c *C, data *testPolicyPCRData) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyPCR(data.pcrDigest, data.pcrs)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -243,7 +243,7 @@ func (s *policySuite) testPolicyNV(c *C, data *testPolicyNVData) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyNV(index.Name(), data.operandB, data.offset, data.operation)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -341,7 +341,7 @@ func (s *policySuite) testPolicyCounterTimer(c *C, data *testPolicyCounterTimerD
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyCounterTimer(data.operandB, data.offset, data.operation)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -399,7 +399,7 @@ func (s *policySuite) testPolicyCommandCode(c *C, data *testPolicyCommandCode) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyCommandCode(data.code)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -434,7 +434,7 @@ func (s *policySuite) testPolicyCpHash(c *C, alg tpm2.HashAlgorithmId) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(alg.GetHash())
+	trial := ComputeAuthPolicy(alg)
 	trial.PolicyCpHash(cpHashA)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -459,7 +459,7 @@ func (s *policySuite) testPolicyNameHash(c *C, alg tpm2.HashAlgorithmId) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(alg.GetHash())
+	trial := ComputeAuthPolicy(alg)
 	trial.PolicyNameHash(nameHash)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -487,7 +487,7 @@ func (s *policySuite) testPolicyDuplicationSelect(c *C, data *testPolicyDuplicat
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyDuplicationSelect(data.objectName, data.newParentName, data.includeObject)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -558,7 +558,7 @@ func (s *policySuite) testPolicyAuthorize(c *C, data *testPolicyAuthorizeData) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyAuthorize(data.policyRef, data.keySign)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -610,7 +610,7 @@ func (s *policySuite) testPolicyAuthValue(c *C, alg tpm2.HashAlgorithmId) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(alg.GetHash())
+	trial := ComputeAuthPolicy(alg)
 	trial.PolicyAuthValue()
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -631,7 +631,7 @@ func (s *policySuite) testPolicyPassword(c *C, alg tpm2.HashAlgorithmId) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(alg.GetHash())
+	trial := ComputeAuthPolicy(alg)
 	trial.PolicyPassword()
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)
@@ -657,7 +657,7 @@ func (s *policySuite) testPolicyNvWritten(c *C, data *testPolicyNvWrittenData) {
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 
-	trial := ComputeAuthPolicy(data.alg.GetHash())
+	trial := ComputeAuthPolicy(data.alg)
 	trial.PolicyNvWritten(data.writtenSet)
 
 	c.Check(trial.GetDigest(), DeepEquals, expectedDigest)

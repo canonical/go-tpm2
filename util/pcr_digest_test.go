@@ -5,8 +5,6 @@
 package util_test
 
 import (
-	"crypto"
-
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
@@ -22,7 +20,7 @@ func (s *pcrDigestSuite) TestComputePCRDigestFromSinglePCR(c *C) {
 	pcrs := tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}}
 	pcrValues := tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	digest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	digest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(testutil.DecodeHexString(c, "cd446a8537e59056c999aeb7ecd47f6b4f82f86309d08789b169d43e9ce53935")))
 }
@@ -33,7 +31,7 @@ func (s *pcrDigestSuite) TestComputePCRDigestFromMultiplePCRs(c *C) {
 		4: testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
 		7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	digest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	digest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(testutil.DecodeHexString(c, "6892d59ab3ec801e5f154a7d2767ff78f330aa1b015c16eed9c739d5920fe5f8")))
 }
@@ -44,7 +42,7 @@ func (s *pcrDigestSuite) TestComputePCRDigestFromMultiplePCRsCheckSelectOrder(c 
 		4: testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
 		7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	digest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	digest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(testutil.DecodeHexString(c, "6892d59ab3ec801e5f154a7d2767ff78f330aa1b015c16eed9c739d5920fe5f8")))
 }
@@ -59,7 +57,7 @@ func (s *pcrDigestSuite) TestComputePCRDigestFromMultiplePCRBanks(c *C) {
 		tpm2.HashAlgorithmSHA256: {
 			7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	digest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	digest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(testutil.DecodeHexString(c, "803fa62e5e945f59af7d40a0e802201a5b0354472b4d7279289d8a6d32fabb6c")))
 }
@@ -74,7 +72,7 @@ func (s *pcrDigestSuite) TestComputePCRDigestFromMultiplePCRBanksCheckBankOrder(
 		tpm2.HashAlgorithmSHA256: {
 			7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	digest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	digest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(testutil.DecodeHexString(c, "e77c036d95b0d378b1840381be684acf12d148366529f7226979dfd6ebe15ff9")))
 }
@@ -85,7 +83,7 @@ func (s *pcrDigestSuite) TestComputePCRDigestUnusedValue(c *C) {
 		4: testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
 		7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	digest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	digest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(testutil.DecodeHexString(c, "cd446a8537e59056c999aeb7ecd47f6b4f82f86309d08789b169d43e9ce53935")))
 }
@@ -94,7 +92,7 @@ func (s *pcrDigestSuite) TestComputePCRDigestSHA1(c *C) {
 	pcrs := tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}}
 	pcrValues := tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	digest, err := ComputePCRDigest(crypto.SHA1, pcrs, pcrValues)
+	digest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA1, pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(testutil.DecodeHexString(c, "70b0873f47f961bbb891ccee9f8a57aacd167040")))
 }
@@ -102,10 +100,10 @@ func (s *pcrDigestSuite) TestComputePCRDigestSHA1(c *C) {
 func (s *pcrDigestSuite) TestComputePCRDigestSimpleFromSinglePCRValue(c *C) {
 	pcrValues := tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	pcrs, digest := ComputePCRDigestSimple(crypto.SHA256, pcrValues)
+	pcrs, digest := ComputePCRDigestSimple(tpm2.HashAlgorithmSHA256, pcrValues)
 	c.Check(pcrs, DeepEquals, tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}})
 
-	expectedDigest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	expectedDigest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 
 	c.Check(digest, DeepEquals, expectedDigest)
@@ -116,10 +114,10 @@ func (s *pcrDigestSuite) TestComputePCRDigestSimpleFromMultiplePCRValues(c *C) {
 		4: testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
 		7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	pcrs, digest := ComputePCRDigestSimple(crypto.SHA256, pcrValues)
+	pcrs, digest := ComputePCRDigestSimple(tpm2.HashAlgorithmSHA256, pcrValues)
 	c.Check(pcrs, DeepEquals, tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}})
 
-	expectedDigest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	expectedDigest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 
 	c.Check(digest, DeepEquals, expectedDigest)
@@ -136,10 +134,10 @@ func (s *pcrDigestSuite) TestComputePCRDigestSimpleFromMultiplePCRBanks(c *C) {
 		{Hash: tpm2.HashAlgorithmSHA1, Select: []int{4}},
 		{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}}
 
-	pcrs, digest := ComputePCRDigestSimple(crypto.SHA256, pcrValues)
+	pcrs, digest := ComputePCRDigestSimple(tpm2.HashAlgorithmSHA256, pcrValues)
 	c.Check(pcrs, DeepEquals, expectedPcrs)
 
-	expectedDigest, err := ComputePCRDigest(crypto.SHA256, pcrs, pcrValues)
+	expectedDigest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrs, pcrValues)
 	c.Check(err, IsNil)
 
 	c.Check(digest, DeepEquals, expectedDigest)
@@ -148,10 +146,10 @@ func (s *pcrDigestSuite) TestComputePCRDigestSimpleFromMultiplePCRBanks(c *C) {
 func (s *pcrDigestSuite) TestComputePCRDigestSimpleSHA1(c *C) {
 	pcrValues := tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {7: testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
 
-	pcrs, digest := ComputePCRDigestSimple(crypto.SHA1, pcrValues)
+	pcrs, digest := ComputePCRDigestSimple(tpm2.HashAlgorithmSHA1, pcrValues)
 	c.Check(pcrs, DeepEquals, tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}})
 
-	expectedDigest, err := ComputePCRDigest(crypto.SHA1, pcrs, pcrValues)
+	expectedDigest, err := ComputePCRDigest(tpm2.HashAlgorithmSHA1, pcrs, pcrValues)
 	c.Check(err, IsNil)
 
 	c.Check(digest, DeepEquals, expectedDigest)

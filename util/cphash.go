@@ -5,8 +5,6 @@
 package util
 
 import (
-	"crypto"
-
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -20,7 +18,7 @@ import (
 // The result of this is useful for extended authorization commands that bind an authorization to
 // a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
 // TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
-func ComputeCpHash(alg crypto.Hash, command tpm2.CommandCode, handles []tpm2.Name, params ...interface{}) (tpm2.Digest, error) {
+func ComputeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles []tpm2.Name, params ...interface{}) (tpm2.Digest, error) {
 	cpBytes, err := mu.MarshalToBytes(params...)
 	if err != nil {
 		return nil, err

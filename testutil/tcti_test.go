@@ -5,7 +5,6 @@
 package testutil_test
 
 import (
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
@@ -1022,7 +1021,7 @@ func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
 	// TPMA_NV_POLICY_DELETE index.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(tpm2.HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 	trial.PolicyCommandCode(tpm2.CommandNVUndefineSpaceSpecial)
 
@@ -1053,7 +1052,7 @@ func (s *tctiSuite) TestNVUndefineSpaceSpecial(c *C) {
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(tpm2.HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 	trial.PolicyCommandCode(tpm2.CommandNVUndefineSpaceSpecial)
 

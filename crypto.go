@@ -5,7 +5,6 @@
 package tpm2
 
 import (
-	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
@@ -64,8 +63,8 @@ func eccCurveToGoCurve(curve ECCCurve) elliptic.Curve {
 // The result of this is useful for extended authorization commands that bind an authorization to
 // a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
 // TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
-func ComputeCpHash(alg crypto.Hash, command CommandCode, handles []Name, parameters []byte) Digest {
-	hash := alg.New()
+func ComputeCpHash(alg HashAlgorithmId, command CommandCode, handles []Name, parameters []byte) Digest {
+	hash := alg.NewHash()
 
 	binary.Write(hash, binary.BigEndian, command)
 	for _, name := range handles {

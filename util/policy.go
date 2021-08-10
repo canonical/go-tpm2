@@ -5,7 +5,6 @@
 package util
 
 import (
-	"crypto"
 	"encoding/binary"
 	"hash"
 
@@ -19,7 +18,7 @@ import (
 // without knowledge of the authorization value of the authorizing entities used for those
 // commands.
 type TrialAuthPolicy struct {
-	alg    crypto.Hash
+	alg    tpm2.HashAlgorithmId
 	digest tpm2.Digest
 
 	// A policy can only contain one of TPM2_PolicyCpHash, TPM2_PolicyNameHash or
@@ -30,7 +29,7 @@ type TrialAuthPolicy struct {
 // ComputeAuthPolicy creates a new context for computing an authorization policy digest.
 // It will panic if the specified algorithm is not available. The caller should check
 // this beforehand.
-func ComputeAuthPolicy(alg crypto.Hash) *TrialAuthPolicy {
+func ComputeAuthPolicy(alg tpm2.HashAlgorithmId) *TrialAuthPolicy {
 	if !alg.Available() {
 		panic("unsupported digest algorithm or algorithm not linked in to binary")
 	}
@@ -38,7 +37,7 @@ func ComputeAuthPolicy(alg crypto.Hash) *TrialAuthPolicy {
 }
 
 func (p *TrialAuthPolicy) beginUpdate() (hash.Hash, func()) {
-	h := p.alg.New()
+	h := p.alg.NewHash()
 	h.Write(p.digest)
 
 	return h, func() {
@@ -132,7 +131,7 @@ func (p *TrialAuthPolicy) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectio
 // PolicyNV computes a TPM2_PolicyNV assertion executed for an index for the
 // specified name, with the specified comparison operation.
 func (p *TrialAuthPolicy) PolicyNV(nvIndexName tpm2.Name, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) {
-	h := p.alg.New()
+	h := p.alg.NewHash()
 	h.Write(operandB)
 	binary.Write(h, binary.BigEndian, offset)
 	binary.Write(h, binary.BigEndian, operation)
@@ -148,7 +147,7 @@ func (p *TrialAuthPolicy) PolicyNV(nvIndexName tpm2.Name, operandB tpm2.Operand,
 // PolicyCounterTimer computes a TPM2_PolicyCounterTimer assertion for the
 // specified comparison operation.
 func (p *TrialAuthPolicy) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) {
-	h := p.alg.New()
+	h := p.alg.NewHash()
 	h.Write(operandB)
 	binary.Write(h, binary.BigEndian, offset)
 	binary.Write(h, binary.BigEndian, operation)

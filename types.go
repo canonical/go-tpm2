@@ -230,7 +230,7 @@ func (a CommandAttributes) NumberOfCommandHandles() int {
 type HashAlgorithmId AlgorithmId
 
 // GetHash returns the equivalent crypto.Hash value for this algorithm if one
-// exists.
+// exists, and 0 if one does not exist.
 func (a HashAlgorithmId) GetHash() crypto.Hash {
 	switch a {
 	case HashAlgorithmSHA1:

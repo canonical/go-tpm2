@@ -136,7 +136,7 @@ func TestPolicySigned(t *testing.T) {
 				}
 			}
 
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicySigned(keyContext.Name(), data.policyRef)
 
 			policyDigest, err := tpm.PolicyGetDigest(sessionContext)
@@ -198,7 +198,7 @@ func TestPolicySecret(t *testing.T) {
 			t.Fatalf("PolicyGetDigest failed: %v", err)
 		}
 
-		trial := util.ComputeAuthPolicy(crypto.SHA256)
+		trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 		trial.PolicySecret(primary.Name(), policyRef)
 
 		if !bytes.Equal(trial.GetDigest(), policyDigest) {
@@ -228,7 +228,7 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, -100, nil, nil)
 	})
 	t.Run("WithExpiration", func(t *testing.T) {
-		trial := util.ComputeAuthPolicy(crypto.SHA256)
+		trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 		trial.PolicySecret(primary.Name(), nil)
 
 		secret := []byte("secret data")
@@ -262,7 +262,7 @@ func TestPolicySecret(t *testing.T) {
 		run(t, nil, nil, 1, useSession, nil)
 	})
 	t.Run("WithCpHash", func(t *testing.T) {
-		trial := util.ComputeAuthPolicy(crypto.SHA256)
+		trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 		trial.PolicySecret(primary.Name(), nil)
 
 		secret1 := []byte("secret data1")
@@ -298,7 +298,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext2)
 
-		cpHash, err := util.ComputeCpHash(crypto.SHA256, CommandUnseal, []Name{objectContext2.Name()})
+		cpHash, err := util.ComputeCpHash(HashAlgorithmSHA256, CommandUnseal, []Name{objectContext2.Name()})
 		if err != nil {
 			t.Fatalf("ComputeCpHash failed: %v", err)
 		}
@@ -470,7 +470,7 @@ func TestPolicyOR(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
 	defer closeTPM()
 
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyCommandCode(CommandNVChangeAuth)
 	digest := trial.GetDigest()
 
@@ -597,7 +597,7 @@ func TestPolicyPCR(t *testing.T) {
 				pcrDigest = computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, data.pcrs)
 			}
 
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyPCR(pcrDigest, data.pcrs)
 
 			if !bytes.Equal(policyDigest, trial.GetDigest()) {
@@ -625,7 +625,7 @@ func TestPolicyCommandCode(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyCommandCode(data.code)
 
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
@@ -672,7 +672,7 @@ func TestPolicyCpHash(t *testing.T) {
 			h.Write(data.data)
 			cpHashA := h.Sum(nil)
 
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyCpHash(cpHashA)
 
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
@@ -719,7 +719,7 @@ func TestPolicyNameHash(t *testing.T) {
 			h.Write(data.data)
 			nameHash := h.Sum(nil)
 
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyNameHash(nameHash)
 
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
@@ -782,7 +782,7 @@ func TestPolicyDuplicationSelect(t *testing.T) {
 			h.Write(data.parentData)
 			newParentName, _ := mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil))
 
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyDuplicationSelect(objectName, newParentName, data.includeObject)
 
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
@@ -853,10 +853,10 @@ func TestPolicyAuthorize(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			staticTrial := util.ComputeAuthPolicy(crypto.SHA256)
+			staticTrial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			staticTrial.PolicyAuthorize(data.policyRef, keyContext.Name())
 
-			dynamicTrial := util.ComputeAuthPolicy(crypto.SHA256)
+			dynamicTrial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			dynamicTrial.PolicyCommandCode(data.commandCode)
 			dynamicTrial.PolicyAuthValue()
 
@@ -915,7 +915,7 @@ func TestPolicyAuthValue(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM()
 
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 
 	authPolicy := trial.GetDigest()
@@ -996,7 +996,7 @@ func TestPolicyPassword(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM()
 
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyPassword()
 
 	authPolicy := trial.GetDigest()
@@ -1133,7 +1133,7 @@ func TestPolicyNV(t *testing.T) {
 		run := func(t *testing.T, index ResourceContext, authSession SessionContext) {
 			data.prepare(t, index, authSession)
 
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyNV(index.Name(), data.operandB, data.offset, data.operation)
 
 			authPolicy := trial.GetDigest()
@@ -1223,7 +1223,7 @@ func TestPolicyCounterTimer(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyCounterTimer(data.operandB, data.offset, data.operation)
 
 			authPolicy := trial.GetDigest()
@@ -1268,7 +1268,7 @@ func TestPolicyNvWritten(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			trial := util.ComputeAuthPolicy(crypto.SHA256)
+			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 			trial.PolicyNvWritten(data.writtenSet)
 
 			authPolicy := trial.GetDigest()

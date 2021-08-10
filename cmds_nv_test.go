@@ -181,7 +181,7 @@ type testNVUndefineSpaceSpecialData struct {
 }
 
 func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpaceSpecialData) ResourceContext {
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 	trial.PolicyCommandCode(CommandNVUndefineSpaceSpecial)
 
@@ -626,7 +626,7 @@ func (s *nvGlobalLockSuitePlatform) TestGlobalWriteLockPlatform(c *C) {
 }
 
 func (s *nvSuite) testChangeAuth(c *C, authSession SessionContext) {
-	trial := util.ComputeAuthPolicy(crypto.SHA256)
+	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 	trial.PolicyCommandCode(CommandNVChangeAuth)
 

@@ -25,10 +25,10 @@ func (s *cpHashSuite) TestComputeCpHashUnseal(c *C) {
 	io.WriteString(h, "object")
 	object := mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.RawBytes(h.Sum(nil)))
 
-	digest, err := ComputeCpHash(crypto.SHA256, tpm2.CommandUnseal, []tpm2.Name{object})
+	digest, err := ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandUnseal, []tpm2.Name{object})
 	c.Check(err, IsNil)
 
-	expectedDigest := tpm2.ComputeCpHash(crypto.SHA256, tpm2.CommandUnseal, []tpm2.Name{object}, nil)
+	expectedDigest := tpm2.ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandUnseal, []tpm2.Name{object}, nil)
 	c.Check(digest, DeepEquals, expectedDigest)
 }
 
@@ -38,10 +38,10 @@ func (s *cpHashSuite) TestComputeCpHashHierarchyChangeAuth(c *C) {
 
 	newAuth := tpm2.Auth("1234")
 
-	digest, err := ComputeCpHash(crypto.SHA256, tpm2.CommandHierarchyChangeAuth, []tpm2.Name{hierarchy}, newAuth)
+	digest, err := ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandHierarchyChangeAuth, []tpm2.Name{hierarchy}, newAuth)
 	c.Check(err, IsNil)
 
-	expectedDigest := tpm2.ComputeCpHash(crypto.SHA256, tpm2.CommandHierarchyChangeAuth, []tpm2.Name{hierarchy}, mu.MustMarshalToBytes(newAuth))
+	expectedDigest := tpm2.ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandHierarchyChangeAuth, []tpm2.Name{hierarchy}, mu.MustMarshalToBytes(newAuth))
 	c.Check(digest, DeepEquals, expectedDigest)
 }
 
@@ -50,9 +50,9 @@ func (s *cpHashSuite) TestComputeCpHashSHA1(c *C) {
 	io.WriteString(h, "object")
 	object := mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.RawBytes(h.Sum(nil)))
 
-	digest, err := ComputeCpHash(crypto.SHA1, tpm2.CommandUnseal, []tpm2.Name{object})
+	digest, err := ComputeCpHash(tpm2.HashAlgorithmSHA1, tpm2.CommandUnseal, []tpm2.Name{object})
 	c.Check(err, IsNil)
 
-	expectedDigest := tpm2.ComputeCpHash(crypto.SHA1, tpm2.CommandUnseal, []tpm2.Name{object}, nil)
+	expectedDigest := tpm2.ComputeCpHash(tpm2.HashAlgorithmSHA1, tpm2.CommandUnseal, []tpm2.Name{object}, nil)
 	c.Check(digest, DeepEquals, expectedDigest)
 }

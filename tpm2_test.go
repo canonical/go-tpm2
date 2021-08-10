@@ -151,7 +151,7 @@ func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg HashAlgorithmId,
 		t.Fatalf("PCRRead failed: %v", err)
 	}
 
-	digest, err := util.ComputePCRDigest(alg.GetHash(), pcrs, pcrValues)
+	digest, err := util.ComputePCRDigest(alg, pcrs, pcrValues)
 	if err != nil {
 		t.Fatalf("ComputePCRDigest failed: %v", err)
 	}

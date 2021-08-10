@@ -288,7 +288,7 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 	s.checkAttestCommon(c, quoted, TagAttestQuote, data.sign, data.signHierarchy, data.qualifyingData)
 	_, pcrValues, err := s.TPM.PCRRead(data.pcrs)
 	c.Assert(err, IsNil)
-	digest, err := util.ComputePCRDigest(data.alg.GetHash(), data.pcrs, pcrValues)
+	digest, err := util.ComputePCRDigest(data.alg, data.pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(quoted.Attested.Quote.PCRSelect, DeepEquals, data.pcrs)
 	c.Check(quoted.Attested.Quote.PCRDigest, DeepEquals, digest)

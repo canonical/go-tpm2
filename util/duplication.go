@@ -24,7 +24,7 @@ import (
 // If symmetricAlg is supplied and the Algorithm field is not SymObjectAlgorithmNull, then it is
 // assumed that the object has an inner wrapper. In this case, the symmetric key for the inner
 // wrapper must be supplied using the encryptionKey argument.
-func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, parentNameAlg crypto.Hash, parentSymmetricAlg *tpm2.SymDefObject, encryptionKey tpm2.Data, inSymSeed tpm2.EncryptedSecret, symmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
+func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, encryptionKey tpm2.Data, inSymSeed tpm2.EncryptedSecret, symmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
 	if symmetricAlg != nil && symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
 		if !symmetricAlg.Algorithm.Available() {
 			return nil, errors.New("symmetric algorithm for inner wrapper is not available")

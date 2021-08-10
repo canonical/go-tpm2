@@ -5,7 +5,6 @@
 package util
 
 import (
-	"crypto"
 	"fmt"
 
 	"github.com/canonical/go-tpm2"
@@ -18,8 +17,8 @@ import (
 // TPMContext.PolicyPCR or TrialAuthPolicy.PolicyPCR, and for validating quotes and creation data.
 //
 // This will panic if the specified digest algorithm is not available.
-func ComputePCRDigest(alg crypto.Hash, pcrs tpm2.PCRSelectionList, values tpm2.PCRValues) (tpm2.Digest, error) {
-	h := alg.New()
+func ComputePCRDigest(alg tpm2.HashAlgorithmId, pcrs tpm2.PCRSelectionList, values tpm2.PCRValues) (tpm2.Digest, error) {
+	h := alg.NewHash()
 
 	mu.MustCopyValue(&pcrs, pcrs)
 
@@ -44,7 +43,7 @@ func ComputePCRDigest(alg crypto.Hash, pcrs tpm2.PCRSelectionList, values tpm2.P
 // reference implementation. It returns the PCR selection associated with the computed digest.
 //
 // This will panic if the specified digest algorithm is not available.
-func ComputePCRDigestSimple(alg crypto.Hash, values tpm2.PCRValues) (tpm2.PCRSelectionList, tpm2.Digest) {
+func ComputePCRDigestSimple(alg tpm2.HashAlgorithmId, values tpm2.PCRValues) (tpm2.PCRSelectionList, tpm2.Digest) {
 	pcrs := values.SelectionList()
 	digest, err := ComputePCRDigest(alg, pcrs, values)
 	if err != nil {
