@@ -31,6 +31,9 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 	if !hashAlg.Available() {
 		return nil, errors.New("digest algorithm is not available")
 	}
+	if !symmetricAlg.Algorithm.IsValidBlockCipher() {
+		return nil, errors.New("symmetric algorithm is not a valid block cipher")
+	}
 
 	r := bytes.NewReader(data)
 
@@ -85,6 +88,9 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed []byte, useIV bool, data []byte) ([]byte, error) {
 	if !hashAlg.Available() {
 		return nil, errors.New("digest algorithm is not available")
+	}
+	if !symmetricAlg.Algorithm.IsValidBlockCipher() {
+		return nil, errors.New("symmetric algorithm is not a valid block cipher")
 	}
 
 	iv := make([]byte, symmetricAlg.Algorithm.BlockSize())
@@ -179,6 +185,9 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 		if !name.Algorithm().Available() {
 			return nil, errors.New("name algorithm is not available")
 		}
+		if !symmetricAlg.Algorithm.IsValidBlockCipher() {
+			return nil, errors.New("inner symmetric algorithm is not a valid block cipher")
+		}
 
 		if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, xerrors.Errorf("cannot decrypt inner wrapper: %w", err)
@@ -247,6 +256,9 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 		}
 		if !name.Algorithm().Available() {
 			return nil, nil, errors.New("name algorithm is not available")
+		}
+		if !symmetricAlg.Algorithm.IsValidBlockCipher() {
+			return nil, nil, errors.New("inner symmetric algorithm is not a valid block cipher")
 		}
 
 		// Apply inner wrapper

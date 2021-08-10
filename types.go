@@ -311,14 +311,29 @@ func (a HashAlgorithmId) Size() int {
 // SymAlgorithmId corresponds to the TPMI_ALG_SYM type
 type SymAlgorithmId AlgorithmId
 
+// IsValidBlockCipher determines if this algorithm is a valid block cipher.
+// This should be checked by code that deserializes an algorithm before calling
+// BlockSize if it does not want to panic.
+func (a SymAlgorithmId) IsValidBlockCipher() bool {
+	switch a {
+	case SymAlgorithmTDES:
+	case SymAlgorithmAES:
+	case SymAlgorithmSM4:
+	case SymAlgorithmCamellia:
+	default:
+		return false
+	}
+	return true
+}
+
 // Available indicates whether the TPM symmetric cipher has a registered go implementation.
 func (a SymAlgorithmId) Available() bool {
 	_, ok := symmetricAlgs[a]
 	return ok
 }
 
-// BlockSize indicates the block size of the symmetric cipher. This will panic if the
-// algorithm does not correspond to a symmetric cipher.
+// BlockSize indicates the block size of the symmetric cipher. This will panic if
+// IsValidBlockCipher returns false.
 func (a SymAlgorithmId) BlockSize() int {
 	switch a {
 	case SymAlgorithmTDES:
@@ -347,13 +362,20 @@ func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
 // SymObjectAlgorithmId corresponds to the TPMI_ALG_SYM_OBJECT type
 type SymObjectAlgorithmId AlgorithmId
 
+// IsValidBlockCipher determines if this algorithm is a valid block cipher.
+// This should be checked by code that deserializes an algorithm before calling
+// BlockSize if it does not want to panic.
+func (a SymObjectAlgorithmId) IsValidBlockCipher() bool {
+	return SymAlgorithmId(a).IsValidBlockCipher()
+}
+
 // Available indicates whether the TPM symmetric cipher has a registered go implementation.
 func (a SymObjectAlgorithmId) Available() bool {
 	return SymAlgorithmId(a).Available()
 }
 
-// BlockSize indicates the block size of the symmetric cipher. This will panic if the
-// algorithm does not correspond to a symmetric cipher.
+// BlockSize indicates the block size of the symmetric cipher. This will panic if
+// IsValidBlockCipher returns false.
 func (a SymObjectAlgorithmId) BlockSize() int {
 	return SymAlgorithmId(a).BlockSize()
 }
