@@ -27,7 +27,7 @@ import (
 //
 // It then decrypts the data blob using the specified symmetric algorithm and a
 // key derived from the supplied seed and name.
-func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed, data []byte) ([]byte, error) {
+func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed []byte, useIV bool, data []byte) ([]byte, error) {
 	r := bytes.NewReader(data)
 
 	var integrity []byte
@@ -35,10 +35,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 		return nil, xerrors.Errorf("cannot unpack integrity digest: %w", err)
 	}
 
-	data, err := ioutil.ReadAll(r)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot unpack wrapper: %w", err)
-	}
+	data, _ = ioutil.ReadAll(r)
 
 	hmacKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
 	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
@@ -49,9 +46,23 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 		return nil, errors.New("integrity digest is invalid")
 	}
 
+	r = bytes.NewReader(data)
+
+	iv := make([]byte, symmetricAlg.Algorithm.BlockSize())
+	if useIV {
+		if _, err := mu.UnmarshalFromReader(r, &iv); err != nil {
+			return nil, xerrors.Errorf("cannot unpack IV: %w", err)
+		}
+		if len(iv) != symmetricAlg.Algorithm.BlockSize() {
+			return nil, errors.New("IV has the wrong size")
+		}
+	}
+
+	data, _ = ioutil.ReadAll(r)
+
 	symKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
-	if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), data); err != nil {
+	if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, iv, data); err != nil {
 		return nil, xerrors.Errorf("cannot remove wrapper: %w", err)
 	}
 
@@ -61,29 +72,71 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 // ProduceOuterWrap adds an outer wrapper to the supplied data. The supplied name
 // is associated with the data.
 //
-// It encrypts the data using the symmetric algorithm of protector and a key
-// derived from the supplied seed and name.
+// It encrypts the data using the specified symmetric algorithm and a key derived
+// from the supplied seed and name.
 //
 // It then prepends an integrity HMAC of the encrypted data and the supplied
-// name using the name algorithm of protector and a key derived from the supplied
+// name using the specified digest algorithm and a key derived from the supplied
 // seed.
-func ProduceOuterWrap(protector *tpm2.Public, name tpm2.Name, seed, data []byte) ([]byte, error) {
-	symmetric := protector.Params.AsymDetail().Symmetric
+func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed []byte, useIV bool, data []byte) ([]byte, error) {
+	iv := make([]byte, symmetricAlg.Algorithm.BlockSize())
+	if useIV {
+		if _, err := rand.Read(iv); err != nil {
+			return nil, xerrors.Errorf("cannot generate IV: %w", err)
+		}
+	}
 
-	symKey := internal.KDFa(protector.NameAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetric.KeyBits.Sym))
+	symKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
-	if err := tpm2.CryptSymmetricEncrypt(tpm2.SymAlgorithmId(symmetric.Algorithm), symKey, make([]byte, symmetric.Algorithm.BlockSize()), data); err != nil {
+	if err := tpm2.CryptSymmetricEncrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, iv, data); err != nil {
 		return nil, xerrors.Errorf("cannot apply wrapper: %w", err)
 	}
 
-	hmacKey := internal.KDFa(protector.NameAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, protector.NameAlg.Size()*8)
-	h := hmac.New(func() hash.Hash { return protector.NameAlg.NewHash() }, hmacKey)
+	if useIV {
+		data = mu.MustMarshalToBytes(iv, mu.RawBytes(data))
+	}
+
+	hmacKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
+	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
 	h.Write(data)
 	h.Write(name)
 
 	integrity := h.Sum(nil)
 
 	return mu.MustMarshalToBytes(integrity, mu.RawBytes(data)), nil
+}
+
+func PrivateToSensitive(private tpm2.Private, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (*tpm2.Sensitive, error) {
+	data, err := UnwrapOuter(hashAlg, symmetricAlg, name, seed, true, private)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot unwrap outer wrapper: %w", err)
+	}
+
+	var sensitive struct {
+		Ptr *tpm2.Sensitive `tpm2:"sized"`
+	}
+	if _, err := mu.UnmarshalFromBytes(data, &sensitive); err != nil {
+		return nil, xerrors.Errorf("cannot unmarhsal sensitive: %w", err)
+	}
+
+	return sensitive.Ptr, nil
+}
+
+func SensitiveToPrivate(sensitive *tpm2.Sensitive, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (tpm2.Private, error) {
+	sensitiveSized := struct {
+		Ptr *tpm2.Sensitive `tpm2:"sized"`
+	}{sensitive}
+	private, err := mu.MarshalToBytes(sensitiveSized)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot marshal sensitive: %w", err)
+	}
+
+	private, err = ProduceOuterWrap(hashAlg, symmetricAlg, name, seed, true, private)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot apply outer wrapper: %w", err)
+	}
+
+	return private, nil
 }
 
 // DuplicateToSensitive unwraps the supplied duplication blob. The supplied name
@@ -100,7 +153,7 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 	if len(seed) > 0 {
 		// Remove outer wrapper
 		var err error
-		duplicate, err = UnwrapOuter(parentNameAlg, parentSymmetricAlg, name, seed, duplicate)
+		duplicate, err = UnwrapOuter(parentNameAlg, parentSymmetricAlg, name, seed, false, duplicate)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot unwrap outer wrapper: %w", err)
 		}
@@ -199,7 +252,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 	if applyOuterWrapper {
 		// Apply outer wrapper
 		var err error
-		duplicate, err = ProduceOuterWrap(parent, name, seed, duplicate)
+		duplicate, err = ProduceOuterWrap(parent.NameAlg, &parent.Params.AsymDetail().Symmetric, name, seed, false, duplicate)
 		if err != nil {
 			return nil, nil, xerrors.Errorf("cannot produce outer wrapper: %w", err)
 		}
