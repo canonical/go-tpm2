@@ -6,7 +6,6 @@ package util
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/hmac"
 	"crypto/rand"
 	"errors"
@@ -20,6 +19,14 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+// UnwrapOuter removes an outer wrapper from the supplied sensitive data blob. The
+// supplied name is associated with the data.
+//
+// It checks the integrity HMAC is valid using the specified digest algorithm and
+// a key derived from the supplied seed and returns an error if the check fails.
+//
+// It then decrypts the data blob using the specified symmetric algorithm and a
+// key derived from the supplied seed and name.
 func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, name tpm2.Name, seed, data []byte) ([]byte, error) {
 	r := bytes.NewReader(data)
 
@@ -51,6 +58,15 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 	return data, nil
 }
 
+// ProduceOuterWrap adds an outer wrapper to the supplied data. The supplied name
+// is associated with the data.
+//
+// It encrypts the data using the symmetric algorithm of protector and a key
+// derived from the supplied seed and name.
+//
+// It then prepends an integrity HMAC of the encrypted data and the supplied
+// name using the name algorithm of protector and a key derived from the supplied
+// seed.
 func ProduceOuterWrap(protector *tpm2.Public, name tpm2.Name, seed, data []byte) ([]byte, error) {
 	symmetric := protector.Params.AsymDetail().Symmetric
 
@@ -70,7 +86,17 @@ func ProduceOuterWrap(protector *tpm2.Public, name tpm2.Name, seed, data []byte)
 	return mu.MustMarshalToBytes(integrity, mu.RawBytes(data)), nil
 }
 
-func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parent crypto.PrivateKey, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (*tpm2.Sensitive, error) {
+// DuplicateToSensitive unwraps the supplied duplication blob. The supplied name
+// is the name of the duplication object.
+//
+// If a seed is supplied, it removes the outer wrapper using the specified parent
+// name algorithm and parent symmetric algorithm - these correspond to properties of
+// the new parent's public area.
+//
+// If symmetricAlg is supplied, it removes the inner wrapper - first by decrypting
+// it with the supplied innerSymKey, and then checking the inner integrity digest
+// is valid and returning an error if it isn't.
+func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (*tpm2.Sensitive, error) {
 	if len(seed) > 0 {
 		// Remove outer wrapper
 		var err error
@@ -118,6 +144,16 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parent crypto.
 	return sensitive.Ptr, nil
 }
 
+// SensitiveToDuplicate creates a duplication blob from the supplied sensitive structure.
+// The supplied name is the name of the object associated with sensitive.
+//
+// If symmetricAlg is defined, an inner wrapper will be applied, first by prepending
+// an inner integrity digest computed with the object's name algorithm from the sensitive
+// data and its name, and then encrypting the data with innerSymKey. If innerSymKey isn't
+// supplied, a random key will be created and returned.
+//
+// If a seed is supplied, an outer wrapper will be applied using the name algorithm and
+// symmetric algorithm of parent.
 func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm2.Public, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (innerSymKeyOut tpm2.Data, duplicate tpm2.Private, err error) {
 	applyInnerWrapper := false
 	if symmetricAlg != nil && symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {

@@ -58,7 +58,7 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 		return nil, xerrors.Errorf("cannot compute name: %w", err)
 	}
 
-	return DuplicateToSensitive(duplicate, name, privKey, parentNameAlg, parentSymmetricAlg, seed, symmetricAlg, encryptionKey)
+	return DuplicateToSensitive(duplicate, name, parentNameAlg, parentSymmetricAlg, seed, symmetricAlg, encryptionKey)
 }
 
 // CreateDuplicationObjectFromSensitive creates a duplication object that can be imported in to a
