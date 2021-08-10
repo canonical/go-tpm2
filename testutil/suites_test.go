@@ -357,7 +357,7 @@ func (s *tpmTestSuiteProper) TestCommandLog(c *C) {
 	c.Check(fullTest, IsTrue)
 
 	rc, rHandle, rpBytes, rAuthArea := s.CommandLog()[0].UnmarshalResponse(c)
-	c.Check(rc, Equals, tpm2.Success)
+	c.Check(rc, Equals, tpm2.ResponseSuccess)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
 	c.Check(rpBytes, LenEquals, 0)
 	c.Check(rAuthArea, LenEquals, 0)
@@ -369,7 +369,7 @@ func (s *tpmTestSuiteProper) TestCommandLog(c *C) {
 	c.Check(cpBytes, LenEquals, 0)
 
 	rc, rHandle, rpBytes, rAuthArea = s.CommandLog()[1].UnmarshalResponse(c)
-	c.Check(rc, Equals, tpm2.Success)
+	c.Check(rc, Equals, tpm2.ResponseSuccess)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
 	c.Check(rAuthArea, LenEquals, 0)
 

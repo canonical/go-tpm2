@@ -57,6 +57,8 @@ const (
 )
 
 const (
+	TagRspCommand StructTag = 0x00c4 // TPM_ST_RSP_COMMAND
+
 	TagNoSessions         StructTag = 0x8001 // TPM_ST_NO_SESSIONS
 	TagSessions           StructTag = 0x8002 // TPM_ST_SESSIONS
 	TagAttestNV           StructTag = 0x8014 // TPM_ST_ATTEST_NV
@@ -180,7 +182,8 @@ const (
 )
 
 const (
-	Success ResponseCode = 0
+	ResponseSuccess ResponseCode = 0
+	ResponseBadTag  ResponseCode = 0x1e
 )
 
 const (
@@ -394,6 +397,10 @@ const (
 	ErrorCurve ErrorCode = errorCode1Start + 0x26
 
 	ErrorECCPoint ErrorCode = errorCode1Start + 0x27 // TPM_RC_ECC_POINT
+
+	// ErrorBadTag corresponds to TPM_RC_BAD_TAG and is returned from any TPM command if the command tag is invalid.
+	// This will be the error when trying to execute a TPM2 command on a TPM1.2 device.
+	ErrorBadTag ErrorCode = 0xde
 )
 
 const (

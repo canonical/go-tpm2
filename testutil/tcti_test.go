@@ -159,7 +159,7 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 
 	rc, rHandle, rpBytes, rspAuthArea := s.CommandLog()[0].UnmarshalResponse(c)
 	c.Check(rHandle, Equals, object.Handle())
-	c.Check(rc, Equals, tpm2.Success)
+	c.Check(rc, Equals, tpm2.ResponseSuccess)
 	c.Check(rspAuthArea, LenEquals, 0)
 
 	var name tpm2.Name
@@ -183,7 +183,7 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	c.Check(propertyCount, Equals, uint32(1))
 
 	rc, rHandle, rpBytes, rspAuthArea = s.CommandLog()[1].UnmarshalResponse(c)
-	c.Check(rc, Equals, tpm2.Success)
+	c.Check(rc, Equals, tpm2.ResponseSuccess)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
 	c.Check(rspAuthArea, LenEquals, 0)
 

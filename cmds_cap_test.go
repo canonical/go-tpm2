@@ -593,7 +593,7 @@ func (t *mockTPM12Tcti) Read(data []byte) (int, error) {
 	// tag = TPM_TAG_RSP_COMMAND (0xc4)
 	// paramSize = 10
 	// returnCode = TPM_BAD_ORDINAL (10)
-	b := mu.MustMarshalToBytes(uint16(0xc4), uint32(10), uint32(10))
+	b := mu.MustMarshalToBytes(TagRspCommand, uint32(10), ResponseBadTag)
 	return copy(data, b), io.EOF
 }
 

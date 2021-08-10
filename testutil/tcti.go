@@ -299,7 +299,7 @@ func (t *TCTI) processCommandDone() error {
 	if err != nil {
 		return xerrors.Errorf("cannot unmarshal response: %w", err)
 	}
-	if rc != tpm2.Success {
+	if rc != tpm2.ResponseSuccess {
 		return nil
 	}
 

@@ -153,24 +153,36 @@ func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters [
 		return 0, nil, nil, xerrors.Errorf("cannot unmarshal header: %w", err)
 	}
 
-	if header.ResponseSize != uint32(len(p)) {
+	if header.ResponseSize != uint32(buf.Size()) {
 		return 0, nil, nil, fmt.Errorf("invalid responseSize value (got %d, packet length %d)", header.ResponseSize, len(p))
 	}
 
-	if header.ResponseCode != Success {
-		if buf.Len() != 0 {
-			return header.ResponseCode, nil, nil, fmt.Errorf("%d trailing byte(s)", buf.Len())
-		}
-		return header.ResponseCode, nil, nil, nil
-	}
-
-	if handle != nil {
-		if _, err := mu.UnmarshalFromReader(buf, handle); err != nil {
-			return 0, nil, nil, xerrors.Errorf("cannot unmarshal handle: %w", err)
-		}
+	if header.ResponseCode != ResponseSuccess && buf.Len() != 0 {
+		return header.ResponseCode, nil, nil, fmt.Errorf("%d trailing byte(s) in unsuccessful response", buf.Len())
 	}
 
 	switch header.Tag {
+	case TagRspCommand:
+		if header.ResponseCode != ResponseBadTag {
+			return 0, nil, nil, fmt.Errorf("unexpected TPM1.2 response code 0x%08x", header.ResponseCode)
+		}
+	case TagSessions:
+		if header.ResponseCode != ResponseSuccess {
+			return 0, nil, nil, fmt.Errorf("unexpcted response code 0x%08x for TPM_ST_SESSIONS response", header.ResponseCode)
+		}
+		fallthrough
+	case TagNoSessions:
+		if header.ResponseCode == ResponseSuccess && handle != nil {
+			if _, err := mu.UnmarshalFromReader(buf, handle); err != nil {
+				return 0, nil, nil, xerrors.Errorf("cannot unmarshal handle: %w", err)
+			}
+		}
+	default:
+		return 0, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
+	}
+
+	switch header.Tag {
+	case TagRspCommand:
 	case TagSessions:
 		var parameterSize uint32
 		if _, err := mu.UnmarshalFromReader(buf, &parameterSize); err != nil {
@@ -199,9 +211,7 @@ func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters [
 		if err != nil {
 			return 0, nil, nil, xerrors.Errorf("cannot read parameters: %w", err)
 		}
-	default:
-		return 0, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
 	}
 
-	return Success, parameters, authArea, nil
+	return header.ResponseCode, parameters, authArea, nil
 }

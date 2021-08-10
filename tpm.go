@@ -153,6 +153,9 @@ func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode Command
 		}
 
 		err = DecodeResponseCode(commandCode, responseCode)
+		if _, invalidRc := err.(InvalidResponseCodeError); invalidRc {
+			return nil, &InvalidResponseError{commandCode, err.Error()}
+		}
 		if err == nil {
 			if len(rAuthArea) != len(sessionParams.sessions) {
 				return nil, &InvalidResponseError{commandCode, fmt.Sprintf("unexpected number of auth responses (got %d, expected %d)",

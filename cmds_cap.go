@@ -7,8 +7,6 @@ package tpm2
 import (
 	"encoding/binary"
 	"fmt"
-
-	"github.com/canonical/go-tpm2/mu"
 )
 
 // Section 30 - Capability Commands
@@ -414,23 +412,11 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 // it is connected to a TPM1.2 device. It will return false if communication with the device
 // fails of if the response is badly formed.
 func (t *TPMContext) IsTPM2() (isTpm2 bool) {
-	cpBytes := mu.MustMarshalToBytes(CapabilityTPMProperties, uint32(PropertyTotalCommands), uint32(0))
-	cmd := MarshalCommandPacket(CommandGetCapability, nil, nil, cpBytes)
-
-	resp, err := t.RunCommandBytes(cmd)
-	if err != nil {
+	_, err := t.GetCapabilityTPMProperties(PropertyTotalCommands, 0)
+	if e, ok := err.(*TPMError); ok && e.Code == ErrorBadTag {
 		return false
 	}
-
-	var rHeader ResponseHeader
-	if _, err := mu.UnmarshalFromBytes(resp, &rHeader); err != nil {
-		return false
-	}
-
-	if rHeader.Tag == TagNoSessions {
-		return true
-	}
-	return false
+	return true
 }
 
 // TestParms executes the TPM2_TestParms command to check if the specified combination of
