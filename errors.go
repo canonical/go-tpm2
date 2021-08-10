@@ -123,7 +123,7 @@ type TPMWarning struct {
 }
 
 func (e *TPMWarning) ResponseCode() ResponseCode {
-	return responseCodeS | responseCodeV | ResponseCode(e.Code)
+	return responseCodeS | responseCodeV | (ResponseCode(e.Code) & responseCodeE0)
 }
 
 func (e *TPMWarning) Error() string {
@@ -156,9 +156,9 @@ func (e *TPMError) ResponseCode() ResponseCode {
 	case e.Code == ErrorBadTag:
 		return ResponseBadTag
 	case e.Code >= 0x80:
-		return responseCodeF | (ResponseCode(e.Code) & 0x3f)
+		return responseCodeF | (ResponseCode(e.Code) & responseCodeE1)
 	default:
-		return responseCodeV | (ResponseCode(e.Code) & 0x7f)
+		return responseCodeV | (ResponseCode(e.Code) & responseCodeE0)
 	}
 }
 
@@ -180,7 +180,7 @@ type TPMParameterError struct {
 }
 
 func (e *TPMParameterError) ResponseCode() ResponseCode {
-	return (((0xf & ResponseCode(e.Index)) << 8) & responseCodeN) | responseCodeF | responseCodeP | ResponseCode(e.Code)
+	return (ResponseCode(uint8(e.Index)&responseCodeIndex) << responseCodeIndexShift) | responseCodeF | responseCodeP | (ResponseCode(e.Code) & responseCodeE0)
 }
 
 func (e *TPMParameterError) Error() string {
@@ -204,8 +204,13 @@ type TPMSessionError struct {
 	Index int // Index of the session associated with this error in the authorization area, starting from 1
 }
 
+const (
+	responseCodeHandleIndex uint8 = 0x7
+	responseCodeIsSession   uint8 = 0x8
+)
+
 func (e *TPMSessionError) ResponseCode() ResponseCode {
-	return (((0x8 | (0x7 & ResponseCode(e.Index))) << 8) & responseCodeN) | responseCodeF | ResponseCode(e.Code)
+	return (ResponseCode(responseCodeIsSession|(uint8(e.Index)&responseCodeHandleIndex)) << responseCodeIndexShift) | responseCodeF | (ResponseCode(e.Code) & responseCodeE0)
 }
 
 func (e *TPMSessionError) Error() string {
@@ -232,7 +237,7 @@ type TPMHandleError struct {
 }
 
 func (e *TPMHandleError) ResponseCode() ResponseCode {
-	return (((0x7 & ResponseCode(e.Index)) << 8) & responseCodeN) | responseCodeF | ResponseCode(e.Code)
+	return (ResponseCode(uint8(e.Index)&responseCodeHandleIndex) << responseCodeIndexShift) | responseCodeF | (ResponseCode(e.Code) & responseCodeE0)
 }
 
 func (e *TPMHandleError) Error() string {

@@ -77,9 +77,12 @@ const (
 	// Bit 11 of format-zero errors is zero for errors and one for warnings.
 	responseCodeS ResponseCode = 1 << 11
 
+	responseCodeIndex      uint8 = 0xf
+	responseCodeIndexShift uint8 = 8
+
 	// Bits 8 to 11 of format-one errors represent the parameter number if P is set
 	// or the handle or session number otherwise.
-	responseCodeN ResponseCode = 0xf << 8
+	responseCodeN ResponseCode = ResponseCode(responseCodeIndex) << responseCodeIndexShift
 )
 
 // E returns the E field of the response code, corresponding to the error number.
@@ -133,7 +136,7 @@ func (rc ResponseCode) P() bool {
 // lower 3 bits indicate the handle or session number (0x1 to 0x7 for handles
 // and 0x9 to 0xf for sessions).
 func (rc ResponseCode) N() uint8 {
-	return uint8(rc & responseCodeN >> 8)
+	return uint8(rc & responseCodeN >> responseCodeIndexShift)
 }
 
 // ArithmeticOp corresponds to the TPM_EO type.
