@@ -344,18 +344,47 @@ func (c *context) enterSizedType(v reflect.Value) (exit func()) {
 type TPMKind int
 
 const (
+	// TPMKindUnsupported indicates that a go type has no corresponding
+	// TPM type class.
 	TPMKindUnsupported TPMKind = iota
+
+	// TPMKindPrimitive indicates that a go type corresponds to one
+	// of the primitive TPM types (UINT8, BYTE, INT8, BOOL, UINT16,
+	// INT16, UINT32, INT32, UINT64, INT64, TPM_ALG_ID, any TPMA_
+	// prefixed type).
 	TPMKindPrimitive
+
+	// TPMKindSized indicates that a go type corresponds to a
+	// TPM2B_ prefixed TPM type.
 	TPMKindSized
+
+	// TPMKindList indicates that a go type corresponds to a
+	// TPML_ prefixed TPM type.
 	TPMKindList
+
+	// TPMKindStruct indicates that a go type corresponds to a
+	// TPMS_ or TPMT_ prefixed TPM type - this package doesn't
+	// distinguish between the two.
 	TPMKindStruct
+
+	// TPMKindUnion indicates that a go type corresponds to a
+	// TPMU_ prefixed TPM type.
 	TPMKindUnion
+
+	// TPMKindCustom correponds to a go type that defines its own
+	// marshalling behaviour.
 	TPMKindCustom
-	TPMKindRawBytes
-	TPMKindRawList
+
+	// TPMKindRaw corresponds to a go slice that is marshalled
+	// without a size field (it is not TPMKindSized or TPMKindList).
+	TPMKindRaw
 )
 
-func tpmKind(t reflect.Type) TPMKind {
+func tpmKind(t reflect.Type, opts *options) TPMKind {
+	if opts.sized {
+		return TPMKindSized
+	}
+
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -370,11 +399,14 @@ func tpmKind(t reflect.Type) TPMKind {
 	case reflect.Slice:
 		switch {
 		case t == rawBytesType:
-			return TPMKindRawBytes
+			return TPMKindRaw
+		case opts.raw:
+			return TPMKindRaw
 		case t.Elem().Kind() == reflect.Uint8:
 			return TPMKindSized
+		default:
+			return TPMKindList
 		}
-		return TPMKindList
 	case reflect.Struct:
 		if reflect.PtrTo(t).Implements(unionType) {
 			return TPMKindUnion
@@ -389,37 +421,27 @@ func tpmKind(t reflect.Type) TPMKind {
 // Single field structures will be unwrapped and the TPMKind associated with the structure field will be returned.
 func DetermineTPMKind(i interface{}) TPMKind {
 	t := reflect.TypeOf(i)
-	var k TPMKind
-	raw := false
+	var opts options
+
 	for {
+		k := tpmKind(t, &opts)
+		if k != TPMKindStruct {
+			return k
+		}
+
 		if t.Kind() == reflect.Ptr {
 			t = t.Elem()
 		}
-		k = tpmKind(t)
-		if k != TPMKindStruct {
-			break
-		}
+
 		if t.NumField() != 1 {
-			break
+			return k
 		}
 		f := t.Field(0)
-		opts := parseStructFieldMuOptions(f)
-		switch {
-		case opts.sized:
-			return TPMKindSized
-		case opts.raw:
-			raw = true
-		}
+		opts = parseStructFieldMuOptions(f)
 		t = f.Type
 	}
-	switch {
-	case raw && k == TPMKindSized:
-		return TPMKindRawBytes
-	case raw && k == TPMKindList:
-		return TPMKindRawList
-	default:
-		return k
-	}
+
+	panic("not reached")
 }
 
 type marshaller struct {
@@ -548,24 +570,13 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalValue(v reflect.Value) error {
-	switch {
-	case m.options.sized:
-		if err := m.marshalSized(v); err != nil {
-			return err
-		}
-		return nil
-	case m.options.raw:
-		if err := m.marshalRaw(v); err != nil {
-			return err
-		}
-		return nil
-	}
+	kind := tpmKind(v.Type(), &m.options)
 
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
 		return m.marshalPtr(v)
 	}
 
-	switch tpmKind(v.Type()) {
+	switch kind {
 	case TPMKindPrimitive:
 		return m.marshalPrimitive(v)
 	case TPMKindSized:
@@ -578,7 +589,7 @@ func (m *marshaller) marshalValue(v reflect.Value) error {
 		return m.marshalUnion(v)
 	case TPMKindCustom:
 		return m.marshalCustom(v)
-	case TPMKindRawBytes:
+	case TPMKindRaw:
 		return m.marshalRaw(v)
 	}
 
@@ -781,18 +792,13 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
-	switch {
-	case u.options.sized:
-		return u.unmarshalSized(v)
-	case u.options.raw:
-		return u.unmarshalRaw(v)
-	}
+	kind := tpmKind(v.Type(), &u.options)
 
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
 		return u.unmarshalPtr(v)
 	}
 
-	switch tpmKind(v.Type()) {
+	switch kind {
 	case TPMKindPrimitive:
 		return u.unmarshalPrimitive(v)
 	case TPMKindSized:
@@ -805,7 +811,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 		return u.unmarshalUnion(v)
 	case TPMKindCustom:
 		return u.unmarshalCustom(v)
-	case TPMKindRawBytes:
+	case TPMKindRaw:
 		return u.unmarshalRaw(v)
 	}
 

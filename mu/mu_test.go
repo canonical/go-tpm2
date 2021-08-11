@@ -494,24 +494,24 @@ func (s *muSuite) TestDetermineTPMKindCustom(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithCustomMarshaller{}, k: TPMKindCustom})
 }
 
-func (s *muSuite) TestDetermineTPMKindRawBytes1(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: RawBytes{}, k: TPMKindRawBytes})
+func (s *muSuite) TestDetermineTPMKindRaw1(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: RawBytes{}, k: TPMKindRaw})
 }
 
 type testStructWithRawByteField struct {
 	A []byte `tpm2:"raw"`
 }
 
-func (s *muSuite) TestDetermineTPMKindRawBytes2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithRawByteField{}, k: TPMKindRawBytes})
+func (s *muSuite) TestDetermineTPMKindRaw2(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithRawByteField{}, k: TPMKindRaw})
 }
 
 type testStructWithRawListField struct {
 	A []uint16 `tpm2:"raw"`
 }
 
-func (s *muSuite) TestDetermineTPMKindRawList(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithRawListField{}, k: TPMKindRawList})
+func (s *muSuite) TestDetermineTPMKindRaw3(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithRawListField{}, k: TPMKindRaw})
 }
 
 func (s *muSuite) TestErrorSimple(c *C) {
