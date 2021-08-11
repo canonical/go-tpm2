@@ -466,8 +466,6 @@ func DetermineTPMKind(i interface{}) TPMKind {
 		opts = parseStructFieldMuOptions(f)
 		t = f.Type
 	}
-
-	panic("not reached")
 }
 
 type marshaller struct {
