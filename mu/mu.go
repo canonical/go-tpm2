@@ -13,6 +13,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 
 	"golang.org/x/xerrors"
@@ -44,6 +45,9 @@ type customMuIface interface {
 // directly supported by the marshalling code. This interface should be implemented by types with a value receiver if you want
 // to be able to pass it directly by value to MarshalToBytes or MarshalToWriter. Implementations must also implement the
 // CustomUnmarshaller interface.
+//
+// If the custom implementation makes a recursive call in the MarshalToWriter, it should propagate errors from
+// this without wrapping. This allows the full context of the error to be surfaced from the originating call.
 type CustomMarshaller interface {
 	Marshal(w io.Writer) error
 }
@@ -51,6 +55,9 @@ type CustomMarshaller interface {
 // CustomUnmarshaller is implemented by types that require custom unmarshalling behaviour because they are non-standard and not
 // directly supported by the marshalling code. This interface must be implemented by types with a pointer receiver, and types
 // must also implement the CustomMarshaller interface.
+//
+// If the custom implementation makes a recursive call in the UnmarshalFromReader, it should propagate errors from
+// this without wrapping. This allows the full context of the error to be surfaced from the originating call.
 type CustomUnmarshaller interface {
 	Unmarshal(r Reader) error
 }
@@ -76,6 +83,7 @@ type Union interface {
 type containerNode struct {
 	value reflect.Value
 	index int
+	entry [1]uintptr
 }
 
 type containerStack []containerNode
@@ -96,10 +104,14 @@ func (s containerStack) String() string {
 	str := new(bytes.Buffer)
 	str.WriteString("=== BEGIN STACK ===\n")
 	for i := len(s) - 1; i >= 0; i-- {
-		switch s[i].value.Kind() {
-		case reflect.Struct:
+		switch {
+		case reflect.PtrTo(s[i].value.Type()).Implements(customMuType):
+			frames := runtime.CallersFrames(s[i].entry[:])
+			frame, _ := frames.Next()
+			fmt.Fprintf(str, "... %s custom type, call from %s:%d argument %d\n", s[i].value.Type(), frame.File, frame.Line, s[i].index)
+		case s[i].value.Kind() == reflect.Struct:
 			fmt.Fprintf(str, "... %s field %s\n", s[i].value.Type(), s[i].value.Type().Field(s[i].index).Name)
-		case reflect.Slice:
+		case s[i].value.Kind() == reflect.Slice:
 			fmt.Fprintf(str, "... %s index %d\n", s[i].value.Type(), s[i].index)
 		default:
 			panic("unsupported kind")
@@ -119,6 +131,7 @@ type Error struct {
 	Op string
 
 	total    int
+	entry    [1]uintptr
 	stack    containerStack
 	leafType reflect.Type
 	err      error
@@ -151,12 +164,27 @@ func (e *Error) Depth() int {
 	return len(e.stack)
 }
 
-// Container returns the type of the container at the specified depth,
-// as well as the index in that container in which the descendent value
-// appears. This will panic if depth is greater than the value returned
-// by Depth().
-func (e *Error) Container(depth int) (reflect.Type, int) {
-	return e.stack[depth].value.Type(), e.stack[depth].index
+// Container returns the type of the container at the specified depth.
+//
+// If the returned type is a structure, the returned index corresponds
+// to the index of the field in that structure.
+//
+// If the returned type is a slice, the returned index corresponds to
+// the index in that slice.
+//
+// If the returned type implements the CustomMarshaller and
+// CustomUnmarshaller interfaces, the returned index corresponds to
+// the argument index in the recursive call in to one of the marshalling
+// or unmarshalling APIs. The returned frame indicates where this
+// recursive call originated from.
+func (e *Error) Container(depth int) (containerType reflect.Type, index int, entry runtime.Frame) {
+	var frame runtime.Frame
+	if reflect.PtrTo(e.stack[depth].value.Type()).Implements(customMuType) {
+		frames := runtime.CallersFrames(e.stack[depth].entry[:])
+		frame, _ = frames.Next()
+	}
+
+	return e.stack[depth].value.Type(), e.stack[depth].index, frame
 }
 
 func newError(value reflect.Value, c *context, err error) error {
@@ -164,17 +192,35 @@ func newError(value reflect.Value, c *context, err error) error {
 		// All io.EOF is unexpected
 		err = io.ErrUnexpectedEOF
 	}
+	muErr, isMuErr := err.(*Error)
 
-	e := new(Error)
-	e.Index = c.index
-	e.Op = c.mode
-	e.total = c.total
-	e.stack = make(containerStack, len(c.stack))
-	copy(e.stack, c.stack)
-	e.leafType = value.Type()
-	e.err = err
+	stack := make(containerStack, len(c.stack))
+	copy(stack, c.stack)
 
-	return e
+	var leafType reflect.Type
+	if isMuErr {
+		// This is an error returned from a custom type.
+		// Preserve the original error
+		err = muErr.err
+
+		// Copy the leaf type to the new error
+		leafType = muErr.leafType
+
+		// Append the original error stack to the new error.
+		stack = stack.push(containerNode{value: value, index: muErr.Index, entry: muErr.entry})
+		stack = append(stack, muErr.stack...)
+	} else {
+		leafType = value.Type()
+	}
+
+	return &Error{
+		Index:    c.index,
+		Op:       c.mode,
+		total:    c.total,
+		entry:    c.caller,
+		stack:    stack,
+		leafType: leafType,
+		err:      err}
 }
 
 type options struct {
@@ -199,6 +245,7 @@ func parseStructFieldMuOptions(f reflect.StructField) (out options) {
 }
 
 type context struct {
+	caller  [1]uintptr
 	mode    string
 	index   int
 	total   int
@@ -727,10 +774,7 @@ func (u *unmarshaller) unmarshalUnion(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
-	if v.Kind() != reflect.Ptr {
-		v = v.Addr()
-	}
-	if err := v.Interface().(CustomUnmarshaller).Unmarshal(u); err != nil {
+	if err := v.Addr().Interface().(CustomUnmarshaller).Unmarshal(u); err != nil {
 		return newError(v, u.context, err)
 	}
 	return nil
@@ -780,6 +824,14 @@ func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 	return u.nbytes, nil
 }
 
+func marshalToWriter(skip int, w io.Writer, vals ...interface{}) (int, error) {
+	var caller [1]uintptr
+	runtime.Callers(skip+1, caller[:])
+
+	m := &marshaller{context: &context{caller: caller, mode: "marshal"}, w: w}
+	return m.marshal(vals...)
+}
+
 // MarshalToWriter marshals vals to w in the TPM wire format, according to the rules specified in the package description.
 //
 // Pointers are automatically dereferenced. Nil pointers are marshalled to the zero value for the pointed to type, unless
@@ -792,17 +844,24 @@ func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 // This function only returns an error if a sized value (sized buffer, sized structure or list) is too large for its corresponding
 // size field, or if the supplied io.Writer returns an error.
 func MarshalToWriter(w io.Writer, vals ...interface{}) (int, error) {
-	m := &marshaller{context: &context{mode: "marshal"}, w: w}
-	return m.marshal(vals...)
+	return marshalToWriter(2, w, vals...)
 }
 
 // MustMarshalToWriter is the same as MarshalToWriter, except that it panics if it encounters an error.
 func MustMarshalToWriter(w io.Writer, vals ...interface{}) int {
-	n, err := MarshalToWriter(w, vals...)
+	n, err := marshalToWriter(2, w, vals...)
 	if err != nil {
 		panic(err)
 	}
 	return n
+}
+
+func marshalToBytes(skip int, vals ...interface{}) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	if _, err := marshalToWriter(skip+1, buf, vals...); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // MarshalToBytes marshals vals to TPM wire format, according to the rules specified in the package description.
@@ -817,20 +876,38 @@ func MustMarshalToWriter(w io.Writer, vals ...interface{}) int {
 // This function only returns an error if a sized value (sized buffer, sized structure or list) is too large for its corresponding
 // size field.
 func MarshalToBytes(vals ...interface{}) ([]byte, error) {
-	buf := new(bytes.Buffer)
-	if _, err := MarshalToWriter(buf, vals...); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return marshalToBytes(2, vals...)
 }
 
 // MustMarshalToBytes is the same as MarshalToBytes, except that it panics if it encounters an error.
 func MustMarshalToBytes(vals ...interface{}) []byte {
-	b, err := MarshalToBytes(vals...)
+	b, err := marshalToBytes(2, vals...)
 	if err != nil {
 		panic(err)
 	}
 	return b
+}
+
+func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (int, error) {
+	var caller [1]uintptr
+	runtime.Callers(skip+1, caller[:])
+
+	for _, val := range vals {
+		v := reflect.ValueOf(val)
+		if v.Kind() != reflect.Ptr {
+			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", v.Type()))
+		}
+
+		if v.IsNil() {
+			panic(fmt.Sprintf("cannot unmarshal to nil pointer of type %s", v.Type()))
+		}
+	}
+
+	u, err := makeUnmarshaller(&context{caller: caller, mode: "unmarshal"}, r)
+	if err != nil {
+		return 0, err
+	}
+	return u.unmarshal(vals...)
 }
 
 // UnmarshalFromReader unmarshals data in the TPM wire format from r to vals, according to the rules specified in the package
@@ -851,22 +928,7 @@ func MustMarshalToBytes(vals ...interface{}) []byte {
 // The number of bytes read from r are returned. If this function does not complete successfully, it will return an error and
 // the number of bytes read. In this case, partial results may have been unmarshalled to the supplied destination values.
 func UnmarshalFromReader(r io.Reader, vals ...interface{}) (int, error) {
-	for _, val := range vals {
-		v := reflect.ValueOf(val)
-		if v.Kind() != reflect.Ptr {
-			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", v.Type()))
-		}
-
-		if v.IsNil() {
-			panic(fmt.Sprintf("cannot unmarshal to nil pointer of type %s", v.Type()))
-		}
-	}
-
-	u, err := makeUnmarshaller(&context{mode: "unmarshal"}, r)
-	if err != nil {
-		return 0, err
-	}
-	return u.unmarshal(vals...)
+	return unmarshalFromReader(2, r, vals...)
 }
 
 // UnmarshalFromReader unmarshals data in the TPM wire format from b to vals, according to the rules specified in the package
@@ -888,7 +950,16 @@ func UnmarshalFromReader(r io.Reader, vals ...interface{}) (int, error) {
 // the number of bytes consumed. In this case, partial results may have been unmarshalled to the supplied destination values.
 func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 	buf := bytes.NewReader(b)
-	return UnmarshalFromReader(buf, vals...)
+	return unmarshalFromReader(2, buf, vals...)
+}
+
+func copyValue(skip int, dst, src interface{}) error {
+	buf := new(bytes.Buffer)
+	if _, err := marshalToWriter(skip+1, buf, src); err != nil {
+		return err
+	}
+	_, err := unmarshalFromReader(skip+1, buf, dst)
+	return err
 }
 
 // CopyValue copies the value of src to dst. The destination must be a pointer to the actual
@@ -898,17 +969,12 @@ func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 // This will return an error for any reason that would cause MarshalToBytes or
 // UnmarshalFromBytes to return an error.
 func CopyValue(dst, src interface{}) error {
-	buf := new(bytes.Buffer)
-	if _, err := MarshalToWriter(buf, src); err != nil {
-		return err
-	}
-	_, err := UnmarshalFromReader(buf, dst)
-	return err
+	return copyValue(2, dst, src)
 }
 
 // MustCopyValue is the same as CopyValue except that it panics if it encounters an error.
 func MustCopyValue(dst, src interface{}) {
-	if err := CopyValue(dst, src); err != nil {
+	if err := copyValue(2, dst, src); err != nil {
 		panic(err)
 	}
 }

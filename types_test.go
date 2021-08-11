@@ -560,7 +560,7 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
 		}
-		if err.Error() != "cannot unmarshal argument whilst processing element of type *tpm2.TaggedHash: cannot read digest: unexpected EOF" {
+		if err.Error() != "cannot unmarshal argument whilst processing element of type tpm2.TaggedHash: cannot read digest: unexpected EOF" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})
@@ -601,7 +601,7 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
 		}
-		if err.Error() != "cannot unmarshal argument whilst processing element of type *tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_HMAC" {
+		if err.Error() != "cannot unmarshal argument whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_HMAC" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})
