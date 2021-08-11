@@ -114,7 +114,7 @@ type handleContext struct {
 	Type handleContextType
 	H    Handle
 	N    Name
-	Data *handleContextU `tpm2:"selector:Type"`
+	Data *handleContextU
 }
 
 func (h *handleContext) Handle() Handle {

@@ -861,7 +861,7 @@ func (c *CapabilitiesU) Select(selector reflect.Value) interface{} {
 // CapabilityData corresponds to the TPMS_CAPABILITY_DATA type, and is returned by TPMContext.GetCapability.
 type CapabilityData struct {
 	Capability Capability     // Capability
-	Data       *CapabilitiesU `tpm2:"selector:Capability"` // Capability data
+	Data       *CapabilitiesU // Capability data
 }
 
 // 10.11 Clock/Counter Structures
@@ -1071,15 +1071,15 @@ func (m *SymModeU) Select(selector reflect.Value) interface{} {
 // SymDef corresponds to the TPMT_SYM_DEF type, and is used to select the algorithm used for parameter encryption.
 type SymDef struct {
 	Algorithm SymAlgorithmId // Symmetric algorithm
-	KeyBits   *SymKeyBitsU   `tpm2:"selector:Algorithm"` // Symmetric key size
-	Mode      *SymModeU      `tpm2:"selector:Algorithm"` // Symmetric mode
+	KeyBits   *SymKeyBitsU   // Symmetric key size
+	Mode      *SymModeU      // Symmetric mode
 }
 
 // SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an object's symmetric algorithm.
 type SymDefObject struct {
 	Algorithm SymObjectAlgorithmId // Symmetric algorithm
-	KeyBits   *SymKeyBitsU         `tpm2:"selector:Algorithm"` // Symmetric key size
-	Mode      *SymModeU            `tpm2:"selector:Algorithm"` // Symmetric mode
+	KeyBits   *SymKeyBitsU         // Symmetric key size
+	Mode      *SymModeU            // Symmetric mode
 }
 
 // SymKey corresponds to the TPM2B_SYM_KEY type.
@@ -1163,7 +1163,7 @@ func (d *SchemeKeyedHashU) Select(selector reflect.Value) interface{} {
 // KeyedHashScheme corresponds to the TPMT_KEYEDHASH_SCHEME type.
 type KeyedHashScheme struct {
 	Scheme  KeyedHashSchemeId // Scheme selector
-	Details *SchemeKeyedHashU `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Details *SchemeKeyedHashU // Scheme specific parameters
 }
 
 // 11.2 Assymetric
@@ -1246,7 +1246,7 @@ func (s SigSchemeU) Any() *SchemeHash {
 // SigScheme corresponds to the TPMT_SIG_SCHEME type.
 type SigScheme struct {
 	Scheme  SigSchemeId // Scheme selector
-	Details *SigSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Details *SigSchemeU // Scheme specific parameters
 }
 
 // 11.2.3 Key Derivation Schemes
@@ -1290,7 +1290,7 @@ func (s *KDFSchemeU) Select(selector reflect.Value) interface{} {
 // KDFScheme corresponds to the TPMT_KDF_SCHEME type.
 type KDFScheme struct {
 	Scheme  KDFAlgorithmId // Scheme selector
-	Details *KDFSchemeU    `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Details *KDFSchemeU    // Scheme specific parameters.
 }
 
 type KeySchemeECDH SchemeHash
@@ -1386,7 +1386,7 @@ func (s AsymSchemeU) Any() *SchemeHash {
 // AsymScheme corresponds to the TPMT_ASYM_SCHEME type.
 type AsymScheme struct {
 	Scheme  AsymSchemeId // Scheme selector
-	Details *AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters
+	Details *AsymSchemeU // Scheme specific parameters
 }
 
 // 11.2.4 RSA
@@ -1397,7 +1397,7 @@ type RSASchemeId AsymSchemeId
 // RSAScheme corresponds to the TPMT_RSA_SCHEME type.
 type RSAScheme struct {
 	Scheme  RSASchemeId  // Scheme selector
-	Details *AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Details *AsymSchemeU // Scheme specific parameters.
 }
 
 // PublicKeyRSA corresponds to the TPM2B_PUBLIC_KEY_RSA type.
@@ -1423,7 +1423,7 @@ type ECCSchemeId AsymSchemeId
 // ECCScheme corresponds to the TPMT_ECC_SCHEME type.
 type ECCScheme struct {
 	Scheme  ECCSchemeId  // Scheme selector
-	Details *AsymSchemeU `tpm2:"selector:Scheme"` // Scheme specific parameters.
+	Details *AsymSchemeU // Scheme specific parameters.
 }
 
 // 11.3 Signatures
@@ -1518,7 +1518,7 @@ func (s SignatureU) Any() *SchemeHash {
 // TPMContext.VerifySignature and TPMContext.PolicySigned.
 type Signature struct {
 	SigAlg    SigSchemeId // Signature algorithm
-	Signature *SignatureU `tpm2:"selector:SigAlg"` // Actual signature
+	Signature *SignatureU // Actual signature
 }
 
 // 11.4) Key/Secret Exchange
@@ -1641,7 +1641,7 @@ func (p PublicParamsU) AsymDetail() *AsymParams {
 // PublicParams corresponds to the TPMT_PUBLIC_PARMS type.
 type PublicParams struct {
 	Type       ObjectTypeId   // Type specifier
-	Parameters *PublicParamsU `tpm2:"selector:Type"` // Algorithm details
+	Parameters *PublicParamsU // Algorithm details
 }
 
 // Public corresponds to the TPMT_PUBLIC type, and defines the public area for an object.
@@ -1650,8 +1650,8 @@ type Public struct {
 	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
-	Params     *PublicParamsU   `tpm2:"selector:Type"` // Type specific parameters
-	Unique     *PublicIDU       `tpm2:"selector:Type"` // Type specific unique identifier
+	Params     *PublicParamsU   // Type specific parameters
+	Unique     *PublicIDU       // Type specific unique identifier
 }
 
 // Name computes the name of this object
@@ -1740,7 +1740,7 @@ type PublicDerived struct {
 	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
 	Attrs      ObjectAttributes // Object attributes
 	AuthPolicy Digest           // Authorization policy for this object
-	Params     *PublicParamsU   `tpm2:"selector:Type"` // Type specific parameters
+	Params     *PublicParamsU   // Type specific parameters
 
 	// Unique contains the derivation values. These take precedence over any values specified in SensitiveCreate.Data when creating a
 	// derived object,
@@ -1831,7 +1831,7 @@ type Sensitive struct {
 	Type      ObjectTypeId         // Same as the corresponding Type in the Public object
 	AuthValue Auth                 // Authorization value
 	SeedValue Digest               // For a parent object, the seed value for protecting descendant objects
-	Sensitive *SensitiveCompositeU `tpm2:"selector:Type"` // Type specific private data
+	Sensitive *SensitiveCompositeU // Type specific private data
 }
 
 type sensitiveSized struct {

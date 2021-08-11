@@ -264,7 +264,7 @@ func TestHandle(t *testing.T) {
 
 type TestPublicIDUContainer struct {
 	Alg    ObjectTypeId
-	Unique *PublicIDU `tpm2:"selector:Alg"`
+	Unique *PublicIDU
 }
 
 func TestPublicIDUnion(t *testing.T) {
@@ -334,7 +334,7 @@ func TestPublicIDUnion(t *testing.T) {
 
 type TestSchemeKeyedHashUContainer struct {
 	Scheme  KeyedHashSchemeId
-	Details *SchemeKeyedHashU `tpm2:"selector:Scheme"`
+	Details *SchemeKeyedHashU
 }
 
 func TestSchemeKeyedHashUnion(t *testing.T) {

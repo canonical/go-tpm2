@@ -279,14 +279,16 @@ func (c *context) enterUnionElem(u reflect.Value) (elem reflect.Value, exit func
 	if len(c.stack) == 0 {
 		panic(fmt.Sprintf("union type %s is not inside a container", u.Type()))
 	}
-	if c.options.selector == "" {
-		panic(fmt.Sprintf("no selector member for union type %s\n%s", u.Type(), c.stack))
-	}
 
-	selectorVal := c.stack.top().value.FieldByName(c.options.selector)
-	if !selectorVal.IsValid() {
-		panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field\n%s",
-			c.options.selector, u.Type(), c.stack))
+	var selectorVal reflect.Value
+	if c.options.selector == "" {
+		selectorVal = c.stack.top().value.Field(0)
+	} else {
+		selectorVal = c.stack.top().value.FieldByName(c.options.selector)
+		if !selectorVal.IsValid() {
+			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field\n%s",
+				c.options.selector, u.Type(), c.stack))
+		}
 	}
 
 	p := u.Addr().Interface().(Union).Select(selectorVal)
@@ -355,20 +357,20 @@ const (
 	TPMKindPrimitive
 
 	// TPMKindSized indicates that a go type corresponds to a
-	// TPM2B_ prefixed TPM type.
+	// TPM2B prefixed TPM type.
 	TPMKindSized
 
 	// TPMKindList indicates that a go type corresponds to a
-	// TPML_ prefixed TPM type.
+	// TPML prefixed TPM type.
 	TPMKindList
 
 	// TPMKindStruct indicates that a go type corresponds to a
-	// TPMS_ or TPMT_ prefixed TPM type - this package doesn't
+	// TPMS or TPMT prefixed TPM type - this package doesn't
 	// distinguish between the two.
 	TPMKindStruct
 
 	// TPMKindUnion indicates that a go type corresponds to a
-	// TPMU_ prefixed TPM type.
+	// TPMU prefixed TPM type.
 	TPMKindUnion
 
 	// TPMKindCustom correponds to a go type that defines its own
