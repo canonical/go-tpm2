@@ -196,10 +196,6 @@ func TestDuplicate(t *testing.T) {
 	})
 }
 
-type sensitiveSized struct {
-	Ptr *Sensitive `tpm2:"sized"`
-}
-
 func TestImport(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy)
 	defer closeTPM()

@@ -107,15 +107,13 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 
 	var objectHandle Handle
 
-	var outPublicSized publicSized
-	var creationDataSized creationDataSized
 	var name Name
 
 	if err := t.RunCommand(CommandCreatePrimary, sessions,
 		ResourceContextWithSession{Context: primaryObject, Session: primaryObjectAuthSession}, Delimiter,
-		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Delimiter,
+		mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR, Delimiter,
 		&objectHandle, Delimiter,
-		&outPublicSized, &creationDataSized, &creationHash, &creationTicket, &name); err != nil {
+		mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket, &name); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -123,13 +121,13 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
-	if outPublicSized.Ptr == nil || !outPublicSized.Ptr.compareName(name) {
+	if outPublic == nil || !outPublic.compareName(name) {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			"name and public area returned from TPM are not consistent"}
 	}
 
 	var public *Public
-	if err := mu.CopyValue(&public, outPublicSized.Ptr); err != nil {
+	if err := mu.CopyValue(&public, outPublic); err != nil {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
 	}
@@ -137,7 +135,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))
 	copy(rc.authValue, inSensitive.UserAuth)
 
-	return rc, outPublicSized.Ptr, creationDataSized.Ptr, creationHash, creationTicket, nil
+	return rc, outPublic, creationData, creationHash, creationTicket, nil
 }
 
 // HierarchyControl executes the TPM2_HierarchyControl command in order to enable or disable the hierarchy associated with the

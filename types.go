@@ -984,10 +984,6 @@ type Attest struct {
 	Attested        *AttestU     `tpm2:"selector:Type"` // Type specific attestation data
 }
 
-type attestSized struct {
-	Ptr *Attest `tpm2:"sized"`
-}
-
 // 10.13) Authorization Structures
 
 // AuthCommand corresppnds to the TPMS_AUTH_COMMAND type, and represents an authorization
@@ -1104,10 +1100,6 @@ type Derive struct {
 type SensitiveCreate struct {
 	UserAuth Auth          // Authorization value
 	Data     SensitiveData // Secret data
-}
-
-type sensitiveCreateSized struct {
-	Ptr *SensitiveCreate `tpm2:"sized"`
 }
 
 // SensitiveData corresponds to the TPM2B_SENSITIVE_DATA type.
@@ -1730,10 +1722,6 @@ func (p *Public) Public() crypto.PublicKey {
 	}
 }
 
-type publicSized struct {
-	Ptr *Public `tpm2:"sized"`
-}
-
 // PublicDerived is similar to Public but can be used as a template to create a derived object with TPMContext.CreateLoaded
 type PublicDerived struct {
 	Type       ObjectTypeId     // Type of this object
@@ -1834,10 +1822,6 @@ type Sensitive struct {
 	Sensitive *SensitiveCompositeU // Type specific private data
 }
 
-type sensitiveSized struct {
-	Ptr *Sensitive `tpm2:"sized"`
-}
-
 // Private corresponds to the TPM2B_PRIVATE type.
 type Private []byte
 
@@ -1905,10 +1889,6 @@ func (p *NVPublic) compareName(name Name) bool {
 	return bytes.Equal(n, name)
 }
 
-type nvPublicSized struct {
-	Ptr *NVPublic `tpm2:"sized"`
-}
-
 // 14) Context Data
 
 // ContextData corresponds to the TPM2B_CONTEXT_DATA type.
@@ -1934,8 +1914,4 @@ type CreationData struct {
 	ParentName          Name        // Name of the parent
 	ParentQualifiedName Name        // Qualified name of the parent
 	OutsideInfo         Data        // External information provided by the caller
-}
-
-type creationDataSized struct {
-	Ptr *CreationData `tpm2:"sized"`
 }

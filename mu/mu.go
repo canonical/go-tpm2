@@ -20,10 +20,11 @@ import (
 )
 
 var (
-	customMuType reflect.Type = reflect.TypeOf((*customMuIface)(nil)).Elem()
-	unionType    reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
-	nilValueType reflect.Type = reflect.TypeOf(NilUnionValue)
-	rawBytesType reflect.Type = reflect.TypeOf(RawBytes(nil))
+	customMuType   reflect.Type = reflect.TypeOf((*customMuIface)(nil)).Elem()
+	emptyIfaceType reflect.Type = reflect.TypeOf((*interface{})(nil)).Elem()
+	unionType      reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
+	nilValueType   reflect.Type = reflect.TypeOf(NilUnionValue)
+	rawBytesType   reflect.Type = reflect.TypeOf(RawBytes(nil))
 )
 
 // InvalidSelectorError may be returned as a wrapped error from UnmarshalFromBytes or UnmarshalFromReader when a union type indicates
@@ -71,6 +72,25 @@ var NilUnionValue empty
 // RawBytes is a special byte slice type which is marshalled and unmarshalled without a size field. The slice must be pre-allocated to
 // the correct length by the caller during unmarshalling.
 type RawBytes []byte
+
+func Raw(val interface{}) interface{} {
+	return &struct {
+		Value interface{} `tpm2:"raw"`
+	}{val}
+}
+
+// Sized converts the supplied value to a sized value.
+//
+// To marshal a sized value, the supplied value must be a pointer to the actual
+// value.
+//
+// To unmarshal a sized value, the supplied value must be a pointer to the
+// destionation pointer that will point to the unmarshalled value.
+func Sized(val interface{}) interface{} {
+	return &struct {
+		Value interface{} `tpm2:"sized"`
+	}{val}
+}
 
 // Union is implemented by structure types that correspond to TPMU prefixed TPM types.
 type Union interface {
@@ -387,6 +407,10 @@ func tpmKind(t reflect.Type, opts *options) TPMKind {
 		return TPMKindSized
 	}
 
+	if t == emptyIfaceType {
+		t = t.Elem()
+	}
+
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -574,6 +598,9 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 func (m *marshaller) marshalValue(v reflect.Value) error {
 	kind := tpmKind(v.Type(), &m.options)
 
+	if v.Type() == emptyIfaceType {
+		v = v.Elem()
+	}
 	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
 		return m.marshalPtr(v)
 	}
@@ -796,6 +823,9 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 	kind := tpmKind(v.Type(), &u.options)
 
+	if v.Type() == emptyIfaceType {
+		v = v.Elem()
+	}
 	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
 		return u.unmarshalPtr(v)
 	}

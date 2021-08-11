@@ -4,6 +4,10 @@
 
 package tpm2
 
+import (
+	"github.com/canonical/go-tpm2/mu"
+)
+
 // Section 18 - Attestation Commands
 
 // Certify executes the TPM2_Certify command, which is used to prove that an object with a specific name is loaded in to the TPM.
@@ -34,17 +38,15 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var certifyInfoSized attestSized
-
 	if err := t.RunCommand(CommandCertify, sessions,
 		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
-		&certifyInfoSized, &signature); err != nil {
+		mu.Sized(&certifyInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
-	return certifyInfoSized.Ptr, signature, nil
+	return certifyInfo, signature, nil
 }
 
 // CertifyCreation executes the TPM2_CertifyCreation command, which is used to prove the association between the object represented
@@ -79,17 +81,15 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var certifyInfoSized attestSized
-
 	if err := t.RunCommand(CommandCertifyCreation, sessions,
 		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, objectContext, Delimiter,
 		qualifyingData, creationHash, inScheme, creationTicket, Delimiter,
 		Delimiter,
-		&certifyInfoSized, &signature); err != nil {
+		mu.Sized(&certifyInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
-	return certifyInfoSized.Ptr, signature, nil
+	return certifyInfo, signature, nil
 }
 
 // Quote executes the TPM2_Quote command in order to quote a set of PCR values. The TPM will hash the set of PCRs specified by the
@@ -116,17 +116,15 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var quotedSized attestSized
-
 	if err := t.RunCommand(CommandQuote, sessions,
 		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
 		qualifyingData, inScheme, pcrs, Delimiter,
 		Delimiter,
-		&quotedSized, &signature); err != nil {
+		mu.Sized(&quoted), &signature); err != nil {
 		return nil, nil, err
 	}
 
-	return quotedSized.Ptr, signature, nil
+	return quoted, signature, nil
 }
 
 // GetSessionAuditDigest executes the TPM2_GetSessionAuditDigest to obtain the current digest of the audit session corresponding to
@@ -156,17 +154,15 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var auditInfoSized attestSized
-
 	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
 		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, sessionContext, Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
-		&auditInfoSized, &signature); err != nil {
+		mu.Sized(&auditInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
-	return auditInfoSized.Ptr, signature, nil
+	return auditInfo, signature, nil
 }
 
 // GetCommandAuditDigest executes the TPM2_GetCommandAuditDigest command to obtain the current command audit digest, the current
@@ -198,17 +194,15 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var auditInfoSized attestSized
-
 	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
 		ResourceContextWithSession{Context: privacyContext, Session: privacyContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
-		&auditInfoSized, &signature); err != nil {
+		mu.Sized(&auditInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
-	return auditInfoSized.Ptr, signature, nil
+	return auditInfo, signature, nil
 }
 
 // GetTime executes the TPM2_GetTime command in order to obtain the current values of time and clock.
@@ -237,15 +231,13 @@ func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, q
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	var timeInfoSized attestSized
-
 	if err := t.RunCommand(CommandGetTime, sessions,
 		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
-		&timeInfoSized, &signature); err != nil {
+		mu.Sized(&timeInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
-	return timeInfoSized.Ptr, signature, nil
+	return timeInfo, signature, nil
 }

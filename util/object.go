@@ -120,27 +120,21 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 	return mu.MustMarshalToBytes(integrity, mu.RawBytes(data)), nil
 }
 
-func PrivateToSensitive(private tpm2.Private, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (*tpm2.Sensitive, error) {
+func PrivateToSensitive(private tpm2.Private, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (sensitive *tpm2.Sensitive, err error) {
 	data, err := UnwrapOuter(hashAlg, symmetricAlg, name, seed, true, private)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot unwrap outer wrapper: %w", err)
 	}
 
-	var sensitive struct {
-		Ptr *tpm2.Sensitive `tpm2:"sized"`
-	}
-	if _, err := mu.UnmarshalFromBytes(data, &sensitive); err != nil {
+	if _, err := mu.UnmarshalFromBytes(data, mu.Sized(&sensitive)); err != nil {
 		return nil, xerrors.Errorf("cannot unmarhsal sensitive: %w", err)
 	}
 
-	return sensitive.Ptr, nil
+	return sensitive, nil
 }
 
 func SensitiveToPrivate(sensitive *tpm2.Sensitive, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (tpm2.Private, error) {
-	sensitiveSized := struct {
-		Ptr *tpm2.Sensitive `tpm2:"sized"`
-	}{sensitive}
-	private, err := mu.MarshalToBytes(sensitiveSized)
+	private, err := mu.MarshalToBytes(mu.Sized(sensitive))
 	if err != nil {
 		return nil, xerrors.Errorf("cannot marshal sensitive: %w", err)
 	}
@@ -163,7 +157,7 @@ func SensitiveToPrivate(sensitive *tpm2.Sensitive, name tpm2.Name, hashAlg tpm2.
 // If symmetricAlg is supplied, it removes the inner wrapper - first by decrypting
 // it with the supplied innerSymKey, and then checking the inner integrity digest
 // is valid and returning an error if it isn't.
-func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (*tpm2.Sensitive, error) {
+func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, seed []byte, symmetricAlg *tpm2.SymDefObject, innerSymKey tpm2.Data) (sensitive *tpm2.Sensitive, err error) {
 	if len(seed) > 0 {
 		// Remove outer wrapper
 		if parentSymmetricAlg == nil {
@@ -211,14 +205,11 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 		}
 	}
 
-	var sensitive struct {
-		Ptr *tpm2.Sensitive `tpm2:"sized"`
-	}
-	if _, err := mu.UnmarshalFromBytes(duplicate, &sensitive); err != nil {
+	if _, err := mu.UnmarshalFromBytes(duplicate, mu.Sized(&sensitive)); err != nil {
 		return nil, xerrors.Errorf("cannot unmarhsal sensitive: %w", err)
 	}
 
-	return sensitive.Ptr, nil
+	return sensitive, nil
 }
 
 // SensitiveToDuplicate creates a duplication blob from the supplied sensitive structure.
@@ -242,10 +233,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 		applyOuterWrapper = true
 	}
 
-	sensitiveSized := struct {
-		Ptr *tpm2.Sensitive `tpm2:"sized"`
-	}{sensitive}
-	duplicate, err = mu.MarshalToBytes(sensitiveSized)
+	duplicate, err = mu.MarshalToBytes(mu.Sized(sensitive))
 	if err != nil {
 		return nil, nil, xerrors.Errorf("cannot marshal sensitive: %w", err)
 	}

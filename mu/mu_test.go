@@ -472,6 +472,32 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
 		unmarshalDests: []interface{}{&ua}})
 }
 
+func (s *muSuite) TestSized(c *C) {
+	var u32 uint32 = 657763432
+	a := testStruct{56324, &u32, true, []uint32{4232, 567785}}
+	expected := testutil.DecodeHexString(c, "0013dc042734ac680100000002000010880008a9e9")
+
+	var ua testStruct
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:   []interface{}{Sized(&a)},
+		expected: expected,
+		unmarshalExpectedVals: []interface{}{struct {
+			Value interface{} `tpm2:"sized"`
+		}{&a}},
+		unmarshalDests: []interface{}{Sized(&ua)}})
+
+	ua = testStruct{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:   []interface{}{Sized(&a)},
+		expected: expected,
+		unmarshalExpectedVals: []interface{}{struct {
+			Value interface{} `tpm2:"sized"`
+		}{&a}},
+		unmarshalDests: []interface{}{Sized(&ua)}})
+}
+
 type testDetermineTPMKindData struct {
 	d interface{}
 	k TPMKind

@@ -313,22 +313,18 @@ func (t *TCTI) processCommandDone() error {
 		switch commandCode {
 		case tpm2.CommandCreatePrimary:
 			var inSensitive []byte
-			var inPublic struct {
-				Ptr *tpm2.Public `tpm2:"sized"`
-			}
-			if _, err := mu.UnmarshalFromBytes(cpBytes, &inSensitive, &inPublic); err != nil {
+			var inPublic *tpm2.Public
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inSensitive, mu.Sized(&inPublic)); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
-			info.pub = inPublic.Ptr
+			info.pub = inPublic
 		case tpm2.CommandLoad:
 			var inPrivate tpm2.Private
-			var inPublic struct {
-				Ptr *tpm2.Public `tpm2:"sized"`
-			}
-			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, &inPublic); err != nil {
+			var inPublic *tpm2.Public
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
-			info.pub = inPublic.Ptr
+			info.pub = inPublic
 		case tpm2.CommandHMACStart:
 			info.seq = true
 		case tpm2.CommandContextLoad:
@@ -345,13 +341,11 @@ func (t *TCTI) processCommandDone() error {
 			}
 		case tpm2.CommandLoadExternal:
 			var inPrivate []byte
-			var inPublic struct {
-				Ptr *tpm2.Public `tpm2:"sized"`
-			}
-			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, &inPublic); err != nil {
+			var inPublic *tpm2.Public
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
 				return xerrors.Errorf("cannot unmarshal params: %w", err)
 			}
-			info.pub = inPublic.Ptr
+			info.pub = inPublic
 		case tpm2.CommandHashSequenceStart:
 			info.seq = true
 		case tpm2.CommandCreateLoaded:
@@ -426,14 +420,12 @@ func (t *TCTI) processCommandDone() error {
 	case tpm2.CommandNVDefineSpace:
 		// Record newly defined NV index
 		var auth tpm2.Auth
-		var nvPublic struct {
-			Ptr *tpm2.NVPublic `tpm2:"sized"`
-		}
-		if _, err := mu.UnmarshalFromBytes(cpBytes, &auth, &nvPublic); err != nil {
+		var nvPublic *tpm2.NVPublic
+		if _, err := mu.UnmarshalFromBytes(cpBytes, &auth, mu.Sized(&nvPublic)); err != nil {
 			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
 		}
-		index := nvPublic.Ptr.Index
-		t.handles[index] = &handleInfo{handle: index, created: true, nvPub: nvPublic.Ptr}
+		index := nvPublic.Index
+		t.handles[index] = &handleInfo{handle: index, created: true, nvPub: nvPublic}
 	case tpm2.CommandDictionaryAttackParameters:
 		t.didSetDaParams = true
 	case tpm2.CommandSetCommandCodeAuditStatus:
@@ -465,30 +457,26 @@ func (t *TCTI) processCommandDone() error {
 	case tpm2.CommandNVReadPublic:
 		if !hasEncryptSession(authArea) {
 			nvIndex := cmdHandles[0]
-			var nvPublic struct {
-				Ptr *tpm2.NVPublic `tpm2:"sized"`
-			}
-			if _, err := mu.UnmarshalFromBytes(rpBytes, &nvPublic); err != nil {
+			var nvPublic *tpm2.NVPublic
+			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&nvPublic)); err != nil {
 				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[nvIndex]; !ok {
 				t.handles[nvIndex] = &handleInfo{handle: nvIndex}
 			}
-			t.handles[nvIndex].nvPub = nvPublic.Ptr
+			t.handles[nvIndex].nvPub = nvPublic
 		}
 	case tpm2.CommandReadPublic:
 		if !hasEncryptSession(authArea) {
 			object := cmdHandles[0]
-			var outPublic struct {
-				Ptr *tpm2.Public `tpm2:"sized"`
-			}
-			if _, err := mu.UnmarshalFromBytes(rpBytes, &outPublic); err != nil {
+			var outPublic *tpm2.Public
+			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&outPublic)); err != nil {
 				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[object]; !ok {
 				t.handles[object] = &handleInfo{handle: object}
 			}
-			t.handles[object].pub = outPublic.Ptr
+			t.handles[object].pub = outPublic
 		}
 	}
 

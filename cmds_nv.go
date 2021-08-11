@@ -91,7 +91,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 
 	if err := t.RunCommand(CommandNVDefineSpace, sessions,
 		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter,
-		auth, nvPublicSized{publicInfo}); err != nil {
+		auth, mu.Sized(publicInfo)); err != nil {
 		return nil, err
 	}
 
@@ -154,16 +154,14 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 
 // NVReadPublic executes the TPM2_NV_ReadPublic command to read the public area of the NV index associated with nvIndex.
 func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...SessionContext) (nvPublic *NVPublic, nvName Name, err error) {
-	var nvPublicSized nvPublicSized
-
 	if err := t.RunCommand(CommandNVReadPublic, sessions,
 		nvIndex, Delimiter,
 		Delimiter,
 		Delimiter,
-		&nvPublicSized, &nvName); err != nil {
+		mu.Sized(&nvPublic), &nvName); err != nil {
 		return nil, nil, err
 	}
-	return nvPublicSized.Ptr, nvName, nil
+	return nvPublic, nvName, nil
 }
 
 // NVWriteRaw executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.

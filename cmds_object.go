@@ -116,18 +116,15 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 		inSensitive = &SensitiveCreate{}
 	}
 
-	var outPublicSized publicSized
-	var creationDataSized creationDataSized
-
 	if err := t.RunCommand(CommandCreate, sessions,
 		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
-		sensitiveCreateSized{inSensitive}, publicSized{inPublic}, outsideInfo, creationPCR, Delimiter,
+		mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR, Delimiter,
 		Delimiter,
-		&outPrivate, &outPublicSized, &creationDataSized, &creationHash, &creationTicket); err != nil {
+		&outPrivate, mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
-	return outPrivate, outPublicSized.Ptr, creationDataSized.Ptr, creationHash, creationTicket, nil
+	return outPrivate, outPublic, creationData, creationHash, creationTicket, nil
 }
 
 // Load executes the TPM2_Load command in order to load both the public and private parts of an object in to the TPM.
@@ -198,7 +195,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 
 	if err := t.RunCommand(CommandLoad, sessions,
 		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
-		inPrivate, publicSized{inPublic}, Delimiter,
+		inPrivate, mu.Sized(inPublic), Delimiter,
 		&objectHandle, Delimiter,
 		&name); err != nil {
 		return nil, err
@@ -284,7 +281,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 
 	if err := t.RunCommand(CommandLoadExternal, sessions,
 		Delimiter,
-		sensitiveSized{inPrivate}, publicSized{inPublic}, hierarchy, Delimiter,
+		mu.Sized(inPrivate), mu.Sized(inPublic), hierarchy, Delimiter,
 		&objectHandle, Delimiter,
 		&name); err != nil {
 		return nil, err
@@ -315,15 +312,14 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 //
 // On success, the public part of the object is returned, along with the object's name and qualified name.
 func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...SessionContext) (outPublic *Public, name Name, qualifiedName Name, err error) {
-	var outPublicSized publicSized
 	if err := t.RunCommand(CommandReadPublic, sessions,
 		objectContext, Delimiter,
 		Delimiter,
 		Delimiter,
-		&outPublicSized, &name, &qualifiedName); err != nil {
+		mu.Sized(&outPublic), &name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
 	}
-	return outPublicSized.Ptr, name, qualifiedName, nil
+	return outPublic, name, qualifiedName, nil
 }
 
 // ActivateCredential executes the TPM2_ActivateCredential command to associate a certificate with the object associated with
@@ -581,14 +577,13 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	}
 
 	var objectHandle Handle
-	var outPublicSized publicSized
 	var name Name
 
 	if err := t.RunCommand(CommandCreateLoaded, sessions,
 		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
-		sensitiveCreateSized{inSensitive}, inTemplate, Delimiter,
+		mu.Sized(inSensitive), inTemplate, Delimiter,
 		&objectHandle, Delimiter,
-		&outPrivate, &outPublicSized, &name); err != nil {
+		&outPrivate, mu.Sized(&outPublic), &name); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -596,17 +591,17 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded,
 			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
-	if outPublicSized.Ptr == nil || !outPublicSized.Ptr.compareName(name) {
+	if outPublic == nil || !outPublic.compareName(name) {
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
 	}
 
 	var public *Public
-	if err := mu.CopyValue(&public, outPublicSized.Ptr); err != nil {
+	if err := mu.CopyValue(&public, outPublic); err != nil {
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))
 	copy(rc.authValue, inSensitive.UserAuth)
 
-	return rc, outPrivate, outPublicSized.Ptr, nil
+	return rc, outPrivate, outPublic, nil
 }

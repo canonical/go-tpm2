@@ -4,6 +4,10 @@
 
 package tpm2
 
+import (
+	"github.com/canonical/go-tpm2/mu"
+)
+
 // Section 13 - Duplication Commands
 
 // Duplicate executes the TPM2_Duplicate command in order to duplicate the object associated with objectContext so that it may be
@@ -132,7 +136,7 @@ func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, o
 
 	if err := t.RunCommand(CommandImport, sessions,
 		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
-		encryptionKey, publicSized{objectPublic}, duplicate, inSymSeed, symmetricAlg, Delimiter,
+		encryptionKey, mu.Sized(objectPublic), duplicate, inSymSeed, symmetricAlg, Delimiter,
 		Delimiter,
 		&outPrivate); err != nil {
 		return nil, err
