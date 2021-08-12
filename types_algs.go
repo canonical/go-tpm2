@@ -233,9 +233,13 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 }
 
 // Any returns the signature scheme associated with scheme as a *SchemeHash.
-// It panics if the specified scheme is invalid or SigSchemeAlgNull, or the
-// appropriate field isn't set.
+// It panics if the specified scheme is invalid (SigSchemeId.IsValid returns
+// false), or the appropriate field isn't set.
 func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
+	if !scheme.IsValid() {
+		panic("invalid scheme")
+	}
+
 	switch scheme {
 	case SigSchemeAlgRSASSA:
 		return (*SchemeHash)(&(*s.RSASSA))
@@ -252,7 +256,7 @@ func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
 	case SigSchemeAlgHMAC:
 		return (*SchemeHash)(&(*s.HMAC))
 	default:
-		panic("invalid scheme")
+		panic("not reached")
 	}
 }
 
@@ -317,6 +321,44 @@ type KDFScheme struct {
 
 // AsymSchemeId corresponds to the TPMI_ALG_ASYM_SCHEME type
 type AsymSchemeId AlgorithmId
+
+// IsValid determines if the scheme is a valid asymmetric scheme.
+func (s AsymSchemeId) IsValid() bool {
+	switch s {
+	case AsymSchemeRSASSA:
+	case AsymSchemeRSAES:
+	case AsymSchemeRSAPSS:
+	case AsymSchemeOAEP:
+	case AsymSchemeECDSA:
+	case AsymSchemeECDH:
+	case AsymSchemeECDAA:
+	case AsymSchemeSM2:
+	case AsymSchemeECSCHNORR:
+	case AsymSchemeECMQV:
+	default:
+		return false
+	}
+	return true
+}
+
+// HasDigest determines if the asymmetric scheme is associated with
+// a digest algorithm.
+func (s AsymSchemeId) HasDigest() bool {
+	switch s {
+	case AsymSchemeRSASSA:
+	case AsymSchemeRSAPSS:
+	case AsymSchemeOAEP:
+	case AsymSchemeECDSA:
+	case AsymSchemeECDH:
+	case AsymSchemeECDAA:
+	case AsymSchemeSM2:
+	case AsymSchemeECSCHNORR:
+	case AsymSchemeECMQV:
+	default:
+		return false
+	}
+	return true
+}
 
 const (
 	AsymSchemeNull      AsymSchemeId = AsymSchemeId(AlgorithmNull)      // TPM_ALG_NULL
@@ -388,9 +430,13 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 }
 
 // Any returns the asymmetric scheme associated with scheme as a *SchemeHash.
-// It panics if the specified scheme does not have an associated digest algorithm,
-// or if the appropriate field isn't set.
+// It panics if the specified scheme does not have an associated digest algorithm
+// (AsymSchemeId.HasDigest returns false), or if the appropriate field isn't set.
 func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
+	if !scheme.HasDigest() {
+		panic("invalid asymmetric scheme")
+	}
+
 	switch scheme {
 	case AsymSchemeRSASSA:
 		return (*SchemeHash)(&(*s.RSASSA))
@@ -411,7 +457,7 @@ func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
 	case AsymSchemeECMQV:
 		return (*SchemeHash)(&(*s.ECMQV))
 	default:
-		panic("invalid asymmetric scheme")
+		panic("not reached")
 	}
 }
 
@@ -546,6 +592,10 @@ func (s *SignatureU) Select(selector reflect.Value) interface{} {
 // panics if scheme is SigSchemeAlgNull or the appropriate field isn't
 // set.
 func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
+	if !scheme.IsValid() {
+		panic("invalid signature scheme")
+	}
+
 	switch scheme {
 	case SigSchemeAlgRSASSA:
 		return &SchemeHash{HashAlg: s.RSASSA.Hash}
@@ -562,7 +612,7 @@ func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
 	case SigSchemeAlgHMAC:
 		return &SchemeHash{HashAlg: s.HMAC.HashAlg}
 	default:
-		panic("invalid signature scheme")
+		panic("not reached")
 	}
 }
 

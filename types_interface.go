@@ -49,9 +49,9 @@ func (a HashAlgorithmId) GetHash() crypto.Hash {
 	}
 }
 
-// IsValid determines if the digest algorithm is valid. This should be
-// checked by code that deserializes an algorithm before calling Size
-// if it does not want to panic.
+// IsValid determines if the digest algorithm is valid. This
+// should be checked by code that deserializes an algorithm before
+// calling Size if it does not want to panic.
 func (a HashAlgorithmId) IsValid() bool {
 	switch a {
 	case HashAlgorithmSHA1:
@@ -236,6 +236,22 @@ const (
 
 // SigSchemeId corresponds to the TPMI_ALG_SIG_SCHEME type
 type SigSchemeId AlgorithmId
+
+// IsValid determines if the scheme is a valid signature scheme.
+func (s SigSchemeId) IsValid() bool {
+	switch s {
+	case SigSchemeAlgHMAC:
+	case SigSchemeAlgRSASSA:
+	case SigSchemeAlgRSAPSS:
+	case SigSchemeAlgECDSA:
+	case SigSchemeAlgECDAA:
+	case SigSchemeAlgSM2:
+	case SigSchemeAlgECSCHNORR:
+	default:
+		return false
+	}
+	return true
+}
 
 const (
 	SigSchemeAlgHMAC      SigSchemeId = SigSchemeId(AlgorithmHMAC)      // TPM_ALG_HMAC

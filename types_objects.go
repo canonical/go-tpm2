@@ -22,6 +22,12 @@ import (
 // ObjectTypeId corresponds to the TPMI_ALG_PUBLIC type.
 type ObjectTypeId AlgorithmId
 
+// IsAsymmetric determines if the type corresponds to an asymmetric
+// object.
+func (t ObjectTypeId) IsAsymmetric() bool {
+	return t == ObjectTypeRSA || t == ObjectTypeECC
+}
+
 const (
 	ObjectTypeRSA       ObjectTypeId = ObjectTypeId(AlgorithmRSA)       // TPM_ALG_RSA
 	ObjectTypeKeyedHash ObjectTypeId = ObjectTypeId(AlgorithmKeyedHash) // TPM_ALG_KEYEDHASH
