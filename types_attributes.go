@@ -121,8 +121,9 @@ const (
 	AttrTPMGeneratedEPS    PermanentAttributes = 1 << 10 // tpmGeneratedEPS
 )
 
-// StatupClearAttributes corresponds to the TPMA_STARTUP_CLEAR type and is
-// returned when querying the value of PropertyStartupClear.
+// StatupClearAttributes corresponds to the TPMA_STARTUP_CLEAR type and
+// is used to report details of properties that reset after a Startup(CLEAR).
+// It is returned when querying the value of PropertyStartupClear.
 type StartupClearAttributes uint32
 
 const (
@@ -131,6 +132,17 @@ const (
 	AttrEhEnable   StartupClearAttributes = 1 << 2  // ehEnable
 	AttrPhEnableNV StartupClearAttributes = 1 << 3  // phEnableNV
 	AttrOrderly    StartupClearAttributes = 1 << 31 // orderly
+)
+
+// MemoryAttributes corresponds to the TPMA_MEMORY type and is used to
+// report details about memory management. It is returned when querying
+// the value of PropertyMemory.
+type MemoryAttributes uint32
+
+const (
+	AttrSharedRAM MemoryAttributes = 1 << 0 // sharedRAM
+	AttrSharedNV MemoryAttributes = 1 << 1 // sharedNV
+	AttrObjectCopiedToRAM MemoryAttributes = 1 << 2 // objectCopiedToRam
 )
 
 // CommandAttributes corresponds to the TPMA_CC type and represents the
@@ -155,4 +167,12 @@ const (
 	AttrFlushed   CommandAttributes = 1 << 24
 	AttrRHandle   CommandAttributes = 1 << 28
 	AttrV         CommandAttributes = 1 << 29
+)
+
+// ModeAttributes correspnds to TPMA_MODES and is returned when querying
+// the value of PropertyModes.
+type ModeAttributes uint32
+
+const (
+	ModeFIPS140_2 ModeAttributes = 1 << 0 // FIPS_140_2
 )
