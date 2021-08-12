@@ -23,6 +23,13 @@ import (
 // ObjectTypeId corresponds to the TPMI_ALG_PUBLIC type.
 type ObjectTypeId AlgorithmId
 
+const (
+	ObjectTypeRSA       ObjectTypeId = ObjectTypeId(AlgorithmRSA)       // TPM_ALG_RSA
+	ObjectTypeKeyedHash ObjectTypeId = ObjectTypeId(AlgorithmKeyedHash) // TPM_ALG_KEYEDHASH
+	ObjectTypeECC       ObjectTypeId = ObjectTypeId(AlgorithmECC)       // TPM_ALG_ECC
+	ObjectTypeSymCipher ObjectTypeId = ObjectTypeId(AlgorithmSymCipher) // TPM_ALG_SYMCIPHER
+)
+
 // PublicIDU is a union type that corresponds to the TPMU_PUBLIC_ID type. The selector type
 // is ObjectTypeId. The mapping of selector values to fields is as follows:
 //  - ObjectTypeRSA: RSA

@@ -105,6 +105,18 @@ func (a HashAlgorithmId) Size() int {
 	}
 }
 
+const (
+	HashAlgorithmNull     HashAlgorithmId = HashAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
+	HashAlgorithmSHA1     HashAlgorithmId = HashAlgorithmId(AlgorithmSHA1)     // TPM_ALG_SHA1
+	HashAlgorithmSHA256   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA256)   // TPM_ALG_SHA256
+	HashAlgorithmSHA384   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA384)   // TPM_ALG_SHA384
+	HashAlgorithmSHA512   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA512)   // TPM_ALG_SHA512
+	HashAlgorithmSM3_256  HashAlgorithmId = HashAlgorithmId(AlgorithmSM3_256)  // TPM_ALG_SM3_256
+	HashAlgorithmSHA3_256 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_256) // TPM_ALG_SHA3_256
+	HashAlgorithmSHA3_384 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_384) // TPM_ALG_SHA3_384
+	HashAlgorithmSHA3_512 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_512) // TPM_ALG_SHA3_512
+)
+
 // SymAlgorithmId corresponds to the TPMI_ALG_SYM type
 type SymAlgorithmId AlgorithmId
 
@@ -156,6 +168,15 @@ func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
 	return fn(key)
 }
 
+const (
+	SymAlgorithmTDES     SymAlgorithmId = SymAlgorithmId(AlgorithmTDES)     // TPM_ALG_TDES
+	SymAlgorithmAES      SymAlgorithmId = SymAlgorithmId(AlgorithmAES)      // TPM_ALG_AES
+	SymAlgorithmXOR      SymAlgorithmId = SymAlgorithmId(AlgorithmXOR)      // TPM_ALG_XOR
+	SymAlgorithmNull     SymAlgorithmId = SymAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
+	SymAlgorithmSM4      SymAlgorithmId = SymAlgorithmId(AlgorithmSM4)      // TPM_ALG_SM4
+	SymAlgorithmCamellia SymAlgorithmId = SymAlgorithmId(AlgorithmCamellia) // TPM_ALG_CAMELLIA
+)
+
 // SymObjectAlgorithmId corresponds to the TPMI_ALG_SYM_OBJECT type
 type SymObjectAlgorithmId AlgorithmId
 
@@ -183,11 +204,46 @@ func (a SymObjectAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
 	return SymAlgorithmId(a).NewCipher(key)
 }
 
+const (
+	SymObjectAlgorithmAES      SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmAES)      // TPM_ALG_AES
+	SymObjectAlgorithmNull     SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
+	SymObjectAlgorithmSM4      SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmSM4)      // TPM_ALG_SM4
+	SymObjectAlgorithmCamellia SymObjectAlgorithmId = SymObjectAlgorithmId(AlgorithmCamellia) // TPM_ALG_CAMELLIA
+)
+
 // SymModeId corresponds to the TPMI_ALG_SYM_MODE type
 type SymModeId AlgorithmId
+
+const (
+	SymModeNull SymModeId = SymModeId(AlgorithmNull) // TPM_ALG_NULL
+	SymModeCTR  SymModeId = SymModeId(AlgorithmCTR)  // TPM_ALG_CTR
+	SymModeOFB  SymModeId = SymModeId(AlgorithmOFB)  // TPM_ALG_OFB
+	SymModeCBC  SymModeId = SymModeId(AlgorithmCBC)  // TPM_ALG_CBC
+	SymModeCFB  SymModeId = SymModeId(AlgorithmCFB)  // TPM_ALG_CFB
+	SymModeECB  SymModeId = SymModeId(AlgorithmECB)  // TPM_ALG_ECB
+)
 
 // KDFAlgorithmId corresppnds to the TPMI_ALG_KDF type
 type KDFAlgorithmId AlgorithmId
 
+const (
+	KDFAlgorithmMGF1           KDFAlgorithmId = KDFAlgorithmId(AlgorithmMGF1)           // TPM_ALG_MGF1
+	KDFAlgorithmNull           KDFAlgorithmId = KDFAlgorithmId(AlgorithmNull)           // TPM_ALG_NULL
+	KDFAlgorithmKDF1_SP800_56A KDFAlgorithmId = KDFAlgorithmId(AlgorithmKDF1_SP800_56A) // TPM_ALG_KDF1_SP800_56A
+	KDFAlgorithmKDF2           KDFAlgorithmId = KDFAlgorithmId(AlgorithmKDF2)           // TPM_ALG_KDF2
+	KDFAlgorithmKDF1_SP800_108 KDFAlgorithmId = KDFAlgorithmId(AlgorithmKDF1_SP800_108) // TPM_ALG_KDF1_SP800_108
+)
+
 // SigSchemeId corresponds to the TPMI_ALG_SIG_SCHEME type
 type SigSchemeId AlgorithmId
+
+const (
+	SigSchemeAlgHMAC      SigSchemeId = SigSchemeId(AlgorithmHMAC)      // TPM_ALG_HMAC
+	SigSchemeAlgNull      SigSchemeId = SigSchemeId(AlgorithmNull)      // TPM_ALG_NULL
+	SigSchemeAlgRSASSA    SigSchemeId = SigSchemeId(AlgorithmRSASSA)    // TPM_ALG_RSASSA
+	SigSchemeAlgRSAPSS    SigSchemeId = SigSchemeId(AlgorithmRSAPSS)    // TPM_ALG_RSAPSS
+	SigSchemeAlgECDSA     SigSchemeId = SigSchemeId(AlgorithmECDSA)     // TPM_ALG_ECDSA
+	SigSchemeAlgECDAA     SigSchemeId = SigSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
+	SigSchemeAlgSM2       SigSchemeId = SigSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
+	SigSchemeAlgECSCHNORR SigSchemeId = SigSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+)

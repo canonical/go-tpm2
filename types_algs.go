@@ -133,6 +133,12 @@ type SchemeECDAA struct {
 // KeyedHashSchemeId corresponds to the TPMI_ALG_KEYEDHASH_SCHEME type
 type KeyedHashSchemeId AlgorithmId
 
+const (
+	KeyedHashSchemeHMAC KeyedHashSchemeId = KeyedHashSchemeId(AlgorithmHMAC) // TPM_ALG_HMAC
+	KeyedHashSchemeXOR  KeyedHashSchemeId = KeyedHashSchemeId(AlgorithmXOR)  // TPM_ALG_XOR
+	KeyedHashSchemeNull KeyedHashSchemeId = KeyedHashSchemeId(AlgorithmNull) // TPM_ALG_NULL
+)
+
 // SchemeHMAC corresponds to the TPMS_SCHEME_HMAC type.
 type SchemeHMAC SchemeHash
 
@@ -312,6 +318,20 @@ type KDFScheme struct {
 // AsymSchemeId corresponds to the TPMI_ALG_ASYM_SCHEME type
 type AsymSchemeId AlgorithmId
 
+const (
+	AsymSchemeNull      AsymSchemeId = AsymSchemeId(AlgorithmNull)      // TPM_ALG_NULL
+	AsymSchemeRSASSA    AsymSchemeId = AsymSchemeId(AlgorithmRSASSA)    // TPM_ALG_RSASSA
+	AsymSchemeRSAES     AsymSchemeId = AsymSchemeId(AlgorithmRSAES)     // TPM_ALG_RSAES
+	AsymSchemeRSAPSS    AsymSchemeId = AsymSchemeId(AlgorithmRSAPSS)    // TPM_ALG_RSAPSS
+	AsymSchemeOAEP      AsymSchemeId = AsymSchemeId(AlgorithmOAEP)      // TPM_ALG_OAEP
+	AsymSchemeECDSA     AsymSchemeId = AsymSchemeId(AlgorithmECDSA)     // TPM_ALG_ECDSA
+	AsymSchemeECDH      AsymSchemeId = AsymSchemeId(AlgorithmECDH)      // TPM_ALG_ECDH
+	AsymSchemeECDAA     AsymSchemeId = AsymSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
+	AsymSchemeSM2       AsymSchemeId = AsymSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
+	AsymSchemeECSCHNORR AsymSchemeId = AsymSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+	AsymSchemeECMQV     AsymSchemeId = AsymSchemeId(AlgorithmECMQV)     // TPM_ALG_ECMQV
+)
+
 // AsymSchemeU is a union type that corresponds to the TPMU_ASYM_SCHEME type. The
 // selector type is AsymSchemeId. The mapping of selector values to fields is as follows:
 //  - AsymSchemeRSASSA: RSASSA
@@ -405,6 +425,14 @@ type AsymScheme struct {
 // RSASchemeId corresponds to the TPMI_ALG_RSA_SCHEME type.
 type RSASchemeId AsymSchemeId
 
+const (
+	RSASchemeNull   RSASchemeId = RSASchemeId(AlgorithmNull)   // TPM_ALG_NULL
+	RSASchemeRSASSA RSASchemeId = RSASchemeId(AlgorithmRSASSA) // TPM_ALG_RSASSA
+	RSASchemeRSAES  RSASchemeId = RSASchemeId(AlgorithmRSAES)  // TPM_ALG_RSAES
+	RSASchemeRSAPSS RSASchemeId = RSASchemeId(AlgorithmRSAPSS) // TPM_ALG_RSAPSS
+	RSASchemeOAEP   RSASchemeId = RSASchemeId(AlgorithmOAEP)   // TPM_ALG_OAEP
+)
+
 // RSAScheme corresponds to the TPMT_RSA_SCHEME type.
 type RSAScheme struct {
 	Scheme  RSASchemeId  // Scheme selector
@@ -431,6 +459,16 @@ type ECCPoint struct {
 
 // ECCSchemeId corresponds to the TPMI_ALG_ECC_SCHEME type.
 type ECCSchemeId AsymSchemeId
+
+const (
+	ECCSchemeNull      ECCSchemeId = ECCSchemeId(AlgorithmNull)      // TPM_ALG_NULL
+	ECCSchemeECDSA     ECCSchemeId = ECCSchemeId(AlgorithmECDSA)     // TPM_ALG_ECDSA
+	ECCSchemeECDH      ECCSchemeId = ECCSchemeId(AlgorithmECDH)      // TPM_ALG_ECDH
+	ECCSchemeECDAA     ECCSchemeId = ECCSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
+	ECCSchemeSM2       ECCSchemeId = ECCSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
+	ECCSchemeECSCHNORR ECCSchemeId = ECCSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+	ECCSchemeECMQV     ECCSchemeId = ECCSchemeId(AlgorithmECMQV)     // TPM_ALG_ECMQV
+)
 
 // ECCScheme corresponds to the TPMT_ECC_SCHEME type.
 type ECCScheme struct {

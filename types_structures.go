@@ -89,6 +89,11 @@ type Auth Digest
 // Operand corresponds to the TPM2B_OPERAND type.
 type Operand Digest
 
+const (
+	// EventMaxSize indicates the maximum size of arguments of the Event type.
+	EventMaxSize = 1024
+)
+
 // Event corresponds to the TPM2B_EVENT type. The largest size of this is indicated
 // by EventMaxSize.
 type Event []byte

@@ -22,6 +22,15 @@ func (t NVType) WithAttrs(attrs NVAttributes) NVAttributes {
 	return NVAttributes(t<<4) | attrs
 }
 
+const (
+	NVTypeOrdinary NVType = 0 // TPM_NT_ORDINARY
+	NVTypeCounter  NVType = 1 // TPM_NT_COUNTER
+	NVTypeBits     NVType = 2 // TPM_NT_BITS
+	NVTypeExtend   NVType = 4 // TPM_NT_EXTEND
+	NVTypePinFail  NVType = 8 // TPM_NT_PIN_FAIL
+	NVTypePinPass  NVType = 9 // TPM_NT_PIN_PASS
+)
+
 // NVPinCounterParams corresponds to the TPMS_NV_PIN_COUNTER_PARAMETERS type.
 type NVPinCounterParams struct {
 	Count uint32
@@ -41,6 +50,30 @@ func (a NVAttributes) Type() NVType {
 func (a NVAttributes) AttrsOnly() NVAttributes {
 	return a & ^NVAttributes(0xf0)
 }
+
+const (
+	AttrNVPPWrite        NVAttributes = 1 << 0  // TPMA_NV_PPWRITE
+	AttrNVOwnerWrite     NVAttributes = 1 << 1  // TPMA_NV_OWNERWRITE
+	AttrNVAuthWrite      NVAttributes = 1 << 2  // TPMA_NV_AUTHWRITE
+	AttrNVPolicyWrite    NVAttributes = 1 << 3  // TPMA_NV_POLICY_RITE
+	AttrNVPolicyDelete   NVAttributes = 1 << 10 // TPMA_NV_POLICY_DELETE
+	AttrNVWriteLocked    NVAttributes = 1 << 11 // TPMA_NV_WRITELOCKED
+	AttrNVWriteAll       NVAttributes = 1 << 12 // TPMA_NV_WRITEALL
+	AttrNVWriteDefine    NVAttributes = 1 << 13 // TPMA_NV_WRITEDEFINE
+	AttrNVWriteStClear   NVAttributes = 1 << 14 // TPMA_NV_WRITE_STCLEAR
+	AttrNVGlobalLock     NVAttributes = 1 << 15 // TPMA_NV_GLOBALLOCK
+	AttrNVPPRead         NVAttributes = 1 << 16 // TPMA_NV_PPREAD
+	AttrNVOwnerRead      NVAttributes = 1 << 17 // TPMA_NV_OWNERREAD
+	AttrNVAuthRead       NVAttributes = 1 << 18 // TPMA_NV_AUTHREAD
+	AttrNVPolicyRead     NVAttributes = 1 << 19 // TPMA_NV_POLICYREAD
+	AttrNVNoDA           NVAttributes = 1 << 25 // TPMA_NV_NO_DA
+	AttrNVOrderly        NVAttributes = 1 << 26 // TPMA_NV_ORDERLY
+	AttrNVClearStClear   NVAttributes = 1 << 27 // TPMA_NV_CLEAR_STCLEAR
+	AttrNVReadLocked     NVAttributes = 1 << 28 // TPMA_NV_READLOCKED
+	AttrNVWritten        NVAttributes = 1 << 29 // TPMA_NV_WRITTEN
+	AttrNVPlatformCreate NVAttributes = 1 << 30 // TPMA_NV_PLATFORMCREATE
+	AttrNVReadStClear    NVAttributes = 1 << 31 // TPMA_NV_READ_STCLEAR
+)
 
 // NVPublic corresponds to the TPMS_NV_PUBLIC type, which describes a NV index.
 type NVPublic struct {
