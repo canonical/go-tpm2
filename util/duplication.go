@@ -80,8 +80,8 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 
 	var seed []byte
 	if parentPublic != nil {
-		if !parentPublic.IsStorage() {
-			return nil, nil, nil, errors.New("parent object must be a storage key")
+		if !parentPublic.IsStorageParent() || !parentPublic.IsAsymmetric() {
+			return nil, nil, nil, errors.New("parent object must be an asymmetric storage key")
 		}
 		outSymSeed, seed, err = tpm2.CryptSecretEncrypt(parentPublic, []byte(tpm2.DuplicateString))
 		if err != nil {

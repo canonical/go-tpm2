@@ -199,29 +199,43 @@ func (p *Public) ToTemplate() (Template, error) {
 	return b, nil
 }
 
-// IsStorage indicates that this public area is associated with an object that can
-// be the target of a duplication operation.
-func (p *Public) IsStorage() bool {
+func (p *Public) isParent() bool {
+	if !p.NameAlg.IsValid() {
+		return false
+	}
+	return p.Attrs&(AttrRestricted|AttrDecrypt) == AttrRestricted|AttrDecrypt
+}
+
+// IsAsymmetric indicates that this public area is associated with an asymmetric
+// key.
+func (p *Public) IsAsymmetric() bool {
+	return p.Type.IsAsymmetric()
+}
+
+// IsStorageParent indicates that this public area is associated with an object that can be
+// a storage parent.
+func (p *Public) IsStorageParent() bool {
+	if !p.isParent() {
+		return false
+	}
 	switch p.Type {
-	case ObjectTypeRSA, ObjectTypeECC:
-		return p.Attrs&(AttrRestricted|AttrDecrypt|AttrSign) == AttrRestricted|AttrDecrypt
+	case ObjectTypeRSA, ObjectTypeECC, ObjectTypeSymCipher:
+		return true
 	default:
 		return false
 	}
 }
 
-// IsParent indicates that this public area is associated with an object that can be
-// a storage parent.
-func (p *Public) IsParent() bool {
-	switch p.Type {
-	case ObjectTypeKeyedHash:
+// IsDerivationParent indicates that this public area is associated with an object that can be
+// a derivation parent.
+func (p *Public) IsDerivationParent() bool {
+	if !p.isParent() {
 		return false
-	default:
-		if p.NameAlg == HashAlgorithmNull {
-			return false
-		}
-		return p.Attrs&(AttrRestricted|AttrDecrypt) == AttrRestricted|AttrDecrypt
 	}
+	if p.Type != ObjectTypeKeyedHash {
+		return false
+	}
+	return true
 }
 
 // Public returns a corresponding public key for the TPM public area.

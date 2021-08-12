@@ -11,6 +11,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 
 	. "gopkg.in/check.v1"
@@ -20,194 +21,35 @@ type typesObjectsSuite struct{}
 
 var _ = Suite(&typesObjectsSuite{})
 
-func (s *typesObjectsSuite) TestPublicIsStorageRSAValid(c *C) {
-	pub := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
-				},
-				Scheme:   RSAScheme{Scheme: RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	c.Check(pub.IsStorage(), testutil.IsTrue)
+func (s *typesObjectsSuite) TestPublicIsStorageParentRSAValid(c *C) {
+	pub := templates.NewRSAStorageKeyWithDefaults()
+	c.Check(pub.IsStorageParent(), testutil.IsTrue)
 }
 
-func (s *typesObjectsSuite) TestPublicIsStorageECCValid(c *C) {
-	pub := Public{
-		Type:    ObjectTypeECC,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			ECCDetail: &ECCParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
-				},
-				Scheme:  ECCScheme{Scheme: ECCSchemeNull},
-				CurveID: ECCCurveNIST_P256,
-				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
-	c.Check(pub.IsStorage(), testutil.IsTrue)
+func (s *typesObjectsSuite) TestPublicIsStorageParentECCValid(c *C) {
+	pub := templates.NewECCStorageKeyWithDefaults()
+	c.Check(pub.IsStorageParent(), testutil.IsTrue)
 }
 
-func (s *typesObjectsSuite) TestPublicIsStorageRSASign(c *C) {
-	pub := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrSign,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-				Scheme: RSAScheme{
-					Scheme: RSASchemeRSAPSS,
-					Details: &AsymSchemeU{
-						RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256},
-					},
-				},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	c.Check(pub.IsStorage(), testutil.IsFalse)
+func (s *typesObjectsSuite) TestPublicIsStorageParentSymmetric(c *C) {
+	pub := templates.NewSymmetricStorageKeyWithDefaults()
+	c.Check(pub.IsStorageParent(), testutil.IsTrue)
 }
 
-func (s *typesObjectsSuite) TestPublicIsStorageSymmetric(c *C) {
-	pub := Public{
-		Type:    ObjectTypeSymCipher,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			SymDetail: &SymCipherParams{
-				Sym: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
-				}}}}
-	c.Check(pub.IsStorage(), testutil.IsFalse)
+func (s *typesObjectsSuite) TestPublicIsStorageParentKeyedHash(c *C) {
+	pub := templates.NewDerivationParentKeyWithDefaults()
+	c.Check(pub.IsStorageParent(), testutil.IsFalse)
 }
 
-func (s *typesObjectsSuite) TestPublicIsStorageKeyedHash(c *C) {
-	pub := Public{
-		Type:    ObjectTypeKeyedHash,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{
-					Scheme: KeyedHashSchemeXOR,
-					Details: &SchemeKeyedHashU{
-						XOR: &SchemeXOR{
-							HashAlg: HashAlgorithmSHA256,
-							KDF:     KDFAlgorithmKDF1_SP800_108}}}}}}
-	c.Check(pub.IsStorage(), testutil.IsFalse)
+func (s *typesObjectsSuite) TestPublicIsStorageParentRSASign(c *C) {
+	pub := templates.NewRestrictedRSASigningKeyWithDefaults()
+	c.Check(pub.IsStorageParent(), testutil.IsFalse)
 }
 
-func (s *typesObjectsSuite) TestPublicIsParentRSAValid(c *C) {
-	pub := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
-				},
-				Scheme:   RSAScheme{Scheme: RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	c.Check(pub.IsParent(), testutil.IsTrue)
-}
-
-func (s *typesObjectsSuite) TestPublicIsParentECCValid(c *C) {
-	pub := Public{
-		Type:    ObjectTypeECC,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			ECCDetail: &ECCParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
-				},
-				Scheme:  ECCScheme{Scheme: ECCSchemeNull},
-				CurveID: ECCCurveNIST_P256,
-				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
-	c.Check(pub.IsParent(), testutil.IsTrue)
-}
-
-func (s *typesObjectsSuite) TestPublicIsParentSymmetric(c *C) {
-	pub := Public{
-		Type:    ObjectTypeSymCipher,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			SymDetail: &SymCipherParams{
-				Sym: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
-				}}}}
-	c.Check(pub.IsParent(), testutil.IsTrue)
-}
-
-func (s *typesObjectsSuite) TestPublicIsParentKeyedHash(c *C) {
-	pub := Public{
-		Type:    ObjectTypeKeyedHash,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			KeyedHashDetail: &KeyedHashParams{
-				Scheme: KeyedHashScheme{
-					Scheme: KeyedHashSchemeXOR,
-					Details: &SchemeKeyedHashU{
-						XOR: &SchemeXOR{
-							HashAlg: HashAlgorithmSHA256,
-							KDF:     KDFAlgorithmKDF1_SP800_108}}}}}}
-	c.Check(pub.IsParent(), testutil.IsFalse)
-}
-
-func (s *typesObjectsSuite) TestPublicIsParentRSASign(c *C) {
-	pub := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrRestricted | AttrSign,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-				Scheme: RSAScheme{
-					Scheme: RSASchemeRSAPSS,
-					Details: &AsymSchemeU{
-						RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256},
-					},
-				},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	c.Check(pub.IsParent(), testutil.IsFalse)
-}
-
-func (s *typesObjectsSuite) TestPublicIsParentRSANoNameAlg(c *C) {
-	pub := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmNull,
-		Attrs:   AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB},
-				},
-				Scheme:   RSAScheme{Scheme: RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	c.Check(pub.IsParent(), testutil.IsFalse)
+func (s *typesObjectsSuite) TestPublicIsStorageParentRSANoNameAlg(c *C) {
+	pub := templates.NewRSAStorageKeyWithDefaults()
+	pub.NameAlg = HashAlgorithmNull
+	c.Check(pub.IsStorageParent(), testutil.IsFalse)
 }
 
 type TestPublicIDUContainer struct {
