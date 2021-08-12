@@ -86,9 +86,9 @@ func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign
 		c.Check(signature.SigAlg, Equals, SigSchemeAlgNull)
 	} else {
 		c.Check(signature.SigAlg, Equals, scheme.Scheme)
-		c.Check(signature.Signature.Any().HashAlg, Equals, scheme.Details.Any().HashAlg)
+		c.Check(signature.Signature.Any(signature.SigAlg).HashAlg, Equals, scheme.Details.Any(scheme.Scheme).HashAlg)
 
-		h := scheme.Details.Any().HashAlg.NewHash()
+		h := scheme.Details.Any(scheme.Scheme).HashAlg.NewHash()
 		mu.MustMarshalToWriter(h, attest)
 		digest := h.Sum(nil)
 

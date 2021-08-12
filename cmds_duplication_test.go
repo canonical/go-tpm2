@@ -100,7 +100,7 @@ func TestDuplicate(t *testing.T) {
 		if outer {
 			privKey = key
 			parentNameAlg = parentPub.NameAlg
-			parentSymmetricAlg = &parentPub.Params.AsymDetail().Symmetric
+			parentSymmetricAlg = &parentPub.Params.AsymDetail(parentPub.Type).Symmetric
 		}
 
 		sensitiveDup, err := util.UnwrapDuplicationObjectToSensitive(duplicate, pub, privKey, parentNameAlg, parentSymmetricAlg, encryptionKey, inSymSeed, symmetricAlg)

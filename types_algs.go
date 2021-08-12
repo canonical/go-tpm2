@@ -6,7 +6,6 @@ package tpm2
 
 import (
 	"reflect"
-	"unsafe"
 
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -233,26 +232,27 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 	}
 }
 
-// Any returns the underlying value as *SchemeHash. Note that if more than
-// one field is set, it will return the first set field as *SchemeHash.
-func (s SigSchemeU) Any() *SchemeHash {
-	switch {
-	case s.RSASSA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.RSASSA))
-	case s.RSAPSS != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.RSAPSS))
-	case s.ECDSA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECDSA))
-	case s.ECDAA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECDAA))
-	case s.SM2 != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.SM2))
-	case s.ECSCHNORR != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECSCHNORR))
-	case s.HMAC != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.HMAC))
+// Any returns the signature scheme associated with scheme as a *SchemeHash.
+// It panics if the specified scheme is invalid or SigSchemeAlgNull, or the
+// appropriate field isn't set.
+func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
+	switch scheme {
+	case SigSchemeAlgRSASSA:
+		return (*SchemeHash)(&(*s.RSASSA))
+	case SigSchemeAlgRSAPSS:
+		return (*SchemeHash)(&(*s.RSAPSS))
+	case SigSchemeAlgECDSA:
+		return (*SchemeHash)(&(*s.ECDSA))
+	case SigSchemeAlgECDAA:
+		return &SchemeHash{HashAlg: s.ECDAA.HashAlg}
+	case SigSchemeAlgSM2:
+		return (*SchemeHash)(&(*s.SM2))
+	case SigSchemeAlgECSCHNORR:
+		return (*SchemeHash)(&(*s.ECSCHNORR))
+	case SigSchemeAlgHMAC:
+		return (*SchemeHash)(&(*s.HMAC))
 	default:
-		return nil
+		panic("invalid scheme")
 	}
 }
 
@@ -387,30 +387,31 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 	}
 }
 
-// Any returns the underlying value as *SchemeHash. Note that if more than one field
-// is set, it will return the first set field as *SchemeHash.
-func (s AsymSchemeU) Any() *SchemeHash {
-	switch {
-	case s.RSASSA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.RSASSA))
-	case s.RSAPSS != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.RSAPSS))
-	case s.OAEP != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.OAEP))
-	case s.ECDSA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECDSA))
-	case s.ECDH != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECDH))
-	case s.ECDAA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECDAA))
-	case s.SM2 != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.SM2))
-	case s.ECSCHNORR != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECSCHNORR))
-	case s.ECMQV != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECMQV))
+// Any returns the asymmetric scheme associated with scheme as a *SchemeHash.
+// It panics if the specified scheme does not have an associated digest algorithm,
+// or if the appropriate field isn't set.
+func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
+	switch scheme {
+	case AsymSchemeRSASSA:
+		return (*SchemeHash)(&(*s.RSASSA))
+	case AsymSchemeRSAPSS:
+		return (*SchemeHash)(&(*s.RSAPSS))
+	case AsymSchemeOAEP:
+		return (*SchemeHash)(&(*s.OAEP))
+	case AsymSchemeECDSA:
+		return (*SchemeHash)(&(*s.ECDSA))
+	case AsymSchemeECDH:
+		return (*SchemeHash)(&(*s.ECDH))
+	case AsymSchemeECDAA:
+		return &SchemeHash{HashAlg: s.ECDAA.HashAlg}
+	case AsymSchemeSM2:
+		return (*SchemeHash)(&(*s.SM2))
+	case AsymSchemeECSCHNORR:
+		return (*SchemeHash)(&(*s.ECSCHNORR))
+	case AsymSchemeECMQV:
+		return (*SchemeHash)(&(*s.ECMQV))
 	default:
-		return nil
+		panic("invalid asymmetric scheme")
 	}
 }
 
@@ -541,26 +542,27 @@ func (s *SignatureU) Select(selector reflect.Value) interface{} {
 	}
 }
 
-// Any returns the underlying value as *SchemeHash. Note that if more than one field
-// is set, it will return the first set field as *SchemeHash.
-func (s SignatureU) Any() *SchemeHash {
-	switch {
-	case s.RSASSA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.RSASSA))
-	case s.RSAPSS != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.RSAPSS))
-	case s.ECDSA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECDSA))
-	case s.ECDAA != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECDAA))
-	case s.SM2 != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.SM2))
-	case s.ECSCHNORR != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.ECSCHNORR))
-	case s.HMAC != nil:
-		return (*SchemeHash)(unsafe.Pointer(s.HMAC))
+// Any returns the signature associated with scheme as a *SchemeHash. It
+// panics if scheme is SigSchemeAlgNull or the appropriate field isn't
+// set.
+func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
+	switch scheme {
+	case SigSchemeAlgRSASSA:
+		return &SchemeHash{HashAlg: s.RSASSA.Hash}
+	case SigSchemeAlgRSAPSS:
+		return &SchemeHash{HashAlg: s.RSAPSS.Hash}
+	case SigSchemeAlgECDSA:
+		return &SchemeHash{HashAlg: s.ECDSA.Hash}
+	case SigSchemeAlgECDAA:
+		return &SchemeHash{HashAlg: s.ECDAA.Hash}
+	case SigSchemeAlgSM2:
+		return &SchemeHash{HashAlg: s.SM2.Hash}
+	case SigSchemeAlgECSCHNORR:
+		return &SchemeHash{HashAlg: s.ECSCHNORR.Hash}
+	case SigSchemeAlgHMAC:
+		return &SchemeHash{HashAlg: s.HMAC.HashAlg}
 	default:
-		return nil
+		panic("invalid signature scheme")
 	}
 }
 

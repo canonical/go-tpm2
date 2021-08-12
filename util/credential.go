@@ -34,7 +34,7 @@ func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Na
 
 	credentialBlob = mu.MustMarshalToBytes(credential)
 
-	credentialBlob, err = ProduceOuterWrap(key.NameAlg, &key.Params.AsymDetail().Symmetric, objectName, seed, false, credentialBlob)
+	credentialBlob, err = ProduceOuterWrap(key.NameAlg, &key.Params.AsymDetail(key.Type).Symmetric, objectName, seed, false, credentialBlob)
 	if err != nil {
 		return nil, nil, err
 	}

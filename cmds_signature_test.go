@@ -66,7 +66,7 @@ func TestSign(t *testing.T) {
 			if signature.SigAlg != scheme {
 				t.Errorf("Signature has the wrong scheme")
 			}
-			if signature.Signature.Any().HashAlg != hashAlg {
+			if signature.Signature.Any(signature.SigAlg).HashAlg != hashAlg {
 				t.Errorf("Signature has the wrong hash algorithm")
 			}
 

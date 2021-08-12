@@ -140,8 +140,8 @@ const (
 type MemoryAttributes uint32
 
 const (
-	AttrSharedRAM MemoryAttributes = 1 << 0 // sharedRAM
-	AttrSharedNV MemoryAttributes = 1 << 1 // sharedNV
+	AttrSharedRAM         MemoryAttributes = 1 << 0 // sharedRAM
+	AttrSharedNV          MemoryAttributes = 1 << 1 // sharedNV
 	AttrObjectCopiedToRAM MemoryAttributes = 1 << 2 // objectCopiedToRam
 )
 

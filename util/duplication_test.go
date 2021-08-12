@@ -53,7 +53,7 @@ func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCre
 	var parentSymmetricAlg *tpm2.SymDefObject
 	if data.parentPublic != nil {
 		parentNameAlg = data.parentPublic.NameAlg
-		parentSymmetricAlg = &data.parentPublic.Params.AsymDetail().Symmetric
+		parentSymmetricAlg = &data.parentPublic.Params.AsymDetail(data.parentPublic.Type).Symmetric
 	}
 
 	sensitive, err := UnwrapDuplicationObjectToSensitive(duplicate, public, data.parentPriv, parentNameAlg, parentSymmetricAlg, encryptionKey, symSeed, data.symmetricAlg)

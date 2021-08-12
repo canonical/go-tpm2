@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
-	"unsafe"
 
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -128,14 +127,23 @@ func (p *PublicParamsU) Select(selector reflect.Value) interface{} {
 	}
 }
 
-// AsymDetail returns the underlying value as *AsymParams. It panics if the underlying
-// type is not *RSAParams or *ECCParams.
-func (p PublicParamsU) AsymDetail() *AsymParams {
-	switch {
-	case p.RSADetail != nil:
-		return (*AsymParams)(unsafe.Pointer(p.RSADetail))
-	case p.ECCDetail != nil:
-		return (*AsymParams)(unsafe.Pointer(p.ECCDetail))
+// AsymDetail returns the parameters associated with the specified object type
+// as *AsymParams. It panics if the type is not ObjectTypeRSA or ObjectTypeECC,
+// or the appropriate field isn't set.
+func (p PublicParamsU) AsymDetail(t ObjectTypeId) *AsymParams {
+	switch t {
+	case ObjectTypeRSA:
+		return &AsymParams{
+			Symmetric: p.RSADetail.Symmetric,
+			Scheme: AsymScheme{
+				Scheme:  AsymSchemeId(p.RSADetail.Scheme.Scheme),
+				Details: p.RSADetail.Scheme.Details}}
+	case ObjectTypeECC:
+		return &AsymParams{
+			Symmetric: p.ECCDetail.Symmetric,
+			Scheme: AsymScheme{
+				Scheme:  AsymSchemeId(p.ECCDetail.Scheme.Scheme),
+				Details: p.ECCDetail.Scheme.Details}}
 	default:
 		panic("invalid type")
 	}
@@ -304,17 +312,17 @@ func (s *SensitiveCompositeU) Select(selector reflect.Value) interface{} {
 	}
 }
 
-// Any returns the underlying value as PrivateVendorSpecific. Note that if more
-// than one field is set, it will return the first set field as PrivateVendorSpecific.
-func (s SensitiveCompositeU) Any() PrivateVendorSpecific {
-	switch {
-	case len(s.RSA) > 0:
+// Any returns the value associated with the specified object type as
+// PrivateVendorSpecific.
+func (s SensitiveCompositeU) Any(t ObjectTypeId) PrivateVendorSpecific {
+	switch t {
+	case ObjectTypeRSA:
 		return PrivateVendorSpecific(s.RSA)
-	case len(s.ECC) > 0:
+	case ObjectTypeECC:
 		return PrivateVendorSpecific(s.ECC)
-	case len(s.Bits) > 0:
+	case ObjectTypeKeyedHash:
 		return PrivateVendorSpecific(s.Bits)
-	case len(s.Sym) > 0:
+	case ObjectTypeSymCipher:
 		return PrivateVendorSpecific(s.Sym)
 	default:
 		return nil

@@ -276,7 +276,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 	if applyOuterWrapper {
 		// Apply outer wrapper
 		var err error
-		duplicate, err = ProduceOuterWrap(parent.NameAlg, &parent.Params.AsymDetail().Symmetric, name, seed, false, duplicate)
+		duplicate, err = ProduceOuterWrap(parent.NameAlg, &parent.Params.AsymDetail(parent.Type).Symmetric, name, seed, false, duplicate)
 		if err != nil {
 			return nil, nil, xerrors.Errorf("cannot apply outer wrapper: %w", err)
 		}
