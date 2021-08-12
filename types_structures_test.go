@@ -6,14 +6,121 @@ package tpm2_test
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/binary"
+	"io"
 	"reflect"
 	"testing"
+
+	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 )
+
+type typesStructuresSuite struct{}
+
+var _ = Suite(&typesStructuresSuite{})
+
+func (s *typesStructuresSuite) TestNameTypeInvalidTooShort(c *C) {
+	name := Name{0xaa}
+	c.Check(name.Type(), Equals, NameTypeInvalid)
+}
+
+func (s *typesStructuresSuite) TestNameTypeInvalidAlg(c *C) {
+	name := Name{0xaa, 0xaa}
+	name = append(name, make(Name, 32)...)
+	c.Check(name.Type(), Equals, NameTypeInvalid)
+}
+
+func (s *typesStructuresSuite) TestNameTypeInvalidLength(c *C) {
+	name := make(Name, 30)
+	binary.BigEndian.PutUint16(name, uint16(HashAlgorithmSHA256))
+	c.Check(name.Type(), Equals, NameTypeInvalid)
+}
+
+func (s *typesStructuresSuite) TestNameTypeHandle(c *C) {
+	name := make(Name, 4)
+	c.Check(name.Type(), Equals, NameTypeHandle)
+}
+
+func (s *typesStructuresSuite) TestNameTypeDigest(c *C) {
+	name := make(Name, 34)
+	binary.BigEndian.PutUint16(name, uint16(HashAlgorithmSHA256))
+	c.Check(name.Type(), Equals, NameTypeDigest)
+}
+
+func (s *typesStructuresSuite) TestNameHandle1(c *C) {
+	name := make(Name, 4)
+	binary.BigEndian.PutUint32(name, uint32(HandleOwner))
+	c.Check(name.Handle(), Equals, HandleOwner)
+}
+
+func (s *typesStructuresSuite) TestNameHandle2(c *C) {
+	name := make(Name, 4)
+	binary.BigEndian.PutUint32(name, 0x02000000)
+	c.Check(name.Handle(), Equals, Handle(0x02000000))
+}
+
+func (s *typesStructuresSuite) TestNameHandlePanic(c *C) {
+	name := make(Name, 3)
+	c.Check(func() { name.Handle() }, PanicMatches, "name is not a handle")
+}
+
+func (s *typesStructuresSuite) TestNameAlgorithm1(c *C) {
+	name := make(Name, 34)
+	binary.BigEndian.PutUint16(name, uint16(HashAlgorithmSHA256))
+	c.Check(name.Algorithm(), Equals, HashAlgorithmSHA256)
+}
+
+func (s *typesStructuresSuite) TestNameAlgorithm2(c *C) {
+	name := make(Name, 22)
+	binary.BigEndian.PutUint16(name, uint16(HashAlgorithmSHA1))
+	c.Check(name.Algorithm(), Equals, HashAlgorithmSHA1)
+}
+
+func (s *typesStructuresSuite) TestNameAlgorithmHandle(c *C) {
+	name := make(Name, 4)
+	binary.BigEndian.PutUint32(name, uint32(HandleOwner))
+	c.Check(name.Algorithm(), Equals, HashAlgorithmNull)
+}
+
+func (s *typesStructuresSuite) TestNameAlgorithmInvalid(c *C) {
+	var name Name
+	c.Check(name.Algorithm(), Equals, HashAlgorithmNull)
+}
+
+func (s *typesStructuresSuite) TestNameDigest1(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	digest := h.Sum(nil)
+
+	name := make(Name, 2)
+	binary.BigEndian.PutUint16(name, uint16(HashAlgorithmSHA256))
+	name = append(name, digest...)
+
+	c.Check(name.Digest(), DeepEquals, Digest(digest))
+}
+
+func (s *typesStructuresSuite) TestNameDigest2(c *C) {
+	h := crypto.SHA1.New()
+	io.WriteString(h, "foo")
+	digest := h.Sum(nil)
+
+	name := make(Name, 2)
+	binary.BigEndian.PutUint16(name, uint16(HashAlgorithmSHA1))
+	name = append(name, digest...)
+
+	c.Check(name.Digest(), DeepEquals, Digest(digest))
+}
+
+func (s *typesStructuresSuite) TestNameDigestPanic(c *C) {
+	name := make(Name, 2)
+	binary.BigEndian.PutUint16(name, uint16(HashAlgorithmSHA256))
+	c.Check(func() { name.Digest() }, PanicMatches, "name is not a valid digest")
+}
 
 func TestPCRSelect(t *testing.T) {
 	for _, data := range []struct {

@@ -156,7 +156,7 @@ func (h *handleContext) checkConsistency() error {
 		default:
 			return errors.New("inconsistent handle type for permanent context")
 		}
-		if !h.Name().IsHandle() || h.Name().Handle() != h.Handle() {
+		if h.Name().Type() != NameTypeHandle || h.Name().Handle() != h.Handle() {
 			return errors.New("name inconsistent with handle for permanent context")
 		}
 	case handleContextTypeObject:
@@ -187,7 +187,7 @@ func (h *handleContext) checkConsistency() error {
 		default:
 			return errors.New("inconsistent handle type for session context")
 		}
-		if !h.Name().IsHandle() || h.Name().Handle() != h.Handle() {
+		if h.Name().Type() != NameTypeHandle || h.Name().Handle() != h.Handle() {
 			return errors.New("name inconsistent with handle for session context")
 		}
 		scData := h.Data.Session

@@ -127,40 +127,64 @@ func (t Timeout) Value() uint64 {
 // Name corresponds to the TPM2B_NAME type.
 type Name []byte
 
-// IsHandle returns true if the name contains a handle.
-func (n Name) IsHandle() bool {
-	return len(n) == binary.Size(Handle(0))
+// NameType describes the type of a name.
+type NameType int
+
+const (
+	// NameTypeInvalid means that a Name is invalid.
+	NameTypeInvalid NameType = iota
+
+	// NameTypeHandle means that a Name is a handle.
+	NameTypeHandle
+
+	// NameTypeDigest means that a Name is a digest.
+	NameTypeDigest
+)
+
+// Type determines the type of this name.
+func (n Name) Type() NameType {
+	if len(n) < binary.Size(HashAlgorithmId(0)) {
+		return NameTypeInvalid
+	}
+	if len(n) == binary.Size(Handle(0)) {
+		return NameTypeHandle
+	}
+
+	alg := HashAlgorithmId(binary.BigEndian.Uint16(n))
+	if !alg.IsValid() {
+		return NameTypeInvalid
+	}
+
+	if len(n)-binary.Size(HashAlgorithmId(0)) != alg.Size() {
+		return NameTypeInvalid
+	}
+
+	return NameTypeDigest
 }
 
 // Handle returns the handle of the resource that this name corresponds to. If
-// it does not contain a handle, it will panic.
+// Type does not return NameTypeHandle, it will panic.
 func (n Name) Handle() Handle {
-	if !n.IsHandle() {
+	if n.Type() != NameTypeHandle {
 		panic("name is not a handle")
 	}
 	return Handle(binary.BigEndian.Uint32(n))
 }
 
-// Algorithm returns the digest algorithm of the name, if it contains a digest.
-// If the name does not contain a digest, HashAlgorithmNull will be returned.
+// Algorithm returns the digest algorithm of this name. If Type does not return
+// NameTypeDigest, it will return HashAlgorithmNull.
 func (n Name) Algorithm() HashAlgorithmId {
-	if len(n) < binary.Size(HashAlgorithmId(0)) || n.IsHandle() {
+	if n.Type() != NameTypeDigest {
 		return HashAlgorithmNull
 	}
-	a := HashAlgorithmId(binary.BigEndian.Uint16(n))
-	if !a.IsValid() {
-		return HashAlgorithmNull
-	}
-	if a.Size() != len(n)-binary.Size(HashAlgorithmId(0)) {
-		return HashAlgorithmNull
-	}
-	return a
+
+	return HashAlgorithmId(binary.BigEndian.Uint16(n))
 }
 
-// Digest returns the name as a digest, without the algorithm identifier. If it
-// doesn't contain a digest, it will panic.
+// Digest returns the name as a digest without the algorithm identifier. If
+// Type does not return NameTypeDigest, it will panic.
 func (n Name) Digest() Digest {
-	if n.Algorithm() == HashAlgorithmNull {
+	if n.Type() != NameTypeDigest {
 		panic("name is not a valid digest")
 	}
 	return Digest(n[binary.Size(HashAlgorithmId(0)):])

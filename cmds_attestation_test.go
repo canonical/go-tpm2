@@ -32,7 +32,7 @@ func (s *attestationSuite) checkAttestCommon(c *C, attest *Attest, tag StructTag
 	c.Check(attest.Type, Equals, tag)
 
 	if sign == nil {
-		c.Assert(attest.QualifiedSigner.IsHandle(), testutil.IsTrue)
+		c.Assert(attest.QualifiedSigner.Type(), Equals, NameTypeHandle)
 		c.Check(attest.QualifiedSigner.Handle(), Equals, HandleNull)
 	} else {
 		_, _, qn, err := s.TPM.ReadPublic(sign)
