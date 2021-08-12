@@ -284,10 +284,6 @@ func (t *TPMContext) GetCapabilityTPMProperty(property Property, sessions ...Ses
 	return props[0].Value, nil
 }
 
-// TPMManufacturer corresponds to the TPM manufacturer and is returned when querying the value PropertyManufacturer with
-// TPMContext.GetCapabilityTPMProperties
-type TPMManufacturer uint32
-
 // GetManufacturer is a convenience function for TPMContext.GetCapability that returns the ID of
 // the TPM manufacturer.
 func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (manufacturer TPMManufacturer, err error) {
