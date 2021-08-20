@@ -90,7 +90,7 @@ func (s *capabilitiesSuite) TestGetCapabilityAlgs1(c *C) {
 			{Alg: AlgorithmECDSA, Properties: AttrAsymmetric | AttrSigning},
 			{Alg: AlgorithmECDH, Properties: AttrAsymmetric | AttrMethod},
 			{Alg: AlgorithmECDAA, Properties: AttrAsymmetric | AttrSigning},
-			{Alg: AlgorithmECSCHNORR, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECSchnorr, Properties: AttrAsymmetric | AttrSigning},
 			{Alg: AlgorithmECC, Properties: AttrAsymmetric | AttrObject},
 			{Alg: AlgorithmSymCipher, Properties: AttrObject}}})
 }
@@ -108,7 +108,7 @@ func (s *capabilitiesSuite) TestGetCapabilityAlgs2(c *C) {
 			{Alg: AlgorithmECDSA, Properties: AttrAsymmetric | AttrSigning},
 			{Alg: AlgorithmECDH, Properties: AttrAsymmetric | AttrMethod},
 			{Alg: AlgorithmECDAA, Properties: AttrAsymmetric | AttrSigning},
-			{Alg: AlgorithmECSCHNORR, Properties: AttrAsymmetric | AttrSigning},
+			{Alg: AlgorithmECSchnorr, Properties: AttrAsymmetric | AttrSigning},
 			{Alg: AlgorithmECC, Properties: AttrAsymmetric | AttrObject},
 			{Alg: AlgorithmSymCipher, Properties: AttrObject}}})
 }

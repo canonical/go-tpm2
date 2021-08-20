@@ -594,7 +594,7 @@ func (a AlgorithmId) String() string {
 		return "TPM_ALG_ECDAA"
 	case AlgorithmSM2:
 		return "TPM_ALG_SM2"
-	case AlgorithmECSCHNORR:
+	case AlgorithmECSchnorr:
 		return "TPM_ALG_ECSCHNORR"
 	case AlgorithmECMQV:
 		return "TPM_ALG_ECMQV"

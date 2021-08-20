@@ -246,7 +246,7 @@ func (s SigSchemeId) IsValid() bool {
 	case SigSchemeAlgECDSA:
 	case SigSchemeAlgECDAA:
 	case SigSchemeAlgSM2:
-	case SigSchemeAlgECSCHNORR:
+	case SigSchemeAlgECSchnorr:
 	default:
 		return false
 	}
@@ -261,5 +261,5 @@ const (
 	SigSchemeAlgECDSA     SigSchemeId = SigSchemeId(AlgorithmECDSA)     // TPM_ALG_ECDSA
 	SigSchemeAlgECDAA     SigSchemeId = SigSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
 	SigSchemeAlgSM2       SigSchemeId = SigSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
-	SigSchemeAlgECSCHNORR SigSchemeId = SigSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+	SigSchemeAlgECSchnorr SigSchemeId = SigSchemeId(AlgorithmECSchnorr) // TPM_ALG_ECSCHNORR
 )

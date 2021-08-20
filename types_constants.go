@@ -45,7 +45,7 @@ const (
 	AlgorithmECDH           AlgorithmId = 0x0019 // TPM_ALG_ECDH
 	AlgorithmECDAA          AlgorithmId = 0x001a // TPM_ALG_ECDAA
 	AlgorithmSM2            AlgorithmId = 0x001b // TPM_ALG_SM2
-	AlgorithmECSCHNORR      AlgorithmId = 0x001c // TPM_ALG_ECSCHNORR
+	AlgorithmECSchnorr      AlgorithmId = 0x001c // TPM_ALG_ECSCHNORR
 	AlgorithmECMQV          AlgorithmId = 0x001d // TPM_ALG_ECMQV
 	AlgorithmKDF1_SP800_56A AlgorithmId = 0x0020 // TPM_ALG_KDF1_SP800_56A
 	AlgorithmKDF2           AlgorithmId = 0x0021 // TPM_ALG_KDF2

@@ -187,7 +187,7 @@ type SigSchemeRSAPSS SchemeHash
 type SigSchemeECDSA SchemeHash
 type SigSchemeECDAA SchemeECDAA
 type SigSchemeSM2 SchemeHash
-type SigSchemeECSCHNORR SchemeHash
+type SigSchemeECSchnorr SchemeHash
 
 // SigSchemeU is a union type that corresponds to the TPMU_SIG_SCHEME type. The
 // selector type is SigSchemeId. The mapping of selector value to fields is as follows:
@@ -196,7 +196,7 @@ type SigSchemeECSCHNORR SchemeHash
 //  - SigSchemeAlgECDSA: ECDSA
 //  - SigSchemeAlgECDAA: ECDAA
 //  - SigSchemeAlgSM2: SM2
-//  - SigSchemeAlgECSCHNORR: ECSCHNORR
+//  - SigSchemeAlgECSchnorr: ECSchnorr
 //  - SigSchemeAlgHMAC: HMAC
 //  - SigSchemeAlgNull: none
 type SigSchemeU struct {
@@ -205,7 +205,7 @@ type SigSchemeU struct {
 	ECDSA     *SigSchemeECDSA
 	ECDAA     *SigSchemeECDAA
 	SM2       *SigSchemeSM2
-	ECSCHNORR *SigSchemeECSCHNORR
+	ECSchnorr *SigSchemeECSchnorr
 	HMAC      *SchemeHMAC
 }
 
@@ -221,8 +221,8 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 		return &s.ECDAA
 	case SigSchemeAlgSM2:
 		return &s.SM2
-	case SigSchemeAlgECSCHNORR:
-		return &s.ECSCHNORR
+	case SigSchemeAlgECSchnorr:
+		return &s.ECSchnorr
 	case SigSchemeAlgHMAC:
 		return &s.HMAC
 	case SigSchemeAlgNull:
@@ -251,8 +251,8 @@ func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
 		return &SchemeHash{HashAlg: s.ECDAA.HashAlg}
 	case SigSchemeAlgSM2:
 		return (*SchemeHash)(&(*s.SM2))
-	case SigSchemeAlgECSCHNORR:
-		return (*SchemeHash)(&(*s.ECSCHNORR))
+	case SigSchemeAlgECSchnorr:
+		return (*SchemeHash)(&(*s.ECSchnorr))
 	case SigSchemeAlgHMAC:
 		return (*SchemeHash)(&(*s.HMAC))
 	default:
@@ -333,7 +333,7 @@ func (s AsymSchemeId) IsValid() bool {
 	case AsymSchemeECDH:
 	case AsymSchemeECDAA:
 	case AsymSchemeSM2:
-	case AsymSchemeECSCHNORR:
+	case AsymSchemeECSchnorr:
 	case AsymSchemeECMQV:
 	default:
 		return false
@@ -352,7 +352,7 @@ func (s AsymSchemeId) HasDigest() bool {
 	case AsymSchemeECDH:
 	case AsymSchemeECDAA:
 	case AsymSchemeSM2:
-	case AsymSchemeECSCHNORR:
+	case AsymSchemeECSchnorr:
 	case AsymSchemeECMQV:
 	default:
 		return false
@@ -370,7 +370,7 @@ const (
 	AsymSchemeECDH      AsymSchemeId = AsymSchemeId(AlgorithmECDH)      // TPM_ALG_ECDH
 	AsymSchemeECDAA     AsymSchemeId = AsymSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
 	AsymSchemeSM2       AsymSchemeId = AsymSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
-	AsymSchemeECSCHNORR AsymSchemeId = AsymSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+	AsymSchemeECSchnorr AsymSchemeId = AsymSchemeId(AlgorithmECSchnorr) // TPM_ALG_ECSCHNORR
 	AsymSchemeECMQV     AsymSchemeId = AsymSchemeId(AlgorithmECMQV)     // TPM_ALG_ECMQV
 )
 
@@ -384,7 +384,7 @@ const (
 //  - AsymSchemeECDH: ECDH
 //  - AsymSchemeECDAA: ECDAA
 //  - AsymSchemeSM2: SM2
-//  - AsymSchemeECSCHNORR: ECSCHNORR
+//  - AsymSchemeECSchnorr: ECSchnorr
 //  - AsymSchemeECMQV: ECMQV
 //  - AsymSchemeNull: none
 type AsymSchemeU struct {
@@ -396,7 +396,7 @@ type AsymSchemeU struct {
 	ECDH      *KeySchemeECDH
 	ECDAA     *SigSchemeECDAA
 	SM2       *SigSchemeSM2
-	ECSCHNORR *SigSchemeECSCHNORR
+	ECSchnorr *SigSchemeECSchnorr
 	ECMQV     *KeySchemeECMQV
 }
 
@@ -418,8 +418,8 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 		return &s.ECDAA
 	case AsymSchemeSM2:
 		return &s.SM2
-	case AsymSchemeECSCHNORR:
-		return &s.ECSCHNORR
+	case AsymSchemeECSchnorr:
+		return &s.ECSchnorr
 	case AsymSchemeECMQV:
 		return &s.ECMQV
 	case AsymSchemeNull:
@@ -452,8 +452,8 @@ func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
 		return &SchemeHash{HashAlg: s.ECDAA.HashAlg}
 	case AsymSchemeSM2:
 		return (*SchemeHash)(&(*s.SM2))
-	case AsymSchemeECSCHNORR:
-		return (*SchemeHash)(&(*s.ECSCHNORR))
+	case AsymSchemeECSchnorr:
+		return (*SchemeHash)(&(*s.ECSchnorr))
 	case AsymSchemeECMQV:
 		return (*SchemeHash)(&(*s.ECMQV))
 	default:
@@ -513,7 +513,7 @@ const (
 	ECCSchemeECDH      ECCSchemeId = ECCSchemeId(AlgorithmECDH)      // TPM_ALG_ECDH
 	ECCSchemeECDAA     ECCSchemeId = ECCSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
 	ECCSchemeSM2       ECCSchemeId = ECCSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
-	ECCSchemeECSCHNORR ECCSchemeId = ECCSchemeId(AlgorithmECSCHNORR) // TPM_ALG_ECSCHNORR
+	ECCSchemeECSchnorr ECCSchemeId = ECCSchemeId(AlgorithmECSchnorr) // TPM_ALG_ECSCHNORR
 	ECCSchemeECMQV     ECCSchemeId = ECCSchemeId(AlgorithmECMQV)     // TPM_ALG_ECMQV
 )
 
@@ -543,7 +543,7 @@ type SignatureRSAPSS SignatureRSA
 type SignatureECDSA SignatureECC
 type SignatureECDAA SignatureECC
 type SignatureSM2 SignatureECC
-type SignatureECSCHNORR SignatureECC
+type SignatureECSchnorr SignatureECC
 
 // SignatureU is a union type that corresponds to TPMU_SIGNATURE. The selector
 // type is SigSchemeId. The mapping of selector values to fields is as follows:
@@ -552,7 +552,7 @@ type SignatureECSCHNORR SignatureECC
 //  - SigSchemeAlgECDSA: ECDSA
 //  - SigSchemeAlgECDAA: ECDAA
 //  - SigSchemeAlgSM2: SM2
-//  - SigSchemeAlgECSCHNORR: ECSCHNORR
+//  - SigSchemeAlgECSchnorr: ECSchnorr
 //  - SigSchemeAlgHMAC: HMAC
 //  - SigSchemeAlgNull: none
 type SignatureU struct {
@@ -561,7 +561,7 @@ type SignatureU struct {
 	ECDSA     *SignatureECDSA
 	ECDAA     *SignatureECDAA
 	SM2       *SignatureSM2
-	ECSCHNORR *SignatureECSCHNORR
+	ECSchnorr *SignatureECSchnorr
 	HMAC      *TaggedHash
 }
 
@@ -577,8 +577,8 @@ func (s *SignatureU) Select(selector reflect.Value) interface{} {
 		return &s.ECDAA
 	case SigSchemeAlgSM2:
 		return &s.SM2
-	case SigSchemeAlgECSCHNORR:
-		return &s.ECSCHNORR
+	case SigSchemeAlgECSchnorr:
+		return &s.ECSchnorr
 	case SigSchemeAlgHMAC:
 		return &s.HMAC
 	case SigSchemeAlgNull:
@@ -607,8 +607,8 @@ func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
 		return &SchemeHash{HashAlg: s.ECDAA.Hash}
 	case SigSchemeAlgSM2:
 		return &SchemeHash{HashAlg: s.SM2.Hash}
-	case SigSchemeAlgECSCHNORR:
-		return &SchemeHash{HashAlg: s.ECSCHNORR.Hash}
+	case SigSchemeAlgECSchnorr:
+		return &SchemeHash{HashAlg: s.ECSchnorr.Hash}
 	case SigSchemeAlgHMAC:
 		return &SchemeHash{HashAlg: s.HMAC.HashAlg}
 	default:

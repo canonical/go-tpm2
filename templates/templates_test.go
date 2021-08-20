@@ -796,14 +796,14 @@ func (s *templatesSuite) TestNewRestrictedECCSigningKeyDifferentNameAlg(c *C) {
 }
 
 func (s *templatesSuite) TestNewRestrictedECCSigningKeyDifferentScheme(c *C) {
-	s.RequireAlgorithm(c, tpm2.AlgorithmECSCHNORR)
+	s.RequireAlgorithm(c, tpm2.AlgorithmECSchnorr)
 
 	s.testNewRestrictedECCSigningKey(c, &testNewRestrictedECCSigningKeyData{
 		nameAlg: tpm2.HashAlgorithmNull,
 		scheme: &tpm2.ECCScheme{
-			Scheme: tpm2.ECCSchemeECSCHNORR,
+			Scheme: tpm2.ECCSchemeECSchnorr,
 			Details: &tpm2.AsymSchemeU{
-				ECSCHNORR: &tpm2.SigSchemeECSCHNORR{HashAlg: tpm2.HashAlgorithmSHA1}}},
+				ECSchnorr: &tpm2.SigSchemeECSchnorr{HashAlg: tpm2.HashAlgorithmSHA1}}},
 		curve: tpm2.ECCCurveNIST_P256,
 		expected: &tpm2.Public{
 			Type:    tpm2.ObjectTypeECC,
@@ -813,9 +813,9 @@ func (s *templatesSuite) TestNewRestrictedECCSigningKeyDifferentScheme(c *C) {
 				ECCDetail: &tpm2.ECCParams{
 					Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 					Scheme: tpm2.ECCScheme{
-						Scheme: tpm2.ECCSchemeECSCHNORR,
+						Scheme: tpm2.ECCSchemeECSchnorr,
 						Details: &tpm2.AsymSchemeU{
-							ECSCHNORR: &tpm2.SigSchemeECSCHNORR{HashAlg: tpm2.HashAlgorithmSHA1}}},
+							ECSchnorr: &tpm2.SigSchemeECSchnorr{HashAlg: tpm2.HashAlgorithmSHA1}}},
 					CurveID: tpm2.ECCCurveNIST_P256,
 					KDF:     tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull}}}}})
 }
