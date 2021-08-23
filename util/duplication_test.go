@@ -10,7 +10,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"math/big"
 
 	. "gopkg.in/check.v1"
 
@@ -18,13 +17,6 @@ import (
 	"github.com/canonical/go-tpm2/testutil"
 	. "github.com/canonical/go-tpm2/util"
 )
-
-func zeroExtendBytes(x *big.Int, l int) (out []byte) {
-	out = make([]byte, l)
-	tmp := x.Bytes()
-	copy(out[len(out)-len(tmp):], tmp)
-	return
-}
 
 type duplicationSuite struct{}
 
@@ -38,7 +30,7 @@ type testCreateUnwrapDuplicationObjectData struct {
 }
 
 func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCreateUnwrapDuplicationObjectData) {
-	public, sensitiveIn := NewSealedObject(tpm2.HashAlgorithmSHA256, []byte("foo"), []byte("super secret data"))
+	public, sensitiveIn := NewExternalSealedObject(tpm2.HashAlgorithmSHA256, []byte("foo"), []byte("super secret data"))
 
 	encryptionKey, duplicate, symSeed, err := CreateDuplicationObjectFromSensitive(sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
 	c.Check(err, IsNil)
@@ -145,8 +137,8 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithOuterWrapperECC1
 			},
 			Unique: &tpm2.PublicIDU{
 				ECC: &tpm2.ECCPoint{
-					X: zeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
-					Y: zeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
+					X: ZeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
+					Y: ZeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
 				},
 			},
 		},
@@ -177,8 +169,8 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithOuterWrapperECCA
 			},
 			Unique: &tpm2.PublicIDU{
 				ECC: &tpm2.ECCPoint{
-					X: zeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
-					Y: zeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
+					X: ZeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
+					Y: ZeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
 				},
 			},
 		},
@@ -213,8 +205,8 @@ func (s *duplicationSuite) TestCreateUnwrapDuplicationObjectWithBothWrappers(c *
 			},
 			Unique: &tpm2.PublicIDU{
 				ECC: &tpm2.ECCPoint{
-					X: zeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
-					Y: zeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
+					X: ZeroExtendBytes(privKey.X, elliptic.P256().Params().BitSize/8),
+					Y: ZeroExtendBytes(privKey.Y, elliptic.P256().Params().BitSize/8),
 				},
 			},
 		},

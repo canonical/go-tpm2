@@ -331,7 +331,7 @@ func (s *objectSuite) TestLoadExternalWithPrivate(c *C) {
 
 	authValue := []byte("1234")
 
-	public, sensitive := testutil.NewSealedObject(authValue, key)
+	public, sensitive := testutil.NewExternalSealedObject(authValue, key)
 
 	object := s.testLoadExternal(c, &testLoadExternalData{
 		inPrivate: sensitive,

@@ -8,13 +8,13 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/binary"
 	"io"
 
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 	. "github.com/canonical/go-tpm2/util"
 )
@@ -38,37 +38,20 @@ func (s *policySuite) testPolicySigned(c *C, data *testPolicySignedData) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
 
-	h := crypto.SHA256.New()
-	binary.Write(h, binary.BigEndian, uint32(0))
-	h.Write(data.policyRef)
-	digest := h.Sum(nil)
-
-	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest)
-	c.Check(err, IsNil)
-
-	signature := &tpm2.Signature{
+	sig := &tpm2.Signature{
 		SigAlg: tpm2.SigSchemeAlgRSASSA,
 		Signature: &tpm2.SignatureU{
 			RSASSA: &tpm2.SignatureRSASSA{
 				Hash: tpm2.HashAlgorithmSHA256,
-				Sig:  sig}}}
+				Sig:  make([]byte, 256)}}}
 
-	pub := &tpm2.Public{
-		Type:    tpm2.ObjectTypeRSA,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
-				Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
-				KeyBits:   2048,
-				Exponent:  0}},
-		Unique: &tpm2.PublicIDU{RSA: key.N.Bytes()}}
+	pub := NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+
 	pubKey, err := s.TPM.LoadExternal(nil, pub, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypeTrial, nil, data.alg)
-	_, _, err = s.TPM.PolicySigned(pubKey, session, false, nil, data.policyRef, 0, signature)
+	_, _, err = s.TPM.PolicySigned(pubKey, session, false, nil, data.policyRef, 0, sig)
 	c.Check(err, IsNil)
 
 	expectedDigest, err := s.TPM.PolicyGetDigest(session)

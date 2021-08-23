@@ -41,3 +41,27 @@ func NewSealedObjectTemplate() *tpm2.Public {
 	template.Attrs |= tpm2.AttrNoDA
 	return template
 }
+
+// NewECCStorageKeyTemplate is a wrapper around templates.NewECCStorageKeyWithDefaults
+// that defines the noDA attribute.
+func NewECCStorageKeyTemplate() *tpm2.Public {
+	template := templates.NewECCStorageKeyWithDefaults()
+	template.Attrs |= tpm2.AttrNoDA
+	return template
+}
+
+// NewRestrictedECCSigningKeyTemplate is a wrapper around templates.NewRestrictedECCSigningKey
+// that defines the noDA attribute, SHA256 for the name algorithm and NIST-P256 as the curve.
+func NewRestrictedECCSigningKeyTemplate(scheme *tpm2.ECCScheme) *tpm2.Public {
+	template := templates.NewRestrictedECCSigningKey(tpm2.HashAlgorithmSHA256, scheme, tpm2.ECCCurveNIST_P256)
+	template.Attrs |= tpm2.AttrNoDA
+	return template
+}
+
+// NewECCKeyTemplate is a wrapper around templates.NewECCKey that defines the noDA attribute,
+// SHA256 for the name algorithm and NIST-P256 as the curve.
+func NewECCKeyTemplate(usage templates.KeyUsage, scheme *tpm2.ECCScheme) *tpm2.Public {
+	template := templates.NewECCKey(tpm2.HashAlgorithmSHA256, usage, scheme, tpm2.ECCCurveNIST_P256)
+	template.Attrs |= tpm2.AttrNoDA
+	return template
+}

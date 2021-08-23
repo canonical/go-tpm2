@@ -12,10 +12,10 @@ import (
 	"github.com/canonical/go-tpm2/util"
 )
 
-// NewSealedObject is a wrapper around util.NewSealedObject that sets
+// NewExternalSealedObject is a wrapper around util.NewExternalSealedObject that sets
 // the noDA attribute.
-func NewSealedObject(authValue tpm2.Auth, data []byte) (*tpm2.Public, *tpm2.Sensitive) {
-	pub, sensitive := util.NewSealedObject(tpm2.HashAlgorithmSHA256, authValue, data)
+func NewExternalSealedObject(authValue tpm2.Auth, data []byte) (*tpm2.Public, *tpm2.Sensitive) {
+	pub, sensitive := util.NewExternalSealedObject(tpm2.HashAlgorithmSHA256, authValue, data)
 	pub.Attrs |= tpm2.AttrNoDA
 
 	return pub, sensitive
@@ -32,4 +32,13 @@ func NewExternalRSAStoragePublicKey(key *rsa.PublicKey) *tpm2.Public {
 		Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}
 
 	return pub
+}
+
+// NewExternalHMACKey is a wrapper around util.NewExternalHMACKey that sets the
+// noDA attribute.
+func NewExternalHMACKey(authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
+	pub, sensitive := util.NewExternalHMACKey(tpm2.HashAlgorithmSHA256, tpm2.HashAlgorithmSHA256, authValue, key)
+	pub.Attrs |= tpm2.AttrNoDA
+
+	return pub, sensitive
 }

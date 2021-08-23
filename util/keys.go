@@ -76,7 +76,7 @@ func NewExternalECCPublicKeyWithDefaults(usage templates.KeyUsage, key *ecdsa.Pu
 	return NewExternalECCPublicKey(tpm2.HashAlgorithmNull, usage, nil, key)
 }
 
-// NewSealedObject creates both the public and sensitive areas for a
+// NewExternalSealedObject creates both the public and sensitive areas for a
 // sealed object containing the supplied data, with the specified name
 // algorithm and authorization value. If nameAlgorithm is HashAlgorithmNull,
 // then HashAlgorithmSHA256 is used.
@@ -90,7 +90,7 @@ func NewExternalECCPublicKeyWithDefaults(usage templates.KeyUsage, key *ecdsa.Pu
 // for the user auth role using the sensitive area's authorization value. In order
 // to require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
-func NewSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, data []byte) (*tpm2.Public, *tpm2.Sensitive) {
+func NewExternalSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, data []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	pub := templates.NewSealedObject(nameAlg)
 	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
 
@@ -112,4 +112,59 @@ func NewSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, data []b
 	pub.Unique = &tpm2.PublicIDU{KeyedHash: h.Sum(nil)}
 
 	return pub, sensitive
+}
+
+// NewExternalHMACKey creates both the public and sensitive areas for the
+// supplied HMAC key with the specified name algorithm, scheme algorithm
+// and auth value. If nameAlg is HashAlgorithmNull, then HashAlgorithmSHA256
+// is used. If schemeAlg is HashAlgorithmNull, then nameAlg is used.
+//
+// It will panic if authValue is larger than the size of the name algorithm.
+//
+// The returned public and sensitive areas can be made into a duplication
+// object with CreateDuplicationObjectFromSensitive for importing into a TPM.
+//
+// The public area has the AttrUserWithAuth set in order to permit authentication
+// for the user auth role using the sensitive area's authorization value. In order
+// to require authentication for the user auth role using an authorization policy,
+// remove the AttrUserWithAuth attribute.
+func NewExternalHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
+	pub := templates.NewHMACKey(nameAlg, schemeAlg)
+	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
+
+	if len(authValue) > pub.NameAlg.Size() {
+		panic("authValue too large")
+	}
+
+	sensitive := &tpm2.Sensitive{
+		Type:      tpm2.ObjectTypeKeyedHash,
+		AuthValue: make(tpm2.Auth, pub.NameAlg.Size()),
+		SeedValue: make(tpm2.Digest, pub.NameAlg.Size()),
+		Sensitive: &tpm2.SensitiveCompositeU{Bits: key}}
+	copy(sensitive.AuthValue, authValue)
+	rand.Read(sensitive.SeedValue)
+
+	h := pub.NameAlg.NewHash()
+	h.Write(sensitive.SeedValue)
+	h.Write(sensitive.Sensitive.Bits)
+	pub.Unique = &tpm2.PublicIDU{KeyedHash: h.Sum(nil)}
+
+	return pub, sensitive
+}
+
+// NewExternalHMACKeyWithDefaults creates both the public and sensitive
+// areas for the supplied HMAC key with the specified auth value and with
+// SHA256 as both the name and scheme algorithm.
+//
+// It will panic if authValue is larger than the size of the name algorithm.
+//
+// The returned public and sensitive areas can be made into a duplication
+// object with CreateDuplicationObjectFromSensitive for importing into a TPM.
+//
+// The public area has the AttrUserWithAuth set in order to permit authentication
+// for the user auth role using the sensitive area's authorization value. In order
+// to require authentication for the user auth role using an authorization policy,
+// remove the AttrUserWithAuth attribute.
+func NewExternalHMACKeyWithDefaults(authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
+	return NewExternalHMACKey(tpm2.HashAlgorithmNull, tpm2.HashAlgorithmNull, authValue, key)
 }
