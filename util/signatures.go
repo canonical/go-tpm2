@@ -19,59 +19,6 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// SelectSigScheme selects a signature scheme to use to create a signature
-// with the private key associated with the supplied public area. If pub has
-// a signature scheme defined then that scheme is returned, else the supplied
-// scheme is returned instead.
-func SelectSigScheme(pub *tpm2.Public, scheme *tpm2.SigScheme) (*tpm2.SigScheme, error) {
-	switch pub.Type {
-	case tpm2.ObjectTypeRSA:
-		switch pub.Params.RSADetail.Scheme.Scheme {
-		case tpm2.RSASchemeNull:
-			return scheme, nil
-		case tpm2.RSASchemeRSASSA:
-			return &tpm2.SigScheme{
-				Scheme: tpm2.SigSchemeAlgRSASSA,
-				Details: &tpm2.SigSchemeU{
-					RSASSA: pub.Params.RSADetail.Scheme.Details.RSASSA}}, nil
-		case tpm2.RSASchemeRSAPSS:
-			return &tpm2.SigScheme{
-				Scheme: tpm2.SigSchemeAlgRSAPSS,
-				Details: &tpm2.SigSchemeU{
-					RSAPSS: pub.Params.RSADetail.Scheme.Details.RSAPSS}}, nil
-		default:
-			return nil, errors.New("public area has unsupported RSA scheme")
-		}
-	case tpm2.ObjectTypeECC:
-		switch pub.Params.ECCDetail.Scheme.Scheme {
-		case tpm2.ECCSchemeNull:
-			return scheme, nil
-		case tpm2.ECCSchemeECDSA:
-			return &tpm2.SigScheme{
-				Scheme: tpm2.SigSchemeAlgECDSA,
-				Details: &tpm2.SigSchemeU{
-					ECDSA: pub.Params.ECCDetail.Scheme.Details.ECDSA}}, nil
-		default:
-			return nil, errors.New("public area has unsupported ECC scheme")
-		}
-	case tpm2.ObjectTypeKeyedHash:
-		switch pub.Params.KeyedHashDetail.Scheme.Scheme {
-		case tpm2.KeyedHashSchemeNull:
-			return scheme, nil
-		case tpm2.KeyedHashSchemeHMAC:
-			return &tpm2.SigScheme{
-				Scheme: tpm2.SigSchemeAlgHMAC,
-				Details: &tpm2.SigSchemeU{
-					HMAC: pub.Params.KeyedHashDetail.Scheme.Details.HMAC}}, nil
-		default:
-			return nil, errors.New("public area has unsupported keyed hash scheme")
-		}
-	default:
-		return nil, errors.New("invalid object type")
-	}
-
-}
-
 // Sign creates a signature of the supplied digest using the supplied private key and
 // signature scheme. Note that only RSA-SSA, RSA-PSS, ECDSA and HMAC signatures can
 // be created. The returned signature can be verified on a TPM using the associated
