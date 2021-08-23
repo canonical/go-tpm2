@@ -5,14 +5,9 @@
 package tpm2_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/rsa"
-	"math/big"
-
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
@@ -51,34 +46,6 @@ func (s *attestationSuite) checkAttestCommon(c *C, attest *Attest, tag StructTag
 	}
 }
 
-func (s *attestationSuite) checkSignature(c *C, signature *Signature, digest []byte, key *Public) {
-	// TODO: Share this with cmds_signature_test.go
-
-	c.Assert(key.Type, testutil.InSlice(Equals), []ObjectTypeId{ObjectTypeRSA, ObjectTypeECC})
-
-	pubKey := key.Public()
-
-	switch key.Type {
-	case ObjectTypeRSA:
-		c.Assert(signature.SigAlg, testutil.InSlice(Equals), []SigSchemeId{SigSchemeAlgRSASSA, SigSchemeAlgRSAPSS})
-		switch signature.SigAlg {
-		case SigSchemeAlgRSASSA:
-			sig := (*SignatureRSA)(signature.Signature.RSASSA)
-			c.Assert(sig.Hash.Available(), testutil.IsTrue)
-			c.Check(rsa.VerifyPKCS1v15(pubKey.(*rsa.PublicKey), sig.Hash.GetHash(), digest, sig.Sig), IsNil)
-		case SigSchemeAlgRSAPSS:
-			sig := (*SignatureRSA)(signature.Signature.RSAPSS)
-			c.Assert(sig.Hash.Available(), testutil.IsTrue)
-			c.Check(rsa.VerifyPSS(pubKey.(*rsa.PublicKey), sig.Hash.GetHash(), digest, sig.Sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}), IsNil)
-		}
-	case ObjectTypeECC:
-		c.Assert(signature.SigAlg, Equals, SigSchemeAlgECDSA)
-		sig := signature.Signature.ECDSA
-		c.Check(ecdsa.Verify(pubKey.(*ecdsa.PublicKey), digest, new(big.Int).SetBytes(sig.SignatureR), new(big.Int).SetBytes(sig.SignatureS)), testutil.IsTrue)
-	}
-
-}
-
 func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign ResourceContext, attest *Attest, scheme *SigScheme) {
 	c.Assert(signature, NotNil)
 
@@ -88,14 +55,12 @@ func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign
 		c.Check(signature.SigAlg, Equals, scheme.Scheme)
 		c.Check(signature.Signature.Any(signature.SigAlg).HashAlg, Equals, scheme.Details.Any(scheme.Scheme).HashAlg)
 
-		h := scheme.Details.Any(scheme.Scheme).HashAlg.NewHash()
-		mu.MustMarshalToWriter(h, attest)
-		digest := h.Sum(nil)
-
 		pub, _, _, err := s.TPM.ReadPublic(sign)
 		c.Assert(err, IsNil)
 
-		s.checkSignature(c, signature, digest, pub)
+		ok, err := util.VerifyAttestationSignature(pub.Public(), attest, signature)
+		c.Check(err, IsNil)
+		c.Check(ok, testutil.IsTrue)
 	}
 }
 

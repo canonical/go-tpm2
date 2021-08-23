@@ -25,7 +25,7 @@ type signaturesSuite struct {
 }
 
 func (s *signaturesSuite) SetUpSuite(c *C) {
-	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy
 }
 
 var _ = Suite(&signaturesSuite{})
@@ -634,4 +634,19 @@ func (s *signaturesSuite) TestPolicyAuthorizeWithPolicyRef(c *C) {
 				RSASSA: &tpm2.SigSchemeRSASSA{
 					HashAlg: tpm2.HashAlgorithmSHA256}}},
 		policyRef: []byte("ref")})
+}
+
+func (s *signaturesSuite) TestVerifyAttestationSignature(c *C) {
+	key := s.CreatePrimary(c, tpm2.HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil))
+
+	quoted, sig, err := s.TPM.Quote(key, nil, nil, tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7}}}, nil)
+	c.Assert(err, IsNil)
+
+	pub, _, _, err := s.TPM.ReadPublic(key)
+	c.Assert(err, IsNil)
+
+	ok, err := VerifyAttestationSignature(pub.Public(), quoted, sig)
+	c.Check(err, IsNil)
+	c.Check(ok, testutil.IsTrue)
+
 }
