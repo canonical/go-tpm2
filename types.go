@@ -6,7 +6,8 @@ package tpm2
 
 import (
 	"errors"
-	"sort"
+
+	"github.com/canonical/go-tpm2/mu"
 )
 
 // TPMManufacturer corresponds to the TPM manufacturer and is returned when querying the value PropertyManufacturer with
@@ -68,15 +69,15 @@ func (v PCRValues) ToListAndSelection() (pcrs PCRSelectionList, digests DigestLi
 // SetValuesFromListAndSelection sets PCR values from the supplied list of PCR selections and list
 // of values.
 func (v PCRValues) SetValuesFromListAndSelection(pcrs PCRSelectionList, digests DigestList) (int, error) {
+	// Copy the selections so that each selection is ordered correctly
+	mu.MustCopyValue(&pcrs, pcrs)
+
 	i := 0
 	for _, p := range pcrs {
 		if _, ok := v[p.Hash]; !ok {
 			v[p.Hash] = make(map[int]Digest)
 		}
-		sel := make([]int, len(p.Select))
-		copy(sel, p.Select)
-		sort.Ints(sel)
-		for _, s := range sel {
+		for _, s := range p.Select {
 			if len(digests) == 0 {
 				return 0, errors.New("insufficient digests")
 			}
@@ -98,17 +99,6 @@ func (v PCRValues) SetValue(alg HashAlgorithmId, pcr int, digest Digest) {
 		v[alg] = make(map[int]Digest)
 	}
 	v[alg][pcr] = digest
-}
-
-// CreatePCRValuesFromListAndSelection constructs a new set of PCR values from the
-// supplied list of PCR selections and list of PCR values.
-func CreatePCRValuesFromListAndSelection(pcrs PCRSelectionList, digests DigestList) (PCRValues, int, error) {
-	out := make(PCRValues)
-	n, err := out.SetValuesFromListAndSelection(pcrs, digests)
-	if err != nil {
-		return nil, 0, err
-	}
-	return out, n, nil
 }
 
 // PublicTemplate exists to allow either Public or PublicDerived structures
