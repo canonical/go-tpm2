@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/canonical/go-tpm2"
 	"github.com/snapcore/snapd/osutil"
 	"github.com/snapcore/snapd/osutil/sys"
 	"github.com/snapcore/snapd/snap"
@@ -27,6 +26,10 @@ import (
 	"golang.org/x/xerrors"
 
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/linux"
+	"github.com/canonical/go-tpm2/mssim"
 )
 
 // TPMFeatureFlags indicates the TPM features required by a test. It allows the test
@@ -334,13 +337,13 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 				}
 			}()
 
-			tcti, err := tpm2.OpenMssim("", MssimPort)
+			tcti, err := mssim.OpenConnection("", MssimPort)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Cannot open TPM simulator connection for shutdown: %v\n", err)
 				return
 			}
 
-			tpm, _ := tpm2.NewTPMContext(tcti)
+			tpm := tpm2.NewTPMContext(tcti)
 			if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
 				fmt.Fprintf(os.Stderr, "TPM simulator shutdown failed: %v\n", err)
 			}
@@ -401,12 +404,12 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		return nil, xerrors.Errorf("cannot start simulator: %w", err)
 	}
 
-	var tcti *tpm2.TctiMssim
+	var tcti *mssim.Tcti
 	// Give the simulator 5 seconds to start up
 Loop:
 	for i := 0; ; i++ {
 		var err error
-		tcti, err = tpm2.OpenMssim("", MssimPort)
+		tcti, err = mssim.OpenConnection("", MssimPort)
 		switch {
 		case err != nil && i == 4:
 			return nil, xerrors.Errorf("cannot open simulator connection: %w", err)
@@ -417,7 +420,7 @@ Loop:
 		}
 	}
 
-	tpm, _ := tpm2.NewTPMContext(tcti)
+	tpm := tpm2.NewTPMContext(tcti)
 	defer tpm.Close()
 
 	if err := tpm.Startup(tpm2.StartupClear); err != nil {
@@ -436,13 +439,13 @@ func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
 		if features&PermittedTPMFeatures != features {
 			return nil, nil
 		}
-		tcti, err := tpm2.OpenTPMDevice(TPMDevicePath)
+		tcti, err := linux.OpenDevice(TPMDevicePath)
 		if err != nil {
 			return nil, err
 		}
 		return WrapTCTI(tcti, features)
 	case TPMBackendMssim:
-		tcti, err := tpm2.OpenMssim("", MssimPort)
+		tcti, err := mssim.OpenConnection("", MssimPort)
 		if err != nil {
 			return nil, err
 		}
@@ -453,7 +456,7 @@ func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
 
 // NewTCTI returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
-// the returned TCTI will wrap a *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on the port
+// the returned TCTI will wrap a *mssim.Tcti and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will wrap a
 // *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
 // this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
@@ -471,7 +474,7 @@ func NewTCTI(c *C, features TPMFeatureFlags) *TCTI {
 
 // NewTCTIT returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
-// the returned TCTI will wrap a *tpm2.TctiMssim and will correspond to a connection to the TPM simulator on the port
+// the returned TCTI will wrap a *mssim.Tcti and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will wrap a
 // *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
 // this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
@@ -499,7 +502,7 @@ func NewTCTIT(t *testing.T, features TPMFeatureFlags) *TCTI {
 // The returned TPMContext must be closed when it is no longer required.
 func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
 	tcti := NewTCTI(c, features)
-	tpm, _ := tpm2.NewTPMContext(tcti)
+	tpm := tpm2.NewTPMContext(tcti)
 	return tpm, tcti
 }
 
@@ -514,7 +517,7 @@ func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
 // close callback, which will cause the test to fail if closing doesn't succeed.
 func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (tpm *tpm2.TPMContext, tcti *TCTI, close func()) {
 	tcti = NewTCTIT(t, features)
-	tpm, _ = tpm2.NewTPMContext(tcti)
+	tpm = tpm2.NewTPMContext(tcti)
 	return tpm, tcti, func() {
 		if err := tpm.Close(); err != nil {
 			t.Errorf("close failed: %v", err)
@@ -527,7 +530,7 @@ func newSimulatorTCTI() (*TCTI, error) {
 		return nil, nil
 	}
 
-	mssim, err := tpm2.OpenMssim("", MssimPort)
+	mssim, err := mssim.OpenConnection("", MssimPort)
 	if err != nil {
 		return nil, err
 	}
@@ -572,7 +575,7 @@ func NewSimulatorTCTIT(t *testing.T) *TCTI {
 // The returned TPMContext must be closed when it is no longer required.
 func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
 	tcti := NewSimulatorTCTI(c)
-	tpm, _ := tpm2.NewTPMContext(tcti)
+	tpm := tpm2.NewTPMContext(tcti)
 	return tpm, tcti
 }
 
@@ -584,7 +587,7 @@ func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
 // close callback, which will cause the test to fail if closing doesn't succeed.
 func NewTPMSimulatorContextT(t *testing.T) (tpm *tpm2.TPMContext, tcti *TCTI, close func()) {
 	tcti = NewSimulatorTCTIT(t)
-	tpm, _ = tpm2.NewTPMContext(tcti)
+	tpm = tpm2.NewTPMContext(tcti)
 	return tpm, tcti, func() {
 		if err := tpm.Close(); err != nil {
 			t.Errorf("close failed: %v", err)
@@ -607,7 +610,7 @@ func ClearTPMUsingPlatformHierarchyT(t *testing.T, tpm *tpm2.TPMContext) {
 	}
 }
 
-func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) error {
+func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *mssim.Tcti) error {
 	if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
 		return err
 	}
@@ -619,7 +622,7 @@ func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *tpm2.TctiMssim) error {
 
 // ResetTPMSimulatorT issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
 func ResetTPMSimulatorT(t *testing.T, tpm *tpm2.TPMContext, tcti *TCTI) {
-	mssim, ok := tcti.Unwrap().(*tpm2.TctiMssim)
+	mssim, ok := tcti.Unwrap().(*mssim.Tcti)
 	if !ok {
 		t.Fatal("not a simulator")
 	}

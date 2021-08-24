@@ -881,7 +881,7 @@ func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 // be reenabled, and TPMFeatureSetCommandCodeAuditStatus is not permitted, then an
 // error will be returned.
 func (t *TCTI) Close() error {
-	tpm, _ := tpm2.NewTPMContext(t.tcti)
+	tpm := tpm2.NewTPMContext(t.tcti)
 
 	var errs []error
 
@@ -942,7 +942,7 @@ func (t *TCTI) Unwrap() tpm2.TCTI {
 // of the PermittedTPMFeatures variable before calling this, and should skip the current
 // test if it needs to use features that are not permitted.
 func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) {
-	tpm, _ := tpm2.NewTPMContext(tcti)
+	tpm := tpm2.NewTPMContext(tcti)
 
 	props, err := tpm.GetCapabilityTPMProperties(tpm2.PropertyPermanent, tpm2.CapabilityMaxProperties)
 	if err != nil {

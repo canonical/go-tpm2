@@ -2,7 +2,10 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+/*
+Package linux provides an interface for commuting with TPMs using a Linux TPM character device
+*/
+package linux
 
 import (
 	"bytes"
@@ -13,19 +16,21 @@ import (
 
 	"golang.org/x/sys/unix"
 	"golang.org/x/xerrors"
+
+	"github.com/canonical/go-tpm2"
 )
 
 const (
 	maxCommandSize int = 4096
 )
 
-// tctiDeviceLinux represents a connection to a Linux TPM character device.
-type TctiDeviceLinux struct {
+// TctiDevice represents a connection to a Linux TPM character device.
+type TctiDevice struct {
 	f   *os.File
 	buf *bytes.Reader
 }
 
-func (d *TctiDeviceLinux) readMoreData() error {
+func (d *TctiDevice) readMoreData() error {
 	fds := []unix.PollFd{unix.PollFd{Fd: int32(d.f.Fd()), Events: unix.POLLIN}}
 	_, err := unix.Ppoll(fds, nil, nil)
 	if err != nil {
@@ -46,7 +51,7 @@ func (d *TctiDeviceLinux) readMoreData() error {
 	return nil
 }
 
-func (d *TctiDeviceLinux) Read(data []byte) (int, error) {
+func (d *TctiDevice) Read(data []byte) (int, error) {
 	if d.buf == nil {
 		if err := d.readMoreData(); err != nil {
 			return 0, err
@@ -60,39 +65,40 @@ func (d *TctiDeviceLinux) Read(data []byte) (int, error) {
 	return n, err
 }
 
-func (d *TctiDeviceLinux) Write(data []byte) (int, error) {
+func (d *TctiDevice) Write(data []byte) (int, error) {
 	return d.f.Write(data)
 }
 
-func (d *TctiDeviceLinux) Close() error {
+func (d *TctiDevice) Close() error {
 	return d.f.Close()
 }
 
-func (d *TctiDeviceLinux) SetLocality(locality uint8) error {
+func (d *TctiDevice) SetLocality(locality uint8) error {
 	return errors.New("not implemented")
 }
 
-func (d *TctiDeviceLinux) MakeSticky(handle Handle, sticky bool) error {
+func (d *TctiDevice) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }
 
-// OpenTPMDevice attempts to open a connection to the Linux TPM character device at the specified path. If successful, it returns a
-// new TctiDeviceLinux instance which can be passed to NewTPMContext. Failure to open the TPM character device will result in a
-// wrapped *os.PathError being returned
-func OpenTPMDevice(path string) (*TctiDeviceLinux, error) {
+// OpenDevice attempts to open a connection to the Linux TPM character device at
+// the specified path. If successful, it returns a new TctiDevice instance which
+// can be passed to tpm2.NewTPMContext. Failure to open the TPM character device
+// will result in a *os.PathError being returned.
+func OpenDevice(path string) (*TctiDevice, error) {
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot open linux TPM device: %w", err)
+		return nil, err
 	}
 
 	s, err := f.Stat()
 	if err != nil {
-		return nil, xerrors.Errorf("cannot stat linux TPM device: %w", err)
+		return nil, err
 	}
 
 	if s.Mode()&os.ModeDevice == 0 {
 		return nil, fmt.Errorf("unsupported file mode %v", s.Mode())
 	}
 
-	return &TctiDeviceLinux{f: f}, nil
+	return &TctiDevice{f: f}, nil
 }

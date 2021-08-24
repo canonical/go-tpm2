@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mssim"
 
 	. "gopkg.in/check.v1"
 )
@@ -120,7 +121,7 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 		})
 	case b.TCTI != nil:
 		// Create a TPMContext from the supplied TCTI
-		b.TPM, _ = tpm2.NewTPMContext(b.TCTI)
+		b.TPM = tpm2.NewTPMContext(b.TCTI)
 		b.AddFixtureCleanup(func(c *C) {
 			c.Check(b.TPM.Close(), IsNil)
 			b.TCTI = nil
@@ -388,7 +389,7 @@ func (b *TPMSimulatorTest) SetUpTest(c *C) {
 }
 
 // Mssim returns the underlying simulator connection.
-func (b *TPMSimulatorTest) Mssim(c *C) *tpm2.TctiMssim {
+func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Tcti {
 	var tcti tpm2.TCTI = b.TCTI
 	for {
 		wrapper, isWrapper := tcti.(TCTIWrapper)
@@ -397,8 +398,8 @@ func (b *TPMSimulatorTest) Mssim(c *C) *tpm2.TctiMssim {
 		}
 		tcti = wrapper.Unwrap()
 	}
-	c.Assert(tcti, ConvertibleTo, &tpm2.TctiMssim{})
-	return tcti.(*tpm2.TctiMssim)
+	c.Assert(tcti, ConvertibleTo, &mssim.Tcti{})
+	return tcti.(*mssim.Tcti)
 }
 
 // ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator

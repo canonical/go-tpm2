@@ -10,6 +10,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/mssim"
 	"github.com/canonical/go-tpm2/mu"
 	. "github.com/canonical/go-tpm2/testutil"
 )
@@ -446,7 +447,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
 	c.Assert(suite.TCTI, NotNil)
-	c.Check(suite.TCTI.Unwrap(), ConvertibleTo, &tpm2.TctiMssim{})
+	c.Check(suite.TCTI.Unwrap(), ConvertibleTo, &mssim.Tcti{})
 
 	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
 	c.Check(suite.TPM.ClearControl(suite.TPM.PlatformHandleContext(), true, nil), IsNil)

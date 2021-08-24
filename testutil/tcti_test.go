@@ -80,8 +80,7 @@ func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 		// The test has to call Close()
 		c.Check(s.TCTI.Unwrap().(*ignoreCloseTcti).closed, IsTrue)
 
-		tpm, _ := tpm2.NewTPMContext(s.Mssim(c))
-		s.TPM = tpm
+		s.TPM = tpm2.NewTPMContext(s.Mssim(c))
 
 		s.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
 		c.Check(s.TCTI.Unwrap().(TCTIWrapper).Unwrap().Close(), IsNil)
@@ -93,8 +92,7 @@ func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 
 func (s *tctiSuite) rawTpm(c *C) *tpm2.TPMContext {
 	c.Assert(s.TCTI, NotNil)
-	tpm, _ := tpm2.NewTPMContext(s.Mssim(c))
-	return tpm
+	return tpm2.NewTPMContext(s.Mssim(c))
 }
 
 var _ = Suite(&tctiSuite{})

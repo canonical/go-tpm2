@@ -409,33 +409,13 @@ func newTpmContext(tcti TCTI) *TPMContext {
 	return r
 }
 
-// NewTPMContext creates a new instance of TPMContext, which communicates with the TPM using the transmission interface provided
-// via the tcti parameter.
-//
-// If the tcti parameter is nil, this function will try to autodetect a TPM interface using the following order:
-//  * Linux TPM device (/dev/tpmrm0)
-//  * Linux TPM device (/dev/tpm0)
-//  * TPM simulator (localhost:2321 for the TPM command server and localhost:2322 for the platform server)
-// It will return an error if a TPM interface cannot be detected.
-//
-// If the tcti parameter is not nil, this function never returns an error.
-func NewTPMContext(tcti TCTI) (*TPMContext, error) {
-	if tcti == nil {
-		for _, path := range []string{"/dev/tpmrm0", "/dev/tpm0"} {
-			var err error
-			tcti, err = OpenTPMDevice(path)
-			if err == nil {
-				break
-			}
-		}
-	}
-	if tcti == nil {
-		tcti, _ = OpenMssim("localhost", 2321)
-	}
+// NewTPMContext creates a new instance of TPMContext, which communicates with the
+// TPM using the transmission interface provided via the tcti parameter.
+func NewTPMContext(tcti TCTI) *TPMContext {
+	t := new(TPMContext)
+	t.tcti = tcti
+	t.permanentResources = make(map[Handle]*permanentContext)
+	t.maxSubmissions = 5
 
-	if tcti == nil {
-		return nil, errors.New("cannot find TPM interface to auto-open")
-	}
-
-	return newTpmContext(tcti), nil
+	return t
 }

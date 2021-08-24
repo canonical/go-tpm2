@@ -11,18 +11,18 @@ The core type by which consumers of this package communicate with a TPM is TPMCo
 Quick start
 
 In order to create a new TPMContext that can be used to communicate with a Linux TPM character device:
- tcti, err := tpm2.OpenTPMDevice("/dev/tpm0")
+ tcti, err := linux.OpenDevice("/dev/tpm0")
  if err != nil {
 	 return err
  }
- tpm, _ := tpm2.NewTPMContext(tcti)
+ tpm := tpm2.NewTPMContext(tcti)
 
 In order to create and persist a new storage primary key:
- tcti, err := tpm2.OpenTPMDevice("/dev/tpm0")
+ tcti, err := linux.OpenDevice("/dev/tpm0")
  if err != nil {
 	return err
  }
- tpm, _ := tpm2.NewTPMContext(tcti)
+ tpm := tpm2.NewTPMContext(tcti)
 
  template = tpm2.Public{
 	Type:    tpm2.ObjectTypeRSA,
@@ -50,11 +50,11 @@ In order to create and persist a new storage primary key:
  // persistentContext is a ResourceContext corresponding to the new persistent storage primary key.
 
 In order to evict a persistent object:
- tcti, err := tpm2.OpenTPMDevice("/dev/tpm0")
+ tcti, err := linux.OpenDevice("/dev/tpm0")
  if err != nil {
 	return err
  }
- tpm, _ := tpm2.NewTPMContext(tcti)
+ tpm := tpm2.NewTPMContext(tcti)
 
  context, err := tpm.CreateResourceContextFromTPM(tpm2.Handle(0x81000001))
  if err != nil {

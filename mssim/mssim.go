@@ -2,7 +2,10 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package tpm2
+/*
+Package mssim provides an interface for commuting with a TPM simulator
+*/
+package mssim
 
 import (
 	"encoding/binary"
@@ -11,6 +14,7 @@ import (
 	"io"
 	"net"
 
+	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 
 	"golang.org/x/xerrors"
@@ -35,8 +39,8 @@ func (e PlatformCommandError) Error() string {
 	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
 }
 
-// TctiMssim represents a connection to a TPM simulator that implements the Microsoft TPM2 simulator interface.
-type TctiMssim struct {
+// Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2 simulator interface.
+type Tcti struct {
 	locality uint8 // Locality of commands submitted to the simulator on this interface
 
 	tpm      net.Conn
@@ -45,7 +49,7 @@ type TctiMssim struct {
 	r io.Reader
 }
 
-func (t *TctiMssim) Read(data []byte) (int, error) {
+func (t *Tcti) Read(data []byte) (int, error) {
 	if t.r == nil {
 		var size uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
@@ -68,7 +72,7 @@ func (t *TctiMssim) Read(data []byte) (int, error) {
 	return n, err
 }
 
-func (t *TctiMssim) Write(data []byte) (int, error) {
+func (t *Tcti) Write(data []byte) (int, error) {
 	buf := mu.MustMarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
 
 	n, err := t.tpm.Write(buf)
@@ -79,7 +83,7 @@ func (t *TctiMssim) Write(data []byte) (int, error) {
 	return n, err
 }
 
-func (t *TctiMssim) Close() (err error) {
+func (t *Tcti) Close() (err error) {
 	binary.Write(t.platform, binary.BigEndian, cmdSessionEnd)
 	binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd)
 	if e := t.platform.Close(); e != nil {
@@ -91,16 +95,16 @@ func (t *TctiMssim) Close() (err error) {
 	return err
 }
 
-func (t *TctiMssim) SetLocality(locality uint8) error {
+func (t *Tcti) SetLocality(locality uint8) error {
 	t.locality = locality
 	return nil
 }
 
-func (t *TctiMssim) MakeSticky(handle Handle, sticky bool) error {
+func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }
 
-func (t *TctiMssim) platformCommand(cmd uint32) error {
+func (t *Tcti) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
 		return xerrors.Errorf("cannot send command: %w", err)
 	}
@@ -118,24 +122,24 @@ func (t *TctiMssim) platformCommand(cmd uint32) error {
 
 // Reset submits the reset command on the platform connection, which initiates a reset of the TPM simulator and results in the
 // execution of _TPM_Init().
-func (t *TctiMssim) Reset() error {
+func (t *Tcti) Reset() error {
 	return t.platformCommand(cmdReset)
 }
 
 // Stop submits a stop command on both the TPM command and platform channels, which initiates a shutdown of the TPM simulator.
-func (t *TctiMssim) Stop() (out error) {
+func (t *Tcti) Stop() (out error) {
 	if err := binary.Write(t.platform, binary.BigEndian, cmdStop); err != nil {
 		return err
 	}
 	return binary.Write(t.tpm, binary.BigEndian, cmdStop)
 }
 
-// OpenMssim attempts to open a connection to a TPM simulator on the specified host and port. The port
-// argument corresponds to the TPM command server. The simulator will also provide a platform server on
-// port+1. If host is an empty string, it defaults to "localhost".
+// OpenConnection attempts to open a connection to a TPM simulator on the specified host and port.
+// The port argument corresponds to the TPM command server. The simulator will also provide a
+// platform server on port+1. If host is an empty string, it defaults to "localhost".
 //
-// If successful, it returns a new TctiMssim instance which can be passed to NewTPMContext.
-func OpenMssim(host string, port uint) (*TctiMssim, error) {
+// If successful, it returns a new Tcti instance which can be passed to tpm2.NewTPMContext.
+func OpenConnection(host string, port uint) (*Tcti, error) {
 	if host == "" {
 		host = "localhost"
 	}
@@ -143,7 +147,7 @@ func OpenMssim(host string, port uint) (*TctiMssim, error) {
 	tpmAddress := fmt.Sprintf("%s:%d", host, port)
 	platformAddress := fmt.Sprintf("%s:%d", host, port+1)
 
-	tcti := new(TctiMssim)
+	tcti := new(Tcti)
 	tcti.locality = 3
 
 	tpm, err := net.Dial("tcp", tpmAddress)
