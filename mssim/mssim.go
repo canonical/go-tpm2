@@ -29,17 +29,19 @@ const (
 	cmdStop           uint32 = 21
 )
 
-// PlatformCommandError corresponds to an error code in response to a platform command executed on a TPM simulator.
+// PlatformCommandError corresponds to an error code in response to a platform command
+// executed on a TPM simulator.
 type PlatformCommandError struct {
 	commandCode uint32
 	Code        uint32
 }
 
-func (e PlatformCommandError) Error() string {
+func (e *PlatformCommandError) Error() string {
 	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
 }
 
-// Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2 simulator interface.
+// Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2
+// simulator interface.
 type Tcti struct {
 	locality uint8 // Locality of commands submitted to the simulator on this interface
 
