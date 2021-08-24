@@ -3,7 +3,7 @@
 // See LICENCE file for details.
 
 /*
-Package mssim provides an interface for commuting with a TPM simulator
+Package mssim provides an interface for communicating with a TPM simulator
 */
 package mssim
 

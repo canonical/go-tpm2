@@ -3,7 +3,7 @@
 // See LICENCE file for details.
 
 /*
-Package linux provides an interface for commuting with TPMs using a Linux TPM character device
+Package linux provides an interface for communicating with TPMs using a Linux TPM character device
 */
 package linux
 
