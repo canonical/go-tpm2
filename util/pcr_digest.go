@@ -41,17 +41,16 @@ func ComputePCRDigest(alg tpm2.HashAlgorithmId, pcrs tpm2.PCRSelectionList, valu
 	return h.Sum(nil), nil
 }
 
-// ComputePCRDigestSimple computes a digest using the specified algorithm from all of the provided set
-// of PCR values. The digest is computed the same way as PCRComputeCurrentDigest as defined in the TPM
-// reference implementation. It returns the PCR selection associated with the computed digest.
-//
-// This will panic if the specified digest algorithm is not available.
-func ComputePCRDigestSimple(alg tpm2.HashAlgorithmId, values tpm2.PCRValues) (tpm2.PCRSelectionList, tpm2.Digest) {
+// ComputePCRDigestFromAllValues computes a digest using the specified algorithm from all of the
+// provided set of PCR values. The digest is computed the same way as PCRComputeCurrentDigest as
+// defined in the TPM reference implementation. It returns the PCR selection associated with the
+// computed digest.
+func ComputePCRDigestFromAllValues(alg tpm2.HashAlgorithmId, values tpm2.PCRValues) (tpm2.PCRSelectionList, tpm2.Digest, error) {
 	pcrs := values.SelectionList()
 	digest, err := ComputePCRDigest(alg, pcrs, values)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 
-	return pcrs, digest
+	return pcrs, digest, nil
 }
