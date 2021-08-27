@@ -195,9 +195,24 @@ func SignPolicyAuthorization(key crypto.PrivateKey, scheme *tpm2.SigScheme, nonc
 	return Sign(key, scheme, h.Sum(nil))
 }
 
+// ComputePolicyAuthorizeDigest computes a digest to sign from the supplied
+// authorization policy digest and policy reference. The resulting digest
+// can be signed to authorize the supplied policy with the TPM2_PolicyAuthorize
+// assertion.
+func ComputePolicyAuthorizeDigest(alg tpm2.HashAlgorithmId, approvedPolicy tpm2.Digest, policyRef tpm2.Nonce) (tpm2.Digest, error) {
+	if !alg.Available() {
+		return nil, errors.New("digest algorithm is not available")
+	}
+
+	h := alg.NewHash()
+	h.Write(approvedPolicy)
+	h.Write(policyRef)
+	return h.Sum(nil), nil
+}
+
 // PolicyAuthorize authorizes an authorization policy digest with the supplied key and
-// signature scheme. The resulting signature can be verified by the TPM in order to
-// produce a ticket that can then be supplied to a TPM2_PolicyAuthorize assertion.
+// signature scheme. The resulting digest and signature can be verified by the TPM in
+// order to produce a ticket that can then be supplied to a TPM2_PolicyAuthorize assertion.
 //
 // The digest algorithm used for the signature must match the name algorithm in
 // the public area associated with the supplied private key.
@@ -207,11 +222,7 @@ func PolicyAuthorize(key crypto.PrivateKey, scheme *tpm2.SigScheme, approvedPoli
 		return nil, nil, errors.New("digest algorithm is not available")
 	}
 
-	h := hashAlg.NewHash()
-	h.Write(approvedPolicy)
-	h.Write(policyRef)
-	digest := h.Sum(nil)
-
+	digest, _ := ComputePolicyAuthorizeDigest(hashAlg, approvedPolicy, policyRef)
 	sig, err := Sign(key, scheme, digest)
 	if err != nil {
 		return nil, nil, err
