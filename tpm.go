@@ -410,8 +410,14 @@ func newTpmContext(tcti TCTI) *TPMContext {
 }
 
 // NewTPMContext creates a new instance of TPMContext, which communicates with the
-// TPM using the transmission interface provided via the tcti parameter.
+// TPM using the transmission interface provided via the tcti parameter. The
+// transmission interface must not be nil - it is expected that the caller checks
+// the error returned from the function that is used to create it.
 func NewTPMContext(tcti TCTI) *TPMContext {
+	if tcti == nil {
+		panic("nil transmission interface")
+	}
+
 	t := new(TPMContext)
 	t.tcti = tcti
 	t.permanentResources = make(map[Handle]*permanentContext)
