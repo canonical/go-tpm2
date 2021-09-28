@@ -115,26 +115,12 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	switch {
 	case b.TPM != nil:
 		c.Assert(b.TCTI, NotNil)
-		b.AddFixtureCleanup(func(c *C) {
-			b.TCTI = nil
-			b.TPM = nil
-		})
 	case b.TCTI != nil:
 		// Create a TPMContext from the supplied TCTI
 		b.TPM = tpm2.NewTPMContext(b.TCTI)
-		b.AddFixtureCleanup(func(c *C) {
-			c.Check(b.TPM.Close(), IsNil)
-			b.TCTI = nil
-			b.TPM = nil
-		})
 	default:
 		// Create a new connection
 		b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
-		b.AddFixtureCleanup(func(c *C) {
-			c.Check(b.TPM.Close(), IsNil)
-			b.TCTI = nil
-			b.TPM = nil
-		})
 	}
 }
 
@@ -149,15 +135,21 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 // If the TCTI member is set prior to calling SetUpTest, a TPMContext is created
 // using this connection if necessary.
 //
-// Any TPMContext created by SetUpTest is closed automatically when TearDownTest
-// is called.
-//
 // If both TPM and TCTI are set prior to calling SetUpTest, then these will be
-// used by the test. In this case, the test is responsible for closing the
-// TPMContext.
+// used by the test.
+//
+// The TPMContext is closed automatically when TearDownTest is called, unless
+// the test clears the TPM member first.
 func (b *TPMTest) SetUpTest(c *C) {
 	b.BaseTest.SetUpTest(c)
 	b.initTPMContextIfNeeded(c)
+	b.AddFixtureCleanup(func(c *C) {
+		if b.TPM != nil {
+			c.Check(b.TPM.Close(), IsNil)
+		}
+		b.TCTI = nil
+		b.TPM = nil
+	})
 }
 
 // CommandLog returns a log of TPM commands that have been executed since
@@ -371,19 +363,19 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) {
 // If the TCTI member is set prior to calling SetUpTest, then a TPMContext is
 // created using this connection if necessary.
 //
-// The TPM simulator will be reset and cleared automatically when TearDownTest
-// is called.
-//
-// Any TPMContext created by SetUpTest is closed automatically when TearDownTest
-// is called.
-//
 // If the TCTI and TPM members are both set prior to calling SetUpTest, then
-// these will be used by the test. In this case, the test is responsible for
-// closing the TPMContext.
+// these will be used by the test.
+//
+// When TearDownTest is called, the TPM simulator will be reset and cleared
+// and the TPMContext will be closed, unless the test clears the TPM member
+// first.
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
 	b.initTPMSimulatorConnectionIfNeeded(c)
 	b.TPMTest.SetUpTest(c)
 	b.AddFixtureCleanup(func(c *C) {
+		if b.TPM == nil {
+			return
+		}
 		b.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
 	})
 }

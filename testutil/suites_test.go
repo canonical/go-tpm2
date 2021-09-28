@@ -201,6 +201,22 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
+	c.Check(tpm.Close(), InSlice(ErrorMatches), []string{
+		`.*use of closed network connection$`,
+		`.*file already closed$`})
+}
+
+func (s *tpmTestSuite) TestLifecycleNoCloseTPM(c *C) {
+	suite := new(TPMTest)
+
+	suite.SetUpTest(c)
+	tpm := suite.TPM
+	suite.TPM = nil
+	suite.TCTI = nil
+
+	suite.TearDownTest(c)
+	c.Check(suite.TPM, IsNil)
+	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), IsNil)
 }
 
@@ -499,6 +515,19 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	currentTime, err := tpm.ReadClock()
 	c.Assert(err, IsNil)
 	c.Check(currentTime.ClockInfo.ResetCount, Equals, uint32(0))
+}
+
+func (s *tpmSimulatorTestSuite) TestTestLifecycleNoResetAndClear(c *C) {
+	suite := new(TPMSimulatorTest)
+
+	suite.SetUpTest(c)
+	tpm := suite.TPM
+	suite.TPM = nil
+
+	suite.TearDownTest(c)
+	c.Check(suite.TPM, IsNil)
+	c.Check(suite.TCTI, IsNil)
+	c.Check(tpm.Close(), IsNil)
 }
 
 type mockTPMSimulatorTestSuite struct {
