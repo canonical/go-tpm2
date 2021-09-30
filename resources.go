@@ -253,16 +253,6 @@ func (r *resourceContext) GetAuthValue() []byte {
 	return bytes.TrimRight(r.authValue, "\x00")
 }
 
-func makePartialResourceContext(handle Handle) *resourceContext {
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &resourceContext{
-		handleContext: handleContext{
-			Type: handleContextTypePartial,
-			H:    handle,
-			N:    name}}
-}
-
 type permanentContext struct {
 	resourceContext
 }
@@ -298,7 +288,7 @@ func makeObjectContext(handle Handle, name Name, public *Public) *objectContext 
 				Data: &handleContextU{Object: public}}}}
 }
 
-func (t *TPMContext) makeObjectContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
+func (t *TPMContext) makeObjectContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
 	pub, name, _, err := t.ReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -345,7 +335,7 @@ func makeNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 				Data: &handleContextU{NV: public}}}}
 }
 
-func (t *TPMContext) makeNVIndexContextFromTPM(context ResourceContext, sessions ...SessionContext) (ResourceContext, error) {
+func (t *TPMContext) makeNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
 	pub, name, err := t.NVReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -421,61 +411,66 @@ func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext
 			Data: &handleContextU{Session: data}}}
 }
 
-// CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle. It will execute a command to read
-// the public area from the TPM in order to initialize state that is maintained on the host side. A ResourceUnavailableError error
-// will be returned if the specified handle references a resource that is currently unavailable. If this function is called without any
-// sessions, it does not benefit from any integrity protections other than a consistency cross-check that is performed on the returned
-// data to make sure that the name and public area match. Applications should consider the implications of this during subsequent use
-// of the ResourceContext. If any sessions are passed then the pubic area is read back from the TPM twice - the session is used only
-// on the second read once the name is known. This second read provides an assurance that an entity with the name of the returned
-// ResourceContext actually lives on the TPM.
-//
-// This function will panic if handle doesn't correspond to a NV index, transient object or persistent object.
-//
-// If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
-// this should be provided by calling ResourceContext.SetAuthValue.
-func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
-	switch handle.Type() {
-	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
+func (t *TPMContext) makeResourceContextFromTPM(handle HandleContext, sessions ...SessionContext) (rc ResourceContext, err error) {
+	switch handle.Handle().Type() {
+	case HandleTypeNVIndex:
+		rc, err = t.makeNVIndexContextFromTPM(handle, sessions...)
+	case HandleTypeTransient, HandleTypePersistent:
+		rc, err = t.makeObjectContextFromTPM(handle, sessions...)
 	default:
 		panic("invalid handle type")
 	}
 
-	var rc ResourceContext = makePartialResourceContext(handle)
-	var s []SessionContext
-	for i := 0; i < 2; i++ {
-		var err error
-		if handle.Type() == HandleTypeNVIndex {
-			rc, err = t.makeNVIndexContextFromTPM(rc, s...)
-		} else {
-			rc, err = t.makeObjectContextFromTPM(rc, s...)
-		}
-
-		switch {
-		case IsTPMWarning(err, WarningReferenceH0, AnyCommandCode):
-			return nil, ResourceUnavailableError{handle}
-		case IsTPMHandleError(err, ErrorHandle, AnyCommandCode, AnyHandleIndex):
-			return nil, ResourceUnavailableError{handle}
-		case err != nil:
-			return nil, err
-		}
-
-		if len(sessions) == 0 {
-			break
-		}
-		s = sessions
+	switch {
+	case IsTPMWarning(err, WarningReferenceH0, AnyCommandCode):
+		return nil, ResourceUnavailableError{handle.Handle()}
+	case IsTPMHandleError(err, ErrorHandle, AnyCommandCode, AnyHandleIndex):
+		return nil, ResourceUnavailableError{handle.Handle()}
+	case err != nil:
+		return nil, err
 	}
 
 	return rc, nil
 }
 
-// CreatePartialHandleContext creates a new HandleContext for the specified handle. The returned HandleContext is partial
-// and cannot be used in any command other than TPMContext.FlushContext.
+// CreateResourceContextFromTPM creates and returns a new ResourceContext for the
+// specified handle. It will execute a command to read the public area from the TPM
+// in order to initialize state that is maintained on the host side. A
+// ResourceUnavailableError error will be returned if the specified handle references.
 //
-// This function will panic if handle doesn't correspond to a session or transient object.
+// The public area and name returned from the TPM are checked for consistency.
+//
+// If any sessions are supplied, the public area is read from the TPM twice. The
+// second time uses the supplied sessions.
+//
+// This function will panic if handle doesn't correspond to a NV index, transient object
+// or persistent object.
+//
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization
+// value of the corresponding TPM resource, this should be provided by calling
+// ResourceContext.SetAuthValue.
+func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
+	rc, err := t.makeResourceContextFromTPM(makePartialHandleContext(handle))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sessions) == 0 {
+		return rc, nil
+	}
+
+	return t.makeResourceContextFromTPM(rc, sessions...)
+}
+
+// CreatePartialHandleContext creates a new HandleContext for the specified handle. The
+// returned HandleContext is partial and cannot be used in any command other than
+// TPMContext.FlushContext, TPMContext.ReadPublic or TPMContext.NVReadPublic.
+//
+// This function will panic if handle doesn't correspond to a session, transient or
+// persistent object, or NV index.
 func CreatePartialHandleContext(handle Handle) HandleContext {
 	switch handle.Type() {
-	case HandleTypeHMACSession, HandleTypePolicySession, HandleTypeTransient:
+	case HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypeTransient, HandleTypePersistent:
 		return makePartialHandleContext(handle)
 	default:
 		panic("invalid handle type")

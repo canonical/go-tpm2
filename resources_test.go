@@ -117,7 +117,7 @@ func (s *resourcesSuite) TestCreatePartialHandleContextTransient(c *C) {
 }
 
 func (s *resourcesSuite) TestCreatePartialHandleContextForWrongType(c *C) {
-	c.Check(func() { CreatePartialHandleContext(0x81000000) }, PanicMatches, "invalid handle type")
+	c.Check(func() { CreatePartialHandleContext(0x00000000) }, PanicMatches, "invalid handle type")
 }
 
 type testCreateObjectHandleContextFromBytesData struct {

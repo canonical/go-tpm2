@@ -311,7 +311,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 // If objectContext corresponds to a sequence object, a *TPMError with an error code of ErrorSequence will be returned.
 //
 // On success, the public part of the object is returned, along with the object's name and qualified name.
-func (t *TPMContext) ReadPublic(objectContext ResourceContext, sessions ...SessionContext) (outPublic *Public, name Name, qualifiedName Name, err error) {
+func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...SessionContext) (outPublic *Public, name Name, qualifiedName Name, err error) {
 	if err := t.RunCommand(CommandReadPublic, sessions,
 		objectContext, Delimiter,
 		Delimiter,

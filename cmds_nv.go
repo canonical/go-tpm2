@@ -153,7 +153,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 }
 
 // NVReadPublic executes the TPM2_NV_ReadPublic command to read the public area of the NV index associated with nvIndex.
-func (t *TPMContext) NVReadPublic(nvIndex ResourceContext, sessions ...SessionContext) (nvPublic *NVPublic, nvName Name, err error) {
+func (t *TPMContext) NVReadPublic(nvIndex HandleContext, sessions ...SessionContext) (nvPublic *NVPublic, nvName Name, err error) {
 	if err := t.RunCommand(CommandNVReadPublic, sessions,
 		nvIndex, Delimiter,
 		Delimiter,
