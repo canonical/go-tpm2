@@ -309,6 +309,108 @@ func (s *tctiSuite) TestHierarchyControlAllowedWithPlatform(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 }
 
+func (s *tctiSuite) TestNVReadLockAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVReadStClear),
+		Size:    8}
+	index, err := s.TPM.NVDefineSpace(s.TPM.OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.NVReadLock(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVReadLockNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVReadStClear),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	c.Check(s.TPM.NVReadLock(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVReadLockNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVReadStClear),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	err = s.TPM.NVReadLock(index, index, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_ReadLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
+}
+
+func (s *tctiSuite) TestNVWriteLockStClearAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVWriteStClear),
+		Size:    8}
+	index, err := s.TPM.NVDefineSpace(s.TPM.OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVWriteLockStClearNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVWriteStClear),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVWriteLockStClearNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVWriteStClear),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	err = s.TPM.NVWriteLock(index, index, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
+}
+
 func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureSetCommandCodeAuditStatus)
 	s.deferCloseTpm(c)
@@ -464,6 +566,347 @@ func (s *tctiSuite) TestDAProtectedCapabilityDisallowed(c *C) {
 
 	err = s.TPM.NVWrite(index, index, []byte("foo"), 0, nil)
 	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_NV_Write is trying to use a non-requested feature \(missing: 0x00000800\)`)
+}
+
+func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV|TPMFeaturePersistent)
+	s.deferCloseTpm(c)
+
+	trial := util.ComputeAuthPolicy(tpm2.HashAlgorithmSHA256)
+	trial.PolicyAuthValue()
+	trial.PolicyCommandCode(tpm2.CommandNVUndefineSpaceSpecial)
+
+	nvPublic := tpm2.NVPublic{
+		Index:      0x01800000,
+		NameAlg:    tpm2.HashAlgorithmSHA256,
+		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVOwnerRead | tpm2.AttrNVOwnerWrite | tpm2.AttrNVNoDA | tpm2.AttrNVPolicyDelete | tpm2.AttrNVPlatformCreate),
+		AuthPolicy: trial.GetDigest(),
+		Size:       8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).PlatformHandleContext(), nil, &nvPublic, nil)
+	c.Assert(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	session, err := s.TPM.StartAuthSession(nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+	c.Assert(err, IsNil)
+	c.Check(s.TPM.PolicyAuthValue(session), IsNil)
+	c.Check(s.TPM.PolicyCommandCode(session, tpm2.CommandNVUndefineSpaceSpecial), IsNil)
+
+	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	trial := util.ComputeAuthPolicy(tpm2.HashAlgorithmSHA256)
+	trial.PolicyAuthValue()
+	trial.PolicyCommandCode(tpm2.CommandNVUndefineSpaceSpecial)
+
+	nvPublic := tpm2.NVPublic{
+		Index:      0x01800000,
+		NameAlg:    tpm2.HashAlgorithmSHA256,
+		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVOwnerRead | tpm2.AttrNVOwnerWrite | tpm2.AttrNVNoDA | tpm2.AttrNVPolicyDelete | tpm2.AttrNVPlatformCreate),
+		AuthPolicy: trial.GetDigest(),
+		Size:       8}
+	index, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).PlatformHandleContext(), nil, &nvPublic, nil)
+	c.Assert(err, IsNil)
+	s.AddCleanup(func() {
+		// We test that the fixture can't undefine this index, but we should actually undefine it
+		// after completing the test.
+		session, err := s.rawTpm(c).StartAuthSession(nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+		c.Assert(err, IsNil)
+		c.Check(s.rawTpm(c).PolicyAuthValue(session), IsNil)
+		c.Check(s.rawTpm(c).PolicyCommandCode(session, tpm2.CommandNVUndefineSpaceSpecial), IsNil)
+		c.Check(s.rawTpm(c).NVUndefineSpaceSpecial(index, s.rawTpm(c).PlatformHandleContext(), session, nil), IsNil)
+	})
+
+	index, err = s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	session, err := s.TPM.StartAuthSession(nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+	c.Assert(err, IsNil)
+	c.Check(s.TPM.PolicyAuthValue(session), IsNil)
+	c.Check(s.TPM.PolicyCommandCode(session, tpm2.CommandNVUndefineSpaceSpecial), IsNil)
+
+	err = s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_UndefineSpaceSpecial is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+}
+
+func (s *tctiSuite) TestEvictControlNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
+	s.deferCloseTpm(c)
+
+	object, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	persistent, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), object, 0x81000001, nil)
+	c.Assert(err, IsNil)
+
+	persistent, err = s.TPM.CreateResourceContextFromTPM(persistent.Handle())
+	c.Assert(err, IsNil)
+
+	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), persistent, persistent.Handle(), nil)
+	c.Check(err, IsNil)
+}
+
+func (s *tctiSuite) TestEvictControlNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	object, _, _, _, _, err := s.rawTpm(c).CreatePrimary(s.rawTpm(c).OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	persistent, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), object, 0x81000001, nil)
+	c.Assert(err, IsNil)
+
+	persistent, err = s.TPM.CreateResourceContextFromTPM(persistent.Handle())
+	c.Assert(err, IsNil)
+
+	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), persistent, persistent.Handle(), nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_EvictControl is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+}
+
+func (s *tctiSuite) TestNVUndefineSpaceNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVOwnerRead | tpm2.AttrNVOwnerWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Assert(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	c.Check(s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVUndefineSpaceNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVOwnerRead | tpm2.AttrNVOwnerWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Assert(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	err = s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_UndefineSpace is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+}
+
+func (s *tctiSuite) TestNVWriteLockDefineAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVWriteDefine),
+		Size:    8}
+	index, err := s.TPM.NVDefineSpace(s.TPM.OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVWriteLockDefineNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVWriteDefine),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVWriteLockDefineNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVWriteDefine),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	err = s.TPM.NVWriteLock(index, index, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+}
+
+func (s *tctiSuite) TestNVIncrementAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeCounter.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	index, err := s.TPM.NVDefineSpace(s.TPM.OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.NVIncrement(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVIncrementNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeCounter.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	c.Check(s.TPM.NVIncrement(index, index, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVIncrementNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeCounter.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	err = s.TPM.NVIncrement(index, index, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_Increment is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+}
+
+func (s *tctiSuite) TestNVSetBitsAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeBits.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	index, err := s.TPM.NVDefineSpace(s.TPM.OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.NVSetBits(index, index, 0, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVSetBitsNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeBits.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	c.Check(s.TPM.NVSetBits(index, index, 0, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVSetBitsNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeBits.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	err = s.TPM.NVSetBits(index, index, 0, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_SetBits is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+}
+
+func (s *tctiSuite) TestNVWriteAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	index, err := s.TPM.NVDefineSpace(s.TPM.OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVWriteNotCreatedAllowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
+}
+
+func (s *tctiSuite) TestNVWriteNotCreatedDisallowed(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	nvPublic := tpm2.NVPublic{
+		Index:   0x01800000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
+	c.Check(err, IsNil)
+
+	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	c.Assert(err, IsNil)
+
+	err = s.TPM.NVWrite(index, index, nil, 0, nil)
+	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_Write is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *tctiSuite) TestRestorePlatformHierarchyAuth(c *C) {

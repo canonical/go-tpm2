@@ -547,6 +547,24 @@ func (t *TCTI) Write(data []byte) (int, error) {
 	}
 
 	switch commandCode {
+	case tpm2.CommandNVUndefineSpaceSpecial:
+		commandFeatures |= TPMFeaturePersistent
+		nvIndex := handles[0]
+		if info, ok := t.handles[nvIndex]; !ok {
+			fmt.Fprintf(os.Stderr, "Requesting to undefine index %v not known to the test fixture\n", nvIndex)
+		} else if info.created {
+			commandFeatures &^= TPMFeaturePersistent
+		}
+	case tpm2.CommandEvictControl:
+		object := handles[1]
+		if object.Type() == tpm2.HandleTypePersistent {
+			commandFeatures |= TPMFeaturePersistent
+			if info, ok := t.handles[object]; !ok {
+				fmt.Fprintf(os.Stderr, "Requesting eviction of persistent object %v not known to the test fixture\n", object)
+			} else if info.created {
+				commandFeatures &^= TPMFeaturePersistent
+			}
+		}
 	case tpm2.CommandHierarchyControl:
 		commandFeatures |= TPMFeatureStClearChange
 		if t.permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
@@ -561,6 +579,14 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			if enable != tpm2.HandlePlatform {
 				commandFeatures &^= TPMFeatureStClearChange
 			}
+		}
+	case tpm2.CommandNVUndefineSpace:
+		commandFeatures |= TPMFeaturePersistent
+		nvIndex := handles[1]
+		if info, ok := t.handles[nvIndex]; !ok {
+			fmt.Fprintf(os.Stderr, "Requesting to undefine index %v not known to the test fixture\n", nvIndex)
+		} else if info.created {
+			commandFeatures &^= TPMFeaturePersistent
 		}
 	case tpm2.CommandClear:
 		commandFeatures |= TPMFeatureClear
@@ -580,6 +606,43 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		commandFeatures |= TPMFeatureNVGlobalWriteLock
 		// Make TPMFeatureNVGlobalWriteLock imply TPMFeatureNV for this command.
 		commandFeatures &^= TPMFeatureNV
+	case tpm2.CommandNVIncrement:
+		commandFeatures |= TPMFeaturePersistent
+		nvIndex := handles[1]
+		if info, ok := t.handles[nvIndex]; !ok {
+			fmt.Fprintf(os.Stderr, "Requesting to modify index %v not known to the test fixture\n", nvIndex)
+		} else if info.created {
+			commandFeatures &^= TPMFeaturePersistent
+		}
+	case tpm2.CommandNVSetBits:
+		commandFeatures |= TPMFeaturePersistent
+		nvIndex := handles[1]
+		if info, ok := t.handles[nvIndex]; !ok {
+			fmt.Fprintf(os.Stderr, "Requesting to modify index %v not known to the test fixture\n", nvIndex)
+		} else if info.created {
+			commandFeatures &^= TPMFeaturePersistent
+		}
+	case tpm2.CommandNVWrite:
+		commandFeatures |= TPMFeaturePersistent
+		nvIndex := handles[1]
+		if info, ok := t.handles[nvIndex]; !ok {
+			fmt.Fprintf(os.Stderr, "Requesting to modify index %v not known to the test fixture\n", nvIndex)
+		} else if info.created {
+			commandFeatures &^= TPMFeaturePersistent
+		}
+	case tpm2.CommandNVWriteLock:
+		nvIndex := handles[1]
+		if info, ok := t.handles[nvIndex]; !ok {
+			commandFeatures |= (TPMFeatureStClearChange | TPMFeaturePersistent)
+			fmt.Fprintf(os.Stderr, "Requesting to write lock index %v not known to the test fixture\n", nvIndex)
+		} else if !info.created {
+			if info.nvPub.Attrs&tpm2.AttrNVWriteDefine > 0 {
+				commandFeatures |= TPMFeaturePersistent
+			}
+			if info.nvPub.Attrs&tpm2.AttrNVWriteStClear > 0 {
+				commandFeatures |= TPMFeatureStClearChange
+			}
+		}
 	case tpm2.CommandSetCommandCodeAuditStatus:
 		commandFeatures |= TPMFeatureSetCommandCodeAuditStatus
 		if t.permittedFeatures&TPMFeatureEndorsementHierarchy > 0 {
@@ -595,6 +658,14 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		commandFeatures |= TPMFeatureShutdown
 		// Make TPMFeatureShutdown imply TPMFeatureNV for this command.
 		commandFeatures &^= TPMFeatureNV
+	case tpm2.CommandNVReadLock:
+		commandFeatures |= TPMFeatureStClearChange
+		nvIndex := handles[1]
+		if info, ok := t.handles[nvIndex]; !ok {
+			fmt.Fprintf(os.Stderr, "Requesting to read lock index %v not known to the test fixture\n", nvIndex)
+		} else if info.created || info.nvPub.Attrs&tpm2.AttrNVReadStClear == 0 {
+			commandFeatures &^= TPMFeatureStClearChange
+		}
 	}
 
 	for _, h := range handles[:cmdInfo.authHandles] {

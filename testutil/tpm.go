@@ -60,9 +60,9 @@ const (
 
 	// TPMFeatureStClearChange indicates that the test needs to make changes that can't be undone without a
 	// TPM2_Startup(CLEAR). On a physical TPM device, these changes can only be undone with a platform
-	// reset or restart. This is not required if TPMFeaturePlatformHierarchy is set because the test
-	// fixture can undo changes made by the test, as long as the test doesn't disable use of the
-	// platform hierarchy.
+	// reset or restart. This is not required for TPM2_HierarchyControl if TPMFeaturePlatformHierarchy is
+	// set because the test fixture can undo changes made by this command, as long as the test doesn't
+	// disable use of the platform hierarchy.
 	TPMFeatureStClearChange
 
 	// TPMFeatureSetCommandCodeAuditStatus indicates that the test uses the TPM2_SetCommandCodeAuditStatus
@@ -71,22 +71,24 @@ const (
 	TPMFeatureSetCommandCodeAuditStatus
 
 	// TPMFeatureClear indicates that the test uses the TPM2_Clear command. This also requires either
-	// TPMFeatureLockoutHierarchy or TPMFeaturePlatformHierarchy.
+	// TPMFeatureLockoutHierarchy or TPMFeaturePlatformHierarchy. This implies TPMFeatureNV for the
+	// TPM2_Clear command.
 	TPMFeatureClear
 
 	// TPMFeatureClearControl indicates that the test uses the TPM2_ClearControl command. Changes made by
 	// the test can only be undone with the use of the platform hierarchy, which on a proper implementation
 	// requires assistance from the platform firmware. This is not needed if TPMFeaturePlatformHierarchy
-	// is set, as the test fixture will restore the value of disableClear automatically. This implies
+	// is set, as the test harness will restore the value of disableClear automatically. This implies
 	// TPMFeatureNV for the TPM2_ClearControl command.
 	TPMFeatureClearControl
 
-	// TPMFeatureShutdown indicates that the test uses the TPM2_Shutdown command.
+	// TPMFeatureShutdown indicates that the test uses the TPM2_Shutdown command. This implies
+	// TPMFeatureNV for the TPM2_Shutdown command.
 	TPMFeatureShutdown
 
 	// TPMFeatureNVGlobalWriteLock indicates that the test uses the TPM2_NV_GlobalWriteLock command. This
 	// may make NV indices that weren't created by the test permanently read only if they define the
-	// TPMA_NV_GLOBALLOCK attribute.
+	// TPMA_NV_GLOBALLOCK attribute. This implies TPMFeatureNV for the TPM2_NV_GlobalWriteLock command.
 	TPMFeatureNVGlobalWriteLock
 
 	// TPMFeatureDAProtectedCapability indicates that the test makes use of a DA protected resource. The
@@ -99,6 +101,11 @@ const (
 	// TPMFeatureNV indicates that the test makes use of a command that may write to NV. Physical
 	// TPMs may employ rate limiting on these commands.
 	TPMFeatureNV
+
+	// TPMFeaturePersistent indicates that the test may make changes to persistent resources that
+	// were not created by the test, such as writing to or undefining NV indices or evicting
+	// persistent objects.
+	TPMFeaturePersistent
 )
 
 func (f TPMFeatureFlags) String() string {
