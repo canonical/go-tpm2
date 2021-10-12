@@ -54,17 +54,20 @@ const (
 	// authorization value should be empty at the start of the test.
 	TPMFeaturePlatformHierarchy
 
-	// TPMFeaturePCR indicates that the test requires the use of a PCR.
+	// TPMFeaturePCR indicates that the test requires the use of a PCR. This is only required for
+	// commands that require authorization - ie, it is not required for TPM2_PCR_Read.
 	TPMFeaturePCR
 
 	// TPMFeatureStClearChange indicates that the test needs to make changes that can't be undone without a
 	// TPM2_Startup(CLEAR). On a physical TPM device, these changes can only be undone with a platform
-	// reset or restart.
+	// reset or restart. This is not required if TPMFeaturePlatformHierarchy is set because the test
+	// fixture can undo changes made by the test, as long as the test doesn't disable use of the
+	// platform hierarchy.
 	TPMFeatureStClearChange
 
 	// TPMFeatureSetCommandCodeAuditStatus indicates that the test uses the TPM2_SetCommandCodeAuditStatus
 	// command. This isn't required if TPMFeatureEndorsementHierarchy is set, as changes made by this
-	// command can be undone.
+	// command can be undone. This implies TPMFeatureNV for the TPM2_SetCommandCodeAuditStatus command.
 	TPMFeatureSetCommandCodeAuditStatus
 
 	// TPMFeatureClear indicates that the test uses the TPM2_Clear command. This also requires either
@@ -74,7 +77,8 @@ const (
 	// TPMFeatureClearControl indicates that the test uses the TPM2_ClearControl command. Changes made by
 	// the test can only be undone with the use of the platform hierarchy, which on a proper implementation
 	// requires assistance from the platform firmware. This is not needed if TPMFeaturePlatformHierarchy
-	// is set, as the test harness will restore the value of disableClear automatically.
+	// is set, as the test fixture will restore the value of disableClear automatically. This implies
+	// TPMFeatureNV for the TPM2_ClearControl command.
 	TPMFeatureClearControl
 
 	// TPMFeatureShutdown indicates that the test uses the TPM2_Shutdown command.

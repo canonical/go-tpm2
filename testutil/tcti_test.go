@@ -321,11 +321,18 @@ func (s *tctiSuite) TestSetCommandCodeAuditStatusDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00000040\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001040\)`)
 }
 
-func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner(c *C) {
+func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner1(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureEndorsementHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
+}
+
+func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner2(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureEndorsementHierarchy|TPMFeatureSetCommandCodeAuditStatus)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
@@ -373,11 +380,18 @@ func (s *tctiSuite) TestClearControlDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00000100\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001100\)`)
 }
 
-func (s *tctiSuite) TestClearControlAllowedWithPlatform(c *C) {
+func (s *tctiSuite) TestClearControlAllowedWithPlatform1(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	c.Check(s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil), IsNil)
+}
+
+func (s *tctiSuite) TestClearControlAllowedWithPlatform2(c *C) {
+	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureClearControl)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil), IsNil)

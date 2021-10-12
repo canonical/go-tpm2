@@ -571,7 +571,8 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		if t.permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
 			// We can revert changes to disableClear
 			commandFeatures &^= TPMFeatureClearControl
-		} else {
+		}
+		if t.permittedFeatures&TPMFeatureClearControl > 0 {
 			// Make TPMFeatureClearControl imply TPMFeatureNV for this command.
 			commandFeatures &^= TPMFeatureNV
 		}
@@ -585,7 +586,8 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			// We can revert changes to this. Note that reverting requires the use
 			// of the storage or platform hierarchy too, which is checked implicitly.
 			commandFeatures &^= TPMFeatureSetCommandCodeAuditStatus
-		} else {
+		}
+		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
 			// Make TPMFeatureSetCommandCodeAuditStatus imply TPMFeatureNV for this command.
 			commandFeatures &^= TPMFeatureNV
 		}
