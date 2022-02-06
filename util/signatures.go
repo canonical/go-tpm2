@@ -5,12 +5,12 @@
 package util
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/subtle"
 	"encoding/binary"
 	"errors"
 	"math/big"
@@ -159,7 +159,7 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 			if err != nil {
 				return false, err
 			}
-			return bytes.Equal(signature.Signature.HMAC.Digest, test.Signature.HMAC.Digest), nil
+			return subtle.ConstantTimeCompare(signature.Signature.HMAC.Digest, test.Signature.HMAC.Digest) == 1, nil
 		default:
 			return false, errors.New("unsupported keyed hash signature algorithm")
 		}
