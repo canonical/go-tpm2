@@ -15,6 +15,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
+	tpm2_crypto "github.com/canonical/go-tpm2/crypto"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
@@ -483,7 +484,7 @@ func (s *objectSuite) TestMakeCredential(c *C) {
 	credentialBlob, secret, err := s.TPM.MakeCredential(ek, credential, name)
 	c.Check(err, IsNil)
 
-	seed, err := util.CryptSecretDecrypt(key, HashAlgorithmSHA256, []byte(IdentityKey), secret)
+	seed, err := tpm2_crypto.SecretDecrypt(key, crypto.SHA256, []byte(IdentityKey), secret)
 	c.Check(err, IsNil)
 
 	recoveredCredential, err := util.UnwrapOuter(HashAlgorithmSHA256, &ekPub.Params.RSADetail.Symmetric, name, seed, false, credentialBlob)

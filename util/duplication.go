@@ -7,10 +7,12 @@ package util
 import (
 	"crypto"
 	"errors"
+	"fmt"
 
 	"golang.org/x/xerrors"
 
 	"github.com/canonical/go-tpm2"
+	tpm2_crypto "github.com/canonical/go-tpm2/crypto"
 )
 
 // UnwrapDuplicationObjectToSensitive unwraps the supplied duplication object and returns the
@@ -25,6 +27,10 @@ import (
 // assumed that the object has an inner wrapper. In this case, the symmetric key for the inner
 // wrapper must be supplied using the encryptionKey argument.
 func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, encryptionKey tpm2.Data, inSymSeed tpm2.EncryptedSecret, symmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
+	if parentNameAlg != tpm2.HashAlgorithmNull && !parentNameAlg.Available() {
+		return nil, fmt.Errorf("digest algorithm %v is not available", parentNameAlg)
+	}
+
 	var seed []byte
 	if len(inSymSeed) > 0 {
 		if privKey == nil {
@@ -32,7 +38,7 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 		}
 
 		var err error
-		seed, err = CryptSecretDecrypt(privKey, parentNameAlg, []byte(tpm2.DuplicateString), inSymSeed)
+		seed, err = tpm2_crypto.SecretDecrypt(privKey, parentNameAlg.GetHash(), []byte(tpm2.DuplicateString), inSymSeed)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot decrypt symmetric seed: %w", err)
 		}
@@ -80,10 +86,13 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 
 	var seed []byte
 	if parentPublic != nil {
+		if parentPublic.NameAlg != tpm2.HashAlgorithmNull && !parentPublic.NameAlg.Available() {
+			return nil, nil, nil, fmt.Errorf("digest algorithm %v is not available", parentPublic.NameAlg)
+		}
 		if !parentPublic.IsStorageParent() || !parentPublic.IsAsymmetric() {
 			return nil, nil, nil, errors.New("parent object must be an asymmetric storage key")
 		}
-		outSymSeed, seed, err = tpm2.CryptSecretEncrypt(parentPublic, []byte(tpm2.DuplicateString))
+		outSymSeed, seed, err = tpm2_crypto.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
 		if err != nil {
 			return nil, nil, nil, xerrors.Errorf("cannot create encrypted symmetric seed: %w", err)
 		}

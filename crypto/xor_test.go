@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package internal_test
+package crypto_test
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	_ "crypto/sha256"
 	"testing"
 
-	. "github.com/canonical/go-tpm2/internal"
+	. "github.com/canonical/go-tpm2/crypto"
 )
 
 func TestXORObfuscation(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/canonical/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/crypto"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -74,16 +74,16 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 		if symmetric.Mode.Sym != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
-		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM,
+		k := crypto.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := CryptSymmetricEncrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
+		if err := crypto.SymmetricEncrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		internal.XORObfuscation(hashAlg.GetHash(), sessionValue, sessionData.NonceCaller, sessionData.NonceTPM, data)
+		crypto.XORObfuscation(hashAlg.GetHash(), sessionValue, sessionData.NonceCaller, sessionData.NonceTPM, data)
 	default:
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
@@ -116,16 +116,16 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 		if symmetric.Mode.Sym != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
-		k := internal.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceTPM, sessionData.NonceCaller,
+		k := crypto.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceTPM, sessionData.NonceCaller,
 			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
-		if err := CryptSymmetricDecrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
+		if err := crypto.SymmetricDecrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		internal.XORObfuscation(hashAlg.GetHash(), sessionValue, sessionData.NonceTPM, sessionData.NonceCaller, data)
+		crypto.XORObfuscation(hashAlg.GetHash(), sessionValue, sessionData.NonceTPM, sessionData.NonceCaller, data)
 	default:
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}

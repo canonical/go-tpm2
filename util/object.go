@@ -15,7 +15,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/crypto"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -44,7 +44,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 
 	data, _ = ioutil.ReadAll(r)
 
-	hmacKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
+	hmacKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
 	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
 	h.Write(data)
 	h.Write(name)
@@ -67,9 +67,9 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 
 	data, _ = ioutil.ReadAll(r)
 
-	symKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
+	symKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
-	if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, iv, data); err != nil {
+	if err := crypto.SymmetricDecrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
 		return nil, xerrors.Errorf("cannot decrypt: %w", err)
 	}
 
@@ -100,9 +100,9 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 		}
 	}
 
-	symKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
+	symKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
-	if err := tpm2.CryptSymmetricEncrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), symKey, iv, data); err != nil {
+	if err := crypto.SymmetricEncrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
 		return nil, xerrors.Errorf("cannot encrypt: %w", err)
 	}
 
@@ -110,7 +110,7 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 		data = mu.MustMarshalToBytes(iv, mu.RawBytes(data))
 	}
 
-	hmacKey := internal.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
+	hmacKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
 	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
 	h.Write(data)
 	h.Write(name)
@@ -183,7 +183,7 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 			return nil, errors.New("inner symmetric algorithm is not a valid block cipher")
 		}
 
-		if err := tpm2.CryptSymmetricDecrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+		if err := crypto.SymmetricDecrypt(symmetricAlg.Algorithm, innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, xerrors.Errorf("cannot decrypt inner wrapper: %w", err)
 		}
 
@@ -268,7 +268,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 			return nil, nil, errors.New("the supplied symmetric key for inner wrapper has the wrong length")
 		}
 
-		if err := tpm2.CryptSymmetricEncrypt(tpm2.SymAlgorithmId(symmetricAlg.Algorithm), innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+		if err := crypto.SymmetricEncrypt(symmetricAlg.Algorithm, innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, nil, xerrors.Errorf("cannot apply inner wrapper: %w", err)
 		}
 	}

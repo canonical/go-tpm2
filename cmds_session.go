@@ -9,7 +9,7 @@ package tpm2
 import (
 	"fmt"
 
-	"github.com/canonical/go-tpm2/internal"
+	"github.com/canonical/go-tpm2/crypto"
 )
 
 // StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session. On successful completion, it will
@@ -85,7 +85,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		tpmKeyHandle = tpmKey.Handle()
 
 		var err error
-		encryptedSalt, salt, err = CryptSecretEncrypt(object.GetPublic(), []byte(SecretKey))
+		encryptedSalt, salt, err = cryptSecretEncrypt(object.GetPublic(), []byte(SecretKey))
 		if err != nil {
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
@@ -143,7 +143,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		copy(key, authValue)
 		copy(key[len(authValue):], salt)
 
-		data.SessionKey = internal.KDFa(authHash.GetHash(), key, []byte(SessionKey), []byte(nonceTPM), nonceCaller, digestSize*8)
+		data.SessionKey = crypto.KDFa(authHash.GetHash(), key, []byte(SessionKey), []byte(nonceTPM), nonceCaller, digestSize*8)
 	}
 
 	return makeSessionContext(sessionHandle, data), nil

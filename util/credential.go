@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/crypto"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -27,7 +28,7 @@ func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Na
 		return nil, nil, errors.New("name algorithm for key is not available")
 	}
 
-	secret, seed, err := tpm2.CryptSecretEncrypt(key, []byte(tpm2.IdentityKey))
+	secret, seed, err := crypto.SecretEncrypt(key.Public(), key.NameAlg.GetHash(), []byte(tpm2.IdentityKey))
 	if err != nil {
 		return nil, nil, err
 	}

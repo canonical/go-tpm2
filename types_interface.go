@@ -10,7 +10,7 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
-	"errors"
+	"fmt"
 	"hash"
 )
 
@@ -161,9 +161,12 @@ func (a SymAlgorithmId) BlockSize() int {
 // NewCipher constructs a new symmetric cipher with the supplied key, if there is a go
 // implementation registered.
 func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
+	if !a.IsValidBlockCipher() {
+		return nil, fmt.Errorf("%v is not a valid block cipher", a)
+	}
 	fn, ok := symmetricAlgs[a]
 	if !ok {
-		return nil, errors.New("unavailable cipher")
+		return nil, fmt.Errorf("unavailable cipher %v", a)
 	}
 	return fn(key)
 }

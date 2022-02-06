@@ -5,6 +5,7 @@
 package util
 
 import (
+	"encoding/binary"
 	"errors"
 
 	"github.com/canonical/go-tpm2"
@@ -30,5 +31,13 @@ func ComputeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles [
 		return nil, err
 	}
 
-	return tpm2.ComputeCpHash(alg, command, handles, cpBytes), nil
+	hash := alg.NewHash()
+
+	binary.Write(hash, binary.BigEndian, command)
+	for _, name := range handles {
+		hash.Write([]byte(name))
+	}
+	hash.Write(cpBytes)
+
+	return hash.Sum(nil), nil
 }

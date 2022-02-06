@@ -20,7 +20,7 @@ package tpm2
 // entity.
 //
 // The cpHashA parameter allows the session to be bound to a specific command and set of command parameters by providing a command
-// parameter digest. Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session. If
+// parameter digest. Command parameter digests can be computed using util.ComputeCpHash, using the digest algorithm for the session. If
 // provided, the cpHashA value must be included in the digest that is signed by the authorizing entity.
 //
 // If policySession does not correspond to a trial session, a *TPMError error with an error code of ErrorCpHash will be returned if
@@ -72,7 +72,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 // ErrorMode will be returned for session index 1.
 //
 // The cpHashA parameter allows the session to be bound to a specific command and set of command parameters by providing a command
-// parameter digest. Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session. If
+// parameter digest. Command parameter digests can be computed using util.ComputeCpHash, using the digest algorithm for the session. If
 // provided, the cpHashA value must be included in the digest that is signed by the authorizing entity.
 //
 // If policySession does not correspond to a trial session, a *TPMError error with an error code of ErrorCpHash will be returned if
@@ -258,7 +258,7 @@ func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code Comman
 // to be limited to a specific command. This command allows the policy to be limited further to a specific command set of command
 // parameters.
 //
-// Command parameter digests can be computed using ComputeCpHash, using the digest algorithm for the session.
+// Command parameter digests can be computed using util.ComputeCpHash, using the digest algorithm for the session.
 //
 // If the size of cpHashA is inconsistent with the digest algorithm for the session, a *TPMParameterError error with an error code
 // of ErrorSize will be returned.
