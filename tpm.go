@@ -59,20 +59,47 @@ type ResourceContextWithSession struct {
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
 // Section 14 - Asymmetric Primitives
 // Section 15 - Symmetric Primitives
-// Section 17 - Hash/HMAC/Event Sequences
 // Section 19 - Ephemeral EC Keys
 // Section 26 - Miscellaneous Management Functions
 // Section 27 - Field Upgrade
 
-// TPMContext is the main entry point by which commands are executed on a TPM device using this package. It communicates with the
-// underlying device via a transmission interface, which is an implementation of io.ReadWriteCloser provided to NewTPMContext.
+// TPMContext is the main entry point by which commands are executed on a TPM
+// device using this package. It communicates with the underlying device via a
+// transmission interface, which is provided to NewTPMContext.
 //
-// Methods that execute commands on the TPM will return errors where the TPM responds with them. These are in the form of *TPMError,
-// *TPMWarning, *TPMHandleError, *TPMSessionError, *TPMParameterError and *TPMVendorError types.
+// Methods that execute commands on the TPM may return errors from the TPM in
+// some cases. These are in the form of *TPMError, *TPMWarning, *TPMHandleError,
+// *TPMSessionError, *TPMParameterError and *TPMVendorError types.
 //
-// Some methods also accept a variable number of optional SessionContext arguments - these are for sessions that don't provide
-// authorization for a corresponding TPM resource. These sessions may be used for the purposes of session based parameter encryption
-// or command auditing.
+// Some methods make use of resources on the TPM, and use of these resources
+// may require authorization with one of 3 roles - user, admin or duplication.
+// The supported authorization mechanism depends on the resource and role, and
+// is summarized below:
+//
+//  - HandleTypePCR:
+//   - user role:
+//    - passphrase / HMAC session (if no auth policy is set)
+//    - policy session (if auth policy is set)
+//  - HandleTypeNVIndex:
+//   - user role: passphrase / HMAC session / policy session depending on attributes.
+//   - admin role: policy session
+//  - HandleTypePermanent:
+//   - user role:
+//    - passphrase / HMAC session
+//    - policy session (if auth policy is set)
+//  - HandleTypeTransient / HandleTypePersistent:
+//   - user role:
+//    - passphrase / HMAC session (if AttrUserWithAuth is set)
+//    - policy session
+//   - admin role:
+//    - passphrase / HMAC session (if AttrAdminWithPolicy is not set)
+//    - policy session
+//   - duplication role: policy session
+//
+// Some methods also accept a variable number of optional SessionContext
+// arguments - these are for sessions that don't provide authorization for a
+// corresponding TPM resource. These sessions may be used for the purposes of
+// session based parameter encryption or command auditing.
 type TPMContext struct {
 	tcti                  TCTI
 	permanentResources    map[Handle]*permanentContext

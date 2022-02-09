@@ -55,7 +55,7 @@ const (
 	AttrNVPPWrite        NVAttributes = 1 << 0  // TPMA_NV_PPWRITE
 	AttrNVOwnerWrite     NVAttributes = 1 << 1  // TPMA_NV_OWNERWRITE
 	AttrNVAuthWrite      NVAttributes = 1 << 2  // TPMA_NV_AUTHWRITE
-	AttrNVPolicyWrite    NVAttributes = 1 << 3  // TPMA_NV_POLICY_RITE
+	AttrNVPolicyWrite    NVAttributes = 1 << 3  // TPMA_NV_POLICY_WRITE
 	AttrNVPolicyDelete   NVAttributes = 1 << 10 // TPMA_NV_POLICY_DELETE
 	AttrNVWriteLocked    NVAttributes = 1 << 11 // TPMA_NV_WRITELOCKED
 	AttrNVWriteAll       NVAttributes = 1 << 12 // TPMA_NV_WRITEALL
