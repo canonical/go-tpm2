@@ -10,7 +10,34 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/linux"
+	"github.com/canonical/go-tpm2/mssim"
 )
+
+func ExampleNewTPMContext_linux() {
+	tcti, err := linux.OpenDevice("/dev/tpm0")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	tpm := tpm2.NewTPMContext(tcti)
+	defer tpm.Close()
+
+	// Use TPMContext
+	// ...
+}
+
+func ExampleNewTPMContext_simulator() {
+	tcti, err := mssim.OpenConnection("", 2321)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	tpm := tpm2.NewTPMContext(tcti)
+	defer tpm.Close()
+
+	// Use TPMContext
+	// ...
+}
 
 func ExampleTPMContext_cleartextPassphraseAuth() {
 	// Change the authorization value for the storage hierarchy using
