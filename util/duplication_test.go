@@ -14,7 +14,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/testutil"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	. "github.com/canonical/go-tpm2/util"
 )
 
@@ -35,7 +35,7 @@ func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCre
 	encryptionKey, duplicate, symSeed, err := CreateDuplicationObjectFromSensitive(sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
 	c.Check(err, IsNil)
 	if data.symmetricAlg != nil && data.symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull && len(data.encryptionKey) == 0 {
-		c.Check(encryptionKey, testutil.LenEquals, int(data.symmetricAlg.KeyBits.Sym/8))
+		c.Check(encryptionKey, internal_testutil.LenEquals, int(data.symmetricAlg.KeyBits.Sym/8))
 	} else {
 		c.Check(encryptionKey, IsNil)
 		encryptionKey = data.encryptionKey
@@ -53,7 +53,7 @@ func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCre
 	c.Assert(sensitive, NotNil)
 
 	c.Check(sensitive.Type, Equals, sensitiveIn.Type)
-	c.Check(sensitive.AuthValue, testutil.LenEquals, crypto.SHA256.Size())
+	c.Check(sensitive.AuthValue, internal_testutil.LenEquals, crypto.SHA256.Size())
 	c.Check(sensitive.AuthValue[:len(sensitiveIn.AuthValue)], DeepEquals, sensitiveIn.AuthValue)
 	c.Check(sensitive.AuthValue[len(sensitiveIn.AuthValue):], DeepEquals, make(tpm2.Auth, crypto.SHA256.Size()-len(sensitiveIn.AuthValue)))
 	c.Check(sensitive.SeedValue, DeepEquals, sensitiveIn.SeedValue)

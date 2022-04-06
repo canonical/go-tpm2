@@ -12,6 +12,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
@@ -83,11 +84,11 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 
 	c.Check(index.Name(), DeepEquals, expectedName)
 
-	c.Assert(index, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Assert(index, internal_testutil.ConvertibleTo, &NvIndexContext{})
 	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, data.publicInfo)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, err := s.TPM.NVReadPublic(index)
@@ -103,7 +104,7 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	c.Check(index.Handle(), Equals, HandleUnassigned)
 
 	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	// XXX: Make NVReadPublic work with HandleContext and use that directly here
@@ -149,7 +150,7 @@ func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthValue(c *C) {
 		// context.
 		c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 		_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-		c.Assert(authArea, testutil.LenEquals, 1)
+		c.Assert(authArea, internal_testutil.LenEquals, 1)
 		c.Check(authArea[0].HMAC, DeepEquals, Auth(auth))
 	}
 
@@ -207,7 +208,7 @@ func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpa
 	c.Check(index.Handle(), Equals, HandleUnassigned)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 2)
+	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 
@@ -280,7 +281,7 @@ func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
 	c.Check(s.TPM.NVWrite(index, index, data.writeData, data.writeOffset, data.authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, err := s.TPM.NVReadPublic(index)
@@ -294,7 +295,7 @@ func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
 	c.Check(b, DeepEquals, data.expected)
 
 	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 }
 
@@ -369,7 +370,7 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 	c.Check(s.TPM.NVIncrement(index, index, authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, err := s.TPM.NVReadPublic(index)
@@ -382,7 +383,7 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 	c.Check(err, IsNil)
 
 	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	c.Check(s.TPM.NVIncrement(index, index, authSession), IsNil)
@@ -419,7 +420,7 @@ func (s *nvSuite) testExtend(c *C, data *testNVExtendData) {
 	c.Check(s.TPM.NVExtend(index, index, data.data, data.authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, err := s.TPM.NVReadPublic(index)
@@ -475,7 +476,7 @@ func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 	}
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, err := s.TPM.NVReadPublic(index)
@@ -489,7 +490,7 @@ func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 	c.Check(value, Equals, expected)
 
 	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 }
 
@@ -517,7 +518,7 @@ func (s *nvSuite) testWriteLock(c *C, authSession SessionContext) {
 	c.Check(s.TPM.NVWriteLock(index, index, authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, err := s.TPM.NVReadPublic(index)
@@ -548,7 +549,7 @@ func (s *nvSuite) testReadLock(c *C, authSession SessionContext) {
 	c.Check(s.TPM.NVReadLock(index, index, authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, err := s.TPM.NVReadPublic(index)
@@ -596,7 +597,7 @@ func (s *nvGlobalLockSuiteBase) testGlobalWriteLock(c *C, data *testNVGlobalWrit
 	c.Check(s.TPM.NVGlobalWriteLock(data.auth, data.authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	for _, index := range indices {
@@ -648,14 +649,14 @@ func (s *nvSuite) testChangeAuth(c *C, authSession SessionContext) {
 	c.Check(s.TPM.NVChangeAuth(index, newAuth, authSession), IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	// NVChangeAuth sets the auth value on index.
 	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 
 	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].HMAC, DeepEquals, Auth(newAuth))
 }
 

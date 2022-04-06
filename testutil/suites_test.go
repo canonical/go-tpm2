@@ -10,6 +10,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mssim"
 	"github.com/canonical/go-tpm2/mu"
 	. "github.com/canonical/go-tpm2/testutil"
@@ -162,7 +163,7 @@ func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), InSlice(ErrorMatches), []string{
+	c.Check(tpm.Close(), internal_testutil.InSlice(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`})
 }
@@ -182,7 +183,7 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), InSlice(ErrorMatches), []string{
+	c.Check(tpm.Close(), internal_testutil.InSlice(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`})
 }
@@ -201,7 +202,7 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), InSlice(ErrorMatches), []string{
+	c.Check(tpm.Close(), internal_testutil.InSlice(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`})
 }
@@ -361,34 +362,34 @@ func (s *tpmTestSuiteProper) TestCommandLog(c *C) {
 	outData, testResult, err := s.TPM.GetTestResult()
 	c.Check(err, IsNil)
 
-	c.Assert(s.CommandLog(), LenEquals, 2)
+	c.Assert(s.CommandLog(), internal_testutil.LenEquals, 2)
 
 	c.Check(s.CommandLog()[0].GetCommandCode(c), Equals, tpm2.CommandSelfTest)
 	cHandles, cAuthArea, cpBytes := s.CommandLog()[0].UnmarshalCommand(c)
-	c.Check(cHandles, LenEquals, 0)
-	c.Check(cAuthArea, LenEquals, 0)
+	c.Check(cHandles, internal_testutil.LenEquals, 0)
+	c.Check(cAuthArea, internal_testutil.LenEquals, 0)
 
 	var fullTest bool
 	_, err = mu.UnmarshalFromBytes(cpBytes, &fullTest)
 	c.Check(err, IsNil)
-	c.Check(fullTest, IsTrue)
+	c.Check(fullTest, internal_testutil.IsTrue)
 
 	rc, rHandle, rpBytes, rAuthArea := s.CommandLog()[0].UnmarshalResponse(c)
 	c.Check(rc, Equals, tpm2.ResponseSuccess)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rpBytes, LenEquals, 0)
-	c.Check(rAuthArea, LenEquals, 0)
+	c.Check(rpBytes, internal_testutil.LenEquals, 0)
+	c.Check(rAuthArea, internal_testutil.LenEquals, 0)
 
 	c.Check(s.CommandLog()[1].GetCommandCode(c), Equals, tpm2.CommandGetTestResult)
 	cHandles, cAuthArea, cpBytes = s.CommandLog()[1].UnmarshalCommand(c)
-	c.Check(cHandles, LenEquals, 0)
-	c.Check(cAuthArea, LenEquals, 0)
-	c.Check(cpBytes, LenEquals, 0)
+	c.Check(cHandles, internal_testutil.LenEquals, 0)
+	c.Check(cAuthArea, internal_testutil.LenEquals, 0)
+	c.Check(cpBytes, internal_testutil.LenEquals, 0)
 
 	rc, rHandle, rpBytes, rAuthArea = s.CommandLog()[1].UnmarshalResponse(c)
 	c.Check(rc, Equals, tpm2.ResponseSuccess)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rAuthArea, LenEquals, 0)
+	c.Check(rAuthArea, internal_testutil.LenEquals, 0)
 
 	var outData2 tpm2.MaxBuffer
 	var testResult2 tpm2.ResponseCode
@@ -412,7 +413,7 @@ func (s *tpmTestSuiteProper) TestForgetCommands(c *C) {
 	c.Check(err, IsNil)
 
 	s.ForgetCommands()
-	c.Check(s.CommandLog(), LenEquals, 0)
+	c.Check(s.CommandLog(), internal_testutil.LenEquals, 0)
 }
 
 func (s *tpmTestSuiteProper) TestNextAvailableHandle(c *C) {
@@ -433,13 +434,13 @@ func (s *tpmTestSuiteProper) TestClearTPMUsingPlatformHierarchy(c *C) {
 
 	s.ForgetCommands()
 	s.ClearTPMUsingPlatformHierarchy(c)
-	c.Check(s.CommandLog(), LenEquals, 0)
+	c.Check(s.CommandLog(), internal_testutil.LenEquals, 0)
 
 	c.Check(s.CreateStoragePrimaryKeyRSA(c), Not(DeepEquals), name)
 
 	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyPermanent, 1)
 	c.Assert(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Property, Equals, tpm2.PropertyPermanent)
 	c.Check(tpm2.PermanentAttributes(props[0].Value)&tpm2.AttrDisableClear, Equals, tpm2.PermanentAttributes(0))
 }
@@ -463,7 +464,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
 	c.Assert(suite.TCTI, NotNil)
-	c.Check(suite.TCTI.Unwrap(), ConvertibleTo, &mssim.Tcti{})
+	c.Check(suite.TCTI.Unwrap(), internal_testutil.ConvertibleTo, &mssim.Tcti{})
 
 	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
 	c.Check(suite.TPM.ClearControl(suite.TPM.PlatformHandleContext(), true, nil), IsNil)

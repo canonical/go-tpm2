@@ -8,6 +8,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
@@ -32,11 +33,11 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	c.Check(persist.Handle(), Equals, data.handle)
 	c.Check(persist.Name(), DeepEquals, object.Name())
 
-	c.Check(persist, testutil.ConvertibleTo, &ObjectContext{})
+	c.Check(persist, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(persist.(*ObjectContext).GetPublic(), DeepEquals, object.(*ObjectContext).GetPublic())
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	pub, name, _, err := s.TPM.ReadPublic(persist)
@@ -86,7 +87,7 @@ func (s *contextSuite) TestContextSaveTransient(c *C) {
 
 	context2, err := s.TPM.ContextSave(object)
 	c.Assert(err, IsNil)
-	c.Check(context2.Sequence, testutil.UintGreater, context.Sequence)
+	c.Check(context2.Sequence, internal_testutil.UintGreater, context.Sequence)
 }
 
 func (s *contextSuite) TestContextSaveStClear(c *C) {
@@ -122,7 +123,7 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
 
-	c.Check(session.Handle(), Not(testutil.InSlice(Equals)), handles)
+	c.Check(session.Handle(), Not(internal_testutil.InSlice(Equals)), handles)
 }
 
 func (s *contextSuite) TestContextSavePartialHandle(c *C) {
@@ -158,7 +159,7 @@ func (s *contextSuite) TestContextSaveAndLoadTransient(c *C) {
 	c.Check(restored.Handle(), Not(Equals), object.Handle())
 	c.Check(restored.Name(), DeepEquals, object.Name())
 
-	c.Assert(restored, testutil.ConvertibleTo, &ObjectContext{})
+	c.Assert(restored, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(restored.(*ObjectContext).GetPublic(), DeepEquals, object.(*ObjectContext).GetPublic())
 
 	pub, name, _, err := s.TPM.ReadPublic(restored.(ResourceContext))
@@ -190,12 +191,12 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 	c.Check(restored.Handle(), Equals, session.Handle())
 	c.Check(restored.Name(), DeepEquals, session.Name())
 
-	c.Check(restored, testutil.ConvertibleTo, &SessionContextImpl{})
+	c.Check(restored, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 	c.Check(restored.(*SessionContextImpl).Data(), DeepEquals, origData)
 
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
-	c.Check(session.Handle(), testutil.InSlice(Equals), handles)
+	c.Check(session.Handle(), internal_testutil.InSlice(Equals), handles)
 }
 
 func (s *contextSuite) TestEvictControl(c *C) {
@@ -240,5 +241,5 @@ func (s *contextSuite) TestFlushContextSession(c *C) {
 
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeHMACSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
-	c.Check(handle, Not(testutil.InSlice(Equals)), handles)
+	c.Check(handle, Not(internal_testutil.InSlice(Equals)), handles)
 }

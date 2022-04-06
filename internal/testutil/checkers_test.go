@@ -15,7 +15,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	. "github.com/canonical/go-tpm2/testutil"
+	. "github.com/canonical/go-tpm2/internal/testutil"
 )
 
 func testInfo(c *C, checker Checker, name string, paramNames []string) {

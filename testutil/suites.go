@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mssim"
 
 	. "gopkg.in/check.v1"
@@ -32,8 +33,8 @@ type BaseTest struct {
 // InitCleanup can be called multiple times in the same test.
 func (b *BaseTest) InitCleanup(c *C) {
 	if c.TestName() != b.currentTestName {
-		c.Assert(b.cleanupHandlers, LenEquals, 0)        // missing BaseTest.TearDownTest call?
-		c.Assert(b.fixtureCleanupHandlers, LenEquals, 0) // missing BaseTest.TearDownTest call?
+		c.Assert(b.cleanupHandlers, internal_testutil.LenEquals, 0)        // missing BaseTest.TearDownTest call?
+		c.Assert(b.fixtureCleanupHandlers, internal_testutil.LenEquals, 0) // missing BaseTest.TearDownTest call?
 	}
 	b.currentTestName = c.TestName()
 }
@@ -164,7 +165,7 @@ func (b *TPMTest) CommandLog() (log []*CommandRecordC) {
 // LastCommand returns a record of the last TPM command that was executed.
 // It asserts if no command has been executed.
 func (b *TPMTest) LastCommand(c *C) *CommandRecordC {
-	c.Assert(b.TCTI.CommandLog, Not(LenEquals), 0)
+	c.Assert(b.TCTI.CommandLog, Not(internal_testutil.LenEquals), 0)
 	return &CommandRecordC{b.TCTI.CommandLog[len(b.TCTI.CommandLog)-1]}
 }
 
@@ -390,7 +391,7 @@ func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Tcti {
 		}
 		tcti = wrapper.Unwrap()
 	}
-	c.Assert(tcti, ConvertibleTo, &mssim.Tcti{})
+	c.Assert(tcti, internal_testutil.ConvertibleTo, &mssim.Tcti{})
 	return tcti.(*mssim.Tcti)
 }
 

@@ -16,6 +16,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	tpm2_crypto "github.com/canonical/go-tpm2/crypto"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
@@ -48,10 +49,10 @@ func (s *objectSuite) checkPublicAgainstTemplate(c *C, public, template *Public)
 
 	switch template.Type {
 	case ObjectTypeRSA:
-		c.Check(unique.RSA, testutil.LenEquals, int(template.Params.RSADetail.KeyBits)/8)
+		c.Check(unique.RSA, internal_testutil.LenEquals, int(template.Params.RSADetail.KeyBits)/8)
 	case ObjectTypeECC:
-		c.Check(unique.ECC.X, testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
-		c.Check(unique.ECC.Y, testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
+		c.Check(unique.ECC.X, internal_testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
+		c.Check(unique.ECC.Y, internal_testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
 	}
 }
 
@@ -71,7 +72,7 @@ func (s *objectSuite) checkCreationData(c *C, data *CreationData, hash Digest, t
 	c.Check(err, IsNil)
 
 	c.Check(data, NotNil)
-	c.Check(data.PCRSelect.Equal(creationPCR), testutil.IsTrue)
+	c.Check(data.PCRSelect.Equal(creationPCR), internal_testutil.IsTrue)
 	c.Check(data.PCRDigest, DeepEquals, pcrDigest)
 	// XXX: Check locality?
 
@@ -97,13 +98,13 @@ func (s *objectSuite) checkCreationTicket(c *C, ticket *TkCreation, hierarchy Ha
 
 	props, err := s.TPM.GetCapabilityTPMProperties(PropertyContextHash, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, testutil.LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Property, Equals, PropertyContextHash)
 
 	contextHash := HashAlgorithmId(props[0].Value)
-	c.Check(contextHash.IsValid(), testutil.IsTrue)
+	c.Check(contextHash.IsValid(), internal_testutil.IsTrue)
 
-	c.Check(ticket.Digest, testutil.LenEquals, contextHash.Size())
+	c.Check(ticket.Digest, internal_testutil.LenEquals, contextHash.Size())
 }
 
 var _ = Suite(&objectSuite{})
@@ -127,7 +128,7 @@ func (s *objectSuite) testCreate(c *C, data *testCreateData) (outPrivate Private
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	seedLength := data.template.NameAlg.Size()
@@ -144,7 +145,7 @@ func (s *objectSuite) testCreate(c *C, data *testCreateData) (outPrivate Private
 			2 + data.template.NameAlg.Size() + // authValue
 			2 + seedLength + // seedValue
 			2 + data.sensitiveSize // sensitive
-	c.Check(outPrivate, testutil.LenEquals, expectedPrivateLength)
+	c.Check(outPrivate, internal_testutil.LenEquals, expectedPrivateLength)
 
 	s.checkPublicAgainstTemplate(c, outPublic, data.template)
 	s.checkCreationData(c, creationData, creationHash, data.template, data.outsideInfo, data.creationPCR, data.parent)
@@ -234,14 +235,14 @@ func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	_, handle, _, _ := s.LastCommand(c).UnmarshalResponse(c)
 
 	c.Check(object.Handle(), Equals, handle)
 	c.Check(object.Name(), DeepEquals, expectedName)
-	c.Assert(object, testutil.ConvertibleTo, &ObjectContext{})
+	c.Assert(object, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(object.(*ObjectContext).GetPublic(), DeepEquals, pub)
 
 	pub2, name, _, err := s.TPM.ReadPublic(object)
@@ -288,7 +289,7 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Check(authArea, testutil.LenEquals, 0)
+	c.Check(authArea, internal_testutil.LenEquals, 0)
 
 	_, handle, _, _ := s.LastCommand(c).UnmarshalResponse(c)
 	expectedName, _ := data.inPublic.Name()
@@ -297,7 +298,7 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 
 	c.Check(object.Handle(), Equals, handle)
 	c.Check(object.Name(), DeepEquals, expectedName)
-	c.Assert(object, testutil.ConvertibleTo, &ObjectContext{})
+	c.Assert(object, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(object.(*ObjectContext).GetPublic(), DeepEquals, public)
 
 	pub, name, _, err := s.TPM.ReadPublic(object)
@@ -346,7 +347,7 @@ func (s *objectSuite) TestLoadExternalWithPrivate(c *C) {
 	c.Check(unsealedKey, DeepEquals, SensitiveData(key))
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].HMAC, DeepEquals, Auth(authValue))
 }
 
@@ -379,7 +380,7 @@ func (s *objectSuite) testUnseal(c *C, data *testUnsealData) {
 	c.Check(unsealedSecret, DeepEquals, SensitiveData(data.secret))
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 }
 
@@ -446,7 +447,7 @@ func (s *objectSuite) testObjectChangeAuth(c *C, objectAuthSession SessionContex
 	c.Check(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	object, err = s.TPM.Load(primary, priv, pub, nil)
@@ -524,7 +525,7 @@ func (s *objectSuite) testActivateCredential(c *C, data *testActivateCredentialD
 	c.Check(certInfo, DeepEquals, Digest(credential))
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 2)
+	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 }

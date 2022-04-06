@@ -11,6 +11,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
@@ -33,12 +34,12 @@ func (r *mockResourceContext) GetAuthValue() []byte                { return r.au
 
 func (s *authSuite) TestSessionParamIsAuthFalse(c *C) {
 	p := MakeMockSessionParam(nil, nil, false, nil, nil)
-	c.Check(p.IsAuth(), testutil.IsFalse)
+	c.Check(p.IsAuth(), internal_testutil.IsFalse)
 }
 
 func (s *authSuite) TestSessionParamIsAuthTrue(c *C) {
 	p := MakeMockSessionParam(nil, new(mockResourceContext), false, nil, nil)
-	c.Check(p.IsAuth(), testutil.IsTrue)
+	c.Check(p.IsAuth(), internal_testutil.IsTrue)
 }
 
 type testSessionParamComputeSessionHMACKeyData struct {

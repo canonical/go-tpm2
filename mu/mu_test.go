@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"testing"
 
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	. "github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 
@@ -104,7 +105,7 @@ func (s *muSuite) testMarshalAndUnmarshalIO(c *C, data *testMarshalAndUnmarshalD
 func (s *muSuite) TestMarshalAndUnmarshalPrimitives(c *C) {
 	data := &testMarshalAndUnmarshalData{
 		values:   []interface{}{uint16(1156), true, uint32(45623564), false},
-		expected: testutil.DecodeHexString(c, "04840102b8290c00")}
+		expected: internal_testutil.DecodeHexString(c, "04840102b8290c00")}
 	s.testMarshalAndUnmarshalBytes(c, data)
 	s.testMarshalAndUnmarshalIO(c, data)
 }
@@ -123,7 +124,7 @@ func (s *muSuite) TestMarshalAndUnmarshalPtrs(c *C) {
 
 	data := &testMarshalAndUnmarshalData{
 		values:                []interface{}{&x, &y, z},
-		expected:              testutil.DecodeHexString(c, "02b8290c010000"),
+		expected:              internal_testutil.DecodeHexString(c, "02b8290c010000"),
 		unmarshalDests:        []interface{}{&uxp, &uyp, &uzp},
 		unmarshalExpectedVals: []interface{}{&x, &y, &z2}}
 
@@ -141,7 +142,7 @@ func (s *muSuite) TestMarshalAndUnmarshalPtrs(c *C) {
 }
 
 func (s *muSuite) TestMarshalAndUnmarshlRawBytes(c *C) {
-	a := testutil.DecodeHexString(c, "7a788f56fa49ae0ba5ebde780efe4d6a89b5db47")
+	a := internal_testutil.DecodeHexString(c, "7a788f56fa49ae0ba5ebde780efe4d6a89b5db47")
 	ua := make(RawBytes, len(a))
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
@@ -160,13 +161,13 @@ func (s *muSuite) TestMarshalAndUnmarshlRawBytes(c *C) {
 type testSizedBuffer []byte
 
 func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
-	a := testutil.DecodeHexString(c, "2f74683f15431d01ea28ade26c4d009b")
+	a := internal_testutil.DecodeHexString(c, "2f74683f15431d01ea28ade26c4d009b")
 	ua := make([]byte, 8)
 	ua2 := ua
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:         []interface{}{a},
-		expected:       append(testutil.DecodeHexString(c, "0010"), a...),
+		expected:       append(internal_testutil.DecodeHexString(c, "0010"), a...),
 		unmarshalDests: []interface{}{&ua}})
 	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
 	c.Check(ua2, DeepEquals, make([]byte, 8))
@@ -176,7 +177,7 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:         []interface{}{testSizedBuffer(a)},
-		expected:       append(testutil.DecodeHexString(c, "0010"), a...),
+		expected:       append(internal_testutil.DecodeHexString(c, "0010"), a...),
 		unmarshalDests: []interface{}{&ua3}})
 	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
 	c.Check(ua4, DeepEquals, make(testSizedBuffer, len(a)+10))
@@ -184,7 +185,7 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
 
 func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
 	values := []interface{}{[]uint32{46, 4563421, 678, 12390}, []uint64{}, []uint16{59747, 22875}}
-	expected := testutil.DecodeHexString(c, "000000040000002e0045a1dd000002a6000030660000000000000002e963595b")
+	expected := internal_testutil.DecodeHexString(c, "000000040000002e0045a1dd000002a6000030660000000000000002e963595b")
 
 	ua := make([]uint32, 1)
 	ua2 := ua
@@ -234,7 +235,7 @@ func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 
 	a := testStruct{56324, &u32, true, []uint32{4232, 567785}}
 	b := testStruct{34963, nil, false, []uint32{}}
-	expected := testutil.DecodeHexString(c, "dc042734ac680100000002000010880008a9e98893000000000000000000dc042734ac680100000002000010880008a9e9")
+	expected := internal_testutil.DecodeHexString(c, "dc042734ac680100000002000010880008a9e98893000000000000000000dc042734ac680100000002000010880008a9e9")
 
 	var uc_b uint32
 	var ua testStruct
@@ -275,8 +276,8 @@ type testStructWithRawTagFields struct {
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalWithRawTag(c *C) {
-	a := testStructWithRawTagFields{A: []uint16{56, 453, 3233}, B: testutil.DecodeHexString(c, "faf556442bec56fe94f51e1381d1b26a")}
-	expected := testutil.DecodeHexString(c, "003801c50ca1faf556442bec56fe94f51e1381d1b26a")
+	a := testStructWithRawTagFields{A: []uint16{56, 453, 3233}, B: internal_testutil.DecodeHexString(c, "faf556442bec56fe94f51e1381d1b26a")}
+	expected := internal_testutil.DecodeHexString(c, "003801c50ca1faf556442bec56fe94f51e1381d1b26a")
 
 	ua := testStructWithRawTagFields{A: make([]uint16, len(a.A)), B: make([]byte, len(a.B))}
 
@@ -294,8 +295,8 @@ func (s *muSuite) TestMarshalAndUnmarshalWithRawTag(c *C) {
 }
 
 func (s *muSuite) TestUnmarshalNilRawTagFields(c *C) {
-	a := testStructWithRawTagFields{A: []uint16{56, 453, 3233}, B: testutil.DecodeHexString(c, "faf556442bec56fe94f51e1381d1b26a")}
-	expected := testutil.DecodeHexString(c, "003801c50ca1faf556442bec56fe94f51e1381d1b26a")
+	a := testStructWithRawTagFields{A: []uint16{56, 453, 3233}, B: internal_testutil.DecodeHexString(c, "faf556442bec56fe94f51e1381d1b26a")}
+	expected := internal_testutil.DecodeHexString(c, "003801c50ca1faf556442bec56fe94f51e1381d1b26a")
 
 	ua := testStructWithRawTagFields{B: make([]byte, len(expected))}
 
@@ -324,7 +325,7 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedStruct(c *C) {
 	a := testStructWithSizedField{A: 1872244400, B: &testStruct{56324, &u32, true, []uint32{4232, 567785}}}
 	b := testStructWithSizedField{A: 21213504}
 
-	expected := testutil.DecodeHexString(c, "6f982eb00013dc042734ac680100000002000010880008a9e90143b1400000")
+	expected := internal_testutil.DecodeHexString(c, "6f982eb00013dc042734ac680100000002000010880008a9e90143b1400000")
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:   []interface{}{a, b},
@@ -369,7 +370,7 @@ func (s *muSuite) TestMarshalAndUnmarshalUnion(c *C) {
 	y := testUnionContainer{Select: 4}
 	z := testUnionContainer{Select: 1} // Test that the zero value gets marshalled
 
-	expected := testutil.DecodeHexString(c, "00000001dc042734ac68010000000205e3131b0053366f000000020000000200322abf000181ab0000000310e100000004000000010000000000000000000000")
+	expected := internal_testutil.DecodeHexString(c, "00000001dc042734ac68010000000205e3131b0053366f000000020000000200322abf000181ab0000000310e100000004000000010000000000000000000000")
 
 	var u32_0 uint32
 
@@ -396,7 +397,7 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 	y := testUnionContainer2{Select: 4}
 	z := testUnionContainer2{Select: 1} // Test that the zero value gets marshalled
 
-	expected := testutil.DecodeHexString(c, "00000001dc042734ac68010000000205e3131b0053366f000000020000000200322abf000181ab0000000310e100000004000000010000000000000000000000")
+	expected := internal_testutil.DecodeHexString(c, "00000001dc042734ac68010000000205e3131b0053366f000000020000000200322abf000181ab0000000310e100000004000000010000000000000000000000")
 
 	var u32_0 uint32
 
@@ -434,7 +435,7 @@ func (t *testStructWithCustomMarshaller) Unmarshal(r Reader) error {
 
 func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
 	a := testStructWithCustomMarshaller{A: 44332, B: []uint32{885432, 31287554}}
-	expected := testutil.DecodeHexString(c, "2cad00000002000d82b801dd6902")
+	expected := internal_testutil.DecodeHexString(c, "2cad00000002000d82b801dd6902")
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:   []interface{}{a},
@@ -454,8 +455,8 @@ type testStructWithRawTagSizedFields struct {
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
-	a := testStructWithRawTagSizedFields{A: [][]byte{testutil.DecodeHexString(c, "a5a5a5"), testutil.DecodeHexString(c, "4d4d4d4d")}}
-	expected := testutil.DecodeHexString(c, "0003a5a5a500044d4d4d4d")
+	a := testStructWithRawTagSizedFields{A: [][]byte{internal_testutil.DecodeHexString(c, "a5a5a5"), internal_testutil.DecodeHexString(c, "4d4d4d4d")}}
+	expected := internal_testutil.DecodeHexString(c, "0003a5a5a500044d4d4d4d")
 
 	ua := testStructWithRawTagSizedFields{A: make([][]byte, len(a.A))}
 
@@ -475,7 +476,7 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
 func (s *muSuite) TestSized(c *C) {
 	var u32 uint32 = 657763432
 	a := testStruct{56324, &u32, true, []uint32{4232, 567785}}
-	expected := testutil.DecodeHexString(c, "0013dc042734ac680100000002000010880008a9e9")
+	expected := internal_testutil.DecodeHexString(c, "0013dc042734ac680100000002000010880008a9e9")
 
 	var ua testStruct
 
@@ -572,7 +573,7 @@ func (s *muSuite) TestErrorSimple(c *C) {
 	_, err := MarshalToBytes(a)
 	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\[\\]uint8: sized value size greater than 2\\^16-1")
 
-	c.Assert(err, testutil.ConvertibleTo, &Error{})
+	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
 	c.Check(e.Index, Equals, 0)
 	c.Assert(e.Depth(), Equals, 0)
@@ -583,7 +584,7 @@ func (s *muSuite) TestErrorWithMultipleArguments(c *C) {
 	_, err := MarshalToBytes(uint32(5), a)
 	c.Check(err, ErrorMatches, "cannot marshal argument 1 whilst processing element of type \\[\\]uint8: sized value size greater than 2\\^16-1")
 
-	c.Assert(err, testutil.ConvertibleTo, &Error{})
+	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
 	c.Check(e.Index, Equals, 1)
 	c.Assert(e.Depth(), Equals, 0)
@@ -597,7 +598,7 @@ func (s *muSuite) TestErrorInStructContainer(c *C) {
 		"... mu_test.testStructWithSizedField field B\n"+
 		"=== END STACK ===\n")
 
-	c.Assert(err, testutil.ConvertibleTo, &Error{})
+	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
 	c.Check(e.Index, Equals, 0)
 	c.Assert(e.Depth(), Equals, 1)
@@ -615,7 +616,7 @@ func (s *muSuite) TestErrorInSliceContainer(c *C) {
 		"... \\[\\]mu_test.testStructWithSizedField index 2\n"+
 		"=== END STACK ===\n")
 
-	c.Assert(err, testutil.ConvertibleTo, &Error{})
+	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
 	c.Check(e.Index, Equals, 0)
 	c.Assert(e.Depth(), Equals, 2)
@@ -628,7 +629,7 @@ func (s *muSuite) TestErrorInSliceContainer(c *C) {
 }
 
 func (s *muSuite) TestErrorInSliceContainerWithMultipleArguments(c *C) {
-	b := testutil.DecodeHexString(c, "000000000000000300000000000000000000000000000000ffffa5a5a5a5")
+	b := internal_testutil.DecodeHexString(c, "000000000000000300000000000000000000000000000000ffffa5a5a5a5")
 
 	var x uint32
 	var y []testStructWithSizedField
@@ -640,7 +641,7 @@ func (s *muSuite) TestErrorInSliceContainerWithMultipleArguments(c *C) {
 		"... \\[\\]mu_test.testStructWithSizedField index 2\n"+
 		"=== END STACK ===\n")
 
-	c.Assert(err, testutil.ConvertibleTo, &Error{})
+	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
 	c.Check(e.Index, Equals, 1)
 	c.Assert(e.Depth(), Equals, 2)
@@ -655,14 +656,14 @@ func (s *muSuite) TestErrorInSliceContainerWithMultipleArguments(c *C) {
 func (s *muSuite) TestErrorFromCustomType(c *C) {
 	var a *testStructContainingCustomType
 
-	_, err := UnmarshalFromBytes(testutil.DecodeHexString(c, "000000000000000000040000000000000000"), &a)
+	_, err := UnmarshalFromBytes(internal_testutil.DecodeHexString(c, "000000000000000000040000000000000000"), &a)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type uint32: unexpected EOF\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... \\[\\]uint32 index 2\n"+
 		"... mu_test.testStructWithCustomMarshaller custom type, call from mu_test.go:200 argument 1\n"+
 		"... mu_test.testStructContainingCustomType field X\n"+
 		"=== END STACK ===\n")
-	c.Assert(err, testutil.ConvertibleTo, &Error{})
+	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
 	c.Check(e.Index, Equals, 0)
 	c.Assert(e.Depth(), Equals, 3)
@@ -692,7 +693,7 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionWithInvalidSelector(c *C) {
 		"=== END STACK ===\n")
 
 	var e *InvalidSelectorError
-	c.Check(err, testutil.ErrorAs, &e)
+	c.Check(err, internal_testutil.ErrorAs, &e)
 }
 
 func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
@@ -709,7 +710,7 @@ func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
 }
 
 func (s *muSuite) TestUnmarshalBadSizedBuffer(c *C) {
-	b := testutil.DecodeHexString(c, "ffff000000000000000000000000")
+	b := internal_testutil.DecodeHexString(c, "ffff000000000000000000000000")
 	var o []byte
 	_, err := UnmarshalFromBytes(b, &o)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint8: sized value has a size larger than the remaining bytes")

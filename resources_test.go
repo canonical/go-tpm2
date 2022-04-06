@@ -10,6 +10,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
@@ -36,7 +37,7 @@ func (s *resourcesSuite) testCreateObjectResourceContextFromTPM(c *C, data *test
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, data.handle)
 	c.Check(rc.Name(), DeepEquals, data.name)
-	c.Assert(rc, testutil.ConvertibleTo, &ObjectContext{})
+	c.Assert(rc, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(rc.(*ObjectContext).GetPublic(), DeepEquals, data.public)
 }
 
@@ -70,7 +71,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMNV(c *C) {
 	c.Assert(rc, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Assert(rc, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Assert(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
 	c.Check(rc2.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
 }
 
@@ -135,7 +136,7 @@ func (s *resourcesSuite) testCreateObjectHandleContextFromBytes(c *C, data *test
 
 	c.Check(context.Handle(), Equals, data.handle)
 	c.Check(context.Name(), DeepEquals, data.name)
-	c.Assert(context, testutil.ConvertibleTo, &ObjectContext{})
+	c.Assert(context, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(context.(*ObjectContext).GetPublic(), DeepEquals, data.public)
 }
 
@@ -174,7 +175,7 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesNV(c *C) {
 
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Assert(rc2, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Assert(rc2, internal_testutil.ConvertibleTo, &NvIndexContext{})
 	c.Check(rc2.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
 }
 
@@ -189,7 +190,7 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesSession(c *C) {
 
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Assert(session2, testutil.ConvertibleTo, &SessionContextImpl{})
+	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 
 	data := session.(*SessionContextImpl).Data()
 	c.Check(Canonicalize(&data), IsNil)
@@ -211,7 +212,7 @@ func (s *resourcesSuite) testCreateResourceContextFromTPMWithSession(c *C, data 
 	c.Check(rc.Name(), DeepEquals, data.name)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, session.Handle())
 }
 
@@ -249,7 +250,7 @@ func (s *resourcesSuite) TestCreateNVIndexResourceContextFromPublic(c *C) {
 	c.Check(err, IsNil)
 
 	c.Check(rc.Name(), DeepEquals, name)
-	c.Check(rc, testutil.ConvertibleTo, &NvIndexContext{})
+	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
 	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
 }
 
@@ -264,7 +265,7 @@ func (s *resourcesSuite) TestCreateObjectResourceContextFromPublic(c *C) {
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Check(rc2, testutil.ConvertibleTo, &ObjectContext{})
+	c.Check(rc2, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
 }
 

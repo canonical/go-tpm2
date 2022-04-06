@@ -8,6 +8,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
@@ -60,7 +61,7 @@ func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign
 
 		ok, err := util.VerifyAttestationSignature(pub.Public(), attest, signature)
 		c.Check(err, IsNil)
-		c.Check(ok, testutil.IsTrue)
+		c.Check(ok, internal_testutil.IsTrue)
 	}
 }
 
@@ -86,7 +87,7 @@ func (s *attestationSuite) testCertify(c *C, data *testCertifyData) {
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 2)
+	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 
@@ -166,7 +167,7 @@ func (s *attestationSuite) testCertifyCreation(c *C, data *testCertifyCreationDa
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	s.checkAttestCommon(c, certifyInfo, TagAttestCreation, data.sign, data.signHierarchy, data.qualifyingData)
@@ -225,7 +226,7 @@ func (s *attestationSuite) TestCertifyCreationInvalidTicket(c *C) {
 	creationTicket.Hierarchy = HandleEndorsement
 
 	_, _, err = s.TPM.CertifyCreation(nil, object, nil, creationHash, nil, creationTicket, nil)
-	c.Check(IsTPMParameterError(err, ErrorTicket, CommandCertifyCreation, 4), testutil.IsTrue)
+	c.Check(IsTPMParameterError(err, ErrorTicket, CommandCertifyCreation, 4), internal_testutil.IsTrue)
 }
 
 type testQuoteData struct {
@@ -247,7 +248,7 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 1)
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	s.checkAttestCommon(c, quoted, TagAttestQuote, data.sign, data.signHierarchy, data.qualifyingData)
@@ -343,7 +344,7 @@ func (s *attestationSuite) testGetTime(c *C, data *testGetTimeData) {
 	c.Assert(err, IsNil)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, testutil.LenEquals, 2)
+	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 

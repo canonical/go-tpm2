@@ -13,6 +13,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	. "github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
@@ -78,7 +79,7 @@ func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 
 	s.AddCleanup(func() {
 		// The test has to call Close()
-		c.Check(s.TCTI.Unwrap().(*ignoreCloseTcti).closed, IsTrue)
+		c.Check(s.TCTI.Unwrap().(*ignoreCloseTcti).closed, internal_testutil.IsTrue)
 
 		s.TPM = tpm2.NewTPMContext(s.Mssim(c))
 
@@ -131,16 +132,16 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(object.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, object.Handle())
 
-	c.Check(s.CommandLog(), LenEquals, 2)
+	c.Check(s.CommandLog(), internal_testutil.LenEquals, 2)
 
 	cmd := s.CommandLog()[0].GetCommandCode(c)
 	c.Check(cmd, Equals, tpm2.CommandLoadExternal)
 	cmdHandles, cmdAuthArea, cpBytes := s.CommandLog()[0].UnmarshalCommand(c)
-	c.Check(cmdHandles, LenEquals, 0)
-	c.Check(cmdAuthArea, LenEquals, 0)
+	c.Check(cmdHandles, internal_testutil.LenEquals, 0)
+	c.Check(cmdAuthArea, internal_testutil.LenEquals, 0)
 
 	var inSensitiveBytes []byte
 	var inPublicBytes []byte
@@ -150,14 +151,14 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	var inPublic *tpm2.Public
 	_, err = mu.UnmarshalFromBytes(inPublicBytes, &inPublic)
 	c.Assert(err, IsNil)
-	c.Check(inSensitiveBytes, LenEquals, 0)
+	c.Check(inSensitiveBytes, internal_testutil.LenEquals, 0)
 	c.Check(inPublic, DeepEquals, &public)
 	c.Check(hierarchy, Equals, tpm2.HandleOwner)
 
 	rc, rHandle, rpBytes, rspAuthArea := s.CommandLog()[0].UnmarshalResponse(c)
 	c.Check(rHandle, Equals, object.Handle())
 	c.Check(rc, Equals, tpm2.ResponseSuccess)
-	c.Check(rspAuthArea, LenEquals, 0)
+	c.Check(rspAuthArea, internal_testutil.LenEquals, 0)
 
 	var name tpm2.Name
 	_, err = mu.UnmarshalFromBytes(rpBytes, &name)
@@ -167,8 +168,8 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	cmd = s.CommandLog()[1].GetCommandCode(c)
 	c.Check(cmd, Equals, tpm2.CommandGetCapability)
 	cmdHandles, cmdAuthArea, cpBytes = s.CommandLog()[1].UnmarshalCommand(c)
-	c.Check(cmdHandles, LenEquals, 0)
-	c.Check(cmdAuthArea, LenEquals, 0)
+	c.Check(cmdHandles, internal_testutil.LenEquals, 0)
+	c.Check(cmdAuthArea, internal_testutil.LenEquals, 0)
 
 	var capability tpm2.Capability
 	var property uint32
@@ -182,7 +183,7 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	rc, rHandle, rpBytes, rspAuthArea = s.CommandLog()[1].UnmarshalResponse(c)
 	c.Check(rc, Equals, tpm2.ResponseSuccess)
 	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rspAuthArea, LenEquals, 0)
+	c.Check(rspAuthArea, internal_testutil.LenEquals, 0)
 
 	var moreData bool
 	var capabilityData tpm2.CapabilityData
@@ -949,19 +950,19 @@ func (s *tctiSuite) testRestoreHierarchyControl(c *C, data *testRestoreHierarchy
 
 	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
 	enabled := tpm2.StartupClearAttributes(props[0].Value)&data.attr > 0
-	c.Check(enabled, IsFalse)
+	c.Check(enabled, internal_testutil.IsFalse)
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityTPMProperties(tpm2.PropertyStartupClear, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Property, Equals, tpm2.PropertyStartupClear)
 	enabled = tpm2.StartupClearAttributes(props[0].Value)&data.attr > 0
-	c.Check(enabled, IsTrue)
+	c.Check(enabled, internal_testutil.IsTrue)
 }
 
 func (s *tctiSuite) TestRestoreHierarchyControlOwner(c *C) {
@@ -1090,19 +1091,19 @@ func (s *tctiSuite) TestRestoreDisableClear(c *C) {
 
 	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyPermanent, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Property, Equals, tpm2.PropertyPermanent)
 	disabled := tpm2.PermanentAttributes(props[0].Value)&tpm2.AttrDisableClear > 0
-	c.Check(disabled, IsTrue)
+	c.Check(disabled, internal_testutil.IsTrue)
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityTPMProperties(tpm2.PropertyPermanent, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Property, Equals, tpm2.PropertyPermanent)
 	disabled = tpm2.PermanentAttributes(props[0].Value)&tpm2.AttrDisableClear > 0
-	c.Check(disabled, IsFalse)
+	c.Check(disabled, internal_testutil.IsFalse)
 }
 
 func (s *tctiSuite) TestRestoreDisableClearFailsIfPlatformIsDisabled(c *C) {
@@ -1147,7 +1148,7 @@ func (s *tctiSuite) TestRestoreDACounter(c *C) {
 
 	props, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyLockoutCounter, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Value, Equals, uint32(1))
 
 	// Check that changing the lockout hierarchy auth value isn't a problem.
@@ -1157,7 +1158,7 @@ func (s *tctiSuite) TestRestoreDACounter(c *C) {
 
 	props, err = s.rawTpm(c).GetCapabilityTPMProperties(tpm2.PropertyLockoutCounter, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0].Value, Equals, uint32(0))
 }
 
@@ -1167,7 +1168,7 @@ func (s *tctiSuite) TestRestoreDAParams(c *C) {
 
 	origProps, err := s.TPM.GetCapabilityTPMProperties(tpm2.PropertyMaxAuthFail, 3)
 	c.Check(err, IsNil)
-	c.Assert(origProps, LenEquals, 3)
+	c.Assert(origProps, internal_testutil.LenEquals, 3)
 
 	c.Check(s.TPM.DictionaryAttackParameters(s.TPM.LockoutHandleContext(), math.MaxUint32, math.MaxUint32, math.MaxUint32, nil), IsNil)
 
@@ -1190,14 +1191,14 @@ func (s *tctiSuite) TestCreateAndFlushPrimaryObject(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(object.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, object.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(object.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
@@ -1215,14 +1216,14 @@ func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(object.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, object.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(object.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestCreateAndFlushHMACObject(c *C) {
@@ -1247,14 +1248,14 @@ func (s *tctiSuite) TestCreateAndFlushHMACObject(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(seq.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, seq.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(seq.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
@@ -1272,14 +1273,14 @@ func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(object2.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, object2.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(object2.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestLoadAndFlushExternalObject(c *C) {
@@ -1305,14 +1306,14 @@ func (s *tctiSuite) TestLoadAndFlushExternalObject(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(object.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, object.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(object.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestCreateAndFlushHashObject(c *C) {
@@ -1324,14 +1325,14 @@ func (s *tctiSuite) TestCreateAndFlushHashObject(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(seq.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, seq.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(seq.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestStartAndFlushSession(c *C) {
@@ -1343,14 +1344,14 @@ func (s *tctiSuite) TestStartAndFlushSession(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(tpm2.HandleTypeLoadedSession.BaseHandle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, session.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(tpm2.HandleTypeLoadedSession.BaseHandle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestLoadAndFlushRestoredSession(c *C) {
@@ -1367,14 +1368,14 @@ func (s *tctiSuite) TestLoadAndFlushRestoredSession(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(tpm2.HandleTypeLoadedSession.BaseHandle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, session2.Handle())
 
 	c.Check(s.TPM.Close(), IsNil)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(tpm2.HandleTypeLoadedSession.BaseHandle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
@@ -1389,7 +1390,7 @@ func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(persistent.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, persistent.Handle())
 
 	// Check that changing the owner hierarchy auth value and then disabling the hierarchy
@@ -1401,7 +1402,7 @@ func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(persistent.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
@@ -1436,7 +1437,7 @@ func (s *tctiSuite) TestUndefineNVIndex(c *C) {
 
 	props, err := s.TPM.GetCapabilityHandles(nvPublic.Index, 1)
 	c.Check(err, IsNil)
-	c.Assert(props, LenEquals, 1)
+	c.Assert(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, nvPublic.Index)
 
 	// Check that changing the owner hierarchy auth value and then disabling the hierarchy
@@ -1448,7 +1449,7 @@ func (s *tctiSuite) TestUndefineNVIndex(c *C) {
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(nvPublic.Index, 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 func (s *tctiSuite) TestUndefineNVIndexError(c *C) {
@@ -1612,11 +1613,11 @@ func (s *tctiSuite) TestClear(c *C) {
 	// Verify that platform objects have gone
 	props, err := s.rawTpm(c).GetCapabilityHandles(pPersist.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 
 	props, err = s.rawTpm(c).GetCapabilityHandles(nvPublic.Index, 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 0)
+	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
 type testRestoreCommandCodeAuditStatusData struct {
@@ -2022,7 +2023,7 @@ func (s *tctiSuite) TestDontEvictExistingObject(c *C) {
 
 	props, err := s.rawTpm(c).GetCapabilityHandles(persist.Handle(), 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, persist.Handle())
 }
 
@@ -2069,6 +2070,6 @@ func (s *tctiSuite) TestDontEvictExistingIndex(c *C) {
 
 	props, err := s.rawTpm(c).GetCapabilityHandles(nvPublic.Index, 1)
 	c.Check(err, IsNil)
-	c.Check(props, LenEquals, 1)
+	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, nvPublic.Index)
 }

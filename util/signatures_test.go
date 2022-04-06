@@ -15,6 +15,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 	. "github.com/canonical/go-tpm2/util"
@@ -158,7 +159,7 @@ func (s *signaturesSuite) TestVerifyRSASSA(c *C) {
 
 	ok, err := VerifySignature(pub.Public(), digest, sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsTrue)
+	c.Check(ok, internal_testutil.IsTrue)
 }
 
 func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
@@ -181,7 +182,7 @@ func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
 
 	ok, err := VerifySignature(pub.Public(), make([]byte, 32), sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsFalse)
+	c.Check(ok, internal_testutil.IsFalse)
 }
 
 func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
@@ -204,7 +205,7 @@ func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
 
 	ok, err := VerifySignature(pub.Public(), digest, sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsTrue)
+	c.Check(ok, internal_testutil.IsTrue)
 }
 
 func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
@@ -227,7 +228,7 @@ func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
 
 	ok, err := VerifySignature(pub.Public(), make([]byte, 32), sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsFalse)
+	c.Check(ok, internal_testutil.IsFalse)
 }
 
 func (s *signaturesSuite) TestVerifyECDSA(c *C) {
@@ -250,7 +251,7 @@ func (s *signaturesSuite) TestVerifyECDSA(c *C) {
 
 	ok, err := VerifySignature(pub.Public(), digest, sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsTrue)
+	c.Check(ok, internal_testutil.IsTrue)
 }
 
 func (s *signaturesSuite) TestVerifyECDSAInvalid(c *C) {
@@ -273,7 +274,7 @@ func (s *signaturesSuite) TestVerifyECDSAInvalid(c *C) {
 
 	ok, err := VerifySignature(pub.Public(), make([]byte, 32), sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsFalse)
+	c.Check(ok, internal_testutil.IsFalse)
 }
 
 func (s *signaturesSuite) TestVerifyHMAC(c *C) {
@@ -299,7 +300,7 @@ func (s *signaturesSuite) TestVerifyHMAC(c *C) {
 
 	ok, err := VerifySignature(key, digest, sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsTrue)
+	c.Check(ok, internal_testutil.IsTrue)
 }
 
 func (s *signaturesSuite) TestVerifyHMACInvalid(c *C) {
@@ -325,7 +326,7 @@ func (s *signaturesSuite) TestVerifyHMACInvalid(c *C) {
 
 	ok, err := VerifySignature(key, make([]byte, 32), sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsFalse)
+	c.Check(ok, internal_testutil.IsFalse)
 }
 
 type testSignPolicyAuthorizationData struct {
@@ -571,6 +572,6 @@ func (s *signaturesSuite) TestVerifyAttestationSignature(c *C) {
 
 	ok, err := VerifyAttestationSignature(pub.Public(), quoted, sig)
 	c.Check(err, IsNil)
-	c.Check(ok, testutil.IsTrue)
+	c.Check(ok, internal_testutil.IsTrue)
 
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
@@ -23,33 +24,33 @@ var _ = Suite(&typesObjectsSuite{})
 
 func (s *typesObjectsSuite) TestPublicIsStorageParentRSAValid(c *C) {
 	pub := templates.NewRSAStorageKeyWithDefaults()
-	c.Check(pub.IsStorageParent(), testutil.IsTrue)
+	c.Check(pub.IsStorageParent(), internal_testutil.IsTrue)
 }
 
 func (s *typesObjectsSuite) TestPublicIsStorageParentECCValid(c *C) {
 	pub := templates.NewECCStorageKeyWithDefaults()
-	c.Check(pub.IsStorageParent(), testutil.IsTrue)
+	c.Check(pub.IsStorageParent(), internal_testutil.IsTrue)
 }
 
 func (s *typesObjectsSuite) TestPublicIsStorageParentSymmetric(c *C) {
 	pub := templates.NewSymmetricStorageKeyWithDefaults()
-	c.Check(pub.IsStorageParent(), testutil.IsTrue)
+	c.Check(pub.IsStorageParent(), internal_testutil.IsTrue)
 }
 
 func (s *typesObjectsSuite) TestPublicIsStorageParentKeyedHash(c *C) {
 	pub := templates.NewDerivationParentKeyWithDefaults()
-	c.Check(pub.IsStorageParent(), testutil.IsFalse)
+	c.Check(pub.IsStorageParent(), internal_testutil.IsFalse)
 }
 
 func (s *typesObjectsSuite) TestPublicIsStorageParentRSASign(c *C) {
 	pub := templates.NewRestrictedRSASigningKeyWithDefaults()
-	c.Check(pub.IsStorageParent(), testutil.IsFalse)
+	c.Check(pub.IsStorageParent(), internal_testutil.IsFalse)
 }
 
 func (s *typesObjectsSuite) TestPublicIsStorageParentRSANoNameAlg(c *C) {
 	pub := templates.NewRSAStorageKeyWithDefaults()
 	pub.NameAlg = HashAlgorithmNull
-	c.Check(pub.IsStorageParent(), testutil.IsFalse)
+	c.Check(pub.IsStorageParent(), internal_testutil.IsFalse)
 }
 
 type TestPublicIDUContainer struct {

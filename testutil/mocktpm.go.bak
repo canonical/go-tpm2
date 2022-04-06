@@ -1,0 +1,68 @@
+// Copyright 2021 Canonical Ltd.
+// Licensed under the LGPLv3 with static-linking exception.
+// See LICENCE file for details.
+
+package testutil
+
+func MarshalResponsePacket(rc ResponseCode, handle *Handle, parameters []byte, authArea []AuthResponse) ResponsePacket {
+	header := ResponseHeader{ResponseCode: rc}
+	var payload []byte
+
+	var hBytes []byte
+	if handle != nil {
+		hBytes = mu.MustMarshalToBytes(handle)
+	}
+
+	switch {
+	case len(authArea) > 0:
+		header.Tag = TagSessions
+		payload = mu.MustMarshalToBytes(mu.RawBytes(hBytes), uint32(len(parameters)), mu.RawBytes(parameters), authArea)
+	case len(authArea) == 0:
+		header.Tag = TagNoSessions
+		payload = mu.MustMarshalToBytes(mu.RawBytes(hBytes), mu.RawBytes(parameters))
+	}
+
+	header.ResponseSize = uint32(binary.Size(header) + len(payload))
+
+	return mu.MustMarshalToBytes(header, mu.RawBytes(payload))
+}
+
+func encodeErrorCode(err tpm2.ErrorCode) tpm2.ResponseCode {
+	return fmt0Version & tpm2.ResponseCode(err)
+}
+
+type MockTPM struct {
+	responses [][]byte
+}
+
+func (t *MockTPM) respond(rsp tpm2.ResponsePacket) {
+	t.responses = append(t.responses, rsp)
+}
+
+func (t *MockTPM) Read(data []byte) (n int, err error) {
+	if len(t.responses) == 0 {
+		return 0, io.EOF
+	}
+
+	n = len(t.responses[0])
+	if n == 0 {
+		t.responses = t.responses[1:]
+		return 0, io.EOF
+	}
+
+	if len(data) < n {
+		n = len(data)
+	}
+	copy(data, responses[0])
+	responses[0] = responses[0][:n]
+
+	return n, nil
+}
+
+func (t *MockTPM) Write(data []byte) (n int, err error) {
+	cmd := tpm2.CommandPacket(data)
+	hdr, err := cmd.GetHeader()
+	if xerrors.Is(err, io.ErrUnexpectedEOF) {
+		return t.respond(MarshalResponsePacket(encodeErrorCode(tpm2.ErrorInsufficient), nil, nil, nil))
+	}
+}

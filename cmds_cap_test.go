@@ -11,6 +11,7 @@ import (
 	"reflect"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 
@@ -132,11 +133,11 @@ func (s *capabilitiesSuite) TestGetCapabilityAlgMissing(c *C) {
 }
 
 func (s *capabilitiesSuite) TestIsAlgorithmSupported(c *C) {
-	c.Check(s.TPM.IsAlgorithmSupported(AlgorithmRSA), testutil.IsTrue)
+	c.Check(s.TPM.IsAlgorithmSupported(AlgorithmRSA), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestIsAlgorithmNotSupported(c *C) {
-	c.Check(s.TPM.IsAlgorithmSupported(AlgorithmError), testutil.IsFalse)
+	c.Check(s.TPM.IsAlgorithmSupported(AlgorithmError), internal_testutil.IsFalse)
 }
 
 func makeCommandAttributes(code CommandCode, attrs CommandAttributes, handles int) CommandAttributes {
@@ -290,11 +291,11 @@ func (s *capabilitiesSuite) TestGetCapabilityMissingCommand(c *C) {
 }
 
 func (s *capabilitiesSuite) TestIsCommandSupported(c *C) {
-	c.Check(s.TPM.IsCommandSupported(CommandCreatePrimary), testutil.IsTrue)
+	c.Check(s.TPM.IsCommandSupported(CommandCreatePrimary), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestIsCommandIsNotSupported(c *C) {
-	c.Check(s.TPM.IsCommandSupported(CommandFirst), testutil.IsFalse)
+	c.Check(s.TPM.IsCommandSupported(CommandFirst), internal_testutil.IsFalse)
 }
 
 type testGetCapabilityHandlesData struct {
@@ -338,15 +339,15 @@ func (s *capabilitiesSuite) TestGetCapabilityHandles3(c *C) {
 }
 
 func (s *capabilitiesSuite) TestDoesHandleExist1(c *C) {
-	c.Check(s.TPM.DoesHandleExist(HandleOwner), testutil.IsTrue)
+	c.Check(s.TPM.DoesHandleExist(HandleOwner), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestDoesHandleExist2(c *C) {
-	c.Check(s.TPM.DoesHandleExist(0), testutil.IsTrue)
+	c.Check(s.TPM.DoesHandleExist(0), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestDoesHandleNotExist(c *C) {
-	c.Check(s.TPM.DoesHandleExist(0x40000000), testutil.IsFalse)
+	c.Check(s.TPM.DoesHandleExist(0x40000000), internal_testutil.IsFalse)
 }
 
 func (s *capabilitiesSuite) TestGetCapabilityPCRs(c *C) {
@@ -466,7 +467,7 @@ func (s *capabilitiesSuite) TestGetCapabilityTPMPropertyInvalid(c *C) {
 func (s *capabilitiesSuite) TestGetManufacturer(c *C) {
 	id, err := s.TPM.GetManufacturer()
 	c.Check(err, IsNil)
-	c.Check(id, testutil.InSlice(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT, TPMManufacturerNTC, TPMManufacturerSTM})
+	c.Check(id, internal_testutil.InSlice(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT, TPMManufacturerNTC, TPMManufacturerSTM})
 }
 
 func (s *capabilitiesSuite) testTestParms(c *C, params *PublicParams) {
@@ -523,12 +524,12 @@ func (s *capabilitiesSuite) TestTestParmsErrValue(c *C) {
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2047,
 				Exponent: 0}}})
-	c.Check(IsTPMParameterError(err, ErrorValue, CommandTestParms, 1), testutil.IsTrue)
+	c.Check(IsTPMParameterError(err, ErrorValue, CommandTestParms, 1), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestIsTPM2(c *C) {
 	isTpm2 := s.TPM.IsTPM2()
-	c.Check(isTpm2, testutil.IsTrue)
+	c.Check(isTpm2, internal_testutil.IsTrue)
 }
 
 type testGetCapabilityPCRPropertiesData struct {
@@ -627,5 +628,5 @@ var _ = Suite(&capabilitiesMockTPM12Suite{})
 
 func (s *capabilitiesMockTPM12Suite) TestIsTPM2(c *C) {
 	isTpm2 := s.tpm.IsTPM2()
-	c.Check(isTpm2, testutil.IsFalse)
+	c.Check(isTpm2, internal_testutil.IsFalse)
 }
