@@ -467,7 +467,7 @@ func (s *capabilitiesSuite) TestGetCapabilityTPMPropertyInvalid(c *C) {
 func (s *capabilitiesSuite) TestGetManufacturer(c *C) {
 	id, err := s.TPM.GetManufacturer()
 	c.Check(err, IsNil)
-	c.Check(id, internal_testutil.InSlice(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT, TPMManufacturerNTC, TPMManufacturerSTM})
+	c.Check(id, internal_testutil.IsOneOf(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT, TPMManufacturerNTC, TPMManufacturerSTM})
 }
 
 func (s *capabilitiesSuite) testTestParms(c *C, params *PublicParams) {

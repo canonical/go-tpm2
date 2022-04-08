@@ -46,15 +46,15 @@ type checkersSuite struct{}
 
 var _ = Suite(&checkersSuite{})
 
-func (s *checkersSuite) TestInSlice(c *C) {
-	testInfo(c, InSlice(Equals), "InSlice(Equals)", []string{"obtained", "[]expected"})
-	testCheck(c, InSlice(Equals), true, "", 1, []int{2, 1, 5})
-	testCheck(c, InSlice(Equals), false, "", 10, []int{2, 1, 5})
-	testCheck(c, InSlice(Equals), true, "", "foo", []string{"foo", "bar"})
-	testCheck(c, InSlice(Equals), false, "", "baz", []string{"foo", "bar"})
+func (s *checkersSuite) TestIsOneOf(c *C) {
+	testInfo(c, IsOneOf(Equals), "IsOneOf(Equals)", []string{"obtained", "[]expected"})
+	testCheck(c, IsOneOf(Equals), true, "", 1, []int{2, 1, 5})
+	testCheck(c, IsOneOf(Equals), false, "", 10, []int{2, 1, 5})
+	testCheck(c, IsOneOf(Equals), true, "", "foo", []string{"foo", "bar"})
+	testCheck(c, IsOneOf(Equals), false, "", "baz", []string{"foo", "bar"})
 
-	c.Check(func() { testCheck(c, InSlice(IsNil), false, "") }, Panics, "InSlice must be used with a checker that requires 2 parameters")
-	testCheck(c, InSlice(Equals), false, "[]expected has the wrong kind", 1, 1)
+	testCheck(c, IsOneOf(IsNil), false, "IsOneOf must be used with a checker that requires 2 parameters", 1, []int{1})
+	testCheck(c, IsOneOf(Equals), false, "[]expected has the wrong kind", 1, 1)
 }
 
 func (s *checkersSuite) TestIsTrue(c *C) {

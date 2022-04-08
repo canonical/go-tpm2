@@ -13,23 +13,30 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type inSliceChecker struct {
+type isOneOfChecker struct {
 	sub Checker
 }
 
-func (checker *inSliceChecker) Info() *CheckerInfo {
+func (checker *isOneOfChecker) Info() *CheckerInfo {
 	info := *checker.sub.Info()
-	info.Name = "InSlice(" + info.Name + ")"
+	info.Name = "IsOneOf(" + info.Name + ")"
 	info.Params = append([]string{}, info.Params...)
+	if len(info.Params) > 2 {
+		info.Params = info.Params[:2]
+	}
 	if len(info.Params) == 2 {
 		info.Params[1] = "[]" + info.Params[1]
 	} else {
-		panic("InSlice must be used with a checker that requires 2 parameters")
+		info.Params = append(info.Params, "[]expected")
 	}
 	return &info
 }
 
-func (checker *inSliceChecker) Check(params []interface{}, names []string) (result bool, error string) {
+func (checker *isOneOfChecker) Check(params []interface{}, names []string) (result bool, error string) {
+	if len(checker.sub.Info().Params) != 2 {
+		return false, "IsOneOf must be used with a checker that requires 2 parameters"
+	}
+
 	slice := reflect.ValueOf(params[1])
 	if slice.Kind() != reflect.Slice {
 		return false, names[1] + " has the wrong kind"
@@ -43,15 +50,15 @@ func (checker *inSliceChecker) Check(params []interface{}, names []string) (resu
 	return false, ""
 }
 
-// InSlice determines whether a value is contained in the provided slice, using
+// IsOneOf determines whether a value is contained in the provided slice, using
 // the specified checker.
 //
 // For example:
 //
-//  c.Check(value, InSlice(Equals), []int{1, 2, 3})
+//  c.Check(value, IsOneOf(Equals), []int{1, 2, 3})
 //
-func InSlice(checker Checker) Checker {
-	return &inSliceChecker{checker}
+func IsOneOf(checker Checker) Checker {
+	return &isOneOfChecker{checker}
 }
 
 type isTrueChecker struct {

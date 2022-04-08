@@ -163,7 +163,7 @@ func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), internal_testutil.InSlice(ErrorMatches), []string{
+	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`})
 }
@@ -183,7 +183,7 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), internal_testutil.InSlice(ErrorMatches), []string{
+	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`})
 }
@@ -202,7 +202,7 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), internal_testutil.InSlice(ErrorMatches), []string{
+	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`})
 }

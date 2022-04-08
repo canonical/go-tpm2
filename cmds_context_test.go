@@ -123,7 +123,7 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
 
-	c.Check(session.Handle(), Not(internal_testutil.InSlice(Equals)), handles)
+	c.Check(session.Handle(), Not(internal_testutil.IsOneOf(Equals)), handles)
 }
 
 func (s *contextSuite) TestContextSavePartialHandle(c *C) {
@@ -196,7 +196,7 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
-	c.Check(session.Handle(), internal_testutil.InSlice(Equals), handles)
+	c.Check(session.Handle(), internal_testutil.IsOneOf(Equals), handles)
 }
 
 func (s *contextSuite) TestEvictControl(c *C) {
@@ -241,5 +241,5 @@ func (s *contextSuite) TestFlushContextSession(c *C) {
 
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeHMACSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
-	c.Check(handle, Not(internal_testutil.InSlice(Equals)), handles)
+	c.Check(handle, Not(internal_testutil.IsOneOf(Equals)), handles)
 }
