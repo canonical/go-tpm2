@@ -481,22 +481,20 @@ func (s *muSuite) TestSized(c *C) {
 	var ua testStruct
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:   []interface{}{Sized(&a)},
-		expected: expected,
-		unmarshalExpectedVals: []interface{}{struct {
-			Value interface{} `tpm2:"sized"`
-		}{&a}},
-		unmarshalDests: []interface{}{Sized(&ua)}})
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
 
 	ua = testStruct{}
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:   []interface{}{Sized(&a)},
-		expected: expected,
-		unmarshalExpectedVals: []interface{}{struct {
-			Value interface{} `tpm2:"sized"`
-		}{&a}},
-		unmarshalDests: []interface{}{Sized(&ua)}})
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
 }
 
 type testDetermineTPMKindData struct {
@@ -520,16 +518,8 @@ func (s *muSuite) TestDetermineTPMKindSized1(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testSizedBuffer{}, k: TPMKindSized})
 }
 
-type testStructSized struct {
-	*testStruct `tpm2:"sized"`
-}
-
 func (s *muSuite) TestDetermineTPMKindSized2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructSized{}, k: TPMKindSized})
-}
-
-func (s *muSuite) TestDetermineTPMKindSizedPtr(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testStructSized{}, k: TPMKindSized})
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(&testStruct{}), k: TPMKindSized})
 }
 
 func (s *muSuite) TestDetermineTPMKindList(c *C) {
@@ -552,20 +542,12 @@ func (s *muSuite) TestDetermineTPMKindRaw1(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: RawBytes{}, k: TPMKindRaw})
 }
 
-type testStructWithRawByteField struct {
-	A []byte `tpm2:"raw"`
-}
-
 func (s *muSuite) TestDetermineTPMKindRaw2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithRawByteField{}, k: TPMKindRaw})
-}
-
-type testStructWithRawListField struct {
-	A []uint16 `tpm2:"raw"`
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(testSizedBuffer{}), k: TPMKindRaw})
 }
 
 func (s *muSuite) TestDetermineTPMKindRaw3(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithRawListField{}, k: TPMKindRaw})
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw([]uint32{}), k: TPMKindRaw})
 }
 
 func (s *muSuite) TestErrorSimple(c *C) {
