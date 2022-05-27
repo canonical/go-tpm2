@@ -54,12 +54,9 @@ func (p CommandPacket) Unmarshal(numHandles int) (handles HandleList, authArea [
 		return nil, nil, nil, fmt.Errorf("invalid commandSize value (got %d, packet length %d)", header.CommandSize, len(p))
 	}
 
-	for i := 0; i < numHandles; i++ {
-		var handle Handle
-		if _, err := mu.UnmarshalFromReader(buf, &handle); err != nil {
-			return nil, nil, nil, xerrors.Errorf("cannot unmarshal handles: %w", err)
-		}
-		handles = append(handles, handle)
+	handles = make(HandleList, numHandles)
+	if _, err := mu.UnmarshalFromReader(buf, mu.Raw(&handles)); err != nil {
+		return nil, nil, nil, xerrors.Errorf("cannot unmarshal handles: %w", err)
 	}
 
 	switch header.Tag {
@@ -98,32 +95,23 @@ func (p CommandPacket) Unmarshal(numHandles int) (handles HandleList, authArea [
 // parameters argument must already be serialized to the TPM wire format.
 func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []AuthCommand, parameters []byte) CommandPacket {
 	header := CommandHeader{CommandCode: command}
-	var payload []byte
-
-	hBytes := new(bytes.Buffer)
-	for _, h := range handles {
-		mu.MustMarshalToWriter(hBytes, h)
-	}
+	var payload mu.RawBytes
 
 	switch {
 	case len(authArea) > 0:
 		header.Tag = TagSessions
 
-		aBytes := new(bytes.Buffer)
-		for _, auth := range authArea {
-			mu.MustMarshalToWriter(aBytes, auth)
-		}
-
-		payload = mu.MustMarshalToBytes(mu.RawBytes(hBytes.Bytes()), uint32(aBytes.Len()), mu.RawBytes(aBytes.Bytes()), mu.RawBytes(parameters))
+		aBytes := mu.MustMarshalToBytes(mu.Raw(authArea))
+		payload = mu.MustMarshalToBytes(mu.Raw(handles), uint32(len(aBytes)), mu.RawBytes(aBytes), mu.RawBytes(parameters))
 	case len(authArea) == 0:
 		header.Tag = TagNoSessions
 
-		payload = mu.MustMarshalToBytes(mu.RawBytes(hBytes.Bytes()), mu.RawBytes(parameters))
+		payload = mu.MustMarshalToBytes(mu.Raw(handles), mu.RawBytes(parameters))
 	}
 
 	header.CommandSize = uint32(binary.Size(header) + len(payload))
 
-	return mu.MustMarshalToBytes(header, mu.RawBytes(payload))
+	return mu.MustMarshalToBytes(header, payload)
 }
 
 // ResponseHeader is the header for the TPM's response to a command.
