@@ -397,9 +397,12 @@ const (
 	TPMKindList
 
 	// TPMKindStruct indicates that a go type corresponds to a
-	// TPMS or TPMT prefixed TPM type - this package doesn't
-	// distinguish between the two.
+	// TPMS prefixed TPM type.
 	TPMKindStruct
+
+	// TPMKindTaggedUnion indicates that a go type corresponds
+	// to a TPMT prefixed TPM type.
+	TPMKindTaggedUnion
 
 	// TPMKindUnion indicates that a go type corresponds to a
 	// TPMU prefixed TPM type.
@@ -410,7 +413,8 @@ const (
 	TPMKindCustom
 
 	// TPMKindRaw corresponds to a go slice that is marshalled
-	// without a size field (it is not TPMKindSized or TPMKindList).
+	// without a size field. It behaves like a sequence of
+	// individual values.
 	TPMKindRaw
 )
 
@@ -450,6 +454,11 @@ func tpmKindFromType(t reflect.Type) TPMKind {
 			return TPMKindList
 		}
 	case reflect.Struct:
+		for i := 0; i < t.NumField(); i++ {
+			if tpmKindFromType(t.Field(i).Type) == TPMKindUnion {
+				return TPMKindTaggedUnion
+			}
+		}
 		if reflect.PtrTo(t).Implements(unionType) {
 			return TPMKindUnion
 		}
@@ -616,7 +625,7 @@ func (m *marshaller) marshalValue(v reflect.Value) error {
 		return m.marshalSized(v)
 	case TPMKindList:
 		return m.marshalList(v)
-	case TPMKindStruct:
+	case TPMKindStruct, TPMKindTaggedUnion:
 		return m.marshalStruct(v)
 	case TPMKindUnion:
 		return m.marshalUnion(v)
@@ -842,7 +851,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 		return u.unmarshalSized(v)
 	case TPMKindList:
 		return u.unmarshalList(v)
-	case TPMKindStruct:
+	case TPMKindStruct, TPMKindTaggedUnion:
 		return u.unmarshalStruct(v)
 	case TPMKindUnion:
 		return u.unmarshalUnion(v)

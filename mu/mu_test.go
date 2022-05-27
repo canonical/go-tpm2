@@ -530,6 +530,10 @@ func (s *muSuite) TestDetermineTPMKindStruct(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStruct{}, k: TPMKindStruct})
 }
 
+func (s *muSuite) TestDetermineTPMKindTaggedUnion(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testUnionContainer{}, k: TPMKindTaggedUnion})
+}
+
 func (s *muSuite) TestDetermineTPMKindUnion(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testUnion{}, k: TPMKindUnion})
 }
