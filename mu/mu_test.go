@@ -737,6 +737,10 @@ func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 	c.Check(func() { UnmarshalFromBytes([]byte{}, a) }, PanicMatches, "cannot unmarshal to nil pointer of type \\*uint16")
 }
 
+func (s *muSuite) TestMarshalSizedAndRaw(c *C) {
+	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue")
+}
+
 type testMarshalErrorData struct {
 	value interface{}
 	err   string

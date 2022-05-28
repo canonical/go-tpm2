@@ -436,15 +436,26 @@ func tpmKind(t reflect.Type, c *context, o *options) TPMKind {
 			return TPMKindList
 		}
 	case reflect.Struct:
+		if t.NumField() == 0 {
+			return TPMKindUnsupported
+		}
+
 		k := TPMKindStruct
+
 		for i := 0; i < t.NumField(); i++ {
-			if tpmKind(t.Field(i).Type, nil, nil) == TPMKindUnion {
+			f := t.Field(i)
+			if f.PkgPath != "" {
+				// structs with unexported fields are unsupported
+				return TPMKindUnsupported
+			}
+			if tpmKind(f.Type, nil, nil) == TPMKindUnion {
 				if o.raw || o.selector != "" {
 					panic(fmt.Sprintf(`"raw" and "selector" options cannot be used with type %v`, orig))
 				}
 				k = TPMKindTaggedUnion
 			}
 		}
+
 		if reflect.PtrTo(t).Implements(unionType) {
 			if o.raw || o.sized {
 				panic(fmt.Sprintf(`"raw" and "sized" options cannot be used with type %v`, orig))
@@ -454,6 +465,7 @@ func tpmKind(t reflect.Type, c *context, o *options) TPMKind {
 			}
 			return TPMKindUnion
 		}
+
 		switch {
 		case o.raw || o.selector != "":
 			panic(fmt.Sprintf(`"raw" and "selector" options cannot be used with type %v`, orig))
