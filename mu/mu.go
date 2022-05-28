@@ -896,7 +896,16 @@ func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 		default:
 		}
 
-		if err := u.unmarshalValue(reflect.ValueOf(v).Elem(), opts); err != nil {
+		val := reflect.ValueOf(v)
+		if val.Kind() != reflect.Ptr {
+			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", val.Type()))
+		}
+
+		if val.IsNil() {
+			panic(fmt.Sprintf("cannot unmarshal to nil pointer of type %s", val.Type()))
+		}
+
+		if err := u.unmarshalValue(val.Elem(), opts); err != nil {
 			return u.nbytes, err
 		}
 	}
@@ -970,17 +979,6 @@ func MustMarshalToBytes(vals ...interface{}) []byte {
 func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (int, error) {
 	var caller [1]uintptr
 	runtime.Callers(skip+1, caller[:])
-
-	for _, val := range vals {
-		v := reflect.ValueOf(val)
-		if v.Kind() != reflect.Ptr {
-			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", v.Type()))
-		}
-
-		if v.IsNil() {
-			panic(fmt.Sprintf("cannot unmarshal to nil pointer of type %s", v.Type()))
-		}
-	}
 
 	u, err := makeUnmarshaller(&context{caller: caller, mode: "unmarshal", total: len(vals)}, r)
 	if err != nil {
