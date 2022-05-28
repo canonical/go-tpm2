@@ -261,7 +261,9 @@ type options struct {
 	raw      bool
 }
 
-func parseStructFieldMuOptions(f reflect.StructField) (out options) {
+func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
+	out = new(options)
+
 	s := f.Tag.Get("tpm2")
 	for _, part := range strings.Split(s, ",") {
 		switch {
@@ -273,53 +275,48 @@ func parseStructFieldMuOptions(f reflect.StructField) (out options) {
 			out.raw = true
 		}
 	}
-	return
+
+	return out
 }
 
 type context struct {
-	caller  [1]uintptr
-	mode    string
-	index   int
-	total   int
-	stack   containerStack
-	options options
+	caller [1]uintptr // address of the function calling into the public API
+	mode   string     // marshal or unmarshal
+	index  int        // current argument index
+	total  int        // total number of arguments
+	stack  containerStack
+	sized  bool
 }
 
-func (c *context) enterStructField(s reflect.Value, i int) (f reflect.Value, exit func()) {
-	origOptions := c.options
-	c.options = parseStructFieldMuOptions(s.Type().Field(i))
+func (c *context) enterStructField(s reflect.Value, i int) (exit func()) {
 	c.stack = c.stack.push(containerNode{value: s, index: i})
 
-	return s.Field(i), func() {
+	return func() {
 		c.stack = c.stack.pop()
-		c.options = origOptions
 	}
 }
 
-func (c *context) enterListElem(l reflect.Value, i int) (elem reflect.Value, exit func()) {
-	origOptions := c.options
-	c.options = options{}
+func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 	c.stack = c.stack.push(containerNode{value: l, index: i})
 
-	return l.Index(i), func() {
+	return func() {
 		c.stack = c.stack.pop()
-		c.options = origOptions
 	}
 }
 
-func (c *context) enterUnionElem(u reflect.Value) (elem reflect.Value, exit func(), err error) {
+func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
 	if len(c.stack) == 0 {
 		panic(fmt.Sprintf("union type %s is not inside a container", u.Type()))
 	}
 
 	var selectorVal reflect.Value
-	if c.options.selector == "" {
+	if opts == nil || opts.selector == "" {
 		selectorVal = c.stack.top().value.Field(0)
 	} else {
-		selectorVal = c.stack.top().value.FieldByName(c.options.selector)
+		selectorVal = c.stack.top().value.FieldByName(opts.selector)
 		if !selectorVal.IsValid() {
 			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field\n%s",
-				c.options.selector, u.Type(), c.stack))
+				opts.selector, u.Type(), c.stack))
 		}
 	}
 
@@ -344,33 +341,19 @@ func (c *context) enterUnionElem(u reflect.Value) (elem reflect.Value, exit func
 			u.Type(), c.stack))
 	}
 
-	origOptions := c.options
-	c.options.selector = ""
 	c.stack = c.stack.push(containerNode{value: u, index: index})
 
 	return pv.Elem(), func() {
 		c.stack = c.stack.pop()
-		c.options = origOptions
 	}, nil
 
 }
 
-func (c *context) enterSizedType(v reflect.Value) (exit func()) {
-	switch {
-	case v.Kind() == reflect.Ptr:
-	case v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8:
-	default:
-		panic(fmt.Sprintf("invalid sized type: %v", v.Type()))
-	}
-
-	origOptions := c.options
-	c.options.sized = false
-	if v.Kind() == reflect.Slice {
-		c.options.raw = true
-	}
-
+func (c *context) enterSizedType() (exit func()) {
+	orig := c.sized
+	c.sized = true
 	return func() {
-		c.options = origOptions
+		c.sized = orig
 	}
 }
 
@@ -418,27 +401,25 @@ const (
 	TPMKindRaw
 )
 
-func (k TPMKind) applyOptions(opts *options) TPMKind {
-	switch {
-	case opts.sized:
-		return TPMKindSized
-	case k == TPMKindSized || k == TPMKindList:
-		if opts.raw {
-			return TPMKindRaw
-		}
-		return k
-	default:
-		return k
-	}
-}
-
-func tpmKindFromType(t reflect.Type) TPMKind {
+func tpmKind(t reflect.Type, c *context, o *options) TPMKind {
+	isPtr := false
+	orig := t
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
+		isPtr = true
 	}
 
 	if reflect.PtrTo(t).Implements(customMuType) {
 		return TPMKindCustom
+	}
+
+	sized := false
+	if c != nil {
+		sized = c.sized
+	}
+	if o == nil {
+		var def options
+		o = &def
 	}
 
 	switch t.Kind() {
@@ -448,21 +429,47 @@ func tpmKindFromType(t reflect.Type) TPMKind {
 		switch {
 		case t == rawBytesType:
 			return TPMKindRaw
+		case o.sized || o.selector != "":
+			panic(fmt.Sprintf(`"sized" and "selector" options cannot be used with type %v`, orig))
+		case o.raw:
+			return TPMKindRaw
 		case t.Elem().Kind() == reflect.Uint8:
+			if sized {
+				return TPMKindRaw
+			}
 			return TPMKindSized
 		default:
 			return TPMKindList
 		}
 	case reflect.Struct:
+		k := TPMKindStruct
 		for i := 0; i < t.NumField(); i++ {
-			if tpmKindFromType(t.Field(i).Type) == TPMKindUnion {
-				return TPMKindTaggedUnion
+			if tpmKind(t.Field(i).Type, nil, nil) == TPMKindUnion {
+				if o.raw || o.selector != "" {
+					panic(fmt.Sprintf(`"raw" and "selector" options cannot be used with type %v`, orig))
+				}
+				k = TPMKindTaggedUnion
 			}
 		}
 		if reflect.PtrTo(t).Implements(unionType) {
+			if o.raw || o.sized {
+				panic(fmt.Sprintf(`"raw" and "sized" options cannot be used with type %v`, orig))
+			}
+			if k == TPMKindTaggedUnion {
+				panic(fmt.Sprintf(`type %v cannot be both a union and a tagged union`, orig))
+			}
 			return TPMKindUnion
 		}
-		return TPMKindStruct
+		switch {
+		case o.raw || o.selector != "":
+			panic(fmt.Sprintf(`"raw" and "selector" options cannot be used with type %v`, orig))
+		case o.sized && !isPtr:
+			panic(fmt.Sprintf(`"sized" option cannot be used with type %v: requires a pointer`, orig))
+		case o.sized:
+			return TPMKindSized
+		default:
+			return k
+		}
 	default:
 		return TPMKindUnsupported
 	}
@@ -478,7 +485,7 @@ func DetermineTPMKind(i interface{}) TPMKind {
 	case sizedWrapperType, reflect.PtrTo(sizedWrapperType):
 		return TPMKindSized
 	default:
-		return tpmKindFromType(t)
+		return tpmKind(t, nil, nil)
 	}
 }
 
@@ -495,7 +502,7 @@ func (m *marshaller) Write(p []byte) (n int, err error) {
 }
 
 func (m *marshaller) marshalSized(v reflect.Value) error {
-	exit := m.enterSizedType(v)
+	exit := m.enterSizedType()
 	defer exit()
 
 	if v.IsNil() {
@@ -507,11 +514,11 @@ func (m *marshaller) marshalSized(v reflect.Value) error {
 
 	tmpBuf := new(bytes.Buffer)
 	sm := &marshaller{context: m.context, w: tmpBuf}
-	if err := sm.marshalValue(v); err != nil {
+	if err := sm.marshalValue(v, nil); err != nil {
 		return err
 	}
 	if tmpBuf.Len() > math.MaxUint16 {
-		return newError(v, m.context, errors.New("sized value size greater than 2^16-1"))
+		return newError(v, m.context, fmt.Errorf("sized value size of %d is larger than 2^16-1", tmpBuf.Len()))
 	}
 	if err := binary.Write(m, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
 		return newError(v, m.context, err)
@@ -524,8 +531,8 @@ func (m *marshaller) marshalSized(v reflect.Value) error {
 
 func (m *marshaller) marshalRawList(v reflect.Value) error {
 	for i := 0; i < v.Len(); i++ {
-		elem, exit := m.enterListElem(v, i)
-		if err := m.marshalValue(elem); err != nil {
+		exit := m.enterListElem(v, i)
+		if err := m.marshalValue(v.Index(i), nil); err != nil {
 			exit()
 			return err
 		}
@@ -546,12 +553,12 @@ func (m *marshaller) marshalRaw(v reflect.Value) error {
 	}
 }
 
-func (m *marshaller) marshalPtr(v reflect.Value) error {
+func (m *marshaller) marshalPtr(v reflect.Value, opts *options) error {
 	p := v
 	if v.IsNil() {
 		p = reflect.New(v.Type().Elem())
 	}
-	return m.marshalValue(p.Elem())
+	return m.marshalValue(p.Elem(), opts)
 }
 
 func (m *marshaller) marshalPrimitive(v reflect.Value) error {
@@ -566,7 +573,7 @@ func (m *marshaller) marshalList(v reflect.Value) error {
 	// necessary anyway. For the case where int is 64-bits, truncate to uint32 then zero extend it again to int to make
 	// sure the original number was preserved.
 	if int(uint32(v.Len())) != v.Len() {
-		return newError(v, m.context, errors.New("slice length greater than 2^32-1"))
+		return newError(v, m.context, fmt.Errorf("slice length of %d is larger than 2^32-1", v.Len()))
 	}
 
 	// Marshal length field
@@ -579,8 +586,8 @@ func (m *marshaller) marshalList(v reflect.Value) error {
 
 func (m *marshaller) marshalStruct(v reflect.Value) error {
 	for i := 0; i < v.NumField(); i++ {
-		f, exit := m.enterStructField(v, i)
-		if err := m.marshalValue(f); err != nil {
+		exit := m.enterStructField(v, i)
+		if err := m.marshalValue(v.Field(i), parseStructFieldMuOptions(v.Type().Field(i))); err != nil {
 			exit()
 			return err
 		}
@@ -590,14 +597,14 @@ func (m *marshaller) marshalStruct(v reflect.Value) error {
 	return nil
 }
 
-func (m *marshaller) marshalUnion(v reflect.Value) error {
+func (m *marshaller) marshalUnion(v reflect.Value, opts *options) error {
 	// Ignore during marshalling - let the TPM unmarshalling catch it
-	elem, exit, _ := m.enterUnionElem(v)
+	elem, exit, _ := m.enterUnionElem(v, opts)
 	if !elem.IsValid() {
 		return nil
 	}
 	defer exit()
-	return m.marshalValue(elem)
+	return m.marshalValue(elem, nil)
 }
 
 func (m *marshaller) marshalCustom(v reflect.Value) error {
@@ -607,16 +614,18 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 	return nil
 }
 
-func (m *marshaller) marshalValue(v reflect.Value) error {
+func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 	if v.Type() == emptyIfaceType {
 		v = v.Elem()
 	}
 
-	kind := tpmKindFromType(v.Type()).applyOptions(&m.options)
+	kind := tpmKind(v.Type(), m.context, opts)
 
 	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
-		return m.marshalPtr(v)
+		return m.marshalPtr(v, opts)
 	}
+
+	m.sized = false
 
 	switch kind {
 	case TPMKindPrimitive:
@@ -628,7 +637,7 @@ func (m *marshaller) marshalValue(v reflect.Value) error {
 	case TPMKindStruct, TPMKindTaggedUnion:
 		return m.marshalStruct(v)
 	case TPMKindUnion:
-		return m.marshalUnion(v)
+		return m.marshalUnion(v, opts)
 	case TPMKindCustom:
 		return m.marshalCustom(v)
 	case TPMKindRaw:
@@ -639,11 +648,9 @@ func (m *marshaller) marshalValue(v reflect.Value) error {
 }
 
 func (m *marshaller) marshal(vals ...interface{}) (int, error) {
-	m.total = len(vals)
-	m.nbytes = 0
 	for i, v := range vals {
 		m.index = i
-		if err := m.marshalValue(reflect.ValueOf(v)); err != nil {
+		if err := m.marshalValue(reflect.ValueOf(v), nil); err != nil {
 			return m.nbytes, err
 		}
 	}
@@ -717,7 +724,7 @@ func makeUnmarshaller(ctx *context, r io.Reader) (*unmarshaller, error) {
 }
 
 func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
-	exit := u.enterSizedType(v)
+	exit := u.enterSizedType()
 	defer exit()
 
 	var size uint16
@@ -731,7 +738,7 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 	case size == 0:
 		return nil
 	case int(size) > u.Len():
-		return newError(v, u.context, errors.New("sized value has a size larger than the remaining bytes"))
+		return newError(v, u.context, fmt.Errorf("sized value has a size of %d bytes which is larger than the %d remaining bytes", size, u.Len()))
 	case v.Kind() == reflect.Slice:
 		v.Set(reflect.MakeSlice(v.Type(), int(size), int(size)))
 	}
@@ -740,14 +747,14 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 	if err != nil {
 		return newError(v, u.context, xerrors.Errorf("cannot create new reader for sized payload: %w", err))
 	}
-	return su.unmarshalValue(v)
+	return su.unmarshalValue(v, nil)
 }
 
 func (u *unmarshaller) unmarshalRawList(v reflect.Value, n int) (reflect.Value, error) {
 	for i := 0; i < n; i++ {
 		v = reflect.Append(v, reflect.Zero(v.Type().Elem()))
-		elem, exit := u.enterListElem(v, i)
-		if err := u.unmarshalValue(elem); err != nil {
+		exit := u.enterListElem(v, i)
+		if err := u.unmarshalValue(v.Index(i), nil); err != nil {
 			exit()
 			return reflect.Value{}, err
 		}
@@ -769,11 +776,11 @@ func (u *unmarshaller) unmarshalRaw(v reflect.Value) error {
 	}
 }
 
-func (u *unmarshaller) unmarshalPtr(v reflect.Value) error {
+func (u *unmarshaller) unmarshalPtr(v reflect.Value, opts *options) error {
 	if v.IsNil() {
 		v.Set(reflect.New(v.Type().Elem()))
 	}
-	return u.unmarshalValue(v.Elem())
+	return u.unmarshalValue(v.Elem(), opts)
 }
 
 func (u *unmarshaller) unmarshalPrimitive(v reflect.Value) error {
@@ -804,8 +811,8 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 
 func (u *unmarshaller) unmarshalStruct(v reflect.Value) error {
 	for i := 0; i < v.NumField(); i++ {
-		elem, exit := u.enterStructField(v, i)
-		if err := u.unmarshalValue(elem); err != nil {
+		exit := u.enterStructField(v, i)
+		if err := u.unmarshalValue(v.Field(i), parseStructFieldMuOptions(v.Type().Field(i))); err != nil {
 			exit()
 			return err
 		}
@@ -814,8 +821,8 @@ func (u *unmarshaller) unmarshalStruct(v reflect.Value) error {
 	return nil
 }
 
-func (u *unmarshaller) unmarshalUnion(v reflect.Value) error {
-	elem, exit, err := u.enterUnionElem(v)
+func (u *unmarshaller) unmarshalUnion(v reflect.Value, opts *options) error {
+	elem, exit, err := u.enterUnionElem(v, opts)
 	if err != nil {
 		return newError(v, u.context, err)
 	}
@@ -823,7 +830,7 @@ func (u *unmarshaller) unmarshalUnion(v reflect.Value) error {
 		return nil
 	}
 	defer exit()
-	return u.unmarshalValue(elem)
+	return u.unmarshalValue(elem, nil)
 }
 
 func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
@@ -833,16 +840,18 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 	return nil
 }
 
-func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
+func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 	if v.Type() == emptyIfaceType {
 		v = v.Elem()
 	}
 
-	kind := tpmKindFromType(v.Type()).applyOptions(&u.options)
+	kind := tpmKind(v.Type(), u.context, opts)
 
 	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
-		return u.unmarshalPtr(v)
+		return u.unmarshalPtr(v, opts)
 	}
+
+	u.sized = false
 
 	switch kind {
 	case TPMKindPrimitive:
@@ -854,7 +863,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 	case TPMKindStruct, TPMKindTaggedUnion:
 		return u.unmarshalStruct(v)
 	case TPMKindUnion:
-		return u.unmarshalUnion(v)
+		return u.unmarshalUnion(v, opts)
 	case TPMKindCustom:
 		return u.unmarshalCustom(v)
 	case TPMKindRaw:
@@ -865,11 +874,9 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
-	u.total = len(vals)
-	u.nbytes = 0
 	for i, v := range vals {
 		u.index = i
-		if err := u.unmarshalValue(reflect.ValueOf(v).Elem()); err != nil {
+		if err := u.unmarshalValue(reflect.ValueOf(v).Elem(), nil); err != nil {
 			return u.nbytes, err
 		}
 	}
@@ -880,7 +887,7 @@ func marshalToWriter(skip int, w io.Writer, vals ...interface{}) (int, error) {
 	var caller [1]uintptr
 	runtime.Callers(skip+1, caller[:])
 
-	m := &marshaller{context: &context{caller: caller, mode: "marshal"}, w: w}
+	m := &marshaller{context: &context{caller: caller, mode: "marshal", total: len(vals)}, w: w}
 	return m.marshal(vals...)
 }
 
@@ -955,7 +962,7 @@ func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (int, error
 		}
 	}
 
-	u, err := makeUnmarshaller(&context{caller: caller, mode: "unmarshal"}, r)
+	u, err := makeUnmarshaller(&context{caller: caller, mode: "unmarshal", total: len(vals)}, r)
 	if err != nil {
 		return 0, err
 	}

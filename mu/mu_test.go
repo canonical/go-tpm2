@@ -6,7 +6,6 @@ package mu_test
 
 import (
 	"bytes"
-	"encoding/binary"
 	"io"
 	"reflect"
 	"testing"
@@ -158,8 +157,6 @@ func (s *muSuite) TestMarshalAndUnmarshlRawBytes(c *C) {
 		unmarshalDests: []interface{}{&ua}})
 }
 
-type testSizedBuffer []byte
-
 func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
 	a := internal_testutil.DecodeHexString(c, "2f74683f15431d01ea28ade26c4d009b")
 	ua := make([]byte, 8)
@@ -222,13 +219,6 @@ func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
 	c.Check(ua2, DeepEquals, make([]uint32, 1))
 }
 
-type testStruct struct {
-	A uint16
-	B *uint32
-	C bool
-	D []uint32
-}
-
 func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 	var u32 uint32 = 657763432
 	var u32_0 uint32
@@ -268,11 +258,6 @@ func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 	c.Check(uc_b, Equals, u32)
 	// Test that a preallocated slice is used if it is large enough
 	c.Check(uc_d, DeepEquals, append(uc.D, make([]uint32, 8)...))
-}
-
-type testStructWithRawTagFields struct {
-	A []uint16 `tpm2:"raw"`
-	B []byte   `tpm2:"raw"`
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalWithRawTag(c *C) {
@@ -315,11 +300,6 @@ func (s *muSuite) TestUnmarshalNilRawTagFields(c *C) {
 		unmarshalExpectedVals: []interface{}{testStructWithRawTagFields{A: []uint16{56, 453, 3233, 64245, 22084, 11244, 22270, 38133, 7699, 33233, 45674}}}})
 }
 
-type testStructWithSizedField struct {
-	A uint32
-	B *testStruct `tpm2:"sized"`
-}
-
 func (s *muSuite) TestMarshalAndUnmarshalSizedStruct(c *C) {
 	var u32 uint32 = 657763432
 	a := testStructWithSizedField{A: 1872244400, B: &testStruct{56324, &u32, true, []uint32{4232, 567785}}}
@@ -334,32 +314,6 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedStruct(c *C) {
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:   []interface{}{a, b},
 		expected: expected})
-}
-
-type testUnion struct {
-	A *testStruct
-	B []uint32
-	C uint16
-}
-
-func (t *testUnion) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(uint32) {
-	case 1:
-		return &t.A
-	case 2:
-		return &t.B
-	case 3:
-		return &t.C
-	case 4:
-		return NilUnionValue
-	default:
-		return nil
-	}
-}
-
-type testUnionContainer struct {
-	Select uint32
-	Union  *testUnion
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalUnion(c *C) {
@@ -384,11 +338,6 @@ func (s *muSuite) TestMarshalAndUnmarshalUnion(c *C) {
 		unmarshalExpectedVals: []interface{}{v, w, x, testUnionContainer{Select: 4, Union: &testUnion{}}, testUnionContainer{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
 }
 
-type testUnionContainer2 struct {
-	Select uint32
-	Union  *testUnion `tpm2:"selector:Select"`
-}
-
 func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 	var u32 uint32 = 657763432
 	v := testUnionContainer2{Select: 1, Union: &testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
@@ -411,28 +360,6 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 		unmarshalExpectedVals: []interface{}{v, w, x, testUnionContainer2{Select: 4, Union: &testUnion{}}, testUnionContainer2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
 }
 
-type testStructWithCustomMarshaller struct {
-	A uint16
-	B []uint32
-}
-
-func (t testStructWithCustomMarshaller) Marshal(w io.Writer) error {
-	var a [2]byte
-	binary.LittleEndian.PutUint16(a[:], t.A)
-//line mu_test.go:150
-	_, err := MarshalToWriter(w, binary.BigEndian.Uint16(a[:]), t.B)
-	return err
-}
-
-func (t *testStructWithCustomMarshaller) Unmarshal(r Reader) error {
-//line mu_test.go:200
-	_, err := UnmarshalFromReader(r, &t.A, &t.B)
-	var a [2]byte
-	binary.BigEndian.PutUint16(a[:], t.A)
-	t.A = binary.LittleEndian.Uint16(a[:])
-	return err
-}
-
 func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
 	a := testStructWithCustomMarshaller{A: 44332, B: []uint32{885432, 31287554}}
 	expected := internal_testutil.DecodeHexString(c, "2cad00000002000d82b801dd6902")
@@ -443,15 +370,6 @@ func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:   []interface{}{a},
 		expected: expected})
-}
-
-type testStructContainingCustomType struct {
-	A uint32
-	X *testStructWithCustomMarshaller
-}
-
-type testStructWithRawTagSizedFields struct {
-	A [][]byte `tpm2:"raw"`
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
@@ -488,6 +406,79 @@ func (s *muSuite) TestSized(c *C) {
 	c.Check(ua, DeepEquals, a)
 
 	ua = testStruct{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+}
+
+func (s *muSuite) TestSized2(c *C) {
+	var u32 uint32 = 657763432
+	a := testStructWithSizedField{A: 1872244400, B: &testStruct{56324, &u32, true, []uint32{4232, 567785}}}
+
+	expected := internal_testutil.DecodeHexString(c, "00196f982eb00013dc042734ac680100000002000010880008a9e9")
+
+	var ua testStructWithSizedField
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+
+	ua = testStructWithSizedField{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+}
+
+func (s *muSuite) TestSized3(c *C) {
+	a := testStructWithSizedField3{A: 1872244400, B: internal_testutil.DecodeHexString(c, "a5a5a5a5")}
+
+	expected := internal_testutil.DecodeHexString(c, "000a6f982eb00004a5a5a5a5")
+
+	var ua testStructWithSizedField3
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+
+	ua = testStructWithSizedField3{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+}
+
+func (s *muSuite) TestSized4(c *C) {
+	var u32 uint32 = 657763432
+	a := testUnionContainer{Select: 1, Union: &testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
+	expected := internal_testutil.DecodeHexString(c, "001700000001dc042734ac68010000000205e3131b0053366f")
+
+	var ua testUnionContainer
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(&a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+
+	ua = testUnionContainer{}
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{Sized(&a)},
@@ -557,7 +548,7 @@ func (s *muSuite) TestDetermineTPMKindRaw3(c *C) {
 func (s *muSuite) TestErrorSimple(c *C) {
 	a := make([]byte, 70000)
 	_, err := MarshalToBytes(a)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\[\\]uint8: sized value size greater than 2\\^16-1")
+	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\[\\]uint8: sized value size of 70000 is larger than 2\\^16-1")
 
 	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
@@ -568,7 +559,7 @@ func (s *muSuite) TestErrorSimple(c *C) {
 func (s *muSuite) TestErrorWithMultipleArguments(c *C) {
 	a := make([]byte, 70000)
 	_, err := MarshalToBytes(uint32(5), a)
-	c.Check(err, ErrorMatches, "cannot marshal argument 1 whilst processing element of type \\[\\]uint8: sized value size greater than 2\\^16-1")
+	c.Check(err, ErrorMatches, "cannot marshal argument 1 whilst processing element of type \\[\\]uint8: sized value size of 70000 is larger than 2\\^16-1")
 
 	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
@@ -579,7 +570,7 @@ func (s *muSuite) TestErrorWithMultipleArguments(c *C) {
 func (s *muSuite) TestErrorInStructContainer(c *C) {
 	a := testStructWithSizedField{B: &testStruct{D: make([]uint32, 20000)}}
 	_, err := MarshalToBytes(a)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\*mu_test.testStruct: sized value size greater than 2\\^16-1\n\n"+
+	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\*mu_test.testStruct: sized value size of 80011 is larger than 2\\^16-1\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithSizedField field B\n"+
 		"=== END STACK ===\n")
@@ -596,7 +587,7 @@ func (s *muSuite) TestErrorInStructContainer(c *C) {
 func (s *muSuite) TestErrorInSliceContainer(c *C) {
 	a := []testStructWithSizedField{{}, {}, {B: &testStruct{D: make([]uint32, 20000)}}}
 	_, err := MarshalToBytes(a)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\*mu_test.testStruct: sized value size greater than 2\\^16-1\n\n"+
+	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\*mu_test.testStruct: sized value size of 80011 is larger than 2\\^16-1\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithSizedField field B\n"+
 		"... \\[\\]mu_test.testStructWithSizedField index 2\n"+
@@ -621,7 +612,7 @@ func (s *muSuite) TestErrorInSliceContainerWithMultipleArguments(c *C) {
 	var y []testStructWithSizedField
 
 	_, err := UnmarshalFromBytes(b, &x, &y)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument 1 whilst processing element of type \\*mu_test.testStruct: sized value has a size larger than the remaining bytes\n\n"+
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 1 whilst processing element of type \\*mu_test.testStruct: sized value has a size of 65535 bytes which is larger than the 4 remaining bytes\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithSizedField field B\n"+
 		"... \\[\\]mu_test.testStructWithSizedField index 2\n"+
@@ -699,22 +690,18 @@ func (s *muSuite) TestUnmarshalBadSizedBuffer(c *C) {
 	b := internal_testutil.DecodeHexString(c, "ffff000000000000000000000000")
 	var o []byte
 	_, err := UnmarshalFromBytes(b, &o)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint8: sized value has a size larger than the remaining bytes")
+	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint8: sized value has a size of 65535 bytes which is larger than the 12 remaining bytes")
 }
 
 func (s *muSuite) TestMarshalBadSizedBuffer(c *C) {
 	x := make([]byte, 100000)
 	_, err := MarshalToBytes(x)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\[\\]uint8: sized value size greater than 2\\^16-1")
+	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\[\\]uint8: sized value size of 100000 is larger than 2\\^16-1")
 }
 
 func (s *muSuite) TestMarshalUnionInNoContainer(c *C) {
 	a := &testUnion{}
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion is not inside a container")
-}
-
-type testUnionInvalidContainer2 struct {
-	A *testUnion `tpm2:"selector:foo"`
 }
 
 func (s *muSuite) TestMarshalUnionInInvalidContainer2(c *C) {
@@ -725,13 +712,9 @@ func (s *muSuite) TestMarshalUnionInInvalidContainer2(c *C) {
 		"=== END STACK ===\n")
 }
 
-type testStructWithInvalidSizedField struct {
-	A testStruct `tpm2:"sized"`
-}
-
 func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
 	a := testStructWithInvalidSizedField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "invalid sized type: mu_test.testStruct")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "\"sized\" option cannot be used with type mu_test.testStruct: requires a pointer")
 }
 
 func (s *muSuite) TestMarshalUnsupportedType(c *C) {
@@ -780,10 +763,6 @@ func (s *muSuite) TestMarshalErrorSized1(c *C) {
 	s.testMarshalError(c, &testMarshalErrorData{
 		[]byte{0},
 		"cannot marshal argument whilst processing element of type \\[\\]uint8: io: read/write on closed pipe"})
-}
-
-type testStructWithSizedField2 struct {
-	A *testStruct `tpm2:"sized"`
 }
 
 func (s *muSuite) TestMarshalErrorSized2(c *C) {
