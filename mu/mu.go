@@ -20,13 +20,10 @@ import (
 )
 
 var (
-	customMuType     reflect.Type = reflect.TypeOf((*customMuIface)(nil)).Elem()
-	emptyIfaceType   reflect.Type = reflect.TypeOf((*interface{})(nil)).Elem()
-	unionType        reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
-	nilValueType     reflect.Type = reflect.TypeOf(NilUnionValue)
-	rawBytesType     reflect.Type = reflect.TypeOf(RawBytes(nil))
-	rawWrapperType   reflect.Type = reflect.TypeOf(rawWrapper{})
-	sizedWrapperType reflect.Type = reflect.TypeOf(sizedWrapper{})
+	customMuType reflect.Type = reflect.TypeOf((*customMuIface)(nil)).Elem()
+	unionType    reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
+	nilValueType reflect.Type = reflect.TypeOf(NilUnionValue)
+	rawBytesType reflect.Type = reflect.TypeOf(RawBytes(nil))
 )
 
 // InvalidSelectorError may be returned as a wrapped error from UnmarshalFromBytes or UnmarshalFromReader when a union type indicates
@@ -75,8 +72,9 @@ var NilUnionValue empty
 // the correct length by the caller during unmarshalling.
 type RawBytes []byte
 
-type rawWrapper struct {
-	Value interface{} `tpm2:"raw"`
+type wrappedValue struct {
+	value interface{}
+	opts  *options
 }
 
 // Raw converts the supplied value, which should be a slice, to a raw slice.
@@ -85,12 +83,8 @@ type rawWrapper struct {
 //
 // To unmarshal a raw slice, the supplied value must be a pointer to the
 // preallocated destination slice.
-func Raw(val interface{}) *rawWrapper {
-	return &rawWrapper{val}
-}
-
-type sizedWrapper struct {
-	Value interface{} `tpm2:"sized"`
+func Raw(val interface{}) *wrappedValue {
+	return &wrappedValue{value: val, opts: &options{raw: true}}
 }
 
 // Sized converts the supplied value to a sized value.
@@ -99,9 +93,9 @@ type sizedWrapper struct {
 // value.
 //
 // To unmarshal a sized value, the supplied value must be a pointer to the
-// destionation pointer that will point to the unmarshalled value.
-func Sized(val interface{}) *sizedWrapper {
-	return &sizedWrapper{val}
+// destination pointer that will point to the unmarshalled value.
+func Sized(val interface{}) *wrappedValue {
+	return &wrappedValue{value: val, opts: &options{sized: true}}
 }
 
 // Union is implemented by structure types that correspond to TPMU prefixed TPM types.
@@ -478,14 +472,18 @@ func tpmKind(t reflect.Type, c *context, o *options) TPMKind {
 // DetermineTPMKind returns the TPMKind associated with the supplied go value. It will
 // automatically dereference pointer types.
 func DetermineTPMKind(i interface{}) TPMKind {
-	t := reflect.TypeOf(i)
-	switch t {
-	case rawWrapperType, reflect.PtrTo(rawWrapperType):
-		return TPMKindRaw
-	case sizedWrapperType, reflect.PtrTo(sizedWrapperType):
-		return TPMKindSized
+	switch v := i.(type) {
+	case *wrappedValue:
+		switch {
+		case v.opts.raw:
+			return TPMKindRaw
+		case v.opts.sized:
+			return TPMKindSized
+		default:
+			return DetermineTPMKind(v.value)
+		}
 	default:
-		return tpmKind(t, nil, nil)
+		return tpmKind(reflect.TypeOf(i), nil, nil)
 	}
 }
 
@@ -615,10 +613,6 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
-	if v.Type() == emptyIfaceType {
-		v = v.Elem()
-	}
-
 	kind := tpmKind(v.Type(), m.context, opts)
 
 	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
@@ -650,7 +644,16 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 func (m *marshaller) marshal(vals ...interface{}) (int, error) {
 	for i, v := range vals {
 		m.index = i
-		if err := m.marshalValue(reflect.ValueOf(v), nil); err != nil {
+
+		var opts *options
+		switch w := v.(type) {
+		case *wrappedValue:
+			v = w.value
+			opts = w.opts
+		default:
+		}
+
+		if err := m.marshalValue(reflect.ValueOf(v), opts); err != nil {
 			return m.nbytes, err
 		}
 	}
@@ -841,10 +844,6 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
-	if v.Type() == emptyIfaceType {
-		v = v.Elem()
-	}
-
 	kind := tpmKind(v.Type(), u.context, opts)
 
 	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
@@ -876,7 +875,16 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 	for i, v := range vals {
 		u.index = i
-		if err := u.unmarshalValue(reflect.ValueOf(v).Elem(), nil); err != nil {
+
+		var opts *options
+		switch w := v.(type) {
+		case *wrappedValue:
+			v = w.value
+			opts = w.opts
+		default:
+		}
+
+		if err := u.unmarshalValue(reflect.ValueOf(v).Elem(), opts); err != nil {
 			return u.nbytes, err
 		}
 	}
