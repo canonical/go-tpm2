@@ -457,7 +457,7 @@ func (s *muSuite) TestSized3(c *C) {
 	ua = &testStructWithSizedField3{}
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(&a)},
+		values:                []interface{}{Sized(a)},
 		expected:              expected,
 		unmarshalExpectedVals: []interface{}{*Sized(&a)},
 		unmarshalDests:        []interface{}{Sized(&ua)}})
@@ -499,6 +499,34 @@ func (s *muSuite) testDetermineTPMKind(c *C, data *testDetermineTPMKindData) {
 
 func (s *muSuite) TestDetermineTPMKindUnsupported(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: [3]uint16{1, 2, 3}, k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported2(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(uint32(0)), k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported3(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(uint32(0)), k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported4(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized([]uint32{}), k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported5(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(testStruct{}), k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported6(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(testStruct{}), k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported7(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(&testUnion{}), k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported8(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(&testUnion{}), k: TPMKindUnsupported})
 }
 
 func (s *muSuite) TestDetermineTPMKindPrimitive(c *C) {
@@ -714,17 +742,17 @@ func (s *muSuite) TestMarshalUnionInInvalidContainer2(c *C) {
 
 func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
 	a := testStructWithInvalidSizedField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "\"sized\" option cannot be used with type mu_test.testStruct: requires a pointer")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(\"sized\" option requires a pointer field\\)")
 }
 
 func (s *muSuite) TestMarshalUnsupportedType(c *C) {
 	a := "foo"
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type string")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type string \\(unsupported kind: string\\)")
 }
 
 func (s *muSuite) TestUnmarshalUnsupportedType(c *C) {
 	var a [3]uint16
-	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16")
+	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16 \\(unsupported kind: array\\)")
 }
 
 func (s *muSuite) TestUnmarshalValue(c *C) {
@@ -743,7 +771,7 @@ func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 }
 
 func (s *muSuite) TestMarshalSizedAndRaw(c *C) {
-	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue")
+	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)")
 }
 
 type testMarshalErrorData struct {
