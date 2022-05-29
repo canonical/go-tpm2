@@ -302,8 +302,8 @@ func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 }
 
 func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
-	if len(c.stack) == 0 {
-		panic(fmt.Sprintf("union type %s is not inside a struct", u.Type()))
+	if len(c.stack) == 0 || c.stack.top().value.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("union type %s is not inside a struct\n%s", u.Type(), c.stack))
 	}
 
 	var selectorVal reflect.Value
@@ -315,6 +315,10 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field\n%s",
 				opts.selector, u.Type(), c.stack))
 		}
+	}
+
+	if !u.CanAddr() {
+		panic(fmt.Sprintf("union type %s needs to be referenced via a pointer field\n%s", u.Type(), c.stack))
 	}
 
 	p := u.Addr().Interface().(Union).Select(selectorVal)

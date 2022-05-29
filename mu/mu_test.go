@@ -729,14 +729,24 @@ func (s *muSuite) TestMarshalBadSizedBuffer(c *C) {
 
 func (s *muSuite) TestMarshalUnionInNoStruct(c *C) {
 	a := &testUnion{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion is not inside a struct")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion is not inside a struct\n"+
+		"=== BEGIN STACK ===\n"+
+		"=== END STACK ===\n")
 }
 
-func (s *muSuite) TestMarshalUnionInInvalidContainer2(c *C) {
+func (s *muSuite) TestMarshalInvalidTaggedUnion(c *C) {
 	a := testInvalidTaggedUnion{&testUnion{}}
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "selector name foo for union type mu_test.testUnion does not reference a valid field\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testInvalidTaggedUnion field A\n"+
+		"=== END STACK ===\n")
+}
+
+func (s *muSuite) TestMarshalInvalidTaggedUnion2(c *C) {
+	a := testInvalidTaggedUnion2{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion needs to be referenced via a pointer field\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testInvalidTaggedUnion2 field A\n"+
 		"=== END STACK ===\n")
 }
 

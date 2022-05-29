@@ -97,6 +97,10 @@ type testInvalidTaggedUnion struct {
 	A *testUnion `tpm2:"selector:foo"`
 }
 
+type testInvalidTaggedUnion2 struct {
+	A testUnion
+}
+
 type testStructWithInvalidSizedField struct {
 	A testStruct `tpm2:"sized"`
 }
