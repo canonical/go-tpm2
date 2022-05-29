@@ -486,14 +486,7 @@ func tpmKind(t reflect.Type, c *context, o *options) TPMKind {
 func DetermineTPMKind(i interface{}) TPMKind {
 	switch v := i.(type) {
 	case *wrappedValue:
-		switch {
-		case v.opts.raw:
-			return TPMKindRaw
-		case v.opts.sized:
-			return TPMKindSized
-		default:
-			return DetermineTPMKind(v.value)
-		}
+		return tpmKind(reflect.TypeOf(v.value), nil, v.opts)
 	default:
 		return tpmKind(reflect.TypeOf(i), nil, nil)
 	}
