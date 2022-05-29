@@ -1057,13 +1057,15 @@ func copyValue(skip int, dst, src interface{}) error {
 	if _, err := marshalToWriter(skip+1, buf, src); err != nil {
 		return err
 	}
-	_, err := unmarshalFromReader(skip+1, buf, wrappedDst)
+	if _, err := unmarshalFromReader(skip+1, buf, wrappedDst); err != nil {
+		return err
+	}
 
 	if isInterface {
 		dstV.Elem().Set(reflect.ValueOf(wrappedDst.value).Elem())
 	}
 
-	return err
+	return nil
 }
 
 // CopyValue copies the value of src to dst. The destination must be a pointer to the actual
