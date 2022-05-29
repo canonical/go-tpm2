@@ -1031,11 +1031,42 @@ func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 }
 
 func copyValue(skip int, dst, src interface{}) error {
+	var wrappedDst *wrappedValue
+	switch w := dst.(type) {
+	case *wrappedValue:
+		wrappedDst = &wrappedValue{value: w.value, opts: w.opts}
+	default:
+		wrappedDst = &wrappedValue{value: dst}
+
+	}
+
+	dstV := reflect.ValueOf(wrappedDst.value)
+	if dstV.Kind() != reflect.Ptr {
+		panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", reflect.TypeOf(wrappedDst.value)))
+	}
+	if dstV.IsNil() {
+		panic(fmt.Sprintf("cannot unmarshal to nil pointer of type %s", dstV.Type()))
+	}
+
+	isInterface := false
+	if dstV.Elem().Kind() == reflect.Interface {
+		if !reflect.TypeOf(src).Implements(dstV.Elem().Type()) {
+			panic(fmt.Sprintf("type %s does not implement destination interface %s", reflect.TypeOf(src), dstV.Elem().Type()))
+		}
+		wrappedDst.value = reflect.New(reflect.TypeOf(src)).Interface()
+		isInterface = true
+	}
+
 	buf := new(bytes.Buffer)
 	if _, err := marshalToWriter(skip+1, buf, src); err != nil {
 		return err
 	}
-	_, err := unmarshalFromReader(skip+1, buf, dst)
+	_, err := unmarshalFromReader(skip+1, buf, wrappedDst)
+
+	if isInterface {
+		dstV.Elem().Set(reflect.ValueOf(wrappedDst.value).Elem())
+	}
+
 	return err
 }
 

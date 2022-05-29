@@ -806,3 +806,12 @@ func (s *muSuite) TestCopyValue(c *C) {
 	c.Check(CopyValue(&dst, src), IsNil)
 	c.Check(dst, DeepEquals, testStruct{A: 10, B: new(uint32), C: true, D: []uint32{54353, 431}})
 }
+
+type emptyInterface interface{}
+
+func (s *muSuite) TestCopyValue2(c *C) {
+	src := testStruct{A: 10, C: true, D: []uint32{54353, 431}}
+	var dst emptyInterface
+	c.Check(CopyValue(&dst, src), IsNil)
+	c.Check(dst, DeepEquals, testStruct{A: 10, B: new(uint32), C: true, D: []uint32{54353, 431}})
+}
