@@ -99,10 +99,13 @@ func Sized(val interface{}) *wrappedValue {
 }
 
 // Union is implemented by structure types that correspond to TPMU prefixed TPM types.
+// A struct that contains a union member automatically becomes a tagged union.
 type Union interface {
-	// Select is called by the marshalling code to map the supplied selector to a field. The returned value must be a pointer to
-	// the field to be marshalled or unmarshalled. To work correctly during marshalling and unmarshalling, implementations must
-	// take a pointer receiver. If no data should be marshalled or unmarshalled, it should return NilUnionValue.
+	// Select is called by the marshalling code to map the supplied selector
+	// to a field. The returned value must be a pointer to the field to be
+	// marshalled or unmarshalled. To work correctly during marshalling and
+	// unmarshalling, implementations must take a pointer receiver. If no data
+	// should be marshalled or unmarshalled, it should return NilUnionValue.
 	Select(selector reflect.Value) interface{}
 }
 
@@ -300,7 +303,7 @@ func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 
 func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
 	if len(c.stack) == 0 {
-		panic(fmt.Sprintf("union type %s is not inside a container", u.Type()))
+		panic(fmt.Sprintf("union type %s is not inside a struct", u.Type()))
 	}
 
 	var selectorVal reflect.Value

@@ -52,12 +52,12 @@ func (t *testUnion) Select(selector reflect.Value) interface{} {
 	}
 }
 
-type testUnionContainer struct {
+type testTaggedUnion struct {
 	Select uint32
 	Union  *testUnion
 }
 
-type testUnionContainer2 struct {
+type testTaggedUnion2 struct {
 	Select uint32
 	Union  *testUnion `tpm2:"selector:Select"`
 }
@@ -93,7 +93,7 @@ type testStructWithRawTagSizedFields struct {
 	A [][]byte `tpm2:"raw"`
 }
 
-type testUnionInvalidContainer2 struct {
+type testInvalidTaggedUnion struct {
 	A *testUnion `tpm2:"selector:foo"`
 }
 
