@@ -732,6 +732,11 @@ func (s *muSuite) TestUnmarshalValue(c *C) {
 	c.Check(func() { UnmarshalFromBytes([]byte{}, a) }, PanicMatches, "cannot unmarshal to non-pointer type uint16")
 }
 
+func (s *muSuite) TestUnmarshalNilInterface(c *C) {
+	var a interface{}
+	c.Check(func() { UnmarshalFromBytes([]byte{}, a) }, PanicMatches, "cannot unmarshal to non-pointer type \\%!s\\(<nil>\\)")
+}
+
 func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 	var a *uint16
 	c.Check(func() { UnmarshalFromBytes([]byte{}, a) }, PanicMatches, "cannot unmarshal to nil pointer of type \\*uint16")

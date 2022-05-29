@@ -891,7 +891,7 @@ func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 
 		val := reflect.ValueOf(v)
 		if val.Kind() != reflect.Ptr {
-			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", val.Type()))
+			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", reflect.TypeOf(v)))
 		}
 
 		if val.IsNil() {
