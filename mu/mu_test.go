@@ -752,17 +752,24 @@ func (s *muSuite) TestMarshalInvalidTaggedUnion2(c *C) {
 
 func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
 	a := testStructWithInvalidSizedField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(\"sized\" option requires a pointer field\\)")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(\"sized\" option requires a pointer field\\)\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidSizedField field A\n"+
+		"=== END STACK ===\n")
 }
 
 func (s *muSuite) TestMarshalUnsupportedType(c *C) {
 	a := "foo"
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type string \\(unsupported kind: string\\)")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type string \\(unsupported kind: string\\)\n"+
+		"=== BEGIN STACK ===\n"+
+		"=== END STACK ===\n")
 }
 
 func (s *muSuite) TestUnmarshalUnsupportedType(c *C) {
 	var a [3]uint16
-	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16 \\(unsupported kind: array\\)")
+	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16 \\(unsupported kind: array\\)\n"+
+		"=== BEGIN STACK ===\n"+
+		"=== END STACK ===\n")
 }
 
 func (s *muSuite) TestUnmarshalValue(c *C) {
@@ -781,7 +788,9 @@ func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 }
 
 func (s *muSuite) TestMarshalSizedAndRaw(c *C) {
-	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)")
+	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)\n"+
+		"=== BEGIN STACK ===\n"+
+		"=== END STACK ===\n")
 }
 
 type testMarshalErrorData struct {

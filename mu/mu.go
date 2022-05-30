@@ -636,7 +636,7 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 	}
 
 	if err != nil {
-		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)", v.Type(), err))
+		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)\n%s", v.Type(), err, m.stack))
 	}
 
 	m.sized = false
@@ -857,6 +857,9 @@ func (u *unmarshaller) unmarshalUnion(v reflect.Value, opts *options) error {
 }
 
 func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
+	if !v.CanAddr() {
+		panic(fmt.Sprintf("custom type %s needs to be referenced via a pointer field\n%s", v.Type(), u.stack))
+	}
 	if err := v.Addr().Interface().(CustomUnmarshaller).Unmarshal(u); err != nil {
 		return newError(v, u.context, err)
 	}
@@ -871,7 +874,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 	}
 
 	if err != nil {
-		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)", v.Type(), err))
+		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)\n%s", v.Type(), err, u.stack))
 	}
 
 	u.sized = false
