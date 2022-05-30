@@ -26,8 +26,8 @@ var (
 	rawBytesType reflect.Type = reflect.TypeOf(RawBytes(nil))
 )
 
-// InvalidSelectorError may be returned as a wrapped error from UnmarshalFromBytes or UnmarshalFromReader when a union type indicates
-// that a selector value is invalid.
+// InvalidSelectorError may be returned as a wrapped error from UnmarshalFromBytes or
+// UnmarshalFromReader when a union type indicates that a selector value is invalid.
 type InvalidSelectorError struct {
 	Selector reflect.Value
 }
@@ -64,12 +64,13 @@ type CustomUnmarshaller interface {
 
 type empty struct{}
 
-// NilUnionValue is a special value, the type of which should be returned from implementations of Union.Select to indicate
-// that a union contains no data for a particular selector value.
+// NilUnionValue is a special value, the type of which should be returned from implementations
+// of Union.Select to indicate that a union contains no data for a particular selector value.
 var NilUnionValue empty
 
-// RawBytes is a special byte slice type which is marshalled and unmarshalled without a size field. The slice must be pre-allocated to
-// the correct length by the caller during unmarshalling.
+// RawBytes is a special byte slice type which is marshalled and unmarshalled without a
+// size field. The slice must be pre-allocated to the correct length by the caller during
+// unmarshalling.
 type RawBytes []byte
 
 type wrappedValue struct {
@@ -99,13 +100,21 @@ func Sized(val interface{}) *wrappedValue {
 }
 
 // Union is implemented by structure types that correspond to TPMU prefixed TPM types.
-// A struct that contains a union member automatically becomes a tagged union.
+// A struct that contains a union member automatically becomes a tagged union. The
+// selector field is the first member of the tagged union, unless overridden with the
+// `tpm2:"selector:<field_name>"` tag.
+//
+// Go doesn't have support for unions - TPMU types must be implemented with
+// a struct that contains a field for each possible value.
 type Union interface {
-	// Select is called by the marshalling code to map the supplied selector
-	// to a field. The returned value must be a pointer to the field to be
-	// marshalled or unmarshalled. To work correctly during marshalling and
-	// unmarshalling, implementations must take a pointer receiver. If no data
-	// should be marshalled or unmarshalled, it should return NilUnionValue.
+	// Select is called by this package to map the supplied selector value
+	// to a field. The returned value must be a pointer to the selected field.
+	// For this to work correctly, implementations must take a pointer receiver
+	// and therefore, the implementation must be addressable.
+	//
+	// If the supplied selector value maps to no data, return NilUnionValue.
+	//
+	// If nil is returned, this is interpreted as an error.
 	Select(selector reflect.Value) interface{}
 }
 
