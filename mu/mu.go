@@ -755,15 +755,26 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 		return newError(v, u.context, err)
 	}
 
+	// v is either:
+	// - a pointer kind, in which case it is a pointer to a struct. This
+	//   is the sized structure case.
+	// - a slice kind, in which case the slice is always a byte slice. This
+	//   is the sized buffer case.
 	switch {
-	case size == 0 && !v.IsNil() && v.Kind() == reflect.Ptr:
-		return newError(v, u.context, errors.New("sized value is zero sized, but destination value has been pre-allocated"))
-	case size == 0:
+	case size == 0 && v.Kind() == reflect.Ptr:
+		// zero sized structure. Clear the pointer if it was pre-set and
+		// then return early.
+		v.Set(reflect.Zero(v.Type()))
 		return nil
 	case int(size) > u.Len():
 		return newError(v, u.context, fmt.Errorf("sized value has a size of %d bytes which is larger than the %d remaining bytes", size, u.Len()))
-	case v.Kind() == reflect.Slice:
+	case v.Kind() == reflect.Slice && (v.IsNil() || v.Cap() < int(size)):
+		// sized buffer with no pre-allocated buffer or a pre-allocated
+		// buffer that isn't large enough. Allocate a new one.
 		v.Set(reflect.MakeSlice(v.Type(), int(size), int(size)))
+	case v.Kind() == reflect.Slice:
+		// sized buffer with pre-allocated buffer that is large enough.
+		v.SetLen(int(size))
 	}
 
 	su, err := makeUnmarshaller(u.context, io.LimitReader(u, int64(size)))

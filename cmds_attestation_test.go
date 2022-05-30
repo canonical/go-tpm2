@@ -36,6 +36,9 @@ func (s *attestationSuite) checkAttestCommon(c *C, attest *Attest, tag StructTag
 		c.Check(attest.QualifiedSigner, DeepEquals, qn)
 	}
 
+	if qualifyingData == nil {
+		qualifyingData = Data{}
+	}
 	c.Check(attest.ExtraData, DeepEquals, qualifyingData)
 
 	if sign != nil && signHierarchy == HandleEndorsement {

@@ -152,6 +152,8 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	_, err = mu.UnmarshalFromBytes(inPublicBytes, &inPublic)
 	c.Assert(err, IsNil)
 	c.Check(inSensitiveBytes, internal_testutil.LenEquals, 0)
+
+	mu.MustCopyValue(&public, public)
 	c.Check(inPublic, DeepEquals, &public)
 	c.Check(hierarchy, Equals, tpm2.HandleOwner)
 

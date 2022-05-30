@@ -157,27 +157,165 @@ func (s *muSuite) TestMarshalAndUnmarshlRawBytes(c *C) {
 		unmarshalDests: []interface{}{&ua}})
 }
 
-func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
-	a := internal_testutil.DecodeHexString(c, "2f74683f15431d01ea28ade26c4d009b")
-	ua := make([]byte, 8)
-	ua2 := ua
+func (s *muSuite) TestMarshalAndUnmarshlRaw(c *C) {
+	a := internal_testutil.DecodeHexString(c, "7a788f56fa49ae0ba5ebde780efe4d6a89b5db47")
+	ua := make([]byte, len(a))
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:         []interface{}{a},
-		expected:       append(internal_testutil.DecodeHexString(c, "0010"), a...),
-		unmarshalDests: []interface{}{&ua}})
-	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
-	c.Check(ua2, DeepEquals, make([]byte, 8))
+		values:                []interface{}{Raw(a)},
+		expected:              a,
+		unmarshalDests:        []interface{}{Raw(&ua)},
+		unmarshalExpectedVals: []interface{}{*Raw(&a)}})
 
-	ua3 := make(testSizedBuffer, len(a)+10)
-	ua4 := ua3
+	ua = make([]byte, len(a))
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:         []interface{}{testSizedBuffer(a)},
-		expected:       append(internal_testutil.DecodeHexString(c, "0010"), a...),
-		unmarshalDests: []interface{}{&ua3}})
-	// Test that unmarshalling in to a pre-allocated slice causes it to be reallocated
-	c.Check(ua4, DeepEquals, make(testSizedBuffer, len(a)+10))
+		values:                []interface{}{Raw(a)},
+		expected:              a,
+		unmarshalDests:        []interface{}{Raw(&ua)},
+		unmarshalExpectedVals: []interface{}{*Raw(&a)}})
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
+	values := []interface{}{
+		internal_testutil.DecodeHexString(c, "2f74683f15431d01ea28ade26c4d009b"),
+		internal_testutil.DecodeHexString(c, "9112422c"),
+		testSizedBuffer(internal_testutil.DecodeHexString(c, "74465e401880e264")),
+		[]byte{}}
+	expected := internal_testutil.DecodeHexString(c, "00102f74683f15431d01ea28ade26c4d009b00049112422c000874465e401880e2640000")
+
+	ua := make([]byte, 8)
+	ua2 := ua
+	var ub []byte
+	uc := make(testSizedBuffer, 8)
+	uc2 := uc
+	var ud []byte
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:         values,
+		expected:       expected,
+		unmarshalDests: []interface{}{&ua, &ub, &uc, &ud}})
+	// Test that a preallocated slice is used if it is large enough
+	c.Check(uc2, DeepEquals, uc)
+
+	// Test that a preallocated slice is reallocated if it isn't
+	// large enough
+	c.Check(ua2, DeepEquals, make([]byte, 8))
+
+	ua = make([]byte, 8)
+	ua2 = ua
+	ub = nil
+	uc = make(testSizedBuffer, 18)
+	uc2 = uc
+	ud = nil
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:         values,
+		expected:       expected,
+		unmarshalDests: []interface{}{&ua, &ub, &uc, &ud}})
+	// Test that a preallocated slice is used if it is large enough
+	c.Check(uc2, DeepEquals, append(uc, make(testSizedBuffer, 10)...))
+
+	// Test that a preallocated slice is reallocated if it isn't
+	// large enough
+	c.Check(ua2, DeepEquals, make([]byte, 8))
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalSized(c *C) {
+	var u32 uint32 = 657763432
+	a := &testStruct{56324, &u32, true, []uint32{4232, 567785}}
+	expected := internal_testutil.DecodeHexString(c, "0013dc042734ac680100000002000010880008a9e9")
+
+	var ua *testStruct
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+
+	ua = &testStruct{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalSized2(c *C) {
+	var u32 uint32 = 657763432
+	a := &testStructWithSizedField{A: 1872244400, B: &testStruct{56324, &u32, true, []uint32{4232, 567785}}}
+
+	expected := internal_testutil.DecodeHexString(c, "00196f982eb00013dc042734ac680100000002000010880008a9e9")
+
+	var ua *testStructWithSizedField
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+
+	ua = &testStructWithSizedField{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalSized3(c *C) {
+	a := &testStructWithSizedField3{A: 1872244400, B: internal_testutil.DecodeHexString(c, "a5a5a5a5")}
+
+	expected := internal_testutil.DecodeHexString(c, "000a6f982eb00004a5a5a5a5")
+
+	var ua *testStructWithSizedField3
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+
+	ua = &testStructWithSizedField3{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+}
+
+func (s *muSuite) TestSizedMarshalAndUnmarshalSized4(c *C) {
+	var u32 uint32 = 657763432
+	a := &testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
+	expected := internal_testutil.DecodeHexString(c, "001700000001dc042734ac68010000000205e3131b0053366f")
+
+	var ua *testTaggedUnion
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
+
+	ua = &testTaggedUnion{}
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{Sized(a)},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{*Sized(&a)},
+		unmarshalDests:        []interface{}{Sized(&ua)}})
+	c.Check(ua, DeepEquals, a)
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
@@ -391,101 +529,15 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
 		unmarshalDests: []interface{}{&ua}})
 }
 
-func (s *muSuite) TestSized(c *C) {
-	var u32 uint32 = 657763432
-	a := &testStruct{56324, &u32, true, []uint32{4232, 567785}}
-	expected := internal_testutil.DecodeHexString(c, "0013dc042734ac680100000002000010880008a9e9")
+func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
+	x := testStructWithSizedField{A: 56321}
+	b, err := MarshalToBytes(x)
+	c.Check(err, IsNil)
 
-	var ua *testStruct
-
-	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
-
-	ua = &testStruct{}
-
-	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
-}
-
-func (s *muSuite) TestSized2(c *C) {
-	var u32 uint32 = 657763432
-	a := &testStructWithSizedField{A: 1872244400, B: &testStruct{56324, &u32, true, []uint32{4232, 567785}}}
-
-	expected := internal_testutil.DecodeHexString(c, "00196f982eb00013dc042734ac680100000002000010880008a9e9")
-
-	var ua *testStructWithSizedField
-
-	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
-
-	ua = &testStructWithSizedField{}
-
-	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
-}
-
-func (s *muSuite) TestSized3(c *C) {
-	a := &testStructWithSizedField3{A: 1872244400, B: internal_testutil.DecodeHexString(c, "a5a5a5a5")}
-
-	expected := internal_testutil.DecodeHexString(c, "000a6f982eb00004a5a5a5a5")
-
-	var ua *testStructWithSizedField3
-
-	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
-
-	ua = &testStructWithSizedField3{}
-
-	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
-}
-
-func (s *muSuite) TestSized4(c *C) {
-	var u32 uint32 = 657763432
-	a := &testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
-	expected := internal_testutil.DecodeHexString(c, "001700000001dc042734ac68010000000205e3131b0053366f")
-
-	var ua *testTaggedUnion
-
-	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
-
-	ua = &testTaggedUnion{}
-
-	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
-	c.Check(ua, DeepEquals, a)
+	ux := testStructWithSizedField{B: &testStruct{}}
+	_, err = UnmarshalFromBytes(b, &ux)
+	c.Check(err, IsNil)
+	c.Check(ux.B, IsNil)
 }
 
 type testDetermineTPMKindData struct {
@@ -699,19 +751,6 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionWithInvalidSelector(c *C) {
 
 	var e *InvalidSelectorError
 	c.Check(err, internal_testutil.ErrorAs, &e)
-}
-
-func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
-	x := testStructWithSizedField{A: 56321}
-	b, err := MarshalToBytes(x)
-	c.Check(err, IsNil)
-
-	ux := testStructWithSizedField{B: &testStruct{}}
-	_, err = UnmarshalFromBytes(b, &ux)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\*mu_test.testStruct: sized value is zero sized, but destination value has been pre-allocated\n\n"+
-		"=== BEGIN STACK ===\n"+
-		"... mu_test.testStructWithSizedField field B\n"+
-		"=== END STACK ===\n")
 }
 
 func (s *muSuite) TestUnmarshalBadSizedBuffer(c *C) {
