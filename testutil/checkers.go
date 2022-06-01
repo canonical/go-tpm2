@@ -37,10 +37,10 @@ func (c *tpmValueDeepEqualsChecker) Check(params []interface{}, names []string) 
 	var obtained interface{}
 	var expected interface{}
 
-	if k := mu.DetermineTPMKind(params[0]); k == mu.TPMKindUnsupported {
+	if !mu.IsSupported(params[0]) {
 		return false, "obtained value is not a valid TPM value"
 	}
-	if k := mu.DetermineTPMKind(params[1]); k == mu.TPMKindUnsupported {
+	if !mu.IsSupported(params[1]) {
 		return false, "expected value is not a valid TPM value"
 	}
 

@@ -292,89 +292,6 @@ func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
 	return out
 }
 
-type context struct {
-	caller [1]uintptr // address of the function calling into the public API
-	mode   string     // marshal or unmarshal
-	index  int        // current argument index
-	total  int        // total number of arguments
-	stack  containerStack
-	sized  bool
-}
-
-func (c *context) enterStructField(s reflect.Value, i int) (exit func()) {
-	c.stack = c.stack.push(containerNode{value: s, index: i})
-
-	return func() {
-		c.stack = c.stack.pop()
-	}
-}
-
-func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
-	c.stack = c.stack.push(containerNode{value: l, index: i})
-
-	return func() {
-		c.stack = c.stack.pop()
-	}
-}
-
-func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
-	valid := false
-	if len(c.stack) > 0 {
-		if k, _ := tpmKind(c.stack.top().value.Type(), nil, nil); k == TPMKindTaggedUnion {
-			valid = true
-		}
-	}
-	if !valid {
-		panic(fmt.Sprintf("union type %s is not inside a struct\n%s", u.Type(), c.stack))
-	}
-
-	var selectorVal reflect.Value
-	if opts == nil || opts.selector == "" {
-		selectorVal = c.stack.top().value.Field(0)
-	} else {
-		selectorVal = c.stack.top().value.FieldByName(opts.selector)
-		if !selectorVal.IsValid() {
-			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field\n%s",
-				opts.selector, u.Type(), c.stack))
-		}
-	}
-
-	if !u.CanAddr() {
-		panic(fmt.Sprintf("union type %s needs to be addressable\n%s", u.Type(), c.stack))
-	}
-
-	p := u.Addr().Interface().(Union).Select(selectorVal)
-	switch {
-	case p == nil:
-		return reflect.Value{}, nil, &InvalidSelectorError{selectorVal}
-	case p == NilUnionValue:
-		return reflect.Value{}, nil, nil
-	}
-	pv := reflect.ValueOf(p)
-
-	index := -1
-	for i := 0; i < u.NumField(); i++ {
-		if u.Field(i).Addr().Interface() == pv.Interface() {
-			index = i
-			break
-		}
-	}
-	if index == -1 {
-		panic(fmt.Sprintf("Union.Select implementation for type %s returned a non-member pointer\n%s",
-			u.Type(), c.stack))
-	}
-
-	return pv.Elem(), c.enterStructField(u, index), nil
-}
-
-func (c *context) enterSizedType() (exit func()) {
-	orig := c.sized
-	c.sized = true
-	return func() {
-		c.sized = orig
-	}
-}
-
 // TPMKind indicates the TPM type class associated with a Go type
 type TPMKind int
 
@@ -512,87 +429,183 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 
 }
 
-func tpmKindCheckStructFieldRecursive(t, c reflect.Type, addressable bool, f reflect.StructField) TPMKind {
-	opts := parseStructFieldMuOptions(f)
-	k := tpmKindCheckRecursive(t, c, addressable, opts)
-	if k == TPMKindUnion {
-		if opts.selector != "" {
-			if _, found := c.FieldByName(opts.selector); !found {
-				return TPMKindUnsupported
-			}
-		}
-		if f.Type.Kind() != reflect.Ptr && !addressable {
-			return TPMKindUnsupported
-		}
-	}
-	return k
-}
+// DetermineTPMKind returns the TPMKind associated with the supplied go value. It will
+// automatically dereference pointer types.
+//
+// This doesn't mean that the supplied go value can actually be handled by this package
+// because it doesn't recurse into containers. For that, use IsSupported.
+func DetermineTPMKind(i interface{}) TPMKind {
+	var t reflect.Type
+	var o *options
 
-func tpmKindCheckRecursive(t, c reflect.Type, addressable bool, opts *options) (ret TPMKind) {
+	switch v := i.(type) {
+	case *wrappedValue:
+		t = reflect.TypeOf(v.value)
+		o = v.opts
+	default:
+		t = reflect.TypeOf(i)
+	}
+
 	for {
-		k, err := tpmKind(t, nil, opts)
+		k, err := tpmKind(t, nil, o)
 		switch {
 		case err != nil:
 			return TPMKindUnsupported
 		case k == TPMKindUnsupported:
 			t = t.Elem()
-			addressable = true
-		case k == TPMKindSized && t.Kind() == reflect.Ptr:
-			// sized structure case
-			if e := tpmKindCheckRecursive(t, c, true, nil); e == TPMKindUnsupported {
-				return TPMKindUnsupported
-			}
-			return k
-		case k == TPMKindList:
-			if e := tpmKindCheckRecursive(t.Elem(), t, false, nil); e == TPMKindUnsupported {
-				return TPMKindUnsupported
-			}
-			return k
-		case k == TPMKindStruct || k == TPMKindTaggedUnion:
-			for i := 0; i < t.NumField(); i++ {
-				if e := tpmKindCheckStructFieldRecursive(t.Field(i).Type, t, addressable, t.Field(i)); e == TPMKindUnsupported {
-					return TPMKindUnsupported
-				}
-			}
-			return k
-		case k == TPMKindUnion:
-			if c != nil {
-				if parent, _ := tpmKind(c, nil, nil); parent != TPMKindTaggedUnion {
-					return TPMKindUnsupported
-				}
-			}
-
-			for i := 0; i < t.NumField(); i++ {
-				if e := tpmKindCheckRecursive(t.Field(i).Type, t, addressable, nil); e == TPMKindUnsupported {
-					return TPMKindUnsupported
-				}
-			}
-
-			return k
-		case k == TPMKindRaw && t.Elem().Kind() != reflect.Uint8:
-			// raw list case
-			if e := tpmKindCheckRecursive(t.Elem(), t, false, nil); e == TPMKindUnsupported {
-				return TPMKindUnsupported
-			}
-			return k
 		default:
 			return k
 		}
 	}
 }
 
-// DetermineTPMKind returns the TPMKind associated with the supplied go value. It will
-// automatically dereference pointer types.
+func checkSupported(t, c reflect.Type, addressable bool, opts *options) bool {
+	for {
+		k, err := tpmKind(t, nil, opts)
+		switch {
+		case err != nil:
+			return false
+		case k == TPMKindUnsupported:
+			t = t.Elem()
+			addressable = true
+		case k == TPMKindSized && t.Kind() == reflect.Ptr:
+			// sized structure case
+			return checkSupported(t, c, true, nil)
+		case k == TPMKindList:
+			return checkSupported(t.Elem(), t, true, nil)
+		case k == TPMKindStruct || k == TPMKindTaggedUnion:
+			for i := 0; i < t.NumField(); i++ {
+				if !checkSupported(t.Field(i).Type, t, addressable, parseStructFieldMuOptions(t.Field(i))) {
+					return false
+				}
+			}
+			return true
+		case k == TPMKindUnion:
+			if c == nil {
+				return false
+			}
+			if parent, _ := tpmKind(c, nil, nil); parent != TPMKindTaggedUnion {
+				return false
+			}
+			if opts.selector != "" {
+				if _, found := c.FieldByName(opts.selector); !found {
+					return false
+				}
+			}
+			if !addressable {
+				return false
+			}
+
+			for i := 0; i < t.NumField(); i++ {
+				if !checkSupported(t.Field(i).Type, t, addressable, nil) {
+					return false
+				}
+			}
+
+			return true
+		case k == TPMKindRaw && t.Elem().Kind() != reflect.Uint8:
+			// raw list case
+			return checkSupported(t.Elem(), t, true, nil)
+		default:
+			return true
+		}
+	}
+}
+
+// IsSupported determines whether the supplied value can be handled by this
+// package. This recurses into structures and slices.
 //
-// For slices and structures, this will recursively check that all elements / fields
-// map to a supported TPMKind. If TPMKindUnsupported is returned, the value will
-// generate a panic either during marshalling or unmarshalling.
-func DetermineTPMKind(i interface{}) TPMKind {
+// If false is returned, then values of this type can't be handled by this
+// package and may result in a panic during marshalling or unmarshalling.
+func IsSupported(i interface{}) bool {
 	switch v := i.(type) {
 	case *wrappedValue:
-		return tpmKindCheckRecursive(reflect.TypeOf(v.value), nil, false, v.opts)
+		return checkSupported(reflect.TypeOf(v.value), nil, false, v.opts)
 	default:
-		return tpmKindCheckRecursive(reflect.TypeOf(i), nil, false, nil)
+		return checkSupported(reflect.TypeOf(i), nil, false, nil)
+	}
+}
+
+type context struct {
+	caller [1]uintptr // address of the function calling into the public API
+	mode   string     // marshal or unmarshal
+	index  int        // current argument index
+	total  int        // total number of arguments
+	stack  containerStack
+	sized  bool
+}
+
+func (c *context) enterStructField(s reflect.Value, i int) (exit func()) {
+	c.stack = c.stack.push(containerNode{value: s, index: i})
+
+	return func() {
+		c.stack = c.stack.pop()
+	}
+}
+
+func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
+	c.stack = c.stack.push(containerNode{value: l, index: i})
+
+	return func() {
+		c.stack = c.stack.pop()
+	}
+}
+
+func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
+	valid := false
+	if len(c.stack) > 0 {
+		if k, _ := tpmKind(c.stack.top().value.Type(), nil, nil); k == TPMKindTaggedUnion {
+			valid = true
+		}
+	}
+	if !valid {
+		panic(fmt.Sprintf("union type %s is not inside a struct\n%s", u.Type(), c.stack))
+	}
+
+	var selectorVal reflect.Value
+	if opts == nil || opts.selector == "" {
+		selectorVal = c.stack.top().value.Field(0)
+	} else {
+		selectorVal = c.stack.top().value.FieldByName(opts.selector)
+		if !selectorVal.IsValid() {
+			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field\n%s",
+				opts.selector, u.Type(), c.stack))
+		}
+	}
+
+	if !u.CanAddr() {
+		panic(fmt.Sprintf("union type %s needs to be addressable\n%s", u.Type(), c.stack))
+	}
+
+	p := u.Addr().Interface().(Union).Select(selectorVal)
+	switch {
+	case p == nil:
+		return reflect.Value{}, nil, &InvalidSelectorError{selectorVal}
+	case p == NilUnionValue:
+		return reflect.Value{}, nil, nil
+	}
+	pv := reflect.ValueOf(p)
+
+	index := -1
+	for i := 0; i < u.NumField(); i++ {
+		if u.Field(i).Addr().Interface() == pv.Interface() {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		panic(fmt.Sprintf("Union.Select implementation for type %s returned a non-member pointer\n%s",
+			u.Type(), c.stack))
+	}
+
+	return pv.Elem(), c.enterStructField(u, index), nil
+}
+
+func (c *context) enterSizedType() (exit func()) {
+	orig := c.sized
+	c.sized = true
+	return func() {
+		c.sized = orig
 	}
 }
 

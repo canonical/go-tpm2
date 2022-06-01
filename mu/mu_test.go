@@ -562,121 +562,214 @@ func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
 	c.Check(ux.B, IsNil)
 }
 
-type testDetermineTPMKindData struct {
-	d interface{}
-	k TPMKind
+func (s *muSuite) testIsSupported(c *C, d interface{}, expected bool) {
+	c.Check(IsSupported(d), Equals, expected)
 }
 
-func (s *muSuite) testDetermineTPMKind(c *C, data *testDetermineTPMKindData) {
-	c.Check(DetermineTPMKind(data.d), Equals, data.k)
+func (s *muSuite) TestIsSupportedUnsupported(c *C) {
+	s.testIsSupported(c, [3]uint16{1, 2, 3}, false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported2(c *C) {
+	s.testIsSupported(c, Sized(uint32(0)), false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported3(c *C) {
+	s.testIsSupported(c, Raw(uint32(0)), false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported4(c *C) {
+	s.testIsSupported(c, Sized([]uint32{}), false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported5(c *C) {
+	s.testIsSupported(c, Sized(testStruct{}), false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported6(c *C) {
+	s.testIsSupported(c, Raw(testStruct{}), false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported7(c *C) {
+	s.testIsSupported(c, testUnion{}, false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported8(c *C) {
+	s.testIsSupported(c, Sized(&testUnion{}), false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported9(c *C) {
+	s.testIsSupported(c, Raw(&testUnion{}), false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported10(c *C) {
+	s.testIsSupported(c, testInvalidTaggedUnion{}, false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported11(c *C) {
+	s.testIsSupported(c, testTaggedUnion3{}, false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported12(c *C) {
+	s.testIsSupported(c, testStructWithInvalidSizedField{}, false)
+}
+
+func (s *muSuite) TestIsSupported1(c *C) {
+	s.testIsSupported(c, uint32(0), true)
+}
+
+func (s *muSuite) TestIsSupported2(c *C) {
+	var x uint16
+	s.testIsSupported(c, &x, true)
+}
+
+func (s *muSuite) TestIsSupported3(c *C) {
+	s.testIsSupported(c, testSizedBuffer{}, true)
+}
+
+func (s *muSuite) TestIsSupported4(c *C) {
+	s.testIsSupported(c, Sized(&testStruct{}), true)
+}
+
+func (s *muSuite) TestIsSupported5(c *C) {
+	s.testIsSupported(c, []uint32{}, true)
+}
+
+func (s *muSuite) TestIsSupported6(c *C) {
+	s.testIsSupported(c, testStruct{}, true)
+}
+
+func (s *muSuite) TestIsSupported7(c *C) {
+	s.testIsSupported(c, testTaggedUnion{}, true)
+}
+
+func (s *muSuite) TestIsSupported8(c *C) {
+	s.testIsSupported(c, testTaggedUnion2{}, true)
+}
+
+func (s *muSuite) TestIsSupported9(c *C) {
+	s.testIsSupported(c, &testTaggedUnion3{}, true)
+}
+
+func (s *muSuite) TestIsSupported10(c *C) {
+	s.testIsSupported(c, testCustom{}, true)
+}
+
+func (s *muSuite) TestIsSupported11(c *C) {
+	s.testIsSupported(c, testStructContainingCustom{}, true)
+}
+
+func (s *muSuite) TestIsSupported12(c *C) {
+	s.testIsSupported(c, RawBytes{}, true)
+}
+
+func (s *muSuite) TestIsSupported13(c *C) {
+	s.testIsSupported(c, Raw(testSizedBuffer{}), true)
+}
+
+func (s *muSuite) TestIsSupported14(c *C) {
+	s.testIsSupported(c, Raw([]uint32{}), true)
+}
+
+func (s *muSuite) TestIsSupported15(c *C) {
+	s.testIsSupported(c, testStructWithRawTagFields{}, true)
+}
+
+func (s *muSuite) TestIsSupported16(c *C) {
+	s.testIsSupported(c, testStructWithSizedField{}, true)
+}
+
+func (s *muSuite) TestIsSupported17(c *C) {
+	s.testIsSupported(c, testStructWithRawTagSizedFields{}, true)
+}
+
+func (s *muSuite) testDetermineTPMKind(c *C, d interface{}, expected TPMKind) {
+	c.Check(DetermineTPMKind(d), Equals, expected)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: [3]uint16{1, 2, 3}, k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, [3]uint16{1, 2, 3}, TPMKindUnsupported)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(uint32(0)), k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, Sized(uint32(0)), TPMKindUnsupported)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported3(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(uint32(0)), k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, Raw(uint32(0)), TPMKindUnsupported)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported4(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized([]uint32{}), k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, Sized([]uint32{}), TPMKindUnsupported)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported5(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(testStruct{}), k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, Sized(testStruct{}), TPMKindUnsupported)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported6(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(testStruct{}), k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, Raw(testStruct{}), TPMKindUnsupported)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported7(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(&testUnion{}), k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, Sized(&testUnion{}), TPMKindUnsupported)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported8(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(&testUnion{}), k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, Raw(&testUnion{}), TPMKindUnsupported)
 }
 
-func (s *muSuite) TestDetermineTPMKindUnsupported9(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testInvalidTaggedUnion{}, k: TPMKindUnsupported})
+func (s *muSuite) TestDetermineTPMKindPrimitive1(c *C) {
+	s.testDetermineTPMKind(c, uint32(0), TPMKindPrimitive)
 }
 
-func (s *muSuite) TestDetermineTPMKindUnsupported10(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testTaggedUnion3{}, k: TPMKindUnsupported})
-}
-
-func (s *muSuite) TestDetermineTPMKindUnsupported11(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithInvalidSizedField{}, k: TPMKindUnsupported})
-}
-
-func (s *muSuite) TestDetermineTPMKindPrimitive(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: uint32(10), k: TPMKindPrimitive})
+func (s *muSuite) TestDetermineTPMKindPrimitive2(c *C) {
+	var x uint16
+	s.testDetermineTPMKind(c, &x, TPMKindPrimitive)
 }
 
 func (s *muSuite) TestDetermineTPMKindSized1(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testSizedBuffer{}, k: TPMKindSized})
+	s.testDetermineTPMKind(c, testSizedBuffer{}, TPMKindSized)
 }
 
 func (s *muSuite) TestDetermineTPMKindSized2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Sized(&testStruct{}), k: TPMKindSized})
+	s.testDetermineTPMKind(c, Sized(&testStruct{}), TPMKindSized)
 }
 
 func (s *muSuite) TestDetermineTPMKindList(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: []uint32{}, k: TPMKindList})
+	s.testDetermineTPMKind(c, []uint32{}, TPMKindList)
 }
 
 func (s *muSuite) TestDetermineTPMKindStruct(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStruct{}, k: TPMKindStruct})
-}
-
-func (s *muSuite) TestDetermineTPMKindStruct2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testStruct{}, k: TPMKindStruct})
+	s.testDetermineTPMKind(c, testStruct{}, TPMKindStruct)
 }
 
 func (s *muSuite) TestDetermineTPMKindTaggedUnion(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testTaggedUnion{}, k: TPMKindTaggedUnion})
+	s.testDetermineTPMKind(c, testTaggedUnion{}, TPMKindTaggedUnion)
 }
 
 func (s *muSuite) TestDetermineTPMKindTaggedUnion2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testTaggedUnion{}, k: TPMKindTaggedUnion})
-}
-
-func (s *muSuite) TestDetermineTPMKindTaggedUnion3(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testTaggedUnion2{}, k: TPMKindTaggedUnion})
-}
-
-func (s *muSuite) TestDetermineTPMKindTaggedUnion4(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testTaggedUnion3{}, k: TPMKindTaggedUnion})
+	s.testDetermineTPMKind(c, testTaggedUnion3{}, TPMKindTaggedUnion)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnion(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testUnion{}, k: TPMKindUnion})
-}
-
-func (s *muSuite) TestDetermineTPMKindUnion2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testUnion{}, k: TPMKindUnion})
+	s.testDetermineTPMKind(c, testUnion{}, TPMKindUnion)
 }
 
 func (s *muSuite) TestDetermineTPMKindCustom(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testCustom{}, k: TPMKindCustom})
+	s.testDetermineTPMKind(c, testCustom{}, TPMKindCustom)
 }
 
 func (s *muSuite) TestDetermineTPMKindRaw1(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: RawBytes{}, k: TPMKindRaw})
+	s.testDetermineTPMKind(c, RawBytes{}, TPMKindRaw)
 }
 
 func (s *muSuite) TestDetermineTPMKindRaw2(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(testSizedBuffer{}), k: TPMKindRaw})
+	s.testDetermineTPMKind(c, Raw(testSizedBuffer{}), TPMKindRaw)
 }
 
 func (s *muSuite) TestDetermineTPMKindRaw3(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw([]uint32{}), k: TPMKindRaw})
+	s.testDetermineTPMKind(c, Raw([]uint32{}), TPMKindRaw)
 }
 
 func (s *muSuite) TestErrorSimple(c *C) {
