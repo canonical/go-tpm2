@@ -403,23 +403,29 @@ const (
 )
 
 func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
-	isPtr := false
-	if t.Kind() == reflect.Ptr {
-		isPtr = true
-		t = t.Elem()
+	if o == nil {
+		var def options
+		o = &def
 	}
 
-	if reflect.PtrTo(t).Implements(customMuType) {
-		return TPMKindCustom, nil
+	if t.Kind() != reflect.Ptr {
+		switch {
+		case reflect.PtrTo(t).Implements(customMuType):
+			if o.raw || o.sized || o.selector != "" {
+				return TPMKindUnsupported, errors.New(`"raw", "sized" and "selector" options are invalid with custom types`)
+			}
+			return TPMKindCustom, nil
+		case reflect.PtrTo(t).Implements(unionType):
+			if o.raw || o.sized {
+				return TPMKindUnsupported, errors.New(`"raw" and "sized" options are invalid with union types`)
+			}
+			return TPMKindUnion, nil
+		}
 	}
 
 	sized := false
 	if c != nil {
 		sized = c.sized
-	}
-	if o == nil {
-		var def options
-		o = &def
 	}
 
 	switch t.Kind() {
@@ -428,6 +434,19 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 			return TPMKindUnsupported, errors.New(`"sized", "raw" and "selector" options are invalid with primitive types`)
 		}
 		return TPMKindPrimitive, nil
+	case reflect.Ptr:
+		if k, _ := tpmKind(t.Elem(), nil, nil); k != TPMKindStruct && k != TPMKindTaggedUnion {
+			return TPMKindUnsupported, nil
+		}
+
+		switch {
+		case o.sized:
+			return TPMKindSized, nil
+		case o.raw || o.selector != "":
+			return TPMKindUnsupported, errors.New(`"raw" and "selector" options are invalid with struct types`)
+		default:
+			return TPMKindUnsupported, nil
+		}
 	case reflect.Slice:
 		switch {
 		case t == rawBytesType:
@@ -457,36 +476,39 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 				// structs with unexported fields are unsupported
 				return TPMKindUnsupported, errors.New("struct type with unexported fields")
 			}
-			if fk, _ := tpmKind(f.Type, nil, nil); fk == TPMKindUnion {
-				if o.raw || o.selector != "" {
-					return TPMKindUnsupported, errors.New(`"raw" and "selector" options are invalid with tagged union types`)
-				}
+			if f.Type.Kind() != reflect.Ptr {
+				continue
+			}
+			if fk, _ := tpmKind(f.Type.Elem(), nil, nil); fk == TPMKindUnion {
 				k = TPMKindTaggedUnion
 			}
 		}
 
-		if reflect.PtrTo(t).Implements(unionType) {
-			if o.raw || o.sized {
-				return TPMKindUnsupported, errors.New(`"raw" and "sized" options are invalid with union types`)
-			}
-			if k == TPMKindTaggedUnion {
-				return TPMKindUnsupported, errors.New("type cannot be both a union and tagged union")
-			}
-			return TPMKindUnion, nil
+		if o.sized {
+			return TPMKindUnsupported, errors.New(`"sized" option requires a pointer field`)
+		}
+		if o.raw || o.selector != "" {
+			return TPMKindUnsupported, errors.New(`"raw" and "selector" options are invalid with struct types`)
 		}
 
-		switch {
-		case o.raw || o.selector != "":
-			return TPMKindUnsupported, errors.New(`"raw" and "selector" options are invalid with struct types`)
-		case o.sized && !isPtr:
-			return TPMKindUnsupported, errors.New(`"sized" option requires a pointer field`)
-		case o.sized:
-			return TPMKindSized, nil
-		default:
-			return k, nil
-		}
+		return k, nil
 	default:
 		return TPMKindUnsupported, fmt.Errorf("unsupported kind: %v", t.Kind())
+	}
+
+}
+
+func tpmKindRecursive(t reflect.Type, opts *options) TPMKind {
+	for {
+		k, err := tpmKind(t, nil, opts)
+		switch {
+		case err != nil:
+			return TPMKindUnsupported
+		case k == TPMKindUnsupported:
+			t = t.Elem()
+		default:
+			return k
+		}
 	}
 }
 
@@ -495,11 +517,9 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 func DetermineTPMKind(i interface{}) TPMKind {
 	switch v := i.(type) {
 	case *wrappedValue:
-		k, _ := tpmKind(reflect.TypeOf(v.value), nil, v.opts)
-		return k
+		return tpmKindRecursive(reflect.TypeOf(v.value), v.opts)
 	default:
-		k, _ := tpmKind(reflect.TypeOf(i), nil, nil)
-		return k
+		return tpmKindRecursive(reflect.TypeOf(i), nil)
 	}
 }
 
@@ -631,12 +651,11 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 	kind, err := tpmKind(v.Type(), m.context, opts)
 
-	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
-		return m.marshalPtr(v, opts)
-	}
-
-	if err != nil {
+	switch {
+	case err != nil:
 		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)\n%s", v.Type(), err, m.stack))
+	case kind == TPMKindUnsupported:
+		return m.marshalPtr(v, opts)
 	}
 
 	m.sized = false
@@ -880,12 +899,11 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 	kind, err := tpmKind(v.Type(), u.context, opts)
 
-	if v.Kind() == reflect.Ptr && kind != TPMKindSized {
-		return u.unmarshalPtr(v, opts)
-	}
-
-	if err != nil {
+	switch {
+	case err != nil:
 		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)\n%s", v.Type(), err, u.stack))
+	case kind == TPMKindUnsupported:
+		return u.unmarshalPtr(v, opts)
 	}
 
 	u.sized = false
