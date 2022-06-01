@@ -518,8 +518,8 @@ func checkSupported(t, c reflect.Type, addressable bool, opts *options) bool {
 	}
 }
 
-// IsSupported determines whether the supplied value can be handled by this
-// package. This recurses into structures and slices.
+// IsSupported determines whether the type of the supplied value can be
+// handled by this package. This recurses into structures and slices.
 //
 // If false is returned, then values of this type can't be handled by this
 // package and may result in a panic during marshalling or unmarshalling.
@@ -1230,4 +1230,33 @@ func MustCopyValue(dst, src interface{}) {
 	if err := copyValue(2, dst, src); err != nil {
 		panic(err)
 	}
+}
+
+// IsValid determines whether the supplied value is representable by
+// the TPM wire format.
+func IsValid(v interface{}) bool {
+	if !IsSupported(v) {
+		return false
+	}
+
+	var d interface{}
+	if err := CopyValue(&d, v); err != nil {
+		return false
+	}
+
+	return true
+}
+
+// DeepEqual determines whether the supplied values are deeply equal. It
+// does this by first converting both values to their canonical form, by
+// serializing and unserializing them. This will panic if either value
+// cannot be represented by the TPM wire format.
+func DeepEqual(x, y interface{}) bool {
+	var x2 interface{}
+	MustCopyValue(&x2, x)
+
+	var y2 interface{}
+	MustCopyValue(&y2, y)
+
+	return reflect.DeepEqual(x2, y2)
 }

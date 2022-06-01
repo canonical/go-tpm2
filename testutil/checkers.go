@@ -5,8 +5,6 @@
 package testutil
 
 import (
-	"reflect"
-
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2/mu"
@@ -19,7 +17,8 @@ type tpmValueDeepEqualsChecker struct {
 // TPMValueDeepEquals checks that the obtained TPM value is deeply
 // equal to the expected TPM value. This works by first converting
 // both values to a canonical form by serializing and unserializing
-// them. Both values need to be valid TPM types for this to work.
+// them. Both values need to be valid TPM types for this to work,
+// and they need to be representable by the TPM wire format.
 //
 // For example:
 //
@@ -34,22 +33,12 @@ var TPMValueDeepEquals Checker = &tpmValueDeepEqualsChecker{
 	&CheckerInfo{Name: "TPMValueDeepEquals", Params: []string{"obtained", "expected"}}}
 
 func (c *tpmValueDeepEqualsChecker) Check(params []interface{}, names []string) (result bool, err string) {
-	var obtained interface{}
-	var expected interface{}
-
-	if !mu.IsSupported(params[0]) {
+	if !mu.IsValid(params[0]) {
 		return false, "obtained value is not a valid TPM value"
 	}
-	if !mu.IsSupported(params[1]) {
+	if !mu.IsValid(params[1]) {
 		return false, "expected value is not a valid TPM value"
 	}
 
-	if err := mu.CopyValue(&obtained, params[0]); err != nil {
-		return false, "cannot copy obtained value to canonical form: " + err.Error()
-	}
-	if err := mu.CopyValue(&expected, params[1]); err != nil {
-		return false, "cannot copy expected value to canonical form: " + err.Error()
-	}
-
-	return reflect.DeepEqual(obtained, expected), ""
+	return mu.DeepEqual(params[0], params[1]), ""
 }
