@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	customMuType reflect.Type = reflect.TypeOf((*customMuIface)(nil)).Elem()
+	customMuType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
 	unionType    reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 	nilValueType reflect.Type = reflect.TypeOf(NilUnionValue)
 	rawBytesType reflect.Type = reflect.TypeOf(RawBytes(nil))
@@ -36,29 +36,20 @@ func (e *InvalidSelectorError) Error() string {
 	return fmt.Sprintf("invalid selector value: %v", e.Selector)
 }
 
-type customMuIface interface {
-	CustomMarshaller
-	CustomUnmarshaller
-}
-
-// CustomMarshaller is implemented by types that require custom marshalling behaviour because they are non-standard and not
-// directly supported by the marshalling code. This interface should be implemented by types with a value receiver if you want
-// to be able to pass it directly by value to MarshalToBytes or MarshalToWriter. Implementations must also implement the
-// CustomUnmarshaller interface.
+// CustomMarshaller is implemented by types that require custom marshalling
+// behaviour because they are non-standard and not directly supported by this
+// package.marshalling code.
 //
-// If the custom implementation makes a recursive call in the MarshalToWriter, it should propagate errors from
-// this without wrapping. This allows the full context of the error to be surfaced from the originating call.
+// If the implementation makes a recursive call in to this package, it should
+// return errors from any recursive call without wrapping. This allows the full
+// context of the error to be surfaced from the originating call.
 type CustomMarshaller interface {
+	// Marshal should serialize the value to the supplied writer.
+	// The implementation of this must take a value receiver.
 	Marshal(w io.Writer) error
-}
 
-// CustomUnmarshaller is implemented by types that require custom unmarshalling behaviour because they are non-standard and not
-// directly supported by the marshalling code. This interface must be implemented by types with a pointer receiver, and types
-// must also implement the CustomMarshaller interface.
-//
-// If the custom implementation makes a recursive call in the UnmarshalFromReader, it should propagate errors from
-// this without wrapping. This allows the full context of the error to be surfaced from the originating call.
-type CustomUnmarshaller interface {
+	// Unmarshal should unserialize the value from the supplied reader.
+	// The implementation of this should take a pointer receiver.
 	Unmarshal(r Reader) error
 }
 
@@ -631,7 +622,7 @@ func (m *marshaller) marshalUnion(v reflect.Value, opts *options) error {
 }
 
 func (m *marshaller) marshalCustom(v reflect.Value) error {
-	if err := v.Interface().(CustomMarshaller).Marshal(m); err != nil {
+	if err := v.Interface().(interface{ Marshal(w io.Writer) error }).Marshal(m); err != nil {
 		return newError(v, m.context, err)
 	}
 	return nil
@@ -880,7 +871,7 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 	if !v.CanAddr() {
 		panic(fmt.Sprintf("custom type %s needs to be referenced via a pointer field\n%s", v.Type(), u.stack))
 	}
-	if err := v.Addr().Interface().(CustomUnmarshaller).Unmarshal(u); err != nil {
+	if err := v.Addr().Interface().(interface{ Unmarshal(r Reader) error }).Unmarshal(u); err != nil {
 		return newError(v, u.context, err)
 	}
 	return nil
