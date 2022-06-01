@@ -54,7 +54,8 @@ type customUnmarshallerIface interface {
 // context of the error to be surfaced from the originating call.
 type CustomMarshaller interface {
 	// Marshal should serialize the value to the supplied writer.
-	// The implementation of this must take a value receiver.
+	// The implementation of this should take a value receiver, but if
+	// it takes a pointer receiver then the value must be addressable.
 	Marshal(w io.Writer) error
 
 	// Unmarshal should unserialize the value from the supplied reader.
@@ -112,12 +113,11 @@ func Sized(val interface{}) *wrappedValue {
 // Go doesn't have support for unions - TPMU types must be implemented with
 // a struct that contains a field for each possible value.
 //
-// Implementations of this must be addressable when marshalling and unmarshalling.
+// Implementations of this must be addressable when marshalling.
 type Union interface {
 	// Select is called by this package to map the supplied selector value
 	// to a field. The returned value must be a pointer to the selected field.
-	// For this to work correctly, implementations must take a pointer receiver
-	// and therefore.
+	// For this to work correctly, implementations must take a pointer receiver.
 	//
 	// If the supplied selector value maps to no data, return NilUnionValue.
 	//
@@ -344,7 +344,7 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 
 	if t.Kind() != reflect.Ptr {
 		switch {
-		case t.Implements(customMarshallerType) && reflect.PtrTo(t).Implements(customUnmarshallerType):
+		case reflect.PtrTo(t).Implements(customMarshallerType) && reflect.PtrTo(t).Implements(customUnmarshallerType):
 			if o.raw || o.sized || o.selector != "" {
 				return TPMKindUnsupported, errors.New(`"raw", "sized" and "selector" options are invalid with custom types`)
 			}
@@ -502,6 +502,12 @@ func checkSupported(t, c reflect.Type, addressable bool, opts *options) bool {
 				}
 			}
 
+			return true
+		case k == TPMKindCustom:
+			if !t.Implements(customMarshallerType) && !addressable {
+				// Marshal() takes a pointer receiver and we're not addressable
+				return false
+			}
 			return true
 		case k == TPMKindRaw && t.Elem().Kind() != reflect.Uint8:
 			// raw list case
@@ -728,6 +734,13 @@ func (m *marshaller) marshalUnion(v reflect.Value, opts *options) error {
 }
 
 func (m *marshaller) marshalCustom(v reflect.Value) error {
+	if !v.Type().Implements(customMarshallerType) {
+		// support Marshal() implementations that take a pointer receiver.
+		if !v.CanAddr() {
+			panic(fmt.Sprintf("custom type %s needs to be addressable\n%s", v.Type(), m.stack))
+		}
+		v = v.Addr()
+	}
 	if err := v.Interface().(customMarshallerIface).Marshal(m); err != nil {
 		return newError(v, m.context, err)
 	}
@@ -974,7 +987,7 @@ func (u *unmarshaller) unmarshalUnion(v reflect.Value, opts *options) error {
 
 func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 	if !v.CanAddr() {
-		panic(fmt.Sprintf("custom type %s needs to be referenced via a pointer field\n%s", v.Type(), u.stack))
+		panic(fmt.Sprintf("custom type %s needs to be addressable\n%s", v.Type(), u.stack))
 	}
 	if err := v.Addr().Interface().(customUnmarshallerIface).Unmarshal(u); err != nil {
 		return newError(v, u.context, err)

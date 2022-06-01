@@ -67,31 +67,14 @@ type testTaggedUnion3 struct {
 	Union  testUnion
 }
 
-type testCustom struct {
-	A uint16
-	B []uint32
-}
-
-func (t testCustom) Marshal(w io.Writer) error {
-	var a [2]byte
-	binary.LittleEndian.PutUint16(a[:], t.A)
-//line mu_test.go:150
-	_, err := MarshalToWriter(w, binary.BigEndian.Uint16(a[:]), t.B)
-	return err
-}
-
-func (t *testCustom) Unmarshal(r Reader) error {
-//line mu_test.go:200
-	_, err := UnmarshalFromReader(r, &t.A, &t.B)
-	var a [2]byte
-	binary.BigEndian.PutUint16(a[:], t.A)
-	t.A = binary.LittleEndian.Uint16(a[:])
-	return err
-}
-
 type testStructContainingCustom struct {
 	A uint32
 	X *testCustom
+}
+
+type testStructContainingCustom2 struct {
+	A uint32
+	X testCustom2
 }
 
 type testStructWithRawTagSizedFields struct {
@@ -114,4 +97,48 @@ type testStructWithSizedField2 struct {
 type testStructWithSizedField3 struct {
 	A uint32
 	B []byte
+}
+
+type testCustom struct {
+	A uint16
+	B []uint32
+}
+
+func (t testCustom) Marshal(w io.Writer) error {
+	var a [2]byte
+	binary.LittleEndian.PutUint16(a[:], t.A)
+//line mu_test.go:150
+	_, err := MarshalToWriter(w, binary.BigEndian.Uint16(a[:]), t.B)
+	return err
+}
+
+func (t *testCustom) Unmarshal(r Reader) error {
+//line mu_test.go:200
+	_, err := UnmarshalFromReader(r, &t.A, &t.B)
+	var a [2]byte
+	binary.BigEndian.PutUint16(a[:], t.A)
+	t.A = binary.LittleEndian.Uint16(a[:])
+	return err
+}
+
+type testCustom2 struct {
+	A uint16
+	B []uint32
+}
+
+func (t *testCustom2) Marshal(w io.Writer) error {
+	var a [2]byte
+	binary.LittleEndian.PutUint16(a[:], t.A)
+//line mu_test.go:350
+	_, err := MarshalToWriter(w, binary.BigEndian.Uint16(a[:]), t.B)
+	return err
+}
+
+func (t *testCustom2) Unmarshal(r Reader) error {
+//line mu_test.go:400
+	_, err := UnmarshalFromReader(r, &t.A, &t.B)
+	var a [2]byte
+	binary.BigEndian.PutUint16(a[:], t.A)
+	t.A = binary.LittleEndian.Uint16(a[:])
+	return err
 }

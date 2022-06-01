@@ -532,6 +532,18 @@ func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
 		expected: expected})
 }
 
+func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller2(c *C) {
+	a := &testCustom2{A: 44332, B: []uint32{885432, 31287554}}
+	expected := internal_testutil.DecodeHexString(c, "2cad00000002000d82b801dd6902")
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:   []interface{}{a},
+		expected: expected})
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:   []interface{}{a},
+		expected: expected})
+}
+
 func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
 	a := testStructWithRawTagSizedFields{A: [][]byte{internal_testutil.DecodeHexString(c, "a5a5a5"), internal_testutil.DecodeHexString(c, "4d4d4d4d")}}
 	expected := internal_testutil.DecodeHexString(c, "0003a5a5a500044d4d4d4d")
@@ -614,6 +626,14 @@ func (s *muSuite) TestIsSupportedUnsupported12(c *C) {
 	s.testIsSupported(c, testStructWithInvalidSizedField{}, false)
 }
 
+func (s *muSuite) TestIsSupportedUnsupported13(c *C) {
+	s.testIsSupported(c, testCustom2{}, false)
+}
+
+func (s *muSuite) TestIsSupportedUnsupported14(c *C) {
+	s.testIsSupported(c, testStructContainingCustom2{}, false)
+}
+
 func (s *muSuite) TestIsSupported1(c *C) {
 	s.testIsSupported(c, uint32(0), true)
 }
@@ -681,6 +701,14 @@ func (s *muSuite) TestIsSupported16(c *C) {
 
 func (s *muSuite) TestIsSupported17(c *C) {
 	s.testIsSupported(c, testStructWithRawTagSizedFields{}, true)
+}
+
+func (s *muSuite) TestIsSupported18(c *C) {
+	s.testIsSupported(c, &testCustom2{}, true)
+}
+
+func (s *muSuite) TestIsSupported19(c *C) {
+	s.testIsSupported(c, &testStructContainingCustom2{}, true)
 }
 
 func (s *muSuite) testDetermineTPMKind(c *C, d interface{}, expected TPMKind) {
@@ -976,6 +1004,21 @@ func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 func (s *muSuite) TestMarshalSizedAndRaw(c *C) {
 	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)\n"+
 		"=== BEGIN STACK ===\n"+
+		"=== END STACK ===\n")
+}
+
+func (s *muSuite) TestMarshalUnaddressableCustom(c *C) {
+	a := testCustom2{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "custom type mu_test.testCustom2 needs to be addressable\n"+
+		"=== BEGIN STACK ===\n"+
+		"=== END STACK ===\n")
+}
+
+func (s *muSuite) TestMarshalUnaddressableCustom2(c *C) {
+	a := testStructContainingCustom2{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "custom type mu_test.testCustom2 needs to be addressable\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructContainingCustom2 field X\n"+
 		"=== END STACK ===\n")
 }
 
