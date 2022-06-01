@@ -13,7 +13,6 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
-	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
@@ -87,9 +86,7 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 
 	c.Assert(index, internal_testutil.ConvertibleTo, &NvIndexContext{})
 
-	var publicInfo *NVPublic
-	mu.MustCopyValue(&publicInfo, data.publicInfo)
-	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, publicInfo)
+	c.Check(index.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, data.publicInfo)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
@@ -97,7 +94,7 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
-	c.Check(pub, DeepEquals, publicInfo)
+	c.Check(pub, testutil.TPMValueDeepEquals, data.publicInfo)
 	c.Check(name, DeepEquals, expectedName)
 
 	if data.cb != nil {

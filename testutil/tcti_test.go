@@ -153,8 +153,7 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(inSensitiveBytes, internal_testutil.LenEquals, 0)
 
-	mu.MustCopyValue(&public, public)
-	c.Check(inPublic, DeepEquals, &public)
+	c.Check(inPublic, TPMValueDeepEquals, &public)
 	c.Check(hierarchy, Equals, tpm2.HandleOwner)
 
 	rc, rHandle, rpBytes, rspAuthArea := s.CommandLog()[0].UnmarshalResponse(c)

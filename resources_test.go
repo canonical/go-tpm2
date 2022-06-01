@@ -11,7 +11,6 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
-	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
@@ -74,8 +73,7 @@ func (s *resourcesSuite) TestCreateResourceContextFromTPMNV(c *C) {
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
 	c.Assert(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
 
-	mu.MustCopyValue(&pub, pub)
-	c.Check(rc2.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+	c.Check(rc2.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, &pub)
 }
 
 func (s *resourcesSuite) testCreateResourceContextFromTPMUnavailable(c *C, handle Handle) {
@@ -180,8 +178,7 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesNV(c *C) {
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
 	c.Assert(rc2, internal_testutil.ConvertibleTo, &NvIndexContext{})
 
-	mu.MustCopyValue(&pub, pub)
-	c.Check(rc2.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+	c.Check(rc2.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, &pub)
 }
 
 func (s *resourcesSuite) TestCreateHandleContextFromBytesSession(c *C) {

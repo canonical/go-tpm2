@@ -34,18 +34,17 @@ func (s *objectSuite) SetUpSuite(c *C) {
 func (s *objectSuite) checkPublicAgainstTemplate(c *C, public, template *Public) {
 	unique := public.Unique
 
-	for _, p := range []**Public{&template, &public} {
-		var dst *Public
-		mu.MustCopyValue(&dst, *p)
-		*p = dst
+	var p *Public
+	mu.MustCopyValue(&p, public)
 
-		(*p).Unique = nil
-		if (*p).Type == ObjectTypeRSA && (*p).Params.RSADetail.Exponent == 0 {
-			(*p).Params.RSADetail.Exponent = DefaultRSAExponent
+	for _, p := range []*Public{template, p} {
+		p.Unique = nil
+		if p.Type == ObjectTypeRSA && p.Params.RSADetail.Exponent == 0 {
+			p.Params.RSADetail.Exponent = DefaultRSAExponent
 		}
 	}
 
-	c.Check(public, DeepEquals, template)
+	c.Check(p, testutil.TPMValueDeepEquals, template)
 
 	switch template.Type {
 	case ObjectTypeRSA:
@@ -293,17 +292,15 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 
 	_, handle, _, _ := s.LastCommand(c).UnmarshalResponse(c)
 	expectedName, _ := data.inPublic.Name()
-	var public *Public
-	mu.MustCopyValue(&public, data.inPublic)
 
 	c.Check(object.Handle(), Equals, handle)
 	c.Check(object.Name(), DeepEquals, expectedName)
 	c.Assert(object, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(object.(*ObjectContext).GetPublic(), DeepEquals, public)
+	c.Check(object.(*ObjectContext).GetPublic(), testutil.TPMValueDeepEquals, data.inPublic)
 
 	pub, name, _, err := s.TPM.ReadPublic(object)
 	c.Assert(err, IsNil)
-	c.Check(pub, DeepEquals, public)
+	c.Check(pub, testutil.TPMValueDeepEquals, data.inPublic)
 	c.Check(name, DeepEquals, expectedName)
 
 	return object
