@@ -62,12 +62,12 @@ type testTaggedUnion2 struct {
 	Union  *testUnion `tpm2:"selector:Select"`
 }
 
-type testStructWithCustomMarshaller struct {
+type testCustom struct {
 	A uint16
 	B []uint32
 }
 
-func (t testStructWithCustomMarshaller) Marshal(w io.Writer) error {
+func (t testCustom) Marshal(w io.Writer) error {
 	var a [2]byte
 	binary.LittleEndian.PutUint16(a[:], t.A)
 //line mu_test.go:150
@@ -75,7 +75,7 @@ func (t testStructWithCustomMarshaller) Marshal(w io.Writer) error {
 	return err
 }
 
-func (t *testStructWithCustomMarshaller) Unmarshal(r Reader) error {
+func (t *testCustom) Unmarshal(r Reader) error {
 //line mu_test.go:200
 	_, err := UnmarshalFromReader(r, &t.A, &t.B)
 	var a [2]byte
@@ -84,9 +84,9 @@ func (t *testStructWithCustomMarshaller) Unmarshal(r Reader) error {
 	return err
 }
 
-type testStructContainingCustomType struct {
+type testStructContainingCustom struct {
 	A uint32
-	X *testStructWithCustomMarshaller
+	X *testCustom
 }
 
 type testStructWithRawTagSizedFields struct {

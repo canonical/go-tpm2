@@ -20,10 +20,11 @@ import (
 )
 
 var (
-	customMuType reflect.Type = reflect.TypeOf((*CustomMarshaller)(nil)).Elem()
-	unionType    reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
-	nilValueType reflect.Type = reflect.TypeOf(NilUnionValue)
-	rawBytesType reflect.Type = reflect.TypeOf(RawBytes(nil))
+	customMarshallerType   reflect.Type = reflect.TypeOf((*customMarshallerIface)(nil)).Elem()
+	customUnmarshallerType reflect.Type = reflect.TypeOf((*customUnmarshallerIface)(nil)).Elem()
+	unionType              reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
+	nilValueType           reflect.Type = reflect.TypeOf(NilUnionValue)
+	rawBytesType           reflect.Type = reflect.TypeOf(RawBytes(nil))
 )
 
 // InvalidSelectorError may be returned as a wrapped error from UnmarshalFromBytes or
@@ -34,6 +35,14 @@ type InvalidSelectorError struct {
 
 func (e *InvalidSelectorError) Error() string {
 	return fmt.Sprintf("invalid selector value: %v", e.Selector)
+}
+
+type customMarshallerIface interface {
+	Marshal(w io.Writer) error
+}
+
+type customUnmarshallerIface interface {
+	Unmarshal(r Reader) error
 }
 
 // CustomMarshaller is implemented by types that require custom marshalling
@@ -52,6 +61,11 @@ type CustomMarshaller interface {
 	// The implementation of this should take a pointer receiver.
 	Unmarshal(r Reader) error
 }
+
+var _ CustomMarshaller = struct {
+	customMarshallerIface
+	customUnmarshallerIface
+}{}
 
 type empty struct{}
 
@@ -97,11 +111,13 @@ func Sized(val interface{}) *wrappedValue {
 //
 // Go doesn't have support for unions - TPMU types must be implemented with
 // a struct that contains a field for each possible value.
+//
+// Implementations of this must be addressable.
 type Union interface {
 	// Select is called by this package to map the supplied selector value
 	// to a field. The returned value must be a pointer to the selected field.
 	// For this to work correctly, implementations must take a pointer receiver
-	// and therefore, the implementation must be addressable.
+	// and therefore.
 	//
 	// If the supplied selector value maps to no data, return NilUnionValue.
 	//
@@ -134,7 +150,7 @@ func (s containerStack) String() string {
 	str.WriteString("=== BEGIN STACK ===\n")
 	for i := len(s) - 1; i >= 0; i-- {
 		switch {
-		case reflect.PtrTo(s[i].value.Type()).Implements(customMuType):
+		case s[i].entry != [1]uintptr{0}:
 			frames := runtime.CallersFrames(s[i].entry[:])
 			frame, _ := frames.Next()
 			fmt.Fprintf(str, "... %s custom type, call from %s:%d argument %d\n", s[i].value.Type(), frame.File, frame.Line, s[i].index)
@@ -208,7 +224,7 @@ func (e *Error) Depth() int {
 // recursive call originated from.
 func (e *Error) Container(depth int) (containerType reflect.Type, index int, entry runtime.Frame) {
 	var frame runtime.Frame
-	if reflect.PtrTo(e.stack[depth].value.Type()).Implements(customMuType) {
+	if e.stack[depth].entry != [1]uintptr{0} {
 		frames := runtime.CallersFrames(e.stack[depth].entry[:])
 		frame, _ = frames.Next()
 	}
@@ -342,12 +358,7 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 			u.Type(), c.stack))
 	}
 
-	c.stack = c.stack.push(containerNode{value: u, index: index})
-
-	return pv.Elem(), func() {
-		c.stack = c.stack.pop()
-	}, nil
-
+	return pv.Elem(), c.enterStructField(u, index), nil
 }
 
 func (c *context) enterSizedType() (exit func()) {
@@ -410,7 +421,7 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 
 	if t.Kind() != reflect.Ptr {
 		switch {
-		case reflect.PtrTo(t).Implements(customMuType):
+		case t.Implements(customMarshallerType) && reflect.PtrTo(t).Implements(customUnmarshallerType):
 			if o.raw || o.sized || o.selector != "" {
 				return TPMKindUnsupported, errors.New(`"raw", "sized" and "selector" options are invalid with custom types`)
 			}
@@ -498,7 +509,23 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 
 }
 
-func tpmKindRecursive(t reflect.Type, opts *options) TPMKind {
+func tpmKindCheckStructFieldRecursive(t, c reflect.Type, f reflect.StructField) TPMKind {
+	opts := parseStructFieldMuOptions(f)
+	k := tpmKindCheckRecursive(t, c, opts)
+	if k == TPMKindUnion {
+		if opts.selector != "" {
+			if _, found := c.FieldByName(opts.selector); !found {
+				return TPMKindUnsupported
+			}
+		}
+		if f.Type.Kind() != reflect.Ptr {
+			return TPMKindUnsupported
+		}
+	}
+	return k
+}
+
+func tpmKindCheckRecursive(t, c reflect.Type, opts *options) TPMKind {
 	for {
 		k, err := tpmKind(t, nil, opts)
 		switch {
@@ -506,6 +533,44 @@ func tpmKindRecursive(t reflect.Type, opts *options) TPMKind {
 			return TPMKindUnsupported
 		case k == TPMKindUnsupported:
 			t = t.Elem()
+		case k == TPMKindSized && t.Kind() == reflect.Ptr:
+			// sized structure case
+			if e := tpmKindCheckRecursive(t, c, nil); e == TPMKindUnsupported {
+				return TPMKindUnsupported
+			}
+			return k
+		case k == TPMKindList:
+			if e := tpmKindCheckRecursive(t.Elem(), t, nil); e == TPMKindUnsupported {
+				return TPMKindUnsupported
+			}
+			return k
+		case k == TPMKindStruct || k == TPMKindTaggedUnion:
+			for i := 0; i < t.NumField(); i++ {
+				if e := tpmKindCheckStructFieldRecursive(t.Field(i).Type, t, t.Field(i)); e == TPMKindUnsupported {
+					return TPMKindUnsupported
+				}
+			}
+			return k
+		case k == TPMKindUnion:
+			if c != nil {
+				if parent, _ := tpmKind(c, nil, nil); parent != TPMKindTaggedUnion {
+					return TPMKindUnsupported
+				}
+			}
+
+			for i := 0; i < t.NumField(); i++ {
+				if e := tpmKindCheckRecursive(t.Field(i).Type, t, nil); e == TPMKindUnsupported {
+					return TPMKindUnsupported
+				}
+			}
+
+			return k
+		case k == TPMKindRaw && t.Elem().Kind() != reflect.Uint8:
+			// raw list case
+			if e := tpmKindCheckRecursive(t.Elem(), t, nil); e == TPMKindUnsupported {
+				return TPMKindUnsupported
+			}
+			return k
 		default:
 			return k
 		}
@@ -514,12 +579,16 @@ func tpmKindRecursive(t reflect.Type, opts *options) TPMKind {
 
 // DetermineTPMKind returns the TPMKind associated with the supplied go value. It will
 // automatically dereference pointer types.
+//
+// For slices and structures, this will recursively check that all elements / fields
+// map to a supported TPMKind. If TPMKindUnsupported is returned, the value will
+// generate a panic either during marshalling or unmarshalling.
 func DetermineTPMKind(i interface{}) TPMKind {
 	switch v := i.(type) {
 	case *wrappedValue:
-		return tpmKindRecursive(reflect.TypeOf(v.value), v.opts)
+		return tpmKindCheckRecursive(reflect.TypeOf(v.value), nil, v.opts)
 	default:
-		return tpmKindRecursive(reflect.TypeOf(i), nil)
+		return tpmKindCheckRecursive(reflect.TypeOf(i), nil, nil)
 	}
 }
 
@@ -642,7 +711,7 @@ func (m *marshaller) marshalUnion(v reflect.Value, opts *options) error {
 }
 
 func (m *marshaller) marshalCustom(v reflect.Value) error {
-	if err := v.Interface().(interface{ Marshal(w io.Writer) error }).Marshal(m); err != nil {
+	if err := v.Interface().(customMarshallerIface).Marshal(m); err != nil {
 		return newError(v, m.context, err)
 	}
 	return nil
@@ -890,7 +959,7 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 	if !v.CanAddr() {
 		panic(fmt.Sprintf("custom type %s needs to be referenced via a pointer field\n%s", v.Type(), u.stack))
 	}
-	if err := v.Addr().Interface().(interface{ Unmarshal(r Reader) error }).Unmarshal(u); err != nil {
+	if err := v.Addr().Interface().(customUnmarshallerIface).Unmarshal(u); err != nil {
 		return newError(v, u.context, err)
 	}
 	return nil

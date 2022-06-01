@@ -499,7 +499,7 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
-	a := testStructWithCustomMarshaller{A: 44332, B: []uint32{885432, 31287554}}
+	a := testCustom{A: 44332, B: []uint32{885432, 31287554}}
 	expected := internal_testutil.DecodeHexString(c, "2cad00000002000d82b801dd6902")
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
@@ -581,6 +581,18 @@ func (s *muSuite) TestDetermineTPMKindUnsupported8(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: Raw(&testUnion{}), k: TPMKindUnsupported})
 }
 
+func (s *muSuite) TestDetermineTPMKindUnsupported9(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testInvalidTaggedUnion{}, k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported10(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testInvalidTaggedUnion2{}, k: TPMKindUnsupported})
+}
+
+func (s *muSuite) TestDetermineTPMKindUnsupported11(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithInvalidSizedField{}, k: TPMKindUnsupported})
+}
+
 func (s *muSuite) TestDetermineTPMKindPrimitive(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: uint32(10), k: TPMKindPrimitive})
 }
@@ -601,16 +613,28 @@ func (s *muSuite) TestDetermineTPMKindStruct(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStruct{}, k: TPMKindStruct})
 }
 
+func (s *muSuite) TestDetermineTPMKindStruct2(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testStruct{}, k: TPMKindStruct})
+}
+
 func (s *muSuite) TestDetermineTPMKindTaggedUnion(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testTaggedUnion{}, k: TPMKindTaggedUnion})
+}
+
+func (s *muSuite) TestDetermineTPMKindTaggedUnion2(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testTaggedUnion{}, k: TPMKindTaggedUnion})
 }
 
 func (s *muSuite) TestDetermineTPMKindUnion(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testUnion{}, k: TPMKindUnion})
 }
 
+func (s *muSuite) TestDetermineTPMKindUnion2(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testUnion{}, k: TPMKindUnion})
+}
+
 func (s *muSuite) TestDetermineTPMKindCustom(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testStructWithCustomMarshaller{}, k: TPMKindCustom})
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testCustom{}, k: TPMKindCustom})
 }
 
 func (s *muSuite) TestDetermineTPMKindRaw1(c *C) {
@@ -711,14 +735,14 @@ func (s *muSuite) TestErrorInSliceContainerWithMultipleArguments(c *C) {
 }
 
 func (s *muSuite) TestErrorFromCustomType(c *C) {
-	var a *testStructContainingCustomType
+	var a *testStructContainingCustom
 
 	_, err := UnmarshalFromBytes(internal_testutil.DecodeHexString(c, "000000000000000000040000000000000000"), &a)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type uint32: unexpected EOF\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... \\[\\]uint32 index 2\n"+
-		"... mu_test.testStructWithCustomMarshaller custom type, call from mu_test.go:200 argument 1\n"+
-		"... mu_test.testStructContainingCustomType field X\n"+
+		"... mu_test.testCustom custom type, call from mu_test.go:200 argument 1\n"+
+		"... mu_test.testStructContainingCustom field X\n"+
 		"=== END STACK ===\n")
 	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
@@ -728,12 +752,12 @@ func (s *muSuite) TestErrorFromCustomType(c *C) {
 	c.Check(t, Equals, reflect.TypeOf([]uint32{}))
 	c.Check(i, Equals, 2)
 	t, i, f := e.Container(1)
-	c.Check(t, Equals, reflect.TypeOf(testStructWithCustomMarshaller{}))
+	c.Check(t, Equals, reflect.TypeOf(testCustom{}))
 	c.Check(i, Equals, 1)
 	c.Check(f.File, Equals, "mu_test.go")
 	c.Check(f.Line, Equals, 200)
 	t, i, _ = e.Container(0)
-	c.Check(t, Equals, reflect.TypeOf(testStructContainingCustomType{}))
+	c.Check(t, Equals, reflect.TypeOf(testStructContainingCustom{}))
 	c.Check(i, Equals, 1)
 }
 
