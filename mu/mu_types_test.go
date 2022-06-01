@@ -62,6 +62,11 @@ type testTaggedUnion2 struct {
 	Union  *testUnion `tpm2:"selector:Select"`
 }
 
+type testTaggedUnion3 struct {
+	Select uint32
+	Union testUnion
+}
+
 type testCustom struct {
 	A uint16
 	B []uint32
@@ -94,11 +99,8 @@ type testStructWithRawTagSizedFields struct {
 }
 
 type testInvalidTaggedUnion struct {
+	Select uint32
 	A *testUnion `tpm2:"selector:foo"`
-}
-
-type testInvalidTaggedUnion2 struct {
-	A testUnion
 }
 
 type testStructWithInvalidSizedField struct {

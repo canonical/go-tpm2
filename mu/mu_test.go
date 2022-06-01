@@ -498,6 +498,28 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: &testUnion{}}, testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
 }
 
+func (s *muSuite) TestMarshalAndUnmarshalUnion3(c *C) {
+	var u32 uint32 = 657763432
+	v := &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
+	w := &testTaggedUnion3{Select: 2, Union: testUnion{B: []uint32{3287743, 98731}}}
+	x := &testTaggedUnion3{Select: 3, Union: testUnion{C: uint16(4321)}}
+	y := &testTaggedUnion3{Select: 4}
+	z := &testTaggedUnion3{Select: 1} // Test that the zero value gets marshalled
+
+	expected := internal_testutil.DecodeHexString(c, "00000001dc042734ac68010000000205e3131b0053366f000000020000000200322abf000181ab0000000310e100000004000000010000000000000000000000")
+
+	var u32_0 uint32
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{v, w, x, y, z},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{v, w, x, y, z},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+}
+
 func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
 	a := testCustom{A: 44332, B: []uint32{885432, 31287554}}
 	expected := internal_testutil.DecodeHexString(c, "2cad00000002000d82b801dd6902")
@@ -586,7 +608,7 @@ func (s *muSuite) TestDetermineTPMKindUnsupported9(c *C) {
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported10(c *C) {
-	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testInvalidTaggedUnion2{}, k: TPMKindUnsupported})
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: testTaggedUnion3{}, k: TPMKindUnsupported})
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported11(c *C) {
@@ -623,6 +645,14 @@ func (s *muSuite) TestDetermineTPMKindTaggedUnion(c *C) {
 
 func (s *muSuite) TestDetermineTPMKindTaggedUnion2(c *C) {
 	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testTaggedUnion{}, k: TPMKindTaggedUnion})
+}
+
+func (s *muSuite) TestDetermineTPMKindTaggedUnion3(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testTaggedUnion2{}, k: TPMKindTaggedUnion})
+}
+
+func (s *muSuite) TestDetermineTPMKindTaggedUnion4(c *C) {
+	s.testDetermineTPMKind(c, &testDetermineTPMKindData{d: &testTaggedUnion3{}, k: TPMKindTaggedUnion})
 }
 
 func (s *muSuite) TestDetermineTPMKindUnion(c *C) {
@@ -798,18 +828,18 @@ func (s *muSuite) TestMarshalUnionInNoStruct(c *C) {
 }
 
 func (s *muSuite) TestMarshalInvalidTaggedUnion(c *C) {
-	a := testInvalidTaggedUnion{&testUnion{}}
+	a := testInvalidTaggedUnion{A: &testUnion{}}
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "selector name foo for union type mu_test.testUnion does not reference a valid field\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testInvalidTaggedUnion field A\n"+
 		"=== END STACK ===\n")
 }
 
-func (s *muSuite) TestMarshalInvalidTaggedUnion2(c *C) {
-	a := testInvalidTaggedUnion2{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion needs to be referenced via a pointer field\n"+
+func (s *muSuite) TestMarshalNonAddressableUnion(c *C) {
+	a := testTaggedUnion3{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion needs to be addressable\n"+
 		"=== BEGIN STACK ===\n"+
-		"... mu_test.testInvalidTaggedUnion2 field A\n"+
+		"... mu_test.testTaggedUnion3 field Union\n"+
 		"=== END STACK ===\n")
 }
 

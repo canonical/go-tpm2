@@ -112,7 +112,7 @@ func Sized(val interface{}) *wrappedValue {
 // Go doesn't have support for unions - TPMU types must be implemented with
 // a struct that contains a field for each possible value.
 //
-// Implementations of this must be addressable.
+// Implementations of this must be addressable when marshalling and unmarshalling.
 type Union interface {
 	// Select is called by this package to map the supplied selector value
 	// to a field. The returned value must be a pointer to the selected field.
@@ -318,7 +318,13 @@ func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 }
 
 func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
-	if len(c.stack) == 0 || c.stack.top().value.Kind() != reflect.Struct {
+	valid := false
+	if len(c.stack) > 0 {
+		if k, _ := tpmKind(c.stack.top().value.Type(), nil, nil); k == TPMKindTaggedUnion {
+			valid = true
+		}
+	}
+	if !valid {
 		panic(fmt.Sprintf("union type %s is not inside a struct\n%s", u.Type(), c.stack))
 	}
 
@@ -334,7 +340,7 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 	}
 
 	if !u.CanAddr() {
-		panic(fmt.Sprintf("union type %s needs to be referenced via a pointer field\n%s", u.Type(), c.stack))
+		panic(fmt.Sprintf("union type %s needs to be addressable\n%s", u.Type(), c.stack))
 	}
 
 	p := u.Addr().Interface().(Union).Select(selectorVal)
@@ -483,10 +489,11 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 				// structs with unexported fields are unsupported
 				return TPMKindUnsupported, errors.New("struct type with unexported fields")
 			}
-			if f.Type.Kind() != reflect.Ptr {
-				continue
+			ft := f.Type
+			if ft.Kind() == reflect.Ptr {
+				ft = ft.Elem()
 			}
-			if fk, _ := tpmKind(f.Type.Elem(), nil, nil); fk == TPMKindUnion {
+			if fk, _ := tpmKind(ft, nil, nil); fk == TPMKindUnion {
 				k = TPMKindTaggedUnion
 			}
 		}
@@ -505,23 +512,23 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 
 }
 
-func tpmKindCheckStructFieldRecursive(t, c reflect.Type, f reflect.StructField) TPMKind {
+func tpmKindCheckStructFieldRecursive(t, c reflect.Type, addressable bool, f reflect.StructField) TPMKind {
 	opts := parseStructFieldMuOptions(f)
-	k := tpmKindCheckRecursive(t, c, opts)
+	k := tpmKindCheckRecursive(t, c, addressable, opts)
 	if k == TPMKindUnion {
 		if opts.selector != "" {
 			if _, found := c.FieldByName(opts.selector); !found {
 				return TPMKindUnsupported
 			}
 		}
-		if f.Type.Kind() != reflect.Ptr {
+		if f.Type.Kind() != reflect.Ptr && !addressable {
 			return TPMKindUnsupported
 		}
 	}
 	return k
 }
 
-func tpmKindCheckRecursive(t, c reflect.Type, opts *options) (ret TPMKind) {
+func tpmKindCheckRecursive(t, c reflect.Type, addressable bool, opts *options) (ret TPMKind) {
 	for {
 		k, err := tpmKind(t, nil, opts)
 		switch {
@@ -529,20 +536,21 @@ func tpmKindCheckRecursive(t, c reflect.Type, opts *options) (ret TPMKind) {
 			return TPMKindUnsupported
 		case k == TPMKindUnsupported:
 			t = t.Elem()
+			addressable = true
 		case k == TPMKindSized && t.Kind() == reflect.Ptr:
 			// sized structure case
-			if e := tpmKindCheckRecursive(t, c, nil); e == TPMKindUnsupported {
+			if e := tpmKindCheckRecursive(t, c, true, nil); e == TPMKindUnsupported {
 				return TPMKindUnsupported
 			}
 			return k
 		case k == TPMKindList:
-			if e := tpmKindCheckRecursive(t.Elem(), t, nil); e == TPMKindUnsupported {
+			if e := tpmKindCheckRecursive(t.Elem(), t, false, nil); e == TPMKindUnsupported {
 				return TPMKindUnsupported
 			}
 			return k
 		case k == TPMKindStruct || k == TPMKindTaggedUnion:
 			for i := 0; i < t.NumField(); i++ {
-				if e := tpmKindCheckStructFieldRecursive(t.Field(i).Type, t, t.Field(i)); e == TPMKindUnsupported {
+				if e := tpmKindCheckStructFieldRecursive(t.Field(i).Type, t, addressable, t.Field(i)); e == TPMKindUnsupported {
 					return TPMKindUnsupported
 				}
 			}
@@ -555,7 +563,7 @@ func tpmKindCheckRecursive(t, c reflect.Type, opts *options) (ret TPMKind) {
 			}
 
 			for i := 0; i < t.NumField(); i++ {
-				if e := tpmKindCheckRecursive(t.Field(i).Type, t, nil); e == TPMKindUnsupported {
+				if e := tpmKindCheckRecursive(t.Field(i).Type, t, addressable, nil); e == TPMKindUnsupported {
 					return TPMKindUnsupported
 				}
 			}
@@ -563,7 +571,7 @@ func tpmKindCheckRecursive(t, c reflect.Type, opts *options) (ret TPMKind) {
 			return k
 		case k == TPMKindRaw && t.Elem().Kind() != reflect.Uint8:
 			// raw list case
-			if e := tpmKindCheckRecursive(t.Elem(), t, nil); e == TPMKindUnsupported {
+			if e := tpmKindCheckRecursive(t.Elem(), t, false, nil); e == TPMKindUnsupported {
 				return TPMKindUnsupported
 			}
 			return k
@@ -582,9 +590,9 @@ func tpmKindCheckRecursive(t, c reflect.Type, opts *options) (ret TPMKind) {
 func DetermineTPMKind(i interface{}) TPMKind {
 	switch v := i.(type) {
 	case *wrappedValue:
-		return tpmKindCheckRecursive(reflect.TypeOf(v.value), nil, v.opts)
+		return tpmKindCheckRecursive(reflect.TypeOf(v.value), nil, false, v.opts)
 	default:
-		return tpmKindCheckRecursive(reflect.TypeOf(i), nil, nil)
+		return tpmKindCheckRecursive(reflect.TypeOf(i), nil, false, nil)
 	}
 }
 
