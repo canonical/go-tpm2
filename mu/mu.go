@@ -475,10 +475,6 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 			return TPMKindList, nil
 		}
 	case reflect.Struct:
-		if t.NumField() == 0 {
-			return TPMKindUnsupported, errors.New("struct type with no fields")
-		}
-
 		k := TPMKindStruct
 
 		for i := 0; i < t.NumField(); i++ {
@@ -525,7 +521,7 @@ func tpmKindCheckStructFieldRecursive(t, c reflect.Type, f reflect.StructField) 
 	return k
 }
 
-func tpmKindCheckRecursive(t, c reflect.Type, opts *options) TPMKind {
+func tpmKindCheckRecursive(t, c reflect.Type, opts *options) (ret TPMKind) {
 	for {
 		k, err := tpmKind(t, nil, opts)
 		switch {
