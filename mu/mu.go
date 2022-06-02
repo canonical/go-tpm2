@@ -1247,16 +1247,16 @@ func IsValid(v interface{}) bool {
 	return true
 }
 
-// DeepEqual determines whether the supplied values are deeply equal. It
-// does this by first converting both values to their canonical form, by
-// serializing and unserializing them. This will panic if either value
+// DeepEqual determines whether the supplied values are deeply equal.
+// Values are deeply equal if they have the same type and have the same
+// representation when serialized. This will panic if either value
 // cannot be represented by the TPM wire format.
 func DeepEqual(x, y interface{}) bool {
-	var x2 interface{}
-	MustCopyValue(&x2, x)
+	if reflect.TypeOf(x) != reflect.TypeOf(y) {
+		return false
+	}
 
-	var y2 interface{}
-	MustCopyValue(&y2, y)
-
-	return reflect.DeepEqual(x2, y2)
+	x2 := MustMarshalToBytes(x)
+	y2 := MustMarshalToBytes(y)
+	return bytes.Equal(x2, y2)
 }
