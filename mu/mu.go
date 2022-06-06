@@ -47,7 +47,7 @@ type customUnmarshallerIface interface {
 
 // CustomMarshaller is implemented by types that require custom marshalling
 // behaviour because they are non-standard and not directly supported by this
-// package.marshalling code.
+// package.
 //
 // If the implementation makes a recursive call in to this package, it should
 // return errors from any recursive call without wrapping. This allows the full
