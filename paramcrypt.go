@@ -22,7 +22,7 @@ func (s *sessionParam) computeSessionValue() []byte {
 	var key []byte
 	key = append(key, s.session.Data().SessionKey...)
 	if s.IsAuth() {
-		key = append(key, s.associatedContext.(resourceContextPrivate).GetAuthValue()...)
+		key = append(key, s.associatedContext.GetAuthValue()...)
 	}
 	return key
 }

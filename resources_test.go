@@ -194,9 +194,9 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesSession(c *C) {
 	c.Check(session2.Name(), DeepEquals, session.Name())
 	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 
-	data := session.(*SessionContextImpl).Data()
+	data := session.(SessionContextInternal).Data()
 	c.Check(Canonicalize(&data), IsNil)
-	c.Check(session2.(*SessionContextImpl).Data(), DeepEquals, data)
+	c.Check(session2.(SessionContextInternal).Data(), DeepEquals, data)
 }
 
 type testCreateResourceContextFromTPMWithSessionData struct {
@@ -275,7 +275,7 @@ func (s *resourcesSuite) SessionContextImplSetAttrs(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 
 	session.SetAttrs(AttrContinueSession)
-	c.Check(session.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession)
+	c.Check(session.(SessionContextInternal).Attrs(), Equals, AttrContinueSession)
 }
 
 func (s *resourcesSuite) SessionContextImplWithAttrs(c *C) {
@@ -284,8 +284,8 @@ func (s *resourcesSuite) SessionContextImplWithAttrs(c *C) {
 	session2 := session.WithAttrs(AttrAudit)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(*SessionContextImpl).Attrs(), Equals, SessionAttributes(0))
-	c.Check(session2.(*SessionContextImpl).Attrs(), Equals, AttrAudit)
+	c.Check(session.(SessionContextInternal).Attrs(), Equals, SessionAttributes(0))
+	c.Check(session2.(SessionContextInternal).Attrs(), Equals, AttrAudit)
 }
 
 func (s *resourcesSuite) SessionContextImplIncludeAttrs(c *C) {
@@ -295,8 +295,8 @@ func (s *resourcesSuite) SessionContextImplIncludeAttrs(c *C) {
 	session2 := session.IncludeAttrs(AttrResponseEncrypt)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession)
-	c.Check(session2.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession|AttrResponseEncrypt)
+	c.Check(session.(SessionContextInternal).Attrs(), Equals, AttrContinueSession)
+	c.Check(session2.(SessionContextInternal).Attrs(), Equals, AttrContinueSession|AttrResponseEncrypt)
 }
 
 func (s *resourcesSuite) SessionContextImplExcludeAttrs(c *C) {
@@ -306,18 +306,18 @@ func (s *resourcesSuite) SessionContextImplExcludeAttrs(c *C) {
 	session2 := session.ExcludeAttrs(AttrAudit)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(*SessionContextImpl).Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
-	c.Check(session2.(*SessionContextImpl).Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
+	c.Check(session.(SessionContextInternal).Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
+	c.Check(session2.(SessionContextInternal).Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
 }
 
 func (s *resourcesSuite) TestResourceContextGetAuth(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	rc.SetAuthValue([]byte("foo"))
-	c.Check(rc.(ResourceContextPrivate).GetAuthValue(), DeepEquals, []byte("foo"))
+	c.Check(rc.(ResourceContextInternal).GetAuthValue(), DeepEquals, []byte("foo"))
 }
 
 func (s *resourcesSuite) TestResourceContextGetAuthWithTrailingZeroes(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	rc.SetAuthValue([]byte("foo\x00bar\x00\x00"))
-	c.Check(rc.(ResourceContextPrivate).GetAuthValue(), DeepEquals, []byte("foo\x00bar"))
+	c.Check(rc.(ResourceContextInternal).GetAuthValue(), DeepEquals, []byte("foo\x00bar"))
 }

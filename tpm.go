@@ -108,7 +108,7 @@ type TPMContext struct {
 	maxBufferSize         int
 	maxDigestSize         int
 	maxNVBufferSize       int
-	exclusiveSession      *sessionContext
+	exclusiveSession      sessionContextInternal
 }
 
 // Close calls Close on the transmission interface.
@@ -219,7 +219,7 @@ func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) 
 		if t.exclusiveSession != nil {
 			t.exclusiveSession.Data().IsExclusive = false
 		}
-		var exclusive *sessionContext
+		var exclusive sessionContextInternal
 		for _, s := range cmd.sessionParams.sessions {
 			if s.session == nil {
 				continue

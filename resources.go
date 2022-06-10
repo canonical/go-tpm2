@@ -31,8 +31,13 @@ type HandleContext interface {
 	SerializeToWriter(io.Writer) error // Write the serialized form of this HandleContext to the supplied io.Writer
 }
 
-type handleContextPrivate interface {
-	invalidate()
+type handleContextInternalMixin interface {
+	Invalidate()
+}
+
+type handleContextInternal interface {
+	HandleContext
+	handleContextInternalMixin
 }
 
 // SessionContext is a HandleContext that corresponds to a session on the TPM.
@@ -51,6 +56,14 @@ type SessionContext interface {
 	ExcludeAttrs(attrs SessionAttributes) SessionContext
 }
 
+type sessionContextInternal interface {
+	SessionContext
+	handleContextInternalMixin
+
+	Attrs() SessionAttributes
+	Data() *sessionContextData
+}
+
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
 type ResourceContext interface {
 	HandleContext
@@ -61,7 +74,10 @@ type ResourceContext interface {
 	SetAuthValue([]byte)
 }
 
-type resourceContextPrivate interface {
+type resourceContextInternal interface {
+	ResourceContext
+	handleContextInternalMixin
+
 	GetAuthValue() []byte
 }
 
@@ -142,7 +158,7 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 	return err
 }
 
-func (h *handleContext) invalidate() {
+func (h *handleContext) Invalidate() {
 	h.H = HandleUnassigned
 	h.N = make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(h.N, uint32(h.H))
@@ -257,7 +273,7 @@ type permanentContext struct {
 	resourceContext
 }
 
-func (r *permanentContext) invalidate() {}
+func (r *permanentContext) Invalidate() {}
 
 func makePermanentContext(handle Handle) *permanentContext {
 	name := make(Name, binary.Size(Handle(0)))
@@ -394,6 +410,10 @@ func (r *sessionContext) IncludeAttrs(attrs SessionAttributes) SessionContext {
 
 func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
 	return &sessionContext{handleContext: r.handleContext, attrs: r.attrs &^ attrs}
+}
+
+func (r *sessionContext) Attrs() SessionAttributes {
+	return r.attrs
 }
 
 func (r *sessionContext) Data() *sessionContextData {

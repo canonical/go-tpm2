@@ -162,7 +162,7 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 		return err
 	}
 
-	flushContext.(handleContextPrivate).invalidate()
+	flushContext.(handleContextInternal).Invalidate()
 	return nil
 }
 
@@ -212,7 +212,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	}
 
 	if object.Handle() == persistentHandle {
-		object.(handleContextPrivate).invalidate()
+		object.(handleContextInternal).Invalidate()
 		return nil, nil
 	}
 

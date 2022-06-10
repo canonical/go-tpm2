@@ -108,7 +108,7 @@ func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer Ma
 		validation = nil
 	}
 
-	sequenceContext.(handleContextPrivate).invalidate()
+	sequenceContext.(handleContextInternal).Invalidate()
 	return result, validation, nil
 }
 
@@ -136,7 +136,7 @@ func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceC
 		return nil, err
 	}
 
-	sequenceContext.(handleContextPrivate).invalidate()
+	sequenceContext.(handleContextInternal).Invalidate()
 	return results, nil
 }
 

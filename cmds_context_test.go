@@ -118,7 +118,7 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 	c.Check(context.Hierarchy, Equals, HandleNull)
 	c.Check(context.Blob, NotNil)
 
-	c.Check(session.(*SessionContextImpl).Data(), IsNil)
+	c.Check(session.(SessionContextInternal).Data(), IsNil)
 
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
@@ -171,7 +171,7 @@ func (s *contextSuite) TestContextSaveAndLoadTransient(c *C) {
 func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 
-	origData := session.(*SessionContextImpl).Data()
+	origData := session.(SessionContextInternal).Data()
 	{
 		b, err := mu.MarshalToBytes(origData)
 		c.Assert(err, IsNil)
@@ -192,7 +192,7 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 	c.Check(restored.Name(), DeepEquals, session.Name())
 
 	c.Check(restored, internal_testutil.ConvertibleTo, &SessionContextImpl{})
-	c.Check(restored.(*SessionContextImpl).Data(), DeepEquals, origData)
+	c.Check(restored.(SessionContextInternal).Data(), DeepEquals, origData)
 
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)

@@ -10,16 +10,12 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-type ResourceContextPrivate = resourceContextPrivate
+type ResourceContextInternal = resourceContextInternal
 type ObjectContext = objectContext
 type NvIndexContext = nvIndexContext
 type SessionContextData = sessionContextData
 type SessionContextImpl = sessionContext // We already have a SessionContext interface
-
-func (r *SessionContextImpl) Attrs() SessionAttributes {
-	return r.attrs
-}
-
+type SessionContextInternal = sessionContextInternal
 type SessionParam = sessionParam
 
 var ComputeBindName = computeBindName
@@ -38,14 +34,18 @@ func MakeMockSessionContext(handle Handle, data *SessionContextData) SessionCont
 }
 
 func MakeMockSessionParam(session SessionContext, associatedContext ResourceContext, includeAuthValue bool, decryptNonce, encryptNonce Nonce) *SessionParam {
-	var s *sessionContext
+	var r resourceContextInternal
+	if associatedContext != nil {
+		r = associatedContext.(resourceContextInternal)
+	}
+	var s sessionContextInternal
 	if session != nil {
-		s = session.(*sessionContext)
+		s = session.(sessionContextInternal)
 	}
 
 	return &sessionParam{
 		session:           s,
-		associatedContext: associatedContext,
+		associatedContext: r,
 		includeAuthValue:  includeAuthValue,
 		decryptNonce:      decryptNonce,
 		encryptNonce:      encryptNonce}

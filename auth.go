@@ -23,9 +23,9 @@ const (
 )
 
 type sessionParam struct {
-	session           *sessionContext // The session instance used for this session parameter - will be nil for a password authorization
-	associatedContext ResourceContext // The resource associated with an authorization - can be nil
-	includeAuthValue  bool            // Whether the authorization value of associatedContext is included in the HMAC key
+	session           sessionContextInternal  // The session instance used for this session parameter - will be nil for a password authorization
+	associatedContext resourceContextInternal // The resource associated with an authorization - can be nil
+	includeAuthValue  bool                    // Whether the authorization value of associatedContext is included in the HMAC key
 
 	decryptNonce Nonce
 	encryptNonce Nonce
@@ -39,7 +39,7 @@ func (s *sessionParam) ComputeSessionHMACKey() []byte {
 	var key []byte
 	key = append(key, s.session.Data().SessionKey...)
 	if s.includeAuthValue {
-		key = append(key, s.associatedContext.(resourceContextPrivate).GetAuthValue()...)
+		key = append(key, s.associatedContext.GetAuthValue()...)
 	}
 	return key
 }
@@ -61,7 +61,7 @@ func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDe
 func (s *sessionParam) computeCommandHMAC(commandCode CommandCode, commandHandles []Name, cpBytes []byte) []byte {
 	data := s.session.Data()
 	cpHash := cryptComputeCpHash(data.HashAlg, commandCode, commandHandles, cpBytes)
-	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.decryptNonce, s.encryptNonce, s.session.attrs.canonicalize())
+	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.decryptNonce, s.encryptNonce, s.session.Attrs().canonicalize())
 	return h
 }
 
@@ -74,7 +74,7 @@ func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandH
 		// Policy session that contains a TPM2_PolicyPassword assertion. The HMAC is just the authorization value
 		// of the resource being authorized.
 		if s.IsAuth() {
-			hmac = s.associatedContext.(resourceContextPrivate).GetAuthValue()
+			hmac = s.associatedContext.GetAuthValue()
 		}
 	} else {
 		hmac = s.computeCommandHMAC(commandCode, commandHandles, cpBytes)
@@ -83,12 +83,12 @@ func (s *sessionParam) buildCommandSessionAuth(commandCode CommandCode, commandH
 	return &AuthCommand{
 		SessionHandle:     s.session.Handle(),
 		Nonce:             data.NonceCaller,
-		SessionAttributes: s.session.attrs.canonicalize(),
+		SessionAttributes: s.session.Attrs().canonicalize(),
 		HMAC:              hmac}
 }
 
 func (s *sessionParam) buildCommandPasswordAuth() *AuthCommand {
-	return &AuthCommand{SessionHandle: HandlePW, SessionAttributes: AttrContinueSession, HMAC: s.associatedContext.(resourceContextPrivate).GetAuthValue()}
+	return &AuthCommand{SessionHandle: HandlePW, SessionAttributes: AttrContinueSession, HMAC: s.associatedContext.GetAuthValue()}
 }
 
 func (s *sessionParam) buildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *AuthCommand {
@@ -155,7 +155,7 @@ func (p *sessionParams) findSessionWithAttr(attr SessionAttributes) (*sessionPar
 		if session.session == nil {
 			continue
 		}
-		if session.session.attrs.canonicalize()&attr > 0 {
+		if session.session.Attrs().canonicalize()&attr > 0 {
 			return session, i
 		}
 	}
@@ -185,7 +185,7 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 			default:
 				// A bound HMAC session used for authorization. Include the auth value of the associated
 				// ResourceContext only if it is not the bind entity.
-				bindName := computeBindName(s.associatedContext.Name(), s.associatedContext.(resourceContextPrivate).GetAuthValue())
+				bindName := computeBindName(s.associatedContext.Name(), s.associatedContext.GetAuthValue())
 				s.includeAuthValue = !bytes.Equal(bindName, data.BoundEntity)
 			}
 		case SessionTypePolicy:
@@ -205,12 +205,17 @@ func (p *sessionParams) validateAndAppend(s *sessionParam) error {
 }
 
 func (p *sessionParams) validateAndAppendAuth(in ResourceContextWithSession) error {
-	sc, _ := in.Session.(*sessionContext)
-	associatedContext := in.Context
-	if associatedContext == nil {
-		associatedContext = makePermanentContext(HandleNull)
+	s := new(sessionParam)
+
+	if in.Session != nil {
+		s.session = in.Session.(sessionContextInternal)
 	}
-	s := &sessionParam{associatedContext: associatedContext, session: sc}
+	if in.Context != nil {
+		s.associatedContext = in.Context.(resourceContextInternal)
+	} else {
+		s.associatedContext = makePermanentContext(HandleNull)
+	}
+
 	return p.validateAndAppend(s)
 }
 
@@ -270,7 +275,7 @@ func (p *sessionParams) invalidateSessionContexts(authResponses []AuthResponse) 
 		if resp.SessionAttributes&AttrContinueSession != 0 {
 			continue
 		}
-		session.invalidate()
+		session.Invalidate()
 	}
 }
 

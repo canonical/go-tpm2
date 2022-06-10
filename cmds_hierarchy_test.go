@@ -364,10 +364,10 @@ func TestClear(t *testing.T) {
 			t.Errorf("Clear didn't evict owner object")
 		}
 
-		if tpm.EndorsementHandleContext().(ResourceContextPrivate).GetAuthValue() != nil {
+		if tpm.EndorsementHandleContext().(ResourceContextInternal).GetAuthValue() != nil {
 			t.Errorf("Clear didn't reset the authorization value for the EH ResourceContext")
 		}
-		if !bytes.Equal(tpm.PlatformHandleContext().(ResourceContextPrivate).GetAuthValue(), testAuth) {
+		if !bytes.Equal(tpm.PlatformHandleContext().(ResourceContextInternal).GetAuthValue(), testAuth) {
 			t.Errorf("Clear reset the authorization value for the PH ResourceContext")
 		}
 	}

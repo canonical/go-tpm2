@@ -123,7 +123,7 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authC
 		return err
 	}
 
-	nvIndex.(handleContextPrivate).invalidate()
+	nvIndex.(handleContextInternal).Invalidate()
 	return nil
 }
 
@@ -148,7 +148,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 		return err
 	}
 
-	nvIndex.(handleContextPrivate).invalidate()
+	nvIndex.(handleContextInternal).Invalidate()
 	return nil
 }
 
