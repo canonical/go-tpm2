@@ -55,7 +55,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 	}
 
 	if err := t.RunCommand(CommandPolicySigned, sessions,
-		authContext, policySession, Delimiter,
+		UseHandleContext(authContext), UseHandleContext(policySession), Delimiter,
 		nonceTPM, cpHashA, policyRef, expiration, auth, Delimiter,
 		Delimiter,
 		&timeout, &policyTicket); err != nil {
@@ -95,7 +95,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 // session.
 func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession SessionContext, sessions ...SessionContext) (timeout Timeout, policyTicket *TkAuth, err error) {
 	if err := t.RunCommand(CommandPolicySecret, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, policySession, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(policySession), Delimiter,
 		policySession.NonceTPM(), cpHashA, policyRef, expiration, Delimiter,
 		Delimiter,
 		&timeout, &policyTicket); err != nil {
@@ -133,7 +133,7 @@ func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession Ses
 // the value of timeout, unless it already has an expiration time that is earlier.
 func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout, cpHashA Digest, policyRef Nonce, authName Name, ticket *TkAuth, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyTicket, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		timeout, cpHashA, policyRef, authName, ticket)
 }
 
@@ -146,7 +146,7 @@ func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout,
 // include the concatenation of all of the digests contained in pHashList.
 func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyOR, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		pHashList)
 }
 
@@ -165,7 +165,7 @@ func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList
 // with an error code of ErrorPCRChanged.
 func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, pcrs PCRSelectionList, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyPCR, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		pcrDigest, pcrs)
 }
 
@@ -211,7 +211,7 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 // of operandB, offset, operation and the name of nvIndex.
 func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyNV, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, policySession, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), UseHandleContext(policySession), Delimiter,
 		operandB, offset, operation)
 }
 
@@ -227,7 +227,7 @@ func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySessio
 // of operandB, offset and operation.
 func (t *TPMContext) PolicyCounterTimer(policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyCounterTimer, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		operandB, offset, operation)
 }
 
@@ -243,7 +243,7 @@ func (t *TPMContext) PolicyCounterTimer(policySession SessionContext, operandB O
 // the session.
 func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code CommandCode, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyCommandCode, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		code)
 }
 
@@ -271,7 +271,7 @@ func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code Comman
 // value of cpHashA, and the value of cpHashA will be recorded on the session context to limit usage of the session to the specific
 // command and set of command parameters.
 func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyCpHash, sessions, policySession, Delimiter, cpHashA)
+	return t.RunCommand(CommandPolicyCpHash, sessions, UseHandleContext(policySession), Delimiter, cpHashA)
 }
 
 // PolicyNameHash executes the TPM2_PolicyNameHash command to bind a policy to a specific set of TPM entities, without being bound
@@ -287,7 +287,7 @@ func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, 
 // value of nameHash, and the value of nameHash will be recorded on the session context to limit usage of the session to the specific
 // set of TPM entities.
 func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Digest, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyNameHash, sessions, policySession, Delimiter, nameHash)
+	return t.RunCommand(CommandPolicyNameHash, sessions, UseHandleContext(policySession), Delimiter, nameHash)
 }
 
 // PolicyDuplicationSelect executes the TPM2_PolicyDuplicationSelect command to allow the policy to be restricted to duplication
@@ -307,7 +307,7 @@ func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Diges
 // session to TPMContext.Duplicate.
 func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objectName, newParentName Name, includeObject bool, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPolicyDuplicationSelect, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		objectName, newParentName, includeObject)
 }
 
@@ -340,7 +340,7 @@ func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolic
 	}
 
 	return t.RunCommand(CommandPolicyAuthorize, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		approvedPolicy, policyRef, keySign, checkTicket)
 }
 
@@ -358,7 +358,7 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
 	}
 
-	if err := t.RunCommand(CommandPolicyAuthValue, sessions, policySession); err != nil {
+	if err := t.RunCommand(CommandPolicyAuthValue, sessions, UseHandleContext(policySession)); err != nil {
 		return err
 	}
 
@@ -380,7 +380,7 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
 	}
 
-	if err := t.RunCommand(CommandPolicyPassword, sessions, policySession); err != nil {
+	if err := t.RunCommand(CommandPolicyPassword, sessions, UseHandleContext(policySession)); err != nil {
 		return err
 	}
 
@@ -392,7 +392,7 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 // with policySession.
 func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...SessionContext) (policyDigest Digest, err error) {
 	if err := t.RunCommand(CommandPolicyGetDigest, sessions,
-		policySession, Delimiter,
+		UseHandleContext(policySession), Delimiter,
 		Delimiter,
 		Delimiter,
 		&policyDigest); err != nil {
@@ -412,7 +412,7 @@ func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...S
 // writtenSet. A flag will be set on the session context so that the value of the AttrNVWritten attribute of the NV index being
 // authorized will be compared to writtenSet when the session is used.
 func (t *TPMContext) PolicyNvWritten(policySession SessionContext, writtenSet bool, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyNvWritten, sessions, policySession, Delimiter, writtenSet)
+	return t.RunCommand(CommandPolicyNvWritten, sessions, UseHandleContext(policySession), Delimiter, writtenSet)
 }
 
 // func (t *TPMContext) PolicyTemplate(policySession HandleContext, templateHash Digest, sessions ...SessionContext) error {

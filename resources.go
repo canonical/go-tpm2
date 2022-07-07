@@ -286,6 +286,8 @@ func makePermanentContext(handle Handle) *permanentContext {
 				N:    name}}}
 }
 
+var nullContext = makePermanentContext(HandleNull)
+
 type objectContext struct {
 	resourceContext
 }
@@ -430,6 +432,11 @@ func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext
 			N:    name,
 			Data: &handleContextU{Session: data}}}
 }
+
+var pwSession = func() *sessionContext {
+	s := makeSessionContext(HandlePW, new(sessionContextData))
+	return s.WithAttrs(AttrContinueSession).(*sessionContext)
+}()
 
 func (t *TPMContext) makeResourceContextFromTPM(handle HandleContext, sessions ...SessionContext) (rc ResourceContext, err error) {
 	switch handle.Handle().Type() {

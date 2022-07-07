@@ -90,7 +90,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 	}
 
 	if err := t.RunCommand(CommandNVDefineSpace, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), Delimiter,
 		auth, mu.Sized(publicInfo)); err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 // On successful completion, nvIndex will be invalidated.
 func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVUndefineSpace, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)); err != nil {
 		return err
 	}
 
@@ -143,8 +143,8 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 			// executed), the TPM will respond with a HMAC generated with a key based on an empty auth value.
 			nvIndex.SetAuthValue(nil)
 		},
-		ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession},
-		ResourceContextWithSession{Context: platform, Session: platformAuthSession}); err != nil {
+		UseResourceContextWithAuth(nvIndex, nvIndexAuthSession),
+		UseResourceContextWithAuth(platform, platformAuthSession)); err != nil {
 		return err
 	}
 
@@ -155,7 +155,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 // NVReadPublic executes the TPM2_NV_ReadPublic command to read the public area of the NV index associated with nvIndex.
 func (t *TPMContext) NVReadPublic(nvIndex HandleContext, sessions ...SessionContext) (nvPublic *NVPublic, nvName Name, err error) {
 	if err := t.RunCommand(CommandNVReadPublic, sessions,
-		nvIndex, Delimiter,
+		UseHandleContext(nvIndex), Delimiter,
 		Delimiter,
 		Delimiter,
 		mu.Sized(&nvPublic), &nvName); err != nil {
@@ -194,7 +194,7 @@ func (t *TPMContext) NVReadPublic(nvIndex HandleContext, sessions ...SessionCont
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVWrite, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), Delimiter,
 		data, offset); err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVIncrement, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)); err != nil {
 		return err
 	}
 
@@ -369,7 +369,7 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVExtend, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), Delimiter,
 		data); err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 // On successful completion, the AttrNVWritten flag will be set if this is the first time that the index has been written to.
 func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVSetBits, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), Delimiter,
 		bits); err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 // the next TPM reset or TPM restart unless the index has the AttrNVWriteDefine attribute set and AttrNVWritten attribute is set.
 func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVWriteLock, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)); err != nil {
 		return err
 	}
 
@@ -451,8 +451,7 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 // is clear. ResourceContext instances associated with NV indices that are updated as a consequence of this function will no longer
 // be able to be used because the name will be incorrect.
 func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandNVGlobalWriteLock, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
+	return t.RunCommand(CommandNVGlobalWriteLock, sessions, UseResourceContextWithAuth(authContext, authContextAuthSession))
 }
 
 // NVReadRaw executes the TPM2_NV_Read command to read the contents of the NV index associated with nvIndex. The amount of data to read,
@@ -488,7 +487,7 @@ func (t *TPMContext) NVGlobalWriteLock(authContext ResourceContext, authContextA
 // On successful completion, the requested data will be returned.
 func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) (data MaxNVBuffer, err error) {
 	if err := t.RunCommand(CommandNVRead, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), Delimiter,
 		size, offset, Delimiter,
 		Delimiter,
 		&data); err != nil {
@@ -704,7 +703,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 // the next TPM reset or TPM restart.
 func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.RunCommand(CommandNVReadLock, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, nvIndex); err != nil {
+		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)); err != nil {
 		return err
 	}
 
@@ -728,9 +727,7 @@ func (t *TPMContext) NVChangeAuth(nvIndex ResourceContext, newAuth Auth, nvIndex
 			// If the session is not bound to nvIndex, the TPM will respond with a HMAC generated with a key derived from newAuth. If the
 			// session is bound, the TPM will respond with a HMAC generated from the original key
 			nvIndex.SetAuthValue(newAuth)
-		},
-		ResourceContextWithSession{Context: nvIndex, Session: nvIndexAuthSession}, Delimiter,
-		newAuth)
+		}, UseResourceContextWithAuth(nvIndex, nvIndexAuthSession), Delimiter, newAuth)
 }
 
 // func (t *TPMContext) NVCertify(signContext, authContext, nvIndex HandleContext, qualifyingData Data,

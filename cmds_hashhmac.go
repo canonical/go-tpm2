@@ -31,7 +31,7 @@ func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashA
 	var sequenceHandle Handle
 
 	if err := t.RunCommand(CommandHMACStart, sessions,
-		ResourceContextWithSession{Context: context, Session: contextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(context, contextAuthSession), Delimiter,
 		auth, hashAlg, Delimiter,
 		&sequenceHandle); err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessi
 // a restricted signing key, the first block of data added to this sequence must be 4 bytes and not the value of TPMGeneratedValue.
 func (t *TPMContext) SequenceUpdate(sequenceContext ResourceContext, buffer MaxBuffer, sequenceContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandSequenceUpdate, sessions,
-		ResourceContextWithSession{Context: sequenceContext, Session: sequenceContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession), Delimiter,
 		buffer)
 }
 
@@ -97,7 +97,7 @@ func (t *TPMContext) SequenceUpdate(sequenceContext ResourceContext, buffer MaxB
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
 func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer MaxBuffer, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (result Digest, validation *TkHashcheck, err error) {
 	if err := t.RunCommand(CommandSequenceComplete, sessions,
-		ResourceContextWithSession{Context: sequenceContext, Session: sequenceContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession), Delimiter,
 		buffer, hierarchy, Delimiter,
 		Delimiter,
 		&result, &validation); err != nil {
@@ -129,7 +129,7 @@ func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer Ma
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
 func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceContext, buffer MaxBuffer, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (results TaggedHashList, err error) {
 	if err := t.RunCommand(CommandEventSequenceComplete, sessions,
-		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, ResourceContextWithSession{Context: sequenceContext, Session: sequenceContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(pcrContext, pcrContextAuthSession), UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession), Delimiter,
 		buffer, Delimiter,
 		Delimiter,
 		&results); err != nil {

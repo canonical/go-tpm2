@@ -20,7 +20,7 @@ package tpm2
 // On success, a valid TkVerified structure will be returned.
 func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature, sessions ...SessionContext) (validation *TkVerified, err error) {
 	if err := t.RunCommand(CommandVerifySignature, sessions,
-		keyContext, Delimiter,
+		UseHandleContext(keyContext), Delimiter,
 		digest, signature, Delimiter,
 		Delimiter,
 		&validation); err != nil {
@@ -63,7 +63,7 @@ func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *S
 	}
 
 	if err := t.RunCommand(CommandSign, sessions,
-		ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(keyContext, keyContextAuthSession), Delimiter,
 		digest, inScheme, validation, Delimiter,
 		Delimiter,
 		&signature); err != nil {

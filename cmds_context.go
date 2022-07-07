@@ -40,7 +40,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 	}
 
 	if err := t.RunCommand(CommandContextSave, nil,
-		saveContext, Delimiter,
+		UseHandleContext(saveContext), Delimiter,
 		Delimiter,
 		Delimiter,
 		&context); err != nil {
@@ -206,7 +206,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	}
 
 	if err := t.RunCommand(CommandEvictControl, sessions,
-		ResourceContextWithSession{Context: auth, Session: authAuthSession}, object, Delimiter,
+		UseResourceContextWithAuth(auth, authAuthSession), UseHandleContext(object), Delimiter,
 		persistentHandle); err != nil {
 		return nil, err
 	}

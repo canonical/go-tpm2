@@ -117,7 +117,7 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 	}
 
 	if err := t.RunCommand(CommandCreate, sessions,
-		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(parentContext, parentContextAuthSession), Delimiter,
 		mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR, Delimiter,
 		Delimiter,
 		&outPrivate, mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket); err != nil {
@@ -194,7 +194,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	var name Name
 
 	if err := t.RunCommand(CommandLoad, sessions,
-		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(parentContext, parentContextAuthSession), Delimiter,
 		inPrivate, mu.Sized(inPublic), Delimiter,
 		&objectHandle, Delimiter,
 		&name); err != nil {
@@ -313,7 +313,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 // On success, the public part of the object is returned, along with the object's name and qualified name.
 func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...SessionContext) (outPublic *Public, name Name, qualifiedName Name, err error) {
 	if err := t.RunCommand(CommandReadPublic, sessions,
-		objectContext, Delimiter,
+		UseHandleContext(objectContext), Delimiter,
 		Delimiter,
 		Delimiter,
 		mu.Sized(&outPublic), &name, &qualifiedName); err != nil {
@@ -356,7 +356,7 @@ func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...Session
 // which was issued by a certificate authority.
 func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession SessionContext, sessions ...SessionContext) (certInfo Digest, err error) {
 	if err := t.RunCommand(CommandActivateCredential, sessions,
-		ResourceContextWithSession{Context: activateContext, Session: activateContextAuthSession}, ResourceContextWithSession{Context: keyContext, Session: keyContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(activateContext, activateContextAuthSession), UseResourceContextWithAuth(keyContext, keyContextAuthSession), Delimiter,
 		credentialBlob, secret, Delimiter,
 		Delimiter,
 		&certInfo); err != nil {
@@ -399,7 +399,7 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceCont
 // associated with objectName is resident on it.
 func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...SessionContext) (credentialBlob IDObjectRaw, secret EncryptedSecret, err error) {
 	if err := t.RunCommand(CommandMakeCredential, sessions,
-		context, Delimiter,
+		UseHandleContext(context), Delimiter,
 		credential, objectName, Delimiter,
 		Delimiter,
 		&credentialBlob, &secret); err != nil {
@@ -419,7 +419,7 @@ func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, 
 // On success, the object's sensitive data is returned in decrypted form.
 func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession SessionContext, sessions ...SessionContext) (outData SensitiveData, err error) {
 	if err := t.RunCommand(CommandUnseal, sessions,
-		ResourceContextWithSession{Context: itemContext, Session: itemContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(itemContext, itemContextAuthSession), Delimiter,
 		Delimiter,
 		Delimiter,
 		&outData); err != nil {
@@ -449,7 +449,7 @@ func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession 
 // to the version of the object that is currently loaded in to the TPM.
 func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth, objectContextAuthSession SessionContext, sessions ...SessionContext) (outPrivate Private, err error) {
 	if err := t.RunCommand(CommandObjectChangeAuth, sessions,
-		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, parentContext, Delimiter,
+		UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseHandleContext(parentContext), Delimiter,
 		newAuth, Delimiter,
 		Delimiter,
 		&outPrivate); err != nil {
@@ -580,7 +580,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	var name Name
 
 	if err := t.RunCommand(CommandCreateLoaded, sessions,
-		ResourceContextWithSession{Context: parentContext, Session: parentContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(parentContext, parentContextAuthSession), Delimiter,
 		mu.Sized(inSensitive), inTemplate, Delimiter,
 		&objectHandle, Delimiter,
 		&outPrivate, mu.Sized(&outPublic), &name); err != nil {

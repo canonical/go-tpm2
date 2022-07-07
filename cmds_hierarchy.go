@@ -110,7 +110,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	var name Name
 
 	if err := t.RunCommand(CommandCreatePrimary, sessions,
-		ResourceContextWithSession{Context: primaryObject, Session: primaryObjectAuthSession}, Delimiter,
+		UseResourceContextWithAuth(primaryObject, primaryObjectAuthSession), Delimiter,
 		mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR, Delimiter,
 		&objectHandle, Delimiter,
 		mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket, &name); err != nil {
@@ -163,7 +163,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 // this command.
 func (t *TPMContext) HierarchyControl(authContext ResourceContext, enable Handle, state bool, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandHierarchyControl, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), Delimiter,
 		enable, state)
 }
 
@@ -190,8 +190,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession S
 					rc.SetAuthValue(nil)
 				}
 			}
-		},
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession})
+		}, UseResourceContextWithAuth(authContext, authContextAuthSession))
 }
 
 // ClearControl executes the TPM2_ClearControl command to enable or disable execution of the TPM2_Clear command (via the
@@ -210,7 +209,7 @@ func (t *TPMContext) Clear(authContext ResourceContext, authContextAuthSession S
 // authContextAuthSession.
 func (t *TPMContext) ClearControl(authContext ResourceContext, disable bool, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandClearControl, sessions,
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(authContext, authContextAuthSession), Delimiter,
 		disable)
 }
 
@@ -231,6 +230,5 @@ func (t *TPMContext) HierarchyChangeAuth(authContext ResourceContext, newAuth Au
 			// If the HMAC key for this command includes the auth value for authHandle, the TPM will respond with a HMAC generated with a key
 			// that includes newAuth instead.
 			authContext.SetAuthValue(newAuth)
-		},
-		ResourceContextWithSession{Context: authContext, Session: authContextAuthSession}, Delimiter, newAuth)
+		}, UseResourceContextWithAuth(authContext, authContextAuthSession), Delimiter, newAuth)
 }

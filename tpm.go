@@ -49,11 +49,46 @@ type delimiterSentinel struct{}
 // parameter pointer blocks in the variable length params argument in TPMContext.RunCommand.
 var Delimiter delimiterSentinel
 
-// ResourceContextWithAuth associates a ResourceContext with a session for authorization, and is provided to TPMContext.RunCommand in
-// the command handle area for any handles that require an authorization.
-type ResourceContextWithSession struct {
-	Context ResourceContext
-	Session SessionContext
+// CommandHandleContext is used to supply a HandleContext to TPMContext.RunCommand
+// or TPMContext.RunCommandWithResponseCallback.
+type CommandHandleContext struct {
+	handle  HandleContext
+	session SessionContext
+}
+
+// Handle returns the HandleContext.
+func (c *CommandHandleContext) Handle() HandleContext {
+	return c.handle
+}
+
+// Session returns the SessionContext if the handle requires authorization.
+func (c *CommandHandleContext) Session() SessionContext {
+	return c.session
+}
+
+// UseResourceContextWithAuth creates a CommandHandleContext for a ResourceContext that
+// requires authorization. The supplied SessionContext is the session used for authorization
+// and may be nil - in this case, passphrase authorization is used. If the authorization
+// value of the resource is required as part of the authorization, it is obtained from
+// the supplied ResourceContext, and should be set by calling ResourceContext.SetAuthValue.
+// If the ResourceContext is nil, then HandleNull is used.
+func UseResourceContextWithAuth(r ResourceContext, s SessionContext) *CommandHandleContext {
+	if r == nil {
+		r = nullContext
+	}
+	if s == nil {
+		s = pwSession
+	}
+	return &CommandHandleContext{handle: r, session: s}
+}
+
+// UseHandleContext creates a CommandHandleContext for any HandleContext that does not
+// require authorization. If the HandleContext is nil, then HandleNull is used.
+func UseHandleContext(h HandleContext) *CommandHandleContext {
+	if h == nil {
+		h = nullContext
+	}
+	return &CommandHandleContext{handle: h}
 }
 
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
@@ -221,9 +256,6 @@ func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) 
 		}
 		var exclusive sessionContextInternal
 		for _, s := range cmd.sessionParams.sessions {
-			if s.session == nil {
-				continue
-			}
 			if s.session.Data().IsExclusive {
 				exclusive = s.session
 				break
@@ -260,10 +292,8 @@ func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) 
 // handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Delimiter
 // sentinel value.
 //
-// Command handles are provided as HandleContext types if they do not require an authorization. For command handles that require an
-// authorization, they are provided using the ResourceContextWithSession type. This links the ResourceContext to an optional
-// authorization session. If the authorization value of the TPM entity is required as part of the authorization, this will be obtained
-// from the supplied ResourceContext. A nil HandleContext will automatically be converted to a handle with the value of HandleNull.
+// Command handles are provided as *CommandHandleContext types. For command handles that require authorization and if the
+// authorization value of the TPM entity is required, this will be obtained from the ResourceContext supplied.
 //
 // Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
 //
@@ -297,23 +327,17 @@ func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, ses
 
 		switch sentinels {
 		case 0:
-			var handle HandleContext
 			switch p := param.(type) {
-			case ResourceContextWithSession:
-				handle = p.Context
-				if err := sessionParams.validateAndAppendAuth(p); err != nil {
-					return fmt.Errorf("cannot process ResourceContextWithSession for command %s at index %d: %v", commandCode, len(commandHandles), err)
+			case *CommandHandleContext:
+				if p.session != nil {
+					if err := sessionParams.appendSessionForResource(p.session, p.handle.(ResourceContext)); err != nil {
+						return fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", commandCode, len(commandHandles), err)
+					}
 				}
-			case HandleContext:
-				handle = p
-			case nil:
+				commandHandles = append(commandHandles, p.handle)
 			default:
 				return fmt.Errorf("cannot process command handle argument for command %s at index %d: invalid type (%s)", commandCode, len(commandHandles), reflect.TypeOf(param))
 			}
-			if handle == nil {
-				handle = makePermanentContext(HandleNull)
-			}
-			commandHandles = append(commandHandles, handle)
 		case 1:
 			commandParams = append(commandParams, param)
 		case 2:
@@ -330,7 +354,7 @@ func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, ses
 		}
 	}
 
-	if err := sessionParams.validateAndAppendExtra(sessions); err != nil {
+	if err := sessionParams.appendExtraSessions(sessions...); err != nil {
 		return fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", commandCode, err)
 	}
 
@@ -356,10 +380,8 @@ func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, ses
 // handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Delimiter
 // sentinel value.
 //
-// Command handles are provided as HandleContext types if they do not require an authorization. For command handles that require an
-// authorization, they are provided using the ResourceContextWithSession type. This links the ResourceContext to an optional
-// authorization session. If the authorization value of the TPM entity is required as part of the authorization, this will be obtained
-// from the supplied ResourceContext. A nil HandleContext will automatically be converted to a handle with the value of HandleNull.
+// Command handles are provided as *CommandHandleContext types. For command handles that require authorization and if the
+// authorization value of the TPM entity is required, this will be obtained from the ResourceContext supplied.
 //
 // Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
 //

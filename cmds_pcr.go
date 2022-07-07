@@ -17,7 +17,7 @@ package tpm2
 // ErrorLocality will be returned.
 func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashList, pcrContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandPCRExtend, sessions,
-		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(pcrContext, pcrContextAuthSession), Delimiter,
 		digests)
 }
 
@@ -33,7 +33,7 @@ func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashLis
 // On success, this function will return a list of tagged digests that the PCR associated with pcrContext was extended with.
 func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession SessionContext, sessions ...SessionContext) (digests TaggedHashList, err error) {
 	if err := t.RunCommand(CommandPCREvent, sessions,
-		ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(pcrContext, pcrContextAuthSession), Delimiter,
 		eventData, Delimiter,
 		Delimiter,
 		&digests); err != nil {
@@ -100,5 +100,5 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 // If the PCR associated with pcrContext can not be reset from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
 func (t *TPMContext) PCRReset(pcrContext ResourceContext, pcrContextAuthSession SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPCRReset, sessions, ResourceContextWithSession{Context: pcrContext, Session: pcrContextAuthSession})
+	return t.RunCommand(CommandPCRReset, sessions, UseResourceContextWithAuth(pcrContext, pcrContextAuthSession))
 }

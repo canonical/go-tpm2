@@ -39,7 +39,7 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 	}
 
 	if err := t.RunCommand(CommandCertify, sessions,
-		ResourceContextWithSession{Context: objectContext, Session: objectContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
 		mu.Sized(&certifyInfo), &signature); err != nil {
@@ -82,7 +82,7 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 	}
 
 	if err := t.RunCommand(CommandCertifyCreation, sessions,
-		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, objectContext, Delimiter,
+		UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(objectContext), Delimiter,
 		qualifyingData, creationHash, inScheme, creationTicket, Delimiter,
 		Delimiter,
 		mu.Sized(&certifyInfo), &signature); err != nil {
@@ -117,7 +117,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 	}
 
 	if err := t.RunCommand(CommandQuote, sessions,
-		ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
 		qualifyingData, inScheme, pcrs, Delimiter,
 		Delimiter,
 		mu.Sized(&quoted), &signature); err != nil {
@@ -155,7 +155,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 	}
 
 	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
-		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, sessionContext, Delimiter,
+		UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(sessionContext), Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
 		mu.Sized(&auditInfo), &signature); err != nil {
@@ -195,7 +195,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 	}
 
 	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
-		ResourceContextWithSession{Context: privacyContext, Session: privacyContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(privacyContext, privacyContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
 		mu.Sized(&auditInfo), &signature); err != nil {
@@ -232,7 +232,7 @@ func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, q
 	}
 
 	if err := t.RunCommand(CommandGetTime, sessions,
-		ResourceContextWithSession{Context: privacyAdminContext, Session: privacyAdminContextAuthSession}, ResourceContextWithSession{Context: signContext, Session: signContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
 		qualifyingData, inScheme, Delimiter,
 		Delimiter,
 		mu.Sized(&timeInfo), &signature); err != nil {

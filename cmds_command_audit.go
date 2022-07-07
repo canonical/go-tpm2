@@ -20,6 +20,6 @@ package tpm2
 // zero, a *TPMParameterError error with an error code of ErrorValue will be returned for parameter index 1.
 func (t *TPMContext) SetCommandCodeAuditStatus(auth ResourceContext, auditAlg HashAlgorithmId, setList, clearList CommandCodeList, authAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandSetCommandCodeAuditStatus, sessions,
-		ResourceContextWithSession{Context: auth, Session: authAuthSession}, Delimiter,
+		UseResourceContextWithAuth(auth, authAuthSession), Delimiter,
 		auditAlg, setList, clearList)
 }

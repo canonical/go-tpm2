@@ -114,7 +114,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var nonceTPM Nonce
 
 	if err := t.RunCommand(CommandStartAuthSession, sessions,
-		tpmKey, bind, Delimiter,
+		UseHandleContext(tpmKey), UseHandleContext(bind), Delimiter,
 		Nonce(nonceCaller), encryptedSalt, sessionType, symmetric, authHash, Delimiter,
 		&sessionHandle, Delimiter,
 		&nonceTPM); err != nil {
@@ -152,5 +152,5 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 // PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to reset the policy
 // authorization session to its initial state.
 func (t *TPMContext) PolicyRestart(sessionContext SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyRestart, sessions, sessionContext)
+	return t.RunCommand(CommandPolicyRestart, sessions, UseHandleContext(sessionContext))
 }

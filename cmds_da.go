@@ -13,7 +13,7 @@ package tpm2
 // On successful completion, the lockout counter will be reset to zero.
 func (t *TPMContext) DictionaryAttackLockReset(lockContext ResourceContext, lockContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandDictionaryAttackLockReset, sessions,
-		ResourceContextWithSession{Context: lockContext, Session: lockContextAuthSession})
+		UseResourceContextWithAuth(lockContext, lockContextAuthSession))
 }
 
 // DictionaryAttackParameters executes the TPM2_DictionaryAttackParameters command to change the dictionary attack lockout settings.
@@ -29,6 +29,6 @@ func (t *TPMContext) DictionaryAttackLockReset(lockContext ResourceContext, lock
 // auth role for lockContext, with session based authorization provided via lockContextAuthSession.
 func (t *TPMContext) DictionaryAttackParameters(lockContext ResourceContext, newMaxTries, newRecoveryTime, lockoutRecovery uint32, lockContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.RunCommand(CommandDictionaryAttackParameters, sessions,
-		ResourceContextWithSession{Context: lockContext, Session: lockContextAuthSession}, Delimiter,
+		UseResourceContextWithAuth(lockContext, lockContextAuthSession), Delimiter,
 		newMaxTries, newRecoveryTime, lockoutRecovery)
 }
