@@ -247,46 +247,22 @@ func UseHandleContext(h HandleContext) *CommandHandleContext {
 
 // CommandContext provides an API for building a command to execute via a TPMContext.
 type CommandContext struct {
-	tpm           *TPMContext
-	commandCode   CommandCode
-	handles       []*CommandHandleContext
-	params        []interface{}
-	extraSessions []SessionContext
+	tpm *TPMContext
+	cmdContext
 }
 
 // ResponseContext contains the context required to validate a response and obtain
 // response parameters.
 type ResponseContext struct {
-	tpm              *TPMContext
-	commandCode      CommandCode
-	sessionParams    *sessionParams
-	responseAuthArea []AuthResponse
-	rpBytes          []byte
+	tpm *TPMContext
+	*rspContext
 }
 
 // Complete performs validation of the response auth area and updates internal SessionContext
 // state. If a response HMAC is invalid, an error will be returned. The caller supplies a
 // command dependent number of pointers to the response parameters.
 func (c *ResponseContext) Complete(responseParams ...interface{}) error {
-	c.tpm.updateExclusiveSession(c)
-
-	if len(c.responseAuthArea) > 0 {
-		if err := c.sessionParams.processResponseAuthArea(c.responseAuthArea, c.rpBytes); err != nil {
-			return &InvalidResponseError{c.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
-		}
-	}
-
-	rpBuf := bytes.NewReader(c.rpBytes)
-
-	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-		return &InvalidResponseError{c.commandCode, fmt.Sprintf("cannot unmarshal response parameters: %v", err)}
-	}
-
-	if rpBuf.Len() > 0 {
-		return &InvalidResponseError{c.commandCode, fmt.Sprintf("response parameter area contains %d trailing bytes", rpBuf.Len())}
-	}
-
-	return nil
+	return c.tpm.completeResponse(c.rspContext, responseParams...)
 }
 
 // AddHandles appends the supplied command handle contexts to this command.
@@ -326,49 +302,13 @@ func (c *CommandContext) AddExtraSessions(sessions ...SessionContext) *CommandCo
 // One of *TPMWarning, *TPMError, *TPMParameterError, *TPMHandleError or *TPMSessionError
 // will be returned if the TPM returns a response code other than ResponseSuccess.
 func (c *CommandContext) RunWithoutProcessingResponse(responseHandle *Handle) (*ResponseContext, error) {
-	var handles HandleList
-	var handleNames []Name
-	var sessionParams sessionParams
-
-	for _, h := range c.handles {
-		handles = append(handles, h.handle.Handle())
-		handleNames = append(handleNames, h.handle.Name())
-
-		if h.session != nil {
-			if err := sessionParams.appendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
-				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.commandCode, len(handles), err)
-			}
-		}
-	}
-	if err := sessionParams.appendExtraSessions(c.extraSessions...); err != nil {
-		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.commandCode, err)
-	}
-
-	if sessionParams.hasDecryptSession() && (len(c.params) == 0 || !isParamEncryptable(c.params[0])) {
-		return nil, fmt.Errorf("command %s does not support command parameter encryption", c.commandCode)
-	}
-
-	cpBytes, err := mu.MarshalToBytes(c.params...)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
-	}
-
-	cAuthArea, err := sessionParams.buildCommandAuthArea(c.commandCode, handleNames, cpBytes)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
-	}
-
-	rpBytes, rAuthArea, err := c.tpm.RunCommand(c.commandCode, handles, cAuthArea, cpBytes, responseHandle)
+	r, err := c.tpm.runCommandContext(&c.cmdContext, responseHandle)
 	if err != nil {
 		return nil, err
 	}
-
 	return &ResponseContext{
-		tpm:              c.tpm,
-		commandCode:      c.commandCode,
-		sessionParams:    &sessionParams,
-		responseAuthArea: rAuthArea,
-		rpBytes:          rpBytes}, nil
+		tpm:        c.tpm,
+		rspContext: r}, nil
 }
 
 // Run executes the command defined by this context using the TPMContext that created it.

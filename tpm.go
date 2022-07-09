@@ -5,8 +5,13 @@
 package tpm2
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
+
+	"github.com/canonical/go-tpm2/mu"
+
+	"golang.org/x/xerrors"
 )
 
 func makeInvalidArgError(name, msg string) error {
@@ -26,6 +31,22 @@ func isSessionAllowed(commandCode CommandCode) bool {
 	default:
 		return true
 	}
+}
+
+type cmdContext struct {
+	commandCode   CommandCode
+	handles       []*CommandHandleContext
+	params        []interface{}
+	extraSessions []SessionContext
+}
+
+type rspContext struct {
+	commandCode      CommandCode
+	sessionParams    *sessionParams
+	responseAuthArea []AuthResponse
+	rpBytes          []byte
+
+	err error
 }
 
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
@@ -84,6 +105,7 @@ type TPMContext struct {
 	maxDigestSize         int
 	maxNVBufferSize       int
 	exclusiveSession      sessionContextInternal
+	pendingResponse       *rspContext
 }
 
 // Close calls Close on the transmission interface.
@@ -174,22 +196,107 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 	return rpBytes, rAuthArea, nil
 }
 
-func (t *TPMContext) updateExclusiveSession(c *ResponseContext) {
-	if !isSessionAllowed(c.commandCode) {
-		return
+func (t *TPMContext) processResponseAuth(r *rspContext) (err error) {
+	if r != t.pendingResponse {
+		return r.err
 	}
 
-	if t.exclusiveSession != nil {
-		t.exclusiveSession.Data().IsExclusive = false
-		t.exclusiveSession = nil
-	}
+	defer func() {
+		r.err = err
+	}()
 
-	for _, s := range c.sessionParams.sessions {
-		if s.session.IsExclusive() {
-			t.exclusiveSession = s.session
-			break
+	t.pendingResponse = nil
+
+	if isSessionAllowed(r.commandCode) {
+		if t.exclusiveSession != nil {
+			t.exclusiveSession.Data().IsExclusive = false
+			t.exclusiveSession = nil
+		}
+
+		for _, s := range r.sessionParams.sessions {
+			if s.session.IsExclusive() {
+				t.exclusiveSession = s.session
+				break
+			}
 		}
 	}
+
+	if len(r.responseAuthArea) > 0 {
+		if err := r.sessionParams.processResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
+			return &InvalidResponseError{r.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
+		}
+	}
+
+	return nil
+}
+
+func (t *TPMContext) completeResponse(r *rspContext, responseParams ...interface{}) error {
+	if err := t.processResponseAuth(r); err != nil {
+		return err
+	}
+
+	rpBuf := bytes.NewReader(r.rpBytes)
+
+	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
+		return &InvalidResponseError{r.commandCode, fmt.Sprintf("cannot unmarshal response parameters: %v", err)}
+	}
+
+	if rpBuf.Len() > 0 {
+		return &InvalidResponseError{r.commandCode, fmt.Sprintf("response parameter area contains %d trailing bytes", rpBuf.Len())}
+	}
+
+	return nil
+}
+
+func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*rspContext, error) {
+	var handles HandleList
+	var handleNames []Name
+	var sessionParams sessionParams
+
+	for _, h := range c.handles {
+		handles = append(handles, h.handle.Handle())
+		handleNames = append(handleNames, h.handle.Name())
+
+		if h.session != nil {
+			if err := sessionParams.appendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
+				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.commandCode, len(handles), err)
+			}
+		}
+	}
+	if err := sessionParams.appendExtraSessions(c.extraSessions...); err != nil {
+		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.commandCode, err)
+	}
+
+	if sessionParams.hasDecryptSession() && (len(c.params) == 0 || !isParamEncryptable(c.params[0])) {
+		return nil, fmt.Errorf("command %s does not support command parameter encryption", c.commandCode)
+	}
+
+	cpBytes, err := mu.MarshalToBytes(c.params...)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
+	}
+
+	cAuthArea, err := sessionParams.buildCommandAuthArea(c.commandCode, handleNames, cpBytes)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
+	}
+
+	if t.pendingResponse != nil {
+		t.processResponseAuth(t.pendingResponse)
+	}
+
+	rpBytes, rAuthArea, err := t.RunCommand(c.commandCode, handles, cAuthArea, cpBytes, responseHandle)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &rspContext{
+		commandCode:      c.commandCode,
+		sessionParams:    &sessionParams,
+		responseAuthArea: rAuthArea,
+		rpBytes:          rpBytes}
+	t.pendingResponse = r
+	return r, nil
 }
 
 // StartCommand is the high-level function for beginning the process of executing a command. It
@@ -199,7 +306,10 @@ func (t *TPMContext) updateExclusiveSession(c *ResponseContext) {
 // Most users will want to use one of the many convenience functions provided by TPMContext,
 // which are just wrappers around this.
 func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
-	return &CommandContext{tpm: t, commandCode: commandCode}
+	return &CommandContext{
+		tpm: t,
+		cmdContext: cmdContext{
+			commandCode: commandCode}}
 }
 
 // SetMaxSubmissions sets the maximum number of times that CommandContext will attempt to
