@@ -38,11 +38,11 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	if err := t.RunCommand(CommandCertify, sessions,
-		UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
-		qualifyingData, inScheme, Delimiter,
-		Delimiter,
-		mu.Sized(&certifyInfo), &signature); err != nil {
+	if err := t.StartCommand(CommandCertify).
+		AddHandles(UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession)).
+		AddParams(qualifyingData, inScheme).
+		AddExtraSessions(sessions...).
+		Run(nil, mu.Sized(&certifyInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -81,11 +81,11 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	if err := t.RunCommand(CommandCertifyCreation, sessions,
-		UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(objectContext), Delimiter,
-		qualifyingData, creationHash, inScheme, creationTicket, Delimiter,
-		Delimiter,
-		mu.Sized(&certifyInfo), &signature); err != nil {
+	if err := t.StartCommand(CommandCertifyCreation).
+		AddHandles(UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(objectContext)).
+		AddParams(qualifyingData, creationHash, inScheme, creationTicket).
+		AddExtraSessions(sessions...).
+		Run(nil, mu.Sized(&certifyInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -116,11 +116,11 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	if err := t.RunCommand(CommandQuote, sessions,
-		UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
-		qualifyingData, inScheme, pcrs, Delimiter,
-		Delimiter,
-		mu.Sized(&quoted), &signature); err != nil {
+	if err := t.StartCommand(CommandQuote).
+		AddHandles(UseResourceContextWithAuth(signContext, signContextAuthSession)).
+		AddParams(qualifyingData, inScheme, pcrs).
+		AddExtraSessions(sessions...).
+		Run(nil, mu.Sized(&quoted), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -154,11 +154,11 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	if err := t.RunCommand(CommandGetSessionAuditDigest, sessions,
-		UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(sessionContext), Delimiter,
-		qualifyingData, inScheme, Delimiter,
-		Delimiter,
-		mu.Sized(&auditInfo), &signature); err != nil {
+	if err := t.StartCommand(CommandGetSessionAuditDigest).
+		AddHandles(UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(sessionContext)).
+		AddParams(qualifyingData, inScheme).
+		AddExtraSessions(sessions...).
+		Run(nil, mu.Sized(&auditInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -194,11 +194,11 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	if err := t.RunCommand(CommandGetCommandAuditDigest, sessions,
-		UseResourceContextWithAuth(privacyContext, privacyContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
-		qualifyingData, inScheme, Delimiter,
-		Delimiter,
-		mu.Sized(&auditInfo), &signature); err != nil {
+	if err := t.StartCommand(CommandGetCommandAuditDigest).
+		AddHandles(UseResourceContextWithAuth(privacyContext, privacyContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession)).
+		AddParams(qualifyingData, inScheme).
+		AddExtraSessions(sessions...).
+		Run(nil, mu.Sized(&auditInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -231,11 +231,11 @@ func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, q
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
-	if err := t.RunCommand(CommandGetTime, sessions,
-		UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), Delimiter,
-		qualifyingData, inScheme, Delimiter,
-		Delimiter,
-		mu.Sized(&timeInfo), &signature); err != nil {
+	if err := t.StartCommand(CommandGetTime).
+		AddHandles(UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession)).
+		AddParams(qualifyingData, inScheme).
+		AddExtraSessions(sessions...).
+		Run(nil, mu.Sized(&timeInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 

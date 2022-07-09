@@ -135,8 +135,7 @@ const (
 	WarningLocality WarningCode = 0x07
 
 	// WarningYielded corresponds to TPM_RC_YIELDED and is returned for any command that is suspended as a hint that the command can be
-	// retried. This is handled automatically by all methods on TPMContext that execute commands via TPMContext.RunCommand by
-	// resubmitting the command.
+	// retried. This is handled automatically when executing commands using CommandContext by resubmitting the command.
 	WarningYielded WarningCode = 0x08
 
 	// WarningCanceled corresponds to TPM_RC_CANCELED and is returned for any command that is canceled before being able to complete.
@@ -167,7 +166,7 @@ const (
 	WarningLockout WarningCode = 0x21
 
 	// WarningRetry corresponds to TPM_RC_RETRY and is returned for any command if the TPM was not able to start the command. This is
-	// handled automatically by all methods on TPMContext that execute commands via TPMContext.RunCommand by resubmitting the command.
+	// handled automatically when executing comands using CommandContext by resubmitting the command.
 	WarningRetry WarningCode = 0x22
 
 	// WarningNVUnavailable corresponds to TPM_RC_NV_UNAVAILABLE and is returned for any command that requires NV access but NV memory

@@ -33,11 +33,10 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 		var moreData bool
 		var data CapabilityData
 
-		if err := t.RunCommand(CommandGetCapability, sessions,
-			Delimiter,
-			capability, nextProperty, remaining, Delimiter,
-			Delimiter,
-			&moreData, &data); err != nil {
+		if err := t.StartCommand(CommandGetCapability).
+			AddParams(capability, nextProperty, remaining).
+			AddExtraSessions(sessions...).
+			Run(nil, &moreData, &data); err != nil {
 			return nil, err
 		}
 
@@ -418,7 +417,7 @@ func (t *TPMContext) IsTPM2() (isTpm2 bool) {
 // TestParms executes the TPM2_TestParms command to check if the specified combination of
 // algorithm parameters is supported.
 func (t *TPMContext) TestParms(parameters *PublicParams, sessions ...SessionContext) error {
-	return t.RunCommand(CommandTestParms, sessions, Delimiter, parameters)
+	return t.StartCommand(CommandTestParms).AddParams(parameters).AddExtraSessions(sessions...).Run(nil)
 }
 
 // IsRSAKeySizeSupporters is a convenience function around TestParms that determines whether

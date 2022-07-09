@@ -116,11 +116,11 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 		inSensitive = &SensitiveCreate{}
 	}
 
-	if err := t.RunCommand(CommandCreate, sessions,
-		UseResourceContextWithAuth(parentContext, parentContextAuthSession), Delimiter,
-		mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR, Delimiter,
-		Delimiter,
-		&outPrivate, mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket); err != nil {
+	if err := t.StartCommand(CommandCreate).
+		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
+		AddParams(mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR).
+		AddExtraSessions(sessions...).
+		Run(nil, &outPrivate, mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -193,11 +193,11 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoad, sessions,
-		UseResourceContextWithAuth(parentContext, parentContextAuthSession), Delimiter,
-		inPrivate, mu.Sized(inPublic), Delimiter,
-		&objectHandle, Delimiter,
-		&name); err != nil {
+	if err := t.StartCommand(CommandLoad).
+		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
+		AddParams(inPrivate, mu.Sized(inPublic)).
+		AddExtraSessions(sessions...).
+		Run(&objectHandle, &name); err != nil {
 		return nil, err
 	}
 
@@ -279,11 +279,10 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandLoadExternal, sessions,
-		Delimiter,
-		mu.Sized(inPrivate), mu.Sized(inPublic), hierarchy, Delimiter,
-		&objectHandle, Delimiter,
-		&name); err != nil {
+	if err := t.StartCommand(CommandLoadExternal).
+		AddParams(mu.Sized(inPrivate), mu.Sized(inPublic), hierarchy).
+		AddExtraSessions(sessions...).
+		Run(&objectHandle, &name); err != nil {
 		return nil, err
 	}
 
@@ -312,11 +311,10 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 //
 // On success, the public part of the object is returned, along with the object's name and qualified name.
 func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...SessionContext) (outPublic *Public, name Name, qualifiedName Name, err error) {
-	if err := t.RunCommand(CommandReadPublic, sessions,
-		UseHandleContext(objectContext), Delimiter,
-		Delimiter,
-		Delimiter,
-		mu.Sized(&outPublic), &name, &qualifiedName); err != nil {
+	if err := t.StartCommand(CommandReadPublic).
+		AddHandles(UseHandleContext(objectContext)).
+		AddExtraSessions(sessions...).
+		Run(nil, mu.Sized(&outPublic), &name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
 	}
 	return outPublic, name, qualifiedName, nil
@@ -355,11 +353,11 @@ func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...Session
 // On success, the decrypted credential is returned. This is typically used to decrypt a certificate associated with activateContext,
 // which was issued by a certificate authority.
 func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession SessionContext, sessions ...SessionContext) (certInfo Digest, err error) {
-	if err := t.RunCommand(CommandActivateCredential, sessions,
-		UseResourceContextWithAuth(activateContext, activateContextAuthSession), UseResourceContextWithAuth(keyContext, keyContextAuthSession), Delimiter,
-		credentialBlob, secret, Delimiter,
-		Delimiter,
-		&certInfo); err != nil {
+	if err := t.StartCommand(CommandActivateCredential).
+		AddHandles(UseResourceContextWithAuth(activateContext, activateContextAuthSession), UseResourceContextWithAuth(keyContext, keyContextAuthSession)).
+		AddParams(credentialBlob, secret).
+		AddExtraSessions(sessions...).
+		Run(nil, &certInfo); err != nil {
 		return nil, err
 	}
 	return certInfo, nil
@@ -398,11 +396,11 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceCont
 // can only be recovered on the TPM associated with the endorsement certificate that the requesting party provided if the object
 // associated with objectName is resident on it.
 func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...SessionContext) (credentialBlob IDObjectRaw, secret EncryptedSecret, err error) {
-	if err := t.RunCommand(CommandMakeCredential, sessions,
-		UseHandleContext(context), Delimiter,
-		credential, objectName, Delimiter,
-		Delimiter,
-		&credentialBlob, &secret); err != nil {
+	if err := t.StartCommand(CommandMakeCredential).
+		AddHandles(UseHandleContext(context)).
+		AddParams(credential, objectName).
+		AddExtraSessions(sessions...).
+		Run(nil, &credentialBlob, &secret); err != nil {
 		return nil, nil, err
 	}
 	return credentialBlob, secret, nil
@@ -418,11 +416,10 @@ func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, 
 //
 // On success, the object's sensitive data is returned in decrypted form.
 func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession SessionContext, sessions ...SessionContext) (outData SensitiveData, err error) {
-	if err := t.RunCommand(CommandUnseal, sessions,
-		UseResourceContextWithAuth(itemContext, itemContextAuthSession), Delimiter,
-		Delimiter,
-		Delimiter,
-		&outData); err != nil {
+	if err := t.StartCommand(CommandUnseal).
+		AddHandles(UseResourceContextWithAuth(itemContext, itemContextAuthSession)).
+		AddExtraSessions(sessions...).
+		Run(nil, &outData); err != nil {
 		return nil, err
 	}
 
@@ -448,11 +445,11 @@ func (t *TPMContext) Unseal(itemContext ResourceContext, itemContextAuthSession 
 // On success, this returns a new private area for the object associated with objectContext. This function does not make any changes
 // to the version of the object that is currently loaded in to the TPM.
 func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceContext, newAuth Auth, objectContextAuthSession SessionContext, sessions ...SessionContext) (outPrivate Private, err error) {
-	if err := t.RunCommand(CommandObjectChangeAuth, sessions,
-		UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseHandleContext(parentContext), Delimiter,
-		newAuth, Delimiter,
-		Delimiter,
-		&outPrivate); err != nil {
+	if err := t.StartCommand(CommandObjectChangeAuth).
+		AddHandles(UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseHandleContext(parentContext)).
+		AddParams(newAuth).
+		AddExtraSessions(sessions...).
+		Run(nil, &outPrivate); err != nil {
 		return nil, err
 	}
 
@@ -579,11 +576,11 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	var objectHandle Handle
 	var name Name
 
-	if err := t.RunCommand(CommandCreateLoaded, sessions,
-		UseResourceContextWithAuth(parentContext, parentContextAuthSession), Delimiter,
-		mu.Sized(inSensitive), inTemplate, Delimiter,
-		&objectHandle, Delimiter,
-		&outPrivate, mu.Sized(&outPublic), &name); err != nil {
+	if err := t.StartCommand(CommandCreateLoaded).
+		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
+		AddParams(mu.Sized(inSensitive), inTemplate).
+		AddExtraSessions(sessions...).
+		Run(&objectHandle, &outPrivate, mu.Sized(&outPublic), &name); err != nil {
 		return nil, nil, nil, err
 	}
 

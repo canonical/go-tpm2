@@ -16,9 +16,11 @@ package tpm2
 // If the PCR associated with pcrContext can not be extended from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
 func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashList, pcrContextAuthSession SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPCRExtend, sessions,
-		UseResourceContextWithAuth(pcrContext, pcrContextAuthSession), Delimiter,
-		digests)
+	return t.StartCommand(CommandPCRExtend).
+		AddHandles(UseResourceContextWithAuth(pcrContext, pcrContextAuthSession)).
+		AddParams(digests).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PCREvent executes the TPM2_PCR_Event command to extend the PCR associated with the pcrContext parameter with a digest of the
@@ -32,11 +34,11 @@ func (t *TPMContext) PCRExtend(pcrContext ResourceContext, digests TaggedHashLis
 //
 // On success, this function will return a list of tagged digests that the PCR associated with pcrContext was extended with.
 func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrContextAuthSession SessionContext, sessions ...SessionContext) (digests TaggedHashList, err error) {
-	if err := t.RunCommand(CommandPCREvent, sessions,
-		UseResourceContextWithAuth(pcrContext, pcrContextAuthSession), Delimiter,
-		eventData, Delimiter,
-		Delimiter,
-		&digests); err != nil {
+	if err := t.StartCommand(CommandPCREvent).
+		AddHandles(UseResourceContextWithAuth(pcrContext, pcrContextAuthSession)).
+		AddParams(eventData).
+		AddExtraSessions(sessions...).
+		Run(nil, &digests); err != nil {
 		return nil, err
 	}
 	return digests, nil
@@ -63,11 +65,10 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		var pcrSelectionOut PCRSelectionList
 		var values DigestList
 
-		if err := t.RunCommand(CommandPCRRead, sessions,
-			Delimiter,
-			remaining, Delimiter,
-			Delimiter,
-			&updateCounter, &pcrSelectionOut, &values); err != nil {
+		if err := t.StartCommand(CommandPCRRead).
+			AddParams(remaining).
+			AddExtraSessions(sessions...).
+			Run(nil, &updateCounter, &pcrSelectionOut, &values); err != nil {
 			return 0, nil, err
 		}
 
@@ -100,5 +101,8 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 // If the PCR associated with pcrContext can not be reset from the current locality, a *TPMError error with an error code of
 // ErrorLocality will be returned.
 func (t *TPMContext) PCRReset(pcrContext ResourceContext, pcrContextAuthSession SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPCRReset, sessions, UseResourceContextWithAuth(pcrContext, pcrContextAuthSession))
+	return t.StartCommand(CommandPCRReset).
+		AddHandles(UseResourceContextWithAuth(pcrContext, pcrContextAuthSession)).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }

@@ -55,11 +55,11 @@ func (t *TPMContext) Duplicate(objectContext, newParentContext ResourceContext, 
 		symmetricAlg = &SymDefObject{Algorithm: SymObjectAlgorithmNull}
 	}
 
-	if err := t.RunCommand(CommandDuplicate, sessions,
-		UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseHandleContext(newParentContext), Delimiter,
-		encryptionKeyIn, symmetricAlg, Delimiter,
-		Delimiter,
-		&encryptionKeyOut, &duplicate, &outSymSeed); err != nil {
+	if err := t.StartCommand(CommandDuplicate).
+		AddHandles(UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseHandleContext(newParentContext)).
+		AddParams(encryptionKeyIn, symmetricAlg).
+		AddExtraSessions(sessions...).
+		Run(nil, &encryptionKeyOut, &duplicate, &outSymSeed); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -134,11 +134,11 @@ func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, o
 		symmetricAlg = &SymDefObject{Algorithm: SymObjectAlgorithmNull}
 	}
 
-	if err := t.RunCommand(CommandImport, sessions,
-		UseResourceContextWithAuth(parentContext, parentContextAuthSession), Delimiter,
-		encryptionKey, mu.Sized(objectPublic), duplicate, inSymSeed, symmetricAlg, Delimiter,
-		Delimiter,
-		&outPrivate); err != nil {
+	if err := t.StartCommand(CommandImport).
+		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
+		AddParams(encryptionKey, mu.Sized(objectPublic), duplicate, inSymSeed, symmetricAlg).
+		AddExtraSessions(sessions...).
+		Run(nil, &outPrivate); err != nil {
 		return nil, err
 	}
 

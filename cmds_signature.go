@@ -19,11 +19,11 @@ package tpm2
 //
 // On success, a valid TkVerified structure will be returned.
 func (t *TPMContext) VerifySignature(keyContext ResourceContext, digest Digest, signature *Signature, sessions ...SessionContext) (validation *TkVerified, err error) {
-	if err := t.RunCommand(CommandVerifySignature, sessions,
-		UseHandleContext(keyContext), Delimiter,
-		digest, signature, Delimiter,
-		Delimiter,
-		&validation); err != nil {
+	if err := t.StartCommand(CommandVerifySignature).
+		AddHandles(UseHandleContext(keyContext)).
+		AddParams(digest, signature).
+		AddExtraSessions(sessions...).
+		Run(nil, &validation); err != nil {
 		return nil, err
 	}
 
@@ -62,11 +62,11 @@ func (t *TPMContext) Sign(keyContext ResourceContext, digest Digest, inScheme *S
 		validation = &TkHashcheck{Tag: TagHashcheck, Hierarchy: HandleNull}
 	}
 
-	if err := t.RunCommand(CommandSign, sessions,
-		UseResourceContextWithAuth(keyContext, keyContextAuthSession), Delimiter,
-		digest, inScheme, validation, Delimiter,
-		Delimiter,
-		&signature); err != nil {
+	if err := t.StartCommand(CommandSign).
+		AddHandles(UseResourceContextWithAuth(keyContext, keyContextAuthSession)).
+		AddParams(digest, inScheme, validation).
+		AddExtraSessions(sessions...).
+		Run(nil, &signature); err != nil {
 		return nil, err
 	}
 

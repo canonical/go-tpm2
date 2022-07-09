@@ -19,7 +19,8 @@ package tpm2
 // If auditAlg is not HashAlgorithmNull or the current audit digest algorith, and the length of setList or clearList is greater than
 // zero, a *TPMParameterError error with an error code of ErrorValue will be returned for parameter index 1.
 func (t *TPMContext) SetCommandCodeAuditStatus(auth ResourceContext, auditAlg HashAlgorithmId, setList, clearList CommandCodeList, authAuthSession SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandSetCommandCodeAuditStatus, sessions,
-		UseResourceContextWithAuth(auth, authAuthSession), Delimiter,
-		auditAlg, setList, clearList)
+	return t.StartCommand(CommandSetCommandCodeAuditStatus).
+		AddHandles(UseResourceContextWithAuth(auth, authAuthSession)).
+		AddParams(auditAlg, setList, clearList).
+		Run(nil)
 }

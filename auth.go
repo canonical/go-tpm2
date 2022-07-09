@@ -70,9 +70,9 @@ func (s *sessionParam) computeCommandHMAC(commandCode CommandCode, commandHandle
 	return h
 }
 
-func (s *sessionParam) computeResponseHMAC(resp AuthResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) ([]byte, bool) {
+func (s *sessionParam) computeResponseHMAC(resp AuthResponse, commandCode CommandCode, rpBytes []byte) ([]byte, bool) {
 	data := s.session.Data()
-	rpHash := cryptComputeRpHash(data.HashAlg, responseCode, commandCode, rpBytes)
+	rpHash := cryptComputeRpHash(data.HashAlg, ResponseSuccess, commandCode, rpBytes)
 	return s.computeHMAC(rpHash, data.NonceTPM, data.NonceCaller, nil, nil, resp.SessionAttributes)
 }
 
@@ -93,7 +93,7 @@ func (s *sessionParam) buildCommandAuth(commandCode CommandCode, commandHandles 
 		HMAC:              hmac}
 }
 
-func (s *sessionParam) processResponseAuth(resp AuthResponse, responseCode ResponseCode, commandCode CommandCode, rpBytes []byte) error {
+func (s *sessionParam) processResponseAuth(resp AuthResponse, commandCode CommandCode, rpBytes []byte) error {
 	if s.IsPassword() {
 		if len(resp.HMAC) != 0 {
 			return errors.New("non-zero length HMAC for policy session with PolicyPassword assertion")
@@ -106,7 +106,7 @@ func (s *sessionParam) processResponseAuth(resp AuthResponse, responseCode Respo
 	data.IsAudit = resp.SessionAttributes&AttrAudit > 0
 	data.IsExclusive = resp.SessionAttributes&AttrAuditExclusive > 0
 
-	hmac, hmacRequired := s.computeResponseHMAC(resp, responseCode, commandCode, rpBytes)
+	hmac, hmacRequired := s.computeResponseHMAC(resp, commandCode, rpBytes)
 	if (hmacRequired || len(resp.HMAC) > 0) && !bytes.Equal(hmac, resp.HMAC) {
 		return errors.New("incorrect HMAC")
 	}
@@ -237,11 +237,11 @@ func (p *sessionParams) invalidateSessionContexts(authResponses []AuthResponse) 
 	}
 }
 
-func (p *sessionParams) processResponseAuthArea(authResponses []AuthResponse, responseCode ResponseCode, rpBytes []byte) error {
+func (p *sessionParams) processResponseAuthArea(authResponses []AuthResponse, rpBytes []byte) error {
 	defer p.invalidateSessionContexts(authResponses)
 
 	for i, resp := range authResponses {
-		if err := p.sessions[i].processResponseAuth(resp, responseCode, p.commandCode, rpBytes); err != nil {
+		if err := p.sessions[i].processResponseAuth(resp, p.commandCode, rpBytes); err != nil {
 			return fmt.Errorf("encountered an error for session at index %d: %v", i, err)
 		}
 	}

@@ -9,11 +9,9 @@ package tpm2
 // ReadClock executes the TPM2_ReadClock command. On succesful completion, it will return a TimeInfo struct that contains the current
 // value of time, clock, reset and restart counts.
 func (t *TPMContext) ReadClock(sessions ...SessionContext) (currentTime *TimeInfo, err error) {
-	if err := t.RunCommand(CommandReadClock, sessions,
-		Delimiter,
-		Delimiter,
-		Delimiter,
-		&currentTime); err != nil {
+	if err := t.StartCommand(CommandReadClock).
+		AddExtraSessions(sessions...).
+		Run(nil, &currentTime); err != nil {
 		return nil, err
 	}
 	return currentTime, nil

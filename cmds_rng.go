@@ -26,11 +26,10 @@ func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...SessionContext
 		}
 
 		var tmpBytes Digest
-		if err := t.RunCommand(CommandGetRandom, sessions,
-			Delimiter,
-			sz, Delimiter,
-			Delimiter,
-			&tmpBytes); err != nil {
+		if err := t.StartCommand(CommandGetRandom).
+			AddParams(sz).
+			AddExtraSessions(sessions...).
+			Run(nil, &tmpBytes); err != nil {
 			return nil, err
 		}
 
@@ -47,5 +46,8 @@ func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...SessionContext
 }
 
 func (t *TPMContext) StirRandom(inData SensitiveData, sessions ...SessionContext) error {
-	return t.RunCommand(CommandStirRandom, sessions, Delimiter, inData)
+	return t.StartCommand(CommandStirRandom).
+		AddParams(inData).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }

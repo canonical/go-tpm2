@@ -5,15 +5,8 @@
 package tpm2
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"reflect"
-
-	"github.com/canonical/go-tpm2/mu"
-
-	"golang.org/x/xerrors"
 )
 
 func makeInvalidArgError(name, msg string) error {
@@ -35,62 +28,6 @@ func isSessionAllowed(commandCode CommandCode) bool {
 	}
 }
 
-type cmdContext struct {
-	commandCode      CommandCode
-	sessionParams    *sessionParams
-	responseCode     ResponseCode
-	responseAuthArea []AuthResponse
-	rpBytes          []byte
-}
-
-type delimiterSentinel struct{}
-
-// Delimiter is a sentinel value used to delimit command handle, command parameter, response handle pointer and response
-// parameter pointer blocks in the variable length params argument in TPMContext.RunCommand.
-var Delimiter delimiterSentinel
-
-// CommandHandleContext is used to supply a HandleContext to TPMContext.RunCommand
-// or TPMContext.RunCommandWithResponseCallback.
-type CommandHandleContext struct {
-	handle  HandleContext
-	session SessionContext
-}
-
-// Handle returns the HandleContext.
-func (c *CommandHandleContext) Handle() HandleContext {
-	return c.handle
-}
-
-// Session returns the SessionContext if the handle requires authorization.
-func (c *CommandHandleContext) Session() SessionContext {
-	return c.session
-}
-
-// UseResourceContextWithAuth creates a CommandHandleContext for a ResourceContext that
-// requires authorization. The supplied SessionContext is the session used for authorization
-// and may be nil - in this case, passphrase authorization is used. If the authorization
-// value of the resource is required as part of the authorization, it is obtained from
-// the supplied ResourceContext, and should be set by calling ResourceContext.SetAuthValue.
-// If the ResourceContext is nil, then HandleNull is used.
-func UseResourceContextWithAuth(r ResourceContext, s SessionContext) *CommandHandleContext {
-	if r == nil {
-		r = nullContext
-	}
-	if s == nil {
-		s = pwSession
-	}
-	return &CommandHandleContext{handle: r, session: s}
-}
-
-// UseHandleContext creates a CommandHandleContext for any HandleContext that does not
-// require authorization. If the HandleContext is nil, then HandleNull is used.
-func UseHandleContext(h HandleContext) *CommandHandleContext {
-	if h == nil {
-		h = nullContext
-	}
-	return &CommandHandleContext{handle: h}
-}
-
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
 // Section 14 - Asymmetric Primitives
 // Section 15 - Symmetric Primitives
@@ -99,8 +36,11 @@ func UseHandleContext(h HandleContext) *CommandHandleContext {
 // Section 27 - Field Upgrade
 
 // TPMContext is the main entry point by which commands are executed on a TPM
-// device using this package. It communicates with the underlying device via a
-// transmission interface, which is provided to NewTPMContext.
+// device using this package. It provides convenience functions for supported
+// commands and communicates with the underlying device via a transmission
+// interface, which is provided to NewTPMContext. Convenience functions are
+// wrappers around TPMContext.StartCommand, which may be used directly for
+// custom commands or commands that aren't supported directly by this package.
 //
 // Methods that execute commands on the TPM may return errors from the TPM in
 // some cases. These are in the form of *TPMError, *TPMWarning, *TPMHandleError,
@@ -155,11 +95,14 @@ func (t *TPMContext) Close() error {
 	return nil
 }
 
-// RunCommandBytes is a low-level interface for executing a command. The caller is responsible for supplying a properly
-// serialized command packet, which can be created with MarshalCommandPacket.
+// RunCommandBytes is a low-level interface for executing a command. The caller is responsible for
+// supplying a properly serialized command packet, which can be created with MarshalCommandPacket.
 //
-// If successful, this function will return the response packet. An error will only be returned if the transmission
-// interface returns an error.
+// If successful, this function will return the response packet. No checking is performed on this
+// response packet. An error will only be returned if the transmission interface returns an error.
+//
+// Most users will want to use one of the many convenience functions provided by TPMContext
+// instead, or TPMContext.StartCommand if one doesn't already exist.
 func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, error) {
 	if _, err := t.tcti.Write(packet); err != nil {
 		return nil, &TctiError{"write", err}
@@ -173,238 +116,94 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 	return ResponsePacket(resp), nil
 }
 
-func (t *TPMContext) runCommandWithoutProcessingAuthResponse(commandCode CommandCode, sessionParams *sessionParams, inHandles []HandleContext, params []interface{}, outHandle *Handle) (*cmdContext, error) {
-	handles := make(HandleList, 0, len(inHandles))
-	handleNames := make([]Name, 0, len(inHandles))
-
-	for _, h := range inHandles {
-		handles = append(handles, h.Handle())
-		handleNames = append(handleNames, h.Name())
-	}
-
-	if sessionParams.hasDecryptSession() && (len(params) == 0 || !isParamEncryptable(params[0])) {
-		return nil, fmt.Errorf("command %s does not support command parameter encryption", commandCode)
-	}
-
-	cpBytes, err := mu.MarshalToBytes(params...)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", commandCode, err)
-	}
-
-	cAuthArea, err := sessionParams.buildCommandAuthArea(commandCode, handleNames, cpBytes)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", commandCode, err)
-	}
-
-	cmd := MarshalCommandPacket(commandCode, handles, cAuthArea, cpBytes)
-
-	var responseCode ResponseCode
-	var rpBytes []byte
-	var rAuthArea []AuthResponse
+// RunCommand is a low-level interface for executing a command. The caller supplies the command
+// code, list of command handles, command auth area and marshalled command parameters. The
+// caller should also supply a pointer to a response handle if the command returns one. On
+// success, the response parameter bytes and response auth area are returned. This function does
+// no checking of the auth response.
+//
+// If the TPM returns a response indicating that the command should be retried, this function
+// will retry up to a maximum number of times defined by the number supplied to
+// TPMContext.SetMaxSubmissions.
+//
+// A *TctiError will be returned if the transmission interface returns an error.
+//
+// One of *TPMWarning, *TPMError, *TPMParameterError, *TPMHandleError or *TPMSessionError
+// will be returned if the TPM returns a response code other than ResponseSuccess.
+//
+// There's almost no need for most users to use this API directly. Most users will want to use
+// one of the many convenience functions provided by TPMContext instead, or TPMContext.StartCommand
+// if one doesn't already exist.
+func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cAuthArea []AuthCommand, cpBytes []byte, rHandle *Handle) (rpBytes []byte, rAuthArea []AuthResponse, err error) {
+	cmd := MarshalCommandPacket(commandCode, cHandles, cAuthArea, cpBytes)
 
 	for tries := uint(1); ; tries++ {
 		var err error
 		resp, err := t.RunCommandBytes(cmd)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		responseCode, rpBytes, rAuthArea, err = resp.Unmarshal(outHandle)
+		var rc ResponseCode
+		rc, rpBytes, rAuthArea, err = resp.Unmarshal(rHandle)
 		if err != nil {
-			return nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response packet: %v", err)}
+			return nil, nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response packet: %v", err)}
 		}
 
-		err = DecodeResponseCode(commandCode, responseCode)
+		err = DecodeResponseCode(commandCode, rc)
 		if _, invalidRc := err.(InvalidResponseCodeError); invalidRc {
-			return nil, &InvalidResponseError{commandCode, err.Error()}
+			return nil, nil, &InvalidResponseError{commandCode, err.Error()}
 		}
 		if err == nil {
-			if len(rAuthArea) != len(sessionParams.sessions) {
-				return nil, &InvalidResponseError{commandCode, fmt.Sprintf("unexpected number of auth responses (got %d, expected %d)",
-					len(rAuthArea), len(sessionParams.sessions))}
+			if len(rAuthArea) != len(cAuthArea) {
+				return nil, nil, &InvalidResponseError{commandCode, fmt.Sprintf("unexpected number of auth responses (got %d, expected %d)",
+					len(rAuthArea), len(cAuthArea))}
 			}
 
 			break
 		}
 
 		if tries >= t.maxSubmissions {
-			return nil, err
+			return nil, nil, err
 		}
 		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return &cmdContext{
-		commandCode:      commandCode,
-		sessionParams:    sessionParams,
-		responseCode:     responseCode,
-		responseAuthArea: rAuthArea,
-		rpBytes:          rpBytes}, nil
+	return rpBytes, rAuthArea, nil
 }
 
-func (t *TPMContext) processAuthResponse(cmd *cmdContext, params []interface{}) error {
-	if len(cmd.responseAuthArea) > 0 {
-		if err := cmd.sessionParams.processResponseAuthArea(cmd.responseAuthArea, cmd.responseCode, cmd.rpBytes); err != nil {
-			return &InvalidResponseError{cmd.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
-		}
+func (t *TPMContext) updateExclusiveSession(c *ResponseContext) {
+	if !isSessionAllowed(c.commandCode) {
+		return
 	}
 
-	if isSessionAllowed(cmd.commandCode) {
-		if t.exclusiveSession != nil {
-			t.exclusiveSession.Data().IsExclusive = false
-		}
-		var exclusive sessionContextInternal
-		for _, s := range cmd.sessionParams.sessions {
-			if s.session.Data().IsExclusive {
-				exclusive = s.session
-				break
-			}
-		}
-		t.exclusiveSession = exclusive
-		if t.exclusiveSession != nil {
-			t.exclusiveSession.Data().IsExclusive = true
-		}
+	if t.exclusiveSession != nil {
+		t.exclusiveSession.Data().IsExclusive = false
+		t.exclusiveSession = nil
 	}
 
-	rpBuf := bytes.NewReader(cmd.rpBytes)
-
-	if _, err := mu.UnmarshalFromReader(rpBuf, params...); err != nil {
-		return &InvalidResponseError{cmd.commandCode, fmt.Sprintf("cannot unmarshal response parameters: %v", err)}
+	for _, s := range c.sessionParams.sessions {
+		if s.session.IsExclusive() {
+			t.exclusiveSession = s.session
+			break
+		}
 	}
-
-	if rpBuf.Len() > 0 {
-		return &InvalidResponseError{cmd.commandCode, fmt.Sprintf("response parameter area contains %d trailing bytes", rpBuf.Len())}
-	}
-
-	return nil
 }
 
-// RunCommandWithResponseCallback is a high-level generic interface for executing the command specified by commandCode. It differs
-// from RunCommand with the addition of an optional callback which is executed after receiving a response from the TPM, but before
-// the response is decoded and the session state is updated. This is useful for commands that change the authorization value of a
-// supplied entity, where the response HMAC may be generated based on the new authorization value. It takes care of marshalling
-// command handles and command parameters, as well as constructing and marshalling the authorization area and choosing the correct
-// StructTag value. It takes care of unmarshalling response handles and response parameters, as well as unmarshalling the response
-// authorization area and performing checks on the authorization response.
+// StartCommand is the high-level function for beginning the process of executing a command. It
+// returns a CommandContext that can be used to assemble a command, properly serialize a command
+// packet and then submit the packet for execution via TPMContext.RunCommand.
 //
-// The variable length params argument provides a mechanism for the caller to provide command handles, command parameters, response
-// handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Delimiter
-// sentinel value.
-//
-// Command handles are provided as *CommandHandleContext types. For command handles that require authorization and if the
-// authorization value of the TPM entity is required, this will be obtained from the ResourceContext supplied.
-//
-// Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
-//
-// Response handles are provided as pointers to Handle values.
-//
-// Response parameters are provided as pointers to values of the go equivalent types for the types defined in the TPM Library
-// Specification.
-//
-// If the TPM responds with a warning that indicates the command could not be started and should be retried, this function will
-// resubmit the command a finite number of times before returning an error. The maximum number of retries can be set via
-// TPMContext.SetMaxSubmissions.
-//
-// The caller can provide additional sessions that aren't associated with a TPM entity (and therefore not used for authorization) via
-// the sessions parameter, for the purposes of command auditing or session based parameter encryption.
-//
-// In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
-// this function will also return an error if the TPM responds with any ResponseCode other than Success.
-func (t *TPMContext) RunCommandWithResponseCallback(commandCode CommandCode, sessions []SessionContext, responseCb func(), params ...interface{}) error {
-	var commandHandles []HandleContext
-	var commandParams []interface{}
-	var responseHandle *Handle
-	var responseParams []interface{}
-	var sessionParams sessionParams
-
-	sentinels := 0
-	for _, param := range params {
-		if param == Delimiter {
-			sentinels++
-			continue
-		}
-
-		switch sentinels {
-		case 0:
-			switch p := param.(type) {
-			case *CommandHandleContext:
-				if p.session != nil {
-					if err := sessionParams.appendSessionForResource(p.session, p.handle.(ResourceContext)); err != nil {
-						return fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", commandCode, len(commandHandles), err)
-					}
-				}
-				commandHandles = append(commandHandles, p.handle)
-			default:
-				return fmt.Errorf("cannot process command handle argument for command %s at index %d: invalid type (%s)", commandCode, len(commandHandles), reflect.TypeOf(param))
-			}
-		case 1:
-			commandParams = append(commandParams, param)
-		case 2:
-			if responseHandle != nil {
-				return errors.New("only one response handle argument can be supplied")
-			}
-			handle, isHandle := param.(*Handle)
-			if !isHandle {
-				return fmt.Errorf("cannot process response handle argument for command %s: invalid type (%s)", commandCode, reflect.TypeOf(param))
-			}
-			responseHandle = handle
-		case 3:
-			responseParams = append(responseParams, param)
-		}
-	}
-
-	if err := sessionParams.appendExtraSessions(sessions...); err != nil {
-		return fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", commandCode, err)
-	}
-
-	ctx, err := t.runCommandWithoutProcessingAuthResponse(commandCode, &sessionParams, commandHandles, commandParams, responseHandle)
-	if err != nil {
-		return err
-	}
-
-	if responseCb != nil {
-		responseCb()
-	}
-
-	return t.processAuthResponse(ctx, responseParams)
+// Most users will want to use one of the many convenience functions provided by TPMContext,
+// which are just wrappers around this.
+func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
+	return &CommandContext{tpm: t, commandCode: commandCode}
 }
 
-// RunCommand is the high-level generic interface for executing the command specified by commandCode. All of the methods on TPMContext
-// exported by this package that execute commands on the TPM are essentially wrappers around this function. It takes care of
-// marshalling command handles and command parameters, as well as constructing and marshalling the authorization area and choosing
-// the correct StructTag value. It takes care of unmarshalling response handles and response parameters, as well as unmarshalling the
-// response authorization area and performing checks on the authorization response.
-//
-// The variable length params argument provides a mechanism for the caller to provide command handles, command parameters, response
-// handle pointers and response parameter pointers (in that order), with each group of arguments being separated by the Delimiter
-// sentinel value.
-//
-// Command handles are provided as *CommandHandleContext types. For command handles that require authorization and if the
-// authorization value of the TPM entity is required, this will be obtained from the ResourceContext supplied.
-//
-// Command parameters are provided as the go equivalent types for the types defined in the TPM Library Specification.
-//
-// Response handles are provided as pointers to Handle values.
-//
-// Response parameters are provided as pointers to values of the go equivalent types for the types defined in the TPM Library
-// Specification.
-//
-// If the TPM responds with a warning that indicates the command could not be started and should be retried, this function will
-// resubmit the command a finite number of times before returning an error. The maximum number of retries can be set via
-// TPMContext.SetMaxSubmissions.
-//
-// The caller can provide additional sessions that aren't associated with a TPM entity (and therefore not used for authorization) via
-// the sessions parameter, for the purposes of command auditing or session based parameter encryption.
-//
-// In addition to returning an error if any marshalling or unmarshalling fails, or if the transmission backend returns an error,
-// this function will also return an error if the TPM responds with any ResponseCode other than Success.
-func (t *TPMContext) RunCommand(commandCode CommandCode, sessions []SessionContext, params ...interface{}) error {
-	return t.RunCommandWithResponseCallback(commandCode, sessions, nil, params...)
-}
-
-// SetMaxSubmissions sets the maximum number of times that RunCommand will attempt to submit a command before failing with an error.
-// The default value is 5.
+// SetMaxSubmissions sets the maximum number of times that CommandContext will attempt to
+// submit a command before failing with an error. The default value is 5.
 func (t *TPMContext) SetMaxSubmissions(max uint) {
 	t.maxSubmissions = max
 }

@@ -30,10 +30,11 @@ package tpm2
 func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashAlgorithmId, contextAuthSession SessionContext, sessions ...SessionContext) (sequenceContext ResourceContext, err error) {
 	var sequenceHandle Handle
 
-	if err := t.RunCommand(CommandHMACStart, sessions,
-		UseResourceContextWithAuth(context, contextAuthSession), Delimiter,
-		auth, hashAlg, Delimiter,
-		&sequenceHandle); err != nil {
+	if err := t.StartCommand(CommandHMACStart).
+		AddHandles(UseResourceContextWithAuth(context, contextAuthSession)).
+		AddParams(auth, hashAlg).
+		AddExtraSessions(sessions...).
+		Run(&sequenceHandle); err != nil {
 		return nil, err
 	}
 
@@ -54,10 +55,10 @@ func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashA
 func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessions ...SessionContext) (sequenceContext ResourceContext, err error) {
 	var sequenceHandle Handle
 
-	if err := t.RunCommand(CommandHashSequenceStart, sessions,
-		Delimiter,
-		auth, hashAlg, Delimiter,
-		&sequenceHandle); err != nil {
+	if err := t.StartCommand(CommandHashSequenceStart).
+		AddParams(auth, hashAlg).
+		AddExtraSessions(sessions...).
+		Run(&sequenceHandle); err != nil {
 		return nil, err
 	}
 
@@ -77,9 +78,11 @@ func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessi
 // If sequenceContext corresponds to a hash sequence and the hash sequence is intended to produce a digest that will be signed with
 // a restricted signing key, the first block of data added to this sequence must be 4 bytes and not the value of TPMGeneratedValue.
 func (t *TPMContext) SequenceUpdate(sequenceContext ResourceContext, buffer MaxBuffer, sequenceContextAuthSession SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandSequenceUpdate, sessions,
-		UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession), Delimiter,
-		buffer)
+	return t.StartCommand(CommandSequenceUpdate).
+		AddHandles(UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession)).
+		AddParams(buffer).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // SequenceComplete executes the TPM2_SequenceComplete command to add the last part of the data the HMAC or hash sequence associated
@@ -96,11 +99,11 @@ func (t *TPMContext) SequenceUpdate(sequenceContext ResourceContext, buffer MaxB
 //
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
 func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer MaxBuffer, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (result Digest, validation *TkHashcheck, err error) {
-	if err := t.RunCommand(CommandSequenceComplete, sessions,
-		UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession), Delimiter,
-		buffer, hierarchy, Delimiter,
-		Delimiter,
-		&result, &validation); err != nil {
+	if err := t.StartCommand(CommandSequenceComplete).
+		AddHandles(UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession)).
+		AddParams(buffer, hierarchy).
+		AddExtraSessions(sessions...).
+		Run(nil, &result, &validation); err != nil {
 		return nil, nil, err
 	}
 
@@ -128,11 +131,11 @@ func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer Ma
 //
 // On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
 func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceContext, buffer MaxBuffer, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (results TaggedHashList, err error) {
-	if err := t.RunCommand(CommandEventSequenceComplete, sessions,
-		UseResourceContextWithAuth(pcrContext, pcrContextAuthSession), UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession), Delimiter,
-		buffer, Delimiter,
-		Delimiter,
-		&results); err != nil {
+	if err := t.StartCommand(CommandEventSequenceComplete).
+		AddHandles(UseResourceContextWithAuth(pcrContext, pcrContextAuthSession), UseResourceContextWithAuth(sequenceContext, sequenceContextAuthSession)).
+		AddParams(buffer).
+		AddExtraSessions(sessions...).
+		Run(nil, &results); err != nil {
 		return nil, err
 	}
 

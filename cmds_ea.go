@@ -54,11 +54,11 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 		nonceTPM = policySession.NonceTPM()
 	}
 
-	if err := t.RunCommand(CommandPolicySigned, sessions,
-		UseHandleContext(authContext), UseHandleContext(policySession), Delimiter,
-		nonceTPM, cpHashA, policyRef, expiration, auth, Delimiter,
-		Delimiter,
-		&timeout, &policyTicket); err != nil {
+	if err := t.StartCommand(CommandPolicySigned).
+		AddHandles(UseHandleContext(authContext), UseHandleContext(policySession)).
+		AddParams(nonceTPM, cpHashA, policyRef, expiration, auth).
+		AddExtraSessions(sessions...).
+		Run(nil, &timeout, &policyTicket); err != nil {
 		return nil, nil, err
 	}
 
@@ -94,11 +94,11 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 // less than zero, a timeout value and corresponding *TkAuth ticket will be returned if policySession does not correspond to a trial
 // session.
 func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession SessionContext, sessions ...SessionContext) (timeout Timeout, policyTicket *TkAuth, err error) {
-	if err := t.RunCommand(CommandPolicySecret, sessions,
-		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(policySession), Delimiter,
-		policySession.NonceTPM(), cpHashA, policyRef, expiration, Delimiter,
-		Delimiter,
-		&timeout, &policyTicket); err != nil {
+	if err := t.StartCommand(CommandPolicySecret).
+		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(policySession)).
+		AddParams(policySession.NonceTPM(), cpHashA, policyRef, expiration).
+		AddExtraSessions(sessions...).
+		Run(nil, &timeout, &policyTicket); err != nil {
 		return nil, nil, err
 	}
 
@@ -132,9 +132,11 @@ func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession Ses
 // recorded on the session context to restrict the session's usage. The expiration time of the session context will be updated with
 // the value of timeout, unless it already has an expiration time that is earlier.
 func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout, cpHashA Digest, policyRef Nonce, authName Name, ticket *TkAuth, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyTicket, sessions,
-		UseHandleContext(policySession), Delimiter,
-		timeout, cpHashA, policyRef, authName, ticket)
+	return t.StartCommand(CommandPolicyTicket).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(timeout, cpHashA, policyRef, authName, ticket).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyOR executes the TPM2_PolicyOR command to allow a policy to be satisfied by different sets of conditions, and is an immediate
@@ -145,9 +147,11 @@ func (t *TPMContext) PolicyTicket(policySession SessionContext, timeout Timeout,
 // On successful completion, the policy digest of the session context associated with policySession is cleared, and then extended to
 // include the concatenation of all of the digests contained in pHashList.
 func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyOR, sessions,
-		UseHandleContext(policySession), Delimiter,
-		pHashList)
+	return t.StartCommand(CommandPolicyOR).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(pHashList).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyPCR executes the TPM2_PolicyPCR command to gate a policy based on the values of the PCRs selected via the pcrs parameter. If
@@ -164,9 +168,11 @@ func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList
 // If the PCR contents have changed since the last time this command was executed for this session, a *TPMError error will be returned
 // with an error code of ErrorPCRChanged.
 func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, pcrs PCRSelectionList, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyPCR, sessions,
-		UseHandleContext(policySession), Delimiter,
-		pcrDigest, pcrs)
+	return t.StartCommand(CommandPolicyPCR).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(pcrDigest, pcrs).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // func (t *TPMContext) PolicyLocality(policySession HandleContext, locality Locality, sessions ...SessionContext) error {
@@ -210,9 +216,11 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 // On successful completion, the policy digest of the session context associated with policySession is extended to include the values
 // of operandB, offset, operation and the name of nvIndex.
 func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyNV, sessions,
-		UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), UseHandleContext(policySession), Delimiter,
-		operandB, offset, operation)
+	return t.StartCommand(CommandPolicyNV).
+		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), UseHandleContext(policySession)).
+		AddParams(operandB, offset, operation).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyCounterTimer executes the TPM2_PolicyCounterTimer command to gate a policy based on the contents of the TimeInfo structure,
@@ -226,9 +234,11 @@ func (t *TPMContext) PolicyNV(authContext, nvIndex ResourceContext, policySessio
 // On successful completion, the policy digest of the session context associated with policySession is extended to include the values
 // of operandB, offset and operation.
 func (t *TPMContext) PolicyCounterTimer(policySession SessionContext, operandB Operand, offset uint16, operation ArithmeticOp, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyCounterTimer, sessions,
-		UseHandleContext(policySession), Delimiter,
-		operandB, offset, operation)
+	return t.StartCommand(CommandPolicyCounterTimer).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(operandB, offset, operation).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyCommandCode executes the TPM2_PolicyCommandCode command to indicate that an authorization policy should be limited to a
@@ -242,9 +252,11 @@ func (t *TPMContext) PolicyCounterTimer(policySession SessionContext, operandB O
 // include the value of the specified command code, and the command code will be recorded on the session context to limit usage of
 // the session.
 func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code CommandCode, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyCommandCode, sessions,
-		UseHandleContext(policySession), Delimiter,
-		code)
+	return t.StartCommand(CommandPolicyCommandCode).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(code).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // func (t *TPMContext) PolicyPhysicalPresence(policySession HandleContext, sessions ...SessionContext) error {
@@ -271,7 +283,11 @@ func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code Comman
 // value of cpHashA, and the value of cpHashA will be recorded on the session context to limit usage of the session to the specific
 // command and set of command parameters.
 func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyCpHash, sessions, UseHandleContext(policySession), Delimiter, cpHashA)
+	return t.StartCommand(CommandPolicyCpHash).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(cpHashA).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyNameHash executes the TPM2_PolicyNameHash command to bind a policy to a specific set of TPM entities, without being bound
@@ -287,7 +303,11 @@ func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, 
 // value of nameHash, and the value of nameHash will be recorded on the session context to limit usage of the session to the specific
 // set of TPM entities.
 func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Digest, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyNameHash, sessions, UseHandleContext(policySession), Delimiter, nameHash)
+	return t.StartCommand(CommandPolicyNameHash).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(nameHash).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyDuplicationSelect executes the TPM2_PolicyDuplicationSelect command to allow the policy to be restricted to duplication
@@ -306,9 +326,11 @@ func (t *TPMContext) PolicyNameHash(policySession SessionContext, nameHash Diges
 // to limit usage of the session to those entities, and the CommandDuplicate command code will be recorded to limit usage of the
 // session to TPMContext.Duplicate.
 func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objectName, newParentName Name, includeObject bool, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyDuplicationSelect, sessions,
-		UseHandleContext(policySession), Delimiter,
-		objectName, newParentName, includeObject)
+	return t.StartCommand(CommandPolicyDuplicationSelect).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(objectName, newParentName, includeObject).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyAuthorize executes the TPM2_PolicyAuthorize command, which allows policies to change. This is an immediate assertion. The
@@ -339,9 +361,11 @@ func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolic
 		checkTicket = &TkVerified{Tag: TagVerified, Hierarchy: HandleNull}
 	}
 
-	return t.RunCommand(CommandPolicyAuthorize, sessions,
-		UseHandleContext(policySession), Delimiter,
-		approvedPolicy, policyRef, keySign, checkTicket)
+	return t.StartCommand(CommandPolicyAuthorize).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(approvedPolicy, policyRef, keySign, checkTicket).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // PolicyAuthValue executes the TPM2_PolicyAuthValue command to bind the policy to the authorization value of the entity on which the
@@ -358,7 +382,10 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
 	}
 
-	if err := t.RunCommand(CommandPolicyAuthValue, sessions, UseHandleContext(policySession)); err != nil {
+	if err := t.StartCommand(CommandPolicyAuthValue).
+		AddHandles(UseHandleContext(policySession)).
+		AddExtraSessions(sessions...).
+		Run(nil); err != nil {
 		return err
 	}
 
@@ -380,7 +407,10 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
 	}
 
-	if err := t.RunCommand(CommandPolicyPassword, sessions, UseHandleContext(policySession)); err != nil {
+	if err := t.StartCommand(CommandPolicyPassword).
+		AddHandles(UseHandleContext(policySession)).
+		AddExtraSessions(sessions...).
+		Run(nil); err != nil {
 		return err
 	}
 
@@ -391,11 +421,10 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 // PolicyGetDigest executes the TPM2_PolicyGetDigest command to return the current policy digest of the session context associated
 // with policySession.
 func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...SessionContext) (policyDigest Digest, err error) {
-	if err := t.RunCommand(CommandPolicyGetDigest, sessions,
-		UseHandleContext(policySession), Delimiter,
-		Delimiter,
-		Delimiter,
-		&policyDigest); err != nil {
+	if err := t.StartCommand(CommandPolicyGetDigest).
+		AddHandles(UseHandleContext(policySession)).
+		AddExtraSessions(sessions...).
+		Run(nil, &policyDigest); err != nil {
 		return nil, err
 	}
 
@@ -412,7 +441,11 @@ func (t *TPMContext) PolicyGetDigest(policySession SessionContext, sessions ...S
 // writtenSet. A flag will be set on the session context so that the value of the AttrNVWritten attribute of the NV index being
 // authorized will be compared to writtenSet when the session is used.
 func (t *TPMContext) PolicyNvWritten(policySession SessionContext, writtenSet bool, sessions ...SessionContext) error {
-	return t.RunCommand(CommandPolicyNvWritten, sessions, UseHandleContext(policySession), Delimiter, writtenSet)
+	return t.StartCommand(CommandPolicyNvWritten).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(writtenSet).
+		AddExtraSessions(sessions...).
+		Run(nil)
 }
 
 // func (t *TPMContext) PolicyTemplate(policySession HandleContext, templateHash Digest, sessions ...SessionContext) error {

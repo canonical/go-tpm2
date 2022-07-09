@@ -203,3 +203,193 @@ func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters [
 
 	return header.ResponseCode, parameters, authArea, nil
 }
+
+// CommandHandleContext is used to supply a HandleContext to a CommandContext.
+type CommandHandleContext struct {
+	handle  HandleContext
+	session SessionContext
+}
+
+// Handle returns the HandleContext.
+func (c *CommandHandleContext) Handle() HandleContext {
+	return c.handle
+}
+
+// Session returns the SessionContext if the handle requires authorization.
+func (c *CommandHandleContext) Session() SessionContext {
+	return c.session
+}
+
+// UseResourceContextWithAuth creates a CommandHandleContext for a ResourceContext that
+// requires authorization. The supplied SessionContext is the session used for authorization
+// and may be nil - in this case, passphrase authorization is used. If the authorization
+// value of the resource is required as part of the authorization, it is obtained from
+// the supplied ResourceContext, and should be set by calling ResourceContext.SetAuthValue.
+// If the ResourceContext is nil, then HandleNull is used.
+func UseResourceContextWithAuth(r ResourceContext, s SessionContext) *CommandHandleContext {
+	if r == nil {
+		r = nullContext
+	}
+	if s == nil {
+		s = pwSession
+	}
+	return &CommandHandleContext{handle: r, session: s}
+}
+
+// UseHandleContext creates a CommandHandleContext for any HandleContext that does not
+// require authorization. If the HandleContext is nil, then HandleNull is used.
+func UseHandleContext(h HandleContext) *CommandHandleContext {
+	if h == nil {
+		h = nullContext
+	}
+	return &CommandHandleContext{handle: h}
+}
+
+// CommandContext provides an API for building a command to execute via a TPMContext.
+type CommandContext struct {
+	tpm           *TPMContext
+	commandCode   CommandCode
+	handles       []*CommandHandleContext
+	params        []interface{}
+	extraSessions []SessionContext
+}
+
+// ResponseContext contains the context required to validate a response and obtain
+// response parameters.
+type ResponseContext struct {
+	tpm              *TPMContext
+	commandCode      CommandCode
+	sessionParams    *sessionParams
+	responseAuthArea []AuthResponse
+	rpBytes          []byte
+}
+
+// Complete performs validation of the response auth area and updates internal SessionContext
+// state. If a response HMAC is invalid, an error will be returned. The caller supplies a
+// command dependent number of pointers to the response parameters.
+func (c *ResponseContext) Complete(responseParams ...interface{}) error {
+	c.tpm.updateExclusiveSession(c)
+
+	if len(c.responseAuthArea) > 0 {
+		if err := c.sessionParams.processResponseAuthArea(c.responseAuthArea, c.rpBytes); err != nil {
+			return &InvalidResponseError{c.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
+		}
+	}
+
+	rpBuf := bytes.NewReader(c.rpBytes)
+
+	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
+		return &InvalidResponseError{c.commandCode, fmt.Sprintf("cannot unmarshal response parameters: %v", err)}
+	}
+
+	if rpBuf.Len() > 0 {
+		return &InvalidResponseError{c.commandCode, fmt.Sprintf("response parameter area contains %d trailing bytes", rpBuf.Len())}
+	}
+
+	return nil
+}
+
+// AddHandles appends the supplied command handle contexts to this command.
+func (c *CommandContext) AddHandles(handles ...*CommandHandleContext) *CommandContext {
+	c.handles = append(c.handles, handles...)
+	return c
+}
+
+// AddParams appends the supplied command parameters to this command.
+func (c *CommandContext) AddParams(params ...interface{}) *CommandContext {
+	c.params = append(c.params, params...)
+	return c
+}
+
+// AddExtraSessions adds the supplied additional session contexts to this command. These
+// sessions are not used for authorization of any resources.
+func (c *CommandContext) AddExtraSessions(sessions ...SessionContext) *CommandContext {
+	c.extraSessions = append(c.extraSessions, sessions...)
+	return c
+}
+
+// RunWithoutProcessingResponse executes the command defined by this context using the
+// TPMContext that created it. The caller supplies a pointer to the response handle if the
+// command returns one.
+//
+// If the TPM returns a response indicating that the command should be retried, this function
+// will retry up to a maximum number of times defined by the number supplied to
+// TPMContext.SetMaxSubmissions.
+//
+// This performs no validation of the response auth area. Instead, a ResponseContext is
+// returned and the caller is expected to call ResponseContext.Complete. This is useful for
+// commands that change an authorization value, where the response HMAC is computed with a
+// key based on the new value.
+//
+// A *TctiError will be returned if the transmission interface returns an error.
+//
+// One of *TPMWarning, *TPMError, *TPMParameterError, *TPMHandleError or *TPMSessionError
+// will be returned if the TPM returns a response code other than ResponseSuccess.
+func (c *CommandContext) RunWithoutProcessingResponse(responseHandle *Handle) (*ResponseContext, error) {
+	var handles HandleList
+	var handleNames []Name
+	var sessionParams sessionParams
+
+	for _, h := range c.handles {
+		handles = append(handles, h.handle.Handle())
+		handleNames = append(handleNames, h.handle.Name())
+
+		if h.session != nil {
+			if err := sessionParams.appendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
+				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.commandCode, len(handles), err)
+			}
+		}
+	}
+	if err := sessionParams.appendExtraSessions(c.extraSessions...); err != nil {
+		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.commandCode, err)
+	}
+
+	if sessionParams.hasDecryptSession() && (len(c.params) == 0 || !isParamEncryptable(c.params[0])) {
+		return nil, fmt.Errorf("command %s does not support command parameter encryption", c.commandCode)
+	}
+
+	cpBytes, err := mu.MarshalToBytes(c.params...)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
+	}
+
+	cAuthArea, err := sessionParams.buildCommandAuthArea(c.commandCode, handleNames, cpBytes)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
+	}
+
+	rpBytes, rAuthArea, err := c.tpm.RunCommand(c.commandCode, handles, cAuthArea, cpBytes, responseHandle)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ResponseContext{
+		tpm:              c.tpm,
+		commandCode:      c.commandCode,
+		sessionParams:    &sessionParams,
+		responseAuthArea: rAuthArea,
+		rpBytes:          rpBytes}, nil
+}
+
+// Run executes the command defined by this context using the TPMContext that created it.
+// The caller supplies a pointer to the response handle if the command returns one, and
+// a command dependent number of pointers to response parameters.
+//
+// If the TPM returns a response indicating that the command should be retried, this function
+// will retry up to a maximum number of times defined by the number supplied to
+// TPMContext.SetMaxSubmissions.
+//
+// This performs validation of the response auth area and updates internal SessionContext
+// state. If a response HMAC is invalid, an error will be returned.
+//
+// A *TctiError will be returned if the transmission interface returns an error.
+//
+// One of *TPMWarning, *TPMError, *TPMParameterError, *TPMHandleError or *TPMSessionError
+// will be returned if the TPM returns a response code other than ResponseSuccess.
+func (c *CommandContext) Run(responseHandle *Handle, responseParams ...interface{}) error {
+	r, err := c.RunWithoutProcessingResponse(responseHandle)
+	if err != nil {
+		return err
+	}
+	return r.Complete(responseParams...)
+}
