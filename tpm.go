@@ -157,7 +157,10 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 // one of the many convenience functions provided by TPMContext instead, or TPMContext.StartCommand
 // if one doesn't already exist.
 func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cAuthArea []AuthCommand, cpBytes []byte, rHandle *Handle) (rpBytes []byte, rAuthArea []AuthResponse, err error) {
-	cmd := MarshalCommandPacket(commandCode, cHandles, cAuthArea, cpBytes)
+	cmd, err := MarshalCommandPacket(commandCode, cHandles, cAuthArea, cpBytes)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("cannot serialize command packet: %w", err)
+	}
 
 	for tries := uint(1); ; tries++ {
 		var err error

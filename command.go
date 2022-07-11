@@ -7,6 +7,7 @@ package tpm2
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -93,25 +94,48 @@ func (p CommandPacket) Unmarshal(numHandles int) (handles HandleList, authArea [
 
 // MarshalCommandPacket serializes a complete TPM packet from the provided arguments. The
 // parameters argument must already be serialized to the TPM wire format.
-func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []AuthCommand, parameters []byte) CommandPacket {
+//
+// This will return an error if the supplied parameters cannot be represented correctly
+// by the TPM wire format.
+func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []AuthCommand, parameters []byte) (CommandPacket, error) {
 	header := CommandHeader{CommandCode: command}
-	var payload mu.RawBytes
+	var payload []byte
 
 	switch {
 	case len(authArea) > 0:
 		header.Tag = TagSessions
 
 		aBytes := mu.MustMarshalToBytes(mu.Raw(authArea))
-		payload = mu.MustMarshalToBytes(mu.Raw(handles), uint32(len(aBytes)), mu.RawBytes(aBytes), mu.RawBytes(parameters))
+		if int(uint32(len(aBytes))) != len(aBytes) {
+			return nil, errors.New("authArea is too large")
+		}
+		payload = mu.MustMarshalToBytes(mu.Raw(handles), uint32(len(aBytes)), mu.Raw(aBytes), mu.Raw(parameters))
 	case len(authArea) == 0:
 		header.Tag = TagNoSessions
 
-		payload = mu.MustMarshalToBytes(mu.Raw(handles), mu.RawBytes(parameters))
+		payload = mu.MustMarshalToBytes(mu.Raw(handles), mu.Raw(parameters))
 	}
 
-	header.CommandSize = uint32(binary.Size(header) + len(payload))
+	commandSize := binary.Size(header) + len(payload)
+	if int(uint32(commandSize)) != commandSize {
+		return nil, errors.New("total payload is too large")
+	}
+	header.CommandSize = uint32(commandSize)
 
-	return mu.MustMarshalToBytes(header, payload)
+	return mu.MustMarshalToBytes(header, mu.Raw(payload)), nil
+}
+
+// MustMarshalCommandPacket serializes a complete TPM packet from the provided arguments.
+// The parameters argument must already be serialized to the TPM wire format.
+//
+// This will panic if the supplied parameters cannot be represented correctly by the TPM
+// wire format.
+func MustMarshalCommandPacket(commandCode CommandCode, handles HandleList, authArea []AuthCommand, parameters []byte) CommandPacket {
+	b, err := MarshalCommandPacket(commandCode, handles, authArea, parameters)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // ResponseHeader is the header for the TPM's response to a command.
