@@ -210,23 +210,19 @@ func (t *TPMContext) processResponseAuth(r *rspContext) (err error) {
 
 	t.pendingResponse = nil
 
-	if isSessionAllowed(r.commandCode) {
-		if t.exclusiveSession != nil {
-			t.exclusiveSession.Data().IsExclusive = false
-			t.exclusiveSession = nil
-		}
-
-		for _, s := range r.sessionParams.sessions {
-			if s.session.IsExclusive() {
-				t.exclusiveSession = s.session
-				break
-			}
-		}
+	if isSessionAllowed(r.commandCode) && t.exclusiveSession != nil {
+		t.exclusiveSession.Data().IsExclusive = false
+		t.exclusiveSession = nil
 	}
 
-	if len(r.responseAuthArea) > 0 {
-		if err := r.sessionParams.processResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
-			return &InvalidResponseError{r.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
+	if err := r.sessionParams.processResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
+		return &InvalidResponseError{r.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
+	}
+
+	for _, s := range r.sessionParams.sessions {
+		if s.session.IsExclusive() {
+			t.exclusiveSession = s.session
+			break
 		}
 	}
 
