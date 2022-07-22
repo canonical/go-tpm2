@@ -240,6 +240,11 @@ func (p *sessionParams) invalidateSessionContexts(authResponses []AuthResponse) 
 func (p *sessionParams) processResponseAuthArea(authResponses []AuthResponse, rpBytes []byte) error {
 	defer p.invalidateSessionContexts(authResponses)
 
+	if len(authResponses) != len(p.sessions) {
+		return fmt.Errorf("unexpected number of response auths (got %d, expected %d)",
+			len(authResponses), len(p.sessions))
+	}
+
 	for i, resp := range authResponses {
 		if err := p.sessions[i].processResponseAuth(resp, p.commandCode, rpBytes); err != nil {
 			return fmt.Errorf("encountered an error for session at index %d: %v", i, err)
