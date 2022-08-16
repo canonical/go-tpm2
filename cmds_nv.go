@@ -247,7 +247,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 		return err
 	}
 
-	if len(data) > t.maxNVBufferSize {
+	if len(data) > int(t.maxNVBufferSize) {
 		if authContextAuthSession != nil {
 			sessionPrivate := authContextAuthSession.(*sessionContext)
 			if sessionPrivate.attrs&AttrContinueSession == 0 {
@@ -274,7 +274,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 	total := 0
 	for {
 		d := data[total:]
-		if len(d) > t.maxNVBufferSize {
+		if len(d) > int(t.maxNVBufferSize) {
 			d = d[:t.maxNVBufferSize]
 		}
 		if err := t.NVWriteRaw(authContext, nvIndex, d, offset+uint16(total), authContextAuthSession, sessions...); err != nil {
@@ -561,8 +561,8 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 
 	for {
 		sz := remaining
-		if remaining > uint16(t.maxNVBufferSize) {
-			sz = uint16(t.maxNVBufferSize)
+		if remaining > t.maxNVBufferSize {
+			sz = t.maxNVBufferSize
 		}
 		tmpData, err := t.NVReadRaw(authContext, nvIndex, sz, offset+uint16(total), authContextAuthSession, sessions...)
 		if err != nil {

@@ -164,7 +164,7 @@ func (t *TPMContext) SequenceExecute(sequenceContext ResourceContext, buffer []b
 	}
 
 	total := 0
-	for len(buffer)-total > t.maxBufferSize {
+	for len(buffer)-total > int(t.maxBufferSize) {
 		b := buffer[total:]
 		b = b[:t.maxBufferSize]
 		if err := t.SequenceUpdate(sequenceContext, b, sequenceContextAuthSession, sessions...); err != nil {
@@ -203,7 +203,7 @@ func (t *TPMContext) EventSequenceExecute(pcrContext, sequenceContext ResourceCo
 	}
 
 	total := 0
-	for len(buffer)-total > t.maxBufferSize {
+	for len(buffer)-total > int(t.maxBufferSize) {
 		b := buffer[total:]
 		b = b[:t.maxBufferSize]
 		if err := t.SequenceUpdate(sequenceContext, b, sequenceContextAuthSession, sessions...); err != nil {

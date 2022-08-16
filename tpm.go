@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math"
 
 	"github.com/canonical/go-tpm2/mu"
 
@@ -101,9 +102,9 @@ type TPMContext struct {
 	permanentResources    map[Handle]*permanentContext
 	maxSubmissions        uint
 	propertiesInitialized bool
-	maxBufferSize         int
-	maxDigestSize         int
-	maxNVBufferSize       int
+	maxBufferSize         uint16
+	maxDigestSize         uint16
+	maxNVBufferSize       uint16
 	exclusiveSession      sessionContextInternal
 	pendingResponse       *rspContext
 }
@@ -328,12 +329,21 @@ func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 
 	for _, prop := range props {
 		switch prop.Property {
-		case PropertyInputBuffer:
-			t.maxBufferSize = int(prop.Value)
-		case PropertyMaxDigest:
-			t.maxDigestSize = int(prop.Value)
-		case PropertyNVBufferMax:
-			t.maxNVBufferSize = int(prop.Value)
+		case PropertyInputBuffer, PropertyMaxDigest, PropertyNVBufferMax:
+			if prop.Value > math.MaxUint16 {
+				return &InvalidResponseError{Command: CommandGetCapability, msg: fmt.Sprintf("property %v out of range", prop.Property)}
+			}
+
+			value := uint16(prop.Value)
+
+			switch prop.Property {
+			case PropertyInputBuffer:
+				t.maxBufferSize = value
+			case PropertyMaxDigest:
+				t.maxDigestSize = value
+			case PropertyNVBufferMax:
+				t.maxNVBufferSize = value
+			}
 		}
 	}
 
