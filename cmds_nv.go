@@ -210,6 +210,34 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 	return nil
 }
 
+type nvWriteHelperContext struct {
+	authContext ResourceContext
+	nvIndex ResourceContext
+	data []byte
+	offset uint16
+	tpm *TPMContext
+
+	total uint16
+}
+
+func (c *nvWriteHelperContext) last() bool {
+	return len(c.data[c.total:]) <= int(c.tpm.maxNVBufferSize)
+}
+
+func (c *nvWriteHelperContext) run(sessions ...SessionContext) error {
+	d := c.data[c.total:]
+	if len(d) > int(c.tpm.maxNVBufferSize) {
+		d = d[:c.tpm.maxNVBufferSize]
+	}
+
+	if err := c.tpm.NVWriteRaw(c.authContext, c.nvIndex, d, c.offset+c.total, sessions[0], sessions[1:]...); err != nil {
+		return err
+	}
+
+	c.total += uint16(len(d))
+	return nil
+}
+
 // NVWrite executes the TPM2_NV_Write command to write data to the NV index associated with nvIndex, at the specified offset.
 //
 // The command requires authorization, defined by the state of the AttrNVPPWrite, AttrNVOwnerWrite, AttrNVAuthWrite and
@@ -226,8 +254,7 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 // digest that matches the authorization policy for the index.
 //
 // If data is too large to be written in a single command, this function will re-execute the TPM2_NV_Write command until all data is
-// written. In this case, any SessionContext instances provided must have the AttrContinueSession attribute defined and
-// authContextAuthSession must not be a policy session.
+// written. In this case, authContextAuthSession must not be a policy session.
 //
 // If the index has the AttrNVWriteLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
@@ -247,47 +274,17 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 		return err
 	}
 
-	if len(data) > int(t.maxNVBufferSize) {
-		if authContextAuthSession != nil {
-			sessionPrivate := authContextAuthSession.(*sessionContext)
-			if sessionPrivate.attrs&AttrContinueSession == 0 {
-				return makeInvalidArgError("authContextAuthSession",
-					fmt.Sprintf("the AttrContinueSession attribute is required for authorization sessions for writes larger than %d bytes", t.maxNVBufferSize))
-			}
-			sessionData := sessionPrivate.Data()
-			if sessionData == nil {
-				return makeInvalidArgError("authContextAuthSession", "unusable session context")
-			}
-			if sessionData.SessionType == SessionTypePolicy {
-				return makeInvalidArgError("authContextAuthSession",
-					fmt.Sprintf("a policy authorization session cannot be used for writes larger than %d bytes", t.maxNVBufferSize))
-			}
-		}
-		for i, s := range sessions {
-			if s.(*sessionContext).attrs&AttrContinueSession == 0 {
-				return makeInvalidArgError("sessions",
-					fmt.Sprintf("the AttrContinueSession attribute is required for session at index %d for writes larger than %d bytes", i, t.maxNVBufferSize))
-			}
-		}
-	}
+	sessionsCopy := []SessionContext{authContextAuthSession}
+	sessionsCopy = append(sessionsCopy, sessions...)
 
-	total := 0
-	for {
-		d := data[total:]
-		if len(d) > int(t.maxNVBufferSize) {
-			d = d[:t.maxNVBufferSize]
-		}
-		if err := t.NVWriteRaw(authContext, nvIndex, d, offset+uint16(total), authContextAuthSession, sessions...); err != nil {
-			return err
-		}
+	context := &nvWriteHelperContext{
+		authContext: authContext,
+		nvIndex: nvIndex,
+		data: data,
+		offset: offset,
+		tpm: t}
 
-		total += len(d)
-		if len(data)-total == 0 {
-			break
-		}
-	}
-
-	return nil
+	return execMultipleHelper(context, sessionsCopy...)
 }
 
 // NVSetPinCounterParams is a convenience function for NVWrite for updating the contents of the NV pin pass or NV pin fail index associated
@@ -532,8 +529,7 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 // digest that matches the authorization policy for the index.
 //
 // If the requested data can not be read in a single command, this function will re-execute the TPM2_NV_Read command until all data
-// is read. In this case, any SessionContext instances provided should have the AttrContinueSession attribute defined and
-// authContextAuth should not correspond to a policy session.
+// is read. In this case, authContextAuth should not correspond to a policy session.
 //
 // If the index has the AttrNVReadLocked attribute set, a *TPMError error with an error code of ErrorNVLocked will be returned.
 //
@@ -555,30 +551,12 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 		return nil, err
 	}
 
-	data = make([]byte, size)
-	total := 0
-	remaining := size
+	sessionsCopy := []SessionContext{authContextAuthSession}
+	sessionsCopy = append(sessionsCopy, sessions...)
 
-	for {
-		sz := remaining
-		if remaining > t.maxNVBufferSize {
-			sz = t.maxNVBufferSize
-		}
-		tmpData, err := t.NVReadRaw(authContext, nvIndex, sz, offset+uint16(total), authContextAuthSession, sessions...)
-		if err != nil {
-			return nil, err
-		}
-
-		copy(data[total:], tmpData)
-		total += int(sz)
-		remaining -= sz
-
-		if remaining == 0 {
-			break
-		}
-	}
-
-	return data, nil
+	return readMultipleHelper(size, t.maxNVBufferSize, func(sz, total uint16, sessions ...SessionContext) ([]byte, error) {
+		return t.NVReadRaw(authContext, nvIndex, sz, offset+total, sessions[0], sessions[1:]...)
+	}, sessionsCopy...)
 }
 
 func (t *TPMContext) nvReadUint64(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
