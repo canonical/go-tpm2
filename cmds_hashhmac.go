@@ -143,75 +143,160 @@ func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceC
 	return results, nil
 }
 
-// SequenceExecute executes a hash or HMAC sequence to completion and returns the result by adding the provided data to the sequence
-// with a number of TPM2_SequenceUpdate commands appropriate for the size of buffer, and executing a final TPM2_SequenceComplete
-// command. This command requires authorization with the user auth role for sequenceContext, with session based authorization provided
-// via sequenceContextAuthSession. As this function executes multiple commands, any SessionContext instances provided should have the
-// AttrContinueSession attribute defined.
+type sequenceExecuteContext struct {
+	sequenceContext ResourceContext
+	buffer          []byte
+	hierarchy       Handle
+
+	tpm   *TPMContext
+	total int
+
+	result     Digest
+	validation *TkHashcheck
+}
+
+func (c *sequenceExecuteContext) last() bool {
+	return len(c.buffer[c.total:]) <= int(c.tpm.maxBufferSize)
+}
+
+func (c *sequenceExecuteContext) run(sessions ...SessionContext) error {
+	if c.last() {
+		result, validation, err := c.tpm.SequenceComplete(c.sequenceContext, c.buffer[c.total:], c.hierarchy, sessions[0], sessions[1:]...)
+		if err != nil {
+			return err
+		}
+		c.result = result
+		c.validation = validation
+		return nil
+	}
+
+	b := c.buffer[c.total:]
+	b = b[:c.tpm.maxBufferSize]
+	if err := c.tpm.SequenceUpdate(c.sequenceContext, b, sessions[0], sessions[1:]...); err != nil {
+		return err
+	}
+
+	c.total += len(b)
+	return nil
+}
+
+// SequenceExecute executes a hash or HMAC sequence to completion and returns
+// the result by adding the provided data to the sequence with a number of
+// TPM2_SequenceUpdate commands appropriate for the size of buffer, and
+// executing a final TPM2_SequenceComplete command. This command requires
+// authorization with the user auth role for sequenceContext, with session
+// based authorization provided via sequenceContextAuthSession.
 //
-// If sequenceContext does not correspond to a hash or HMAC sequence object, then a *TPMHandleError error with an error code of
-// ErrorMode will be returned.
+// If sequenceContext does not correspond to a hash or HMAC sequence object,
+// then a *TPMHandleError error with an error code of ErrorMode will be
+// returned.
 //
-// If sequenceContext corresponds to a hash sequence and the hash sequence is intended to produce a digest that will be signed with
-// a restricted signing key, the first block of data added to this sequence must be 4 bytes and not the value of TPMGeneratedValue.
-// If the returned digest is safe to sign with a restricted signing key, then a ticket that can be passed to TPMContext.Sign will be
-// returned. In this case, the hierarchy argument is used to specify the hierarchy for the ticket.
+// If sequenceContext corresponds to a hash sequence and the hash sequence
+// is intended to produce a digest that will be signed with a restricted
+// signing key, the first block of data added to this sequence must be 4 bytes
+// and not the value of TPMGeneratedValue. If the returned digest is safe to
+// sign with a restricted signing key, then a ticket that can be passed to
+// TPMContext.Sign will be returned. In this case, the hierarchy argument is
+// used to specify the hierarchy for the ticket.
 //
-// On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
+// On success, the sequence object associated with sequenceContext will be
+// evicted, and sequenceContext will become invalid.
 func (t *TPMContext) SequenceExecute(sequenceContext ResourceContext, buffer []byte, hierarchy Handle, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (result Digest, validation *TkHashcheck, err error) {
 	if err := t.initPropertiesIfNeeded(); err != nil {
 		return nil, nil, err
 	}
 
-	total := 0
-	for len(buffer)-total > int(t.maxBufferSize) {
-		b := buffer[total:]
-		b = b[:t.maxBufferSize]
-		if err := t.SequenceUpdate(sequenceContext, b, sequenceContextAuthSession, sessions...); err != nil {
-			return nil, nil, err
-		}
+	sessionsCopy := []SessionContext{sequenceContextAuthSession}
+	sessionsCopy = append(sessionsCopy, sessions...)
 
-		total += len(b)
+	c := &sequenceExecuteContext{
+		sequenceContext: sequenceContext,
+		buffer:          buffer,
+		hierarchy:       hierarchy,
+		tpm:             t}
+
+	if err := execMultipleHelper(c, sessionsCopy...); err != nil {
+		return nil, nil, err
 	}
 
-	return t.SequenceComplete(sequenceContext, buffer[total:], hierarchy, sequenceContextAuthSession, sessions...)
+	return c.result, c.validation, nil
 }
 
-// EventSequenceExecute executes an event sequence to completion and returns the result by adding the provided data to the sequence
-// with a number of TPM2_SequenceUpdate commands appropriate for the size of buffer, and executing a final TPM2_EventSequenceComplete
-// command. This command requires authorization with the user auth role for sequenceContext, with session based authorization provided
-// via sequenceContextAuthSession.
+type eventSequenceExecuteContext struct {
+	pcrContext      ResourceContext
+	sequenceContext ResourceContext
+	buffer          []byte
+
+	tpm   *TPMContext
+	total int
+
+	results TaggedHashList
+}
+
+func (c *eventSequenceExecuteContext) last() bool {
+	return len(c.buffer[c.total:]) <= int(c.tpm.maxBufferSize)
+}
+
+func (c *eventSequenceExecuteContext) run(sessions ...SessionContext) error {
+	if c.last() {
+		results, err := c.tpm.EventSequenceComplete(c.pcrContext, c.sequenceContext, c.buffer[c.total:], sessions[0], sessions[1], sessions[2:]...)
+		if err != nil {
+			return err
+		}
+		c.results = results
+		return nil
+	}
+
+	b := c.buffer[c.total:]
+	b = b[:c.tpm.maxBufferSize]
+	if err := c.tpm.SequenceUpdate(c.sequenceContext, b, sessions[1], sessions[2:]...); err != nil {
+		return err
+	}
+
+	c.total += len(b)
+	return nil
+}
+
+// EventSequenceExecute executes an event sequence to completion and returns
+// the result by adding the provided data to the sequence with a number of
+// TPM2_SequenceUpdate commands appropriate for the size of buffer, and
+// executing a final TPM2_EventSequenceComplete command. This command requires
+// authorization with the user auth role for sequenceContext, with session
+// based authorization provided via sequenceContextAuthSession.
 //
-// If pcrContext is not nil, the result will be extended to the corresponding PCR in the same manner as TPMContext.PCRExtend.
-// Authorization with the user auth role is required for pcrContext, with session based authorization provided via
-// pcrContextAuthSession.
+// If pcrContext is not nil, the result will be extended to the corresponding
+// PCR in the same manner as TPMContext.PCRExtend. Authorization with the user
+// auth role is required for pcrContext, with session based authorization
+// provided via pcrContextAuthSession.
 //
-// As this function executes multiple commands, any SessionContext instances provided should have the AttrContinueSession attribute
-// defined.
+// If sequenceContext does not correspond to an event sequence object, then a
+// *TPMHandleError error with an error code of ErrorMode will be returned for
+// handle index 1 if the command is CommandSequenceUpdate, or handle index 2
+// if the command is CommandEventSequenceComplete.
 //
-// If sequenceContext does not correspond to an event sequence object, then a *TPMHandleError error with an error code of ErrorMode
-// will be returned for handle index 1 if the command is CommandSequenceUpdate, or handle index 2 if the command is
-// CommandEventSequenceComplete.
+// If pcrContext is not nil and the corresponding PCR can not be extended from
+// the current locality, a *TPMError error with an error code of ErrorLocality
+// will be returned.
 //
-// If pcrContext is not nil and the corresponding PCR can not be extended from the current locality, a *TPMError error with an
-// error code of ErrorLocality will be returned.
-//
-// On success, the sequence object associated with sequenceContext will be evicted, and sequenceContext will become invalid.
+// On success, the sequence object associated with sequenceContext will be
+// evicted, and sequenceContext will become invalid.
 func (t *TPMContext) EventSequenceExecute(pcrContext, sequenceContext ResourceContext, buffer []byte, pcrContextAuthSession, sequenceContextAuthSession SessionContext, sessions ...SessionContext) (results TaggedHashList, err error) {
 	if err := t.initPropertiesIfNeeded(); err != nil {
 		return nil, err
 	}
 
-	total := 0
-	for len(buffer)-total > int(t.maxBufferSize) {
-		b := buffer[total:]
-		b = b[:t.maxBufferSize]
-		if err := t.SequenceUpdate(sequenceContext, b, sequenceContextAuthSession, sessions...); err != nil {
-			return nil, err
-		}
+	sessionsCopy := []SessionContext{pcrContextAuthSession, sequenceContextAuthSession}
+	sessionsCopy = append(sessionsCopy, sessions...)
 
-		total += len(b)
+	c := &eventSequenceExecuteContext{
+		pcrContext:      pcrContext,
+		sequenceContext: sequenceContext,
+		buffer:          buffer,
+		tpm:             t}
+
+	if err := execMultipleHelper(c, sessionsCopy...); err != nil {
+		return nil, err
 	}
 
-	return t.EventSequenceComplete(pcrContext, sequenceContext, buffer[total:], pcrContextAuthSession, sequenceContextAuthSession, sessions...)
+	return c.results, nil
 }
