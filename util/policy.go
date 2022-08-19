@@ -118,6 +118,10 @@ func (p *TrialAuthPolicy) PolicyOR(pHashList tpm2.DigestList) {
 
 // PolicyPCR computes a TPM2_PolicyPCR assertion executed for the specified
 // PCR selection and with PCR values associated with the specified PCR digest.
+//
+// If generating policy for non PC client TPM devices, make sure to call
+// tpm2.PCRSelectionList.WithMinSelectSize with an appropriate value defined
+// in the TPM's platform profile specification.
 func (p *TrialAuthPolicy) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) {
 	if len(pcrDigest) != p.alg.Size() {
 		panic("invalid PCR digest length")

@@ -96,6 +96,21 @@ func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
 }
 
 func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
+	{
+		var tmp PCRSelectionList
+		mu.MustCopyValue(&tmp, creationPCR)
+		creationPCR = tmp
+	}
+	v, err := tpm.GetCapabilityTPMProperty(PropertyPCRSelectMin)
+	if err != nil {
+		t.Fatalf("GetCapability failed: %v", err)
+	}
+	for i := range creationPCR {
+		if creationPCR[i].SizeOfSelect < uint8(v) {
+			creationPCR[i].SizeOfSelect = uint8(v)
+		}
+	}
+
 	var parentQualifiedName Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQualifiedName = parent.Name()
@@ -107,7 +122,7 @@ func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationDat
 		}
 	}
 
-	if !reflect.DeepEqual(creationData.PCRSelect, creationPCR) {
+	if !creationData.PCRSelect.Equal(creationPCR) {
 		t.Errorf("creation data has invalid pcrSelect")
 	}
 	if len(creationData.PCRDigest) != template.NameAlg.Size() {

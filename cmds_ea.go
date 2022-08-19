@@ -154,23 +154,37 @@ func (t *TPMContext) PolicyOR(policySession SessionContext, pHashList DigestList
 		Run(nil)
 }
 
-// PolicyPCR executes the TPM2_PolicyPCR command to gate a policy based on the values of the PCRs selected via the pcrs parameter. If
-// no digest has been specified via the pcrDigest parameter, then it is a deferred assertion and the policy digest of the session
-// context associated with policySession will be extended to include the value of the PCR selection and a digest computed from the
-// selected PCR contents.
+// PolicyPCR executes the TPM2_PolicyPCR command to gate a policy based on the
+// values of the PCRs selected via the pcrs parameter. If no digest has been
+// specified via the pcrDigest parameter, then it is a deferred assertion and
+// the policy digest of the session context associated with policySession will
+// be extended to include the value of the PCR selection and a digest computed
+// from the selected PCR contents.
 //
-// If pcrDigest is provided, then it is a combined assertion. If policySession does not correspond to a trial session, the digest
-// computed from the selected PCRs will be compared to the value of pcrDigest and a *TPMParameterError error with an error code of
-// ErrorValue will be returned for parameter index 1 if they don't match, without making any changes to the session context. If
-// policySession corresponds to a trial session, the digest computed from the selected PCRs is not compared to the value of pcrDigest;
-// instead, the policy digest of the session is extended to include the value of the PCR selection and the value of pcrDigest.
+// If pcrDigest is provided, then it is a combined assertion. If policySession
+// does not correspond to a trial session, the digest computed from the
+// selected PCRs will be compared to the value of pcrDigest and a
+// *TPMParameterError error with an error code of ErrorValue will be returned
+// for parameter index 1 if they don't match, without making any changes to the
+// session context. If policySession corresponds to a trial session, the digest
+// computed from the selected PCRs is not compared to the value of pcrDigest;
+// instead, the policy digest of the session is extended to include the value
+// of the PCR selection and the value of pcrDigest.
 //
-// If the PCR contents have changed since the last time this command was executed for this session, a *TPMError error will be returned
-// with an error code of ErrorPCRChanged.
+// If the PCR contents have changed since the last time this command was
+// executed for this session, a *TPMError error will be returned with an error
+// code of ErrorPCRChanged.
+//
+// This function will call TPMContext.InitProperties if it hasn't already
+// been called.
 func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, pcrs PCRSelectionList, sessions ...SessionContext) error {
+	if err := t.initPropertiesIfNeeded(); err != nil {
+		return err
+	}
+
 	return t.StartCommand(CommandPolicyPCR).
 		AddHandles(UseHandleContext(policySession)).
-		AddParams(pcrDigest, pcrs).
+		AddParams(pcrDigest, pcrs.WithMinSelectSize(t.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
 		Run(nil)
 }

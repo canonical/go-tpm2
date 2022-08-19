@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/xerrors"
+
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -23,7 +25,13 @@ func ComputePCRDigest(alg tpm2.HashAlgorithmId, pcrs tpm2.PCRSelectionList, valu
 
 	h := alg.NewHash()
 
-	mu.MustCopyValue(&pcrs, pcrs)
+	{
+		var tmp tpm2.PCRSelectionList
+		if err := mu.CopyValue(&tmp, pcrs); err != nil {
+			return nil, xerrors.Errorf("invalid selection: %w", err)
+		}
+		pcrs = tmp
+	}
 
 	for _, s := range pcrs {
 		if _, ok := values[s.Hash]; !ok {

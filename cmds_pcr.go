@@ -44,20 +44,24 @@ func (t *TPMContext) PCREvent(pcrContext ResourceContext, eventData Event, pcrCo
 	return digests, nil
 }
 
-// PCRRead executes the TPM2_PCR_Read command to return the values of the PCRs defined in the pcrSelectionIn parameter. The
-// underlying command may not be able to read all of the specified PCRs in a single transaction, so this function will
-// re-execute the TPM2_PCR_Read command until all requested values have been read. As a consequence, any SessionContext instances
+// PCRRead executes the TPM2_PCR_Read command to return the values of the PCRs
+// defined in the pcrSelectionIn parameter. The underlying command may not be
+// able to read all of the specified PCRs in a single transaction, so this
+// function will re-execute the TPM2_PCR_Read command until all requested
+// values have been read. As a consequence, any SessionContext instances
 // provided should have the AttrContinueSession attribute defined.
 //
-// On success, the current value of pcrUpdateCounter is returned, as well as the requested PCR values.
+// This function will call TPMContext.InitProperties if it hasn't already
+// been called.
+//
+// On success, the current value of pcrUpdateCounter is returned, as well as
+// the requested PCR values.
 func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...SessionContext) (pcrUpdateCounter uint32, pcrValues PCRValues, err error) {
-	var remaining PCRSelectionList
-	for _, s := range pcrSelectionIn {
-		c := PCRSelection{Hash: s.Hash, Select: make([]int, len(s.Select))}
-		copy(c.Select, s.Select)
-		remaining = append(remaining, c)
+	if err := t.initPropertiesIfNeeded(); err != nil {
+		return 0, nil, err
 	}
 
+	remaining := pcrSelectionIn
 	pcrValues = make(PCRValues)
 
 	for i := 0; ; i++ {
@@ -66,7 +70,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		var values DigestList
 
 		if err := t.StartCommand(CommandPCRRead).
-			AddParams(remaining).
+			AddParams(remaining.WithMinSelectSize(t.minPcrSelectSize)).
 			AddExtraSessions(sessions...).
 			Run(nil, &updateCounter, &pcrSelectionOut, &values); err != nil {
 			return 0, nil, err

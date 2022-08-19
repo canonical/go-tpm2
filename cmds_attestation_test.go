@@ -9,6 +9,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
+	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/templates"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
@@ -245,6 +246,16 @@ type testQuoteData struct {
 }
 
 func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
+	var pcrs PCRSelectionList
+	mu.MustCopyValue(&pcrs, data.pcrs)
+	v, err := s.TPM.GetCapabilityTPMProperty(PropertyPCRSelectMin)
+	c.Assert(err, IsNil)
+	for i := range pcrs {
+		if pcrs[i].SizeOfSelect < uint8(v) {
+			pcrs[i].SizeOfSelect = uint8(v)
+		}
+	}
+
 	sessionHandle := authSessionHandle(data.signAuthSession)
 
 	quoted, signature, err := s.TPM.Quote(data.sign, data.qualifyingData, data.inScheme, data.pcrs, data.signAuthSession)
@@ -259,7 +270,7 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 	c.Assert(err, IsNil)
 	digest, err := util.ComputePCRDigest(data.alg, data.pcrs, pcrValues)
 	c.Check(err, IsNil)
-	c.Check(quoted.Attested.Quote.PCRSelect, DeepEquals, data.pcrs)
+	c.Check(quoted.Attested.Quote.PCRSelect, DeepEquals, pcrs)
 	c.Check(quoted.Attested.Quote.PCRDigest, DeepEquals, digest)
 
 	s.checkAttestSignature(c, signature, data.sign, quoted, data.signScheme)

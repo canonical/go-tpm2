@@ -352,8 +352,8 @@ func (s *capabilitiesSuite) TestDoesHandleNotExist(c *C) {
 
 func (s *capabilitiesSuite) TestGetCapabilityPCRs(c *C) {
 	expected := PCRSelectionList{
-		{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}},
-		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}}
+		{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}, SizeOfSelect: 3},
+		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}, SizeOfSelect: 3}}
 
 	pcrs, err := s.TPM.GetCapabilityPCRs()
 	c.Check(err, IsNil)

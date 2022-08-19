@@ -92,33 +92,47 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 	return certifyInfo, signature, nil
 }
 
-// Quote executes the TPM2_Quote command in order to quote a set of PCR values. The TPM will hash the set of PCRs specified by the
-// pcrs parameter.
+// Quote executes the TPM2_Quote command in order to quote a set of PCR values.
+// The TPM will hash the set of PCRs specified by the pcrs parameter.
 //
-// If signContext is not nil, the returned attestation will be signed by the key associated with it. This command requires
-// authorization with the user auth role for signContext, with session based authorization provided via signContextAuthSession.
+// If signContext is not nil, the returned attestation will be signed by the
+// key associated with it. This command requires authorization with the user
+// auth role for signContext, with session based authorization provided via
+// signContextAuthSession.
 //
-// If signContext is not nil and the object associated with signContext is not a signing key, a *TPMHandleError error with an error
-// code of ErrorKey will be returned for handle index 1.
+// If signContext is not nil and the object associated with signContext is
+// not a signing key, a *TPMHandleError error with an error code of ErrorKey
+// will be returned for handle index 1.
 //
-// If signContext is not nil and if the scheme of the key associated with signContext is AsymSchemeNull, then inScheme must be
-// provided to specify a valid signing scheme for the key. If it isn't, a *TPMParameterError error with an error code of ErrorScheme
-// will be returned for parameter index 2.
+// If signContext is not nil and if the scheme of the key associated with
+// signContext is AsymSchemeNull, then inScheme must be provided to specify a
+// valid signing scheme for the key. If it isn't, a *TPMParameterError error
+// with an error code of ErrorScheme will be returned for parameter index 2.
 //
-// If signContext is not nil and the scheme of the key associated with signContext is not AsymSchemeNull, then inScheme may be nil. If
-// it is provided, then the specified scheme must match that of the signing key, else a *TPMParameterError error with an error code of
-// ErrorScheme will be returned for parameter index 2.
+// If signContext is not nil and the scheme of the key associated with
+// signContext is not AsymSchemeNull, then inScheme may be nil. If it is
+// provided, then the specified scheme must match that of the signing key,
+// else a *TPMParameterError error with an error code of ErrorScheme will be
+// returned for parameter index 2.
 //
-// On successful, it returns an attestation structure containing the hash of the PCRs selected by the pcrs parameter. If signContext
-// is not nil, the attestation structure will be signed by the associated key and returned too.
+// This function will call TPMContext.InitProperties if it hasn't already
+// been called.
+//
+// On success, it returns an attestation structure containing the hash of the
+// PCRs selected by the pcrs parameter. If signContext is not nil, the
+// attestation structure will be signed by the associated key and returned too.
 func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inScheme *SigScheme, pcrs PCRSelectionList, signContextAuthSession SessionContext, sessions ...SessionContext) (quoted *Attest, signature *Signature, err error) {
+	if err := t.initPropertiesIfNeeded(); err != nil {
+		return nil, nil, err
+	}
+
 	if inScheme == nil {
 		inScheme = &SigScheme{Scheme: SigSchemeAlgNull}
 	}
 
 	if err := t.StartCommand(CommandQuote).
 		AddHandles(UseResourceContextWithAuth(signContext, signContextAuthSession)).
-		AddParams(qualifyingData, inScheme, pcrs).
+		AddParams(qualifyingData, inScheme, pcrs.WithMinSelectSize(t.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
 		Run(nil, mu.Sized(&quoted), &signature); err != nil {
 		return nil, nil, err

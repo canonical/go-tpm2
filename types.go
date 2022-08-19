@@ -7,6 +7,8 @@ package tpm2
 import (
 	"errors"
 
+	"golang.org/x/xerrors"
+
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -70,7 +72,13 @@ func (v PCRValues) ToListAndSelection() (pcrs PCRSelectionList, digests DigestLi
 // of values.
 func (v PCRValues) SetValuesFromListAndSelection(pcrs PCRSelectionList, digests DigestList) (int, error) {
 	// Copy the selections so that each selection is ordered correctly
-	mu.MustCopyValue(&pcrs, pcrs)
+	{
+		var tmp PCRSelectionList
+		if err := mu.CopyValue(&tmp, pcrs); err != nil {
+			return 0, xerrors.Errorf("invalid selection: %w", err)
+		}
+		pcrs = tmp
+	}
 
 	i := 0
 	for _, p := range pcrs {

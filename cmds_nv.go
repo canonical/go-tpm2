@@ -212,10 +212,10 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 
 type nvWriteHelperContext struct {
 	authContext ResourceContext
-	nvIndex ResourceContext
-	data []byte
-	offset uint16
-	tpm *TPMContext
+	nvIndex     ResourceContext
+	data        []byte
+	offset      uint16
+	tpm         *TPMContext
 
 	total uint16
 }
@@ -279,10 +279,10 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 
 	context := &nvWriteHelperContext{
 		authContext: authContext,
-		nvIndex: nvIndex,
-		data: data,
-		offset: offset,
-		tpm: t}
+		nvIndex:     nvIndex,
+		data:        data,
+		offset:      offset,
+		tpm:         t}
 
 	return execMultipleHelper(context, sessionsCopy...)
 }

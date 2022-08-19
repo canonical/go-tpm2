@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"reflect"
 	"sort"
@@ -192,59 +193,111 @@ func (n Name) Digest() Digest {
 
 // 10.6) PCR Structures
 
-// PCRSelect is a slice of PCR indexes. It is marshalled to and from the
-// TPMS_PCR_SELECT type, which is a bitmap of the PCR indices contained within
-// this slice.
-type PCRSelect []int
+// PCRSelectBitmap correspnds to the TPMS_PCR_SELECT type, and is a bitmap
+// that defines a selection of PCRs. Note that it is easier to work with the
+// PCRSelect type instead, which is a slice of PCR indexes.
+type PCRSelectBitmap []byte
 
-func (d PCRSelect) Marshal(w io.Writer) error {
-	bytes := make([]byte, 3)
-
-	for _, i := range d {
-		octet := i / 8
-		for octet >= len(bytes) {
-			bytes = append(bytes, byte(0))
+// ToPCRs converts this PCRSelectBitmap to a slice of PCR indexes.
+func (b PCRSelectBitmap) ToPCRs() (out PCRSelect) {
+	for i, octet := range b {
+		for bit := uint(0); bit < 8; bit++ {
+			if octet&(1<<bit) == 0 {
+				continue
+			}
+			out = append(out, int((uint(i)*8)+bit))
 		}
-		bit := uint(i % 8)
-		bytes[octet] |= 1 << bit
 	}
 
-	if err := binary.Write(w, binary.BigEndian, uint8(len(bytes))); err != nil {
-		return xerrors.Errorf("cannot write size of PCR selection bit mask: %w", err)
+	return out
+}
+
+func (b PCRSelectBitmap) Marshal(w io.Writer) error {
+	if len(b) > math.MaxUint8 {
+		return errors.New("bitmap too long")
 	}
 
-	if _, err := w.Write(bytes); err != nil {
-		return xerrors.Errorf("cannot write PCR selection bit mask: %w", err)
+	if err := binary.Write(w, binary.BigEndian, uint8(len(b))); err != nil {
+		return xerrors.Errorf("cannot write size of bitmap: %w", err)
 	}
+
+	if _, err := w.Write(b); err != nil {
+		return xerrors.Errorf("cannot write bitmap: %w", err)
+	}
+
 	return nil
 }
 
-func (d *PCRSelect) Unmarshal(r mu.Reader) error {
+func (b *PCRSelectBitmap) Unmarshal(r mu.Reader) error {
 	var size uint8
 	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
-		return xerrors.Errorf("cannot read size of PCR selection bit mask: %w", err)
+		return xerrors.Errorf("cannot read size of bitmap: %w", err)
 	}
 	if int(size) > r.Len() {
 		return errors.New("size field is larger than the remaining bytes")
 	}
 
-	bytes := make([]byte, size)
+	*b = make(PCRSelectBitmap, size)
 
-	if _, err := io.ReadFull(r, bytes); err != nil {
-		return xerrors.Errorf("cannot read PCR selection bit mask: %w", err)
+	if _, err := io.ReadFull(r, *b); err != nil {
+		return xerrors.Errorf("cannot read bitmap: %w", err)
 	}
 
-	*d = make(PCRSelect, 0)
+	return nil
+}
 
-	for i, octet := range bytes {
-		for bit := uint(0); bit < 8; bit++ {
-			if octet&(1<<bit) == 0 {
-				continue
-			}
-			*d = append(*d, int((uint(i)*8)+bit))
+// PCRSelect is a slice of PCR indexes. It makes it easier to work with the
+// TPMS_PCR_SELECT type, which is a bitmap of PCR indices.
+//
+// It is marshalled to and from the TPMS_PCR_SELECT type for legacy purposes.
+// It should be converted to and from PCRSelectBitmap for marshalling, which
+// makes it possible to specify the minimum size of the bitmap.
+type PCRSelect []int
+
+// ToBitmap converts this PCRSelect into its bitmap form, with the specified
+// minimum size. If minsize is zero, a value of 3 will be used which aligns
+// with PC client TPM devices.
+func (d PCRSelect) ToBitmap(minsize uint8) (out PCRSelectBitmap, err error) {
+	if minsize == 0 {
+		minsize = 3
+	}
+	out = make([]byte, minsize)
+
+	for _, i := range d {
+		if i < 0 {
+			return nil, errors.New("invalid PCR index (< 0)")
 		}
+
+		octet := i / 8
+		if octet >= math.MaxUint8 {
+			return nil, errors.New("invalid PCR index (> 2040)")
+		}
+
+		for octet >= len(out) {
+			out = append(out, byte(0))
+		}
+		bit := uint(i % 8)
+		out[octet] |= 1 << bit
 	}
 
+	return out, nil
+}
+
+func (d PCRSelect) Marshal(w io.Writer) error {
+	bmp, err := d.ToBitmap(0)
+	if err != nil {
+		return err
+	}
+	_, err = mu.MarshalToWriter(w, bmp)
+	return err
+}
+
+func (d *PCRSelect) Unmarshal(r mu.Reader) error {
+	var b PCRSelectBitmap
+	if _, err := mu.UnmarshalFromReader(r, &b); err != nil {
+		return err
+	}
+	*d = b.ToPCRs()
 	return nil
 }
 
@@ -252,6 +305,37 @@ func (d *PCRSelect) Unmarshal(r mu.Reader) error {
 type PCRSelection struct {
 	Hash   HashAlgorithmId // Hash is the digest algorithm associated with the selection
 	Select PCRSelect       // The selected PCRs
+
+	// SizeOfSelect sets the minimum number of bytes in the serialized Select field
+	// during marshalling, and is set to the actual number of bytes in the Select
+	// field during unmarshalling.
+	//
+	// TPMs define a minimum size for a PCR selection, based on the number of PCRs
+	// defined in its associated platform specification. Note that methods of
+	// TPMContext that accept a PCRSelection will set this automatically.
+	//
+	// If set to zero during marshalling, a value of 3 will be assumed, which
+	// aligns with PC client TPM devices.
+	SizeOfSelect uint8
+}
+
+func (s PCRSelection) Marshal(w io.Writer) error {
+	bmp, err := s.Select.ToBitmap(s.SizeOfSelect)
+	if err != nil {
+		return err
+	}
+	_, err = mu.MarshalToWriter(w, s.Hash, bmp)
+	return err
+}
+
+func (s *PCRSelection) Unmarshal(r mu.Reader) error {
+	var b PCRSelectBitmap
+	if _, err := mu.UnmarshalFromReader(r, &s.Hash, &b); err != nil {
+		return err
+	}
+	s.Select = b.ToPCRs()
+	s.SizeOfSelect = uint8(len(b))
+	return nil
 }
 
 // 10.7 Tickets
@@ -339,99 +423,141 @@ type TaggedHashList []TaggedHash
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
 
-// Equal indicates whether l and r contain the same PCR selections. Equal selections will marshal
-// to the same bytes in the TPM wire format. To be considered equal, each set of selections must
-/// be identical length, contain the same PCR banks in the same order, and each PCR bank must
-/// contain the same set of PCRs - the order of the PCRs listed in each bank are not important
-// because that ordering is not preserved on the wire and PCRs are selected in ascending numerical
-// order.
+// WithMinSelectSize creates a copy of this list of selections with the minimum
+// size of each selection in bytes set to the specified value. If this isn't
+// used to change the default of zero, then 3 is assumed during marshalling
+// which aligns with PC client TPM devices.
+//
+// Methods of TPMContext that accept a PCRSelectionList call this function
+// already.
+func (l PCRSelectionList) WithMinSelectSize(sz uint8) (out PCRSelectionList) {
+	for _, s := range l {
+		out = append(out, PCRSelection{Hash: s.Hash, Select: s.Select, SizeOfSelect: sz})
+	}
+	return out
+}
+
+// Equal indicates whether l and r contain the same PCR selections. Equal
+// selections will marshal to the same bytes in the TPM wire format.
+//
+// This will panic if either selection list cannot be marshalled to the TPM
+// wire format. Use mu.IsValid to check if the values can actually be
+// serialized correctly.
+//
+// Deprecated: Use mu.DeepEqual instead.
 func (l PCRSelectionList) Equal(r PCRSelectionList) bool {
 	lb := mu.MustMarshalToBytes(l)
 	rb := mu.MustMarshalToBytes(r)
 	return bytes.Equal(lb, rb)
 }
 
-// Sort will sort the list of PCR selections in order of ascending algorithm ID. A new list of
-// selections is returned.
+// Sort will sort the list of PCR selections in order of ascending algorithm
+// ID. A new list of selections is returned.
+//
+// This will panic if the selection list cannot be marshalled to the TPM wire
+// format. Use mu.IsValid to check if it can actually be serialized correctly.
 func (l PCRSelectionList) Sort() (out PCRSelectionList) {
 	mu.MustCopyValue(&out, l)
+	for i, s := range l {
+		out[i].SizeOfSelect = s.SizeOfSelect
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Hash < out[j].Hash })
 	return
 }
 
-// Merge will merge the PCR selections specified by l and r together and return a new set
-// of PCR selections which contains a combination of both. For each PCR found in r that isn't
-// found in l, it will be added to the first occurence of the corresponding PCR bank found
-// in l if that exists, or otherwise a selection for that PCR bank will be appended to the result.
+// Merge will merge the PCR selections specified by l and r together and
+// return a new set of PCR selections which contains a combination of both.
+// For each PCR found in r that isn't found in l, it will be added to the
+// first occurence of the corresponding PCR bank found in l if that exists,
+// or otherwise a selection for that PCR bank will be appended to the result.
+//
+// This will panic if either selection list cannot be marshalled to the TPM
+// wire format. Use mu.IsValid to check if the values can actually be
+// serialized correctly.
 func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
 	mu.MustCopyValue(&out, l)
-	mu.MustCopyValue(&r, r)
+	for i, s := range l {
+		out[i].SizeOfSelect = s.SizeOfSelect
+	}
 
 	for _, sr := range r {
-		for _, pr := range sr.Select {
-			found := false
-			for _, so := range out {
-				if so.Hash != sr.Hash {
-					continue
-				}
-				for _, po := range so.Select {
-					if po == pr {
-						found = true
-					}
-					if po >= pr {
-						break
-					}
-				}
-				if found {
-					break
-				}
+		rbmp, err := sr.Select.ToBitmap(math.MaxUint8)
+		if err != nil {
+			panic(err)
+		}
+
+		dsti := -1
+		var dstbmp PCRSelectBitmap
+
+		for i, sl := range out {
+			if sl.Hash != sr.Hash {
+				continue
 			}
 
-			if !found {
-				added := false
-				for i, so := range out {
-					if so.Hash != sr.Hash {
-						continue
-					}
-					out[i].Select = append(so.Select, pr)
-					added = true
-					break
-				}
-				if !added {
-					out = append(out, PCRSelection{Hash: sr.Hash, Select: []int{pr}})
-				}
+			lbmp, err := sl.Select.ToBitmap(math.MaxUint8)
+			if err != nil {
+				panic(err)
 			}
+
+			if dsti == -1 {
+				dsti = i
+				dstbmp = lbmp
+			}
+
+			for j := 0; j < math.MaxUint8; j++ {
+				rbmp[j] &^= lbmp[j]
+			}
+		}
+
+		if dsti > -1 {
+			for j := 0; j < math.MaxUint8; j++ {
+				dstbmp[j] |= rbmp[j]
+			}
+			out[dsti].Select = dstbmp.ToPCRs()
+		} else {
+			var sr2 PCRSelection
+			mu.MustCopyValue(&sr2, sr)
+			sr2.SizeOfSelect = sr.SizeOfSelect
+			out = append(out, sr2)
 		}
 	}
 
-	mu.MustCopyValue(&out, out)
 	return out
 }
 
-// Remove will remove the PCR selections in r from the PCR selections in l, and return a
-// new set of selections.
+// Remove will remove the PCR selections in r from the PCR selections in l,
+// and return a new set of selections.
+//
+// This will panic if either selection list cannot be marshalled to the TPM
+// wire format. Use mu.IsValid to check if the values can actually be
+// serialized correctly.
 func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
 	mu.MustCopyValue(&out, l)
-	mu.MustCopyValue(&r, r)
+	for i, s := range l {
+		out[i].SizeOfSelect = s.SizeOfSelect
+	}
 
 	for _, sr := range r {
-		for _, pr := range sr.Select {
-			for i, so := range out {
-				if so.Hash != sr.Hash {
-					continue
-				}
-				for j, po := range so.Select {
-					if po == pr {
-						if j < len(so.Select)-1 {
-							copy(out[i].Select[j:], so.Select[j+1:])
-						}
-						out[i].Select = so.Select[:len(so.Select)-1]
-					}
-					if po >= pr {
-						break
-					}
-				}
+		rbmp, err := sr.Select.ToBitmap(math.MaxUint8)
+		if err != nil {
+			panic(err)
+		}
+
+		for i, sl := range out {
+			if sl.Hash != sr.Hash {
+				continue
 			}
+
+			lbmp, err := sl.Select.ToBitmap(math.MaxUint8)
+			if err != nil {
+				panic(err)
+			}
+
+			for j := 0; j < math.MaxUint8; j++ {
+				lbmp[j] &^= rbmp[j]
+			}
+
+			out[i].Select = lbmp.ToPCRs()
 		}
 	}
 
@@ -444,7 +570,8 @@ func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
 		}
 		out = out[:len(out)-1]
 	}
-	return
+
+	return out
 }
 
 // IsEmpty returns true if the list of PCR selections selects no PCRs.

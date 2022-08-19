@@ -66,12 +66,12 @@ func execMultipleHelper(action execMultipleHelperAction, sessions ...SessionCont
 }
 
 type readMultipleHelperContext struct {
-	fn func(size, offset uint16, sessions ...SessionContext) ([]byte, error)
-	data []byte
+	fn      func(size, offset uint16, sessions ...SessionContext) ([]byte, error)
+	data    []byte
 	maxSize uint16
 
 	remaining uint16
-	total uint16
+	total     uint16
 }
 
 func (c *readMultipleHelperContext) last() bool {
@@ -98,9 +98,9 @@ func (c *readMultipleHelperContext) run(sessions ...SessionContext) error {
 
 func readMultipleHelper(size, maxSize uint16, exec func(size, offset uint16, sessions ...SessionContext) ([]byte, error), sessions ...SessionContext) ([]byte, error) {
 	context := &readMultipleHelperContext{
-		fn: exec,
-		data: make([]byte, size),
-		maxSize: maxSize,
+		fn:        exec,
+		data:      make([]byte, size),
+		maxSize:   maxSize,
 		remaining: size}
 
 	if err := execMultipleHelper(context, sessions...); err != nil {
@@ -196,6 +196,7 @@ type TPMContext struct {
 	maxBufferSize         uint16
 	maxDigestSize         uint16
 	maxNVBufferSize       uint16
+	minPcrSelectSize      uint8
 	exclusiveSession      sessionContextInternal
 	pendingResponse       *rspContext
 }
@@ -435,6 +436,11 @@ func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 			case PropertyNVBufferMax:
 				t.maxNVBufferSize = value
 			}
+		case PropertyPCRSelectMin:
+			if prop.Value > math.MaxUint8 {
+				return &InvalidResponseError{Command: CommandGetCapability, msg: "property TPM_PT_PCR_SELECT_MIN out of range"}
+			}
+			t.minPcrSelectSize = uint8(prop.Value)
 		}
 	}
 
@@ -446,6 +452,9 @@ func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 	}
 	if t.maxNVBufferSize == 0 {
 		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_NV_BUFFER_MAX property"}
+	}
+	if t.minPcrSelectSize == 0 {
+		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_PCR_SELECT_MIN property"}
 	}
 	t.propertiesInitialized = true
 	return nil

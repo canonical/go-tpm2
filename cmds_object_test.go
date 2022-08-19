@@ -56,6 +56,19 @@ func (s *objectSuite) checkPublicAgainstTemplate(c *C, public, template *Public)
 }
 
 func (s *objectSuite) checkCreationData(c *C, data *CreationData, hash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
+	{
+		var tmp PCRSelectionList
+		mu.MustCopyValue(&tmp, creationPCR)
+		creationPCR = tmp
+	}
+	v, err := s.TPM.GetCapabilityTPMProperty(PropertyPCRSelectMin)
+	c.Assert(err, IsNil)
+	for i := range creationPCR {
+		if creationPCR[i].SizeOfSelect < uint8(v) {
+			creationPCR[i].SizeOfSelect = uint8(v)
+		}
+	}
+
 	var parentQN Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQN = parent.Name()
