@@ -6,7 +6,9 @@ package tpm2
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"math"
 )
 
 // Section 30 - Capability Commands
@@ -384,6 +386,20 @@ func (t *TPMContext) GetNVIndexMax(sessions ...SessionContext) (int, error) {
 		return 0, err
 	}
 	return int(n), nil
+}
+
+// GetMinPCRSelectSize is a convenience function for TPMContext.GetCapability
+// that returns the value of the PropertyPCRSelectMin property, which indicates
+// the minimum number of bytes in a PCR selection.
+func (t *TPMContext) GetMinPCRSelectSize(sessions ...SessionContext) (uint8, error) {
+	n, err := t.GetCapabilityTPMProperty(PropertyPCRSelectMin, sessions...)
+	if err != nil {
+		return 0, err
+	}
+	if n > math.MaxUint8 {
+		return 0, errors.New("value out of range")
+	}
+	return uint8(n), nil
 }
 
 // GetCapabilityPCRProperties is a convenience function for TPMContext.GetCapability, and returns
