@@ -11,18 +11,62 @@ import (
 
 // Section 30 - Capability Commands
 
-// GetCapability executes the TPM2_GetCapability command, which returns various properties of the TPM and its current state. The
-// capability parameter indicates the category of data to be returned. The property parameter indicates the first value of the
-// selected category to be returned. The propertyCount parameter indicates the number of values to be returned.
+// GetCapabilityRaw executes the TPM2_GetCapability command, which returns
+// various properties of the TPM and its current state. The capability
+// parameter indicates the category of data to be returned. The property
+// parameter indicates the first value of the selected category to be
+// returned. The propertyCount parameter indicates the number of values to be
+// returned.
 //
-// If no property in the TPM corresponds to the value of property, then the next property is returned.
+// If no property in the TPM corresponds to the value of property, then the
+// next property is returned.
 //
-// The underlying implementation of TPM2_GetCapability is not required to (or may not be able to) return all of the requested
-// values in a single request. This function will re-execute the TPM2_GetCapability command until all of the requested properties
-// have been returned. As a consequence, any SessionContext instances provided should have the AttrContinueSession attribute defined.
+// The underlying implementation of TPM2_GetCapability is not required to (or
+// may not be able to) return all of the requested values in a single request.
 //
-// If capability is CapabilityHandles and property does not correspond to a valid handle type, a *TPMParameterError error with
-// an error code of ErrorHandle is returned for parameter index 2.
+// If capability is CapabilityHandles and property does not correspond to a
+// valid handle type, a *TPMParameterError error with an error code of
+// ErrorHandle is returned for parameter index 2.
+//
+// On success, a capability structure is returned containing the requested
+// number of properties, the number of properties available, or the number of
+// properties that could be returned, whichever is less. If there are more
+// properties in the selected category, moreData will be true whether the
+// remaining properties were requested or not.
+func (t *TPMContext) GetCapabilityRaw(capability Capability, property, propertyCount uint32, sessions ...SessionContext) (moreData bool, capabilityData *CapabilityData, err error) {
+	if err := t.StartCommand(CommandGetCapability).
+		AddParams(capability, property, propertyCount).
+		AddExtraSessions(sessions...).
+		Run(nil, &moreData, &capabilityData); err != nil {
+		return false, nil, err
+	}
+	return moreData, capabilityData, nil
+}
+
+// GetCapability executes the TPM2_GetCapability command, which returns
+// various properties of the TPM and its current state. The capability
+// parameter indicates the category of data to be returned. The property
+// parameter indicates the first value of the selected category to be
+// returned. The propertyCount parameter indicates the number of values to be
+// returned.
+//
+// If no property in the TPM corresponds to the value of property, then the
+// next property is returned.
+//
+// The underlying implementation of TPM2_GetCapability is not required to (or
+// may not be able to) return all of the requested values in a single request.
+// This function will re-execute the TPM2_GetCapability command until all of
+// the requested properties have been returned. As a consequence, any
+// SessionContext instances provided should have the AttrContinueSession
+// attribute defined.
+//
+// If capability is CapabilityHandles and property does not correspond to a
+// valid handle type, a *TPMParameterError error with an error code of
+// ErrorHandle is returned for parameter index 2.
+//
+// On success, a capability structure is returned containing the requested
+// number of properties, or the number of properties available, whichever is
+// less.
 func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32, sessions ...SessionContext) (capabilityData *CapabilityData, err error) {
 	capabilityData = &CapabilityData{Capability: capability, Data: &CapabilitiesU{}}
 
@@ -30,13 +74,8 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 	remaining := propertyCount
 
 	for {
-		var moreData bool
-		var data CapabilityData
-
-		if err := t.StartCommand(CommandGetCapability).
-			AddParams(capability, nextProperty, remaining).
-			AddExtraSessions(sessions...).
-			Run(nil, &moreData, &data); err != nil {
+		moreData, data, err := t.GetCapabilityRaw(capability, nextProperty, remaining, sessions...)
+		if err != nil {
 			return nil, err
 		}
 
@@ -83,7 +122,7 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 				return nil, &InvalidResponseError{CommandGetCapability,
 					fmt.Sprintf("TPM did not respond with all requested properties for capability %s", data.Capability)}
 			}
-			return &data, nil
+			return data, nil
 		case CapabilityTPMProperties:
 			capabilityData.Data.TPMProperties = append(capabilityData.Data.TPMProperties, data.Data.TPMProperties...)
 			l = len(data.Data.TPMProperties)

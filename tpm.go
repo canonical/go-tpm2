@@ -194,9 +194,9 @@ type TPMContext struct {
 	maxSubmissions        uint
 	propertiesInitialized bool
 	maxBufferSize         uint16
+	minPcrSelectSize      uint8
 	maxDigestSize         uint16
 	maxNVBufferSize       uint16
-	minPcrSelectSize      uint8
 	exclusiveSession      sessionContextInternal
 	pendingResponse       *rspContext
 }
@@ -410,9 +410,13 @@ func (t *TPMContext) SetMaxSubmissions(max uint) {
 	t.maxSubmissions = max
 }
 
-// InitProperties executes a TPM2_GetCapability command to initialize properties used internally by TPMContext. This is normally done
-// automatically by functions that require these properties when they are used for the first time, but this function is provided so
-// that the command can be audited, and so the exclusivity of an audit session can be preserved.
+// InitProperties executes one or more TPM2_GetCapability commands to
+// initialize properties used internally by TPMContext. This is normally done
+// automatically by functions that require these properties when they are used
+// for the first time, but this function is provided so that the command can
+// be audited, and so the exclusivity of an audit session can be preserved.
+//
+// Any sessions supplied should have the AttrContinueSession attribute set.
 func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 	props, err := t.GetCapabilityTPMProperties(PropertyFixed, CapabilityMaxProperties, sessions...)
 	if err != nil {
