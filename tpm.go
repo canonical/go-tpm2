@@ -343,7 +343,7 @@ func (t *TPMContext) completeResponse(r *rspContext, responseParams ...interface
 func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*rspContext, error) {
 	var handles HandleList
 	var handleNames []Name
-	var sessionParams sessionParams
+	sessionParams := newSessionParams(c.commandCode)
 
 	for _, h := range c.handles {
 		handles = append(handles, h.handle.Handle())
@@ -368,7 +368,7 @@ func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*
 		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
 	}
 
-	cAuthArea, err := sessionParams.buildCommandAuthArea(c.commandCode, handleNames, cpBytes)
+	cAuthArea, err := sessionParams.buildCommandAuthArea(handleNames, cpBytes)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
 	}
@@ -384,7 +384,7 @@ func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*
 
 	r := &rspContext{
 		commandCode:      c.commandCode,
-		sessionParams:    &sessionParams,
+		sessionParams:    sessionParams,
 		responseAuthArea: rAuthArea,
 		rpBytes:          rpBytes}
 	t.pendingResponse = r

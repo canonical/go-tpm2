@@ -130,22 +130,29 @@ func computeBindName(name Name, auth Auth) Name {
 
 type sessionParams struct {
 	commandCode CommandCode
-	sessions    []*sessionParam
+
+	sessions            []*sessionParam
+	encryptSessionIndex int
+	decryptSessionIndex int
 }
 
-func (p *sessionParams) findSessionWithAttr(attr SessionAttributes) (*sessionParam, int) {
-	for i, session := range p.sessions {
-		if session.session.Attrs().canonicalize()&attr > 0 {
-			return session, i
-		}
-	}
-
-	return nil, 0
+func newSessionParams(commandCode CommandCode) *sessionParams {
+	return &sessionParams{
+		commandCode:         commandCode,
+		encryptSessionIndex: -1,
+		decryptSessionIndex: -1}
 }
 
 func (p *sessionParams) append(s *sessionParam) error {
 	if len(p.sessions) >= 3 {
 		return errors.New("too many session parameters")
+	}
+
+	if p.encryptSessionIndex == -1 && s.session.Attrs()&AttrResponseEncrypt > 0 {
+		p.encryptSessionIndex = len(p.sessions)
+	}
+	if p.decryptSessionIndex == -1 && s.session.Attrs()&AttrCommandEncrypt > 0 {
+		p.decryptSessionIndex = len(p.sessions)
 	}
 
 	p.sessions = append(p.sessions, s)
@@ -206,7 +213,7 @@ func (p *sessionParams) computeCallerNonces() error {
 	return nil
 }
 
-func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte) ([]AuthCommand, error) {
+func (p *sessionParams) buildCommandAuthArea(commandHandles []Name, cpBytes []byte) ([]AuthCommand, error) {
 	if err := p.computeCallerNonces(); err != nil {
 		return nil, fmt.Errorf("cannot compute caller nonces: %v", err)
 	}
@@ -216,11 +223,10 @@ func (p *sessionParams) buildCommandAuthArea(commandCode CommandCode, commandHan
 	}
 
 	p.computeEncryptNonce()
-	p.commandCode = commandCode
 
 	var area []AuthCommand
 	for _, s := range p.sessions {
-		a := s.buildCommandAuth(commandCode, commandHandles, cpBytes)
+		a := s.buildCommandAuth(p.commandCode, commandHandles, cpBytes)
 		area = append(area, *a)
 	}
 

@@ -27,25 +27,30 @@ func (s *sessionParam) computeSessionValue() []byte {
 	return key
 }
 
-func (p *sessionParams) findDecryptSession() (*sessionParam, int) {
-	return p.findSessionWithAttr(AttrCommandEncrypt)
+func (p *sessionParams) decryptSession() (*sessionParam, int) {
+	if p.decryptSessionIndex == -1 {
+		return nil, -1
+	}
+	return p.sessions[p.decryptSessionIndex], p.decryptSessionIndex
 }
 
-func (p *sessionParams) findEncryptSession() (*sessionParam, int) {
-	return p.findSessionWithAttr(AttrResponseEncrypt)
+func (p *sessionParams) encryptSession() (*sessionParam, int) {
+	if p.encryptSessionIndex == -1 {
+		return nil, -1
+	}
+	return p.sessions[p.encryptSessionIndex], p.encryptSessionIndex
 }
 
 func (p *sessionParams) hasDecryptSession() bool {
-	s, _ := p.findDecryptSession()
-	return s != nil
+	return p.decryptSessionIndex != -1
 }
 
 func (p *sessionParams) computeEncryptNonce() {
-	s, i := p.findEncryptSession()
+	s, i := p.encryptSession()
 	if s == nil || i == 0 || !p.sessions[0].IsAuth() {
 		return
 	}
-	ds, di := p.findDecryptSession()
+	ds, di := p.decryptSession()
 	if ds != nil && di == i {
 		return
 	}
@@ -54,7 +59,7 @@ func (p *sessionParams) computeEncryptNonce() {
 }
 
 func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
-	s, i := p.findDecryptSession()
+	s, i := p.decryptSession()
 	if s == nil {
 		return nil
 	}
@@ -96,7 +101,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 }
 
 func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
-	s, _ := p.findEncryptSession()
+	s, _ := p.encryptSession()
 	if s == nil {
 		return nil
 	}
