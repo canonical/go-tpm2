@@ -160,34 +160,50 @@ type rspContext struct {
 // *TPMSessionError, *TPMParameterError and *TPMVendorError types.
 //
 // Some methods make use of resources on the TPM, and use of these resources
-// may require authorization with one of 3 roles - user, admin or duplication.
-// The supported authorization mechanism depends on the resource and role, and
-// is summarized below:
+// may require authorization with one of 3 roles depending on the command: user,
+// admin or duplication. The role determines the required authorization type
+// (passphrase, HMAC session, or policy session), which is dependent on the type
+// of the resource.
 //
-//  - HandleTypePCR:
-//   - user role:
-//    - passphrase / HMAC session (if no auth policy is set)
-//    - policy session (if auth policy is set)
-//  - HandleTypeNVIndex:
-//   - user role: passphrase / HMAC session / policy session depending on attributes.
-//   - admin role: policy session
-//  - HandleTypePermanent:
-//   - user role:
-//    - passphrase / HMAC session
-//    - policy session (if auth policy is set)
-//  - HandleTypeTransient / HandleTypePersistent:
-//   - user role:
-//    - passphrase / HMAC session (if AttrUserWithAuth is set)
-//    - policy session
-//   - admin role:
-//    - passphrase / HMAC session (if AttrAdminWithPolicy is not set)
-//    - policy session
-//   - duplication role: policy session
+// Methods that require authorization for a ResourceContext provide an associated
+// SessionContext argument. Setting this to nil specifies passphrase authorization.
+// A HMAC or policy session can be used by supplying a SessionContext associated
+// with a session of the corresponding type.
 //
-// Some methods also accept a variable number of optional SessionContext
-// arguments - these are for sessions that don't provide authorization for a
-// corresponding TPM resource. These sessions may be used for the purposes of
-// session based parameter encryption or command auditing.
+// If the authorization value of a resource is required as part of the authorization
+// (eg, for passphrase authorization, a HMAC session that is not bound to the specified
+// resource, or a policy session that contains the TPM2_PolicyPassword or TPM2_PolicyAuthValue
+// assertion), it is obtained from the ResourceContext supplied to the method and should
+// be set by calling ResourceContext.SetAuthValue before the method is called.
+//
+// Where a method requires authorization with the user role for a resource, the following
+// authorization types are permitted:
+//
+//  - HandleTypePCR: passphrase or HMAC session if no auth policy is set, or a policy
+//    session if an auth policy is set.
+//  - HandleTypeNVIndex: passphrase, HMAC session or policy session depending on attributes.
+//  - HandleTypePermanent: passphrase or HMAC session. A policy session can also be used
+//    if an auth policy is set.
+//  - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
+//    can also be used if AttrWithUserAuth is set.
+//
+// Where a command requires authorization with the admin role for a resource, the following
+// authorization types are permitted:
+//
+//  - HandleTypeNVIndex: policy session.
+//  - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
+//    can also be used if AttrAdminWithPolicy is not set.
+//
+// Where a command requires authorization with the duplication role for a resource, a
+// policy session is required.
+//
+// Where a policy session is used for a resource that requires authorization with the admin
+// or duplication role, the session must contain the TPM2_PolicyCommandCode assertion.
+//
+// Some methods also accept a variable number of optional SessionContext arguments -
+// these are for sessions that don't provide authorization for a corresponding TPM resource.
+// These sessions may be used for the purposes of session based parameter encryption or
+// command auditing.
 type TPMContext struct {
 	tcti                  TCTI
 	permanentResources    map[Handle]*permanentContext
