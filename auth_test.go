@@ -31,6 +31,7 @@ func (r *mockResourceContext) SerializeToBytes() []byte            { return nil 
 func (r *mockResourceContext) SerializeToWriter(w io.Writer) error { return nil }
 func (r *mockResourceContext) SetAuthValue(authValue []byte)       { r.authValue = authValue }
 func (r *mockResourceContext) GetAuthValue() []byte                { return r.authValue }
+func (r *mockResourceContext) SetHandle(handle Handle)             { r.handle = handle }
 func (r *mockResourceContext) Invalidate()                         {}
 
 func (s *authSuite) TestSessionParamIsAuthFalse(c *C) {

@@ -49,8 +49,8 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 	context.Blob = blob
 
 	switch c := saveContext.(type) {
-	case *sessionContext:
-		c.handleContext.Data.Session = nil
+	case sessionContextInternal:
+		c.Unload()
 		if t.exclusiveSession == c {
 			t.exclusiveSession = nil
 		}
@@ -106,6 +106,9 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if hc.Handle() != context.SavedHandle {
 			return nil, errors.New("host and TPM context blobs have inconsistent handles")
 		}
+		if hc.(sessionContextInternal).Data() == nil {
+			return nil, errors.New("invalid host context blob")
+		}
 	case HandleTypeTransient:
 	default:
 		return nil, errors.New("unexpected context type")
@@ -130,12 +133,12 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		hc.(*objectContext).H = loadedHandle
+		hc.(resourceContextInternal).SetHandle(loadedHandle)
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is incorrect", loadedHandle)}
 		}
-		hc.(*sessionContext).Data().IsExclusive = false
+		hc.(sessionContextInternal).Data().IsExclusive = false
 	default:
 		panic("not reached")
 	}

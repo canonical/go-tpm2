@@ -62,6 +62,7 @@ type sessionContextInternal interface {
 
 	Attrs() SessionAttributes
 	Data() *sessionContextData
+	Unload()
 }
 
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
@@ -79,6 +80,7 @@ type resourceContextInternal interface {
 	handleContextInternalMixin
 
 	GetAuthValue() []byte
+	SetHandle(handle Handle)
 }
 
 type handleContextType uint8
@@ -105,10 +107,14 @@ type sessionContextData struct {
 	Symmetric      *SymDef
 }
 
+type sessionContextDataWrapper struct {
+	Data *sessionContextData `tpm2:"sized"`
+}
+
 type handleContextU struct {
 	Object  *Public
 	NV      *NVPublic
-	Session *sessionContextData
+	Session *sessionContextDataWrapper
 }
 
 func (d *handleContextU) Select(selector reflect.Value) interface{} {
@@ -206,38 +212,38 @@ func (h *handleContext) checkConsistency() error {
 		if h.Name().Type() != NameTypeHandle || h.Name().Handle() != h.Handle() {
 			return errors.New("name inconsistent with handle for session context")
 		}
-		scData := h.Data.Session
-		if scData != nil {
-			if !scData.IsAudit && scData.IsExclusive {
+		data := h.Data.Session.Data
+		if data != nil {
+			if !data.IsAudit && data.IsExclusive {
 				return errors.New("inconsistent audit attributes for session context")
 			}
-			if !scData.HashAlg.Available() {
+			if !data.HashAlg.Available() {
 				return errors.New("invalid digest algorithm for session context")
 			}
-			switch scData.SessionType {
+			switch data.SessionType {
 			case SessionTypeHMAC, SessionTypePolicy, SessionTypeTrial:
 			default:
 				return errors.New("invalid session type for session context")
 			}
-			if scData.PolicyHMACType > policyHMACTypeMax {
+			if data.PolicyHMACType > policyHMACTypeMax {
 				return errors.New("invalid policy session HMAC type for session context")
 			}
-			if (scData.IsBound && len(scData.BoundEntity) == 0) || (!scData.IsBound && len(scData.BoundEntity) > 0) {
+			if (data.IsBound && len(data.BoundEntity) == 0) || (!data.IsBound && len(data.BoundEntity) > 0) {
 				return errors.New("invalid bind properties for session context")
 			}
-			digestSize := scData.HashAlg.Size()
-			if len(scData.SessionKey) != digestSize && len(scData.SessionKey) != 0 {
+			digestSize := data.HashAlg.Size()
+			if len(data.SessionKey) != digestSize && len(data.SessionKey) != 0 {
 				return errors.New("unexpected session key size for session context")
 			}
-			if len(scData.NonceCaller) != digestSize || len(scData.NonceTPM) != digestSize {
+			if len(data.NonceCaller) != digestSize || len(data.NonceTPM) != digestSize {
 				return errors.New("unexpected nonce size for session context")
 			}
-			switch scData.Symmetric.Algorithm {
+			switch data.Symmetric.Algorithm {
 			case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull:
 			default:
 				return errors.New("invalid symmetric algorithm for session context")
 			}
-			if scData.Symmetric.Algorithm == SymAlgorithmAES && scData.Symmetric.Mode.Sym != SymModeCFB {
+			if data.Symmetric.Algorithm == SymAlgorithmAES && data.Symmetric.Mode.Sym != SymModeCFB {
 				return errors.New("invalid symmetric mode for session context")
 			}
 		}
@@ -267,6 +273,10 @@ func (r *resourceContext) SetAuthValue(authValue []byte) {
 
 func (r *resourceContext) GetAuthValue() []byte {
 	return bytes.TrimRight(r.authValue, "\x00")
+}
+
+func (r *resourceContext) SetHandle(handle Handle) {
+	r.handleContext.H = handle
 }
 
 type permanentContext struct {
@@ -419,7 +429,11 @@ func (r *sessionContext) Attrs() SessionAttributes {
 }
 
 func (r *sessionContext) Data() *sessionContextData {
-	return r.handleContext.Data.Session
+	return r.handleContext.Data.Session.Data
+}
+
+func (r *sessionContext) Unload() {
+	r.handleContext.Data.Session.Data = nil
 }
 
 func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext {
@@ -430,7 +444,7 @@ func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext
 			Type: handleContextTypeSession,
 			H:    handle,
 			N:    name,
-			Data: &handleContextU{Session: data}}}
+			Data: &handleContextU{Session: &sessionContextDataWrapper{Data: data}}}}
 }
 
 var pwSession = func() *sessionContext {

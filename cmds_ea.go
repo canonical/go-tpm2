@@ -391,7 +391,7 @@ func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolic
 // When using policySession in a subsequent authorization, the authorization value of the entity being authorized must be provided by
 // calling ResourceContext.SetAuthValue.
 func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...SessionContext) error {
-	sessionData := policySession.(*sessionContext).Data()
+	sessionData := policySession.(sessionContextInternal).Data()
 	if sessionData == nil {
 		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
 	}
@@ -416,7 +416,7 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 // When using policySession in a subsequent authorization, the authorization value of the entity being authorized must be provided by
 // calling ResourceContext.SetAuthValue.
 func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...SessionContext) error {
-	sessionData := policySession.(*sessionContext).Data()
+	sessionData := policySession.(sessionContextInternal).Data()
 	if sessionData == nil {
 		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
 	}

@@ -194,9 +194,24 @@ func (s *resourcesSuite) TestCreateHandleContextFromBytesSession(c *C) {
 	c.Check(session2.Name(), DeepEquals, session.Name())
 	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 
-	data := session.(SessionContextInternal).Data()
-	c.Check(Canonicalize(&data), IsNil)
-	c.Check(session2.(SessionContextInternal).Data(), DeepEquals, data)
+	c.Check(session2.(SessionContextInternal).Data(), testutil.TPMValueDeepEquals, session.(SessionContextInternal).Data())
+
+	_, err = s.TPM.ContextSave(session)
+	c.Check(err, IsNil)
+	c.Check(session.(SessionContextInternal).Data(), IsNil)
+
+	b = session.SerializeToBytes()
+
+	session2, n, err = CreateHandleContextFromBytes(b)
+	c.Assert(err, IsNil)
+	c.Check(n, Equals, len(b))
+	c.Assert(session2, NotNil)
+
+	c.Check(session2.Handle(), Equals, session.Handle())
+	c.Check(session2.Name(), DeepEquals, session.Name())
+	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
+
+	c.Check(session2.(SessionContextInternal).Data(), IsNil)
 }
 
 type testCreateResourceContextFromTPMWithSessionData struct {
