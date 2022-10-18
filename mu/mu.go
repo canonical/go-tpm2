@@ -19,6 +19,15 @@ import (
 	"golang.org/x/xerrors"
 )
 
+const (
+	// maxListLength is the maximum theoretical length of a TPML type that can be
+	// supported, although no lists are this long in practise. TPML types have a
+	// uint32 length field and are represented in go as slices. The length of a
+	// slice is represented as a go int, which is either 32-bit or 64-bit, so set
+	// the maximum to the highest number that can be represented by an int32
+	maxListLength = math.MaxInt32
+)
+
 var (
 	customMarshallerType   reflect.Type = reflect.TypeOf((*customMarshallerIface)(nil)).Elem()
 	customUnmarshallerType reflect.Type = reflect.TypeOf((*customUnmarshallerIface)(nil)).Elem()
@@ -695,11 +704,8 @@ func (m *marshaller) marshalPrimitive(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalList(v reflect.Value) error {
-	// int is either 32-bits or 64-bits. We can't compare slice.Len() to math.MaxUint32 when int is 32-bits and it isn't
-	// necessary anyway. For the case where int is 64-bits, truncate to uint32 then zero extend it again to int to make
-	// sure the original number was preserved.
-	if int(uint32(v.Len())) != v.Len() {
-		return newError(v, m.context, fmt.Errorf("slice length of %d is larger than 2^32-1", v.Len()))
+	if v.Len() > maxListLength {
+		return newError(v, m.context, fmt.Errorf("slice length of %d is out of range", v.Len()))
 	}
 
 	// Marshal length field
@@ -947,6 +953,9 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 	var length uint32
 	if err := binary.Read(u, binary.BigEndian, &length); err != nil {
 		return newError(v, u.context, err)
+	}
+	if length > maxListLength {
+		return newError(v, u.context, fmt.Errorf("list length of %d is out of range", length))
 	}
 
 	if v.IsNil() || v.Cap() < int(length) {

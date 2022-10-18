@@ -935,6 +935,13 @@ func (s *muSuite) TestUnmarshalBadSizedBuffer(c *C) {
 	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint8: sized value has a size of 65535 bytes which is larger than the 12 remaining bytes")
 }
 
+func (s *muSuite) TestUnmarshalBadList(c *C) {
+	b := internal_testutil.DecodeHexString(c, "800000010000")
+	var o []uint16
+	_, err := UnmarshalFromBytes(b, &o)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint16: list length of 2147483649 is out of range")
+}
+
 func (s *muSuite) TestMarshalBadSizedBuffer(c *C) {
 	x := make([]byte, 100000)
 	_, err := MarshalToBytes(x)
