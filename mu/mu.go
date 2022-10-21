@@ -890,8 +890,6 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 		// then return early.
 		v.Set(reflect.Zero(v.Type()))
 		return nil
-	case int(size) > u.Len():
-		return newError(v, u.context, fmt.Errorf("sized value has a size of %d bytes which is larger than the %d remaining bytes", size, u.Len()))
 	case v.Kind() == reflect.Slice && (v.IsNil() || v.Cap() < int(size)):
 		// sized buffer with no pre-allocated buffer or a pre-allocated
 		// buffer that isn't large enough. Allocate a new one.

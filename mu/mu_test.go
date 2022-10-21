@@ -867,8 +867,9 @@ func (s *muSuite) TestErrorInSliceContainerWithMultipleArguments(c *C) {
 	var y []testStructWithSizedField
 
 	_, err := UnmarshalFromBytes(b, &x, &y)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument 1 whilst processing element of type \\*mu_test.testStruct: sized value has a size of 65535 bytes which is larger than the 4 remaining bytes\n\n"+
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 1 whilst processing element of type uint32: unexpected EOF\n\n"+
 		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStruct field B\n"+
 		"... mu_test.testStructWithSizedField field B\n"+
 		"... \\[\\]mu_test.testStructWithSizedField index 2\n"+
 		"=== END STACK ===\n")
@@ -876,7 +877,7 @@ func (s *muSuite) TestErrorInSliceContainerWithMultipleArguments(c *C) {
 	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
 	c.Check(e.Index, Equals, 1)
-	c.Assert(e.Depth(), Equals, 2)
+	c.Assert(e.Depth(), Equals, 3)
 	t, i, _ := e.Container(1)
 	c.Check(t, Equals, reflect.TypeOf(testStructWithSizedField{}))
 	c.Check(i, Equals, 1)
@@ -932,7 +933,7 @@ func (s *muSuite) TestUnmarshalBadSizedBuffer(c *C) {
 	b := internal_testutil.DecodeHexString(c, "ffff000000000000000000000000")
 	var o []byte
 	_, err := UnmarshalFromBytes(b, &o)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint8: sized value has a size of 65535 bytes which is larger than the 12 remaining bytes")
+	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint8: unexpected EOF")
 }
 
 func (s *muSuite) TestUnmarshalBadList(c *C) {
