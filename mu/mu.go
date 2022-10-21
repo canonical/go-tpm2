@@ -958,8 +958,8 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 		return newError(v, u.context, fmt.Errorf("list length of %d is out of range", length))
 	}
 
-	if v.IsNil() || v.Cap() < int(length) {
-		v.Set(reflect.MakeSlice(v.Type(), 0, int(length)))
+	if v.IsNil() {
+		v.Set(reflect.MakeSlice(v.Type(), 0, 0))
 	}
 
 	s, err := u.unmarshalRawList(v.Slice(0, 0), int(length))

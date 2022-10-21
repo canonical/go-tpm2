@@ -322,7 +322,7 @@ func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
 	values := []interface{}{[]uint32{46, 4563421, 678, 12390}, []uint64{}, []uint16{59747, 22875}}
 	expected := internal_testutil.DecodeHexString(c, "000000040000002e0045a1dd000002a6000030660000000000000002e963595b")
 
-	ua := make([]uint32, 1)
+	ua := make([]uint32, 0)
 	ua2 := ua
 	var ub []uint64
 	uc := make([]uint16, 2)
@@ -337,9 +337,9 @@ func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
 
 	// Test that a preallocated slice is reallocated if it isn't
 	// large enough
-	c.Check(ua2, DeepEquals, make([]uint32, 1))
+	c.Check(ua2, DeepEquals, make([]uint32, 0))
 
-	ua = make([]uint32, 1)
+	ua = make([]uint32, 0)
 	ua2 = ua
 	ub = nil
 	uc = make([]uint16, 10)
@@ -354,7 +354,7 @@ func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
 
 	// Test that a preallocated slice is reallocated if it isn't
 	// large enough
-	c.Check(ua2, DeepEquals, make([]uint32, 1))
+	c.Check(ua2, DeepEquals, make([]uint32, 0))
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
