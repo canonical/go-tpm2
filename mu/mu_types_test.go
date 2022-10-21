@@ -112,7 +112,7 @@ func (t testCustom) Marshal(w io.Writer) error {
 	return err
 }
 
-func (t *testCustom) Unmarshal(r Reader) error {
+func (t *testCustom) Unmarshal(r io.Reader) error {
 //line mu_test.go:200
 	_, err := UnmarshalFromReader(r, &t.A, &t.B)
 	var a [2]byte
@@ -134,7 +134,7 @@ func (t *testCustom2) Marshal(w io.Writer) error {
 	return err
 }
 
-func (t *testCustom2) Unmarshal(r Reader) error {
+func (t *testCustom2) Unmarshal(r io.Reader) error {
 //line mu_test.go:400
 	_, err := UnmarshalFromReader(r, &t.A, &t.B)
 	var a [2]byte

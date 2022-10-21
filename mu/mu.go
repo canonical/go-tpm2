@@ -11,12 +11,9 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"reflect"
 	"runtime"
 	"strings"
-
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -51,7 +48,7 @@ type customMarshallerIface interface {
 }
 
 type customUnmarshallerIface interface {
-	Unmarshal(r Reader) error
+	Unmarshal(r io.Reader) error
 }
 
 // CustomMarshaller is implemented by types that require custom marshalling
@@ -69,7 +66,7 @@ type CustomMarshaller interface {
 
 	// Unmarshal should unserialize the value from the supplied reader.
 	// The implementation of this should take a pointer receiver.
-	Unmarshal(r Reader) error
+	Unmarshal(r io.Reader) error
 }
 
 var _ CustomMarshaller = struct {
@@ -804,17 +801,9 @@ func (m *marshaller) marshal(vals ...interface{}) (int, error) {
 	return m.nbytes, nil
 }
 
-// Reader is an interface that groups the io.Reader interface with an additional method to
-// obtain the remaining number of bytes that can be read for implementations that support this.
-type Reader interface {
-	io.Reader
-	Len() int
-}
-
 type unmarshaller struct {
 	*context
 	r      io.Reader
-	sz     int64
 	nbytes int
 }
 
@@ -824,50 +813,8 @@ func (u *unmarshaller) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (u *unmarshaller) Len() int {
-	return int(u.sz - int64(u.nbytes))
-}
-
-func startingSizeOfReader(r io.Reader) (int64, error) {
-	switch rImpl := r.(type) {
-	case *os.File:
-		fi, err := rImpl.Stat()
-		if err != nil {
-			return 0, err
-		}
-		if fi.Mode().IsRegular() {
-			start, err := rImpl.Seek(0, io.SeekCurrent)
-			if err != nil {
-				return 0, err
-			}
-			return fi.Size() - start, nil
-		}
-	case *bytes.Reader:
-		return int64(rImpl.Len()), nil
-	case *bytes.Buffer:
-		return int64(rImpl.Len()), nil
-	case *io.SectionReader:
-		start, _ := rImpl.Seek(0, io.SeekCurrent)
-		return rImpl.Size() - start, nil
-	case *io.LimitedReader:
-		sz, err := startingSizeOfReader(rImpl.R)
-		if err != nil {
-			return 0, err
-		}
-		if rImpl.N < sz {
-			sz = rImpl.N
-		}
-		return sz, nil
-	}
-	return 1<<63 - 1, nil
-}
-
-func makeUnmarshaller(ctx *context, r io.Reader) (*unmarshaller, error) {
-	sz, err := startingSizeOfReader(r)
-	if err != nil {
-		return nil, err
-	}
-	return &unmarshaller{context: ctx, r: r, sz: sz}, nil
+func newUnmarshaller(ctx *context, r io.Reader) *unmarshaller {
+	return &unmarshaller{context: ctx, r: r}
 }
 
 func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
@@ -899,10 +846,7 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 		v.SetLen(int(size))
 	}
 
-	su, err := makeUnmarshaller(u.context, io.LimitReader(u, int64(size)))
-	if err != nil {
-		return newError(v, u.context, xerrors.Errorf("cannot create new reader for sized payload: %w", err))
-	}
+	su := newUnmarshaller(u.context, io.LimitReader(u, int64(size)))
 	return su.unmarshalValue(v, nil)
 }
 
@@ -1130,10 +1074,7 @@ func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (int, error
 	var caller [1]uintptr
 	runtime.Callers(skip+1, caller[:])
 
-	u, err := makeUnmarshaller(&context{caller: caller, mode: "unmarshal", total: len(vals)}, r)
-	if err != nil {
-		return 0, err
-	}
+	u := newUnmarshaller(&context{caller: caller, mode: "unmarshal", total: len(vals)}, r)
 	return u.unmarshal(vals...)
 }
 

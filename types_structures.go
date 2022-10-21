@@ -56,7 +56,7 @@ func (p TaggedHash) Marshal(w io.Writer) error {
 	return nil
 }
 
-func (p *TaggedHash) Unmarshal(r mu.Reader) error {
+func (p *TaggedHash) Unmarshal(r io.Reader) error {
 	if err := binary.Read(r, binary.BigEndian, &p.HashAlg); err != nil {
 		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
@@ -228,13 +228,10 @@ func (b PCRSelectBitmap) Marshal(w io.Writer) error {
 	return nil
 }
 
-func (b *PCRSelectBitmap) Unmarshal(r mu.Reader) error {
+func (b *PCRSelectBitmap) Unmarshal(r io.Reader) error {
 	var size uint8
 	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
 		return xerrors.Errorf("cannot read size of bitmap: %w", err)
-	}
-	if int(size) > r.Len() {
-		return errors.New("size field is larger than the remaining bytes")
 	}
 
 	*b = make(PCRSelectBitmap, size)
@@ -292,7 +289,7 @@ func (d PCRSelect) Marshal(w io.Writer) error {
 	return err
 }
 
-func (d *PCRSelect) Unmarshal(r mu.Reader) error {
+func (d *PCRSelect) Unmarshal(r io.Reader) error {
 	var b PCRSelectBitmap
 	if _, err := mu.UnmarshalFromReader(r, &b); err != nil {
 		return err
@@ -328,7 +325,7 @@ func (s PCRSelection) Marshal(w io.Writer) error {
 	return err
 }
 
-func (s *PCRSelection) Unmarshal(r mu.Reader) error {
+func (s *PCRSelection) Unmarshal(r io.Reader) error {
 	var b PCRSelectBitmap
 	if _, err := mu.UnmarshalFromReader(r, &s.Hash, &b); err != nil {
 		return err
