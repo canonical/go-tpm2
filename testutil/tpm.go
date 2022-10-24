@@ -207,31 +207,32 @@ func AddCommandLineFlags() {
 
 // TPMSimulatorOptions provide the options to LaunchTPMSimulator
 type TPMSimulatorOptions struct {
-	SourceDir      string // Source directory for the persistent data file
+	SourcePath     string // Path for the source persistent data file
 	Manufacture    bool   // Indicates that the simulator should be executed in re-manufacture mode
-	SavePersistent bool   // Saves the persistent data file back to SourceDir on exit
+	SavePersistent bool   // Saves the persistent data file back to SourcePath on exit
 }
 
-// LaunchTPMSimulator launches a TPM simulator. A new temporary directory will be created in which the
-// simulator will store its persistent data, which will be cleaned up on exit. If opts.SourceDir is
-// provided, a pre-existing persistent data file will be copied from this directory to the temporary
-// directory. If opts.SavePersistent is set, the persistent data file will be copied back from the
-// temporary directory to the source directory on exit. This is useful for generating test data that
-// needs to be checked in to a repository.
+// LaunchTPMSimulator launches a TPM simulator. If opts.SourcePath is empty, or it points to a
+// non-existant file and opts.SavePersistent is false, the simulator will run with ephemeral
+// storage if this is supported, else a temporary directory will be created to store the
+// persistent NV storage for the simulator. If opts.SourcePath is not empty, the target file
+// is copied to the temporary directory and used as the persistent NV storage. The temporary
+// directory will be cleanup up on exit. If opts.SavePersistent is true, the persistant NV
+// storage is copied back to opts.SourcePath on exit. This is useful for generating test data
+// that needs to be checked into a repository.
 //
-// On success, it returns a function that can be used to stop the simulator and clean up its temporary
-// directory.
+// On success, it returns a function that can be used to stop the simulator and clean up its
+// temporary directory.
 func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
+	noEphemeral := true // XXX: try to autodetect this
+
 	// Pick sensible defaults
 	if opts == nil {
 		opts = &TPMSimulatorOptions{Manufacture: true}
 	}
-	if opts.SourceDir == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return nil, xerrors.Errorf("cannot determine cwd: %w", err)
-		}
-		opts.SourceDir = wd
+
+	if opts.SourcePath == "" && opts.SavePersistent {
+		return nil, errors.New("SavePersistent requires SourcePath")
 	}
 
 	// Search for a TPM simulator binary
@@ -247,10 +248,9 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		return nil, errors.New("cannot find a simulator binary")
 	}
 
-	// The TPM simulator creates its persistent storage in its current directory. Ideally, we would create
-	// a unique temporary directory for it, but this doesn't work with the snap because it has its own private
-	// tmpdir. Detect whether the chosen TPM simulator is a snap, determine which snap it belongs to and create
-	// a temporary directory inside its common data directory instead.
+	// The TPM simulator creates its persistent storage in its current directory. We create a
+	// directory in XDG_RUNTIME_DIR because snaps have their own private tpmdir. For this,
+	// we need to know the name of the snap if the simulator belongs to one.
 	mssimSnapName := ""
 	for currentPath, lastPath := mssimPath, ""; currentPath != ""; {
 		dest, err := os.Readlink(currentPath)
@@ -269,24 +269,24 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		}
 	}
 
-	// Create the temporary directory.
-	tmpRoot := ""
+	runDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runDir == "" {
+		return nil, errors.New("cannot determine XDG_RUNTIME_DIR")
+	}
+
+	// Create the root temporary directory.
+	tmpRoot := runDir
+	tmpPrefix := "tpm2test.mssim"
 	if mssimSnapName != "" {
-		home := os.Getenv("HOME")
-		if home == "" {
-			return nil, errors.New("cannot determine home directory")
-		}
-		tmpRoot = snap.UserCommonDataDir(home, mssimSnapName)
+		// The simulator is shipped as a snap
+		tmpRoot = filepath.Join(runDir, mssimSnapName)
+		tmpPrefix = ""
 		if err := os.MkdirAll(tmpRoot, 0755); err != nil {
-			return nil, xerrors.Errorf("cannot create snap common data dir: %w", err)
+			return nil, xerrors.Errorf("cannot create snap tmpdir: %w", err)
 		}
 	}
 
-	mssimTmpDir, err := ioutil.TempDir(tmpRoot, "tpm2test.mssim")
-	if err != nil {
-		return nil, xerrors.Errorf("cannot create temporary directory for simulator: %w", err)
-	}
-
+	var mssimTmpDir string
 	var cmd *exec.Cmd
 
 	// At this point, we have stuff to clean up on early failure.
@@ -294,7 +294,12 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		// Defer saving the persistent data and removing the temporary directory
 		defer func() {
 			// Defer removal of the temporary directory
-			defer os.RemoveAll(mssimTmpDir)
+			defer func() {
+				if mssimTmpDir == "" {
+					return
+				}
+				os.RemoveAll(mssimTmpDir)
+			}()
 
 			if !opts.SavePersistent {
 				// Nothing else to do
@@ -314,7 +319,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 			defer src.Close()
 
 			// Atomically write to the source directory
-			dest, err := osutil.NewAtomicFile(filepath.Join(opts.SourceDir, "NVChip"), 0644, 0, sys.UserID(osutil.NoChown), sys.GroupID(osutil.NoChown))
+			dest, err := osutil.NewAtomicFile(opts.SourcePath, 0644, 0, sys.UserID(osutil.NoChown), sys.GroupID(osutil.NoChown))
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Cannot create new atomic file for saving TPM simulator persistent data: %v\n", err)
 				return
@@ -370,31 +375,57 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		}
 	}
 
-	succeeded := false
 	// Defer cleanup on failure
 	defer func() {
-		if succeeded {
+		if err == nil {
 			return
 		}
 		cleanup()
 	}()
 
-	// Copy any pre-existing persistent data in to the temporary directory
-	source, err := os.Open(filepath.Join(opts.SourceDir, "NVChip"))
-	switch {
-	case err != nil && !os.IsNotExist(err):
-		return nil, xerrors.Errorf("cannot open source persistent storage: %w", err)
-	case err != nil:
-		// Nothing to do
-	default:
-		defer source.Close()
-		dest, err := os.Create(filepath.Join(mssimTmpDir, "NVChip"))
+	makeTmpDir := func() (err error) {
+		mssimTmpDir, err = ioutil.TempDir(tmpRoot, tmpPrefix)
 		if err != nil {
-			return nil, xerrors.Errorf("cannot create temporary storage for simulator: %w", err)
+			return xerrors.Errorf("cannot create temporary directory for simulator: %w", err)
 		}
-		defer dest.Close()
-		if _, err := io.Copy(dest, source); err != nil {
-			return nil, xerrors.Errorf("cannot copy persistent storage to temporary location for simulator: %w", err)
+		return nil
+	}
+
+	// Copy any pre-existing persistent data in to the temporary directory
+	if opts.SourcePath != "" {
+		source, err := os.Open(opts.SourcePath)
+		switch {
+		case err != nil && !os.IsNotExist(err):
+			return nil, xerrors.Errorf("cannot open source persistent storage: %w", err)
+		case err != nil && (opts.SavePersistent || noEphemeral):
+			// No source file, but we want to either save the persistent data or we
+			// don't support ephemeral mode, so create the instance tmpdir.
+			if err := makeTmpDir(); err != nil {
+				return nil, err
+			}
+		case err != nil:
+			// No source file, we don't want to save the persistent data and we support
+			// ephemeral mode - nothing to do.
+		default:
+			// We have a source file. Create the instance tmpdir and copy the file there.
+			defer source.Close()
+			if err := makeTmpDir(); err != nil {
+				return nil, err
+			}
+			dest, err := os.Create(filepath.Join(mssimTmpDir, "NVChip"))
+			if err != nil {
+				return nil, xerrors.Errorf("cannot create temporary storage for simulator: %w", err)
+			}
+			defer dest.Close()
+			if _, err := io.Copy(dest, source); err != nil {
+				return nil, xerrors.Errorf("cannot copy persistent storage to temporary location for simulator: %w", err)
+			}
+		}
+	} else if !noEphemeral {
+		// No source file and we aren't saving the persistent data, but ephemeral
+		// mode is not supported - create the instance tmpdir.
+		if err := makeTmpDir(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -402,14 +433,13 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	if opts.Manufacture {
 		args = append(args, "-m")
 	}
+	if mssimTmpDir == "" {
+		args = append(args, "-e")
+	}
 	args = append(args, strconv.FormatUint(uint64(MssimPort), 10))
 
 	cmd = exec.Command(mssimPath, args...)
 	cmd.Dir = mssimTmpDir // Run from the temporary directory we created
-	// The tpm2-simulator-chrisccoulson snap originally had a patch to chdir in to the root of the snap's common data directory,
-	// where it would store its persistent data. We don't want this behaviour now. This environment variable exists until all
-	// secboot and go-tpm2 branches have been fixed to not depend on this behaviour.
-	cmd.Env = append(cmd.Env, "TPM2SIM_DONT_CD_TO_HOME=1")
 
 	if err := cmd.Start(); err != nil {
 		return nil, xerrors.Errorf("cannot start simulator: %w", err)
@@ -438,7 +468,6 @@ Loop:
 		return nil, xerrors.Errorf("simulator startup failed: %w", err)
 	}
 
-	succeeded = true
 	return cleanup, nil
 }
 
