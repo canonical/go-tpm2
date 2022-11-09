@@ -1602,7 +1602,7 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaInvalidHMAC(c *C) {
 				HMAC:              internal_testutil.DecodeHexString(c, "042aea10a0f14f2d391373599be69d53a75dde9951fc3d3cd10b6100aa7a9f24"),
 			}},
 		rpBytes: append([]byte{0, 6}, []byte("foobar")...)}), ErrorMatches,
-		"encountered an error for session at index 0: "+
+		"encountered an error whilst processing the auth response for session 0: "+
 			"incorrect HMAC \\(expected: f5c298228f0195386a623875430b30bfa414e1aa5280dbcb2f656ec5d50890cb, got: 042aea10a0f14f2d391373599be69d53a75dde9951fc3d3cd10b6100aa7a9f24\\)")
 }
 

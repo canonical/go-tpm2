@@ -93,6 +93,17 @@ func (e *InvalidResponseError) Error() string {
 	return fmt.Sprintf("TPM returned an invalid response for command %s: %v", e.Command, e.err.Error())
 }
 
+// InvalidAuthResponseError is returned from any TPMContext method that
+// executes a TPM command if one of the response auth HMACs is invalid.
+type InvalidAuthResponseError struct {
+	Index int
+	msg   string
+}
+
+func (e *InvalidAuthResponseError) Error() string {
+	return fmt.Sprintf("encountered an error whilst processing the auth response for session %d: %s", e.Index, e.msg)
+}
+
 // TctiError is returned from any TPMContext method if the underlying TCTI returns an error.
 type TctiError struct {
 	Op  string // The operation that caused the error

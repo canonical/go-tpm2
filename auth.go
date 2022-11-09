@@ -283,7 +283,7 @@ func (p *sessionParams) ProcessResponseAuthArea(authResponses []AuthResponse, rp
 
 	for i, resp := range authResponses {
 		if err := p.sessions[i].ProcessResponseAuth(resp, p.commandCode, rpBytes); err != nil {
-			return fmt.Errorf("encountered an error for session at index %d: %v", i, err)
+			return &InvalidAuthResponseError{i, err.Error()}
 		}
 	}
 
