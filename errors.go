@@ -612,10 +612,16 @@ func IsTPMWarning(err error, code WarningCode, command CommandCode) bool {
 	return xerrors.Is(err, &TPMWarning{Command: command, Code: code})
 }
 
-type InvalidResponseCodeError ResponseCode
+// InvalidResponseCode is returned from DecodeResponseCode and any TPMContext
+// method that executes a command on the TPM if the TPM response code is
+// invalid.
+type InvalidResponseCodeError struct {
+	Command CommandCode
+	Code    ResponseCode
+}
 
-func (e InvalidResponseCodeError) Error() string {
-	return fmt.Sprintf("invalid response code 0x%08x", ResponseCode(e))
+func (e *InvalidResponseCodeError) Error() string {
+	return fmt.Sprintf("TPM returned an invalid response code whilst executing command %s: 0x%08x", e.Command, e.Code)
 }
 
 // DecodeResponseCode decodes the ResponseCode provided via resp. If the specified response code is
@@ -651,7 +657,7 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 		switch {
 		case !resp.V():
 			// A TPM1.2 error
-			return InvalidResponseCodeError(resp)
+			return &InvalidResponseCodeError{Command: command, Code: resp}
 		case resp.T():
 			// An error defined by the TPM vendor
 			return &TPMVendorError{Command: command, Code: resp}

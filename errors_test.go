@@ -31,9 +31,9 @@ func (s *errorsSuite) TestDecodeBadTag(c *C) {
 
 func (s *errorsSuite) TestDecodeInvalid(c *C) {
 	err := DecodeResponseCode(CommandGetCapability, 0x1)
-	c.Check(err, ErrorMatches, "invalid response code 0x00000001")
-	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
-	c.Check(ResponseCode(err.(InvalidResponseCodeError)), Equals, ResponseCode(0x1))
+	c.Check(err, ErrorMatches, "TPM returned an invalid response code whilst executing command TPM_CC_GetCapability: 0x00000001")
+	c.Assert(err, internal_testutil.ConvertibleTo, &InvalidResponseCodeError{})
+	c.Check(err.(*InvalidResponseCodeError), DeepEquals, &InvalidResponseCodeError{Command: CommandGetCapability, Code: 0x1})
 }
 
 func (s *errorsSuite) TestDecodeVendorError(c *C) {

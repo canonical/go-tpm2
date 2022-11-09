@@ -285,7 +285,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 		}
 
 		err = DecodeResponseCode(commandCode, rc)
-		if _, invalidRc := err.(InvalidResponseCodeError); invalidRc {
+		if _, invalidRc := err.(*InvalidResponseCodeError); invalidRc {
 			return nil, nil, &InvalidResponseError{commandCode, err.Error()}
 		}
 		if err == nil {
