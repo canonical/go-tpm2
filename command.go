@@ -306,16 +306,21 @@ func UseHandleContext(h HandleContext) *CommandHandleContext {
 	return &CommandHandleContext{handle: h}
 }
 
+type commandDispatcher interface {
+	RunCommand(c *cmdContext, responseHandle *Handle) (*rspContext, error)
+	CompleteResponse(r *rspContext, responseParams ...interface{}) error
+}
+
 // CommandContext provides an API for building a command to execute via a TPMContext.
 type CommandContext struct {
-	tpm *TPMContext
+	dispatcher commandDispatcher
 	cmdContext
 }
 
 // ResponseContext contains the context required to validate a response and obtain
 // response parameters.
 type ResponseContext struct {
-	tpm *TPMContext
+	dispatcher commandDispatcher
 	*rspContext
 }
 
@@ -327,7 +332,7 @@ type ResponseContext struct {
 // AttrResponseEncrypt attribute set, then the first response parameter will
 // be decrypted using the properties of that SessionContext.
 func (c *ResponseContext) Complete(responseParams ...interface{}) error {
-	return c.tpm.completeResponse(c.rspContext, responseParams...)
+	return c.dispatcher.CompleteResponse(c.rspContext, responseParams...)
 }
 
 // AddHandles appends the supplied command handle contexts to this command.
@@ -371,12 +376,12 @@ func (c *CommandContext) AddExtraSessions(sessions ...SessionContext) *CommandCo
 // One of *TPMWarning, *TPMError, *TPMParameterError, *TPMHandleError or *TPMSessionError
 // will be returned if the TPM returns a response code other than ResponseSuccess.
 func (c *CommandContext) RunWithoutProcessingResponse(responseHandle *Handle) (*ResponseContext, error) {
-	r, err := c.tpm.runCommandContext(&c.cmdContext, responseHandle)
+	r, err := c.dispatcher.RunCommand(&c.cmdContext, responseHandle)
 	if err != nil {
 		return nil, err
 	}
 	return &ResponseContext{
-		tpm:        c.tpm,
+		dispatcher: c.dispatcher,
 		rspContext: r}, nil
 }
 

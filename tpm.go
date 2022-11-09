@@ -125,6 +125,10 @@ func isSessionAllowed(commandCode CommandCode) bool {
 	}
 }
 
+type execContextDispatcher interface {
+	RunCommand(commandCode CommandCode, cHandles HandleList, cAuthArea []AuthCommand, cpBytes []byte, rHandle *Handle) (rpBytes []byte, rAuthArea []AuthResponse, err error)
+}
+
 type cmdContext struct {
 	commandCode   CommandCode
 	handles       []*CommandHandleContext
@@ -139,6 +143,114 @@ type rspContext struct {
 	rpBytes          []byte
 
 	err error
+}
+
+type execContext struct {
+	dispatcher           execContextDispatcher
+	lastExclusiveSession sessionContextInternal
+	pendingResponse      *rspContext
+}
+
+func (e *execContext) processResponseAuth(r *rspContext) (err error) {
+	if r != e.pendingResponse {
+		return r.err
+	}
+
+	defer func() {
+		r.err = err
+	}()
+
+	e.pendingResponse = nil
+
+	if isSessionAllowed(r.commandCode) && e.lastExclusiveSession != nil {
+		data := e.lastExclusiveSession.Data()
+		if data != nil {
+			data.IsExclusive = false
+		}
+		e.lastExclusiveSession = nil
+	}
+
+	if err := r.sessionParams.ProcessResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
+		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot process response auth area: %w", err)}
+	}
+
+	for _, s := range r.sessionParams.sessions {
+		if s.session.IsExclusive() {
+			e.lastExclusiveSession = s.session
+			break
+		}
+	}
+
+	return nil
+}
+
+func (e *execContext) CompleteResponse(r *rspContext, responseParams ...interface{}) error {
+	if err := e.processResponseAuth(r); err != nil {
+		return err
+	}
+
+	rpBuf := bytes.NewReader(r.rpBytes)
+
+	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
+		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot unmarshal response parameters: %w", err)}
+	}
+
+	if rpBuf.Len() > 0 {
+		return &InvalidResponseError{r.commandCode, fmt.Errorf("response parameter area contains %d trailing bytes", rpBuf.Len())}
+	}
+
+	return nil
+}
+
+func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspContext, error) {
+	var handles HandleList
+	var handleNames []Name
+	sessionParams := newSessionParams(c.commandCode)
+
+	for _, h := range c.handles {
+		handles = append(handles, h.handle.Handle())
+		handleNames = append(handleNames, h.handle.Name())
+
+		if h.session != nil {
+			if err := sessionParams.AppendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
+				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.commandCode, len(handles), err)
+			}
+		}
+	}
+	if err := sessionParams.AppendExtraSessions(c.extraSessions...); err != nil {
+		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.commandCode, err)
+	}
+
+	if sessionParams.hasDecryptSession() && (len(c.params) == 0 || !isParamEncryptable(c.params[0])) {
+		return nil, fmt.Errorf("command %s does not support command parameter encryption", c.commandCode)
+	}
+
+	cpBytes, err := mu.MarshalToBytes(c.params...)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
+	}
+
+	cAuthArea, err := sessionParams.BuildCommandAuthArea(handleNames, cpBytes)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
+	}
+
+	if e.pendingResponse != nil {
+		e.processResponseAuth(e.pendingResponse)
+	}
+
+	rpBytes, rAuthArea, err := e.dispatcher.RunCommand(c.commandCode, handles, cAuthArea, cpBytes, responseHandle)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &rspContext{
+		commandCode:      c.commandCode,
+		sessionParams:    sessionParams,
+		responseAuthArea: rAuthArea,
+		rpBytes:          rpBytes}
+	e.pendingResponse = r
+	return r, nil
 }
 
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
@@ -213,8 +325,7 @@ type TPMContext struct {
 	minPcrSelectSize      uint8
 	maxDigestSize         uint16
 	maxNVBufferSize       uint16
-	exclusiveSession      sessionContextInternal
-	pendingResponse       *rspContext
+	execContext           execContext
 }
 
 // Close calls Close on the transmission interface.
@@ -305,105 +416,6 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 	return rpBytes, rAuthArea, nil
 }
 
-func (t *TPMContext) processResponseAuth(r *rspContext) (err error) {
-	if r != t.pendingResponse {
-		return r.err
-	}
-
-	defer func() {
-		r.err = err
-	}()
-
-	t.pendingResponse = nil
-
-	if isSessionAllowed(r.commandCode) && t.exclusiveSession != nil {
-		t.exclusiveSession.Data().IsExclusive = false
-		t.exclusiveSession = nil
-	}
-
-	if err := r.sessionParams.ProcessResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
-		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot process response auth area: %w", err)}
-	}
-
-	for _, s := range r.sessionParams.sessions {
-		if s.session.IsExclusive() {
-			t.exclusiveSession = s.session
-			break
-		}
-	}
-
-	return nil
-}
-
-func (t *TPMContext) completeResponse(r *rspContext, responseParams ...interface{}) error {
-	if err := t.processResponseAuth(r); err != nil {
-		return err
-	}
-
-	rpBuf := bytes.NewReader(r.rpBytes)
-
-	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot unmarshal response parameters: %w", err)}
-	}
-
-	if rpBuf.Len() > 0 {
-		return &InvalidResponseError{r.commandCode, fmt.Errorf("response parameter area contains %d trailing bytes", rpBuf.Len())}
-	}
-
-	return nil
-}
-
-func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*rspContext, error) {
-	var handles HandleList
-	var handleNames []Name
-	sessionParams := newSessionParams(c.commandCode)
-
-	for _, h := range c.handles {
-		handles = append(handles, h.handle.Handle())
-		handleNames = append(handleNames, h.handle.Name())
-
-		if h.session != nil {
-			if err := sessionParams.AppendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
-				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.commandCode, len(handles), err)
-			}
-		}
-	}
-	if err := sessionParams.AppendExtraSessions(c.extraSessions...); err != nil {
-		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.commandCode, err)
-	}
-
-	if sessionParams.hasDecryptSession() && (len(c.params) == 0 || !isParamEncryptable(c.params[0])) {
-		return nil, fmt.Errorf("command %s does not support command parameter encryption", c.commandCode)
-	}
-
-	cpBytes, err := mu.MarshalToBytes(c.params...)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
-	}
-
-	cAuthArea, err := sessionParams.BuildCommandAuthArea(handleNames, cpBytes)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
-	}
-
-	if t.pendingResponse != nil {
-		t.processResponseAuth(t.pendingResponse)
-	}
-
-	rpBytes, rAuthArea, err := t.RunCommand(c.commandCode, handles, cAuthArea, cpBytes, responseHandle)
-	if err != nil {
-		return nil, err
-	}
-
-	r := &rspContext{
-		commandCode:      c.commandCode,
-		sessionParams:    sessionParams,
-		responseAuthArea: rAuthArea,
-		rpBytes:          rpBytes}
-	t.pendingResponse = r
-	return r, nil
-}
-
 // StartCommand is the high-level function for beginning the process of executing a command. It
 // returns a CommandContext that can be used to assemble a command, properly serialize a command
 // packet and then submit the packet for execution via TPMContext.RunCommand.
@@ -412,7 +424,7 @@ func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*
 // which are just wrappers around this.
 func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
 	return &CommandContext{
-		tpm: t,
+		dispatcher: &t.execContext,
 		cmdContext: cmdContext{
 			commandCode: commandCode}}
 }
@@ -506,6 +518,7 @@ func NewTPMContext(tcti TCTI) *TPMContext {
 	t.tcti = tcti
 	t.permanentResources = make(map[Handle]*permanentContext)
 	t.maxSubmissions = 5
+	t.execContext.dispatcher = t
 
 	return t
 }

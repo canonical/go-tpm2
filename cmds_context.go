@@ -51,9 +51,6 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 	switch c := saveContext.(type) {
 	case sessionContextInternal:
 		c.Unload()
-		if t.exclusiveSession == c {
-			t.exclusiveSession = nil
-		}
 	}
 
 	return context, nil
