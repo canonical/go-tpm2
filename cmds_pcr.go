@@ -4,6 +4,8 @@
 
 package tpm2
 
+import "errors"
+
 // Section 22 - Integrity Collection (PCR)
 
 // PCRExtend executes the TPM2_PCR_Extend command to extend the PCR associated with the pcrContext parameter with the tagged digests
@@ -79,15 +81,15 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		if i == 0 {
 			pcrUpdateCounter = updateCounter
 		} else if updateCounter != pcrUpdateCounter {
-			return 0, nil, &InvalidResponseError{CommandPCRRead, "PCR update counter changed between commands"}
+			return 0, nil, &InvalidResponseError{CommandPCRRead, errors.New("PCR update counter changed between commands")}
 		} else if len(values) == 0 && pcrSelectionOut.IsEmpty() {
 			return 0, nil, makeInvalidArgError("pcrSelectionIn", "unimplemented PCRs specified")
 		}
 
 		if n, err := pcrValues.SetValuesFromListAndSelection(pcrSelectionOut, values); err != nil {
-			return 0, nil, &InvalidResponseError{CommandPCRRead, err.Error()}
+			return 0, nil, &InvalidResponseError{CommandPCRRead, err}
 		} else if n != len(values) {
-			return 0, nil, &InvalidResponseError{CommandPCRRead, "too many digests"}
+			return 0, nil, &InvalidResponseError{CommandPCRRead, errors.New("too many digests")}
 		}
 
 		remaining = remaining.Remove(pcrSelectionOut)

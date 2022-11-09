@@ -125,7 +125,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	case HandleTypeHMACSession, HandleTypePolicySession:
 	default:
 		return nil, &InvalidResponseError{CommandStartAuthSession,
-			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", sessionHandle)}
+			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", sessionHandle)}
 	}
 
 	data := &sessionContextData{

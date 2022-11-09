@@ -74,11 +74,15 @@ func (e ResourceUnavailableError) Is(target error) bool {
 // HandleContexts should be considered stale after this error.
 type InvalidResponseError struct {
 	Command CommandCode
-	msg     string
+	err     error
+}
+
+func (e *InvalidResponseError) Unwrap() error {
+	return e.err
 }
 
 func (e *InvalidResponseError) Error() string {
-	return fmt.Sprintf("TPM returned an invalid response for command %s: %v", e.Command, e.msg)
+	return fmt.Sprintf("TPM returned an invalid response for command %s: %v", e.Command, e.err.Error())
 }
 
 // TctiError is returned from any TPMContext method if the underlying TCTI returns an error.

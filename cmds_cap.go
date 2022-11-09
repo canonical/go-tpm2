@@ -83,7 +83,7 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 
 		if data.Capability != capability {
 			return nil, &InvalidResponseError{CommandGetCapability,
-				fmt.Sprintf("TPM responded with data for the wrong capability (got %s)", data.Capability)}
+				fmt.Errorf("TPM responded with data for the wrong capability (got %s)", data.Capability)}
 		}
 
 		var l int
@@ -122,7 +122,7 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 		case CapabilityPCRs:
 			if moreData {
 				return nil, &InvalidResponseError{CommandGetCapability,
-					fmt.Sprintf("TPM did not respond with all requested properties for capability %s", data.Capability)}
+					fmt.Errorf("TPM did not respond with all requested properties for capability %s", data.Capability)}
 			}
 			return data, nil
 		case CapabilityTPMProperties:

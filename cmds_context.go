@@ -131,12 +131,12 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 	switch hc.Handle().Type() {
 	case HandleTypeTransient:
 		if loadedHandle.Type() != HandleTypeTransient {
-			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is the wrong type", loadedHandle)}
+			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
 		hc.(resourceContextInternal).SetHandle(loadedHandle)
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
-			return nil, &InvalidResponseError{CommandContextLoad, fmt.Sprintf("handle %v returned from TPM is incorrect", loadedHandle)}
+			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
 		}
 		hc.(sessionContextInternal).Data().IsExclusive = false
 	default:

@@ -7,9 +7,11 @@ package tpm2
 // Section 12 - Object Commands
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/canonical/go-tpm2/mu"
+	"golang.org/x/xerrors"
 )
 
 // Create executes the TPM2_Create command to create a new ordinary object as
@@ -249,10 +251,10 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	}
 
 	if objectHandle.Type() != HandleTypeTransient {
-		return nil, &InvalidResponseError{CommandLoad, fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+		return nil, &InvalidResponseError{CommandLoad, fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if inPublic == nil || !inPublic.compareName(name) {
-		return nil, &InvalidResponseError{CommandLoad, "name returned from TPM not consistent with loaded public area"}
+		return nil, &InvalidResponseError{CommandLoad, errors.New("name returned from TPM not consistent with loaded public area")}
 	}
 
 	var public *Public
@@ -335,10 +337,10 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 
 	if objectHandle.Type() != HandleTypeTransient {
 		return nil, &InvalidResponseError{CommandLoadExternal,
-			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if inPublic == nil || !inPublic.compareName(name) {
-		return nil, &InvalidResponseError{CommandLoadExternal, "name returned from TPM not consistent with loaded public area"}
+		return nil, &InvalidResponseError{CommandLoadExternal, errors.New("name returned from TPM not consistent with loaded public area")}
 	}
 
 	var public *Public
@@ -633,15 +635,15 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 
 	if objectHandle.Type() != HandleTypeTransient {
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded,
-			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if outPublic == nil || !outPublic.compareName(name) {
-		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, "name and public area returned from TPM are not consistent"}
+		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, errors.New("name and public area returned from TPM are not consistent")}
 	}
 
 	var public *Public
 	if err := mu.CopyValue(&public, outPublic); err != nil {
-		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
+		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, xerrors.Errorf("cannot copy returned public area from TPM: %w", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))

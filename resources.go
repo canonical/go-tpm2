@@ -322,9 +322,9 @@ func (t *TPMContext) makeObjectContextFromTPM(context HandleContext, sessions ..
 		return nil, err
 	}
 	if n, err := pub.Name(); err != nil {
-		return nil, &InvalidResponseError{CommandReadPublic, fmt.Sprintf("cannot compute name of returned public area: %v", err)}
+		return nil, &InvalidResponseError{CommandReadPublic, xerrors.Errorf("cannot compute name of returned public area: %w", err)}
 	} else if !bytes.Equal(n, name) {
-		return nil, &InvalidResponseError{CommandReadPublic, "name and public area don't match"}
+		return nil, &InvalidResponseError{CommandReadPublic, errors.New("name and public area don't match")}
 	}
 	return makeObjectContext(context.Handle(), name, pub), nil
 }
@@ -369,12 +369,12 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context HandleContext, sessions .
 		return nil, err
 	}
 	if n, err := pub.Name(); err != nil {
-		return nil, &InvalidResponseError{CommandNVReadPublic, fmt.Sprintf("cannot compute name of returned public area: %v", err)}
+		return nil, &InvalidResponseError{CommandNVReadPublic, xerrors.Errorf("cannot compute name of returned public area: %w", err)}
 	} else if !bytes.Equal(n, name) {
-		return nil, &InvalidResponseError{CommandNVReadPublic, "name and public area don't match"}
+		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("name and public area don't match")}
 	}
 	if pub.Index != context.Handle() {
-		return nil, &InvalidResponseError{CommandNVReadPublic, "unexpected index in public area"}
+		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("unexpected index in public area")}
 	}
 	return makeNVIndexContext(name, pub), nil
 }

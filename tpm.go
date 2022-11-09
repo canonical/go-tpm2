@@ -281,16 +281,16 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 		var rc ResponseCode
 		rc, rpBytes, rAuthArea, err = resp.Unmarshal(rHandle)
 		if err != nil {
-			return nil, nil, &InvalidResponseError{commandCode, fmt.Sprintf("cannot unmarshal response packet: %v", err)}
+			return nil, nil, &InvalidResponseError{commandCode, xerrors.Errorf("cannot unmarshal response packet: %w", err)}
 		}
 
 		err = DecodeResponseCode(commandCode, rc)
 		if _, invalidRc := err.(*InvalidResponseCodeError); invalidRc {
-			return nil, nil, &InvalidResponseError{commandCode, err.Error()}
+			return nil, nil, &InvalidResponseError{commandCode, err}
 		}
 		if err == nil {
 			if len(rAuthArea) != len(cAuthArea) {
-				return nil, nil, &InvalidResponseError{commandCode, fmt.Sprintf("unexpected number of auth responses (got %d, expected %d)",
+				return nil, nil, &InvalidResponseError{commandCode, fmt.Errorf("unexpected number of auth responses (got %d, expected %d)",
 					len(rAuthArea), len(cAuthArea))}
 			}
 
@@ -325,7 +325,7 @@ func (t *TPMContext) processResponseAuth(r *rspContext) (err error) {
 	}
 
 	if err := r.sessionParams.ProcessResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
-		return &InvalidResponseError{r.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
+		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot process response auth area: %w", err)}
 	}
 
 	for _, s := range r.sessionParams.sessions {
@@ -346,11 +346,11 @@ func (t *TPMContext) completeResponse(r *rspContext, responseParams ...interface
 	rpBuf := bytes.NewReader(r.rpBytes)
 
 	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-		return &InvalidResponseError{r.commandCode, fmt.Sprintf("cannot unmarshal response parameters: %v", err)}
+		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot unmarshal response parameters: %w", err)}
 	}
 
 	if rpBuf.Len() > 0 {
-		return &InvalidResponseError{r.commandCode, fmt.Sprintf("response parameter area contains %d trailing bytes", rpBuf.Len())}
+		return &InvalidResponseError{r.commandCode, fmt.Errorf("response parameter area contains %d trailing bytes", rpBuf.Len())}
 	}
 
 	return nil
@@ -443,7 +443,7 @@ func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 		switch prop.Property {
 		case PropertyInputBuffer, PropertyMaxDigest, PropertyNVBufferMax:
 			if prop.Value > math.MaxUint16 {
-				return &InvalidResponseError{Command: CommandGetCapability, msg: fmt.Sprintf("property %v out of range", prop.Property)}
+				return &InvalidResponseError{CommandGetCapability, fmt.Errorf("property %v out of range", prop.Property)}
 			}
 
 			value := uint16(prop.Value)
@@ -458,7 +458,7 @@ func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 			}
 		case PropertyPCRSelectMin:
 			if prop.Value > math.MaxUint8 {
-				return &InvalidResponseError{Command: CommandGetCapability, msg: "property TPM_PT_PCR_SELECT_MIN out of range"}
+				return &InvalidResponseError{CommandGetCapability, errors.New("property TPM_PT_PCR_SELECT_MIN out of range")}
 			}
 			t.minPcrSelectSize = uint8(prop.Value)
 		}
@@ -468,13 +468,13 @@ func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 		t.maxBufferSize = 1024
 	}
 	if t.maxDigestSize == 0 {
-		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_MAX_DIGEST property"}
+		return &InvalidResponseError{CommandGetCapability, errors.New("missing or invalid TPM_PT_MAX_DIGEST property")}
 	}
 	if t.maxNVBufferSize == 0 {
-		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_NV_BUFFER_MAX property"}
+		return &InvalidResponseError{CommandGetCapability, errors.New("missing or invalid TPM_PT_NV_BUFFER_MAX property")}
 	}
 	if t.minPcrSelectSize == 0 {
-		return &InvalidResponseError{Command: CommandGetCapability, msg: "missing or invalid TPM_PT_PCR_SELECT_MIN property"}
+		return &InvalidResponseError{CommandGetCapability, errors.New("missing or invalid TPM_PT_PCR_SELECT_MIN property")}
 	}
 	t.propertiesInitialized = true
 	return nil

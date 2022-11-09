@@ -7,7 +7,10 @@ package tpm2
 // Section 24 - Hierarchy Commands
 
 import (
+	"errors"
 	"fmt"
+
+	"golang.org/x/xerrors"
 
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -161,17 +164,17 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 
 	if objectHandle.Type() != HandleTypeTransient {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
-			fmt.Sprintf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
+			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if outPublic == nil || !outPublic.compareName(name) {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
-			"name and public area returned from TPM are not consistent"}
+			errors.New("name and public area returned from TPM are not consistent")}
 	}
 
 	var public *Public
 	if err := mu.CopyValue(&public, outPublic); err != nil {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
-			fmt.Sprintf("cannot copy returned public area from TPM: %v", err)}
+			xerrors.Errorf("cannot copy returned public area from TPM: %w", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))

@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-tpm2/mu"
+	"golang.org/x/xerrors"
 )
 
 // NVDefineSpace executes the TPM2_NV_DefineSpace command to reserve space to hold the data associated with a NV index described by
@@ -565,7 +566,7 @@ func (t *TPMContext) nvReadUint64(authContext, nvIndex ResourceContext, authCont
 		return 0, err
 	}
 	if len(data) != binary.Size(uint64(0)) {
-		return 0, &InvalidResponseError{CommandNVRead, fmt.Sprintf("unexpected number of bytes returned (got %d)", len(data))}
+		return 0, &InvalidResponseError{CommandNVRead, fmt.Errorf("unexpected number of bytes returned (got %d)", len(data))}
 	}
 	return binary.BigEndian.Uint64(data), nil
 }
@@ -672,7 +673,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 	}
 	var res NVPinCounterParams
 	if _, err := mu.UnmarshalFromBytes(data, &res); err != nil {
-		return nil, &InvalidResponseError{CommandNVRead, fmt.Sprintf("cannot unmarshal response bytes: %v", err)}
+		return nil, &InvalidResponseError{CommandNVRead, xerrors.Errorf("cannot unmarshal response bytes: %w", err)}
 	}
 	return &res, nil
 }
