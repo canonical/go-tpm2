@@ -56,22 +56,30 @@ func (e ResourceUnavailableError) Is(target error) bool {
 	return t.Handle == AnyHandle || t.Handle == e.Handle
 }
 
-// InvalidResponseError is returned from any TPMContext method that executes a TPM command
-// if the TPM's response is invalid. An invalid response could be one that is shorter than
-// the response header, one with an invalid responseSize field, a payload size that doesn't
-// match what the responseSize field indicates, a payload that unmarshals incorrectly or an
-// invalid response authorization.
+// InvalidResponseError is returned from any TPMContext method that executes
+// a TPM command if the TPM's response is invalid. Some examples of invalid
+// responses that would result in this error are:
 //
-// Any sessions used in the command that caused this error should be considered invalid.
+//   - The response packet was too large.
+//   - The response packet could not be unmarshalled.
+//   - The size field in the response header doesn't match the actual size.
+//   - The response code and response tag were inconsistent.
+//   - An error occurred whilst unmarshalling the response auth area or parameters.
+//   - The response auth area or parameter area have unused bytes after unmarshalling.
+//   - There were an unexpected number of response auths.
+//   - A response auth was invalid.
 //
-// If any function that executes a command which allocates objects on the TPM returns this
-// error, it is possible that these objects were allocated and now exist on the TPM without
-// a corresponding HandleContext being created or any knowledge of the handle of the object
-// created.
+// Any sessions used in the command that caused this error should be considered
+// invalid.
 //
-// If any function that executes a command which removes objects from the TPM returns this
-// error, it is possible that these objects were removed from the TPM. Any associated
-// HandleContexts should be considered stale after this error.
+// It is possible that the TPM command completed successfully.
+//
+// If any function that executes a command which allocates objects on the TPM
+// returns this error, it is possible that these objects were allocated and now
+// exist on the TPM.
+//
+// If any function that executes a command which makes persistent changes to the
+// TPM returns this error, it is possible that the persistent changes were completed.
 type InvalidResponseError struct {
 	Command CommandCode
 	err     error

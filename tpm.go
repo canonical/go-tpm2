@@ -285,9 +285,6 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 		}
 
 		err = DecodeResponseCode(commandCode, rc)
-		if _, invalidRc := err.(*InvalidResponseCodeError); invalidRc {
-			return nil, nil, &InvalidResponseError{commandCode, err}
-		}
 		if err == nil {
 			if len(rAuthArea) != len(cAuthArea) {
 				return nil, nil, &InvalidResponseError{commandCode, fmt.Errorf("unexpected number of auth responses (got %d, expected %d)",
