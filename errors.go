@@ -95,17 +95,6 @@ func (e *TctiError) Unwrap() error {
 	return e.err
 }
 
-// TPM1Error is returned from DecodeResponseCode and any TPMContext method that executes a
-// command on the TPM if the TPM response code indicates an error from a TPM 1.2 device.
-type TPM1Error struct {
-	Command CommandCode  // Command code associated with this error
-	Code    ResponseCode // Response code
-}
-
-func (e *TPM1Error) Error() string {
-	return fmt.Sprintf("TPM returned a 1.2 error whilst executing command %s: 0x%08x", e.Command, e.Code)
-}
-
 // TPMVendorError is returned from DecodeResponseCode and and TPMContext method that executes
 // a command on the TPM if the TPM response code indicates a vendor-specific error.
 type TPMVendorError struct {
