@@ -604,16 +604,16 @@ type TaggedPolicyList []TaggedPolicy
 
 // Capabilities is a union type that corresponds to the TPMU_CAPABILITIES type. The
 // selector type is Capability. Mapping of selector values to fields is as follows:
-//  - CapabilityAlgs: Algorithms
-//  - CapabilityHandles: Handles
-//  - CapabilityCommands: Command
-//  - CapabilityPPCommands: PPCommands
-//  - CapabilityAuditCommands: AuditCommands
-//  - CapabilityPCRs: AssignedPCR
-//  - CapabilityTPMProperties: TPMProperties
-//  - CapabilityPCRProperties: PCRProperties
-//  - CapabilityECCCurves: ECCCurves
-//  - CapabilityAuthPolicies: AuthPolicies
+//   - CapabilityAlgs: Algorithms
+//   - CapabilityHandles: Handles
+//   - CapabilityCommands: Command
+//   - CapabilityPPCommands: PPCommands
+//   - CapabilityAuditCommands: AuditCommands
+//   - CapabilityPCRs: AssignedPCR
+//   - CapabilityTPMProperties: TPMProperties
+//   - CapabilityPCRProperties: PCRProperties
+//   - CapabilityECCCurves: ECCCurves
+//   - CapabilityAuthPolicies: AuthPolicies
 type CapabilitiesU struct {
 	Algorithms    AlgorithmPropertyList
 	Handles       HandleList
@@ -736,13 +736,13 @@ type NVCertifyInfo struct {
 
 // AttestU is a union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag.
 // Mapping of selector values to fields is as follows:
-//  - TagAttestNV: NV
-//  - TagAttestCommandAudit: CommandAudit
-//  - TagAttestSessionAudit: SessionAudit
-//  - TagAttestCertify: Certify
-//  - TagAttestQuote: Quote
-//  - TagAttestTime: Time
-//  - TagAttestCreation: Creation
+//   - TagAttestNV: NV
+//   - TagAttestCommandAudit: CommandAudit
+//   - TagAttestSessionAudit: SessionAudit
+//   - TagAttestCertify: Certify
+//   - TagAttestQuote: Quote
+//   - TagAttestTime: Time
+//   - TagAttestCreation: Creation
 type AttestU struct {
 	Certify      *CertifyInfo
 	Creation     *CreationInfo

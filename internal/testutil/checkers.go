@@ -55,8 +55,7 @@ func (checker *isOneOfChecker) Check(params []interface{}, names []string) (resu
 //
 // For example:
 //
-//  c.Check(value, IsOneOf(Equals), []int{1, 2, 3})
-//
+//	c.Check(value, IsOneOf(Equals), []int{1, 2, 3})
 func IsOneOf(checker Checker) Checker {
 	return &isOneOfChecker{checker}
 }
@@ -102,8 +101,7 @@ type convertibleToChecker struct {
 //
 // For example:
 //
-//  c.Check(err, ConvertibleTo, *os.PathError{})
-//
+//	c.Check(err, ConvertibleTo, *os.PathError{})
 var ConvertibleTo Checker = &convertibleToChecker{
 	&CheckerInfo{Name: "ConvertibleTo", Params: []string{"value", "sample"}}}
 
@@ -130,8 +128,7 @@ type errorIsChecker struct {
 //
 // For example:
 //
-//  c.Check(err, ErrorIs, io.EOF)
-//
+//	c.Check(err, ErrorIs, io.EOF)
 var ErrorIs Checker = &errorIsChecker{
 	&CheckerInfo{Name: "ErrorIs", Params: []string{"value", "expected"}}}
 
@@ -158,10 +155,9 @@ type errorAsChecker struct {
 //
 // For example:
 //
-//  var e *os.PathError
-//  c.Check(err, ErrorAs, &e)
-//  c.Check(e.Path, Equals, "/foo/bar")
-//
+//	var e *os.PathError
+//	c.Check(err, ErrorAs, &e)
+//	c.Check(e.Path, Equals, "/foo/bar")
 var ErrorAs Checker = &errorAsChecker{
 	&CheckerInfo{Name: "ErrorAs", Params: []string{"value", "target"}}}
 
@@ -223,8 +219,8 @@ func (checker *intChecker) Check(params []interface{}, names []string) (result b
 // y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, IntLess, 10)
 //
+//	c.Check(x, IntLess, 10)
 var IntLess Checker = &intChecker{
 	&CheckerInfo{Name: "IntLess", Params: []string{"x", "y"}}}
 
@@ -233,8 +229,8 @@ var IntLess Checker = &intChecker{
 // although y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, IntLessEqual, 10)
 //
+//	c.Check(x, IntLessEqual, 10)
 var IntLessEqual Checker = &intChecker{
 	&CheckerInfo{Name: "IntLessEqual", Params: []string{"x", "y"}}}
 
@@ -243,8 +239,8 @@ var IntLessEqual Checker = &intChecker{
 // must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, IntEqual, 10)
 //
+//	c.Check(x, IntEqual, 10)
 var IntEqual Checker = &intChecker{
 	&CheckerInfo{Name: "IntEqual", Params: []string{"x", "y"}}}
 
@@ -253,8 +249,8 @@ var IntEqual Checker = &intChecker{
 // must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, IntNotEqual, 10)
 //
+//	c.Check(x, IntNotEqual, 10)
 var IntNotEqual Checker = &intChecker{
 	&CheckerInfo{Name: "IntNotEqual", Params: []string{"x", "y"}}}
 
@@ -263,8 +259,8 @@ var IntNotEqual Checker = &intChecker{
 // must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, IntGreater, 10)
 //
+//	c.Check(x, IntGreater, 10)
 var IntGreater Checker = &intChecker{
 	&CheckerInfo{Name: "IntGreater", Params: []string{"x", "y"}}}
 
@@ -273,8 +269,8 @@ var IntGreater Checker = &intChecker{
 // although y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, IntGreaterEqual, 10)
 //
+//	c.Check(x, IntGreaterEqual, 10)
 var IntGreaterEqual Checker = &intChecker{
 	&CheckerInfo{Name: "IntGreaterEqual", Params: []string{"x", "y"}}}
 
@@ -332,8 +328,8 @@ func (checker *uintChecker) Check(params []interface{}, names []string) (result 
 // although y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, UintLess, 10)
 //
+//	c.Check(x, UintLess, 10)
 var UintLess Checker = &uintChecker{
 	&CheckerInfo{Name: "UintLess", Params: []string{"x", "y"}}}
 
@@ -342,8 +338,8 @@ var UintLess Checker = &uintChecker{
 // type, although y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, UintLessEqual, 10)
 //
+//	c.Check(x, UintLessEqual, 10)
 var UintLessEqual Checker = &uintChecker{
 	&CheckerInfo{Name: "UintLessEqual", Params: []string{"x", "y"}}}
 
@@ -352,8 +348,8 @@ var UintLessEqual Checker = &uintChecker{
 // y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, UintEqual, 10)
 //
+//	c.Check(x, UintEqual, 10)
 var UintEqual Checker = &uintChecker{
 	&CheckerInfo{Name: "UintEqual", Params: []string{"x", "y"}}}
 
@@ -362,8 +358,8 @@ var UintEqual Checker = &uintChecker{
 // y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, UintNotEqual, 10)
 //
+//	c.Check(x, UintNotEqual, 10)
 var UintNotEqual Checker = &uintChecker{
 	&CheckerInfo{Name: "UintNotEqual", Params: []string{"x", "y"}}}
 
@@ -372,8 +368,8 @@ var UintNotEqual Checker = &uintChecker{
 // must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, UintGreater, 10)
 //
+//	c.Check(x, UintGreater, 10)
 var UintGreater Checker = &uintChecker{
 	&CheckerInfo{Name: "UintGreater", Params: []string{"x", "y"}}}
 
@@ -382,8 +378,8 @@ var UintGreater Checker = &uintChecker{
 // same type, although y must be representable by the type of x.
 //
 // For example:
-//  c.Check(x, UintGreaterEqual, 10)
 //
+//	c.Check(x, UintGreaterEqual, 10)
 var UintGreaterEqual Checker = &uintChecker{
 	&CheckerInfo{Name: "UintGreaterEqual", Params: []string{"x", "y"}}}
 
@@ -412,7 +408,7 @@ func (checker *hasLenChecker) Check(params []interface{}, names []string) (resul
 // if the check fails.
 //
 // For example:
-//  c.Check(value, LenEquals, 5)
 //
+//	c.Check(value, LenEquals, 5)
 var LenEquals Checker = &hasLenChecker{
 	&CheckerInfo{Name: "LenEquals", Params: []string{"value", "n"}}, IntEqual}

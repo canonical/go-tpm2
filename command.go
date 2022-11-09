@@ -248,9 +248,9 @@ func (c *CommandHandleContext) Session() SessionContext {
 // requires authorization. The supplied SessionContext is the session used for authorization
 // and determines the type of authorization used for the specified resource:
 //
-//  - If SessionContext is nil, then passphrase authorization is used.
-//  - If SessionContext is a HMAC session, then HMAC authorization is used.
-//  - If SessionContext is a policy session, then policy authorization is used.
+//   - If SessionContext is nil, then passphrase authorization is used.
+//   - If SessionContext is a HMAC session, then HMAC authorization is used.
+//   - If SessionContext is a policy session, then policy authorization is used.
 //
 // If the authorization value of the resource is required as part of the authorization
 // (eg, for passphrase authorization, a HMAC session that is not bound to the specified
@@ -265,20 +265,20 @@ func (c *CommandHandleContext) Session() SessionContext {
 // Where a command requires authorization with the user role for a resource, the following
 // authorization types are permitted:
 //
-//  - HandleTypePCR: passphrase or HMAC session if no auth policy is set, or a policy
-//    session if an auth policy is set.
-//  - HandleTypeNVIndex: passphrase, HMAC session or policy session depending on attributes.
-//  - HandleTypePermanent: passphrase or HMAC session. A policy session can also be used
-//    if an auth policy is set.
-//  - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
-//    can also be used if AttrWithUserAuth is set.
+//   - HandleTypePCR: passphrase or HMAC session if no auth policy is set, or a policy
+//     session if an auth policy is set.
+//   - HandleTypeNVIndex: passphrase, HMAC session or policy session depending on attributes.
+//   - HandleTypePermanent: passphrase or HMAC session. A policy session can also be used
+//     if an auth policy is set.
+//   - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
+//     can also be used if AttrWithUserAuth is set.
 //
 // Where a command requires authorization with the admin role for a resource, the following
 // authorization types are permitted:
 //
-//  - HandleTypeNVIndex: policy session.
-//  - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
-//    can also be used if AttrAdminWithPolicy is not set.
+//   - HandleTypeNVIndex: policy session.
+//   - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
+//     can also be used if AttrAdminWithPolicy is not set.
 //
 // Where a command requires authorization with the duplication role for a resource, a
 // policy session is required.

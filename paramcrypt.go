@@ -18,11 +18,11 @@ func isParamEncryptable(param interface{}) bool {
 	return mu.DetermineTPMKind(param) == mu.TPMKindSized
 }
 
-func (s *sessionParam) computeSessionValue() []byte {
+func (s *sessionParam) ComputeSessionValue() []byte {
 	var key []byte
 	key = append(key, s.session.Data().SessionKey...)
 	if s.IsAuth() {
-		key = append(key, s.associatedContext.GetAuthValue()...)
+		key = append(key, s.associatedResource.GetAuthValue()...)
 	}
 	return key
 }
@@ -45,7 +45,7 @@ func (p *sessionParams) hasDecryptSession() bool {
 	return p.decryptSessionIndex != -1
 }
 
-func (p *sessionParams) computeEncryptNonce() {
+func (p *sessionParams) ComputeEncryptNonce() {
 	s, i := p.encryptSession()
 	if s == nil || i == 0 || !p.sessions[0].IsAuth() {
 		return
@@ -58,7 +58,7 @@ func (p *sessionParams) computeEncryptNonce() {
 	p.sessions[0].encryptNonce = s.session.NonceTPM()
 }
 
-func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
+func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
 	s, i := p.decryptSession()
 	if s == nil {
 		return nil
@@ -67,7 +67,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 	sessionData := s.session.Data()
 	hashAlg := sessionData.HashAlg
 
-	sessionValue := s.computeSessionValue()
+	sessionValue := s.ComputeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
 	data := cpBytes[2 : size+2]
@@ -100,7 +100,7 @@ func (p *sessionParams) encryptCommandParameter(cpBytes []byte) error {
 	return nil
 }
 
-func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
+func (p *sessionParams) DecryptResponseParameter(rpBytes []byte) error {
 	s, _ := p.encryptSession()
 	if s == nil {
 		return nil
@@ -109,7 +109,7 @@ func (p *sessionParams) decryptResponseParameter(rpBytes []byte) error {
 	sessionData := s.session.Data()
 	hashAlg := sessionData.HashAlg
 
-	sessionValue := s.computeSessionValue()
+	sessionValue := s.ComputeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)
 	data := rpBytes[2 : size+2]

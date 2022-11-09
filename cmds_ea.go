@@ -10,7 +10,9 @@ package tpm2
 // that binds a policy to the signing key associated with authContext.
 //
 // An authorizing entity signs a digest of authorization qualifiers with the key associated with authContext. The digest is computed as:
-//   digest := H(nonceTPM||expiration||cpHashA||policyRef)
+//
+//	digest := H(nonceTPM||expiration||cpHashA||policyRef)
+//
 // ... where H is the digest algorithm associated with the auth parameter. Where there are no restrictions, the digest is computed
 // from 4 zero bytes, which corresponds to an expiration time of zero. The authorization qualifiers must match the arguments passed
 // to this command. The signature is provided via the auth parameter.
@@ -350,7 +352,9 @@ func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objec
 // PolicyAuthorize executes the TPM2_PolicyAuthorize command, which allows policies to change. This is an immediate assertion. The
 // command allows an authorizing entity to sign a new policy that can be used in an existing policy. The authorizing party signs a
 // digest that is computed as follows:
-//   digest := H(approvedPolicy||policyRef)
+//
+//	digest := H(approvedPolicy||policyRef)
+//
 // ... where H is the name algorithm of the key used to sign the digest.
 //
 // The signature is then verified by TPMContext.VerifySignature, which provides a ticket that is used by this function.

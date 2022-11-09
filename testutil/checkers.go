@@ -22,13 +22,12 @@ type tpmValueDeepEqualsChecker struct {
 //
 // For example:
 //
-//  expected := &tpm2.NVPublic{
-//	Index: 0x0180000,
-//	NameAlg: tpm2.HashAlgorithmSHA256,
-//	Attrs: tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthWrite|tpm2.AttrNVAuthRead|tpm2.AttrNVWritten),
-//	Size: 8}
-//  c.Check(public, TPMValueDeepEquals, expected)
-//
+//	 expected := &tpm2.NVPublic{
+//		Index: 0x0180000,
+//		NameAlg: tpm2.HashAlgorithmSHA256,
+//		Attrs: tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthWrite|tpm2.AttrNVAuthRead|tpm2.AttrNVWritten),
+//		Size: 8}
+//	 c.Check(public, TPMValueDeepEquals, expected)
 var TPMValueDeepEquals Checker = &tpmValueDeepEqualsChecker{
 	&CheckerInfo{Name: "TPMValueDeepEquals", Params: []string{"obtained", "expected"}}}
 

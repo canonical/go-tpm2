@@ -37,10 +37,10 @@ const (
 
 // PublicIDU is a union type that corresponds to the TPMU_PUBLIC_ID type. The selector type
 // is ObjectTypeId. The mapping of selector values to fields is as follows:
-//  - ObjectTypeRSA: RSA
-//  - ObjectTypeKeyedHash: KeyedHash
-//  - ObjectTypeECC: ECC
-//  - ObjectTypeSymCipher: Sym
+//   - ObjectTypeRSA: RSA
+//   - ObjectTypeKeyedHash: KeyedHash
+//   - ObjectTypeECC: ECC
+//   - ObjectTypeSymCipher: Sym
 type PublicIDU struct {
 	KeyedHash Digest
 	Sym       Digest
@@ -107,10 +107,10 @@ type ECCParams struct {
 // PublicParamsU is a union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector
 // type is ObjectTypeId.
 // The mapping of selector values to fields is as follows:
-//  - ObjectTypeRSA: RSADetail
-//  - ObjectTypeKeyedHash: KeyedHashDetail
-//  - ObjectTypeECC: ECCDetail
-//  - ObjectTypeSymCipher: SymDetail
+//   - ObjectTypeRSA: RSADetail
+//   - ObjectTypeKeyedHash: KeyedHashDetail
+//   - ObjectTypeECC: ECCDetail
+//   - ObjectTypeSymCipher: SymDetail
 type PublicParamsU struct {
 	KeyedHashDetail *KeyedHashParams
 	SymDetail       *SymCipherParams
@@ -306,10 +306,10 @@ type PrivateVendorSpecific []byte
 // SensitiveCompositeU is a union type that corresponds to the TPMU_SENSITIVE_COMPOSITE
 // type. The selector type is ObjectTypeId. The mapping of selector values to fields is
 // as follows:
-//  - ObjectTypeRSA: RSA
-//  - ObjectTypeECC: ECC
-//  - ObjectTypeKeyedHash: Bits
-//  - ObjectTypeSymCipher: Sym
+//   - ObjectTypeRSA: RSA
+//   - ObjectTypeECC: ECC
+//   - ObjectTypeKeyedHash: Bits
+//   - ObjectTypeSymCipher: Sym
 type SensitiveCompositeU struct {
 	RSA  PrivateKeyRSA
 	ECC  ECCParameter

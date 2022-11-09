@@ -179,20 +179,20 @@ type rspContext struct {
 // Where a method requires authorization with the user role for a resource, the following
 // authorization types are permitted:
 //
-//  - HandleTypePCR: passphrase or HMAC session if no auth policy is set, or a policy
-//    session if an auth policy is set.
-//  - HandleTypeNVIndex: passphrase, HMAC session or policy session depending on attributes.
-//  - HandleTypePermanent: passphrase or HMAC session. A policy session can also be used
-//    if an auth policy is set.
-//  - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
-//    can also be used if AttrWithUserAuth is set.
+//   - HandleTypePCR: passphrase or HMAC session if no auth policy is set, or a policy
+//     session if an auth policy is set.
+//   - HandleTypeNVIndex: passphrase, HMAC session or policy session depending on attributes.
+//   - HandleTypePermanent: passphrase or HMAC session. A policy session can also be used
+//     if an auth policy is set.
+//   - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
+//     can also be used if AttrWithUserAuth is set.
 //
 // Where a command requires authorization with the admin role for a resource, the following
 // authorization types are permitted:
 //
-//  - HandleTypeNVIndex: policy session.
-//  - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
-//    can also be used if AttrAdminWithPolicy is not set.
+//   - HandleTypeNVIndex: policy session.
+//   - HandleTypeTransient / HandleTypePersistent: policy session. Passphrase or HMAC session
+//     can also be used if AttrAdminWithPolicy is not set.
 //
 // Where a command requires authorization with the duplication role for a resource, a
 // policy session is required.
@@ -324,7 +324,7 @@ func (t *TPMContext) processResponseAuth(r *rspContext) (err error) {
 		t.exclusiveSession = nil
 	}
 
-	if err := r.sessionParams.processResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
+	if err := r.sessionParams.ProcessResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
 		return &InvalidResponseError{r.commandCode, fmt.Sprintf("cannot process response auth area: %v", err)}
 	}
 
@@ -366,12 +366,12 @@ func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*
 		handleNames = append(handleNames, h.handle.Name())
 
 		if h.session != nil {
-			if err := sessionParams.appendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
+			if err := sessionParams.AppendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
 				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.commandCode, len(handles), err)
 			}
 		}
 	}
-	if err := sessionParams.appendExtraSessions(c.extraSessions...); err != nil {
+	if err := sessionParams.AppendExtraSessions(c.extraSessions...); err != nil {
 		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.commandCode, err)
 	}
 
@@ -384,7 +384,7 @@ func (t *TPMContext) runCommandContext(c *cmdContext, responseHandle *Handle) (*
 		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
 	}
 
-	cAuthArea, err := sessionParams.buildCommandAuthArea(handleNames, cpBytes)
+	cAuthArea, err := sessionParams.BuildCommandAuthArea(handleNames, cpBytes)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
 	}

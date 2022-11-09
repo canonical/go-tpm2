@@ -18,11 +18,11 @@ import (
 // SymKeyBitsU is a union type that corresponds to the TPMU_SYM_KEY_BITS type
 // and is used to specify symmetric encryption key sizes. The selector type is
 // AlgorithmId. Mapping of selector values to fields is as follows:
-//  - AlgorithmAES: Sym
-//  - AlgorithmSM4: Sym
-//  - AlgorithmCamellia: Sym
-//  - AlgorithmXOR: XOR
-//  - AlgorithmNull: none
+//   - AlgorithmAES: Sym
+//   - AlgorithmSM4: Sym
+//   - AlgorithmCamellia: Sym
+//   - AlgorithmXOR: XOR
+//   - AlgorithmNull: none
 type SymKeyBitsU struct {
 	Sym uint16
 	XOR HashAlgorithmId
@@ -47,11 +47,11 @@ func (b *SymKeyBitsU) Select(selector reflect.Value) interface{} {
 
 // SymModeU is a union type that corresponds to the TPMU_SYM_MODE type. The selector
 // type is AlgorithmId. The mapping of selector values to fields is as follows:
-//  - AlgorithmAES: Sym
-//  - AlgorithmSM4: Sym
-//  - AlgorithmCamellia: Sym
-//  - AlgorithmXOR: none
-//  - AlgorithmNull: none
+//   - AlgorithmAES: Sym
+//   - AlgorithmSM4: Sym
+//   - AlgorithmCamellia: Sym
+//   - AlgorithmXOR: none
+//   - AlgorithmNull: none
 type SymModeU struct {
 	Sym SymModeId
 }
@@ -151,9 +151,9 @@ type SchemeXOR struct {
 // SchemeKeyedHashU is a union type that corresponds to the TPMU_SCHEME_KEYED_HASH type.
 // The selector type is KeyedHashSchemeId. The mapping of selector values to fields is
 // as follows:
-//  - KeyedHashSchemeHMAC: HMAC
-//  - KeyedHashSchemeXOR: XOR
-//  - KeyedHashSchemeNull: none
+//   - KeyedHashSchemeHMAC: HMAC
+//   - KeyedHashSchemeXOR: XOR
+//   - KeyedHashSchemeNull: none
 type SchemeKeyedHashU struct {
 	HMAC *SchemeHMAC
 	XOR  *SchemeXOR
@@ -191,14 +191,14 @@ type SigSchemeECSchnorr SchemeHash
 
 // SigSchemeU is a union type that corresponds to the TPMU_SIG_SCHEME type. The
 // selector type is SigSchemeId. The mapping of selector value to fields is as follows:
-//  - SigSchemeAlgRSASSA: RSASSA
-//  - SigSchemeAlgRSAPSS: RSAPSS
-//  - SigSchemeAlgECDSA: ECDSA
-//  - SigSchemeAlgECDAA: ECDAA
-//  - SigSchemeAlgSM2: SM2
-//  - SigSchemeAlgECSchnorr: ECSchnorr
-//  - SigSchemeAlgHMAC: HMAC
-//  - SigSchemeAlgNull: none
+//   - SigSchemeAlgRSASSA: RSASSA
+//   - SigSchemeAlgRSAPSS: RSAPSS
+//   - SigSchemeAlgECDSA: ECDSA
+//   - SigSchemeAlgECDAA: ECDAA
+//   - SigSchemeAlgSM2: SM2
+//   - SigSchemeAlgECSchnorr: ECSchnorr
+//   - SigSchemeAlgHMAC: HMAC
+//   - SigSchemeAlgNull: none
 type SigSchemeU struct {
 	RSASSA    *SigSchemeRSASSA
 	RSAPSS    *SigSchemeRSAPSS
@@ -284,11 +284,11 @@ type SchemeKDF1_SP800_108 SchemeHash
 // KDFSchemeU is a union type that corresponds to the TPMU_KDF_SCHEME
 // type. The selector type is KDFAlgorithmId. The mapping of selector
 // value to field is as follows:
-//  - KDFAlgorithmMGF1: MGF1
-//  - KDFAlgorithmKDF1_SP800_56A: KDF1_SP800_56A
-//  - KDFAlgorithmKDF2: KDF2
-//  - KDFAlgorithmKDF1_SP800_108: KDF1_SP800_108
-//  - KDFAlgorithmNull: none
+//   - KDFAlgorithmMGF1: MGF1
+//   - KDFAlgorithmKDF1_SP800_56A: KDF1_SP800_56A
+//   - KDFAlgorithmKDF2: KDF2
+//   - KDFAlgorithmKDF1_SP800_108: KDF1_SP800_108
+//   - KDFAlgorithmNull: none
 type KDFSchemeU struct {
 	MGF1           *SchemeMGF1
 	KDF1_SP800_56A *SchemeKDF1_SP800_56A
@@ -376,17 +376,17 @@ const (
 
 // AsymSchemeU is a union type that corresponds to the TPMU_ASYM_SCHEME type. The
 // selector type is AsymSchemeId. The mapping of selector values to fields is as follows:
-//  - AsymSchemeRSASSA: RSASSA
-//  - AsymSchemeRSAES: RSAES
-//  - AsymSchemeRSAPSS: RSAPSS
-//  - AsymSchemeOAEP: OAEP
-//  - AsymSchemeECDSA: ECDSA
-//  - AsymSchemeECDH: ECDH
-//  - AsymSchemeECDAA: ECDAA
-//  - AsymSchemeSM2: SM2
-//  - AsymSchemeECSchnorr: ECSchnorr
-//  - AsymSchemeECMQV: ECMQV
-//  - AsymSchemeNull: none
+//   - AsymSchemeRSASSA: RSASSA
+//   - AsymSchemeRSAES: RSAES
+//   - AsymSchemeRSAPSS: RSAPSS
+//   - AsymSchemeOAEP: OAEP
+//   - AsymSchemeECDSA: ECDSA
+//   - AsymSchemeECDH: ECDH
+//   - AsymSchemeECDAA: ECDAA
+//   - AsymSchemeSM2: SM2
+//   - AsymSchemeECSchnorr: ECSchnorr
+//   - AsymSchemeECMQV: ECMQV
+//   - AsymSchemeNull: none
 type AsymSchemeU struct {
 	RSASSA    *SigSchemeRSASSA
 	RSAES     *EncSchemeRSAES
@@ -547,14 +547,14 @@ type SignatureECSchnorr SignatureECC
 
 // SignatureU is a union type that corresponds to TPMU_SIGNATURE. The selector
 // type is SigSchemeId. The mapping of selector values to fields is as follows:
-//  - SigSchemeAlgRSASSA: RSASSA
-//  - SigSchemeAlgRSAPSS: RSAPSS
-//  - SigSchemeAlgECDSA: ECDSA
-//  - SigSchemeAlgECDAA: ECDAA
-//  - SigSchemeAlgSM2: SM2
-//  - SigSchemeAlgECSchnorr: ECSchnorr
-//  - SigSchemeAlgHMAC: HMAC
-//  - SigSchemeAlgNull: none
+//   - SigSchemeAlgRSASSA: RSASSA
+//   - SigSchemeAlgRSAPSS: RSAPSS
+//   - SigSchemeAlgECDSA: ECDSA
+//   - SigSchemeAlgECDAA: ECDAA
+//   - SigSchemeAlgSM2: SM2
+//   - SigSchemeAlgECSchnorr: ECSchnorr
+//   - SigSchemeAlgHMAC: HMAC
+//   - SigSchemeAlgNull: none
 type SignatureU struct {
 	RSASSA    *SignatureRSASSA
 	RSAPSS    *SignatureRSAPSS
