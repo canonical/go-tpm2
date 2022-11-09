@@ -463,7 +463,7 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 // fails of if the response is badly formed.
 func (t *TPMContext) IsTPM2() (isTpm2 bool) {
 	_, err := t.GetCapabilityTPMProperties(PropertyTotalCommands, 0)
-	if e, ok := err.(*TPMError); ok && e.Code == ErrorBadTag {
+	if _, ok := err.(*TPMErrorBadTag); ok {
 		return false
 	}
 	return true

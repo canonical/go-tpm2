@@ -6,6 +6,7 @@ package tpm2_test
 
 import (
 	"errors"
+
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
@@ -22,10 +23,10 @@ func (s *errorsSuite) TestDecodeSuccess(c *C) {
 
 func (s *errorsSuite) TestDecodeBadTag(c *C) {
 	err := DecodeResponseCode(CommandGetCapability, ResponseBadTag)
-	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_GetCapability: TPM_RC_BAD_TAG")
-	c.Assert(err, internal_testutil.ConvertibleTo, &TPMError{})
-	c.Check(err.(*TPMError), DeepEquals, &TPMError{Command: CommandGetCapability, Code: ErrorBadTag})
-	c.Check(err.(*TPMError).ResponseCode(), Equals, ResponseBadTag)
+	c.Check(err, ErrorMatches, "TPM returned a TPM_RC_BAD_TAG error whilst executing command TPM_CC_GetCapability")
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMErrorBadTag{})
+	c.Check(err.(*TPMErrorBadTag), DeepEquals, &TPMErrorBadTag{Command: CommandGetCapability})
+	c.Check(err.(*TPMErrorBadTag).ResponseCode(), Equals, ResponseBadTag)
 }
 
 func (s *errorsSuite) TestDecodeInvalid(c *C) {

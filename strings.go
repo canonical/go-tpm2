@@ -428,8 +428,6 @@ func (e ErrorCode) String() string {
 		return "TPM_RC_CURVE"
 	case ErrorECCPoint:
 		return "TPM_RC_ECC_POINT"
-	case ErrorBadTag:
-		return "TPM_RC_BAD_TAG"
 	default:
 		return fmt.Sprintf("0x%02x", uint8(e))
 	}

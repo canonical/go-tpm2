@@ -411,11 +411,24 @@ const (
 	ErrorCurve ErrorCode = errorCode1Start + 0x26
 
 	ErrorECCPoint ErrorCode = errorCode1Start + 0x27 // TPM_RC_ECC_POINT
-
-	// ErrorBadTag corresponds to TPM_RC_BAD_TAG and is returned from any TPM command if the command tag is invalid.
-	// This will be the error when trying to execute a TPM2 command on a TPM1.2 device.
-	ErrorBadTag ErrorCode = 0xde
 )
+
+// TPMErrorBadTag is returned from DecodeResponseCode and any TPMContext method
+// that executes a command on the TPM if the TPM returns a TPM_RC_BAD_TAG
+// response code, indicating that the tag in the command header is invalid.
+// This error will occur when trying to execute a TPM2 command on a TPM1.2
+// device.
+type TPMErrorBadTag struct {
+	Command CommandCode
+}
+
+func (TPMErrorBadTag) ResponseCode() ResponseCode {
+	return ResponseBadTag
+}
+
+func (e *TPMErrorBadTag) Error() string {
+	return fmt.Sprintf("TPM returned a TPM_RC_BAD_TAG error whilst executing command %s", e.Command)
+}
 
 // TPMError is returned from DecodeResponseCode and any TPMContext method that
 // executes a command on the TPM if the TPM response code indicates an error that
@@ -426,14 +439,10 @@ type TPMError struct {
 }
 
 func (e *TPMError) ResponseCode() ResponseCode {
-	switch {
-	case e.Code == ErrorBadTag:
-		return ResponseBadTag
-	case e.Code >= 0x80:
+	if e.Code >= 0x80 {
 		return responseCodeF | (ResponseCode(e.Code) & responseCodeE1)
-	default:
-		return responseCodeV | (ResponseCode(e.Code) & responseCodeE0)
 	}
+	return responseCodeV | (ResponseCode(e.Code) & responseCodeE0)
 }
 
 func (e *TPMError) Error() string {
@@ -619,7 +628,7 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 	case resp == ResponseSuccess:
 		return nil
 	case resp == ResponseBadTag:
-		return &TPMError{Command: command, Code: ErrorBadTag}
+		return &TPMErrorBadTag{Command: command}
 	case resp.F():
 		// Format-one error codes
 		err := &TPMError{Command: command, Code: ErrorCode(resp.E()) + errorCode1Start}
