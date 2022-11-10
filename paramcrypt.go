@@ -20,34 +20,34 @@ func isParamEncryptable(param interface{}) bool {
 
 func (s *sessionParam) ComputeSessionValue() []byte {
 	var key []byte
-	key = append(key, s.session.Data().SessionKey...)
+	key = append(key, s.Session.Data().SessionKey...)
 	if s.IsAuth() {
-		key = append(key, s.associatedResource.GetAuthValue()...)
+		key = append(key, s.AssociatedResource.GetAuthValue()...)
 	}
 	return key
 }
 
 func (p *sessionParams) decryptSession() (*sessionParam, int) {
-	if p.decryptSessionIndex == -1 {
+	if p.DecryptSessionIndex == -1 {
 		return nil, -1
 	}
-	return p.sessions[p.decryptSessionIndex], p.decryptSessionIndex
+	return p.Sessions[p.DecryptSessionIndex], p.DecryptSessionIndex
 }
 
 func (p *sessionParams) encryptSession() (*sessionParam, int) {
-	if p.encryptSessionIndex == -1 {
+	if p.EncryptSessionIndex == -1 {
 		return nil, -1
 	}
-	return p.sessions[p.encryptSessionIndex], p.encryptSessionIndex
+	return p.Sessions[p.EncryptSessionIndex], p.EncryptSessionIndex
 }
 
 func (p *sessionParams) hasDecryptSession() bool {
-	return p.decryptSessionIndex != -1
+	return p.DecryptSessionIndex != -1
 }
 
 func (p *sessionParams) ComputeEncryptNonce() {
 	s, i := p.encryptSession()
-	if s == nil || i == 0 || !p.sessions[0].IsAuth() {
+	if s == nil || i == 0 || !p.Sessions[0].IsAuth() {
 		return
 	}
 	ds, di := p.decryptSession()
@@ -55,7 +55,7 @@ func (p *sessionParams) ComputeEncryptNonce() {
 		return
 	}
 
-	p.sessions[0].encryptNonce = s.session.NonceTPM()
+	p.Sessions[0].EncryptNonce = s.Session.NonceTPM()
 }
 
 func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
@@ -64,7 +64,7 @@ func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
 		return nil
 	}
 
-	sessionData := s.session.Data()
+	sessionData := s.Session.Data()
 	hashAlg := sessionData.HashAlg
 
 	sessionValue := s.ComputeSessionValue()
@@ -93,8 +93,8 @@ func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
-	if i > 0 && p.sessions[0].IsAuth() {
-		p.sessions[0].decryptNonce = sessionData.NonceTPM
+	if i > 0 && p.Sessions[0].IsAuth() {
+		p.Sessions[0].DecryptNonce = sessionData.NonceTPM
 	}
 
 	return nil
@@ -106,7 +106,7 @@ func (p *sessionParams) DecryptResponseParameter(rpBytes []byte) error {
 		return nil
 	}
 
-	sessionData := s.session.Data()
+	sessionData := s.Session.Data()
 	hashAlg := sessionData.HashAlg
 
 	sessionValue := s.ComputeSessionValue()

@@ -48,29 +48,3 @@ func MockRandReader(r io.Reader) (restore func()) {
 		rand.Reader = orig
 	}
 }
-
-func NewMockSessionParam(session SessionContext, associatedResource ResourceContext, includeAuthValue bool, decryptNonce, encryptNonce Nonce) *SessionParam {
-	var r resourceContextInternal
-	if associatedResource != nil {
-		r = associatedResource.(resourceContextInternal)
-	}
-	var s sessionContextInternal
-	if session != nil {
-		s = session.(sessionContextInternal)
-	}
-
-	return &sessionParam{
-		session:            s,
-		associatedResource: r,
-		includeAuthValue:   includeAuthValue,
-		decryptNonce:       decryptNonce,
-		encryptNonce:       encryptNonce}
-}
-
-func NewMockSessionParams(commandCode CommandCode, sessions []*SessionParam, encryptSessionIndex, decryptSessionIndex int) *SessionParams {
-	return &sessionParams{
-		commandCode:         commandCode,
-		sessions:            sessions,
-		encryptSessionIndex: encryptSessionIndex,
-		decryptSessionIndex: decryptSessionIndex}
-}

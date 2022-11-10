@@ -174,9 +174,9 @@ func (e *execContext) processResponseAuth(r *rspContext) (err error) {
 		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot process response auth area: %w", err)}
 	}
 
-	for _, s := range r.sessionParams.sessions {
-		if s.session.IsExclusive() {
-			e.lastExclusiveSession = s.session
+	for _, s := range r.sessionParams.Sessions {
+		if s.Session.IsExclusive() {
+			e.lastExclusiveSession = s.Session
 			break
 		}
 	}
