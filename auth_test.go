@@ -1095,7 +1095,7 @@ type testSessionParamsAppendSessionForResourceData struct {
 func (s *authSuite) testSessionParamsAppendSessionForResource(c *C, data *testSessionParamsAppendSessionForResourceData) {
 	c.Assert(len(data.sessions), Equals, len(data.resources))
 
-	params := NewSessionParams(CommandUnseal)
+	params := NewSessionParams()
 	var expectedParams []*SessionParam
 	for i := range data.sessions {
 		c.Check(params.AppendSessionForResource(data.sessions[i], data.resources[i]), IsNil)
@@ -1149,7 +1149,7 @@ func (s *authSuite) testSessionParamsAppendExtraSessions(c *C, data *testSession
 		attrs:  AttrContinueSession}
 
 	expectedParams := []*SessionParam{newMockSessionParam(session, resource, false, nil, nil)}
-	params := newMockSessionParams(CommandUnseal, []*SessionParam{expectedParams[0]}, -1, -1)
+	params := newMockSessionParams(0, []*SessionParam{expectedParams[0]}, -1, -1)
 
 	c.Check(params.AppendExtraSessions(data.sessions...), IsNil)
 	for _, s := range data.sessions {
@@ -1222,7 +1222,7 @@ func (s *authSuite) TestSessionParamsComputeCallerNonces(c *C) {
 	sessions := []*mockSessionContext{
 		&mockSessionContext{data: &SessionContextData{NonceCaller: make([]byte, 20)}},
 		&mockSessionContext{data: &SessionContextData{NonceCaller: make([]byte, 32)}}}
-	params := newMockSessionParams(CommandUnseal, []*SessionParam{
+	params := newMockSessionParams(0, []*SessionParam{
 		newMockSessionParam(sessions[0], nil, false, nil, nil),
 		newMockSessionParam(sessions[1], nil, false, nil, nil),
 	}, -1, -1)
@@ -1238,10 +1238,10 @@ type testSessionParamsBuildCommandAuthAreaData struct {
 	sessions  []SessionContext
 	resources []ResourceContext
 
-	commandCode         CommandCode
 	encryptSessionIndex int
 	decryptSessionIndex int
 
+	commandCode    CommandCode
 	commandHandles []Name
 	cpBytes        []byte
 
@@ -1262,7 +1262,7 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 		sessions = append(sessions, newMockSessionParam(s, r, false, nil, nil))
 	}
 
-	params := newMockSessionParams(data.commandCode, sessions, data.encryptSessionIndex, data.decryptSessionIndex)
+	params := newMockSessionParams(0, sessions, data.encryptSessionIndex, data.decryptSessionIndex)
 
 	origCpBytes := data.cpBytes
 	if data.cpBytes == nil {
@@ -1272,9 +1272,11 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 	cpBytes := make([]byte, len(origCpBytes))
 	copy(cpBytes, origCpBytes)
 
-	authArea, err := params.BuildCommandAuthArea(data.commandHandles, cpBytes)
+	authArea, err := params.BuildCommandAuthArea(data.commandCode, data.commandHandles, cpBytes)
 	c.Check(err, IsNil)
-	c.Assert(authArea, HasLen, len(sessions))
+
+	// check command code was saved
+	c.Check(params.CommandCode, Equals, data.commandCode)
 
 	// check caller nonces
 	for i, s := range data.sessions {
@@ -1312,6 +1314,7 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 	c.Check(sessions[0].EncryptNonce, DeepEquals, data.expectedEncryptNonce)
 
 	// check auth area
+	c.Assert(authArea, HasLen, len(sessions))
 	for i, a := range authArea {
 		c.Check(a.SessionHandle, Equals, data.sessions[i].Handle())
 		c.Check(a.Nonce, DeepEquals, data.sessions[i].(SessionContextInternal).Data().NonceCaller)
@@ -1488,7 +1491,7 @@ func (s *authSuite) TestSessionParamsInvalidateSessionContexts(c *C) {
 		&mockSessionContext{handle: 0x02000000},
 		&mockSessionContext{handle: 0x03000001},
 		&mockSessionContext{handle: 0x02000002}}
-	params := newMockSessionParams(CommandUnseal, []*SessionParam{
+	params := newMockSessionParams(0, []*SessionParam{
 		newMockSessionParam(sessions[0], nil, false, nil, nil),
 		newMockSessionParam(sessions[1], nil, false, nil, nil),
 		newMockSessionParam(sessions[2], nil, false, nil, nil),

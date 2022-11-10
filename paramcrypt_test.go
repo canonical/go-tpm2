@@ -83,7 +83,7 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceNoEncrypt(c *C) {
 	params := []*SessionParam{
 		newMockSessionParam(sessions[0], resources[0], false, nil, nil)}
 
-	newMockSessionParams(CommandUnseal, params, -1, -1).ComputeEncryptNonce()
+	newMockSessionParams(0, params, -1, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
 }
 
@@ -93,7 +93,7 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncrypt(c *C) 
 	params := []*SessionParam{
 		newMockSessionParam(sessions[0], resources[0], false, nil, nil)}
 
-	newMockSessionParams(CommandUnseal, params, 0, -1).ComputeEncryptNonce()
+	newMockSessionParams(0, params, 0, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
 }
 
@@ -106,7 +106,7 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithExtraEncrypt(c
 		newMockSessionParam(sessions[0], resources[0], false, nil, nil),
 		newMockSessionParam(sessions[1], nil, false, nil, nil)}
 
-	newMockSessionParams(CommandUnseal, params, 1, -1).ComputeEncryptNonce()
+	newMockSessionParams(0, params, 1, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, DeepEquals, Nonce("bar"))
 }
 
@@ -118,7 +118,7 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithExtraEncryptNo
 		newMockSessionParam(sessions[0], nil, false, nil, nil),
 		newMockSessionParam(sessions[1], nil, false, nil, nil)}
 
-	newMockSessionParams(CommandUnseal, params, 1, -1).ComputeEncryptNonce()
+	newMockSessionParams(0, params, 1, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
 }
 
@@ -133,7 +133,7 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncryptAndDecr
 		newMockSessionParam(sessions[1], nil, false, nil, nil),
 		newMockSessionParam(sessions[2], nil, false, nil, nil)}
 
-	newMockSessionParams(CommandUnseal, params, 2, 1).ComputeEncryptNonce()
+	newMockSessionParams(0, params, 2, 1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, DeepEquals, Nonce("bar"))
 }
 
@@ -146,7 +146,7 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncryptAndDecr
 		newMockSessionParam(sessions[0], resources[0], false, nil, nil),
 		newMockSessionParam(sessions[1], nil, false, nil, nil)}
 
-	newMockSessionParams(CommandUnseal, params, 1, 1).ComputeEncryptNonce()
+	newMockSessionParams(0, params, 1, 1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
 }
 
@@ -169,7 +169,7 @@ func (s *paramcryptSuite) testEncryptCommandParameter(c *C, data *testEncryptCom
 		sessions = append(sessions, newMockSessionParam(s, r, false, nil, nil))
 	}
 
-	params := newMockSessionParams(CommandUnseal, sessions, -1, data.decryptSessionIndex)
+	params := newMockSessionParams(0, sessions, -1, data.decryptSessionIndex)
 
 	cpBytes := make([]byte, len(data.cpBytes))
 	copy(cpBytes, data.cpBytes)
@@ -340,7 +340,7 @@ func (s *paramcryptSuite) testDecryptResponseParameter(c *C, data *testDecryptRe
 	//	c.Logf("%x", rpBytes)
 	//}
 
-	params := newMockSessionParams(CommandUnseal, sessions, data.encryptSessionIndex, -1)
+	params := newMockSessionParams(0, sessions, data.encryptSessionIndex, -1)
 
 	c.Check(params.DecryptResponseParameter(rpBytes), IsNil)
 	c.Check(rpBytes, DeepEquals, data.expected)

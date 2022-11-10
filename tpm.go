@@ -205,7 +205,7 @@ func (e *execContext) CompleteResponse(r *rspContext, responseParams ...interfac
 func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspContext, error) {
 	var handles HandleList
 	var handleNames []Name
-	sessionParams := newSessionParams(c.commandCode)
+	sessionParams := newSessionParams()
 
 	for _, h := range c.handles {
 		handles = append(handles, h.handle.Handle())
@@ -230,7 +230,7 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
 	}
 
-	cAuthArea, err := sessionParams.BuildCommandAuthArea(handleNames, cpBytes)
+	cAuthArea, err := sessionParams.BuildCommandAuthArea(c.commandCode, handleNames, cpBytes)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
 	}

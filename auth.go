@@ -183,9 +183,8 @@ type sessionParams struct {
 	DecryptSessionIndex int
 }
 
-func newSessionParams(commandCode CommandCode) *sessionParams {
+func newSessionParams() *sessionParams {
 	return &sessionParams{
-		CommandCode:         commandCode,
 		EncryptSessionIndex: -1,
 		DecryptSessionIndex: -1}
 }
@@ -243,7 +242,9 @@ func (p *sessionParams) ComputeCallerNonces() error {
 	return nil
 }
 
-func (p *sessionParams) BuildCommandAuthArea(commandHandles []Name, cpBytes []byte) ([]AuthCommand, error) {
+func (p *sessionParams) BuildCommandAuthArea(commandCode CommandCode, commandHandles []Name, cpBytes []byte) ([]AuthCommand, error) {
+	p.CommandCode = commandCode
+
 	if err := p.ComputeCallerNonces(); err != nil {
 		return nil, fmt.Errorf("cannot compute caller nonces: %v", err)
 	}
