@@ -125,6 +125,15 @@ type TPMVendorError struct {
 	Code    ResponseCode // Response code
 }
 
+// ResponseCode returns a TPM response code for this error. It will panic
+// if it cannot be converted to a valid vendor error response code.
+func (e *TPMVendorError) ResponseCode() ResponseCode {
+	if e.Code.F() || !e.Code.T() {
+		panic("invalid vendor error")
+	}
+	return e.Code
+}
+
 func (e *TPMVendorError) Error() string {
 	return fmt.Sprintf("TPM returned a vendor defined error whilst executing command %s: 0x%08x", e.Command, e.Code)
 }
@@ -194,8 +203,13 @@ type TPMWarning struct {
 	Code    WarningCode // Warning code
 }
 
+// ResponseCode returns a TPM response code for this error. It will panic
+// if it cannot be converted to a valid warning response code.
 func (e *TPMWarning) ResponseCode() ResponseCode {
-	return responseCodeS | responseCodeV | (ResponseCode(e.Code) & responseCodeE0)
+	if ResponseCode(e.Code)&responseCodeE0 != ResponseCode(e.Code) {
+		panic("invalid warning code")
+	}
+	return responseCodeS | responseCodeV | ResponseCode(e.Code)
 }
 
 func (e *TPMWarning) Error() string {
@@ -445,6 +459,7 @@ type TPMErrorBadTag struct {
 	Command CommandCode
 }
 
+// ResponseCode returns a TPM response code for this error.
 func (TPMErrorBadTag) ResponseCode() ResponseCode {
 	return ResponseBadTag
 }
@@ -461,11 +476,17 @@ type TPMError struct {
 	Code    ErrorCode   // Error code
 }
 
+// ResponseCode returns a TPM response code for this error. It will panic
+// if it cannot be converted to a valid error response code.
 func (e *TPMError) ResponseCode() ResponseCode {
 	if e.Code >= 0x80 {
-		return responseCodeF | (ResponseCode(e.Code) & responseCodeE1)
+		code := ResponseCode(e.Code - errorCode1Start)
+		if code&responseCodeE1 != code {
+			panic("invalid error code")
+		}
+		return responseCodeF | ResponseCode(e.Code)
 	}
-	return responseCodeV | (ResponseCode(e.Code) & responseCodeE0)
+	return responseCodeV | ResponseCode(e.Code)
 }
 
 func (e *TPMError) Error() string {
@@ -493,8 +514,17 @@ type TPMParameterError struct {
 	Index int // Index of the parameter associated with this error in the command parameter area, starting from 1
 }
 
+// ResponseCode returns a TPM response code for this error. It will panic
+// if it cannot be converted to a valid parameter error response code.
 func (e *TPMParameterError) ResponseCode() ResponseCode {
-	return (ResponseCode(uint8(e.Index)&responseCodeIndex) << responseCodeIndexShift) | responseCodeF | responseCodeP | (ResponseCode(e.Code) & responseCodeE0)
+	code := e.TPMError.ResponseCode()
+	if !code.F() {
+		panic("invalid error code")
+	}
+	if e.Index < 0 || e.Index > maxResponseCodeParameterIndex {
+		panic("invalid index")
+	}
+	return (ResponseCode(e.Index) << responseCodeIndexShift) | responseCodeP | code
 }
 
 func (e *TPMParameterError) Error() string {
@@ -527,12 +557,22 @@ type TPMSessionError struct {
 }
 
 const (
-	responseCodeHandleIndex uint8 = 0x7
-	responseCodeIsSession   uint8 = 0x8
+	maxResponseCodeHandleIndex          = 7
+	maxResponseCodeParameterIndex       = 15
+	responseCodeIndexIsSession    uint8 = 0x8
 )
 
+// ResponseCode returns a TPM response code for this error. It will panic
+// if it cannot be converted to a valid session error response code.
 func (e *TPMSessionError) ResponseCode() ResponseCode {
-	return (ResponseCode(responseCodeIsSession|(uint8(e.Index)&responseCodeHandleIndex)) << responseCodeIndexShift) | responseCodeF | (ResponseCode(e.Code) & responseCodeE0)
+	code := e.TPMError.ResponseCode()
+	if !code.F() {
+		panic("invalid error code")
+	}
+	if e.Index < 0 || e.Index > maxResponseCodeHandleIndex {
+		panic("invalid index")
+	}
+	return (ResponseCode(responseCodeIndexIsSession|uint8(e.Index)) << responseCodeIndexShift) | code
 }
 
 func (e *TPMSessionError) Error() string {
@@ -566,8 +606,17 @@ type TPMHandleError struct {
 	Index int
 }
 
+// ResponseCode returns a TPM response code for this error. It will panic
+// if it cannot be converted to a valid handle error response code.
 func (e *TPMHandleError) ResponseCode() ResponseCode {
-	return (ResponseCode(uint8(e.Index)&responseCodeHandleIndex) << responseCodeIndexShift) | responseCodeF | (ResponseCode(e.Code) & responseCodeE0)
+	code := e.TPMError.ResponseCode()
+	if !code.F() {
+		panic("invalid error code")
+	}
+	if e.Index < 0 || e.Index > maxResponseCodeHandleIndex {
+		panic("invalid index")
+	}
+	return (ResponseCode(e.Index) << responseCodeIndexShift) | code
 }
 
 func (e *TPMHandleError) Error() string {
@@ -664,10 +713,17 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 		switch {
 		case resp.P():
 			// Associated with a parameter
+			if resp.N() == 0 {
+				return &InvalidResponseCodeError{Command: command, Code: resp}
+			}
 			return &TPMParameterError{TPMError: err, Index: int(resp.N())}
-		case resp.N()&0x8 != 0:
+		case resp.N()&responseCodeIndexIsSession != 0:
 			// Associated with a session
-			return &TPMSessionError{TPMError: err, Index: int(resp.N() & 0x7)}
+			index := resp.N() &^ responseCodeIndexIsSession
+			if index == 0 {
+				return &InvalidResponseCodeError{Command: command, Code: resp}
+			}
+			return &TPMSessionError{TPMError: err, Index: int(index)}
 		case resp.N() != 0:
 			// Associated with a handle
 			return &TPMHandleError{TPMError: err, Index: int(resp.N())}
