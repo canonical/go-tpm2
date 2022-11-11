@@ -289,10 +289,10 @@ func (c *CommandHandleContext) Session() SessionContext {
 // If the ResourceContext is nil, then HandleNull is used.
 func UseResourceContextWithAuth(r ResourceContext, s SessionContext) *CommandHandleContext {
 	if r == nil {
-		r = nullContext
+		r = nullResource()
 	}
 	if s == nil {
-		s = pwSession
+		s = pwSession()
 	}
 	return &CommandHandleContext{handle: r, session: s}
 }
@@ -301,7 +301,7 @@ func UseResourceContextWithAuth(r ResourceContext, s SessionContext) *CommandHan
 // require authorization. If the HandleContext is nil, then HandleNull is used.
 func UseHandleContext(h HandleContext) *CommandHandleContext {
 	if h == nil {
-		h = nullContext
+		h = nullResource()
 	}
 	return &CommandHandleContext{handle: h}
 }
@@ -314,14 +314,14 @@ type commandDispatcher interface {
 // CommandContext provides an API for building a command to execute via a TPMContext.
 type CommandContext struct {
 	dispatcher commandDispatcher
-	cmdContext
+	cmd        cmdContext
 }
 
 // ResponseContext contains the context required to validate a response and obtain
 // response parameters.
 type ResponseContext struct {
 	dispatcher commandDispatcher
-	*rspContext
+	rsp        *rspContext
 }
 
 // Complete performs validation of the response auth area and updates internal SessionContext
@@ -332,25 +332,25 @@ type ResponseContext struct {
 // AttrResponseEncrypt attribute set, then the first response parameter will
 // be decrypted using the properties of that SessionContext.
 func (c *ResponseContext) Complete(responseParams ...interface{}) error {
-	return c.dispatcher.CompleteResponse(c.rspContext, responseParams...)
+	return c.dispatcher.CompleteResponse(c.rsp, responseParams...)
 }
 
 // AddHandles appends the supplied command handle contexts to this command.
 func (c *CommandContext) AddHandles(handles ...*CommandHandleContext) *CommandContext {
-	c.handles = append(c.handles, handles...)
+	c.cmd.Handles = append(c.cmd.Handles, handles...)
 	return c
 }
 
 // AddParams appends the supplied command parameters to this command.
 func (c *CommandContext) AddParams(params ...interface{}) *CommandContext {
-	c.params = append(c.params, params...)
+	c.cmd.Params = append(c.cmd.Params, params...)
 	return c
 }
 
 // AddExtraSessions adds the supplied additional session contexts to this command. These
 // sessions are not used for authorization of any resources.
 func (c *CommandContext) AddExtraSessions(sessions ...SessionContext) *CommandContext {
-	c.extraSessions = append(c.extraSessions, sessions...)
+	c.cmd.ExtraSessions = append(c.cmd.ExtraSessions, sessions...)
 	return c
 }
 
@@ -376,13 +376,13 @@ func (c *CommandContext) AddExtraSessions(sessions ...SessionContext) *CommandCo
 // One of *TPMWarning, *TPMError, *TPMParameterError, *TPMHandleError or *TPMSessionError
 // will be returned if the TPM returns a response code other than ResponseSuccess.
 func (c *CommandContext) RunWithoutProcessingResponse(responseHandle *Handle) (*ResponseContext, error) {
-	r, err := c.dispatcher.RunCommand(&c.cmdContext, responseHandle)
+	r, err := c.dispatcher.RunCommand(&c.cmd, responseHandle)
 	if err != nil {
 		return nil, err
 	}
 	return &ResponseContext{
 		dispatcher: c.dispatcher,
-		rspContext: r}, nil
+		rsp:        r}, nil
 }
 
 // Run executes the command defined by this context using the TPMContext that created it.

@@ -130,19 +130,19 @@ type execContextDispatcher interface {
 }
 
 type cmdContext struct {
-	commandCode   CommandCode
-	handles       []*CommandHandleContext
-	params        []interface{}
-	extraSessions []SessionContext
+	CommandCode   CommandCode
+	Handles       []*CommandHandleContext
+	Params        []interface{}
+	ExtraSessions []SessionContext
 }
 
 type rspContext struct {
-	commandCode      CommandCode
-	sessionParams    *sessionParams
-	responseAuthArea []AuthResponse
-	rpBytes          []byte
+	CommandCode      CommandCode
+	SessionParams    *sessionParams
+	ResponseAuthArea []AuthResponse
+	RpBytes          []byte
 
-	err error
+	Err error
 }
 
 type execContext struct {
@@ -153,16 +153,16 @@ type execContext struct {
 
 func (e *execContext) processResponseAuth(r *rspContext) (err error) {
 	if r != e.pendingResponse {
-		return r.err
+		return r.Err
 	}
 
 	defer func() {
-		r.err = err
+		r.Err = err
 	}()
 
 	e.pendingResponse = nil
 
-	if isSessionAllowed(r.commandCode) && e.lastExclusiveSession != nil {
+	if isSessionAllowed(r.CommandCode) && e.lastExclusiveSession != nil {
 		data := e.lastExclusiveSession.Data()
 		if data != nil {
 			data.IsExclusive = false
@@ -170,11 +170,11 @@ func (e *execContext) processResponseAuth(r *rspContext) (err error) {
 		e.lastExclusiveSession = nil
 	}
 
-	if err := r.sessionParams.ProcessResponseAuthArea(r.responseAuthArea, r.rpBytes); err != nil {
-		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot process response auth area: %w", err)}
+	if err := r.SessionParams.ProcessResponseAuthArea(r.ResponseAuthArea, r.RpBytes); err != nil {
+		return &InvalidResponseError{r.CommandCode, xerrors.Errorf("cannot process response auth area: %w", err)}
 	}
 
-	for _, s := range r.sessionParams.Sessions {
+	for _, s := range r.SessionParams.Sessions {
 		if s.Session.IsExclusive() {
 			e.lastExclusiveSession = s.Session
 			break
@@ -189,14 +189,14 @@ func (e *execContext) CompleteResponse(r *rspContext, responseParams ...interfac
 		return err
 	}
 
-	rpBuf := bytes.NewReader(r.rpBytes)
+	rpBuf := bytes.NewReader(r.RpBytes)
 
 	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-		return &InvalidResponseError{r.commandCode, xerrors.Errorf("cannot unmarshal response parameters: %w", err)}
+		return &InvalidResponseError{r.CommandCode, xerrors.Errorf("cannot unmarshal response parameters: %w", err)}
 	}
 
 	if rpBuf.Len() > 0 {
-		return &InvalidResponseError{r.commandCode, fmt.Errorf("response parameter area contains %d trailing bytes", rpBuf.Len())}
+		return &InvalidResponseError{r.CommandCode, fmt.Errorf("response parameter area contains %d trailing bytes", rpBuf.Len())}
 	}
 
 	return nil
@@ -207,48 +207,48 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 	var handleNames []Name
 	sessionParams := newSessionParams()
 
-	for _, h := range c.handles {
+	for _, h := range c.Handles {
 		handles = append(handles, h.handle.Handle())
 		handleNames = append(handleNames, h.handle.Name())
 
 		if h.session != nil {
 			if err := sessionParams.AppendSessionForResource(h.session, h.handle.(ResourceContext)); err != nil {
-				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.commandCode, len(handles), err)
+				return nil, fmt.Errorf("cannot process HandleContext for command %s at index %d: %v", c.CommandCode, len(handles), err)
 			}
 		}
 	}
-	if err := sessionParams.AppendExtraSessions(c.extraSessions...); err != nil {
-		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.commandCode, err)
+	if err := sessionParams.AppendExtraSessions(c.ExtraSessions...); err != nil {
+		return nil, fmt.Errorf("cannot process non-auth SessionContext parameters for command %s: %v", c.CommandCode, err)
 	}
 
-	if sessionParams.hasDecryptSession() && (len(c.params) == 0 || !isParamEncryptable(c.params[0])) {
-		return nil, fmt.Errorf("command %s does not support command parameter encryption", c.commandCode)
+	if sessionParams.hasDecryptSession() && (len(c.Params) == 0 || !isParamEncryptable(c.Params[0])) {
+		return nil, fmt.Errorf("command %s does not support command parameter encryption", c.CommandCode)
 	}
 
-	cpBytes, err := mu.MarshalToBytes(c.params...)
+	cpBytes, err := mu.MarshalToBytes(c.Params...)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.commandCode, err)
+		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.CommandCode, err)
 	}
 
-	cAuthArea, err := sessionParams.BuildCommandAuthArea(c.commandCode, handleNames, cpBytes)
+	cAuthArea, err := sessionParams.BuildCommandAuthArea(c.CommandCode, handleNames, cpBytes)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.commandCode, err)
+		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.CommandCode, err)
 	}
 
 	if e.pendingResponse != nil {
 		e.processResponseAuth(e.pendingResponse)
 	}
 
-	rpBytes, rAuthArea, err := e.dispatcher.RunCommand(c.commandCode, handles, cAuthArea, cpBytes, responseHandle)
+	rpBytes, rAuthArea, err := e.dispatcher.RunCommand(c.CommandCode, handles, cAuthArea, cpBytes, responseHandle)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &rspContext{
-		commandCode:      c.commandCode,
-		sessionParams:    sessionParams,
-		responseAuthArea: rAuthArea,
-		rpBytes:          rpBytes}
+		CommandCode:      c.CommandCode,
+		SessionParams:    sessionParams,
+		ResponseAuthArea: rAuthArea,
+		RpBytes:          rpBytes}
 	e.pendingResponse = r
 	return r, nil
 }
@@ -425,8 +425,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
 	return &CommandContext{
 		dispatcher: &t.execContext,
-		cmdContext: cmdContext{
-			commandCode: commandCode}}
+		cmd:        cmdContext{CommandCode: commandCode}}
 }
 
 // SetMaxSubmissions sets the maximum number of times that CommandContext will attempt to

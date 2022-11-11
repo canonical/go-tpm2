@@ -17,10 +17,13 @@ const (
 	PolicyHMACTypePassword = policyHMACTypePassword
 )
 
-type ResourceContextInternal = resourceContextInternal
-type ObjectContext = objectContext
+type CmdContext = cmdContext
+type CommandDispatcher = commandDispatcher
 type NvIndexContext = nvIndexContext
+type ObjectContext = objectContext
 type PolicyHMACType = policyHMACType
+type ResourceContextInternal = resourceContextInternal
+type RspContext = rspContext
 type SessionContextData = sessionContextData
 type SessionContextImpl = sessionContext // We already have a SessionContext interface
 type SessionContextInternal = sessionContextInternal
@@ -31,6 +34,20 @@ var ComputeBindName = computeBindName
 var NewExtraSessionParam = newExtraSessionParam
 var NewSessionParamForAuth = newSessionParamForAuth
 var NewSessionParams = newSessionParams
+var NullResource = nullResource
+var PwSession = pwSession
+
+func (c *CommandContext) Cmd() *CmdContext {
+	return &c.cmd
+}
+
+func (c *ResponseContext) Dispatcher() CommandDispatcher {
+	return c.dispatcher
+}
+
+func (c *ResponseContext) Rsp() *RspContext {
+	return c.rsp
+}
 
 func Canonicalize(vals ...interface{}) error {
 	b := new(bytes.Buffer)
@@ -47,4 +64,18 @@ func MockRandReader(r io.Reader) (restore func()) {
 	return func() {
 		rand.Reader = orig
 	}
+}
+
+func NewMockCommandContext(dispatcher CommandDispatcher, cmd *CmdContext) *CommandContext {
+	c := &CommandContext{dispatcher: dispatcher}
+	if cmd != nil {
+		c.cmd = *cmd
+	}
+	return c
+}
+
+func NewMockResponseContext(dispatcher CommandDispatcher, rsp *RspContext) *ResponseContext {
+	return &ResponseContext{
+		dispatcher: dispatcher,
+		rsp:        rsp}
 }

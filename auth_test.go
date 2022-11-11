@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"crypto/aes"
 	"encoding/binary"
-	"io"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -16,7 +15,6 @@ import (
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/crypto"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
-	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
@@ -25,60 +23,6 @@ type authSuite struct {
 }
 
 var _ = Suite(&authSuite{})
-
-type mockResourceContext struct {
-	handle    Handle
-	name      Name
-	authValue []byte
-}
-
-func (r *mockResourceContext) Handle() Handle                      { return r.handle }
-func (r *mockResourceContext) Name() Name                          { return r.name }
-func (r *mockResourceContext) SerializeToBytes() []byte            { return nil }
-func (r *mockResourceContext) SerializeToWriter(w io.Writer) error { return nil }
-func (r *mockResourceContext) SetAuthValue(authValue []byte)       { r.authValue = authValue }
-func (r *mockResourceContext) GetAuthValue() []byte                { return r.authValue }
-func (r *mockResourceContext) SetHandle(handle Handle)             { r.handle = handle }
-func (r *mockResourceContext) Invalidate()                         {}
-
-type mockSessionContext struct {
-	handle   Handle
-	data     *SessionContextData
-	attrs    SessionAttributes
-	unloaded bool
-}
-
-func (s *mockSessionContext) Handle() Handle { return s.handle }
-
-func (s *mockSessionContext) Name() Name {
-	var name Name
-	mu.MustMarshalToBytes(name, s.handle)
-	return name
-}
-
-func (s *mockSessionContext) SerializeToBytes() []byte            { return nil }
-func (s *mockSessionContext) SerializeToWriter(w io.Writer) error { return nil }
-func (s *mockSessionContext) NonceTPM() Nonce                     { return s.data.NonceTPM }
-func (s *mockSessionContext) IsAudit() bool                       { return s.data.IsAudit }
-func (s *mockSessionContext) IsExclusive() bool                   { return s.data.IsExclusive }
-func (s *mockSessionContext) SetAttrs(attrs SessionAttributes)    { s.attrs = attrs }
-
-func (r *mockSessionContext) WithAttrs(attrs SessionAttributes) SessionContext {
-	return &mockSessionContext{handle: r.handle, data: r.data, attrs: attrs}
-}
-
-func (r *mockSessionContext) IncludeAttrs(attrs SessionAttributes) SessionContext {
-	return &mockSessionContext{handle: r.handle, data: r.data, attrs: r.attrs | attrs}
-}
-
-func (r *mockSessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
-	return &mockSessionContext{handle: r.handle, data: r.data, attrs: r.attrs &^ attrs}
-}
-
-func (r *mockSessionContext) Invalidate()               { r.handle = HandleUnassigned }
-func (r *mockSessionContext) Attrs() SessionAttributes  { return r.attrs }
-func (r *mockSessionContext) Data() *SessionContextData { return r.data }
-func (r *mockSessionContext) Unload()                   { r.unloaded = true }
 
 func newMockSessionParam(session SessionContext, associatedResource ResourceContext, includeAuthValue bool, decryptNonce, encryptNonce Nonce) *SessionParam {
 	var r ResourceContextInternal
