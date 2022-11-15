@@ -241,42 +241,67 @@ func (rc ResponseCode) F() bool {
 	return rc&responseCodeF != 0
 }
 
-// V returns the V field of the response code. If this is set in a format-zero
-// response code, then it is a TPM2 code returned when the response tag is
-// TPM_ST_NO_SESSIONS. If it is not set in a format-zero response code, then it
-// is a TPM1.2 code returned when the response tag is TPM_TAG_RSP_COMMAND.
+// V returns the V field of the response code and is only relevant for
+// format-zero response codes. If this is set then it is a TPM2 code returned
+// when the response tag is TPM_ST_NO_SESSIONS. If it is not set then it is a
+// TPM1.2 code returned when the response tag is TPM_TAG_RSP_COMMAND.
+//
+// This will panic if the F field is set.
 func (rc ResponseCode) V() bool {
+	if rc.F() {
+		panic("not a format-0 response code")
+	}
 	return rc&responseCodeV != 0
 }
 
-// T returns the T field of the response code. If this is set in a format-zero
-// response code, then the code is defined by the TPM vendor. If it is not set
-// in a format-zero response code, then the code is defined by the TCG.
+// T returns the T field of the response code and is only relevant for
+// format-zero response codes. If this is set then the code is defined by the
+// TPM vendor. If it is not set then the code is defined by the TCG.
+//
+// This will panic if the F field is set.
 func (rc ResponseCode) T() bool {
+	if rc.F() {
+		panic("not a format-0 response code")
+	}
 	return rc&responseCodeT != 0
 }
 
-// S returns the S field of the response code. If this is set in a format-zero
-// response code, then the code indicates a warning. If it is not set in a
-// format-zero response code, then the code indicates an error.
+// S returns the S field of the response code and is only relevant for
+// format-zero response codes. If this is set then the code indicates a
+// warning. If it is not set then the code indicates an error.
+//
+// This will panic if the F field is set.
 func (rc ResponseCode) S() bool {
+	if rc.F() {
+		panic("not a format-0 response code")
+	}
 	return rc&responseCodeS != 0
 }
 
-// P returns the P field of the response code. If this is set in a format-one
-// response code, then the code is associated with a command parameter. If it is
-// not set in a format-one error code, then the code is associated with a command
-// handle or session.
+// P returns the P field of the response code and is only relevant for
+// format-one response codes. If this is set then the code is associated with
+// a command parameter. If it is not set then the code is associated with a
+// command handle or session.
+//
+// This will panic if the F field is not set.
 func (rc ResponseCode) P() bool {
+	if !rc.F() {
+		panic("not a format-1 response code")
+	}
 	return rc&responseCodeP != 0
 }
 
-// N returns the N field of the response code. If the P field is set in a
-// format-one response code, then this indicates the parameter number from 0x1
-// to 0xf. If the P field is not set in a format-one response code, then the
+// N returns the N field of the response code and is only relevant for
+// format-one response codes. If the P field is set then this indicates the
+// parameter number from 0x1 to 0xf. If the P field is not set then the
 // lower 3 bits indicate the handle or session number (0x1 to 0x7 for handles
 // and 0x9 to 0xf for sessions).
+//
+// This will panic if the F field is not set.
 func (rc ResponseCode) N() uint8 {
+	if !rc.F() {
+		panic("not a format-1 response code")
+	}
 	return uint8(rc & responseCodeN >> responseCodeIndexShift)
 }
 
