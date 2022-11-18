@@ -176,11 +176,11 @@ func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters [
 	switch header.Tag {
 	case TagRspCommand:
 		if header.ResponseCode != ResponseBadTag {
-			return 0, nil, nil, fmt.Errorf("unexpected TPM1.2 response code 0x%08x", header.ResponseCode)
+			return 0, nil, nil, xerrors.Errorf("[TPM_ST_RSP_COMMAND]: %w", InvalidResponseCodeError(header.ResponseCode))
 		}
 	case TagSessions:
 		if header.ResponseCode != ResponseSuccess {
-			return 0, nil, nil, fmt.Errorf("unexpcted response code 0x%08x for TPM_ST_SESSIONS response", header.ResponseCode)
+			return 0, nil, nil, xerrors.Errorf("[TPM_ST_SESSIONS]: %w", InvalidResponseCodeError(header.ResponseCode))
 		}
 		fallthrough
 	case TagNoSessions:

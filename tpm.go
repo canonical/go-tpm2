@@ -404,6 +404,9 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 
 			break
 		}
+		if _, isInvalidRc := err.(InvalidResponseCodeError); isInvalidRc {
+			return nil, nil, &InvalidResponseError{commandCode, err}
+		}
 
 		if tries >= t.maxSubmissions {
 			return nil, nil, err

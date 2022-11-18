@@ -67,13 +67,13 @@ func (s *commandSuite) TestUnmarshalResponsePacketInvalidSize(c *C) {
 func (s *commandSuite) TestUnmarshalResponsePacketUnexpectedTPM1(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "00c40000000a00000000"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "unexpected TPM1.2 response code 0x00000000")
+	c.Check(err, ErrorMatches, "\\[TPM_ST_RSP_COMMAND\\]: invalid response code 0x00000000")
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketUnsuccessfulWithSessions(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000000a0000088e"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "unexpcted response code 0x0000088e for TPM_ST_SESSIONS response")
+	c.Check(err, ErrorMatches, "\\[TPM_ST_SESSIONS\\]: invalid response code 0x0000088e")
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketTPM12(c *C) {

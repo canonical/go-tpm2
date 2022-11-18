@@ -687,13 +687,10 @@ func IsTPMWarning(err error, code WarningCode, command CommandCode) bool {
 // InvalidResponseCode is returned from DecodeResponseCode and any TPMContext
 // method that executes a command on the TPM if the TPM response code is
 // invalid.
-type InvalidResponseCodeError struct {
-	Command CommandCode
-	Code    ResponseCode
-}
+type InvalidResponseCodeError ResponseCode
 
-func (e *InvalidResponseCodeError) Error() string {
-	return fmt.Sprintf("TPM returned an invalid response code whilst executing command %s: 0x%08x", e.Command, e.Code)
+func (e InvalidResponseCodeError) Error() string {
+	return fmt.Sprintf("invalid response code 0x%08x", ResponseCode(e))
 }
 
 // DecodeResponseCode decodes the ResponseCode provided via resp. If the specified response code is
@@ -714,14 +711,14 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 		case resp.P():
 			// Associated with a parameter
 			if resp.N() == 0 {
-				return &InvalidResponseCodeError{Command: command, Code: resp}
+				return InvalidResponseCodeError(resp)
 			}
 			return &TPMParameterError{TPMError: err, Index: int(resp.N())}
 		case resp.N()&responseCodeIndexIsSession != 0:
 			// Associated with a session
 			index := resp.N() &^ responseCodeIndexIsSession
 			if index == 0 {
-				return &InvalidResponseCodeError{Command: command, Code: resp}
+				return InvalidResponseCodeError(resp)
 			}
 			return &TPMSessionError{TPMError: err, Index: int(index)}
 		case resp.N() != 0:
@@ -736,7 +733,7 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 		switch {
 		case !resp.V():
 			// A TPM1.2 error
-			return &InvalidResponseCodeError{Command: command, Code: resp}
+			return InvalidResponseCodeError(resp)
 		case resp.T():
 			// An error defined by the TPM vendor
 			return &TPMVendorError{Command: command, Code: resp}

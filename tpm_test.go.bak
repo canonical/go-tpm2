@@ -1,0 +1,47 @@
+// Copyright 2021 Canonical Ltd.
+// Licensed under the LGPLv3 with static-linking exception.
+// See LICENCE file for details.
+
+package tpm2_test
+
+import (
+	. "gopkg.in/check.v1"
+
+	. "github.com/canonical/go-tpm2"
+)
+
+type mockCommand struct {
+	handles []Handle
+	params []byte
+}
+
+type mockResponse struct {
+	handle *Handle
+	params []byte
+}
+
+type mockTpmSuiteTcti struct {
+	commands []mockCommand
+}
+
+func newMockTpmSuiteTcti() *mockTpmSuiteTcti {
+	tcti := new(mockTpmSuiteTcti)
+}
+
+func (t *mockTpmSuiteTcti) Read(p []byte) (int, error) {
+}
+
+func (t *mockTpmSuiteTcti) Write(p []byte) (int, error) {
+}
+
+func (t *mockTpmSuiteTcti) Close() error {}
+
+func (t *mockTpmSuiteTcti) SetLocality(locality uint8) error {
+}
+
+func (t *mockTpmSuiteTcti) MakeSticky(handle Handle, sticky bool) error {
+}
+
+type tpmSuite struct {}
+
+var _ = Suite(&tpmSuite{})

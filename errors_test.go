@@ -31,23 +31,23 @@ func (s *errorsSuite) TestDecodeBadTag(c *C) {
 
 func (s *errorsSuite) TestDecodeInvalid(c *C) {
 	err := DecodeResponseCode(CommandGetCapability, 0x1)
-	c.Check(err, ErrorMatches, "TPM returned an invalid response code whilst executing command TPM_CC_GetCapability: 0x00000001")
-	c.Assert(err, internal_testutil.ConvertibleTo, &InvalidResponseCodeError{})
-	c.Check(err.(*InvalidResponseCodeError), DeepEquals, &InvalidResponseCodeError{Command: CommandGetCapability, Code: 0x1})
+	c.Check(err, ErrorMatches, "invalid response code 0x00000001")
+	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
+	c.Check(err.(InvalidResponseCodeError), Equals, InvalidResponseCodeError(0x1))
 }
 
 func (s *errorsSuite) TestDecodeInvalidParameter(c *C) {
 	err := DecodeResponseCode(CommandStartAuthSession, 0xc9)
-	c.Check(err, ErrorMatches, "TPM returned an invalid response code whilst executing command TPM_CC_StartAuthSession: 0x000000c9")
-	c.Assert(err, internal_testutil.ConvertibleTo, &InvalidResponseCodeError{})
-	c.Check(err.(*InvalidResponseCodeError), DeepEquals, &InvalidResponseCodeError{Command: CommandStartAuthSession, Code: 0xc9})
+	c.Check(err, ErrorMatches, "invalid response code 0x000000c9")
+	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
+	c.Check(err.(InvalidResponseCodeError), Equals, InvalidResponseCodeError(0xc9))
 }
 
 func (s *errorsSuite) TestDecodeInvalidSession(c *C) {
 	err := DecodeResponseCode(CommandUnseal, 0x88e)
-	c.Check(err, ErrorMatches, "TPM returned an invalid response code whilst executing command TPM_CC_Unseal: 0x0000088e")
-	c.Assert(err, internal_testutil.ConvertibleTo, &InvalidResponseCodeError{})
-	c.Check(err.(*InvalidResponseCodeError), DeepEquals, &InvalidResponseCodeError{Command: CommandUnseal, Code: 0x88e})
+	c.Check(err, ErrorMatches, "invalid response code 0x0000088e")
+	c.Assert(err, internal_testutil.ConvertibleTo, InvalidResponseCodeError(0))
+	c.Check(err.(InvalidResponseCodeError), Equals, InvalidResponseCodeError(0x88e))
 }
 
 func (s *errorsSuite) TestDecodeVendorError(c *C) {
