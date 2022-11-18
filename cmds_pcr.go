@@ -86,7 +86,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 			return 0, nil, makeInvalidArgError("pcrSelectionIn", "unimplemented PCRs specified")
 		}
 
-		if n, err := pcrValues.SetValuesFromListAndSelection(pcrSelectionOut, values); err != nil {
+		if n, err := pcrValues.AddValues(pcrSelectionOut, values); err != nil {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, err}
 		} else if n != len(values) {
 			return 0, nil, &InvalidResponseError{CommandPCRRead, errors.New("too many digests")}

@@ -8,8 +8,6 @@ import (
 	"errors"
 
 	"golang.org/x/xerrors"
-
-	"github.com/canonical/go-tpm2/mu"
 )
 
 // TPMManufacturer corresponds to the TPM manufacturer and is returned when querying the value PropertyManufacturer with
@@ -68,24 +66,21 @@ func (v PCRValues) ToListAndSelection() (pcrs PCRSelectionList, digests DigestLi
 	return
 }
 
-// SetValuesFromListAndSelection sets PCR values from the supplied list of PCR selections and list
+// AddValues the PCR values from the supplied list of PCR selections and list
 // of values.
-func (v PCRValues) SetValuesFromListAndSelection(pcrs PCRSelectionList, digests DigestList) (int, error) {
-	// Copy the selections so that each selection is ordered correctly
-	{
-		var tmp PCRSelectionList
-		if err := mu.CopyValue(&tmp, pcrs); err != nil {
+func (v PCRValues) AddValues(pcrs PCRSelectionList, digests DigestList) (n int, err error) {
+	for _, p := range pcrs {
+		// Convert the selection to a bitmap and then back again
+		// to ensure it is ordered correctly.
+		bmp, err := p.Select.ToBitmap(0)
+		if err != nil {
 			return 0, xerrors.Errorf("invalid selection: %w", err)
 		}
-		pcrs = tmp
-	}
-
-	i := 0
-	for _, p := range pcrs {
+		sel := bmp.ToPCRs()
 		if _, ok := v[p.Hash]; !ok {
 			v[p.Hash] = make(map[int]Digest)
 		}
-		for _, s := range p.Select {
+		for _, s := range sel {
 			if len(digests) == 0 {
 				return 0, errors.New("insufficient digests")
 			}
@@ -95,10 +90,18 @@ func (v PCRValues) SetValuesFromListAndSelection(pcrs PCRSelectionList, digests 
 				return 0, errors.New("incorrect digest size")
 			}
 			v[p.Hash][s] = d
-			i++
+			n++
 		}
 	}
-	return i, nil
+	return n, nil
+}
+
+// SetValuesFromListAndSelection sets PCR values from the supplied list of PCR selections and list
+// of values.
+//
+// Deprecated: use AddValues instead
+func (v PCRValues) SetValuesFromListAndSelection(pcrs PCRSelectionList, digests DigestList) (int, error) {
+	return v.AddValues(pcrs, digests)
 }
 
 // SetValue sets the PCR value for the specified PCR and PCR bank.
