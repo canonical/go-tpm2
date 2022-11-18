@@ -495,15 +495,6 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 	return t.InitProperties()
 }
 
-func newTpmContext(tcti TCTI) *TPMContext {
-	r := new(TPMContext)
-	r.tcti = tcti
-	r.permanentResources = make(map[Handle]*permanentContext)
-	r.maxSubmissions = 5
-
-	return r
-}
-
 // NewTPMContext creates a new instance of TPMContext, which communicates with the
 // TPM using the transmission interface provided via the tcti parameter. The
 // transmission interface must not be nil - it is expected that the caller checks
