@@ -397,12 +397,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 
 		err = DecodeResponseCode(commandCode, rc)
 		if err == nil {
-			if len(rAuthArea) != len(cAuthArea) {
-				return nil, nil, &InvalidResponseError{commandCode, fmt.Errorf("unexpected number of auth responses (got %d, expected %d)",
-					len(rAuthArea), len(cAuthArea))}
-			}
-
-			break
+			return rpBytes, rAuthArea, nil
 		}
 		if _, isInvalidRc := err.(InvalidResponseCodeError); isInvalidRc {
 			return nil, nil, &InvalidResponseError{commandCode, err}
@@ -415,8 +410,6 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 			return nil, nil, err
 		}
 	}
-
-	return rpBytes, rAuthArea, nil
 }
 
 // StartCommand is the high-level function for beginning the process of executing a command. It
