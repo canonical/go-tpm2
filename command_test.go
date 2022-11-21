@@ -70,10 +70,59 @@ func (s *commandSuite) TestUnmarshalResponsePacketUnexpectedTPM1(c *C) {
 	c.Check(err, ErrorMatches, "\\[TPM_ST_RSP_COMMAND\\]: invalid response code 0x00000000")
 }
 
+func (s *commandSuite) TestUnmarshalResponsePacketTPM1WithExtraBytes(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "00c40000000b0000001ea5"))
+	_, _, _, err := p.Unmarshal(nil)
+	c.Check(err, ErrorMatches, "invalid packet length for TPM_ST_RSP_COMMAND response \\(11 bytes\\)")
+}
+
 func (s *commandSuite) TestUnmarshalResponsePacketUnsuccessfulWithSessions(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000000a0000088e"))
 	_, _, _, err := p.Unmarshal(nil)
 	c.Check(err, ErrorMatches, "\\[TPM_ST_SESSIONS\\]: invalid response code 0x0000088e")
+}
+
+func (s *commandSuite) TestUnmarshalResponsePacketUnsuccessfulWithExtraBytes(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80010000000c0000088ea5a5"))
+	_, _, _, err := p.Unmarshal(nil)
+	c.Check(err, ErrorMatches, "invalid packet length for unsuccessful TPM_ST_NO_SESSIONS response \\(12 bytes\\)")
+}
+
+func (s *commandSuite) TestUnmarshalResponsePacketInvalidTag(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "00010000000a00000000"))
+	_, _, _, err := p.Unmarshal(nil)
+	c.Check(err, ErrorMatches, "invalid tag: 1")
+}
+
+func (s *commandSuite) TestUnmarshalResponseHandleFail(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80010000000a00000000"))
+
+	var handle Handle
+	_, _, _, err := p.Unmarshal(&handle)
+	c.Check(err, ErrorMatches, "cannot unmarshal handle: cannot unmarshal argument whilst processing element of type tpm2.Handle: unexpected EOF")
+}
+
+func (s *commandSuite) TestUnmarshalResponseParamSizeFail(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000000a00000000"))
+	_, _, _, err := p.Unmarshal(nil)
+	c.Check(err, ErrorMatches, "cannot unmarshal parameterSize: cannot unmarshal argument whilst processing element of type uint32: unexpected EOF")
+}
+
+func (s *commandSuite) TestUnmarshalResponsePacketInvalidParamSize(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000001a00000000000010070005a5a5a5a5a50000010000"))
+	_, _, _, err := p.Unmarshal(nil)
+	c.Check(err, ErrorMatches, "invalid parameterSize \\(got 4103, remaining packet bytes 12\\)")
+}
+
+func (s *commandSuite) TestUnmarshalResponsePacketInvalidAuthArea(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "800200000012000000000000000000000000"))
+	_, _, _, err := p.Unmarshal(nil)
+	c.Check(err, ErrorMatches, `cannot unmarshal auth at index 0: cannot unmarshal argument whilst processing element of type tpm2.Auth: unexpected EOF
+
+=== BEGIN STACK ===
+... tpm2.AuthResponse field HMAC
+=== END STACK ===
+`)
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketTPM12(c *C) {
@@ -95,11 +144,13 @@ func (s *commandSuite) TestUnmarshalResponsePacketNoSessions(c *C) {
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketWithSessions(c *C) {
-	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000001a00000000000000070005a5a5a5a5a50000010000"))
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000002800000000000000070005a5a5a5a5a500000100000004010203040000050506070809"))
 	rc, params, authArea, err := p.Unmarshal(nil)
 	c.Check(err, IsNil)
 	c.Check(params, DeepEquals, internal_testutil.DecodeHexString(c, "0005a5a5a5a5a5"))
-	c.Check(authArea, DeepEquals, []AuthResponse{{Nonce: Nonce{}, SessionAttributes: AttrContinueSession, HMAC: Auth{}}})
+	c.Check(authArea, DeepEquals, []AuthResponse{
+		{Nonce: Nonce{}, SessionAttributes: AttrContinueSession, HMAC: Auth{}},
+		{Nonce: Nonce{1, 2, 3, 4}, HMAC: Auth{5, 6, 7, 8, 9}}})
 	c.Check(rc, Equals, ResponseSuccess)
 }
 
@@ -115,16 +166,22 @@ func (s *commandSuite) TestUnmarshalResponsePacketWithHandle(c *C) {
 	c.Check(handle, Equals, Handle(0x80000002))
 }
 
-func (s *commandSuite) TestUnmarshalResponsePacketInvalidParamSize(c *C) {
-	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000001a00000000000010070005a5a5a5a5a50000010000"))
-	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "cannot read parameters: unexpected EOF")
+func (s *commandSuite) TestUnmarshalUnsuccessfulResponseWithHandle(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80010000000a00000128"))
+
+	var handle Handle
+	rc, _, _, err := p.Unmarshal(&handle)
+	c.Check(err, IsNil)
+	c.Check(rc, Equals, ResponseCode(0x128))
+	c.Check(handle, Equals, Handle(0))
 }
 
-func (s *commandSuite) TestUnmarshalResponsePacketTooManySessions(c *C) {
-	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000002900000000000000070005a5a5a5a5a50000010000000001000000000100000000010000"))
-	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "5 trailing byte\\(s\\)")
+func (s *commandSuite) TestUnmarshalUnsuccessfulResponse(c *C) {
+	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80010000000a0000009a"))
+
+	rc, _, _, err := p.Unmarshal(nil)
+	c.Check(err, IsNil)
+	c.Check(rc, Equals, ResponseCode(0x9a))
 }
 
 func (s *commandSuite) TestUseHandleContext(c *C) {

@@ -11,14 +11,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 
 	"github.com/canonical/go-tpm2/mu"
 
 	"golang.org/x/xerrors"
-)
-
-const (
-	maxResponseSize int = 4096
 )
 
 // CommandHeader is the header for a TPM command.
@@ -46,6 +43,10 @@ func (p CommandPacket) GetCommandCode() (CommandCode, error) {
 func (p CommandPacket) Unmarshal(numHandles int) (handles HandleList, authArea []AuthCommand, parameters []byte, err error) {
 	buf := bytes.NewReader(p)
 
+	if buf.Size() > math.MaxUint32 {
+		return nil, nil, nil, fmt.Errorf("packet too large (%d bytes)", buf.Size())
+	}
+
 	var header CommandHeader
 	if _, err := mu.UnmarshalFromReader(buf, &header); err != nil {
 		return nil, nil, nil, xerrors.Errorf("cannot unmarshal header: %w", err)
@@ -68,13 +69,9 @@ func (p CommandPacket) Unmarshal(numHandles int) (handles HandleList, authArea [
 		}
 		r := &io.LimitedReader{R: buf, N: int64(authSize)}
 		for r.N > 0 {
-			if len(authArea) >= 3 {
-				return nil, nil, nil, fmt.Errorf("%d trailing byte(s) in auth area", r.N)
-			}
-
 			var auth AuthCommand
 			if _, err := mu.UnmarshalFromReader(r, &auth); err != nil {
-				return nil, nil, nil, xerrors.Errorf("cannot unmarshal auth: %w", err)
+				return nil, nil, nil, xerrors.Errorf("cannot unmarshal auth at index %d: %w", len(authArea), err)
 			}
 
 			authArea = append(authArea, auth)
@@ -106,7 +103,7 @@ func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []Au
 		header.Tag = TagSessions
 
 		aBytes := mu.MustMarshalToBytes(mu.Raw(authArea))
-		if int(uint32(len(aBytes))) != len(aBytes) {
+		if int64(len(aBytes)) > math.MaxUint32 {
 			return nil, errors.New("authArea is too large")
 		}
 		payload = mu.MustMarshalToBytes(mu.Raw(handles), uint32(len(aBytes)), mu.Raw(aBytes), mu.Raw(parameters))
@@ -116,11 +113,11 @@ func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []Au
 		payload = mu.MustMarshalToBytes(mu.Raw(handles), mu.Raw(parameters))
 	}
 
-	commandSize := binary.Size(header) + len(payload)
-	if int(uint32(commandSize)) != commandSize {
+	if int64(len(payload)) > math.MaxUint32-int64(binary.Size(header)) {
 		return nil, errors.New("total payload is too large")
 	}
-	header.CommandSize = uint32(commandSize)
+
+	header.CommandSize = uint32(binary.Size(header) + len(payload))
 
 	return mu.MustMarshalToBytes(header, mu.Raw(payload)), nil
 }
@@ -154,11 +151,11 @@ type ResponsePacket []byte
 // command returns a handle, and must be nil if the command does not return a handle, else
 // the response will be incorrectly unmarshalled.
 func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters []byte, authArea []AuthResponse, err error) {
-	if len(p) > maxResponseSize {
-		return 0, nil, nil, fmt.Errorf("packet too large (%d bytes)", len(p))
-	}
-
 	buf := bytes.NewReader(p)
+
+	if buf.Size() > math.MaxUint32 {
+		return 0, nil, nil, fmt.Errorf("packet too large (%d bytes)", buf.Size())
+	}
 
 	var header ResponseHeader
 	if _, err := mu.UnmarshalFromReader(buf, &header); err != nil {
@@ -169,28 +166,34 @@ func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters [
 		return 0, nil, nil, fmt.Errorf("invalid responseSize value (got %d, packet length %d)", header.ResponseSize, len(p))
 	}
 
-	if header.ResponseCode != ResponseSuccess && buf.Len() != 0 {
-		return header.ResponseCode, nil, nil, fmt.Errorf("%d trailing byte(s) in unsuccessful response", buf.Len())
-	}
-
 	switch header.Tag {
 	case TagRspCommand:
 		if header.ResponseCode != ResponseBadTag {
 			return 0, nil, nil, xerrors.Errorf("[TPM_ST_RSP_COMMAND]: %w", InvalidResponseCodeError(header.ResponseCode))
 		}
+		if buf.Len() != 0 {
+			return 0, nil, nil, fmt.Errorf("invalid packet length for TPM_ST_RSP_COMMAND response (%d bytes)", buf.Size())
+		}
 	case TagSessions:
 		if header.ResponseCode != ResponseSuccess {
 			return 0, nil, nil, xerrors.Errorf("[TPM_ST_SESSIONS]: %w", InvalidResponseCodeError(header.ResponseCode))
 		}
-		fallthrough
 	case TagNoSessions:
+		if header.ResponseCode != ResponseSuccess && buf.Len() != 0 {
+			return 0, nil, nil, fmt.Errorf("invalid packet length for unsuccessful TPM_ST_NO_SESSIONS response (%d bytes)", buf.Size())
+		}
+	default:
+		return 0, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
+	}
+
+	switch header.Tag {
+	case TagSessions, TagNoSessions:
 		if header.ResponseCode == ResponseSuccess && handle != nil {
 			if _, err := mu.UnmarshalFromReader(buf, handle); err != nil {
 				return 0, nil, nil, xerrors.Errorf("cannot unmarshal handle: %w", err)
 			}
 		}
 	default:
-		return 0, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
 	}
 
 	switch header.Tag {
@@ -201,19 +204,19 @@ func (p ResponsePacket) Unmarshal(handle *Handle) (rc ResponseCode, parameters [
 			return 0, nil, nil, xerrors.Errorf("cannot unmarshal parameterSize: %w", err)
 		}
 
+		if parameterSize > uint32(buf.Len()) {
+			return 0, nil, nil, fmt.Errorf("invalid parameterSize (got %d, remaining packet bytes %d)", parameterSize, buf.Len())
+		}
+
 		parameters = make([]byte, parameterSize)
 		if _, err := io.ReadFull(buf, parameters); err != nil {
 			return 0, nil, nil, xerrors.Errorf("cannot read parameters: %w", err)
 		}
 
 		for buf.Len() > 0 {
-			if len(authArea) >= 3 {
-				return 0, nil, nil, fmt.Errorf("%d trailing byte(s)", buf.Len())
-			}
-
 			var auth AuthResponse
 			if _, err := mu.UnmarshalFromReader(buf, &auth); err != nil {
-				return 0, nil, nil, xerrors.Errorf("cannot unmarshal auth: %w", err)
+				return 0, nil, nil, xerrors.Errorf("cannot unmarshal auth at index %d: %w", len(authArea), err)
 			}
 
 			authArea = append(authArea, auth)
