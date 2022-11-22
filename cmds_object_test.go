@@ -79,9 +79,6 @@ func (s *objectSuite) checkCreationData(c *C, data *CreationData, hash Digest, t
 	c.Check(data.ParentName, DeepEquals, parent.Name())
 	c.Check(data.ParentQualifiedName, DeepEquals, parentQN)
 
-	if outsideInfo == nil {
-		outsideInfo = Data{}
-	}
 	c.Check(data.OutsideInfo, DeepEquals, outsideInfo)
 
 	h := template.NameAlg.NewHash()

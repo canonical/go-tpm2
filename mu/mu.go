@@ -832,7 +832,7 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 	// - a slice kind, in which case the slice is always a byte slice. This
 	//   is the sized buffer case.
 	switch {
-	case size == 0 && v.Kind() == reflect.Ptr:
+	case size == 0:
 		// zero sized structure. Clear the pointer if it was pre-set and
 		// then return early.
 		v.Set(reflect.Zero(v.Type()))
@@ -896,12 +896,17 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 	if err := binary.Read(u, binary.BigEndian, &length); err != nil {
 		return newError(v, u.context, err)
 	}
-	if length > maxListLength {
-		return newError(v, u.context, fmt.Errorf("list length of %d is out of range", length))
-	}
 
-	if v.IsNil() {
+	switch {
+	case length > maxListLength:
+		return newError(v, u.context, fmt.Errorf("list length of %d is out of range", length))
+	case v.IsNil() && length > 0:
+		// Try to reuse the existing slice, although it may be
+		// reallocated later if the capacity isn't large enough
 		v.Set(reflect.MakeSlice(v.Type(), 0, 0))
+	case length == 0:
+		// Clear any existing slice
+		v.Set(reflect.Zero(v.Type()))
 	}
 
 	s, err := u.unmarshalRawList(v.Slice(0, 0), int(length))

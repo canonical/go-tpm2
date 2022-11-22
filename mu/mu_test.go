@@ -192,9 +192,10 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
 	var ud []byte
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:         values,
-		expected:       expected,
-		unmarshalDests: []interface{}{&ua, &ub, &uc, &ud}})
+		values:                values,
+		expected:              expected,
+		unmarshalDests:        []interface{}{&ua, &ub, &uc, &ud},
+		unmarshalExpectedVals: []interface{}{values[0], values[1], values[2], []byte(nil)}})
 	// Test that a preallocated slice is used if it is large enough
 	c.Check(uc2, DeepEquals, uc)
 
@@ -210,9 +211,10 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
 	ud = nil
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:         values,
-		expected:       expected,
-		unmarshalDests: []interface{}{&ua, &ub, &uc, &ud}})
+		values:                values,
+		expected:              expected,
+		unmarshalDests:        []interface{}{&ua, &ub, &uc, &ud},
+		unmarshalExpectedVals: []interface{}{values[0], values[1], values[2], []byte(nil)}})
 	// Test that a preallocated slice is used if it is large enough
 	c.Check(uc2, DeepEquals, append(uc, make(testSizedBuffer, 10)...))
 
@@ -319,7 +321,7 @@ func (s *muSuite) TestSizedMarshalAndUnmarshalSized4(c *C) {
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalList(c *C) {
-	values := []interface{}{[]uint32{46, 4563421, 678, 12390}, []uint64{}, []uint16{59747, 22875}}
+	values := []interface{}{[]uint32{46, 4563421, 678, 12390}, []uint64(nil), []uint16{59747, 22875}}
 	expected := internal_testutil.DecodeHexString(c, "000000040000002e0045a1dd000002a6000030660000000000000002e963595b")
 
 	ua := make([]uint32, 0)
@@ -375,7 +377,7 @@ func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 		values:                []interface{}{a, b, &a},
 		expected:              expected,
 		unmarshalDests:        []interface{}{&ua, &ub, &uc},
-		unmarshalExpectedVals: []interface{}{a, testStruct{34963, &u32_0, false, []uint32{}}, a}})
+		unmarshalExpectedVals: []interface{}{a, testStruct{34963, &u32_0, false, nil}, a}})
 	// Make sure that unmashal didn't allocate a new value when it was passed a non-nil pointer
 	c.Check(uc_b, Equals, u32)
 	// Test that a preallocated slice is used if it is large enough
@@ -391,7 +393,7 @@ func (s *muSuite) TestMarshalAndUnmarshalStruct(c *C) {
 		values:                []interface{}{a, b, &a},
 		expected:              expected,
 		unmarshalDests:        []interface{}{&ua, &ub, &uc},
-		unmarshalExpectedVals: []interface{}{a, testStruct{34963, &u32_0, false, []uint32{}}, a}})
+		unmarshalExpectedVals: []interface{}{a, testStruct{34963, &u32_0, false, nil}, a}})
 	// Make sure that unmashal didn't allocate a new value when it was passed a non-nil pointer
 	c.Check(uc_b, Equals, u32)
 	// Test that a preallocated slice is used if it is large enough
@@ -469,11 +471,11 @@ func (s *muSuite) TestMarshalAndUnmarshalUnion(c *C) {
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: &testUnion{}}, testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: &testUnion{}}, testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: &testUnion{}}, testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: &testUnion{}}, testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
@@ -491,11 +493,11 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: &testUnion{}}, testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: &testUnion{}}, testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32(nil)}}}}})
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: &testUnion{}}, testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: &testUnion{}}, testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32(nil)}}}}})
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalUnion3(c *C) {
@@ -513,11 +515,11 @@ func (s *muSuite) TestMarshalAndUnmarshalUnion3(c *C) {
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: []uint32{}}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {

@@ -157,7 +157,7 @@ func (s *commandSuite) TestUnmarshalResponsePacketWithSessions(c *C) {
 	c.Check(err, IsNil)
 	c.Check(params, DeepEquals, internal_testutil.DecodeHexString(c, "0005a5a5a5a5a5"))
 	c.Check(authArea, DeepEquals, []AuthResponse{
-		{Nonce: Nonce{}, SessionAttributes: AttrContinueSession, HMAC: Auth{}},
+		{SessionAttributes: AttrContinueSession},
 		{Nonce: Nonce{1, 2, 3, 4}, HMAC: Auth{5, 6, 7, 8, 9}}})
 	c.Check(rc, Equals, ResponseSuccess)
 }
