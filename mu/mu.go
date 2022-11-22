@@ -33,8 +33,8 @@ var (
 	rawBytesType           reflect.Type = reflect.TypeOf(RawBytes(nil))
 )
 
-// InvalidSelectorError may be returned as a wrapped error from UnmarshalFromBytes or
-// UnmarshalFromReader when a union type indicates that a selector value is invalid.
+// InvalidSelectorError may be returned as a wrapped error from [UnmarshalFromBytes] or
+// [UnmarshalFromReader] when a union type indicates that a selector value is invalid.
 type InvalidSelectorError struct {
 	Selector reflect.Value
 }
@@ -223,8 +223,8 @@ func (e *Error) Depth() int {
 // If the returned type is a slice, the returned index corresponds to
 // the index in that slice.
 //
-// If the returned type implements the CustomMarshaller and
-// CustomUnmarshaller interfaces, the returned index corresponds to
+// If the returned type implements the [CustomMarshaller] and
+// [CustomUnmarshaller] interfaces, the returned index corresponds to
 // the argument index in the recursive call in to one of the marshalling
 // or unmarshalling APIs. The returned frame indicates where this
 // recursive call originated from.
@@ -439,7 +439,7 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 // automatically dereference pointer types.
 //
 // This doesn't mean that the supplied go value can actually be handled by this package
-// because it doesn't recurse into containers. For that, use IsSupported.
+// because it doesn't recurse into containers. For that, use [IsSupported].
 func DetermineTPMKind(i interface{}) TPMKind {
 	var t reflect.Type
 	var o *options
@@ -1034,7 +1034,7 @@ func MarshalToWriter(w io.Writer, vals ...interface{}) (int, error) {
 	return marshalToWriter(2, w, vals...)
 }
 
-// MustMarshalToWriter is the same as MarshalToWriter, except that it panics if it encounters an error.
+// MustMarshalToWriter is the same as [MarshalToWriter], except that it panics if it encounters an error.
 func MustMarshalToWriter(w io.Writer, vals ...interface{}) int {
 	n, err := marshalToWriter(2, w, vals...)
 	if err != nil {
@@ -1066,7 +1066,7 @@ func MarshalToBytes(vals ...interface{}) ([]byte, error) {
 	return marshalToBytes(2, vals...)
 }
 
-// MustMarshalToBytes is the same as MarshalToBytes, except that it panics if it encounters an error.
+// MustMarshalToBytes is the same as [MarshalToBytes], except that it panics if it encounters an error.
 func MustMarshalToBytes(vals ...interface{}) []byte {
 	b, err := marshalToBytes(2, vals...)
 	if err != nil {
@@ -1088,13 +1088,13 @@ func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (int, error
 //
 // Pointers are automatically dererefenced. If a pointer is nil, then memory is allocated for the values and the pointer
 // is initialized accordingly, unless the pointer is to a sized structure (a struct field with the 'tpm2:"sized"' tag pointing
-// to another struct) and the values being unmarshalled has a zero size, in which case the pointer is not initialized. If
+// to another struct) and the values being unmarshalled has a zero size, in which case the pointer is cleared. If
 // a pointer is already initialized by the caller, then this function will unmarshal to the already allocated memory.
 //
-// Slices are allocated automatically, unless the caller has already allocated a slice that has a large enough capacity
-// to hold the unmarshalled values, in which case the already allocated slice will be used and its length set accordingly.
+// Slices are allocated automatically, unless the caller has already allocated a slice in which case it will be used if it
+// has a large enough capacity. Zero length slices are unmarshalled as nil.
 //
-// This can unmarshal raw slices (those without a corresponding size or length fields, represented by the RawBytes type or
+// This can unmarshal raw slices (those without a corresponding size or length fields, represented by the [RawBytes] type or
 // a slice value referenced from a struct field with the 'tpm2:"raw"' tag), but the caller must pre-allocate a slice of the
 // correct size first. This function cannot allocate a slice because it doesn't have a way to determine the size to allocate.
 //
@@ -1109,13 +1109,13 @@ func UnmarshalFromReader(r io.Reader, vals ...interface{}) (int, error) {
 //
 // Pointers are automatically dererefenced. If a pointer is nil, then memory is allocated for the value and the pointer
 // is initialized accordingly, unless the pointer is to a sized structure (a struct field with the 'tpm2:"sized"' tag pointing
-// to another struct) and the value being unmarshalled has a zero size, in which case the pointer is not initialized. If
+// to another struct) and the value being unmarshalled has a zero size, in which case the pointer is cleared. If
 // a pointer is already initialized by the caller, then this function will unmarshal to the already allocated memory.
 //
-// Slices are allocated automatically, unless the caller has already allocated a slice that has a large enough capacity
-// to hold the unmarshalled values, in which case the already allocated slice will be used and its length set accordingly.
+// Slices are allocated automatically, unless the caller has already allocated a slice in which case it will be used if it
+// has a large enough capacity. Zero length slices are unmarshalled as nil.
 //
-// This can unmarshal raw slices (those without a corresponding size or length fields, represented by the RawBytes type or
+// This can unmarshal raw slices (those without a corresponding size or length fields, represented by the [RawBytes] type or
 // a slice value referenced from a struct field with the 'tpm2:"raw"' tag), but the caller must pre-allocate a slice of the
 // correct size first. This function cannot allocate a slice because it doesn't have a way to determine the size to allocate.
 //
@@ -1172,13 +1172,13 @@ func copyValue(skip int, dst, src interface{}) error {
 // destination value. This works by serializing the source value in the TPM wire format
 // and the deserializing it again into the destination.
 //
-// This will return an error for any reason that would cause MarshalToBytes or
-// UnmarshalFromBytes to return an error.
+// This will return an error for any reason that would cause [MarshalToBytes] or
+// [UnmarshalFromBytes] to return an error.
 func CopyValue(dst, src interface{}) error {
 	return copyValue(2, dst, src)
 }
 
-// MustCopyValue is the same as CopyValue except that it panics if it encounters an error.
+// MustCopyValue is the same as [CopyValue] except that it panics if it encounters an error.
 func MustCopyValue(dst, src interface{}) {
 	if err := copyValue(2, dst, src); err != nil {
 		panic(err)

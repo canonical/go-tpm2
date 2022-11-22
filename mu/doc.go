@@ -13,11 +13,14 @@ Go types are marshalled to and from the TPM wire format according to the followi
   - UINT64 <-> uint64
   - INT64 <-> int64
   - TPM2B prefixed types (sized buffers with a 2-byte size field) fall in to 2 categories:
-  - Byte buffer <-> []byte, or any type with an identical underlying type. A zero
+
+    1. Byte buffer <-> []byte, or any type with an identical underlying type. A zero
     sized byte buffer is unmarshalled to nil.
-  - Sized structure <-> pointer to a struct either referenced from a field with the
+
+    2. Sized structure <-> pointer to a struct either referenced from a field with the
     `tpm2:"sized"` tag or wrapped with the Sized() function. A zero sized struct is
     represented as a nil pointer.
+
   - TPMA prefixed types (attributes) <-> whichever go type corresponds to the underlying TPM
     type (UINT8, UINT16, or UINT32).
   - TPM_ALG_ID (algorithm enum) <-> tpm2.AlgorithmId
