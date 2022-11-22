@@ -54,7 +54,10 @@ func ComputePCRDigest(alg tpm2.HashAlgorithmId, pcrs tpm2.PCRSelectionList, valu
 // defined in the TPM reference implementation. It returns the PCR selection associated with the
 // computed digest.
 func ComputePCRDigestFromAllValues(alg tpm2.HashAlgorithmId, values tpm2.PCRValues) (tpm2.PCRSelectionList, tpm2.Digest, error) {
-	pcrs := values.SelectionList()
+	pcrs, err := values.SelectionList()
+	if err != nil {
+		return nil, nil, err
+	}
 	digest, err := ComputePCRDigest(alg, pcrs, values)
 	if err != nil {
 		return nil, nil, err
