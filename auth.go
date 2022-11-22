@@ -284,7 +284,7 @@ func (p *sessionParams) ProcessResponseAuthArea(authResponses []AuthResponse, rp
 
 	for i, resp := range authResponses {
 		if err := p.Sessions[i].ProcessResponseAuth(resp, p.CommandCode, rpBytes); err != nil {
-			return &InvalidAuthResponseError{i, err.Error()}
+			return &InvalidAuthResponseError{i + 1, err.Error()}
 		}
 	}
 

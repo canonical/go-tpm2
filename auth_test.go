@@ -1557,7 +1557,7 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaHMAC(c *C) {
 }
 
 func (s *authSuite) TestSessionParamsProcessResponseAuthAreaInvalidHMAC(c *C) {
-	c.Check(s.testSessionParamsProcessResponseAuthArea(c, &testSessionParamsProcessResponseAuthAreaData{
+	err := s.testSessionParamsProcessResponseAuthArea(c, &testSessionParamsProcessResponseAuthAreaData{
 		sessions: []SessionContext{
 			&mockSessionContext{
 				handle: 0x02000000,
@@ -1575,9 +1575,14 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaInvalidHMAC(c *C) {
 				SessionAttributes: AttrContinueSession,
 				HMAC:              internal_testutil.DecodeHexString(c, "042aea10a0f14f2d391373599be69d53a75dde9951fc3d3cd10b6100aa7a9f24"),
 			}},
-		rpBytes: append([]byte{0, 6}, []byte("foobar")...)}), ErrorMatches,
-		"encountered an error whilst processing the auth response for session 0: "+
+		rpBytes: append([]byte{0, 6}, []byte("foobar")...)})
+	c.Check(err, ErrorMatches,
+		"encountered an error whilst processing the auth response for session 1: "+
 			"incorrect HMAC \\(expected: f5c298228f0195386a623875430b30bfa414e1aa5280dbcb2f656ec5d50890cb, got: 042aea10a0f14f2d391373599be69d53a75dde9951fc3d3cd10b6100aa7a9f24\\)")
+
+	var e *InvalidAuthResponseError
+	c.Check(err, internal_testutil.ErrorAs, &e)
+	c.Check(e.Index, Equals, 1)
 }
 
 func (s *authSuite) TestSessionParamsProcessResponseAuthAreaFlushSession(c *C) {

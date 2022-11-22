@@ -96,7 +96,7 @@ func (e *InvalidResponseError) Error() string {
 // InvalidAuthResponseError is returned from any TPMContext method that
 // executes a TPM command if one of the response auth HMACs is invalid.
 type InvalidAuthResponseError struct {
-	Index int
+	Index int // Index of the session responsible for this error, starting from 1
 	msg   string
 }
 

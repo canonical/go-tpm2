@@ -56,6 +56,9 @@ func (s *commandSuite) TestUnmarshalResponsePacketTooSmall(c *C) {
 ... tpm2.ResponseHeader field ResponseCode
 === END STACK ===
 `)
+
+	var e *mu.Error
+	c.Check(err, internal_testutil.ErrorAs, &e)
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketInvalidSize(c *C) {
@@ -68,6 +71,7 @@ func (s *commandSuite) TestUnmarshalResponsePacketUnexpectedTPM1(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "00c40000000a00000000"))
 	_, _, _, err := p.Unmarshal(nil)
 	c.Check(err, ErrorMatches, "\\[TPM_ST_RSP_COMMAND\\]: invalid response code 0x00000000")
+	c.Check(err, internal_testutil.ErrorIs, InvalidResponseCodeError(0))
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketTPM1WithExtraBytes(c *C) {
@@ -80,6 +84,7 @@ func (s *commandSuite) TestUnmarshalResponsePacketUnsuccessfulWithSessions(c *C)
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000000a0000088e"))
 	_, _, _, err := p.Unmarshal(nil)
 	c.Check(err, ErrorMatches, "\\[TPM_ST_SESSIONS\\]: invalid response code 0x0000088e")
+	c.Check(err, internal_testutil.ErrorIs, InvalidResponseCodeError(0x88e))
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketUnsuccessfulWithExtraBytes(c *C) {
@@ -123,6 +128,9 @@ func (s *commandSuite) TestUnmarshalResponsePacketInvalidAuthArea(c *C) {
 ... tpm2.AuthResponse field HMAC
 === END STACK ===
 `)
+
+	var e *mu.Error
+	c.Check(err, internal_testutil.ErrorAs, &e)
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketTPM12(c *C) {
