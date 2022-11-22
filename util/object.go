@@ -9,10 +9,9 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"hash"
 	"io/ioutil"
-
-	"golang.org/x/xerrors"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/crypto"
@@ -39,7 +38,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 
 	var integrity []byte
 	if _, err := mu.UnmarshalFromReader(r, &integrity); err != nil {
-		return nil, xerrors.Errorf("cannot unmarshal integrity digest: %w", err)
+		return nil, fmt.Errorf("cannot unmarshal integrity digest: %w", err)
 	}
 
 	data, _ = ioutil.ReadAll(r)
@@ -58,7 +57,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 	iv := make([]byte, symmetricAlg.Algorithm.BlockSize())
 	if useIV {
 		if _, err := mu.UnmarshalFromReader(r, &iv); err != nil {
-			return nil, xerrors.Errorf("cannot unmarshal IV: %w", err)
+			return nil, fmt.Errorf("cannot unmarshal IV: %w", err)
 		}
 		if len(iv) != symmetricAlg.Algorithm.BlockSize() {
 			return nil, errors.New("IV has the wrong size")
@@ -70,7 +69,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 	symKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
 	if err := crypto.SymmetricDecrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
-		return nil, xerrors.Errorf("cannot decrypt: %w", err)
+		return nil, fmt.Errorf("cannot decrypt: %w", err)
 	}
 
 	return data, nil
@@ -96,14 +95,14 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 	iv := make([]byte, symmetricAlg.Algorithm.BlockSize())
 	if useIV {
 		if _, err := rand.Read(iv); err != nil {
-			return nil, xerrors.Errorf("cannot generate IV: %w", err)
+			return nil, fmt.Errorf("cannot generate IV: %w", err)
 		}
 	}
 
 	symKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
 	if err := crypto.SymmetricEncrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
-		return nil, xerrors.Errorf("cannot encrypt: %w", err)
+		return nil, fmt.Errorf("cannot encrypt: %w", err)
 	}
 
 	if useIV {
@@ -123,11 +122,11 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 func PrivateToSensitive(private tpm2.Private, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (sensitive *tpm2.Sensitive, err error) {
 	data, err := UnwrapOuter(hashAlg, symmetricAlg, name, seed, true, private)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot unwrap outer wrapper: %w", err)
+		return nil, fmt.Errorf("cannot unwrap outer wrapper: %w", err)
 	}
 
 	if _, err := mu.UnmarshalFromBytes(data, mu.Sized(&sensitive)); err != nil {
-		return nil, xerrors.Errorf("cannot unmarhsal sensitive: %w", err)
+		return nil, fmt.Errorf("cannot unmarhsal sensitive: %w", err)
 	}
 
 	return sensitive, nil
@@ -136,12 +135,12 @@ func PrivateToSensitive(private tpm2.Private, name tpm2.Name, hashAlg tpm2.HashA
 func SensitiveToPrivate(sensitive *tpm2.Sensitive, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (tpm2.Private, error) {
 	private, err := mu.MarshalToBytes(mu.Sized(sensitive))
 	if err != nil {
-		return nil, xerrors.Errorf("cannot marshal sensitive: %w", err)
+		return nil, fmt.Errorf("cannot marshal sensitive: %w", err)
 	}
 
 	private, err = ProduceOuterWrap(hashAlg, symmetricAlg, name, seed, true, private)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot apply outer wrapper: %w", err)
+		return nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
 	}
 
 	return private, nil
@@ -167,7 +166,7 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 		var err error
 		duplicate, err = UnwrapOuter(parentNameAlg, parentSymmetricAlg, name, seed, false, duplicate)
 		if err != nil {
-			return nil, xerrors.Errorf("cannot unwrap outer wrapper: %w", err)
+			return nil, fmt.Errorf("cannot unwrap outer wrapper: %w", err)
 		}
 	}
 
@@ -184,14 +183,14 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 		}
 
 		if err := crypto.SymmetricDecrypt(symmetricAlg.Algorithm, innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
-			return nil, xerrors.Errorf("cannot decrypt inner wrapper: %w", err)
+			return nil, fmt.Errorf("cannot decrypt inner wrapper: %w", err)
 		}
 
 		r := bytes.NewReader(duplicate)
 
 		var innerIntegrity []byte
 		if _, err := mu.UnmarshalFromReader(r, &innerIntegrity); err != nil {
-			return nil, xerrors.Errorf("cannot unmarshal inner integrity digest: %w", err)
+			return nil, fmt.Errorf("cannot unmarshal inner integrity digest: %w", err)
 		}
 
 		duplicate, _ = ioutil.ReadAll(r)
@@ -206,7 +205,7 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, parentNameAlg 
 	}
 
 	if _, err := mu.UnmarshalFromBytes(duplicate, mu.Sized(&sensitive)); err != nil {
-		return nil, xerrors.Errorf("cannot unmarhsal sensitive: %w", err)
+		return nil, fmt.Errorf("cannot unmarhsal sensitive: %w", err)
 	}
 
 	return sensitive, nil
@@ -235,7 +234,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 
 	duplicate, err = mu.MarshalToBytes(mu.Sized(sensitive))
 	if err != nil {
-		return nil, nil, xerrors.Errorf("cannot marshal sensitive: %w", err)
+		return nil, nil, fmt.Errorf("cannot marshal sensitive: %w", err)
 	}
 
 	if applyInnerWrapper {
@@ -261,7 +260,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 		if len(innerSymKey) == 0 {
 			innerSymKey = make([]byte, symmetricAlg.KeyBits.Sym/8)
 			if _, err := rand.Read(innerSymKey); err != nil {
-				return nil, nil, xerrors.Errorf("cannot obtain symmetric key for inner wrapper: %w", err)
+				return nil, nil, fmt.Errorf("cannot obtain symmetric key for inner wrapper: %w", err)
 			}
 			innerSymKeyOut = innerSymKey
 		} else if len(innerSymKey) != int(symmetricAlg.KeyBits.Sym/8) {
@@ -269,7 +268,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 		}
 
 		if err := crypto.SymmetricEncrypt(symmetricAlg.Algorithm, innerSymKey, make([]byte, symmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
-			return nil, nil, xerrors.Errorf("cannot apply inner wrapper: %w", err)
+			return nil, nil, fmt.Errorf("cannot apply inner wrapper: %w", err)
 		}
 	}
 
@@ -278,7 +277,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 		var err error
 		duplicate, err = ProduceOuterWrap(parent.NameAlg, &parent.Params.AsymDetail(parent.Type).Symmetric, name, seed, false, duplicate)
 		if err != nil {
-			return nil, nil, xerrors.Errorf("cannot apply outer wrapper: %w", err)
+			return nil, nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
 		}
 	}
 

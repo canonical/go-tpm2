@@ -15,8 +15,6 @@ import (
 	"reflect"
 	"sort"
 
-	"golang.org/x/xerrors"
-
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -40,7 +38,7 @@ type TaggedHash struct {
 
 func (p TaggedHash) Marshal(w io.Writer) error {
 	if err := binary.Write(w, binary.BigEndian, p.HashAlg); err != nil {
-		return xerrors.Errorf("cannot marshal digest algorithm: %w", err)
+		return fmt.Errorf("cannot marshal digest algorithm: %w", err)
 	}
 	if !p.HashAlg.IsValid() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
@@ -51,14 +49,14 @@ func (p TaggedHash) Marshal(w io.Writer) error {
 	}
 
 	if _, err := w.Write(p.Digest); err != nil {
-		return xerrors.Errorf("cannot write digest: %w", err)
+		return fmt.Errorf("cannot write digest: %w", err)
 	}
 	return nil
 }
 
 func (p *TaggedHash) Unmarshal(r io.Reader) error {
 	if err := binary.Read(r, binary.BigEndian, &p.HashAlg); err != nil {
-		return xerrors.Errorf("cannot unmarshal digest algorithm: %w", err)
+		return fmt.Errorf("cannot unmarshal digest algorithm: %w", err)
 	}
 	if !p.HashAlg.IsValid() {
 		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
@@ -66,7 +64,7 @@ func (p *TaggedHash) Unmarshal(r io.Reader) error {
 
 	p.Digest = make(Digest, p.HashAlg.Size())
 	if _, err := io.ReadFull(r, p.Digest); err != nil {
-		return xerrors.Errorf("cannot read digest: %w", err)
+		return fmt.Errorf("cannot read digest: %w", err)
 	}
 	return nil
 }
@@ -218,11 +216,11 @@ func (b PCRSelectBitmap) Marshal(w io.Writer) error {
 	}
 
 	if err := binary.Write(w, binary.BigEndian, uint8(len(b))); err != nil {
-		return xerrors.Errorf("cannot write size of bitmap: %w", err)
+		return fmt.Errorf("cannot write size of bitmap: %w", err)
 	}
 
 	if _, err := w.Write(b); err != nil {
-		return xerrors.Errorf("cannot write bitmap: %w", err)
+		return fmt.Errorf("cannot write bitmap: %w", err)
 	}
 
 	return nil
@@ -231,13 +229,13 @@ func (b PCRSelectBitmap) Marshal(w io.Writer) error {
 func (b *PCRSelectBitmap) Unmarshal(r io.Reader) error {
 	var size uint8
 	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
-		return xerrors.Errorf("cannot read size of bitmap: %w", err)
+		return fmt.Errorf("cannot read size of bitmap: %w", err)
 	}
 
 	*b = make(PCRSelectBitmap, size)
 
 	if _, err := io.ReadFull(r, *b); err != nil {
-		return xerrors.Errorf("cannot read bitmap: %w", err)
+		return fmt.Errorf("cannot read bitmap: %w", err)
 	}
 
 	return nil

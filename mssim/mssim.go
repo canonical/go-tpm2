@@ -16,8 +16,6 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
-
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -55,7 +53,7 @@ func (t *Tcti) Read(data []byte) (int, error) {
 	if t.r == nil {
 		var size uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
-			return 0, xerrors.Errorf("cannot read response size from TPM command channel: %w", err)
+			return 0, fmt.Errorf("cannot read response size from TPM command channel: %w", err)
 		}
 
 		t.r = io.LimitReader(t.tpm, int64(size))
@@ -67,7 +65,7 @@ func (t *Tcti) Read(data []byte) (int, error) {
 
 		var trash uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
-			return n, xerrors.Errorf("cannot read zero bytes from TPM command channel after response: %w", err)
+			return n, fmt.Errorf("cannot read zero bytes from TPM command channel after response: %w", err)
 		}
 	}
 
@@ -89,10 +87,10 @@ func (t *Tcti) Close() (err error) {
 	binary.Write(t.platform, binary.BigEndian, cmdSessionEnd)
 	binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd)
 	if e := t.platform.Close(); e != nil {
-		err = xerrors.Errorf("cannot close platform channel: %w", e)
+		err = fmt.Errorf("cannot close platform channel: %w", e)
 	}
 	if e := t.tpm.Close(); e != nil {
-		err = xerrors.Errorf("cannot close TPM command channel: %w", e)
+		err = fmt.Errorf("cannot close TPM command channel: %w", e)
 	}
 	return err
 }
@@ -108,12 +106,12 @@ func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 
 func (t *Tcti) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
-		return xerrors.Errorf("cannot send command: %w", err)
+		return fmt.Errorf("cannot send command: %w", err)
 	}
 
 	var resp uint32
 	if err := binary.Read(t.platform, binary.BigEndian, &resp); err != nil {
-		return xerrors.Errorf("cannot read response to command: %w", err)
+		return fmt.Errorf("cannot read response to command: %w", err)
 	}
 	if resp != 0 {
 		return &PlatformCommandError{cmd, resp}
@@ -154,22 +152,22 @@ func OpenConnection(host string, port uint) (*Tcti, error) {
 
 	tpm, err := net.Dial("tcp", tpmAddress)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot connect to TPM socket: %w", err)
+		return nil, fmt.Errorf("cannot connect to TPM socket: %w", err)
 	}
 	tcti.tpm = tpm
 
 	platform, err := net.Dial("tcp", platformAddress)
 	if err != nil {
 		tcti.tpm.Close()
-		return nil, xerrors.Errorf("cannot connect to platform socket: %w", err)
+		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
 	}
 	tcti.platform = platform
 
 	if err := tcti.platformCommand(cmdPowerOn); err != nil {
-		return nil, xerrors.Errorf("cannot complete power on command: %w", err)
+		return nil, fmt.Errorf("cannot complete power on command: %w", err)
 	}
 	if err := tcti.platformCommand(cmdNVOn); err != nil {
-		return nil, xerrors.Errorf("cannot complete NV on command: %w", err)
+		return nil, fmt.Errorf("cannot complete NV on command: %w", err)
 	}
 
 	return tcti, nil

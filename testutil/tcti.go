@@ -13,8 +13,6 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
-
-	"golang.org/x/xerrors"
 )
 
 type TCTIWrapper interface {
@@ -297,7 +295,7 @@ func (t *TCTI) processCommandDone() error {
 	resp := tpm2.ResponsePacket(currentCmd.response.Bytes())
 	rc, rpBytes, _, err := resp.Unmarshal(pHandle)
 	if err != nil {
-		return xerrors.Errorf("cannot unmarshal response: %w", err)
+		return fmt.Errorf("cannot unmarshal response: %w", err)
 	}
 	if rc != tpm2.ResponseSuccess {
 		return nil
@@ -315,14 +313,14 @@ func (t *TCTI) processCommandDone() error {
 			var inSensitive []byte
 			var inPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &inSensitive, mu.Sized(&inPublic)); err != nil {
-				return xerrors.Errorf("cannot unmarshal params: %w", err)
+				return fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
 		case tpm2.CommandLoad:
 			var inPrivate tpm2.Private
 			var inPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
-				return xerrors.Errorf("cannot unmarshal params: %w", err)
+				return fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
 		case tpm2.CommandHMACStart:
@@ -330,7 +328,7 @@ func (t *TCTI) processCommandDone() error {
 		case tpm2.CommandContextLoad:
 			var context tpm2.Context
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &context); err != nil {
-				return xerrors.Errorf("cannot unmarshal params: %w", err)
+				return fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			for _, s := range savedObjects {
 				if bytes.Equal(s.data, context.Blob) {
@@ -343,7 +341,7 @@ func (t *TCTI) processCommandDone() error {
 			var inPrivate []byte
 			var inPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
-				return xerrors.Errorf("cannot unmarshal params: %w", err)
+				return fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
 		case tpm2.CommandHashSequenceStart:
@@ -364,7 +362,7 @@ func (t *TCTI) processCommandDone() error {
 		object := cmdHandles[1]
 		var persistent tpm2.Handle
 		if _, err := mu.UnmarshalFromBytes(cpBytes, &persistent); err != nil {
-			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
+			return fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		switch object.Type() {
 		case tpm2.HandleTypeTransient:
@@ -413,7 +411,7 @@ func (t *TCTI) processCommandDone() error {
 		// manually.
 		if !hasDecryptSession(authArea) {
 			if _, err := mu.UnmarshalFromBytes(cpBytes, &newAuth); err != nil {
-				return xerrors.Errorf("cannot unmarshal parameters: %w", err)
+				return fmt.Errorf("cannot unmarshal parameters: %w", err)
 			}
 		}
 		t.hierarchyAuths[cmdHandles[0]] = newAuth
@@ -422,7 +420,7 @@ func (t *TCTI) processCommandDone() error {
 		var auth tpm2.Auth
 		var nvPublic *tpm2.NVPublic
 		if _, err := mu.UnmarshalFromBytes(cpBytes, &auth, mu.Sized(&nvPublic)); err != nil {
-			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
+			return fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		index := nvPublic.Index
 		t.handles[index] = &handleInfo{handle: index, created: true, nvPub: nvPublic}
@@ -433,7 +431,7 @@ func (t *TCTI) processCommandDone() error {
 	case tpm2.CommandStartup:
 		var startupType tpm2.StartupType
 		if _, err := mu.UnmarshalFromBytes(cpBytes, &startupType); err != nil {
-			return xerrors.Errorf("cannot unmarshal parameters: %w", err)
+			return fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		if startupType != tpm2.StartupState {
 			delete(t.hierarchyAuths, tpm2.HandlePlatform)
@@ -446,7 +444,7 @@ func (t *TCTI) processCommandDone() error {
 		case tpm2.HandleTypeTransient:
 			var context tpm2.Context
 			if _, err := mu.UnmarshalFromBytes(rpBytes, &context); err != nil {
-				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
+				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if info, ok := t.handles[handle]; ok {
 				savedObjects = append(savedObjects, &savedObject{data: context.Blob, pub: info.pub, seq: info.seq})
@@ -459,7 +457,7 @@ func (t *TCTI) processCommandDone() error {
 			nvIndex := cmdHandles[0]
 			var nvPublic *tpm2.NVPublic
 			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&nvPublic)); err != nil {
-				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
+				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[nvIndex]; !ok {
 				t.handles[nvIndex] = &handleInfo{handle: nvIndex}
@@ -471,7 +469,7 @@ func (t *TCTI) processCommandDone() error {
 			object := cmdHandles[0]
 			var outPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&outPublic)); err != nil {
-				return xerrors.Errorf("cannot unmarshal response parameters: %w", err)
+				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[object]; !ok {
 				t.handles[object] = &handleInfo{handle: object}
@@ -527,7 +525,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 
 	commandCode, err := cmd.GetCommandCode()
 	if err != nil {
-		return 0, xerrors.Errorf("cannot determine command code: %w", err)
+		return 0, fmt.Errorf("cannot determine command code: %w", err)
 	}
 
 	cmdInfo, ok := commandInfoMap[commandCode]
@@ -537,7 +535,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 
 	handles, _, pBytes, err := cmd.Unmarshal(cmdInfo.cmdHandles)
 	if err != nil {
-		return 0, xerrors.Errorf("invalid command payload: %w", err)
+		return 0, fmt.Errorf("invalid command payload: %w", err)
 	}
 
 	var commandFeatures TPMFeatureFlags
@@ -573,7 +571,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			var enable tpm2.Handle
 			var state bool
 			if _, err := mu.UnmarshalFromBytes(pBytes, &enable, &state); err != nil {
-				return 0, xerrors.Errorf("cannot unmarshal parameters: %w", err)
+				return 0, fmt.Errorf("cannot unmarshal parameters: %w", err)
 			}
 
 			if enable != tpm2.HandlePlatform {
@@ -722,7 +720,7 @@ func (t *TCTI) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
 			// this is ok as it will be restored on the next TPM2_Startup(CLEAR).
 			return nil
 		}
-		return xerrors.Errorf("cannot clear auth value for %v: %w", tpm2.HandlePlatform, err)
+		return fmt.Errorf("cannot clear auth value for %v: %w", tpm2.HandlePlatform, err)
 	}
 	return nil
 }
@@ -754,7 +752,7 @@ func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 				// so this is ok as it will be restored on the next TPM2_Startup(CLEAR).
 				break
 			}
-			errs = append(errs, xerrors.Errorf("cannot restore hierarchy %v: %w", hierarchy, err))
+			errs = append(errs, fmt.Errorf("cannot restore hierarchy %v: %w", hierarchy, err))
 		}
 	}
 
@@ -766,7 +764,7 @@ func (t *TCTI) restoreHierarchyAuths(errs []error, tpm *tpm2.TPMContext) []error
 		rc := tpm.GetPermanentContext(hierarchy)
 		rc.SetAuthValue(auth)
 		if err := tpm.HierarchyChangeAuth(rc, nil, nil); err != nil {
-			errs = append(errs, xerrors.Errorf("cannot clear auth value for %v: %w", hierarchy, err))
+			errs = append(errs, fmt.Errorf("cannot clear auth value for %v: %w", hierarchy, err))
 		}
 	}
 
@@ -788,7 +786,7 @@ func (t *TCTI) restoreDisableClear(tpm *tpm2.TPMContext) error {
 		if t.permittedFeatures&TPMFeatureClearControl > 0 {
 			return nil
 		}
-		return xerrors.Errorf("cannot restore disableClear: %w", err)
+		return fmt.Errorf("cannot restore disableClear: %w", err)
 	}
 
 	return nil
@@ -797,11 +795,11 @@ func (t *TCTI) restoreDisableClear(tpm *tpm2.TPMContext) error {
 func (t *TCTI) restoreDA(errs []error, tpm *tpm2.TPMContext) []error {
 	if t.permittedFeatures&TPMFeatureLockoutHierarchy > 0 {
 		if err := tpm.DictionaryAttackLockReset(tpm.LockoutHandleContext(), nil); err != nil {
-			errs = append(errs, xerrors.Errorf("cannot reset DA counter: %w", err))
+			errs = append(errs, fmt.Errorf("cannot reset DA counter: %w", err))
 		}
 		if t.didSetDaParams {
 			if err := tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), t.restoreDaParams.maxTries, t.restoreDaParams.recoveryTime, t.restoreDaParams.lockoutRecovery, nil); err != nil {
-				errs = append(errs, xerrors.Errorf("cannot restore DA parameters: %w", err))
+				errs = append(errs, fmt.Errorf("cannot restore DA parameters: %w", err))
 			}
 		}
 	}
@@ -825,12 +823,12 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 			auth := tpm.GetPermanentContext(info.auth())
 			index, err := tpm2.CreateNVIndexResourceContextFromPublic(info.nvPub)
 			if err != nil {
-				errs = append(errs, xerrors.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
+				errs = append(errs, fmt.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
 				continue
 			}
 
 			if err := tpm.NVUndefineSpace(auth, index, nil); err != nil {
-				errs = append(errs, xerrors.Errorf("cannot undefine %v: %w", info.handle, err))
+				errs = append(errs, fmt.Errorf("cannot undefine %v: %w", info.handle, err))
 			}
 		case tpm2.HandleTypeHMACSession, tpm2.HandleTypePolicySession, tpm2.HandleTypeTransient:
 			tpm.FlushContext(tpm2.CreatePartialHandleContext(info.handle))
@@ -838,12 +836,12 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 			auth := tpm.GetPermanentContext(info.auth())
 			object, err := tpm2.CreateObjectResourceContextFromPublic(info.handle, info.pub)
 			if err != nil {
-				errs = append(errs, xerrors.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
+				errs = append(errs, fmt.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
 				continue
 			}
 
 			if _, err := tpm.EvictControl(auth, object, object.Handle(), nil); err != nil {
-				errs = append(errs, xerrors.Errorf("cannot evict %v: %w", info.handle, err))
+				errs = append(errs, fmt.Errorf("cannot evict %v: %w", info.handle, err))
 			}
 		}
 	}
@@ -875,7 +873,7 @@ func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
 			return nil
 		}
-		return xerrors.Errorf("cannot restore command code audit alg: %w", err)
+		return fmt.Errorf("cannot restore command code audit alg: %w", err)
 	}
 
 	clearList, err := tpm.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
@@ -883,21 +881,21 @@ func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
 			return nil
 		}
-		return xerrors.Errorf("cannot obtain current audit commands: %w", err)
+		return fmt.Errorf("cannot obtain current audit commands: %w", err)
 	}
 
 	if err := tpm.SetCommandCodeAuditStatus(auth, tpm2.HashAlgorithmNull, nil, clearList, nil); err != nil {
 		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
 			return nil
 		}
-		return xerrors.Errorf("cannot clear audit commands: %w", err)
+		return fmt.Errorf("cannot clear audit commands: %w", err)
 	}
 
 	if err := tpm.SetCommandCodeAuditStatus(auth, tpm2.HashAlgorithmNull, t.restoreCmdAuditStatus.commands, nil, nil); err != nil {
 		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
 			return nil
 		}
-		return xerrors.Errorf("cannot restore audit commands: %w", err)
+		return fmt.Errorf("cannot restore audit commands: %w", err)
 	}
 
 	return nil
@@ -1019,7 +1017,7 @@ func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) 
 
 	props, err := tpm.GetCapabilityTPMProperties(tpm2.PropertyPermanent, tpm2.CapabilityMaxProperties)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot request properties from TPM: %w", err)
+		return nil, fmt.Errorf("cannot request properties from TPM: %w", err)
 	}
 
 	var daParams daParams
@@ -1045,11 +1043,11 @@ func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) 
 	if permittedFeatures&TPMFeatureEndorsementHierarchy > 0 {
 		commands, err := tpm.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
 		if err != nil {
-			return nil, xerrors.Errorf("cannot request audit commands from TPM: %w", err)
+			return nil, fmt.Errorf("cannot request audit commands from TPM: %w", err)
 		}
 		auditInfo, _, err := tpm.GetCommandAuditDigest(tpm.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 		if err != nil {
-			return nil, xerrors.Errorf("cannot request audit info from TPM: %w", err)
+			return nil, fmt.Errorf("cannot request audit info from TPM: %w", err)
 		}
 		cmdAuditStatus.alg = tpm2.HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg)
 		cmdAuditStatus.commands = commands

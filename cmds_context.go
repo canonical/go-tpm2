@@ -11,8 +11,6 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-tpm2/mu"
-
-	"golang.org/x/xerrors"
 )
 
 // ContextSave executes the TPM2_ContextSave command on the handle referenced by saveContext, in order to save the context associated
@@ -90,12 +88,12 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 	var contextData []byte
 	var blob ContextData
 	if _, err := mu.UnmarshalFromBytes(context.Blob, &contextData, &blob); err != nil {
-		return nil, xerrors.Errorf("cannot unmarshal context blob: %w", err)
+		return nil, fmt.Errorf("cannot unmarshal context blob: %w", err)
 	}
 
 	hc, _, err := CreateHandleContextFromBytes(contextData)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot unmarshal handle context: %w", err)
+		return nil, fmt.Errorf("cannot unmarshal handle context: %w", err)
 	}
 
 	switch hc.Handle().Type() {

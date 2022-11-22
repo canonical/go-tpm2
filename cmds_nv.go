@@ -12,7 +12,6 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-tpm2/mu"
-	"golang.org/x/xerrors"
 )
 
 // NVDefineSpace executes the TPM2_NV_DefineSpace command to reserve space to hold the data associated with a NV index described by
@@ -673,7 +672,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 	}
 	var res NVPinCounterParams
 	if _, err := mu.UnmarshalFromBytes(data, &res); err != nil {
-		return nil, &InvalidResponseError{CommandNVRead, xerrors.Errorf("cannot unmarshal response bytes: %w", err)}
+		return nil, &InvalidResponseError{CommandNVRead, fmt.Errorf("cannot unmarshal response bytes: %w", err)}
 	}
 	return &res, nil
 }

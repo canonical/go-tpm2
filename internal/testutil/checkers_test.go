@@ -6,12 +6,11 @@ package testutil_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"os"
 	"reflect"
-
-	"golang.org/x/xerrors"
 
 	. "gopkg.in/check.v1"
 
@@ -108,7 +107,7 @@ func (s *checkersSuite) TestErrorAs(c *C) {
 	testCheck(c, ErrorAs, true, "", testError{io.EOF}, &e)
 	c.Check(e, ErrorIs, io.EOF)
 
-	testCheck(c, ErrorAs, true, "", xerrors.Errorf(": %w", testError{io.EOF}), &e)
+	testCheck(c, ErrorAs, true, "", fmt.Errorf(": %w", testError{io.EOF}), &e)
 	c.Check(e, ErrorIs, io.EOF)
 
 	var e2 *os.PathError

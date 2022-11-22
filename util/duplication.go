@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 
-	"golang.org/x/xerrors"
-
 	"github.com/canonical/go-tpm2"
 	tpm2_crypto "github.com/canonical/go-tpm2/crypto"
 )
@@ -40,13 +38,13 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 		var err error
 		seed, err = tpm2_crypto.SecretDecrypt(privKey, parentNameAlg.GetHash(), []byte(tpm2.DuplicateString), inSymSeed)
 		if err != nil {
-			return nil, xerrors.Errorf("cannot decrypt symmetric seed: %w", err)
+			return nil, fmt.Errorf("cannot decrypt symmetric seed: %w", err)
 		}
 	}
 
 	name, err := public.Name()
 	if err != nil {
-		return nil, xerrors.Errorf("cannot compute name: %w", err)
+		return nil, fmt.Errorf("cannot compute name: %w", err)
 	}
 
 	return DuplicateToSensitive(duplicate, name, parentNameAlg, parentSymmetricAlg, seed, symmetricAlg, encryptionKey)
@@ -81,7 +79,7 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 
 	name, err := public.Name()
 	if err != nil {
-		return nil, nil, nil, xerrors.Errorf("cannot compute name: %w", err)
+		return nil, nil, nil, fmt.Errorf("cannot compute name: %w", err)
 	}
 
 	var seed []byte
@@ -94,7 +92,7 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 		}
 		outSymSeed, seed, err = tpm2_crypto.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
 		if err != nil {
-			return nil, nil, nil, xerrors.Errorf("cannot create encrypted symmetric seed: %w", err)
+			return nil, nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
 		}
 	}
 

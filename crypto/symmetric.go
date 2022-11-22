@@ -6,8 +6,7 @@ package crypto
 
 import (
 	"crypto/cipher"
-
-	"golang.org/x/xerrors"
+	"fmt"
 )
 
 type SymmetricAlgorithm interface {
@@ -19,7 +18,7 @@ type SymmetricAlgorithm interface {
 func SymmetricEncrypt(alg SymmetricAlgorithm, key, iv, data []byte) error {
 	c, err := alg.NewCipher(key)
 	if err != nil {
-		return xerrors.Errorf("cannot create cipher: %w", err)
+		return fmt.Errorf("cannot create cipher: %w", err)
 	}
 	// The TPM uses CFB cipher mode for all secret sharing
 	s := cipher.NewCFBEncrypter(c, iv)
@@ -32,7 +31,7 @@ func SymmetricEncrypt(alg SymmetricAlgorithm, key, iv, data []byte) error {
 func SymmetricDecrypt(alg SymmetricAlgorithm, key, iv, data []byte) error {
 	c, err := alg.NewCipher(key)
 	if err != nil {
-		return xerrors.Errorf("cannot create cipher: %w", err)
+		return fmt.Errorf("cannot create cipher: %w", err)
 	}
 	// The TPM uses CFB cipher mode for all secret sharing
 	s := cipher.NewCFBDecrypter(c, iv)

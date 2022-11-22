@@ -15,8 +15,6 @@ import (
 	"reflect"
 
 	"github.com/canonical/go-tpm2/mu"
-
-	"golang.org/x/xerrors"
 )
 
 // HandleContext corresponds to an entity that resides on the TPM. Implementations of HandleContext maintain some host-side
@@ -324,7 +322,7 @@ func (t *TPMContext) makeObjectContextFromTPM(context HandleContext, sessions ..
 		return nil, err
 	}
 	if n, err := pub.Name(); err != nil {
-		return nil, &InvalidResponseError{CommandReadPublic, xerrors.Errorf("cannot compute name of returned public area: %w", err)}
+		return nil, &InvalidResponseError{CommandReadPublic, fmt.Errorf("cannot compute name of returned public area: %w", err)}
 	} else if !bytes.Equal(n, name) {
 		return nil, &InvalidResponseError{CommandReadPublic, errors.New("name and public area don't match")}
 	}
@@ -371,7 +369,7 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context HandleContext, sessions .
 		return nil, err
 	}
 	if n, err := pub.Name(); err != nil {
-		return nil, &InvalidResponseError{CommandNVReadPublic, xerrors.Errorf("cannot compute name of returned public area: %w", err)}
+		return nil, &InvalidResponseError{CommandNVReadPublic, fmt.Errorf("cannot compute name of returned public area: %w", err)}
 	} else if !bytes.Equal(n, name) {
 		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("name and public area don't match")}
 	}
@@ -592,7 +590,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var integrity []byte
 	var b []byte
 	if _, err := mu.UnmarshalFromReader(r, &integrityAlg, &integrity, &b); err != nil {
-		return nil, xerrors.Errorf("cannot unpack context blob and checksum: %w", err)
+		return nil, fmt.Errorf("cannot unpack context blob and checksum: %w", err)
 	}
 
 	if !integrityAlg.Available() {
@@ -607,7 +605,7 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var data *handleContext
 	n, err := mu.UnmarshalFromBytes(b, &data)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot unmarshal context data: %w", err)
+		return nil, fmt.Errorf("cannot unmarshal context data: %w", err)
 	}
 	if n < len(b) {
 		return nil, errors.New("context blob contains trailing bytes")

@@ -23,8 +23,6 @@ import (
 	"github.com/snapcore/snapd/osutil/sys"
 	"github.com/snapcore/snapd/snap"
 
-	"golang.org/x/xerrors"
-
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
@@ -282,7 +280,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		tmpRoot = filepath.Join(runDir, mssimSnapName)
 		tmpPrefix = ""
 		if err := os.MkdirAll(tmpRoot, 0755); err != nil {
-			return nil, xerrors.Errorf("cannot create snap tmpdir: %w", err)
+			return nil, fmt.Errorf("cannot create snap tmpdir: %w", err)
 		}
 	}
 
@@ -386,7 +384,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	makeTmpDir := func() (err error) {
 		mssimTmpDir, err = ioutil.TempDir(tmpRoot, tmpPrefix)
 		if err != nil {
-			return xerrors.Errorf("cannot create temporary directory for simulator: %w", err)
+			return fmt.Errorf("cannot create temporary directory for simulator: %w", err)
 		}
 		return nil
 	}
@@ -396,7 +394,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		source, err := os.Open(opts.SourcePath)
 		switch {
 		case err != nil && !os.IsNotExist(err):
-			return nil, xerrors.Errorf("cannot open source persistent storage: %w", err)
+			return nil, fmt.Errorf("cannot open source persistent storage: %w", err)
 		case err != nil && (opts.SavePersistent || noEphemeral):
 			// No source file, but we want to either save the persistent data or we
 			// don't support ephemeral mode, so create the instance tmpdir.
@@ -414,11 +412,11 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 			}
 			dest, err := os.Create(filepath.Join(mssimTmpDir, "NVChip"))
 			if err != nil {
-				return nil, xerrors.Errorf("cannot create temporary storage for simulator: %w", err)
+				return nil, fmt.Errorf("cannot create temporary storage for simulator: %w", err)
 			}
 			defer dest.Close()
 			if _, err := io.Copy(dest, source); err != nil {
-				return nil, xerrors.Errorf("cannot copy persistent storage to temporary location for simulator: %w", err)
+				return nil, fmt.Errorf("cannot copy persistent storage to temporary location for simulator: %w", err)
 			}
 		}
 	} else if !noEphemeral {
@@ -442,7 +440,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	cmd.Dir = mssimTmpDir // Run from the temporary directory we created
 
 	if err := cmd.Start(); err != nil {
-		return nil, xerrors.Errorf("cannot start simulator: %w", err)
+		return nil, fmt.Errorf("cannot start simulator: %w", err)
 	}
 
 	var tcti *mssim.Tcti
@@ -453,7 +451,7 @@ Loop:
 		tcti, err = mssim.OpenConnection("", MssimPort)
 		switch {
 		case err != nil && i == 4:
-			return nil, xerrors.Errorf("cannot open simulator connection: %w", err)
+			return nil, fmt.Errorf("cannot open simulator connection: %w", err)
 		case err != nil:
 			time.Sleep(time.Second)
 		default:
@@ -465,7 +463,7 @@ Loop:
 	defer tpm.Close()
 
 	if err := tpm.Startup(tpm2.StartupClear); err != nil {
-		return nil, xerrors.Errorf("simulator startup failed: %w", err)
+		return nil, fmt.Errorf("simulator startup failed: %w", err)
 	}
 
 	return cleanup, nil
@@ -655,7 +653,7 @@ func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *mssim.Tcti) error {
 		return err
 	}
 	if err := tcti.Reset(); err != nil {
-		return xerrors.Errorf("resetting the simulator failed: %v", err)
+		return fmt.Errorf("resetting the simulator failed: %v", err)
 	}
 	return tpm.Startup(tpm2.StartupClear)
 }

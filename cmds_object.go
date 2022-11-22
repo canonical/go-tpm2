@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-tpm2/mu"
-	"golang.org/x/xerrors"
 )
 
 // Create executes the TPM2_Create command to create a new ordinary object as
@@ -643,7 +642,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 
 	var public *Public
 	if err := mu.CopyValue(&public, outPublic); err != nil {
-		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, xerrors.Errorf("cannot copy returned public area from TPM: %w", err)}
+		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, fmt.Errorf("cannot copy returned public area from TPM: %w", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))

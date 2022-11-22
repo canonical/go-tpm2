@@ -6,9 +6,8 @@ package tpm2
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -643,14 +642,14 @@ func (e *TPMHandleError) Unwrap() error {
 // IsResourceUnavailableError indicates whether an error is a ResourceUnavailableError with
 // the specified handle. To test for any handle, use AnyHandle.
 func IsResourceUnavailableError(err error, handle Handle) bool {
-	return xerrors.Is(err, ResourceUnavailableError{Handle: handle})
+	return errors.Is(err, ResourceUnavailableError{Handle: handle})
 }
 
 // IsTPMError indicates whether the error or any error within its chain is a *TPMError with
 // the specified ErrorCode and CommandCode. To test for any error code, use AnyErrorCode. To
 // test for any command code, use AnyCommandCode.
 func IsTPMError(err error, code ErrorCode, command CommandCode) bool {
-	return xerrors.Is(err, &TPMError{Command: command, Code: code})
+	return errors.Is(err, &TPMError{Command: command, Code: code})
 }
 
 // IsTPMHandleError indicates whether the error or any error within its chain is a
@@ -658,7 +657,7 @@ func IsTPMError(err error, code ErrorCode, command CommandCode) bool {
 // any error code, use AnyErrorCode. To test for any command code, use AnyCommandCode. To
 // test for any handle index, use AnyHandleIndex.
 func IsTPMHandleError(err error, code ErrorCode, command CommandCode, handle int) bool {
-	return xerrors.Is(err, &TPMHandleError{TPMError: &TPMError{Command: command, Code: code}, Index: handle})
+	return errors.Is(err, &TPMHandleError{TPMError: &TPMError{Command: command, Code: code}, Index: handle})
 }
 
 // IsTPMParameterError indicates whether the error or any error within its chain is a
@@ -666,7 +665,7 @@ func IsTPMHandleError(err error, code ErrorCode, command CommandCode, handle int
 // for any error code, use AnyErrorCode. To test for any command code, use AnyCommandCode.
 // To test for any parameter index, use AnyParameterIndex.
 func IsTPMParameterError(err error, code ErrorCode, command CommandCode, param int) bool {
-	return xerrors.Is(err, &TPMParameterError{TPMError: &TPMError{Command: command, Code: code}, Index: param})
+	return errors.Is(err, &TPMParameterError{TPMError: &TPMError{Command: command, Code: code}, Index: param})
 }
 
 // IsTPMSessionError indicates whether the error or any error within its chain is a
@@ -674,14 +673,14 @@ func IsTPMParameterError(err error, code ErrorCode, command CommandCode, param i
 // error code, use AnyErrorCode. To test for any command code, use AnyCommandCode. To test for
 // any session index, use AnySessionIndex.
 func IsTPMSessionError(err error, code ErrorCode, command CommandCode, session int) bool {
-	return xerrors.Is(err, &TPMSessionError{TPMError: &TPMError{Command: command, Code: code}, Index: session})
+	return errors.Is(err, &TPMSessionError{TPMError: &TPMError{Command: command, Code: code}, Index: session})
 }
 
 // IsTPMWarning indicates whether the error or any error within its chain is a *TPMWarning with the
 // specified WarningCode and CommandCode. To test for any warning code, use AnyWarningCode. To test
 // for any command code, use AnyCommandCode.
 func IsTPMWarning(err error, code WarningCode, command CommandCode) bool {
-	return xerrors.Is(err, &TPMWarning{Command: command, Code: code})
+	return errors.Is(err, &TPMWarning{Command: command, Code: code})
 }
 
 // InvalidResponseCode is returned from DecodeResponseCode and any TPMContext

@@ -2,16 +2,27 @@
 Package mu provides helpers to marshalling to and unmarshalling from the TPM wire format.
 
 Go types are marshalled to and from the TPM wire format according to the following rules:
+
   - UINT8 <-> uint8
+
   - BYTE <-> byte
+
   - INT8 <-> int8
+
   - BOOL <-> bool
+
   - UINT16 <-> uint16
+
   - INT16 <-> int16
+
   - UINT32 <-> uint32
+
   - INT32 <-> int32
+
   - UINT64 <-> uint64
+
   - INT64 <-> int64
+
   - TPM2B prefixed types (sized buffers with a 2-byte size field) fall in to 2 categories:
 
     1. Byte buffer <-> []byte, or any type with an identical underlying type. A zero
@@ -23,12 +34,17 @@ Go types are marshalled to and from the TPM wire format according to the followi
 
   - TPMA prefixed types (attributes) <-> whichever go type corresponds to the underlying TPM
     type (UINT8, UINT16, or UINT32).
+
   - TPM_ALG_ID (algorithm enum) <-> tpm2.AlgorithmId
+
   - TPML prefixed types (lists with a 4-byte length field) <-> slice of whichever go type
     corresponds to the underlying TPM type. Zero length lists are unmarshalled to nil.
+
   - TPMS prefixed types (structures) <-> struct
+
   - TPMT prefixed types (tagged union) <-> struct with at least one union member. The first
     member is the selector field.
+
   - TPMU prefixed types (unions) <-> struct which implements the Union interface. The default
     selector field can be overridden by using the `tpm2:"selector:<field_name>"` tag.
 

@@ -6,10 +6,10 @@ package tpm2
 
 import (
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/canonical/go-tpm2/mu"
-	"golang.org/x/xerrors"
 )
 
 // TPMManufacturer corresponds to the TPM manufacturer and is returned when querying the value PropertyManufacturer with
@@ -125,7 +125,7 @@ func (v PCRValues) AddValues(pcrs PCRSelectionList, digests DigestList) (n int, 
 		// to ensure it is ordered correctly.
 		bmp, err := p.Select.ToBitmap(0)
 		if err != nil {
-			return 0, xerrors.Errorf("invalid selection: %w", err)
+			return 0, fmt.Errorf("invalid selection: %w", err)
 		}
 		sel := bmp.ToPCRs()
 

@@ -12,8 +12,6 @@ import (
 	"math"
 
 	"github.com/canonical/go-tpm2/mu"
-
-	"golang.org/x/xerrors"
 )
 
 func makeInvalidArgError(name, msg string) error {
@@ -171,7 +169,7 @@ func (e *execContext) processResponseAuth(r *rspContext) (err error) {
 	}
 
 	if err := r.SessionParams.ProcessResponseAuthArea(r.ResponseAuthArea, r.RpBytes); err != nil {
-		return &InvalidResponseError{r.CommandCode, xerrors.Errorf("cannot process response auth area: %w", err)}
+		return &InvalidResponseError{r.CommandCode, fmt.Errorf("cannot process response auth area: %w", err)}
 	}
 
 	for _, s := range r.SessionParams.Sessions {
@@ -192,7 +190,7 @@ func (e *execContext) CompleteResponse(r *rspContext, responseParams ...interfac
 	rpBuf := bytes.NewReader(r.RpBytes)
 
 	if _, err := mu.UnmarshalFromReader(rpBuf, responseParams...); err != nil {
-		return &InvalidResponseError{r.CommandCode, xerrors.Errorf("cannot unmarshal response parameters: %w", err)}
+		return &InvalidResponseError{r.CommandCode, fmt.Errorf("cannot unmarshal response parameters: %w", err)}
 	}
 
 	if rpBuf.Len() > 0 {
@@ -227,12 +225,12 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 
 	cpBytes, err := mu.MarshalToBytes(c.Params...)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot marshal parameters for command %s: %w", c.CommandCode, err)
+		return nil, fmt.Errorf("cannot marshal parameters for command %s: %w", c.CommandCode, err)
 	}
 
 	cAuthArea, err := sessionParams.BuildCommandAuthArea(c.CommandCode, handleNames, cpBytes)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot build auth area for command %s: %w", c.CommandCode, err)
+		return nil, fmt.Errorf("cannot build auth area for command %s: %w", c.CommandCode, err)
 	}
 
 	if e.pendingResponse != nil {
@@ -379,7 +377,7 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cAuthArea []AuthCommand, cpBytes []byte, rHandle *Handle) (rpBytes []byte, rAuthArea []AuthResponse, err error) {
 	cmd, err := MarshalCommandPacket(commandCode, cHandles, cAuthArea, cpBytes)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("cannot serialize command packet: %w", err)
+		return nil, nil, fmt.Errorf("cannot serialize command packet: %w", err)
 	}
 
 	for tries := uint(1); ; tries++ {
@@ -392,7 +390,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 		var rc ResponseCode
 		rc, rpBytes, rAuthArea, err = resp.Unmarshal(rHandle)
 		if err != nil {
-			return nil, nil, &InvalidResponseError{commandCode, xerrors.Errorf("cannot unmarshal response packet: %w", err)}
+			return nil, nil, &InvalidResponseError{commandCode, fmt.Errorf("cannot unmarshal response packet: %w", err)}
 		}
 
 		err = DecodeResponseCode(commandCode, rc)

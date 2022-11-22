@@ -14,8 +14,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"golang.org/x/xerrors"
-
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -49,7 +47,7 @@ func SecretDecrypt(priv crypto.PrivateKey, hashAlg crypto.Hash, label, secret []
 	case *ecdsa.PrivateKey:
 		var ephPoint eccPoint
 		if _, err := mu.UnmarshalFromBytes(secret, &ephPoint); err != nil {
-			return nil, xerrors.Errorf("cannot unmarshal ephemeral point: %w", err)
+			return nil, fmt.Errorf("cannot unmarshal ephemeral point: %w", err)
 		}
 		ephX := new(big.Int).SetBytes(ephPoint.X)
 		ephY := new(big.Int).SetBytes(ephPoint.Y)

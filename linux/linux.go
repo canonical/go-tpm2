@@ -15,7 +15,6 @@ import (
 	"os"
 
 	"golang.org/x/sys/unix"
-	"golang.org/x/xerrors"
 
 	"github.com/canonical/go-tpm2"
 )
@@ -34,7 +33,7 @@ func (d *TctiDevice) readMoreData() error {
 	fds := []unix.PollFd{unix.PollFd{Fd: int32(d.f.Fd()), Events: unix.POLLIN}}
 	_, err := unix.Ppoll(fds, nil, nil)
 	if err != nil {
-		return xerrors.Errorf("polling device failed: %w", err)
+		return fmt.Errorf("polling device failed: %w", err)
 	}
 
 	if fds[0].Events != fds[0].Revents {
@@ -44,7 +43,7 @@ func (d *TctiDevice) readMoreData() error {
 	buf := make([]byte, maxCommandSize)
 	n, err := d.f.Read(buf)
 	if err != nil {
-		return xerrors.Errorf("reading from device failed: %w", err)
+		return fmt.Errorf("reading from device failed: %w", err)
 	}
 
 	d.buf = bytes.NewReader(buf[:n])

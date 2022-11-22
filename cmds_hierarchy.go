@@ -10,8 +10,6 @@ import (
 	"errors"
 	"fmt"
 
-	"golang.org/x/xerrors"
-
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -174,7 +172,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 	var public *Public
 	if err := mu.CopyValue(&public, outPublic); err != nil {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
-			xerrors.Errorf("cannot copy returned public area from TPM: %w", err)}
+			fmt.Errorf("cannot copy returned public area from TPM: %w", err)}
 	}
 	rc := makeObjectContext(objectHandle, name, public)
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))
