@@ -5,41 +5,6 @@ on:
   pull_request:
     branches: [ "master" ]
 jobs:
-  legacy-tests:
-    runs-on: ubuntu-18.04
-    env:
-      GOPATH: ${{ github.workspace }}
-    steps:
-    - name: Set up Go 1.16
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.16
-    - name: Install dependencies
-      run: |
-          sudo snap install core core18
-          sudo snap install --edge tpm2-simulator-chrisccoulson
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        path: src/github.com/canonical/go-tpm2
-    - name: Cache Go dependencies
-      id: cache-go-modules
-      uses: actions/cache@v2
-      with:
-        path: ${{ github.workspace }}/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-    - name: Vendor Go dependencies
-      run: cd ${{ github.workspace }}/src/github.com/canonical/go-tpm2 && go mod vendor
-    - name: Set up Go 1.9
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.9
-    - name: Build
-      run: go build -v github.com/canonical/go-tpm2/...
-    - name: Test
-      run: cd ${{ github.workspace }}/src/github.com/canonical/go-tpm2 && ./run-tests -use-mssim
   tests:
     runs-on: ubuntu-18.04
     strategy:
