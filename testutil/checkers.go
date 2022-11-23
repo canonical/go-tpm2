@@ -15,10 +15,11 @@ type tpmValueDeepEqualsChecker struct {
 }
 
 // TPMValueDeepEquals checks that the obtained TPM value is deeply
-// equal to the expected TPM value. This works by first converting
-// both values to a canonical form by serializing and unserializing
-// them. Both values need to be valid TPM types for this to work,
-// and they need to be representable by the TPM wire format.
+// equal to the expected TPM value. This works by first checking that
+// both values have the same type, and then serializing them both to
+// the TPM wire format and checking that they are bit-for-bit identical.
+// Both values need to be valid TPM types for this to work, and they
+// need to be representable by the TPM wire format.
 //
 // For example:
 //
