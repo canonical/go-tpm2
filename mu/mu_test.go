@@ -895,7 +895,7 @@ func (s *muSuite) TestErrorFromCustomType(c *C) {
 	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type uint32: unexpected EOF\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... \\[\\]uint32 index 2\n"+
-		"... mu_test.testCustom custom type, call from mu_test.go:200 argument 1\n"+
+		"... mu_test.testCustom location mu_test.go:200, argument 1\n"+
 		"... mu_test.testStructContainingCustom field X\n"+
 		"=== END STACK ===\n")
 	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
@@ -953,14 +953,12 @@ func (s *muSuite) TestMarshalBadSizedBuffer(c *C) {
 
 func (s *muSuite) TestMarshalUnionInNoStruct(c *C) {
 	a := &testUnion{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion is not inside a struct\n"+
-		"=== BEGIN STACK ===\n"+
-		"=== END STACK ===\n")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion is not inside a struct")
 }
 
 func (s *muSuite) TestMarshalInvalidTaggedUnion(c *C) {
 	a := testInvalidTaggedUnion{A: &testUnion{}}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "selector name foo for union type mu_test.testUnion does not reference a valid field\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "selector name foo for union type mu_test.testUnion does not reference a valid field\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testInvalidTaggedUnion field A\n"+
 		"=== END STACK ===\n")
@@ -968,7 +966,7 @@ func (s *muSuite) TestMarshalInvalidTaggedUnion(c *C) {
 
 func (s *muSuite) TestMarshalNonAddressableUnion(c *C) {
 	a := testTaggedUnion3{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion needs to be addressable\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion needs to be addressable\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testTaggedUnion3 field Union\n"+
 		"=== END STACK ===\n")
@@ -976,7 +974,7 @@ func (s *muSuite) TestMarshalNonAddressableUnion(c *C) {
 
 func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
 	a := testStructWithInvalidSizedField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(\"sized\" option requires a pointer field\\)\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(\"sized\" option requires a pointer field\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidSizedField field A\n"+
 		"=== END STACK ===\n")
@@ -984,16 +982,12 @@ func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
 
 func (s *muSuite) TestMarshalUnsupportedType(c *C) {
 	a := "foo"
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type string \\(unsupported kind: string\\)\n"+
-		"=== BEGIN STACK ===\n"+
-		"=== END STACK ===\n")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type string \\(unsupported kind: string\\)")
 }
 
 func (s *muSuite) TestUnmarshalUnsupportedType(c *C) {
 	var a [3]uint16
-	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16 \\(unsupported kind: array\\)\n"+
-		"=== BEGIN STACK ===\n"+
-		"=== END STACK ===\n")
+	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16 \\(unsupported kind: array\\)")
 }
 
 func (s *muSuite) TestUnmarshalValue(c *C) {
@@ -1012,21 +1006,17 @@ func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 }
 
 func (s *muSuite) TestMarshalSizedAndRaw(c *C) {
-	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)\n"+
-		"=== BEGIN STACK ===\n"+
-		"=== END STACK ===\n")
+	c.Check(func() { MarshalToBytes(Sized(Raw([]byte{}))) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)")
 }
 
 func (s *muSuite) TestMarshalUnaddressableCustom(c *C) {
 	a := testCustom2{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "custom type mu_test.testCustom2 needs to be addressable\n"+
-		"=== BEGIN STACK ===\n"+
-		"=== END STACK ===\n")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "custom type mu_test.testCustom2 needs to be addressable")
 }
 
 func (s *muSuite) TestMarshalUnaddressableCustom2(c *C) {
 	a := testStructContainingCustom2{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "custom type mu_test.testCustom2 needs to be addressable\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "custom type mu_test.testCustom2 needs to be addressable\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructContainingCustom2 field X\n"+
 		"=== END STACK ===\n")
@@ -1105,4 +1095,34 @@ func (s *muSuite) TestCopyValue2(c *C) {
 	var dst emptyInterface
 	c.Check(CopyValue(&dst, src), IsNil)
 	c.Check(dst, DeepEquals, testStruct{A: 10, B: new(uint32), C: true, D: []uint32{54353, 431}})
+}
+
+func (s *muSuite) TestPanicFromCustom(c *C) {
+	a := new(testStructContainingCustom3)
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "some error\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testCustom3\n"+
+		"... mu_test.testStructContainingCustom3 field A\n"+
+		"=== END STACK ===\n")
+	c.Check(func() { UnmarshalFromBytes(nil, &a) }, PanicMatches, "some error\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testCustom3\n"+
+		"... mu_test.testStructContainingCustom3 field A\n"+
+		"=== END STACK ===\n")
+}
+
+func (s *muSuite) TestPanicAcrossCustom(c *C) {
+	a := new(testCustom4)
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "some error\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testCustom3\n"+
+		"... mu_test.testStructContainingCustom3 field A\n"+
+		"... mu_test.testCustom4 location mu_test.go:550, argument 0\n"+
+		"=== END STACK ===\n")
+	c.Check(func() { UnmarshalFromBytes(nil, &a) }, PanicMatches, "some error\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testCustom3\n"+
+		"... mu_test.testStructContainingCustom3 field A\n"+
+		"... mu_test.testCustom4 location mu_test.go:600, argument 0\n"+
+		"=== END STACK ===\n")
 }

@@ -57,7 +57,7 @@ func (s *typesSuite) TestUnmarshalPCRValuesInvalidPayload(c *C) {
 
 === BEGIN STACK ===
 ... tpm2.DigestList index 0
-... tpm2.PCRValues custom type, call from .*\/types\.go:[[:digit:]]* argument 1
+... tpm2.PCRValues location .*\/types\.go:[[:digit:]]*, argument 1
 === END STACK ===
 `)
 }

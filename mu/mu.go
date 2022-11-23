@@ -132,9 +132,10 @@ type Union interface {
 }
 
 type containerNode struct {
-	value reflect.Value
-	index int
-	entry [1]uintptr
+	value  reflect.Value
+	custom bool
+	index  int
+	entry  [1]uintptr
 }
 
 type containerStack []containerNode
@@ -147,8 +148,8 @@ func (s containerStack) pop() containerStack {
 	return s[:len(s)-1]
 }
 
-func (s containerStack) top() containerNode {
-	return s[len(s)-1]
+func (s containerStack) top() *containerNode {
+	return &s[len(s)-1]
 }
 
 func (s containerStack) String() string {
@@ -156,10 +157,12 @@ func (s containerStack) String() string {
 	str.WriteString("=== BEGIN STACK ===\n")
 	for i := len(s) - 1; i >= 0; i-- {
 		switch {
-		case s[i].entry != [1]uintptr{0}:
+		case s[i].custom && s[i].entry != [1]uintptr{0}:
 			frames := runtime.CallersFrames(s[i].entry[:])
 			frame, _ := frames.Next()
-			fmt.Fprintf(str, "... %s custom type, call from %s:%d argument %d\n", s[i].value.Type(), frame.File, frame.Line, s[i].index)
+			fmt.Fprintf(str, "... %s location %s:%d, argument %d\n", s[i].value.Type(), frame.File, frame.Line, s[i].index)
+		case s[i].custom:
+			fmt.Fprintf(str, "... %s\n", s[i].value.Type())
 		case s[i].value.Kind() == reflect.Struct:
 			fmt.Fprintf(str, "... %s field %s\n", s[i].value.Type(), s[i].value.Type().Field(s[i].index).Name)
 		case s[i].value.Kind() == reflect.Slice:
@@ -231,6 +234,22 @@ func (e *Error) Container(depth int) (containerType reflect.Type, index int, ent
 	}
 
 	return e.stack[depth].value.Type(), e.stack[depth].index, frame
+}
+
+type fatalError struct {
+	index int
+	entry [1]uintptr
+	stack containerStack
+	err   interface{}
+}
+
+func (e *fatalError) Error() string {
+	s := new(bytes.Buffer)
+	fmt.Fprintf(s, "%v", e.err)
+	if len(e.stack) > 0 {
+		fmt.Fprintf(s, "\n\n%s", e.stack)
+	}
+	return s.String()
 }
 
 type options struct {
@@ -529,7 +548,7 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 		}
 	}
 	if !valid {
-		panic(fmt.Sprintf("union type %s is not inside a struct\n%s", u.Type(), c.stack))
+		panic(fmt.Sprintf("union type %s is not inside a struct", u.Type()))
 	}
 
 	var selectorVal reflect.Value
@@ -538,13 +557,13 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 	} else {
 		selectorVal = c.stack.top().value.FieldByName(opts.selector)
 		if !selectorVal.IsValid() {
-			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field\n%s",
-				opts.selector, u.Type(), c.stack))
+			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field",
+				opts.selector, u.Type()))
 		}
 	}
 
 	if !u.CanAddr() {
-		panic(fmt.Sprintf("union type %s needs to be addressable\n%s", u.Type(), c.stack))
+		panic(fmt.Sprintf("union type %s needs to be addressable", u.Type()))
 	}
 
 	p := u.Addr().Interface().(Union).Select(selectorVal)
@@ -564,8 +583,8 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 		}
 	}
 	if index == -1 {
-		panic(fmt.Sprintf("Union.Select implementation for type %s returned a non-member pointer\n%s",
-			u.Type(), c.stack))
+		panic(fmt.Sprintf("Union.Select implementation for type %s returned a non-member pointer",
+			u.Type()))
 	}
 
 	return pv.Elem(), c.enterStructField(u, index), nil
@@ -579,6 +598,14 @@ func (c *context) enterSizedType() (exit func()) {
 	}
 }
 
+func (c *context) enterCustomType(v reflect.Value) (exit func()) {
+	c.stack = c.stack.push(containerNode{value: v, custom: true})
+
+	return func() {
+		c.stack = c.stack.pop()
+	}
+}
+
 func (c *context) wrapOrNewError(value reflect.Value, err error) error {
 	muErr, isMuErr := err.(*Error)
 	if !isMuErr {
@@ -588,15 +615,13 @@ func (c *context) wrapOrNewError(value reflect.Value, err error) error {
 	stack := make(containerStack, len(c.stack))
 	copy(stack, c.stack)
 
-	// Stitch the error stack to our stack
-	stack = stack.push(containerNode{value: value, index: muErr.Index, entry: muErr.entry})
-	stack = append(stack, muErr.stack...)
+	stack = append(stack, containerNode{value: value, custom: true, index: muErr.Index, entry: muErr.entry})
 
 	return &Error{
 		Index:    c.index,
 		Op:       c.mode,
 		entry:    c.caller,
-		stack:    stack,
+		stack:    append(stack, muErr.stack...),
 		leafType: muErr.leafType,
 		err:      muErr.err}
 }
@@ -617,6 +642,28 @@ func (c *context) newError(value reflect.Value, err error) error {
 		stack:    stack,
 		leafType: value.Type(),
 		err:      err}
+}
+
+func (c *context) wrapFatal(err interface{}) *fatalError {
+	f, ok := err.(*fatalError)
+	if !ok {
+		return &fatalError{
+			index: c.index,
+			entry: c.caller,
+			stack: c.stack,
+			err:   err}
+	}
+
+	stack := make(containerStack, len(c.stack))
+	copy(stack, c.stack)
+	stack.top().index = f.index
+	stack.top().entry = f.entry
+
+	return &fatalError{
+		index: c.index,
+		entry: c.caller,
+		stack: append(stack, f.stack...),
+		err:   f.err}
 }
 
 type marshaller struct {
@@ -730,21 +777,28 @@ func (m *marshaller) marshalUnion(v reflect.Value, opts *options) error {
 	if !elem.IsValid() {
 		return nil
 	}
-	defer exit()
-	return m.marshalValue(elem, nil)
+	err := m.marshalValue(elem, nil)
+	exit()
+	return err
 }
 
 func (m *marshaller) marshalCustom(v reflect.Value) error {
 	if !v.Type().Implements(customMarshallerType) {
 		// support Marshal() implementations that take a pointer receiver.
 		if !v.CanAddr() {
-			panic(fmt.Sprintf("custom type %s needs to be addressable\n%s", v.Type(), m.stack))
+			panic(fmt.Sprintf("custom type %s needs to be addressable", v.Type()))
 		}
 		v = v.Addr()
 	}
+
+	exit := m.enterCustomType(v)
+
 	if err := v.Interface().(customMarshallerIface).Marshal(m); err != nil {
+		exit()
 		return m.wrapOrNewError(v, err)
 	}
+
+	exit()
 	return nil
 }
 
@@ -753,7 +807,7 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 
 	switch {
 	case err != nil:
-		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)\n%s", v.Type(), err, m.stack))
+		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)", v.Type(), err))
 	case kind == TPMKindUnsupported:
 		return m.marshalPtr(v, opts)
 	}
@@ -781,6 +835,12 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 }
 
 func (m *marshaller) marshal(vals ...interface{}) (int, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			panic(m.wrapFatal(err))
+		}
+	}()
+
 	for i, v := range vals {
 		m.index = i
 
@@ -935,17 +995,24 @@ func (u *unmarshaller) unmarshalUnion(v reflect.Value, opts *options) error {
 	if !elem.IsValid() {
 		return nil
 	}
-	defer exit()
-	return u.unmarshalValue(elem, nil)
+	err = u.unmarshalValue(elem, nil)
+	exit()
+	return err
 }
 
 func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 	if !v.CanAddr() {
-		panic(fmt.Sprintf("custom type %s needs to be addressable\n%s", v.Type(), u.stack))
+		panic(fmt.Sprintf("custom type %s needs to be addressable", v.Type()))
 	}
+
+	exit := u.enterCustomType(v)
+
 	if err := v.Addr().Interface().(customUnmarshallerIface).Unmarshal(u); err != nil {
+		exit()
 		return u.wrapOrNewError(v, err)
 	}
+
+	exit()
 	return nil
 }
 
@@ -954,7 +1021,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 
 	switch {
 	case err != nil:
-		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)\n%s", v.Type(), err, u.stack))
+		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)", v.Type(), err))
 	case kind == TPMKindUnsupported:
 		return u.unmarshalPtr(v, opts)
 	}
@@ -982,6 +1049,12 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 }
 
 func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			panic(u.wrapFatal(err))
+		}
+	}()
+
 	for i, v := range vals {
 		u.index = i
 

@@ -142,3 +142,33 @@ func (t *testCustom2) Unmarshal(r io.Reader) error {
 	t.A = binary.LittleEndian.Uint16(a[:])
 	return err
 }
+
+type testCustom3 struct{}
+
+func (t testCustom3) Marshal(w io.Writer) error {
+	panic("some error")
+}
+
+func (t *testCustom3) Unmarshal(r io.Reader) error {
+	panic("some error")
+}
+
+type testStructContainingCustom3 struct {
+	A testCustom3
+}
+
+type testCustom4 struct {
+	A testStructContainingCustom3
+}
+
+func (t testCustom4) Marshal(w io.Writer) error {
+//line mu_test.go:550
+	_, err := MarshalToWriter(w, t.A)
+	return err
+}
+
+func (t *testCustom4) Unmarshal(r io.Reader) error {
+//line mu_test.go:600
+	_, err := UnmarshalFromReader(r, &t.A)
+	return err
+}
