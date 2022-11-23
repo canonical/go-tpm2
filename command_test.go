@@ -50,7 +50,7 @@ func (s *commandSuite) TestMarshalCommandPacketWithSessions(c *C) {
 func (s *commandSuite) TestUnmarshalResponsePacketTooSmall(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80010000000a000000"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, `cannot unmarshal header: cannot unmarshal argument whilst processing element of type tpm2.ResponseCode: unexpected EOF
+	c.Check(err, ErrorMatches, `cannot unmarshal header: cannot unmarshal argument 0 whilst processing element of type tpm2.ResponseCode: unexpected EOF
 
 === BEGIN STACK ===
 ... tpm2.ResponseHeader field ResponseCode
@@ -104,13 +104,13 @@ func (s *commandSuite) TestUnmarshalResponseHandleFail(c *C) {
 
 	var handle Handle
 	_, _, _, err := p.Unmarshal(&handle)
-	c.Check(err, ErrorMatches, "cannot unmarshal handle: cannot unmarshal argument whilst processing element of type tpm2.Handle: unexpected EOF")
+	c.Check(err, ErrorMatches, "cannot unmarshal handle: cannot unmarshal argument 0 whilst processing element of type tpm2.Handle: unexpected EOF")
 }
 
 func (s *commandSuite) TestUnmarshalResponseParamSizeFail(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000000a00000000"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "cannot unmarshal parameterSize: cannot unmarshal argument whilst processing element of type uint32: unexpected EOF")
+	c.Check(err, ErrorMatches, "cannot unmarshal parameterSize: cannot unmarshal argument 0 whilst processing element of type uint32: unexpected EOF")
 }
 
 func (s *commandSuite) TestUnmarshalResponsePacketInvalidParamSize(c *C) {
@@ -122,7 +122,7 @@ func (s *commandSuite) TestUnmarshalResponsePacketInvalidParamSize(c *C) {
 func (s *commandSuite) TestUnmarshalResponsePacketInvalidAuthArea(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "800200000012000000000000000000000000"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, `cannot unmarshal auth at index 0: cannot unmarshal argument whilst processing element of type tpm2.Auth: unexpected EOF
+	c.Check(err, ErrorMatches, `cannot unmarshal auth at index 0: cannot unmarshal argument 0 whilst processing element of type tpm2.Auth: unexpected EOF
 
 === BEGIN STACK ===
 ... tpm2.AuthResponse field HMAC

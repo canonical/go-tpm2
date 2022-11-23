@@ -805,7 +805,7 @@ func (s *muSuite) TestDetermineTPMKindRaw3(c *C) {
 func (s *muSuite) TestErrorSimple(c *C) {
 	a := make([]byte, 70000)
 	_, err := MarshalToBytes(a)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\[\\]uint8: sized value size of 70000 is larger than 2\\^16-1")
+	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type \\[\\]uint8: sized value size of 70000 is larger than 2\\^16-1")
 
 	c.Assert(err, internal_testutil.ConvertibleTo, &Error{})
 	e := err.(*Error)
@@ -827,7 +827,7 @@ func (s *muSuite) TestErrorWithMultipleArguments(c *C) {
 func (s *muSuite) TestErrorInStructContainer(c *C) {
 	a := testStructWithSizedField{B: &testStruct{D: make([]uint32, 20000)}}
 	_, err := MarshalToBytes(a)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\*mu_test.testStruct: sized value size of 80011 is larger than 2\\^16-1\n\n"+
+	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type \\*mu_test.testStruct: sized value size of 80011 is larger than 2\\^16-1\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithSizedField field B\n"+
 		"=== END STACK ===\n")
@@ -844,7 +844,7 @@ func (s *muSuite) TestErrorInStructContainer(c *C) {
 func (s *muSuite) TestErrorInSliceContainer(c *C) {
 	a := []testStructWithSizedField{{}, {}, {B: &testStruct{D: make([]uint32, 20000)}}}
 	_, err := MarshalToBytes(a)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\*mu_test.testStruct: sized value size of 80011 is larger than 2\\^16-1\n\n"+
+	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type \\*mu_test.testStruct: sized value size of 80011 is larger than 2\\^16-1\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithSizedField field B\n"+
 		"... \\[\\]mu_test.testStructWithSizedField index 2\n"+
@@ -892,7 +892,7 @@ func (s *muSuite) TestErrorFromCustomType(c *C) {
 	var a *testStructContainingCustom
 
 	_, err := UnmarshalFromBytes(internal_testutil.DecodeHexString(c, "000000000000000000040000000000000000"), &a)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type uint32: unexpected EOF\n\n"+
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type uint32: unexpected EOF\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... \\[\\]uint32 index 2\n"+
 		"... mu_test.testCustom custom type, call from mu_test.go:200 argument 1\n"+
@@ -922,7 +922,7 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionWithInvalidSelector(c *C) {
 
 	var uw testTaggedUnion
 	_, err = UnmarshalFromBytes(b, &uw)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type mu_test.testUnion: invalid selector value: 259\n\n"+
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type mu_test.testUnion: invalid selector value: 259\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testTaggedUnion field Union\n"+
 		"=== END STACK ===\n")
@@ -935,20 +935,20 @@ func (s *muSuite) TestUnmarshalBadSizedBuffer(c *C) {
 	b := internal_testutil.DecodeHexString(c, "ffff000000000000000000000000")
 	var o []byte
 	_, err := UnmarshalFromBytes(b, &o)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint8: unexpected EOF")
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type \\[\\]uint8: unexpected EOF")
 }
 
 func (s *muSuite) TestUnmarshalBadList(c *C) {
 	b := internal_testutil.DecodeHexString(c, "800000010000")
 	var o []uint16
 	_, err := UnmarshalFromBytes(b, &o)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type \\[\\]uint16: list length of 2147483649 is out of range")
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type \\[\\]uint16: list length of 2147483649 is out of range")
 }
 
 func (s *muSuite) TestMarshalBadSizedBuffer(c *C) {
 	x := make([]byte, 100000)
 	_, err := MarshalToBytes(x)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type \\[\\]uint8: sized value size of 100000 is larger than 2\\^16-1")
+	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type \\[\\]uint8: sized value size of 100000 is larger than 2\\^16-1")
 }
 
 func (s *muSuite) TestMarshalUnionInNoStruct(c *C) {
@@ -1051,19 +1051,19 @@ func (s *muSuite) testMarshalError(c *C, data *testMarshalErrorData) {
 func (s *muSuite) TestMarshalErrorPrimitive(c *C) {
 	s.testMarshalError(c, &testMarshalErrorData{
 		uint16(0),
-		"cannot marshal argument whilst processing element of type uint16: io: read/write on closed pipe"})
+		"cannot marshal argument 0 whilst processing element of type uint16: io: read/write on closed pipe"})
 }
 
 func (s *muSuite) TestMarshalErrorSized1(c *C) {
 	s.testMarshalError(c, &testMarshalErrorData{
 		[]byte{0},
-		"cannot marshal argument whilst processing element of type \\[\\]uint8: io: read/write on closed pipe"})
+		"cannot marshal argument 0 whilst processing element of type \\[\\]uint8: io: read/write on closed pipe"})
 }
 
 func (s *muSuite) TestMarshalErrorSized2(c *C) {
 	s.testMarshalError(c, &testMarshalErrorData{
 		testStructWithSizedField2{A: &testStruct{}},
-		"cannot marshal argument whilst processing element of type \\*mu_test.testStruct: io: read/write on closed pipe\n\n" +
+		"cannot marshal argument 0 whilst processing element of type \\*mu_test.testStruct: io: read/write on closed pipe\n\n" +
 			"=== BEGIN STACK ===\n" +
 			"... mu_test.testStructWithSizedField2 field A\n" +
 			"=== END STACK ===\n"})
@@ -1072,7 +1072,7 @@ func (s *muSuite) TestMarshalErrorSized2(c *C) {
 func (s *muSuite) TestMarshalErrorRawField(c *C) {
 	s.testMarshalError(c, &testMarshalErrorData{
 		testStructWithRawTagFields{A: []uint16{0}},
-		"cannot marshal argument whilst processing element of type uint16: io: read/write on closed pipe\n\n" +
+		"cannot marshal argument 0 whilst processing element of type uint16: io: read/write on closed pipe\n\n" +
 			"=== BEGIN STACK ===\n" +
 			"... \\[\\]uint16 index 0\n" +
 			"... mu_test.testStructWithRawTagFields field A\n" +
@@ -1082,13 +1082,13 @@ func (s *muSuite) TestMarshalErrorRawField(c *C) {
 func (s *muSuite) TestMarshalErrorRawBytes(c *C) {
 	s.testMarshalError(c, &testMarshalErrorData{
 		RawBytes{0},
-		"cannot marshal argument whilst processing element of type mu.RawBytes: io: read/write on closed pipe"})
+		"cannot marshal argument 0 whilst processing element of type mu.RawBytes: io: read/write on closed pipe"})
 }
 
 func (s *muSuite) TestMarshalErrorList(c *C) {
 	s.testMarshalError(c, &testMarshalErrorData{
 		[]uint32{0},
-		"cannot marshal argument whilst processing element of type \\[\\]uint32: io: read/write on closed pipe"})
+		"cannot marshal argument 0 whilst processing element of type \\[\\]uint32: io: read/write on closed pipe"})
 }
 
 func (s *muSuite) TestCopyValue(c *C) {

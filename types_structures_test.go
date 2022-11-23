@@ -148,7 +148,7 @@ func (s *typesStructuresSuite) TestPCRSelectBitmapMarshal2(c *C) {
 func (s *typesStructuresSuite) TestPCRSelectBitmapMarshalErr(c *C) {
 	a := make(PCRSelectBitmap, 257)
 	_, err := mu.MarshalToBytes(a)
-	c.Check(err, ErrorMatches, `cannot marshal argument whilst processing element of type tpm2\.PCRSelectBitmap: bitmap too long`)
+	c.Check(err, ErrorMatches, `cannot marshal argument 0 whilst processing element of type tpm2\.PCRSelectBitmap: bitmap too long`)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectBitmapToPCRs1(c *C) {
@@ -557,12 +557,12 @@ func TestTaggedHash(t *testing.T) {
 		{
 			desc: "WrongDigestSize",
 			in:   TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument whilst processing element of type tpm2.TaggedHash: invalid digest size 20",
+			err:  "cannot marshal argument 0 whilst processing element of type tpm2.TaggedHash: invalid digest size 20",
 		},
 		{
 			desc: "UnknownAlg",
 			in:   TaggedHash{HashAlg: HashAlgorithmNull, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
+			err:  "cannot marshal argument 0 whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -612,7 +612,7 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
 		}
-		if err.Error() != "cannot unmarshal argument whilst processing element of type tpm2.TaggedHash: cannot read digest: unexpected EOF" {
+		if err.Error() != "cannot unmarshal argument 0 whilst processing element of type tpm2.TaggedHash: cannot read digest: unexpected EOF" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})
@@ -653,7 +653,7 @@ func TestTaggedHash(t *testing.T) {
 		if err == nil {
 			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
 		}
-		if err.Error() != "cannot unmarshal argument whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_HMAC" {
+		if err.Error() != "cannot unmarshal argument 0 whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_HMAC" {
 			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
 		}
 	})

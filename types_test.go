@@ -45,7 +45,7 @@ func (s *typesSuite) TestMarshalPCRValuesInvalidPCR(c *C) {
 	values := PCRValues{HashAlgorithmSHA256: {4000: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")}}
 
 	_, err := mu.MarshalToBytes(values)
-	c.Check(err, ErrorMatches, "cannot marshal argument whilst processing element of type tpm2.PCRValues: cannot create a valid selection")
+	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type tpm2.PCRValues: cannot create a valid selection")
 }
 
 func (s *typesSuite) TestUnmarshalPCRValuesInvalidPayload(c *C) {
@@ -53,7 +53,7 @@ func (s *typesSuite) TestUnmarshalPCRValuesInvalidPayload(c *C) {
 
 	var values PCRValues
 	_, err := mu.UnmarshalFromBytes(b, &values)
-	c.Check(err, ErrorMatches, `cannot unmarshal argument whilst processing element of type tpm2.Digest: unexpected EOF
+	c.Check(err, ErrorMatches, `cannot unmarshal argument 0 whilst processing element of type tpm2.Digest: unexpected EOF
 
 === BEGIN STACK ===
 ... tpm2.DigestList index 0
@@ -67,7 +67,7 @@ func (s *typesSuite) TestUnmarshalPCRValuesInvalidDigestAlgorithm(c *C) {
 
 	var values PCRValues
 	_, err := mu.UnmarshalFromBytes(b, &values)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type tpm2.PCRValues: invalid digest algorithm")
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type tpm2.PCRValues: invalid digest algorithm")
 }
 
 func (s *typesSuite) TestUnmarshalPCRValuesInsufficientDigests(c *C) {
@@ -75,7 +75,7 @@ func (s *typesSuite) TestUnmarshalPCRValuesInsufficientDigests(c *C) {
 
 	var values PCRValues
 	_, err := mu.UnmarshalFromBytes(b, &values)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type tpm2.PCRValues: insufficient digests")
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type tpm2.PCRValues: insufficient digests")
 }
 
 func (s *typesSuite) TestUnmarshalPCRValuesInvalidDigestSize(c *C) {
@@ -83,5 +83,5 @@ func (s *typesSuite) TestUnmarshalPCRValuesInvalidDigestSize(c *C) {
 
 	var values PCRValues
 	_, err := mu.UnmarshalFromBytes(b, &values)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument whilst processing element of type tpm2.PCRValues: invalid digest size")
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type tpm2.PCRValues: invalid digest size")
 }

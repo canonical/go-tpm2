@@ -82,7 +82,7 @@ func TestPublicIDUnion(t *testing.T) {
 			in: TestPublicIDUContainer{Alg: ObjectTypeId(AlgorithmNull),
 				Unique: &PublicIDU{Sym: Digest{0x04, 0x05, 0x06, 0x07}}},
 			out: []byte{0x00, 0x10},
-			err: "cannot unmarshal argument whilst processing element of type tpm2.PublicIDU: invalid selector value: TPM_ALG_NULL\n\n" +
+			err: "cannot unmarshal argument 0 whilst processing element of type tpm2.PublicIDU: invalid selector value: TPM_ALG_NULL\n\n" +
 				"=== BEGIN STACK ===\n" +
 				"... tpm2_test.TestPublicIDUContainer field Unique\n" +
 				"=== END STACK ===\n",

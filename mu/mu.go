@@ -181,7 +181,6 @@ type Error struct {
 
 	Op string
 
-	total    int
 	entry    [1]uintptr
 	stack    containerStack
 	leafType reflect.Type
@@ -190,11 +189,7 @@ type Error struct {
 
 func (e *Error) Error() string {
 	s := new(bytes.Buffer)
-	fmt.Fprintf(s, "cannot %s argument ", e.Op)
-	if e.total > 1 {
-		fmt.Fprintf(s, "%d ", e.Index)
-	}
-	fmt.Fprintf(s, "whilst processing element of type %s: %v", e.leafType, e.err)
+	fmt.Fprintf(s, "cannot %s argument %d whilst processing element of type %s: %v", e.Op, e.Index, e.leafType, e.err)
 	if len(e.stack) != 0 {
 		fmt.Fprintf(s, "\n\n%s", e.stack)
 	}
@@ -506,7 +501,6 @@ type context struct {
 	caller [1]uintptr // address of the function calling into the public API
 	mode   string     // marshal or unmarshal
 	index  int        // current argument index
-	total  int        // total number of arguments
 	stack  containerStack
 	sized  bool
 }
@@ -601,7 +595,6 @@ func (c *context) wrapOrNewError(value reflect.Value, err error) error {
 	return &Error{
 		Index:    c.index,
 		Op:       c.mode,
-		total:    c.total,
 		entry:    c.caller,
 		stack:    stack,
 		leafType: muErr.leafType,
@@ -620,7 +613,6 @@ func (c *context) newError(value reflect.Value, err error) error {
 	return &Error{
 		Index:    c.index,
 		Op:       c.mode,
-		total:    c.total,
 		entry:    c.caller,
 		stack:    stack,
 		leafType: value.Type(),
@@ -1021,7 +1013,7 @@ func marshalToWriter(skip int, w io.Writer, vals ...interface{}) (int, error) {
 	var caller [1]uintptr
 	runtime.Callers(skip+1, caller[:])
 
-	m := &marshaller{context: &context{caller: caller, mode: "marshal", total: len(vals)}, w: w}
+	m := &marshaller{context: &context{caller: caller, mode: "marshal"}, w: w}
 	return m.marshal(vals...)
 }
 
@@ -1085,7 +1077,7 @@ func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (int, error
 	var caller [1]uintptr
 	runtime.Callers(skip+1, caller[:])
 
-	u := newUnmarshaller(&context{caller: caller, mode: "unmarshal", total: len(vals)}, r)
+	u := newUnmarshaller(&context{caller: caller, mode: "unmarshal"}, r)
 	return u.unmarshal(vals...)
 }
 

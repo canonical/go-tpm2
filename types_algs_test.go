@@ -41,7 +41,7 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			desc: "InvalidSelector",
 			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
 			out:  []byte{0x00, 0x0b},
-			err: "cannot unmarshal argument whilst processing element of type tpm2.SchemeKeyedHashU: invalid selector value: TPM_ALG_SHA256\n\n" +
+			err: "cannot unmarshal argument 0 whilst processing element of type tpm2.SchemeKeyedHashU: invalid selector value: TPM_ALG_SHA256\n\n" +
 				"=== BEGIN STACK ===\n" +
 				"... tpm2_test.TestSchemeKeyedHashUContainer field Details\n" +
 				"=== END STACK ===\n",
