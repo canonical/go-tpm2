@@ -238,42 +238,6 @@ func (e *Error) Container(depth int) (containerType reflect.Type, index int, ent
 	return e.stack[depth].value.Type(), e.stack[depth].index, frame
 }
 
-func newError(value reflect.Value, c *context, err error) error {
-	if err == io.EOF {
-		// All io.EOF is unexpected
-		err = io.ErrUnexpectedEOF
-	}
-	muErr, isMuErr := err.(*Error)
-
-	stack := make(containerStack, len(c.stack))
-	copy(stack, c.stack)
-
-	var leafType reflect.Type
-	if isMuErr {
-		// This is an error returned from a custom type.
-		// Preserve the original error
-		err = muErr.err
-
-		// Copy the leaf type to the new error
-		leafType = muErr.leafType
-
-		// Append the original error stack to the new error.
-		stack = stack.push(containerNode{value: value, index: muErr.Index, entry: muErr.entry})
-		stack = append(stack, muErr.stack...)
-	} else {
-		leafType = value.Type()
-	}
-
-	return &Error{
-		Index:    c.index,
-		Op:       c.mode,
-		total:    c.total,
-		entry:    c.caller,
-		stack:    stack,
-		leafType: leafType,
-		err:      err}
-}
-
 type options struct {
 	selector string
 	sized    bool
@@ -621,6 +585,48 @@ func (c *context) enterSizedType() (exit func()) {
 	}
 }
 
+func (c *context) wrapOrNewError(value reflect.Value, err error) error {
+	muErr, isMuErr := err.(*Error)
+	if !isMuErr {
+		return c.newError(value, err)
+	}
+
+	stack := make(containerStack, len(c.stack))
+	copy(stack, c.stack)
+
+	// Stitch the error stack to our stack
+	stack = stack.push(containerNode{value: value, index: muErr.Index, entry: muErr.entry})
+	stack = append(stack, muErr.stack...)
+
+	return &Error{
+		Index:    c.index,
+		Op:       c.mode,
+		total:    c.total,
+		entry:    c.caller,
+		stack:    stack,
+		leafType: muErr.leafType,
+		err:      muErr.err}
+}
+
+func (c *context) newError(value reflect.Value, err error) error {
+	if err == io.EOF {
+		// All io.EOF is unexpected
+		err = io.ErrUnexpectedEOF
+	}
+
+	stack := make(containerStack, len(c.stack))
+	copy(stack, c.stack)
+
+	return &Error{
+		Index:    c.index,
+		Op:       c.mode,
+		total:    c.total,
+		entry:    c.caller,
+		stack:    stack,
+		leafType: value.Type(),
+		err:      err}
+}
+
 type marshaller struct {
 	*context
 	w      io.Writer
@@ -639,7 +645,7 @@ func (m *marshaller) marshalSized(v reflect.Value) error {
 
 	if v.IsNil() {
 		if err := binary.Write(m, binary.BigEndian, uint16(0)); err != nil {
-			return newError(v, m.context, err)
+			return m.newError(v, err)
 		}
 		return nil
 	}
@@ -650,13 +656,13 @@ func (m *marshaller) marshalSized(v reflect.Value) error {
 		return err
 	}
 	if tmpBuf.Len() > math.MaxUint16 {
-		return newError(v, m.context, fmt.Errorf("sized value size of %d is larger than 2^16-1", tmpBuf.Len()))
+		return m.newError(v, fmt.Errorf("sized value size of %d is larger than 2^16-1", tmpBuf.Len()))
 	}
 	if err := binary.Write(m, binary.BigEndian, uint16(tmpBuf.Len())); err != nil {
-		return newError(v, m.context, err)
+		return m.newError(v, err)
 	}
 	if _, err := tmpBuf.WriteTo(m); err != nil {
-		return newError(v, m.context, err)
+		return m.newError(v, err)
 	}
 	return nil
 }
@@ -677,7 +683,7 @@ func (m *marshaller) marshalRaw(v reflect.Value) error {
 	switch v.Type().Elem().Kind() {
 	case reflect.Uint8:
 		if _, err := m.Write(v.Bytes()); err != nil {
-			return newError(v, m.context, err)
+			return m.newError(v, err)
 		}
 		return nil
 	default:
@@ -695,19 +701,19 @@ func (m *marshaller) marshalPtr(v reflect.Value, opts *options) error {
 
 func (m *marshaller) marshalPrimitive(v reflect.Value) error {
 	if err := binary.Write(m, binary.BigEndian, v.Interface()); err != nil {
-		return newError(v, m.context, err)
+		return m.newError(v, err)
 	}
 	return nil
 }
 
 func (m *marshaller) marshalList(v reflect.Value) error {
 	if v.Len() > maxListLength {
-		return newError(v, m.context, fmt.Errorf("slice length of %d is out of range", v.Len()))
+		return m.newError(v, fmt.Errorf("slice length of %d is out of range", v.Len()))
 	}
 
 	// Marshal length field
 	if err := binary.Write(m, binary.BigEndian, uint32(v.Len())); err != nil {
-		return newError(v, m.context, err)
+		return m.newError(v, err)
 	}
 
 	return m.marshalRawList(v)
@@ -745,7 +751,7 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 		v = v.Addr()
 	}
 	if err := v.Interface().(customMarshallerIface).Marshal(m); err != nil {
-		return newError(v, m.context, err)
+		return m.wrapOrNewError(v, err)
 	}
 	return nil
 }
@@ -823,7 +829,7 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 
 	var size uint16
 	if err := binary.Read(u, binary.BigEndian, &size); err != nil {
-		return newError(v, u.context, err)
+		return u.newError(v, err)
 	}
 
 	// v is either:
@@ -867,7 +873,7 @@ func (u *unmarshaller) unmarshalRaw(v reflect.Value) error {
 	switch v.Type().Elem().Kind() {
 	case reflect.Uint8:
 		if _, err := io.ReadFull(u, v.Bytes()); err != nil {
-			return newError(v, u.context, err)
+			return u.newError(v, err)
 		}
 		return nil
 	default:
@@ -885,7 +891,7 @@ func (u *unmarshaller) unmarshalPtr(v reflect.Value, opts *options) error {
 
 func (u *unmarshaller) unmarshalPrimitive(v reflect.Value) error {
 	if err := binary.Read(u, binary.BigEndian, v.Addr().Interface()); err != nil {
-		return newError(v, u.context, err)
+		return u.newError(v, err)
 	}
 	return nil
 }
@@ -894,12 +900,12 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 	// Unmarshal the length
 	var length uint32
 	if err := binary.Read(u, binary.BigEndian, &length); err != nil {
-		return newError(v, u.context, err)
+		return u.newError(v, err)
 	}
 
 	switch {
 	case length > maxListLength:
-		return newError(v, u.context, fmt.Errorf("list length of %d is out of range", length))
+		return u.newError(v, fmt.Errorf("list length of %d is out of range", length))
 	case v.IsNil() && length > 0:
 		// Try to reuse the existing slice, although it may be
 		// reallocated later if the capacity isn't large enough
@@ -932,7 +938,7 @@ func (u *unmarshaller) unmarshalStruct(v reflect.Value) error {
 func (u *unmarshaller) unmarshalUnion(v reflect.Value, opts *options) error {
 	elem, exit, err := u.enterUnionElem(v, opts)
 	if err != nil {
-		return newError(v, u.context, err)
+		return u.newError(v, err)
 	}
 	if !elem.IsValid() {
 		return nil
@@ -946,7 +952,7 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 		panic(fmt.Sprintf("custom type %s needs to be addressable\n%s", v.Type(), u.stack))
 	}
 	if err := v.Addr().Interface().(customUnmarshallerIface).Unmarshal(u); err != nil {
-		return newError(v, u.context, err)
+		return u.wrapOrNewError(v, err)
 	}
 	return nil
 }
