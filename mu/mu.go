@@ -320,6 +320,20 @@ const (
 	TPMKindRaw
 )
 
+func isCustom(t reflect.Type) bool {
+	if t.Kind() != reflect.Ptr {
+		t = reflect.PtrTo(t)
+	}
+	return t.Implements(customMarshallerType) && t.Implements(customUnmarshallerType)
+}
+
+func isUnion(t reflect.Type) bool {
+	if t.Kind() != reflect.Ptr {
+		t = reflect.PtrTo(t)
+	}
+	return t.Implements(unionType)
+}
+
 func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 	if o == nil {
 		var def options
@@ -328,12 +342,12 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 
 	if t.Kind() != reflect.Ptr {
 		switch {
-		case reflect.PtrTo(t).Implements(customMarshallerType) && reflect.PtrTo(t).Implements(customUnmarshallerType):
+		case isCustom(t):
 			if o.raw || o.sized || o.selector != "" {
 				return TPMKindUnsupported, errors.New(`"raw", "sized" and "selector" options are invalid with custom types`)
 			}
 			return TPMKindCustom, nil
-		case reflect.PtrTo(t).Implements(unionType):
+		case isUnion(t):
 			if o.raw || o.sized {
 				return TPMKindUnsupported, errors.New(`"raw" and "sized" options are invalid with union types`)
 			}
@@ -353,11 +367,9 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 		}
 		return TPMKindPrimitive, nil
 	case reflect.Ptr:
-		if k, _ := tpmKind(t.Elem(), nil, nil); k != TPMKindStruct && k != TPMKindTaggedUnion {
-			return TPMKindUnsupported, nil
-		}
-
 		switch {
+		case isCustom(t) || isUnion(t) || t.Elem().Kind() != reflect.Struct:
+			return TPMKindUnsupported, nil
 		case o.sized:
 			return TPMKindSized, nil
 		case o.raw || o.selector != "":
@@ -390,12 +402,9 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 				// structs with unexported fields are unsupported
 				return TPMKindUnsupported, errors.New("struct type with unexported fields")
 			}
-			ft := f.Type
-			if ft.Kind() == reflect.Ptr {
-				ft = ft.Elem()
-			}
-			if fk, _ := tpmKind(ft, nil, nil); fk == TPMKindUnion {
+			if isUnion(f.Type) {
 				k = TPMKindTaggedUnion
+				break
 			}
 		}
 
@@ -417,7 +426,7 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 // automatically dereference pointer types.
 //
 // This doesn't mean that the supplied go value can actually be handled by this package
-// because it doesn't recurse into containers. For that, use [IsSupported].
+// because it doesn't recurse into containers.
 func DetermineTPMKind(i interface{}) TPMKind {
 	var t reflect.Type
 	var o *options
@@ -507,6 +516,11 @@ func checkSupported(t, c reflect.Type, addressable bool, opts *options) bool {
 //
 // If false is returned, then values of this type can't be handled by this
 // package and may result in a panic during marshalling or unmarshalling.
+//
+// Deprecated: This doesn't detect infinite recursion problems and has no
+// knowledge of what happens inside custom types. Types are static, so there
+// should be no need to use this as a runtime check. To check if a specific
+// value can be represented by the TPM wire format, use [IsValid].
 func IsSupported(i interface{}) bool {
 	switch v := i.(type) {
 	case *wrappedValue:
@@ -517,14 +531,29 @@ func IsSupported(i interface{}) bool {
 }
 
 type context struct {
-	caller [1]uintptr // address of the function calling into the public API
-	mode   string     // marshal or unmarshal
-	index  int        // current argument index
-	stack  containerStack
+	caller [1]uintptr     // address of the function calling into the public API
+	mode   string         // marshal or unmarshal
+	index  int            // current argument index
+	stack  containerStack // type stack for this context
 	sized  bool
+
+	parent *context // parent context associated with a call from a custom type
+}
+
+func (c *context) checkInfiniteRecursion(v reflect.Value) {
+	ctx := c
+	for ctx != nil {
+		for _, n := range ctx.stack {
+			if n.value.Type() == v.Type() {
+				panic(fmt.Sprintf("infinite recursion detected when processing type %s", v.Type()))
+			}
+		}
+		ctx = ctx.parent
+	}
 }
 
 func (c *context) enterStructField(s reflect.Value, i int) (exit func()) {
+	c.checkInfiniteRecursion(s)
 	c.stack = c.stack.push(containerNode{value: s, index: i})
 
 	return func() {
@@ -599,6 +628,7 @@ func (c *context) enterSizedType() (exit func()) {
 }
 
 func (c *context) enterCustomType(v reflect.Value) (exit func()) {
+	c.checkInfiniteRecursion(v)
 	c.stack = c.stack.push(containerNode{value: v, custom: true})
 
 	return func() {
@@ -672,6 +702,19 @@ type marshaller struct {
 	nbytes int
 }
 
+func newMarshaller(caller [1]uintptr, w io.Writer) *marshaller {
+	var parent *context
+	if m, ok := w.(*marshaller); ok {
+		parent = m.context
+	}
+	return &marshaller{
+		context: &context{
+			caller: caller,
+			mode:   "marshal",
+			parent: parent},
+		w: w}
+}
+
 func (m *marshaller) Write(p []byte) (n int, err error) {
 	n, err = m.w.Write(p)
 	m.nbytes += n
@@ -679,15 +722,15 @@ func (m *marshaller) Write(p []byte) (n int, err error) {
 }
 
 func (m *marshaller) marshalSized(v reflect.Value) error {
-	exit := m.enterSizedType()
-	defer exit()
-
 	if v.IsNil() {
 		if err := binary.Write(m, binary.BigEndian, uint16(0)); err != nil {
 			return m.newError(v, err)
 		}
 		return nil
 	}
+
+	exit := m.enterSizedType()
+	defer exit()
 
 	tmpBuf := new(bytes.Buffer)
 	sm := &marshaller{context: m.context, w: tmpBuf}
@@ -865,20 +908,26 @@ type unmarshaller struct {
 	nbytes int
 }
 
+func newUnmarshaller(caller [1]uintptr, r io.Reader) *unmarshaller {
+	var parent *context
+	if u, ok := r.(*unmarshaller); ok {
+		parent = u.context
+	}
+	return &unmarshaller{
+		context: &context{
+			caller: caller,
+			mode:   "unmarshal",
+			parent: parent},
+		r: r}
+}
+
 func (u *unmarshaller) Read(p []byte) (n int, err error) {
 	n, err = u.r.Read(p)
 	u.nbytes += n
 	return
 }
 
-func newUnmarshaller(ctx *context, r io.Reader) *unmarshaller {
-	return &unmarshaller{context: ctx, r: r}
-}
-
 func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
-	exit := u.enterSizedType()
-	defer exit()
-
 	var size uint16
 	if err := binary.Read(u, binary.BigEndian, &size); err != nil {
 		return u.newError(v, err)
@@ -904,7 +953,10 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 		v.SetLen(int(size))
 	}
 
-	su := newUnmarshaller(u.context, io.LimitReader(u, int64(size)))
+	exit := u.enterSizedType()
+	defer exit()
+
+	su := &unmarshaller{context: u.context, r: io.LimitReader(u, int64(size))}
 	return su.unmarshalValue(v, nil)
 }
 
@@ -1086,7 +1138,7 @@ func marshalToWriter(skip int, w io.Writer, vals ...interface{}) (int, error) {
 	var caller [1]uintptr
 	runtime.Callers(skip+1, caller[:])
 
-	m := &marshaller{context: &context{caller: caller, mode: "marshal"}, w: w}
+	m := newMarshaller(caller, w)
 	return m.marshal(vals...)
 }
 
@@ -1146,11 +1198,11 @@ func MustMarshalToBytes(vals ...interface{}) []byte {
 	return b
 }
 
-func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (int, error) {
+func unmarshalFromReader(skip int, r io.Reader, vals ...interface{}) (n int, err error) {
 	var caller [1]uintptr
 	runtime.Callers(skip+1, caller[:])
 
-	u := newUnmarshaller(&context{caller: caller, mode: "unmarshal"}, r)
+	u := newUnmarshaller(caller, r)
 	return u.unmarshal(vals...)
 }
 
@@ -1257,11 +1309,14 @@ func MustCopyValue(dst, src interface{}) {
 }
 
 // IsValid determines whether the supplied value is representable by
-// the TPM wire format.
-func IsValid(v interface{}) bool {
-	if !IsSupported(v) {
-		return false
-	}
+// the TPM wire format. It returns false if the type would cause a panic
+// during marshalling or unmarshalling.
+func IsValid(v interface{}) (valid bool) {
+	defer func() {
+		if err := recover(); err != nil {
+			valid = false
+		}
+	}()
 
 	var d interface{}
 	if err := CopyValue(&d, v); err != nil {

@@ -172,3 +172,33 @@ func (t *testCustom4) Unmarshal(r io.Reader) error {
 	_, err := UnmarshalFromReader(r, &t.A)
 	return err
 }
+
+type testRecursiveStruct struct {
+	A *testRecursiveStruct
+}
+
+type testRecursiveStruct2 struct {
+	A []*testRecursiveStruct3
+}
+
+type testRecursiveStruct3 struct {
+	A *testRecursiveStruct2
+}
+
+type testRecursiveStruct4 struct {
+	A testRecursiveCustom
+}
+
+type testRecursiveCustom struct {
+	A []*testRecursiveStruct4
+}
+
+func (c testRecursiveCustom) Marshal(w io.Writer) error {
+	_, err := MarshalToWriter(w, c.A)
+	return err
+}
+
+func (c *testRecursiveCustom) Unmarshal(r io.Reader) error {
+	_, err := UnmarshalFromReader(r, &c.A)
+	return err
+}
