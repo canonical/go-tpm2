@@ -277,7 +277,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	tmpPrefix := "tpm2test.mssim"
 	if mssimSnapName != "" {
 		// The simulator is shipped as a snap
-		tmpRoot = filepath.Join(runDir, mssimSnapName)
+		tmpRoot = filepath.Join(runDir, "snap."+mssimSnapName)
 		tmpPrefix = ""
 		if err := os.MkdirAll(tmpRoot, 0755); err != nil {
 			return nil, fmt.Errorf("cannot create snap tmpdir: %w", err)
