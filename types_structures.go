@@ -5,7 +5,6 @@
 package tpm2
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -430,20 +429,6 @@ func (l PCRSelectionList) WithMinSelectSize(sz uint8) (out PCRSelectionList) {
 		out = append(out, PCRSelection{Hash: s.Hash, Select: s.Select, SizeOfSelect: sz})
 	}
 	return out
-}
-
-// Equal indicates whether l and r contain the same PCR selections. Equal
-// selections will marshal to the same bytes in the TPM wire format.
-//
-// This will panic if either selection list cannot be marshalled to the TPM
-// wire format. Use mu.IsValid to check if the values can actually be
-// serialized correctly.
-//
-// Deprecated: Use mu.DeepEqual instead.
-func (l PCRSelectionList) Equal(r PCRSelectionList) bool {
-	lb := mu.MustMarshalToBytes(l)
-	rb := mu.MustMarshalToBytes(r)
-	return bytes.Equal(lb, rb)
 }
 
 // Sort will sort the list of PCR selections in order of ascending algorithm

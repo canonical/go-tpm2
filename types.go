@@ -91,8 +91,10 @@ func (v PCRValues) SelectionList() (PCRSelectionList, error) {
 	return out.Sort(), nil
 }
 
-// ToListAndSelection converts this set of PCR values to a list of PCR selections and list of PCR
-// values, in a form that can be serialized.
+// ToListAndSelection converts this set of PCR values to a list of PCR
+// selections and list of PCR values in a form that can be serialized,
+// although if you want to do that then you can pass PCRValues directly
+// to [mu.MarshalToBytes] or [mu.MarshalToWriter].
 func (v PCRValues) ToListAndSelection() (pcrs PCRSelectionList, digests DigestList, err error) {
 	pcrs, err = v.SelectionList()
 	if err != nil {
@@ -147,14 +149,6 @@ func (v PCRValues) AddValues(pcrs PCRSelectionList, digests DigestList) (n int, 
 		}
 	}
 	return n, nil
-}
-
-// SetValuesFromListAndSelection sets PCR values from the supplied list of PCR selections and list
-// of values.
-//
-// Deprecated: use AddValues instead
-func (v PCRValues) SetValuesFromListAndSelection(pcrs PCRSelectionList, digests DigestList) (int, error) {
-	return v.AddValues(pcrs, digests)
 }
 
 // SetValue sets the PCR value for the specified PCR and PCR bank.
