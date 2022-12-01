@@ -63,51 +63,6 @@ func execMultipleHelper(action execMultipleHelperAction, sessions ...SessionCont
 	return action.run(sessionsOrig...)
 }
 
-type readMultipleHelperContext struct {
-	fn      func(size, offset uint16, sessions ...SessionContext) ([]byte, error)
-	data    []byte
-	maxSize uint16
-
-	remaining uint16
-	total     uint16
-}
-
-func (c *readMultipleHelperContext) last() bool {
-	return c.remaining <= c.maxSize
-}
-
-func (c *readMultipleHelperContext) run(sessions ...SessionContext) error {
-	sz := c.remaining
-	if c.remaining > c.maxSize {
-		sz = c.maxSize
-	}
-
-	tmpData, err := c.fn(sz, c.total, sessions...)
-	if err != nil {
-		return err
-	}
-	copy(c.data[c.total:], tmpData)
-
-	c.total += sz
-	c.remaining -= sz
-
-	return nil
-}
-
-func readMultipleHelper(size, maxSize uint16, exec func(size, offset uint16, sessions ...SessionContext) ([]byte, error), sessions ...SessionContext) ([]byte, error) {
-	context := &readMultipleHelperContext{
-		fn:        exec,
-		data:      make([]byte, size),
-		maxSize:   maxSize,
-		remaining: size}
-
-	if err := execMultipleHelper(context, sessions...); err != nil {
-		return nil, err
-	}
-
-	return context.data, nil
-}
-
 func isSessionAllowed(commandCode CommandCode) bool {
 	switch commandCode {
 	case CommandStartup:

@@ -6,56 +6,58 @@ package tpm2_test
 
 import (
 	"crypto/rand"
-	"testing"
 
+	. "gopkg.in/check.v1"
+
+	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
+	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/testutil"
 )
 
-func TestGetRandom(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
-	defer closeTPM()
-
-	for _, data := range []struct {
-		desc  string
-		bytes uint16
-	}{
-		{
-			desc:  "20Bytes",
-			bytes: 20,
-		},
-		{
-			desc:  "32Bytes",
-			bytes: 32,
-		},
-		{
-			desc:  "48Bytes",
-			bytes: 48,
-		},
-		{
-			desc:  "512Bytes",
-			bytes: 512,
-		},
-	} {
-		t.Run(data.desc, func(t *testing.T) {
-			random, err := tpm.GetRandom(data.bytes)
-			if err != nil {
-				t.Fatalf("GetRandom failed: %v", err)
-			}
-			if len(random) != int(data.bytes) {
-				t.Errorf("Unexpected random data length (%d)", len(random))
-			}
-		})
-	}
+type rngSuite struct {
+	testutil.TPMTest
 }
 
-func TestStirRandom(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureNV)
-	defer closeTPM()
+func (s *rngSuite) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureNV
+}
 
-	inData := make([]byte, 128)
+var _ = Suite(&rngSuite{})
+
+func (s *rngSuite) testGetRandom(c *C, bytesRequested uint16) {
+	data, err := s.TPM.GetRandom(bytesRequested)
+	c.Check(err, IsNil)
+	c.Check(data, internal_testutil.LenEquals, int(bytesRequested))
+
+	_, _, rpBytes, _ := s.LastCommand(c).UnmarshalResponse(c)
+
+	var expected Digest
+	_, err = mu.UnmarshalFromBytes(rpBytes, &expected)
+	c.Check(err, IsNil)
+
+	c.Check(data, DeepEquals, expected)
+}
+
+func (s *rngSuite) TestGetRandom32(c *C) {
+	s.testGetRandom(c, 32)
+}
+
+func (s *rngSuite) TestGetRandom20(c *C) {
+	s.testGetRandom(c, 32)
+}
+
+func (s *rngSuite) TestStirRandom(c *C) {
+	inData := make([]byte, 32)
 	rand.Read(inData)
 
-	if err := tpm.StirRandom(inData); err != nil {
-		t.Errorf("StirRandom failed: %v", err)
-	}
+	c.Check(s.TPM.StirRandom(inData), IsNil)
+
+	_, _, cpBytes := s.LastCommand(c).UnmarshalCommand(c)
+
+	var expected []byte
+	_, err := mu.UnmarshalFromBytes(cpBytes, &expected)
+	c.Check(err, IsNil)
+
+	c.Check(inData, DeepEquals, expected)
 }

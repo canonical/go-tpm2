@@ -512,6 +512,38 @@ func (t *TPMContext) NVReadRaw(authContext, nvIndex ResourceContext, size, offse
 	return data, nil
 }
 
+type nvReadHelperContext struct {
+	authContext ResourceContext
+	nvIndex     ResourceContext
+	size        uint16
+	offset      uint16
+	tpm         *TPMContext
+
+	data []byte
+}
+
+func (c *nvReadHelperContext) last() bool {
+	return c.size <= c.tpm.maxNVBufferSize
+}
+
+func (c *nvReadHelperContext) run(sessions ...SessionContext) error {
+	sz := c.size
+	if c.size > c.tpm.maxNVBufferSize {
+		sz = c.tpm.maxNVBufferSize
+	}
+
+	data, err := c.tpm.NVReadRaw(c.authContext, c.nvIndex, sz, c.offset, sessions[0], sessions[1:]...)
+	if err != nil {
+		return err
+	}
+	c.data = append(c.data, data...)
+
+	c.size -= sz
+	c.offset += sz
+
+	return nil
+}
+
 // NVRead executes the TPM2_NV_Read command to read the contents of the NV index associated with nvIndex. The amount of data to read,
 // and the offset within the index are defined by the size and offset parameters.
 //
@@ -554,9 +586,17 @@ func (t *TPMContext) NVRead(authContext, nvIndex ResourceContext, size, offset u
 	sessionsCopy := []SessionContext{authContextAuthSession}
 	sessionsCopy = append(sessionsCopy, sessions...)
 
-	return readMultipleHelper(size, t.maxNVBufferSize, func(sz, total uint16, sessions ...SessionContext) ([]byte, error) {
-		return t.NVReadRaw(authContext, nvIndex, sz, offset+total, sessions[0], sessions[1:]...)
-	}, sessionsCopy...)
+	context := &nvReadHelperContext{
+		authContext: authContext,
+		nvIndex:     nvIndex,
+		size:        size,
+		offset:      offset,
+		tpm:         t}
+
+	if err := execMultipleHelper(context, sessionsCopy...); err != nil {
+		return nil, err
+	}
+	return context.data, nil
 }
 
 func (t *TPMContext) nvReadUint64(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
