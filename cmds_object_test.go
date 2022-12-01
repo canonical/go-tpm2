@@ -269,7 +269,7 @@ func (s *objectSuite) TestReadPublic(c *C) {
 	c.Check(pub, DeepEquals, expectedPub)
 	c.Check(name, DeepEquals, object.Name())
 
-	expectedQn, err := util.ComputeQualifiedNameFull(object.Name(), HandleOwner, primary.Name())
+	expectedQn, err := util.ComputeQualifiedNameInHierarchy(object, HandleOwner, primary)
 	c.Check(err, IsNil)
 	c.Check(qn, DeepEquals, expectedQn)
 }

@@ -21,7 +21,7 @@ import (
 // The result of this is useful for extended authorization commands that bind an authorization to
 // a command and set of command parameters, such as TPMContext.PolicySigned, TPMContext.PolicySecret,
 // TPMContext.PolicyTicket and TPMContext.PolicyCpHash.
-func ComputeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles []tpm2.Name, params ...interface{}) (tpm2.Digest, error) {
+func ComputeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles []Entity, params ...interface{}) (tpm2.Digest, error) {
 	if !alg.Available() {
 		return nil, errors.New("algorithm is not available")
 	}
@@ -31,13 +31,13 @@ func ComputeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles [
 		return nil, err
 	}
 
-	hash := alg.NewHash()
+	h := alg.NewHash()
 
-	binary.Write(hash, binary.BigEndian, command)
-	for _, name := range handles {
-		hash.Write([]byte(name))
+	binary.Write(h, binary.BigEndian, command)
+	for _, handle := range handles {
+		h.Write(handle.Name())
 	}
-	hash.Write(cpBytes)
+	h.Write(cpBytes)
 
-	return hash.Sum(nil), nil
+	return h.Sum(nil), nil
 }

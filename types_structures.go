@@ -139,6 +139,15 @@ const (
 	NameTypeDigest
 )
 
+func (n Name) Name() Name {
+	return n
+}
+
+// IsValid determines if this name is valid.
+func (n Name) IsValid() bool {
+	return n.Type() != NameTypeInvalid
+}
+
 // Type determines the type of this name.
 func (n Name) Type() NameType {
 	if len(n) < binary.Size(HashAlgorithmId(0)) {

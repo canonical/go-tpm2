@@ -6,46 +6,60 @@ package util
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// ComputeQualifiedName can compute the qualified name of an object with
-// the specified name that is protected by a parent with the specified
-// qualified name.
-func ComputeQualifiedName(name, parentQn tpm2.Name) (tpm2.Name, error) {
-	if name.Algorithm() == tpm2.HashAlgorithmNull {
+func computeOneQualifiedName(entity Entity, parentQn tpm2.Name) (tpm2.Name, error) {
+	if entity.Name().Algorithm() == tpm2.HashAlgorithmNull {
 		return nil, errors.New("invalid name")
 	}
-	if !name.Algorithm().Available() {
+	if !entity.Name().Algorithm().Available() {
 		return nil, errors.New("name algorithm is not available")
 	}
+	if !parentQn.IsValid() {
+		return nil, errors.New("invalid parent qualified name")
+	}
+	if parentQn.Algorithm() != tpm2.HashAlgorithmNull && parentQn.Algorithm() != entity.Name().Algorithm() {
+		return nil, errors.New("name algorithm mismatch")
+	}
 
-	h := name.Algorithm().NewHash()
+	h := entity.Name().Algorithm().NewHash()
 	h.Write(parentQn)
-	h.Write(name)
+	h.Write(entity.Name())
 
-	return mu.MarshalToBytes(name.Algorithm(), mu.RawBytes(h.Sum(nil)))
+	return mu.MustMarshalToBytes(entity.Name().Algorithm(), mu.RawBytes(h.Sum(nil))), nil
 }
 
-// ComputeQualifiedNameFull can compute the qualified name of an object with
-// the specified name that is protected in the specified hierarchy by the chain
-// of parent objects with the specified names. The ancestor names are ordered
-// from the primary key towards the immediate parent.
-func ComputeQualifiedNameFull(name tpm2.Name, hierarchy tpm2.Handle, ancestors ...tpm2.Name) (tpm2.Name, error) {
-	lastQn := tpm2.Name(mu.MustMarshalToBytes(hierarchy))
+// ComputeQualifiedName computes the qualified name of an object from the
+// specified qualified name of a root object and a list of ancestor objects.
+// The ancestor objects are ordered starting with the immediate child of the
+// object associated with the root qualified name.
+func ComputeQualifiedName(entity Entity, rootQn tpm2.Name, ancestors ...Entity) (tpm2.Name, error) {
+	lastQn := rootQn
 
-	for len(ancestors) > 0 {
-		current := ancestors[0]
-		ancestors = ancestors[1:]
-
+	for i, ancestor := range ancestors {
 		var err error
-		lastQn, err = ComputeQualifiedName(current, lastQn)
+		lastQn, err = computeOneQualifiedName(ancestor, lastQn)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot compute intermediate QN for ancestor at index %d: %w", i, err)
 		}
 	}
 
-	return ComputeQualifiedName(name, lastQn)
+	return computeOneQualifiedName(entity, lastQn)
+}
+
+// ComputeQualifiedNameInHierarchy computes the qualified name of an object
+// protected in the specified hierarchy from a list of ancestor objects. The
+// ancestor objects are ordered starting from the primary object.
+func ComputeQualifiedNameInHierarchy(entity Entity, hierarchy tpm2.Handle, ancestors ...Entity) (tpm2.Name, error) {
+	switch hierarchy {
+	case tpm2.HandleOwner, tpm2.HandleNull, tpm2.HandleEndorsement, tpm2.HandlePlatform:
+		// Good!
+	default:
+		return nil, errors.New("invalid hierarchy")
+	}
+	return ComputeQualifiedName(entity, mu.MustMarshalToBytes(hierarchy), ancestors...)
 }

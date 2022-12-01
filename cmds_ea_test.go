@@ -298,7 +298,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext2)
 
-		cpHash, err := util.ComputeCpHash(HashAlgorithmSHA256, CommandUnseal, []Name{objectContext2.Name()})
+		cpHash, err := util.ComputeCpHash(HashAlgorithmSHA256, CommandUnseal, []util.Entity{objectContext2})
 		if err != nil {
 			t.Fatalf("ComputeCpHash failed: %v", err)
 		}
