@@ -87,7 +87,7 @@ func (s *contextSuite) TestContextSaveTransient(c *C) {
 
 	context2, err := s.TPM.ContextSave(object)
 	c.Assert(err, IsNil)
-	c.Check(context2.Sequence, internal_testutil.UintGreater, context.Sequence)
+	c.Check(context2.Sequence, internal_testutil.IntGreater, context.Sequence)
 }
 
 func (s *contextSuite) TestContextSaveStClear(c *C) {

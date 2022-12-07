@@ -161,58 +161,54 @@ func (s *checkersSuite) TestIntGreaterEqual(c *C) {
 }
 
 func (s *checkersSuite) TestIntChecker(c *C) {
-	testCheck(c, IntEqual, false, "x has invalid kind (must be an int)", uint(10), 10)
-	testCheck(c, IntEqual, false, "y has invalid kind (must be an int)", 10, uint(10))
+	testCheck(c, IntEqual, false, "y has invalid kind (must be an integer)", 10, false)
+	testCheck(c, IntEqual, false, "x has invalid kind (must be an integer)", false, 10)
+	testCheck(c, IntEqual, false, "y overflows an int64", 10, uint64(math.MaxInt64+1))
 	testCheck(c, IntEqual, false, "y cannot be represented by the type of x", int8(10), 128)
+	testCheck(c, IntEqual, false, "y cannot be negative", uint(10), -1)
+	testCheck(c, IntEqual, false, "y cannot be represented by the type of x", uint8(10), 256)
 }
 
-func (s *checkersSuite) TestUintLess(c *C) {
-	testInfo(c, UintLess, "UintLess", []string{"x", "y"})
-	testCheck(c, UintLess, true, "", uint(5), 10)
-	testCheck(c, UintLess, false, "", uint(10), 10)
-	testCheck(c, UintLess, false, "", uint(10), 5)
+func (s *checkersSuite) TestIntLessUnsigned(c *C) {
+	testInfo(c, IntLess, "IntLess", []string{"x", "y"})
+	testCheck(c, IntLess, true, "", uint(5), 10)
+	testCheck(c, IntLess, false, "", uint(10), 10)
+	testCheck(c, IntLess, false, "", uint(10), 5)
 }
 
-func (s *checkersSuite) TestUintLessEqual(c *C) {
-	testInfo(c, UintLessEqual, "UintLessEqual", []string{"x", "y"})
-	testCheck(c, UintLessEqual, true, "", uint(5), 10)
-	testCheck(c, UintLessEqual, true, "", uint(10), 10)
-	testCheck(c, UintLessEqual, false, "", uint(10), 5)
+func (s *checkersSuite) TestIntLessEqualUnsigned(c *C) {
+	testInfo(c, IntLessEqual, "IntLessEqual", []string{"x", "y"})
+	testCheck(c, IntLessEqual, true, "", uint(5), 10)
+	testCheck(c, IntLessEqual, true, "", uint(10), 10)
+	testCheck(c, IntLessEqual, false, "", uint(10), 5)
 }
 
-func (s *checkersSuite) TestUintEqual(c *C) {
-	testInfo(c, UintEqual, "UintEqual", []string{"x", "y"})
-	testCheck(c, UintEqual, false, "", uint(5), 10)
-	testCheck(c, UintEqual, true, "", uint(10), 10)
-	testCheck(c, UintEqual, false, "", uint(10), 5)
+func (s *checkersSuite) TestIntEqualUnsigned(c *C) {
+	testInfo(c, IntEqual, "IntEqual", []string{"x", "y"})
+	testCheck(c, IntEqual, false, "", uint(5), 10)
+	testCheck(c, IntEqual, true, "", uint(10), 10)
+	testCheck(c, IntEqual, false, "", uint(10), 5)
 }
 
-func (s *checkersSuite) TestUintNotEqual(c *C) {
-	testInfo(c, UintNotEqual, "UintNotEqual", []string{"x", "y"})
-	testCheck(c, UintNotEqual, true, "", uint(5), 10)
-	testCheck(c, UintNotEqual, false, "", uint(10), 10)
-	testCheck(c, UintNotEqual, true, "", uint(10), 5)
+func (s *checkersSuite) TestIntNotEqualUnsigned(c *C) {
+	testInfo(c, IntNotEqual, "IntNotEqual", []string{"x", "y"})
+	testCheck(c, IntNotEqual, true, "", uint(5), 10)
+	testCheck(c, IntNotEqual, false, "", uint(10), 10)
+	testCheck(c, IntNotEqual, true, "", uint(10), 5)
 }
 
-func (s *checkersSuite) TestUintGreater(c *C) {
-	testInfo(c, UintGreater, "UintGreater", []string{"x", "y"})
-	testCheck(c, UintGreater, false, "", uint(5), 10)
-	testCheck(c, UintGreater, false, "", uint(10), 10)
-	testCheck(c, UintGreater, true, "", uint(10), 5)
+func (s *checkersSuite) TestIntGreaterUnsigned(c *C) {
+	testInfo(c, IntGreater, "IntGreater", []string{"x", "y"})
+	testCheck(c, IntGreater, false, "", uint(5), 10)
+	testCheck(c, IntGreater, false, "", uint(10), 10)
+	testCheck(c, IntGreater, true, "", uint(10), 5)
 }
 
-func (s *checkersSuite) TestUintGreaterEqual(c *C) {
-	testInfo(c, UintGreaterEqual, "UintGreaterEqual", []string{"x", "y"})
-	testCheck(c, UintGreaterEqual, false, "", uint(5), 10)
-	testCheck(c, UintGreaterEqual, true, "", uint(10), 10)
-	testCheck(c, UintGreaterEqual, true, "", uint(10), 5)
-}
-
-func (s *checkersSuite) TestUintChecker(c *C) {
-	testCheck(c, UintEqual, false, "x has invalid kind (must be an unsigned int)", 10, 10)
-	testCheck(c, UintEqual, false, "y has invalid kind (must be an unsigned int or a plain int)", uint(10), int64(10))
-	testCheck(c, UintEqual, false, "y cannot be represented by the type of x", uint8(10), 256)
-	testCheck(c, UintEqual, true, "", uint64(math.MaxUint64), uint64(math.MaxUint64))
+func (s *checkersSuite) TestIntGreaterEqualUnsigned(c *C) {
+	testInfo(c, IntGreaterEqual, "IntGreaterEqual", []string{"x", "y"})
+	testCheck(c, IntGreaterEqual, false, "", uint(5), 10)
+	testCheck(c, IntGreaterEqual, true, "", uint(10), 10)
+	testCheck(c, IntGreaterEqual, true, "", uint(10), 5)
 }
 
 func (s *checkersSuite) TestLenEquals(c *C) {

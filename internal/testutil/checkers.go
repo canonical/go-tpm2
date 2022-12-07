@@ -173,22 +173,14 @@ type intChecker struct {
 	*CheckerInfo
 }
 
-func (checker *intChecker) Check(params []interface{}, names []string) (result bool, err string) {
+func (checker *intChecker) checkSigned(params []interface{}, names []string) (result bool, err string) {
 	x := reflect.ValueOf(params[0])
-	switch x.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-	default:
-		return false, names[0] + " has invalid kind (must be an int)"
-	}
-
 	y := reflect.ValueOf(params[1])
-	switch y.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-	default:
-		return false, names[1] + " has invalid kind (must be an int)"
-	}
 
 	y64 := y.Convert(reflect.TypeOf(int64(0))).Interface().(int64)
+	if y.Kind() == reflect.Uint64 && y64 < 0 {
+		return false, names[1] + " overflows an int64"
+	}
 	if x.OverflowInt(y64) {
 		return false, names[1] + " cannot be represented by the type of " + names[0]
 	}
@@ -210,6 +202,63 @@ func (checker *intChecker) Check(params []interface{}, names []string) (result b
 		return x64 >= y64, ""
 	default:
 		return false, "unexpected name " + checker.Name
+	}
+}
+
+func (checker *intChecker) checkUnsigned(params []interface{}, names []string) (result bool, err string) {
+	x := reflect.ValueOf(params[0])
+	y := reflect.ValueOf(params[1])
+
+	switch y.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if y.Convert(reflect.TypeOf(int64(0))).Interface().(int64) < 0 {
+			return false, names[1] + " cannot be negative"
+		}
+	}
+
+	y64 := y.Convert(reflect.TypeOf(uint64(0))).Interface().(uint64)
+	if x.OverflowUint(y64) {
+		return false, names[1] + " cannot be represented by the type of " + names[0]
+	}
+
+	x64 := x.Convert(reflect.TypeOf(uint64(0))).Interface().(uint64)
+
+	switch checker.Name {
+	case "IntLess":
+		return x64 < y64, ""
+	case "IntLessEqual":
+		return x64 <= y64, ""
+	case "IntEqual":
+		return x64 == y64, ""
+	case "IntNotEqual":
+		return x64 != y64, ""
+	case "IntGreater":
+		return x64 > y64, ""
+	case "IntGreaterEqual":
+		return x64 >= y64, ""
+	default:
+		return false, "unexpected name " + checker.Name
+	}
+}
+
+func (checker *intChecker) Check(params []interface{}, names []string) (result bool, err string) {
+	y := reflect.ValueOf(params[1])
+	switch y.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		// good
+	default:
+		return false, names[1] + " has invalid kind (must be an integer)"
+	}
+
+	x := reflect.ValueOf(params[0])
+	switch x.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return checker.checkSigned(params, names)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return checker.checkUnsigned(params, names)
+	default:
+		return false, names[0] + " has invalid kind (must be an integer)"
 	}
 }
 
@@ -272,115 +321,6 @@ var IntGreater Checker = &intChecker{
 //	c.Check(x, IntGreaterEqual, 10)
 var IntGreaterEqual Checker = &intChecker{
 	&CheckerInfo{Name: "IntGreaterEqual", Params: []string{"x", "y"}}}
-
-type uintChecker struct {
-	*CheckerInfo
-}
-
-func (checker *uintChecker) Check(params []interface{}, names []string) (result bool, err string) {
-	x := reflect.ValueOf(params[0])
-	switch x.Kind() {
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-	default:
-		return false, names[0] + " has invalid kind (must be an unsigned int)"
-	}
-
-	y := reflect.ValueOf(params[1])
-	switch y.Kind() {
-	case reflect.Int:
-		// Allow y to be an int to simplify test writing
-		if y.Convert(reflect.TypeOf(int(0))).Interface().(int) < 0 {
-			return false, names[1] + " cannot be negative"
-		}
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-	default:
-		return false, names[1] + " has invalid kind (must be an unsigned int or a plain int)"
-	}
-
-	y64 := y.Convert(reflect.TypeOf(uint64(0))).Interface().(uint64)
-	if x.OverflowUint(y64) {
-		return false, names[1] + " cannot be represented by the type of " + names[0]
-	}
-
-	x64 := x.Convert(reflect.TypeOf(uint64(0))).Interface().(uint64)
-
-	switch checker.Name {
-	case "UintLess":
-		return x64 < y64, ""
-	case "UintLessEqual":
-		return x64 <= y64, ""
-	case "UintEqual":
-		return x64 == y64, ""
-	case "UintNotEqual":
-		return x64 != y64, ""
-	case "UintGreater":
-		return x64 > y64, ""
-	case "UintGreaterEqual":
-		return x64 >= y64, ""
-	default:
-		return false, "unexpected name " + checker.Name
-	}
-}
-
-// UintLess checks that x is less than y. Both values must be an
-// unsigned integer kind. They don't have to have the same type,
-// although y must be representable by the type of x.
-//
-// For example:
-//
-//	c.Check(x, UintLess, 10)
-var UintLess Checker = &uintChecker{
-	&CheckerInfo{Name: "UintLess", Params: []string{"x", "y"}}}
-
-// UintLessEqual checks that x is less than or equal to y. Both values
-// must be an unsigned integer kind. They don't have to have the same
-// type, although y must be representable by the type of x.
-//
-// For example:
-//
-//	c.Check(x, UintLessEqual, 10)
-var UintLessEqual Checker = &uintChecker{
-	&CheckerInfo{Name: "UintLessEqual", Params: []string{"x", "y"}}}
-
-// UintEqual checks that x is equal to y. Both values must be an
-// unsigned integer kind. They don't have to have the same type, although
-// y must be representable by the type of x.
-//
-// For example:
-//
-//	c.Check(x, UintEqual, 10)
-var UintEqual Checker = &uintChecker{
-	&CheckerInfo{Name: "UintEqual", Params: []string{"x", "y"}}}
-
-// UintNotEqual checks that x is not equal to y. Both values must be
-// an unsigned integer kind. They don't have to have the same type, although
-// y must be representable by the type of x.
-//
-// For example:
-//
-//	c.Check(x, UintNotEqual, 10)
-var UintNotEqual Checker = &uintChecker{
-	&CheckerInfo{Name: "UintNotEqual", Params: []string{"x", "y"}}}
-
-// UintGreater checks that x is greater than y. Both values must be an
-// unsigned integer kind. They don't have to have the same type, although y
-// must be representable by the type of x.
-//
-// For example:
-//
-//	c.Check(x, UintGreater, 10)
-var UintGreater Checker = &uintChecker{
-	&CheckerInfo{Name: "UintGreater", Params: []string{"x", "y"}}}
-
-// UintGreaterEqual checks that x is greater than or equal to y. Both
-// values must be an unsigned integer kind. They don't have to have the
-// same type, although y must be representable by the type of x.
-//
-// For example:
-//
-//	c.Check(x, UintGreaterEqual, 10)
-var UintGreaterEqual Checker = &uintChecker{
-	&CheckerInfo{Name: "UintGreaterEqual", Params: []string{"x", "y"}}}
 
 type hasLenChecker struct {
 	*CheckerInfo
