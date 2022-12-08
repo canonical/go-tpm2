@@ -372,17 +372,15 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 			return TPMKindUnsupported, nil
 		case o.sized:
 			return TPMKindSized, nil
-		case o.raw || o.selector != "":
-			return TPMKindUnsupported, errors.New(`"raw" and "selector" options are invalid with struct types`)
 		default:
 			return TPMKindUnsupported, nil
 		}
 	case reflect.Slice:
 		switch {
-		case t == rawBytesType:
-			return TPMKindRaw, nil
 		case o.sized || o.selector != "":
 			return TPMKindUnsupported, errors.New(`"sized" and "selector" options are invalid with slice types`)
+		case t == rawBytesType:
+			return TPMKindRaw, nil
 		case o.raw:
 			return TPMKindRaw, nil
 		case t.Elem().Kind() == reflect.Uint8:
