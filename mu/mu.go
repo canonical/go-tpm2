@@ -256,6 +256,7 @@ type options struct {
 	selector string
 	sized    bool
 	raw      bool
+	ignore   bool
 }
 
 func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
@@ -270,6 +271,8 @@ func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
 			out.sized = true
 		case part == "raw":
 			out.raw = true
+		case part == "ignore":
+			out.ignore = true
 		}
 	}
 
@@ -318,6 +321,8 @@ const (
 	// without a size field. It behaves like a sequence of
 	// individual values.
 	TPMKindRaw
+
+	tpmKindIgnore
 )
 
 func isCustom(t reflect.Type) bool {
@@ -338,6 +343,10 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 	if o == nil {
 		var def options
 		o = &def
+	}
+
+	if o.ignore {
+		return tpmKindIgnore, nil
 	}
 
 	if t.Kind() != reflect.Ptr {
@@ -767,6 +776,8 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)", v.Type(), err))
 	case kind == TPMKindUnsupported:
 		return m.marshalPtr(v, opts)
+	case kind == tpmKindIgnore:
+		return nil
 	}
 
 	switch kind {
@@ -990,6 +1001,8 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)", v.Type(), err))
 	case kind == TPMKindUnsupported:
 		return u.unmarshalPtr(v, opts)
+	case kind == tpmKindIgnore:
+		return nil
 	}
 
 	switch kind {

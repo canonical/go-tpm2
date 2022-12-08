@@ -565,6 +565,20 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedTypeInsideRawSlice(c *C) {
 		unmarshalDests: []interface{}{&ua}})
 }
 
+func (s *muSuite) TestMarshalAndUnmarshalStructWithIgnoredField(c *C) {
+	a := testStructWithIgnoredField{A: 10, B: []uint16{50, 300}}
+	expected := internal_testutil.DecodeHexString(c, "000000020032012c")
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{a},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{testStructWithIgnoredField{B: []uint16{50, 300}}}})
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                []interface{}{a},
+		expected:              expected,
+		unmarshalExpectedVals: []interface{}{testStructWithIgnoredField{B: []uint16{50, 300}}}})
+}
+
 func (s *muSuite) TestUnmarshalZeroSizedFieldToNonNilPointer(c *C) {
 	x := testStructWithSizedField{A: 56321}
 	b, err := MarshalToBytes(x)

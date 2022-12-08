@@ -202,3 +202,8 @@ func (c *testRecursiveCustom) Unmarshal(r io.Reader) error {
 	_, err := UnmarshalFromReader(r, &c.A)
 	return err
 }
+
+type testStructWithIgnoredField struct {
+	A uint16 `tpm2:"ignore"`
+	B []uint16
+}

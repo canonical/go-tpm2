@@ -54,6 +54,7 @@ TPMI prefixed types with the same underlying type.
 
 The marshalling code parses the "tpm2" tag on struct fields, the value of which is a comma
 separated list of options. These options are:
+  - ignore - the field is ignored by this package.
   - selector:<field_name> - override the default selector field for a union member. The
     default behaviour without this option is to use the first field as the selector.
   - sized - turns a pointer to a structure into a sized structure (TPM2B) type. A zero sized
