@@ -84,7 +84,7 @@ func NewExternalECCPublicKeyWithDefaults(usage templates.KeyUsage, key *ecdsa.Pu
 // It will panic if authValue is larger than the size of the name algorithm.
 //
 // The returned public and sensitive areas can be made into a duplication
-// object with CreateDuplicationObjectFromSensitive for importing into a TPM.
+// object with CreateDuplicationObject for importing into a TPM.
 //
 // The public area has the AttrUserWithAuth set in order to permit authentication
 // for the user auth role using the sensitive area's authorization value. In order
@@ -122,7 +122,7 @@ func NewExternalSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, 
 // It will panic if authValue is larger than the size of the name algorithm.
 //
 // The returned public and sensitive areas can be made into a duplication
-// object with CreateDuplicationObjectFromSensitive for importing into a TPM.
+// object with CreateDuplicationObject for importing into a TPM.
 //
 // The public area has the AttrUserWithAuth set in order to permit authentication
 // for the user auth role using the sensitive area's authorization value. In order
@@ -159,7 +159,7 @@ func NewExternalHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId, authValue tpm2.
 // It will panic if authValue is larger than the size of the name algorithm.
 //
 // The returned public and sensitive areas can be made into a duplication
-// object with CreateDuplicationObjectFromSensitive for importing into a TPM.
+// object with CreateDuplicationObject for importing into a TPM.
 //
 // The public area has the AttrUserWithAuth set in order to permit authentication
 // for the user auth role using the sensitive area's authorization value. In order

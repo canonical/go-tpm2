@@ -103,7 +103,7 @@ func TestDuplicate(t *testing.T) {
 			parentSymmetricAlg = &parentPub.Params.AsymDetail(parentPub.Type).Symmetric
 		}
 
-		sensitiveDup, err := util.UnwrapDuplicationObjectToSensitive(duplicate, pub, privKey, parentNameAlg, parentSymmetricAlg, encryptionKey, inSymSeed, symmetricAlg)
+		sensitiveDup, err := util.UnwrapDuplicationObject(duplicate, pub, privKey, parentNameAlg, parentSymmetricAlg, inSymSeed, encryptionKey, symmetricAlg)
 		if err != nil {
 			t.Fatalf("Unwrap failed: %v", err)
 		}
@@ -237,9 +237,9 @@ func TestImport(t *testing.T) {
 	}
 
 	t.Run("NoWrappers", func(t *testing.T) {
-		_, duplicate, _, err := util.CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, nil, nil, nil)
+		_, duplicate, _, err := util.CreateDuplicationObject(objectSensitive, objectPublic, nil, nil, nil)
 		if err != nil {
-			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
+			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
 		run(t, nil, duplicate, nil, nil, nil)
 	})
@@ -249,9 +249,9 @@ func TestImport(t *testing.T) {
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      &SymModeU{Sym: SymModeCFB}}
-		encryptionKey, duplicate, _, err := util.CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, nil, nil, symmetricAlg)
+		encryptionKey, duplicate, _, err := util.CreateDuplicationObject(objectSensitive, objectPublic, nil, nil, symmetricAlg)
 		if err != nil {
-			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
+			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
 		run(t, encryptionKey, duplicate, nil, symmetricAlg, nil)
 	})
@@ -262,17 +262,17 @@ func TestImport(t *testing.T) {
 			t.Fatalf("ReadPublic failed: %v", err)
 		}
 
-		_, duplicate, outSymSeed, err := util.CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, primaryPublic, nil, nil)
+		_, duplicate, outSymSeed, err := util.CreateDuplicationObject(objectSensitive, objectPublic, primaryPublic, nil, nil)
 		if err != nil {
-			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
+			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
 		run(t, nil, duplicate, outSymSeed, nil, nil)
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		_, duplicate, _, err := util.CreateDuplicationObjectFromSensitive(objectSensitive, objectPublic, nil, nil, nil)
+		_, duplicate, _, err := util.CreateDuplicationObject(objectSensitive, objectPublic, nil, nil, nil)
 		if err != nil {
-			t.Fatalf("CreateDuplicationObjectFromSensitive failed: %v", err)
+			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
 
 		sessionContext, err := tpm.StartAuthSession(nil, primary, SessionTypeHMAC, nil, HashAlgorithmSHA256)

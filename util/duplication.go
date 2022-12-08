@@ -13,30 +13,39 @@ import (
 	tpm2_crypto "github.com/canonical/go-tpm2/crypto"
 )
 
-// UnwrapDuplicationObjectToSensitive unwraps the supplied duplication object and returns the
-// corresponding sensitive area. If inSymSeed is supplied, then it is assumed that the object
-// has an outer wrapper. In this case, privKey, parentNameAlg and parentSymmetricAlg must be
-// supplied - privKey is the key with which inSymSeed is protected, parentNameAlg is the name
-// algorithm for the parent key (and must not be HashAlgorithmNull), and parentSymmetricAlg
-// defines the symmetric algorithm for the parent key (and the Algorithm field must not be
-// SymObjectAlgorithmNull).
+// UnwrapDuplicationObject unwraps the supplied duplication object and
+// returns the corresponding sensitive area. The duplication object will
+// normally be created by executing the TPM2_Duplicate command.
 //
-// If symmetricAlg is supplied and the Algorithm field is not SymObjectAlgorithmNull, then it is
-// assumed that the object has an inner wrapper. In this case, the symmetric key for the inner
-// wrapper must be supplied using the encryptionKey argument.
-func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, parentNameAlg tpm2.HashAlgorithmId, parentSymmetricAlg *tpm2.SymDefObject, encryptionKey tpm2.Data, inSymSeed tpm2.EncryptedSecret, symmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
-	if parentNameAlg != tpm2.HashAlgorithmNull && !parentNameAlg.Available() {
-		return nil, fmt.Errorf("digest algorithm %v is not available", parentNameAlg)
+// If outerSecret is supplied then it is assumed that the object
+// has an outer wrapper. For an object duplicated with TPM2_Duplicate,
+// outerSecret is the seed returned by this command. In this
+// case, privKey, outerHashAlg and outerSymmetricAlg must be supplied -
+// privKey is the key with which outerSecret is protected (the
+// new parent when using TPM2_Duplicate), outerHashAlg is the algorithm used
+// for integrity checking and key derivation (the new parent's name
+// algorithm when using TPM2_Duplicate) and must not be HashAlgorithmNull,
+// and outerSymmetricAlg defines the symmetric algorithm for the outer
+// wrapper (the new parent's symmetric algorithm when using
+// TPM2_Duplicate) and must not be SymObjectAlgorithmNull).
+//
+// If innerSymmetricAlg is supplied and the Algorithm field is not
+// SymObjectAlgorithmNull, then it is assumed that the object has an
+// inner wrapper. In this case, the symmetric key for the inner wrapper
+// must be supplied using the innerSymmetricKey argument.
+func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSecret tpm2.EncryptedSecret, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
+	if outerHashAlg != tpm2.HashAlgorithmNull && !outerHashAlg.Available() {
+		return nil, fmt.Errorf("digest algorithm %v is not available", outerHashAlg)
 	}
 
 	var seed []byte
-	if len(inSymSeed) > 0 {
+	if len(outerSecret) > 0 {
 		if privKey == nil {
 			return nil, errors.New("parent private key is required for outer wrapper")
 		}
 
 		var err error
-		seed, err = tpm2_crypto.SecretDecrypt(privKey, parentNameAlg.GetHash(), []byte(tpm2.DuplicateString), inSymSeed)
+		seed, err = tpm2_crypto.SecretDecrypt(privKey, outerHashAlg.GetHash(), []byte(tpm2.DuplicateString), outerSecret)
 		if err != nil {
 			return nil, fmt.Errorf("cannot decrypt symmetric seed: %w", err)
 		}
@@ -47,30 +56,34 @@ func UnwrapDuplicationObjectToSensitive(duplicate tpm2.Private, public *tpm2.Pub
 		return nil, fmt.Errorf("cannot compute name: %w", err)
 	}
 
-	return DuplicateToSensitive(duplicate, name, parentNameAlg, parentSymmetricAlg, seed, symmetricAlg, encryptionKey)
+	return DuplicateToSensitive(duplicate, name, outerHashAlg, outerSymmetricAlg, seed, innerSymmetricAlg, innerSymmetricKey)
 }
 
-// CreateDuplicationObjectFromSensitive creates a duplication object that can be imported in to a
-// TPM from the supplied sensitive area.
+// CreateDuplicationObject creates a duplication object that can be
+// imported in to a TPM from the supplied sensitive area.
 //
-// If symmetricAlg is supplied and the Algorithm field is not SymObjectAlgorithmNull, this function
-// will apply an inner wrapper to the duplication object. If encryptionKeyIn is supplied, it will be
-// used as the symmetric key for the inner wrapper. It must have a size appropriate for the selected
-// symmetric algorithm. If encryptionKeyIn is not supplied, a symmetric key will be created and
-// returned
+// If parentPublic is supplied, an outer wrapper will be applied to the
+// duplication object. The parentPublic argument should correspond to the
+// public area of the storage key to which the duplication object will be
+// imported. When applying the outer wrapper, the seed used to derive the
+// symmetric key and HMAC key will be encrypted using parentPublic and
+// returned.
 //
-// If parentPublic is supplied, an outer wrapper will be applied to the duplication object. The
-// parentPublic argument should correspond to the public area of the storage key to which the
-// duplication object will be imported. When applying the outer wrapper, the seed used to derice the
-// symmetric key and HMAC key will be encrypted using parentPublic and returned.
-func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Public, encryptionKeyIn tpm2.Data, symmetricAlg *tpm2.SymDefObject) (encryptionKeyOut tpm2.Data, duplicate tpm2.Private, outSymSeed tpm2.EncryptedSecret, err error) {
+// If innerSymmetricAlg is supplied and the Algorithm field is not
+// SymObjectAlgorithmNull, this function will apply an inner wrapper to
+// the duplication object. If innerSymmetricKey is supplied, it will be
+// used as the symmetric key for the inner wrapper. It must have a size
+// appropriate for the selected symmetric algorithm. If
+// innerSymmetricKey is not supplied, a symmetric key will be created and
+// returned.
+func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Public, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, outerSecret tpm2.EncryptedSecret, err error) {
 	if public.Attrs&(tpm2.AttrFixedTPM|tpm2.AttrFixedParent) != 0 {
 		return nil, nil, nil, errors.New("object must be a duplication root")
 	}
 
 	if public.Attrs&tpm2.AttrEncryptedDuplication != 0 {
-		if symmetricAlg == nil || symmetricAlg.Algorithm == tpm2.SymObjectAlgorithmNull {
-			return nil, nil, nil, errors.New("symmetric algorithm must be supplied for an object with AttrEncryptedDuplication")
+		if innerSymmetricAlg == nil || innerSymmetricAlg.Algorithm == tpm2.SymObjectAlgorithmNull {
+			return nil, nil, nil, errors.New("inner symmetric algorithm must be supplied for an object with AttrEncryptedDuplication")
 		}
 		if parentPublic == nil {
 			return nil, nil, nil, errors.New("parent object must be supplied for an object with AttrEncryptedDuplication")
@@ -90,16 +103,16 @@ func CreateDuplicationObjectFromSensitive(sensitive *tpm2.Sensitive, public, par
 		if !parentPublic.IsStorageParent() || !parentPublic.IsAsymmetric() {
 			return nil, nil, nil, errors.New("parent object must be an asymmetric storage key")
 		}
-		outSymSeed, seed, err = tpm2_crypto.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
+		outerSecret, seed, err = tpm2_crypto.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
+			return nil, nil, nil, fmt.Errorf("cannot create encrypted outer symmetric seed: %w", err)
 		}
 	}
 
-	encryptionKeyOut, duplicate, err = SensitiveToDuplicate(sensitive, name, parentPublic, seed, symmetricAlg, encryptionKeyIn)
+	innerSymmetricKeyOut, duplicate, err = SensitiveToDuplicate(sensitive, name, parentPublic, seed, innerSymmetricAlg, innerSymmetricKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	return encryptionKeyOut, duplicate, outSymSeed, nil
+	return innerSymmetricKeyOut, duplicate, outerSecret, nil
 }

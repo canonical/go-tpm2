@@ -32,7 +32,7 @@ type testCreateUnwrapDuplicationObjectData struct {
 func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCreateUnwrapDuplicationObjectData) {
 	public, sensitiveIn := NewExternalSealedObject(tpm2.HashAlgorithmSHA256, []byte("foo"), []byte("super secret data"))
 
-	encryptionKey, duplicate, symSeed, err := CreateDuplicationObjectFromSensitive(sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
+	encryptionKey, duplicate, symSeed, err := CreateDuplicationObject(sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
 	c.Check(err, IsNil)
 	if data.symmetricAlg != nil && data.symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull && len(data.encryptionKey) == 0 {
 		c.Check(encryptionKey, internal_testutil.LenEquals, int(data.symmetricAlg.KeyBits.Sym/8))
@@ -48,7 +48,7 @@ func (s *duplicationSuite) testCreateUnwrapDuplicationObject(c *C, data *testCre
 		parentSymmetricAlg = &data.parentPublic.Params.AsymDetail(data.parentPublic.Type).Symmetric
 	}
 
-	sensitive, err := UnwrapDuplicationObjectToSensitive(duplicate, public, data.parentPriv, parentNameAlg, parentSymmetricAlg, encryptionKey, symSeed, data.symmetricAlg)
+	sensitive, err := UnwrapDuplicationObject(duplicate, public, data.parentPriv, parentNameAlg, parentSymmetricAlg, symSeed, encryptionKey, data.symmetricAlg)
 	c.Check(err, IsNil)
 	c.Assert(sensitive, NotNil)
 
