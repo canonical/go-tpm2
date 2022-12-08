@@ -336,7 +336,7 @@ func isUnion(t reflect.Type) bool {
 	if t.Kind() != reflect.Ptr {
 		t = reflect.PtrTo(t)
 	}
-	return t.Implements(unionType)
+	return t.Elem().Kind() == reflect.Struct && t.Implements(unionType)
 }
 
 func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
@@ -349,19 +349,11 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		return tpmKindIgnore, nil
 	}
 
-	if t.Kind() != reflect.Ptr {
-		switch {
-		case isCustom(t):
-			if o.raw || o.sized || o.selector != "" {
-				return TPMKindUnsupported, errors.New(`"raw", "sized" and "selector" options are invalid with custom types`)
-			}
-			return TPMKindCustom, nil
-		case isUnion(t):
-			if o.raw || o.sized {
-				return TPMKindUnsupported, errors.New(`"raw" and "sized" options are invalid with union types`)
-			}
-			return TPMKindUnion, nil
+	if t.Kind() != reflect.Ptr && isCustom(t) {
+		if o.raw || o.sized || o.selector != "" {
+			return TPMKindUnsupported, errors.New(`"raw", "sized" and "selector" options are invalid with custom types`)
 		}
+		return TPMKindCustom, nil
 	}
 
 	switch t.Kind() {
@@ -410,8 +402,19 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		if o.sized {
 			return TPMKindUnsupported, errors.New(`"sized" option requires a pointer field`)
 		}
-		if o.raw || o.selector != "" {
-			return TPMKindUnsupported, errors.New(`"raw" and "selector" options are invalid with struct types`)
+		if o.raw {
+			return TPMKindUnsupported, errors.New(`"raw" option is invalid with struct types`)
+		}
+
+		if isUnion(t) {
+			if k == TPMKindTaggedUnion {
+				return TPMKindUnsupported, errors.New("struct type cannot represent both a union and tagged union")
+			}
+			return TPMKindUnion, nil
+		}
+
+		if o.selector != "" {
+			return TPMKindUnsupported, errors.New(`"selector" option is invalid with struct types that don't represent unions`)
 		}
 
 		return k, nil
