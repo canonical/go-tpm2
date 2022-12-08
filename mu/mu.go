@@ -334,7 +334,7 @@ func isUnion(t reflect.Type) bool {
 	return t.Implements(unionType)
 }
 
-func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
+func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 	if o == nil {
 		var def options
 		o = &def
@@ -353,11 +353,6 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 			}
 			return TPMKindUnion, nil
 		}
-	}
-
-	sized := false
-	if c != nil {
-		sized = c.sized
 	}
 
 	switch t.Kind() {
@@ -384,9 +379,6 @@ func tpmKind(t reflect.Type, c *context, o *options) (TPMKind, error) {
 		case o.raw:
 			return TPMKindRaw, nil
 		case t.Elem().Kind() == reflect.Uint8:
-			if sized {
-				return TPMKindRaw, nil
-			}
 			return TPMKindSized, nil
 		default:
 			return TPMKindList, nil
@@ -438,7 +430,7 @@ func DetermineTPMKind(i interface{}) TPMKind {
 	}
 
 	for {
-		k, err := tpmKind(t, nil, o)
+		k, err := tpmKind(t, o)
 		switch {
 		case err != nil:
 			return TPMKindUnsupported
@@ -451,11 +443,11 @@ func DetermineTPMKind(i interface{}) TPMKind {
 }
 
 type context struct {
-	caller [1]uintptr     // address of the function calling into the public API
-	mode   string         // marshal or unmarshal
-	index  int            // current argument index
-	stack  containerStack // type stack for this context
-	sized  bool
+	caller  [1]uintptr     // address of the function calling into the public API
+	mode    string         // marshal or unmarshal
+	index   int            // current argument index
+	stack   containerStack // type stack for this context
+	inSized bool
 
 	parent *context // parent context associated with a call from a custom type
 }
@@ -492,7 +484,7 @@ func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
 	valid := false
 	if len(c.stack) > 0 {
-		if k, _ := tpmKind(c.stack.top().value.Type(), nil, nil); k == TPMKindTaggedUnion {
+		if k, _ := tpmKind(c.stack.top().value.Type(), nil); k == TPMKindTaggedUnion {
 			valid = true
 		}
 	}
@@ -540,10 +532,10 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 }
 
 func (c *context) enterSizedType() (exit func()) {
-	orig := c.sized
-	c.sized = true
+	orig := c.inSized
+	c.inSized = true
 	return func() {
-		c.sized = orig
+		c.inSized = orig
 	}
 }
 
@@ -649,12 +641,14 @@ func (m *marshaller) marshalSized(v reflect.Value) error {
 		return nil
 	}
 
-	exit := m.enterSizedType()
-	defer exit()
+	opts := new(options)
+	if v.Kind() == reflect.Slice {
+		opts.raw = true
+	}
 
 	tmpBuf := new(bytes.Buffer)
 	sm := &marshaller{context: m.context, w: tmpBuf}
-	if err := sm.marshalValue(v, nil); err != nil {
+	if err := sm.marshalValue(v, opts); err != nil {
 		return err
 	}
 	if tmpBuf.Len() > math.MaxUint16 {
@@ -766,7 +760,7 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
-	kind, err := tpmKind(v.Type(), m.context, opts)
+	kind, err := tpmKind(v.Type(), opts)
 
 	switch {
 	case err != nil:
@@ -774,8 +768,6 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 	case kind == TPMKindUnsupported:
 		return m.marshalPtr(v, opts)
 	}
-
-	m.sized = false
 
 	switch kind {
 	case TPMKindPrimitive:
@@ -873,11 +865,13 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 		v.SetLen(int(size))
 	}
 
-	exit := u.enterSizedType()
-	defer exit()
+	opts := new(options)
+	if v.Kind() == reflect.Slice {
+		opts.raw = true
+	}
 
 	su := &unmarshaller{context: u.context, r: io.LimitReader(u, int64(size))}
-	return su.unmarshalValue(v, nil)
+	return su.unmarshalValue(v, opts)
 }
 
 func (u *unmarshaller) unmarshalRawList(v reflect.Value, n int) (reflect.Value, error) {
@@ -989,7 +983,7 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
-	kind, err := tpmKind(v.Type(), u.context, opts)
+	kind, err := tpmKind(v.Type(), opts)
 
 	switch {
 	case err != nil:
@@ -997,8 +991,6 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 	case kind == TPMKindUnsupported:
 		return u.unmarshalPtr(v, opts)
 	}
-
-	u.sized = false
 
 	switch kind {
 	case TPMKindPrimitive:
