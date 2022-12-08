@@ -452,11 +452,10 @@ func DetermineTPMKind(i interface{}) TPMKind {
 }
 
 type context struct {
-	caller  [1]uintptr     // address of the function calling into the public API
-	mode    string         // marshal or unmarshal
-	index   int            // current argument index
-	stack   containerStack // type stack for this context
-	inSized bool
+	caller [1]uintptr     // address of the function calling into the public API
+	mode   string         // marshal or unmarshal
+	index  int            // current argument index
+	stack  containerStack // type stack for this context
 
 	parent *context // parent context associated with a call from a custom type
 }
@@ -538,14 +537,6 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 	}
 
 	return pv.Elem(), c.enterStructField(u, index), nil
-}
-
-func (c *context) enterSizedType() (exit func()) {
-	orig := c.inSized
-	c.inSized = true
-	return func() {
-		c.inSized = orig
-	}
 }
 
 func (c *context) enterCustomType(v reflect.Value) (exit func()) {
