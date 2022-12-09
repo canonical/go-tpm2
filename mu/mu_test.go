@@ -186,6 +186,20 @@ func (s *muSuite) TestMarshalAndUnmarshalSized1Bytes(c *C) {
 	c.Check(ub2, DeepEquals, make(Sized1Bytes, 1))
 }
 
+func (s *muSuite) TestMarshalAndUnmarshalArray(c *C) {
+	values := []interface{}{
+		[10]uint8{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		[5]uint8{20, 21, 22, 23, 24}}
+	expected := internal_testutil.DecodeHexString(c, "0102030405060708090a1415161718")
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:   values,
+		expected: expected})
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:   values,
+		expected: expected})
+}
+
 func (s *muSuite) TestMarshalAndUnmarshlRawBytes(c *C) {
 	a := internal_testutil.DecodeHexString(c, "7a788f56fa49ae0ba5ebde780efe4d6a89b5db47")
 	ua := make(RawBytes, len(a))
@@ -952,8 +966,13 @@ func (s *muSuite) TestMarshalUnsupportedType(c *C) {
 }
 
 func (s *muSuite) TestUnmarshalUnsupportedType(c *C) {
+	var a string
+	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type string \\(unsupported kind: string\\)")
+}
+
+func (s *muSuite) TestUnmarshalUnsupportedArrayType(c *C) {
 	var a [3]uint16
-	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16 \\(unsupported kind: array\\)")
+	c.Check(func() { UnmarshalFromBytes([]byte{}, &a) }, PanicMatches, "cannot unmarshal unsupported type \\[3\\]uint16 \\(unsupported array type\\)")
 }
 
 func (s *muSuite) TestUnmarshalValue(c *C) {
@@ -1106,6 +1125,42 @@ func (s *muSuite) TestMarshalInvalidUnion(c *C) {
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
 
+func (s *muSuite) TestMarshalStructContainingInvalidArrayField(c *C) {
+	a := new(testStructWithInvalidArrayField)
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[10\\]uint8 \\(invalid options for array type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidArrayField field A\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
+func (s *muSuite) TestMarshalStructContainingInvalidArrayField2(c *C) {
+	a := new(testStructWithInvalidArrayField2)
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[10\\]uint8 \\(invalid options for array type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidArrayField2 field A\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
+func (s *muSuite) TestMarshalStructContainingInvalidArrayField3(c *C) {
+	a := new(testStructWithInvalidArrayField3)
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[10\\]uint8 \\(invalid options for array type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidArrayField3 field A\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
+func (s *muSuite) TestMarshalStructContainingInvalidArrayField4(c *C) {
+	a := new(testStructWithInvalidArrayField4)
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[10\\]uint8 \\(invalid options for array type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidArrayField4 field B\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
 type testMarshalErrorData struct {
 	value      interface{}
 	after      int
@@ -1231,6 +1286,13 @@ func (s *muSuite) TestMarshalErrorSized1Bytes2(c *C) {
 		err:   "cannot marshal argument 0 whilst processing element of type mu.Sized1Bytes: io: read/write on closed pipe"})
 }
 
+func (s *muSuite) TestMarshalErrorArray(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		value: [10]byte{},
+		after: 4,
+		err:   "cannot marshal argument 0 whilst processing element of type \\[10\\]uint8: io: read/write on closed pipe"})
+}
+
 func (s *muSuite) TestUnmarshalErrorList1(c *C) {
 	b := internal_testutil.DecodeHexString(c, "000000")
 	var a []uint32
@@ -1274,6 +1336,13 @@ func (s *muSuite) TestUnmarshalErrorSized1Bytes2(c *C) {
 	var a Sized1Bytes
 	_, err := UnmarshalFromBytes(b, &a)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type mu.Sized1Bytes: unexpected EOF")
+}
+
+func (s *muSuite) TestUnmarshalErrorArray(c *C) {
+	b := internal_testutil.DecodeHexString(c, "01020304")
+	var a [5]byte
+	_, err := UnmarshalFromBytes(b, &a)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type \\[5\\]uint8: unexpected EOF")
 }
 
 func (s *muSuite) TestCopyValue(c *C) {

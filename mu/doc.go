@@ -53,6 +53,9 @@ TPMI prefixed types (interface types) are generally not explicitly supported. Th
 by the TPM for type checking during unmarshalling, but this package doesn't distinguish between
 TPMI prefixed types with the same underlying type.
 
+Byte array types are supported and are marshalled to and from a fixed size bytes sequence.
+No other array types are supported.
+
 The marshalling code parses the "tpm2" tag on struct fields, the value of which is a comma
 separated list of options. These options are:
   - sized1 - the field is a variable sized buffer with a single byte size field, used

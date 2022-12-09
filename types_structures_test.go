@@ -5,10 +5,7 @@
 package tpm2_test
 
 import (
-	"bytes"
 	"crypto"
-	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/binary"
 	"io"
 	"reflect"
@@ -392,6 +389,153 @@ func (s *typesStructuresSuite) TestPCRSelectionListRemove3(c *C) {
 	c.Check(x.Remove(y), DeepEquals, expected)
 }
 
+func (s *typesStructuresSuite) TestNewTaggedHashSHA1(c *C) {
+	digest := internal_testutil.DecodeHexString(c, "e5fa44f2b31c1fb553b6021e7360d07d5d91ff5e")
+
+	expected := &TaggedHash{
+		HashAlg:    HashAlgorithmSHA1,
+		DigestData: new(TaggedHashU)}
+	copy(expected.DigestData.SHA1[:], digest)
+
+	h, err := NewTaggedHash(HashAlgorithmSHA1, digest)
+	c.Assert(err, IsNil)
+	c.Check(h, DeepEquals, expected)
+}
+
+func (s *typesStructuresSuite) TestNewTaggedHashSHA256(c *C) {
+	digest := internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")
+
+	expected := &TaggedHash{
+		HashAlg:    HashAlgorithmSHA256,
+		DigestData: new(TaggedHashU)}
+	copy(expected.DigestData.SHA256[:], digest)
+
+	h, err := NewTaggedHash(HashAlgorithmSHA256, digest)
+	c.Assert(err, IsNil)
+	c.Check(h, DeepEquals, expected)
+}
+
+func (s *typesStructuresSuite) TestNewTaggedHashError(c *C) {
+	_, err := NewTaggedHash(HashAlgorithmSHA256, make([]byte, 20))
+	c.Assert(err, ErrorMatches, "invalid digest size")
+}
+
+type testTaggedHashData struct {
+	alg      HashAlgorithmId
+	digest   Digest
+	expected []byte
+}
+
+func (s *typesStructuresSuite) testTaggedHash(c *C, data *testTaggedHashData) {
+	h, err := NewTaggedHash(data.alg, data.digest)
+	c.Assert(err, IsNil)
+
+	c.Check(h.HashAlg, Equals, data.alg)
+	c.Check(h.Digest(), DeepEquals, data.digest)
+
+	b, err := mu.MarshalToBytes(h)
+	c.Check(err, IsNil)
+	c.Check(b, DeepEquals, data.expected)
+
+	var h2 *TaggedHash
+	_, err = mu.UnmarshalFromBytes(b, &h2)
+	c.Check(err, IsNil)
+	c.Check(h2, DeepEquals, h)
+}
+
+func (s *typesStructuresSuite) TestTaggedHashSHA1(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmSHA1,
+		digest:   internal_testutil.DecodeHexString(c, "e5fa44f2b31c1fb553b6021e7360d07d5d91ff5e"),
+		expected: internal_testutil.DecodeHexString(c, "0004e5fa44f2b31c1fb553b6021e7360d07d5d91ff5e")})
+}
+
+func (s *typesStructuresSuite) TestTaggedHashSHA256(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmSHA256,
+		digest:   internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"),
+		expected: internal_testutil.DecodeHexString(c, "000b4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")})
+}
+
+func (s *typesStructuresSuite) TestTaggedHashSHA384(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmSHA384,
+		digest:   internal_testutil.DecodeHexString(c, "d654902b550e334bb6898d5c4ab8ebe1aedc6c85368eafe28e0f89b62a74a23e1ed20abbc10c02ce321266384d444717"),
+		expected: internal_testutil.DecodeHexString(c, "000cd654902b550e334bb6898d5c4ab8ebe1aedc6c85368eafe28e0f89b62a74a23e1ed20abbc10c02ce321266384d444717")})
+}
+
+func (s *typesStructuresSuite) TestTaggedHashSHA512(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmSHA512,
+		digest:   internal_testutil.DecodeHexString(c, "3abb6677af34ac57c0ca5828fd94f9d886c26ce59a8ce60ecf6778079423dccff1d6f19cb655805d56098e6d38a1a710dee59523eed7511e5a9e4b8ccb3a4686"),
+		expected: internal_testutil.DecodeHexString(c, "000d3abb6677af34ac57c0ca5828fd94f9d886c26ce59a8ce60ecf6778079423dccff1d6f19cb655805d56098e6d38a1a710dee59523eed7511e5a9e4b8ccb3a4686")})
+}
+
+func (s *typesStructuresSuite) TestTaggedHashSHA3_256(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmSHA3_256,
+		digest:   internal_testutil.DecodeHexString(c, "bc4bb29ce739b5d97007946aa4fdb987012c647b506732f11653c5059631cd3d"),
+		expected: internal_testutil.DecodeHexString(c, "0027bc4bb29ce739b5d97007946aa4fdb987012c647b506732f11653c5059631cd3d")})
+}
+
+func (s *typesStructuresSuite) TestTaggedHashSHA3_384(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmSHA3_384,
+		digest:   internal_testutil.DecodeHexString(c, "f07020242c5eb616c1702c60774735c868bd2b9eb071660166121723126e21589e1f7f21d871003b939247682166d0ea"),
+		expected: internal_testutil.DecodeHexString(c, "0028f07020242c5eb616c1702c60774735c868bd2b9eb071660166121723126e21589e1f7f21d871003b939247682166d0ea")})
+}
+
+func (s *typesStructuresSuite) TestTaggedHashSHA3_512(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmSHA3_512,
+		digest:   internal_testutil.DecodeHexString(c, "51e0aa1b16f94bf933c1fd6efaa58c1eabe8a3009d1c6096fb0099bab4f52db69e713b224048f3ce693b83b2a8e8de4ca5c1ba9a08c526265366a448f6d057a4"),
+		expected: internal_testutil.DecodeHexString(c, "002951e0aa1b16f94bf933c1fd6efaa58c1eabe8a3009d1c6096fb0099bab4f52db69e713b224048f3ce693b83b2a8e8de4ca5c1ba9a08c526265366a448f6d057a4")})
+}
+
+func (s *typesStructuresSuite) TestUnmarshalInvalidTaggedHash(c *C) {
+	b := internal_testutil.DecodeHexString(c, "0003e5fa44f2b31c1fb553b6021e7360d07d5d91ff5e")
+
+	var h *TaggedHash
+	_, err := mu.UnmarshalFromBytes(b, &h)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type tpm2.TaggedHashU: invalid selector value: TPM_ALG_TDES\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... tpm2.TaggedHash field DigestData\n"+
+		"=== END STACK ===\n")
+}
+
+func (s *typesStructuresSuite) TestTaggedHashListBuilder(c *C) {
+	d1, err := NewTaggedHash(HashAlgorithmSHA1, internal_testutil.DecodeHexString(c, "7448d8798a4380162d4b56f9b452e2f6f9e24e7a"))
+	c.Assert(err, IsNil)
+	d2, err := NewTaggedHash(HashAlgorithmSHA256, internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"))
+	c.Assert(err, IsNil)
+
+	builder := NewTaggedHashListBuilder()
+	c.Assert(builder, NotNil)
+
+	c.Check(builder.Append(d1.HashAlg, d1.Digest()), Equals, builder)
+	c.Check(builder.Append(d2.HashAlg, d2.Digest()), Equals, builder)
+
+	l, err := builder.Finish()
+	c.Check(err, IsNil)
+
+	expected := TaggedHashList{*d1, *d2}
+
+	c.Check(l, DeepEquals, expected)
+}
+
+func (s *typesStructuresSuite) TestTaggedHashListBuilderError(c *C) {
+	builder := NewTaggedHashListBuilder()
+	c.Assert(builder, NotNil)
+
+	c.Check(builder.Append(HashAlgorithmSHA1, make([]byte, 20)), Equals, builder)
+	c.Check(builder.Append(HashAlgorithmSHA256, make([]byte, 10)), Equals, builder)
+	c.Check(builder.Append(HashAlgorithmSHA384, make([]byte, 48)), Equals, builder)
+	c.Check(builder.Append(HashAlgorithmSHA512, nil), Equals, builder)
+
+	_, err := builder.Finish()
+	c.Check(err, ErrorMatches, "encountered error on digest 1: invalid digest size")
+}
+
 func TestPCRSelectionListRemove(t *testing.T) {
 	for _, data := range []struct {
 		desc           string
@@ -481,129 +625,4 @@ func TestPCRSelectionListRemove(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestTaggedHash(t *testing.T) {
-	sha1Hash := sha1.Sum([]byte("foo"))
-	sha256Hash := sha256.Sum256([]byte("foo"))
-
-	for _, data := range []struct {
-		desc string
-		in   TaggedHash
-		out  []byte
-		err  string
-	}{
-		{
-			desc: "SHA1",
-			in:   TaggedHash{HashAlg: HashAlgorithmSHA1, Digest: sha1Hash[:]},
-			out:  append([]byte{0x00, 0x04}, sha1Hash[:]...),
-		},
-		{
-			desc: "SHA256",
-			in:   TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]},
-			out:  append([]byte{0x00, 0x0b}, sha256Hash[:]...),
-		},
-		{
-			desc: "WrongDigestSize",
-			in:   TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument 0 whilst processing element of type tpm2.TaggedHash: invalid digest size 20",
-		},
-		{
-			desc: "UnknownAlg",
-			in:   TaggedHash{HashAlg: HashAlgorithmNull, Digest: sha1Hash[:]},
-			err:  "cannot marshal argument 0 whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_NULL",
-		},
-	} {
-		t.Run(data.desc, func(t *testing.T) {
-			out, err := mu.MarshalToBytes(&data.in)
-			if data.err != "" {
-				if err == nil {
-					t.Fatalf("Expected MarshalToBytes to fail")
-				}
-				if err.Error() != data.err {
-					t.Errorf("MarshalToBytes returned an unexpected error: %v", err)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("MarshalToBytes failed: %v", err)
-			}
-
-			if !bytes.Equal(out, data.out) {
-				t.Errorf("MarshalToBytes returned an unexpected byte sequence: %x", out)
-			}
-
-			var a TaggedHash
-			n, err := mu.UnmarshalFromBytes(out, &a)
-			if err != nil {
-				t.Fatalf("UnmarshalFromBytes failed: %v", err)
-			}
-			if n != len(out) {
-				t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-			}
-
-			if !reflect.DeepEqual(data.in, a) {
-				t.Errorf("UnmarshalFromBytes didn't return the original data")
-			}
-		})
-	}
-
-	t.Run("UnmarshalTruncated", func(t *testing.T) {
-		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
-		out, err := mu.MarshalToBytes(&in)
-		if err != nil {
-			t.Fatalf("MarshalToBytes failed: %v", err)
-		}
-
-		out = out[0:32]
-		_, err = mu.UnmarshalFromBytes(out, &in)
-		if err == nil {
-			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash that is too short")
-		}
-		if err.Error() != "cannot unmarshal argument 0 whilst processing element of type tpm2.TaggedHash: cannot read digest: unexpected EOF" {
-			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
-		}
-	})
-
-	t.Run("UnmarshalFromLongerBuffer", func(t *testing.T) {
-		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
-		out, err := mu.MarshalToBytes(&in)
-		if err != nil {
-			t.Fatalf("MarshalToBytes failed: %v", err)
-		}
-
-		expectedN := len(out)
-		out = append(out, []byte{0, 0, 0, 0}...)
-
-		var a TaggedHash
-		n, err := mu.UnmarshalFromBytes(out, &a)
-		if err != nil {
-			t.Fatalf("UnmarshalFromBytes failed: %v", err)
-		}
-		if n != expectedN {
-			t.Errorf("UnmarshalFromBytes consumed the wrong number of bytes (%d)", n)
-		}
-
-		if !reflect.DeepEqual(in, a) {
-			t.Errorf("UnmarshalFromBytes didn't return the original data")
-		}
-	})
-
-	t.Run("UnmarshalUnknownAlg", func(t *testing.T) {
-		in := TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: sha256Hash[:]}
-		out, err := mu.MarshalToBytes(&in)
-		if err != nil {
-			t.Fatalf("MarshalToBytes failed: %v", err)
-		}
-
-		out[1] = 0x05
-		_, err = mu.UnmarshalFromBytes(out, &in)
-		if err == nil {
-			t.Fatalf("UnmarshalFromBytes should fail to unmarshal a TaggedHash with an unknown algorithm")
-		}
-		if err.Error() != "cannot unmarshal argument 0 whilst processing element of type tpm2.TaggedHash: cannot determine digest size for unknown algorithm TPM_ALG_HMAC" {
-			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
-		}
-	})
 }

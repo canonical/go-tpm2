@@ -24,48 +24,112 @@ type Empty struct{}
 
 // 10.3) Hash/Digest structures
 
+// TaggedHashU is a union type that corresponds to the TPMU_HA type. The
+// selector type is HashAlgorithmId. Mapping of selector values to fields is
+// as follows:
+//   - HashAlgorithmSHA1: SHA1
+//   - HashAlgorithmSHA256: SHA256
+//   - HashAlgorithmSHA384: SHA384
+//   - HashAlgorithmSHA512: SHA512
+//   - HashAlgorithmSHA3_256: SHA3_256
+//   - HashAlgorithmSHA3_384: SHA3_384
+//   - HashAlgorithmSHA3_512: SHA3_512
+type TaggedHashU struct {
+	SHA1     [20]byte
+	SHA256   [32]byte
+	SHA384   [48]byte
+	SHA512   [64]byte
+	SHA3_256 [32]byte
+	SHA3_384 [48]byte
+	SHA3_512 [64]byte
+}
+
+func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
+	switch selector.Interface().(HashAlgorithmId) {
+	case HashAlgorithmSHA1:
+		return &u.SHA1
+	case HashAlgorithmSHA256:
+		return &u.SHA256
+	case HashAlgorithmSHA384:
+		return &u.SHA384
+	case HashAlgorithmSHA512:
+		return &u.SHA512
+	case HashAlgorithmSHA3_256:
+		return &u.SHA3_256
+	case HashAlgorithmSHA3_384:
+		return &u.SHA3_384
+	case HashAlgorithmSHA3_512:
+		return &u.SHA3_512
+	default:
+		return nil
+	}
+}
+
 // TaggedHash corresponds to the TPMT_HA type.
 type TaggedHash struct {
-	HashAlg HashAlgorithmId // Algorithm of the digest contained with Digest
-	Digest  []byte          // Digest data
+	HashAlg    HashAlgorithmId // Algorithm of the digest contained with Digest
+	DigestData *TaggedHashU    // Digest data
 }
 
-// TaggedHash represents the TPMT_HA type in the TCG spec. In the spec, TPMT_HA.digest is a union type
-// (TPMU_HA), which is a union of all of the different hash algorithms. Each member of that union is an
-// array of raw bytes. As no length is encoded, we need a custom marshaller implementation that unmarshals the
-// correct number of bytes depending on the hash algorithm
-
-func (p TaggedHash) Marshal(w io.Writer) error {
-	if err := binary.Write(w, binary.BigEndian, p.HashAlg); err != nil {
-		return fmt.Errorf("cannot marshal digest algorithm: %w", err)
+// NewTaggedHash creates a new tagged hash that represents the specified
+// digest. It will return an error if the algorithm is invalid or the
+// size of the digest doesn't match the algorithm.
+func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
+	if !alg.IsValid() {
+		return nil, errors.New("invalid algorithm")
 	}
-	if !p.HashAlg.IsValid() {
-		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
+	if len(digest) != alg.Size() {
+		return nil, errors.New("invalid digest size")
 	}
 
-	if p.HashAlg.Size() != len(p.Digest) {
-		return fmt.Errorf("invalid digest size %d", len(p.Digest))
+	digestData := new(TaggedHashU)
+	switch alg {
+	case HashAlgorithmSHA1:
+		copy(digestData.SHA1[:], digest)
+	case HashAlgorithmSHA256:
+		copy(digestData.SHA256[:], digest)
+	case HashAlgorithmSHA384:
+		copy(digestData.SHA384[:], digest)
+	case HashAlgorithmSHA512:
+		copy(digestData.SHA512[:], digest)
+	case HashAlgorithmSHA3_256:
+		copy(digestData.SHA3_256[:], digest)
+	case HashAlgorithmSHA3_384:
+		copy(digestData.SHA3_384[:], digest)
+	case HashAlgorithmSHA3_512:
+		copy(digestData.SHA3_512[:], digest)
 	}
 
-	if _, err := w.Write(p.Digest); err != nil {
-		return fmt.Errorf("cannot write digest: %w", err)
-	}
-	return nil
+	return &TaggedHash{
+		HashAlg:    alg,
+		DigestData: digestData}, nil
 }
 
-func (p *TaggedHash) Unmarshal(r io.Reader) error {
-	if err := binary.Read(r, binary.BigEndian, &p.HashAlg); err != nil {
-		return fmt.Errorf("cannot unmarshal digest algorithm: %w", err)
-	}
-	if !p.HashAlg.IsValid() {
-		return fmt.Errorf("cannot determine digest size for unknown algorithm %v", p.HashAlg)
+// Digest returns the value of this tagged hash. It will panic
+// if the digest algorithm is not valid. It will be valid if
+// this tagged hash was created by unmarshalling it, else
+// check [HashAlgorithmId.IsValid].
+func (h *TaggedHash) Digest() Digest {
+	out := make(Digest, h.HashAlg.Size())
+
+	switch h.HashAlg {
+	case HashAlgorithmSHA1:
+		copy(out, h.DigestData.SHA1[:])
+	case HashAlgorithmSHA256:
+		copy(out, h.DigestData.SHA256[:])
+	case HashAlgorithmSHA384:
+		copy(out, h.DigestData.SHA384[:])
+	case HashAlgorithmSHA512:
+		copy(out, h.DigestData.SHA512[:])
+	case HashAlgorithmSHA3_256:
+		copy(out, h.DigestData.SHA3_256[:])
+	case HashAlgorithmSHA3_384:
+		copy(out, h.DigestData.SHA3_384[:])
+	case HashAlgorithmSHA3_512:
+		copy(out, h.DigestData.SHA3_512[:])
 	}
 
-	p.Digest = make(Digest, p.HashAlg.Size())
-	if _, err := io.ReadFull(r, p.Digest); err != nil {
-		return fmt.Errorf("cannot read digest: %w", err)
-	}
-	return nil
+	return out
 }
 
 // 10.4 Sized Buffers
@@ -391,6 +455,51 @@ type DigestList []Digest
 
 // TaggedHashList is a slice of TaggedHash values, and corresponds to the TPML_DIGEST_VALUES type.
 type TaggedHashList []TaggedHash
+
+// TaggedHashListBuilder facilitates creating a [TaggedHashList]. It
+// allows a list to be constructed without having to check for errors
+// until the end.
+type TaggedHashListBuilder struct {
+	hashes TaggedHashList
+	err    error
+}
+
+// NewTaggedHashListBuilder returns a new TaggedHashListBuilder.
+func NewTaggedHashListBuilder() *TaggedHashListBuilder {
+	return new(TaggedHashListBuilder)
+}
+
+// Append appends the digest with the specified algorithm to the list.
+func (b *TaggedHashListBuilder) Append(alg HashAlgorithmId, digest Digest) *TaggedHashListBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	h, err := NewTaggedHash(alg, digest)
+	if err != nil {
+		b.err = fmt.Errorf("encountered error on digest %d: %w", len(b.hashes), err)
+		b.hashes = nil
+	} else {
+		b.hashes = append(b.hashes, *h)
+	}
+	return b
+}
+
+// Finish returns the final list, or an error if one occurred whilst the
+// list was being built.
+func (b *TaggedHashListBuilder) Finish() (TaggedHashList, error) {
+	return b.hashes, b.err
+}
+
+// MustFinish is the same as [Finish] except if panics if an error
+// occurred.
+func (b *TaggedHashListBuilder) MustFinish() TaggedHashList {
+	l, err := b.Finish()
+	if err != nil {
+		panic(err)
+	}
+	return l
+}
 
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection

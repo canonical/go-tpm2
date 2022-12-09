@@ -349,6 +349,8 @@ const (
 	// and is a special type used to support TPMS_PCR_SELECT.
 	TPMKindSized1Bytes
 
+	TPMKindFixedBytes
+
 	tpmKindIgnore
 )
 
@@ -460,6 +462,14 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		}
 
 		return k, nil
+	case reflect.Array:
+		switch {
+		case sizeSpecifiers != 0 || o.selector != "":
+			return TPMKindUnsupported, errors.New("invalid options for array type")
+		case t.Elem().Kind() != reflect.Uint8:
+			return TPMKindUnsupported, errors.New("unsupported array type")
+		}
+		return TPMKindFixedBytes, nil
 	default:
 		return TPMKindUnsupported, fmt.Errorf("unsupported kind: %v", t.Kind())
 	}
@@ -719,6 +729,13 @@ func (m *marshaller) marshalSized1Bytes(v reflect.Value) error {
 	return m.marshalRaw(v)
 }
 
+func (m *marshaller) marshalFixedBytes(v reflect.Value) error {
+	if err := binary.Write(m, binary.BigEndian, v.Interface()); err != nil {
+		return m.newError(v, err)
+	}
+	return nil
+}
+
 func (m *marshaller) marshalRawList(v reflect.Value) error {
 	for i := 0; i < v.Len(); i++ {
 		exit := m.enterListElem(v, i)
@@ -844,6 +861,8 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 		return m.marshalRaw(v)
 	case TPMKindSized1Bytes:
 		return m.marshalSized1Bytes(v)
+	case TPMKindFixedBytes:
+		return m.marshalFixedBytes(v)
 	}
 
 	panic("unhandled kind")
@@ -956,6 +975,13 @@ func (u *unmarshaller) unmarshalSized1Bytes(v reflect.Value) error {
 	}
 
 	return u.unmarshalRaw(v)
+}
+
+func (u *unmarshaller) unmarshalFixedBytes(v reflect.Value) error {
+	if err := binary.Read(u, binary.BigEndian, v.Addr().Interface()); err != nil {
+		return u.newError(v, err)
+	}
+	return nil
 }
 
 func (u *unmarshaller) unmarshalRawList(v reflect.Value, n int) (reflect.Value, error) {
@@ -1095,6 +1121,8 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 		return u.unmarshalRaw(v)
 	case TPMKindSized1Bytes:
 		return u.unmarshalSized1Bytes(v)
+	case TPMKindFixedBytes:
+		return u.unmarshalFixedBytes(v)
 	}
 
 	panic("unhandled kind")

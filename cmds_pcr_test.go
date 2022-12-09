@@ -55,9 +55,11 @@ func TestPCRExtend(t *testing.T) {
 			hashList := TaggedHashList{}
 
 			for _, alg := range data.algorithms {
-				hasher := alg.NewHash()
-				hasher.Write(data.data)
-				hashList = append(hashList, TaggedHash{HashAlg: alg, Digest: hasher.Sum(nil)})
+				h := alg.NewHash()
+				h.Write(data.data)
+
+				ta, _ := NewTaggedHash(alg, h.Sum(nil))
+				hashList = append(hashList, *ta)
 			}
 
 			if err := tpm.PCRExtend(tpm.PCRHandleContext(data.index), hashList, nil); err != nil {
@@ -75,11 +77,11 @@ func TestPCRExtend(t *testing.T) {
 			}
 
 			for i, alg := range data.algorithms {
-				hasher := alg.NewHash()
-				hasher.Write(origValues[alg][data.index])
-				hasher.Write(hashList[i].Digest)
+				h := alg.NewHash()
+				h.Write(origValues[alg][data.index])
+				h.Write(hashList[i].Digest())
 
-				expected := hasher.Sum(nil)
+				expected := h.Sum(nil)
 
 				if !bytes.Equal(expected, newValues[alg][data.index]) {
 					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[alg][data.index], expected)
@@ -130,13 +132,13 @@ func TestPCREvent(t *testing.T) {
 			}
 
 			for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
-				hasher := alg.NewHash()
-				hasher.Write(data.data)
-				expectedDigest := hasher.Sum(nil)
+				h := alg.NewHash()
+				h.Write(data.data)
+				expectedDigest := h.Sum(nil)
 				digest := []byte{}
 				for _, d := range digests {
 					if d.HashAlg == alg {
-						digest = d.Digest
+						digest = d.Digest()
 						break
 					}
 				}
@@ -156,16 +158,16 @@ func TestPCREvent(t *testing.T) {
 			}
 
 			for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
-				hasher := alg.NewHash()
-				hasher.Write(origValues[alg][data.index])
+				h := alg.NewHash()
+				h.Write(origValues[alg][data.index])
 				for _, d := range digests {
 					if d.HashAlg == alg {
-						hasher.Write(d.Digest)
+						h.Write(d.Digest())
 						break
 					}
 				}
 
-				expected := hasher.Sum(nil)
+				expected := h.Sum(nil)
 
 				if !bytes.Equal(expected, newValues[alg][data.index]) {
 					t.Errorf("Updated PCR has unexpected value for algorithm %v (got %x, expected %x)", alg, newValues[alg][data.index], expected)
@@ -318,7 +320,7 @@ func TestPCRRead(t *testing.T) {
 			t.Errorf("Unexpected digests returned")
 		}
 
-		if err := tpm.PCRExtend(tpm.PCRHandleContext(7), TaggedHashList{TaggedHash{HashAlg: HashAlgorithmSHA256, Digest: make(Digest, 32)}}, nil); err != nil {
+		if err := tpm.PCRExtend(tpm.PCRHandleContext(7), NewTaggedHashListBuilder().Append(HashAlgorithmSHA256, make(Digest, 32)).MustFinish(), nil); err != nil {
 			t.Fatalf("PCRExtend failed: %v", err)
 		}
 

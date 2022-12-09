@@ -298,7 +298,7 @@ func TestEventSequence(t *testing.T) {
 				h.Write(d)
 			}
 			d := h.Sum(nil)
-			if !bytes.Equal(r.Digest, d) {
+			if !bytes.Equal(r.Digest(), d) {
 				t.Errorf("Unexpected digest")
 			}
 
@@ -492,7 +492,7 @@ func TestEventSequenceExecute(t *testing.T) {
 			h := r.HashAlg.NewHash()
 			h.Write(data)
 			d := h.Sum(nil)
-			if !bytes.Equal(r.Digest, d) {
+			if !bytes.Equal(r.Digest(), d) {
 				t.Errorf("Unexpected digest")
 			}
 

@@ -145,6 +145,23 @@ type testStructWithInvalidSliceField4 struct {
 	B []byte `tpm2:"raw,sized1"`
 }
 
+type testStructWithInvalidArrayField struct {
+	A [10]byte `tpm2:"sized"`
+}
+
+type testStructWithInvalidArrayField2 struct {
+	A [10]byte `tpm2:"raw"`
+}
+
+type testStructWithInvalidArrayField3 struct {
+	A [10]byte `tpm2:"sized1"`
+}
+
+type testStructWithInvalidArrayField4 struct {
+	A uint16
+	B [10]byte `tpm2:"selector:A"`
+}
+
 type testStructWithInvalidRawField struct {
 	A testStruct `tpm2:"raw"`
 }

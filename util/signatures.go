@@ -91,12 +91,14 @@ func Sign(key crypto.PrivateKey, scheme *tpm2.SigScheme, digest []byte) (*tpm2.S
 			h := hmac.New(hashAlg.NewHash, k)
 			h.Write(digest)
 
+			taggedHash, err := tpm2.NewTaggedHash(hashAlg, h.Sum(nil))
+			if err != nil {
+				return nil, err
+			}
+
 			return &tpm2.Signature{
-				SigAlg: tpm2.SigSchemeAlgHMAC,
-				Signature: &tpm2.SignatureU{
-					HMAC: &tpm2.TaggedHash{
-						HashAlg: hashAlg,
-						Digest:  h.Sum(nil)}}}, nil
+				SigAlg:    tpm2.SigSchemeAlgHMAC,
+				Signature: &tpm2.SignatureU{HMAC: taggedHash}}, nil
 		default:
 			return nil, errors.New("unsupported keyed hash scheme")
 		}
@@ -150,6 +152,9 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 	case []byte:
 		switch signature.SigAlg {
 		case tpm2.SigSchemeAlgHMAC:
+			if !signature.Signature.HMAC.HashAlg.IsValid() {
+				return false, errors.New("invalid HMAC algorithm")
+			}
 			scheme := &tpm2.SigScheme{
 				Scheme: tpm2.SigSchemeAlgHMAC,
 				Details: &tpm2.SigSchemeU{
@@ -159,7 +164,7 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 			if err != nil {
 				return false, err
 			}
-			return subtle.ConstantTimeCompare(signature.Signature.HMAC.Digest, test.Signature.HMAC.Digest) == 1, nil
+			return subtle.ConstantTimeCompare(signature.Signature.HMAC.Digest(), test.Signature.HMAC.Digest()) == 1, nil
 		default:
 			return false, errors.New("unsupported keyed hash signature algorithm")
 		}
