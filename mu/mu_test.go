@@ -30,11 +30,11 @@ type muSuite struct{}
 var _ = Suite(&muSuite{})
 
 type testMarshalAndUnmarshalData struct {
-	values                []interface{}
-	expected              []byte
-	unmarshalDests        []interface{}
+	values                []interface{} // original values
+	expected              []byte        // expected bytes
+	unmarshalDests        []interface{} // optional destinations to unmarshal to
 	unmarshalLen          int
-	unmarshalExpectedVals []interface{}
+	unmarshalExpectedVals []interface{} // optional values to check unmarshal values against
 }
 
 func (s *muSuite) testMarshalAndUnmarshalBytes(c *C, data *testMarshalAndUnmarshalData) {
@@ -148,6 +148,42 @@ func (s *muSuite) TestMarshalAndUnmarshalPtrs(c *C) {
 	s.testMarshalAndUnmarshalIO(c, data)
 	// Make sure that unmashal didn't allocate a new value when it was passed a non-nil pointer
 	c.Check(uy, Equals, y)
+}
+
+func (s *muSuite) TestMarshalAndUnmarshalSized1Bytes(c *C) {
+	values := []interface{}{
+		Sized1Bytes{10, 15, 20},
+		Sized1Bytes{50, 2},
+		Sized1Bytes{}}
+	expected := internal_testutil.DecodeHexString(c, "030a0f1402320200")
+
+	ua := make(Sized1Bytes, 3)
+	ua2 := ua
+	ub := make(Sized1Bytes, 1)
+	ub2 := ub
+	var uc Sized1Bytes
+
+	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
+		values:                values,
+		expected:              expected,
+		unmarshalDests:        []interface{}{&ua, &ub, &uc},
+		unmarshalExpectedVals: []interface{}{values[0], values[1], Sized1Bytes(nil)}})
+	c.Check(ua2, DeepEquals, ua)
+	c.Check(ub2, DeepEquals, make(Sized1Bytes, 1))
+
+	ua = make(Sized1Bytes, 3)
+	ua2 = ua
+	ub = make(Sized1Bytes, 1)
+	ub2 = ub
+	uc = nil
+
+	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
+		values:                values,
+		expected:              expected,
+		unmarshalDests:        []interface{}{&ua, &ub, &uc},
+		unmarshalExpectedVals: []interface{}{values[0], values[1], Sized1Bytes(nil)}})
+	c.Check(ua2, DeepEquals, ua)
+	c.Check(ub2, DeepEquals, make(Sized1Bytes, 1))
 }
 
 func (s *muSuite) TestMarshalAndUnmarshlRawBytes(c *C) {
@@ -884,9 +920,18 @@ func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
 
 func (s *muSuite) TestMarshalInvalidRawField(c *C) {
 	a := testStructWithInvalidRawField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(\"raw\" option is invalid with struct types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(invalid options for struct type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidRawField field A\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
+func (s *muSuite) TestMarshalInvalidSized1BytesField(c *C) {
+	a := testStructWithInvalidSized1Field{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(invalid options for struct type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidSized1Field field A\n"+
 		"=== END STACK ===\n")
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
@@ -949,7 +994,7 @@ func (s *muSuite) TestMarshalUnaddressableCustom2(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidCustomField(c *C) {
 	a := testStructContainingInvalidCustomField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(\"raw\", \"sized\" and \"selector\" options are invalid with custom types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(invalid options for custom type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructContainingInvalidCustomField field X\n"+
 		"=== END STACK ===\n")
@@ -958,7 +1003,7 @@ func (s *muSuite) TestMarshalStructContainingInvalidCustomField(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidCustomField2(c *C) {
 	a := testStructContainingInvalidCustomField2{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(\"raw\", \"sized\" and \"selector\" options are invalid with custom types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(invalid options for custom type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructContainingInvalidCustomField2 field X\n"+
 		"=== END STACK ===\n")
@@ -967,16 +1012,25 @@ func (s *muSuite) TestMarshalStructContainingInvalidCustomField2(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidCustomField3(c *C) {
 	a := testStructContainingInvalidCustomField3{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(\"raw\", \"sized\" and \"selector\" options are invalid with custom types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(invalid options for custom type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructContainingInvalidCustomField3 field X\n"+
 		"=== END STACK ===\n")
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
 
+func (s *muSuite) TestMarshalStructContainingInvalidCustomField4(c *C) {
+	a := testStructContainingInvalidCustomField4{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(invalid options for custom type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructContainingInvalidCustomField4 field X\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
 func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField(c *C) {
 	a := testStructWithInvalidPrimitiveField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(\"sized\", \"raw\" and \"selector\" options are invalid with primitive types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(invalid options for primitive type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidPrimitiveField field B\n"+
 		"=== END STACK ===\n")
@@ -985,7 +1039,7 @@ func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField2(c *C) {
 	a := testStructWithInvalidPrimitiveField2{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(\"sized\", \"raw\" and \"selector\" options are invalid with primitive types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(invalid options for primitive type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidPrimitiveField2 field B\n"+
 		"=== END STACK ===\n")
@@ -994,9 +1048,18 @@ func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField2(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField3(c *C) {
 	a := testStructWithInvalidPrimitiveField3{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(\"sized\", \"raw\" and \"selector\" options are invalid with primitive types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(invalid options for primitive type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidPrimitiveField3 field B\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
+func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField4(c *C) {
+	a := testStructWithInvalidPrimitiveField4{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(invalid options for primitive type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidPrimitiveField4 field B\n"+
 		"=== END STACK ===\n")
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
@@ -1015,6 +1078,24 @@ func (s *muSuite) TestMarshalStructContainingInvalidSliceField2(c *C) {
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint32 \\(\"sized\" and \"selector\" options are invalid with slice types\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidSliceField2 field B\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
+func (s *muSuite) TestMarshalStructContainingInvalidSliceField3(c *C) {
+	a := testStructWithInvalidSliceField3{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu.Sized1Bytes \\(\"raw\" option is invalid with Sized1Bytes type\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidSliceField3 field B\n"+
+		"=== END STACK ===\n")
+	c.Check(IsValid(a), internal_testutil.IsFalse)
+}
+
+func (s *muSuite) TestMarshalStructContainingInvalidSliceField4(c *C) {
+	a := testStructWithInvalidSliceField4{}
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint8 \\(\"raw\" and \"sized1\" options are mutually exclusive\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testStructWithInvalidSliceField4 field B\n"+
 		"=== END STACK ===\n")
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
@@ -1147,18 +1228,61 @@ func (s *muSuite) TestMarshalErrorCustom(c *C) {
 			"=== END STACK ===\n"})
 }
 
-func (s *muSuite) TestUnmarshalErrorList(c *C) {
+func (s *muSuite) TestMarshalErrorSized1Bytes1(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		value: make(Sized1Bytes, 300),
+		err:   "cannot marshal argument 0 whilst processing element of type mu.Sized1Bytes: value size of 300 is larger than 2\\^8-1"})
+}
+
+func (s *muSuite) TestMarshalErrorSized1Bytes2(c *C) {
+	s.testMarshalError(c, &testMarshalErrorData{
+		value: Sized1Bytes{},
+		err:   "cannot marshal argument 0 whilst processing element of type mu.Sized1Bytes: io: read/write on closed pipe"})
+}
+
+func (s *muSuite) TestUnmarshalErrorList1(c *C) {
 	b := internal_testutil.DecodeHexString(c, "000000")
 	var a []uint32
 	_, err := UnmarshalFromBytes(b, &a)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type \\[\\]uint32: unexpected EOF")
 }
 
-func (s *muSuite) TestUnmarshalErrorSized(c *C) {
+func (s *muSuite) TestUnmarshalErrorList2(c *C) {
+	b := internal_testutil.DecodeHexString(c, "000000030020000100")
+	var a []uint32
+	_, err := UnmarshalFromBytes(b, &a)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type uint32: unexpected EOF\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... \\[\\]uint32 index 1\n"+
+		"=== END STACK ===\n")
+}
+
+func (s *muSuite) TestUnmarshalErrorSized1(c *C) {
 	b := internal_testutil.DecodeHexString(c, "00")
 	var a []byte
 	_, err := UnmarshalFromBytes(b, &a)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type \\[\\]uint8: unexpected EOF")
+}
+
+func (s *muSuite) TestUnmarshalErrorSized2(c *C) {
+	b := internal_testutil.DecodeHexString(c, "0004010203")
+	var a []byte
+	_, err := UnmarshalFromBytes(b, &a)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type \\[\\]uint8: unexpected EOF")
+}
+
+func (s *muSuite) TestUnmarshalErrorSized1Bytes1(c *C) {
+	var b []byte
+	var a Sized1Bytes
+	_, err := UnmarshalFromBytes(b, &a)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type mu.Sized1Bytes: unexpected EOF")
+}
+
+func (s *muSuite) TestUnmarshalErrorSized1Bytes2(c *C) {
+	b := internal_testutil.DecodeHexString(c, "0301")
+	var a Sized1Bytes
+	_, err := UnmarshalFromBytes(b, &a)
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type mu.Sized1Bytes: unexpected EOF")
 }
 
 func (s *muSuite) TestCopyValue(c *C) {

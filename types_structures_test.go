@@ -123,42 +123,14 @@ func (s *typesStructuresSuite) TestNameDigestPanic(c *C) {
 	c.Check(func() { name.Digest() }, PanicMatches, "name is not a valid digest")
 }
 
-func (s *typesStructuresSuite) TestPCRSelectBitmapMarshal1(c *C) {
-	a := PCRSelectBitmap{144, 0, 128}
-	out := mu.MustMarshalToBytes(a)
-	c.Check(out, DeepEquals, internal_testutil.DecodeHexString(c, "03900080"))
-
-	var b PCRSelectBitmap
-	_, err := mu.UnmarshalFromBytes(out, &b)
-	c.Check(err, IsNil)
-	c.Check(b, DeepEquals, a)
-}
-
-func (s *typesStructuresSuite) TestPCRSelectBitmapMarshal2(c *C) {
-	a := PCRSelectBitmap{144, 0, 128, 1}
-	out := mu.MustMarshalToBytes(a)
-	c.Check(out, DeepEquals, internal_testutil.DecodeHexString(c, "0490008001"))
-
-	var b PCRSelectBitmap
-	_, err := mu.UnmarshalFromBytes(out, &b)
-	c.Check(err, IsNil)
-	c.Check(b, DeepEquals, a)
-}
-
-func (s *typesStructuresSuite) TestPCRSelectBitmapMarshalErr(c *C) {
-	a := make(PCRSelectBitmap, 257)
-	_, err := mu.MarshalToBytes(a)
-	c.Check(err, ErrorMatches, `cannot marshal argument 0 whilst processing element of type tpm2\.PCRSelectBitmap: bitmap too long`)
-}
-
 func (s *typesStructuresSuite) TestPCRSelectBitmapToPCRs1(c *C) {
-	a := PCRSelectBitmap{144, 0, 128}
+	a := PCRSelectBitmap{Bytes: []byte{144, 0, 128}}
 	pcrs := a.ToPCRs()
 	c.Check(pcrs, DeepEquals, PCRSelect{4, 7, 23})
 }
 
 func (s *typesStructuresSuite) TestPCRSelectBitmapToPCRs2(c *C) {
-	a := PCRSelectBitmap{16, 0, 128, 1}
+	a := PCRSelectBitmap{Bytes: []byte{16, 0, 128, 1}}
 	pcrs := a.ToPCRs()
 	c.Check(pcrs, DeepEquals, PCRSelect{4, 23, 24})
 }
@@ -167,28 +139,28 @@ func (s *typesStructuresSuite) TestPCRSelectToBitmap1(c *C) {
 	pcrs := PCRSelect{4, 7}
 	bmp, err := pcrs.ToBitmap(3)
 	c.Check(err, IsNil)
-	c.Check(bmp, DeepEquals, PCRSelectBitmap{144, 0, 0})
+	c.Check(bmp, DeepEquals, &PCRSelectBitmap{Bytes: []byte{144, 0, 0}})
 }
 
 func (s *typesStructuresSuite) TestPCRSelectToBitmap2(c *C) {
 	pcrs := PCRSelect{4, 7}
 	bmp, err := pcrs.ToBitmap(1)
 	c.Check(err, IsNil)
-	c.Check(bmp, DeepEquals, PCRSelectBitmap{144})
+	c.Check(bmp, DeepEquals, &PCRSelectBitmap{Bytes: []byte{144}})
 }
 
 func (s *typesStructuresSuite) TestPCRSelectToBitmap3(c *C) {
 	pcrs := PCRSelect{7, 23}
 	bmp, err := pcrs.ToBitmap(3)
 	c.Check(err, IsNil)
-	c.Check(bmp, DeepEquals, PCRSelectBitmap{128, 0, 128})
+	c.Check(bmp, DeepEquals, &PCRSelectBitmap{Bytes: []byte{128, 0, 128}})
 }
 
-func (s *typesStructuresSuite) TestPCRSelectToBitmap24(c *C) {
+func (s *typesStructuresSuite) TestPCRSelectToBitmap4(c *C) {
 	pcrs := PCRSelect{4, 7}
 	bmp, err := pcrs.ToBitmap(0)
 	c.Check(err, IsNil)
-	c.Check(bmp, DeepEquals, PCRSelectBitmap{144, 0, 0})
+	c.Check(bmp, DeepEquals, &PCRSelectBitmap{Bytes: []byte{144, 0, 0}})
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionToBitmapErr1(c *C) {
@@ -201,28 +173,6 @@ func (s *typesStructuresSuite) TestPCRSelectionToBitmapErr2(c *C) {
 	pcrs := PCRSelect{7, 2041}
 	_, err := pcrs.ToBitmap(3)
 	c.Check(err, ErrorMatches, `invalid PCR index \(> 2040\)`)
-}
-
-func (s *typesStructuresSuite) TestPCRSelectMarshal1(c *C) {
-	a := PCRSelect{4, 7}
-	out := mu.MustMarshalToBytes(a)
-	c.Check(out, DeepEquals, internal_testutil.DecodeHexString(c, "03900000"))
-
-	var b PCRSelect
-	_, err := mu.UnmarshalFromBytes(out, &b)
-	c.Check(err, IsNil)
-	c.Check(b, DeepEquals, a)
-}
-
-func (s *typesStructuresSuite) TestPCRSelectMarshal2(c *C) {
-	a := PCRSelect{7, 23}
-	out := mu.MustMarshalToBytes(a)
-	c.Check(out, DeepEquals, internal_testutil.DecodeHexString(c, "03800080"))
-
-	var b PCRSelect
-	_, err := mu.UnmarshalFromBytes(out, &b)
-	c.Check(err, IsNil)
-	c.Check(b, DeepEquals, a)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionMarshal1(c *C) {

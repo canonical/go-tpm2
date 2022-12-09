@@ -202,11 +202,13 @@ func (n Name) Digest() Digest {
 // PCRSelectBitmap correspnds to the TPMS_PCR_SELECT type, and is a bitmap
 // that defines a selection of PCRs. Note that it is easier to work with the
 // PCRSelect type instead, which is a slice of PCR indexes.
-type PCRSelectBitmap []byte
+type PCRSelectBitmap struct {
+	Bytes mu.Sized1Bytes
+}
 
 // ToPCRs converts this PCRSelectBitmap to a slice of PCR indexes.
-func (b PCRSelectBitmap) ToPCRs() (out PCRSelect) {
-	for i, octet := range b {
+func (b *PCRSelectBitmap) ToPCRs() (out PCRSelect) {
+	for i, octet := range b.Bytes {
 		for bit := uint(0); bit < 8; bit++ {
 			if octet&(1<<bit) == 0 {
 				continue
@@ -218,53 +220,25 @@ func (b PCRSelectBitmap) ToPCRs() (out PCRSelect) {
 	return out
 }
 
-func (b PCRSelectBitmap) Marshal(w io.Writer) error {
-	if len(b) > math.MaxUint8 {
-		return errors.New("bitmap too long")
-	}
-
-	if err := binary.Write(w, binary.BigEndian, uint8(len(b))); err != nil {
-		return fmt.Errorf("cannot write size of bitmap: %w", err)
-	}
-
-	if _, err := w.Write(b); err != nil {
-		return fmt.Errorf("cannot write bitmap: %w", err)
-	}
-
-	return nil
-}
-
-func (b *PCRSelectBitmap) Unmarshal(r io.Reader) error {
-	var size uint8
-	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
-		return fmt.Errorf("cannot read size of bitmap: %w", err)
-	}
-
-	*b = make(PCRSelectBitmap, size)
-
-	if _, err := io.ReadFull(r, *b); err != nil {
-		return fmt.Errorf("cannot read bitmap: %w", err)
-	}
-
-	return nil
-}
-
 // PCRSelect is a slice of PCR indexes. It makes it easier to work with the
 // TPMS_PCR_SELECT type, which is a bitmap of PCR indices.
 //
-// It is marshalled to and from the TPMS_PCR_SELECT type for legacy purposes.
-// It should be converted to and from PCRSelectBitmap for marshalling, which
-// makes it possible to specify the minimum size of the bitmap.
+// This type can't be marshalled directly because there is no mechanism to
+// specify a minimum size.
+//
+// It should either be converted to and from *[PCRSelectBitmap] for marshalling
+// or used as part of the [PCRSelection] type (which makes it possible to
+// specify the minimum size of the bitmap/
 type PCRSelect []int
 
 // ToBitmap converts this PCRSelect into its bitmap form, with the specified
 // minimum size. If minsize is zero, a value of 3 will be used which aligns
 // with PC client TPM devices.
-func (d PCRSelect) ToBitmap(minsize uint8) (out PCRSelectBitmap, err error) {
+func (d PCRSelect) ToBitmap(minsize uint8) (out *PCRSelectBitmap, err error) {
 	if minsize == 0 {
 		minsize = 3
 	}
-	out = make([]byte, minsize)
+	out = &PCRSelectBitmap{Bytes: make([]byte, minsize)}
 
 	for _, i := range d {
 		if i < 0 {
@@ -276,23 +250,18 @@ func (d PCRSelect) ToBitmap(minsize uint8) (out PCRSelectBitmap, err error) {
 			return nil, errors.New("invalid PCR index (> 2040)")
 		}
 
-		for octet >= len(out) {
-			out = append(out, byte(0))
+		for octet >= len(out.Bytes) {
+			out.Bytes = append(out.Bytes, byte(0))
 		}
 		bit := uint(i % 8)
-		out[octet] |= 1 << bit
+		out.Bytes[octet] |= 1 << bit
 	}
 
 	return out, nil
 }
 
 func (d PCRSelect) Marshal(w io.Writer) error {
-	bmp, err := d.ToBitmap(0)
-	if err != nil {
-		return err
-	}
-	_, err = mu.MarshalToWriter(w, bmp)
-	return err
+	panic("PCRSelect cannot be marshalled directly. Use it as part of PCRSelection or convert it to PCRSelectBitmap")
 }
 
 func (d *PCRSelect) Unmarshal(r io.Reader) error {
@@ -337,7 +306,7 @@ func (s *PCRSelection) Unmarshal(r io.Reader) error {
 		return err
 	}
 	s.Select = b.ToPCRs()
-	s.SizeOfSelect = uint8(len(b))
+	s.SizeOfSelect = uint8(len(b.Bytes))
 	return nil
 }
 
@@ -476,7 +445,7 @@ func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
 		}
 
 		dsti := -1
-		var dstbmp PCRSelectBitmap
+		var dstbmp *PCRSelectBitmap
 
 		for i, sl := range out {
 			if sl.Hash != sr.Hash {
@@ -494,13 +463,13 @@ func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
 			}
 
 			for j := 0; j < math.MaxUint8; j++ {
-				rbmp[j] &^= lbmp[j]
+				rbmp.Bytes[j] &^= lbmp.Bytes[j]
 			}
 		}
 
 		if dsti > -1 {
 			for j := 0; j < math.MaxUint8; j++ {
-				dstbmp[j] |= rbmp[j]
+				dstbmp.Bytes[j] |= rbmp.Bytes[j]
 			}
 			out[dsti].Select = dstbmp.ToPCRs()
 		} else {
@@ -543,7 +512,7 @@ func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
 			}
 
 			for j := 0; j < math.MaxUint8; j++ {
-				lbmp[j] &^= rbmp[j]
+				lbmp.Bytes[j] &^= rbmp.Bytes[j]
 			}
 
 			out[i].Select = lbmp.ToPCRs()

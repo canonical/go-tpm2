@@ -26,11 +26,12 @@ const (
 )
 
 var (
+	sized1BytesType        reflect.Type = reflect.TypeOf(Sized1Bytes(nil))
 	customMarshallerType   reflect.Type = reflect.TypeOf((*customMarshallerIface)(nil)).Elem()
 	customUnmarshallerType reflect.Type = reflect.TypeOf((*customUnmarshallerIface)(nil)).Elem()
-	unionType              reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 	nilValueType           reflect.Type = reflect.TypeOf(NilUnionValue)
 	rawBytesType           reflect.Type = reflect.TypeOf(RawBytes(nil))
+	unionType              reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
 // InvalidSelectorError may be returned as a wrapped error from [UnmarshalFromBytes] or
@@ -84,6 +85,13 @@ var NilUnionValue empty
 // size field. The slice must be pre-allocated to the correct length by the caller during
 // unmarshalling.
 type RawBytes []byte
+
+// Sized1Bytes is a special byte slice which is marshalled and unmarhalled with a
+// single byte size field. This is to faciliate the TPMS_PCR_SELECT type, which
+// looks like any other variable sized type (TPML and TPM2B types) with a size
+// field and variable sized payload, only TPMS_PCR_SELECT has a single byte size
+// field.
+type Sized1Bytes []byte
 
 type wrappedValue struct {
 	value interface{}
@@ -257,6 +265,7 @@ type options struct {
 	sized    bool
 	raw      bool
 	ignore   bool
+	sized1   bool
 }
 
 func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
@@ -273,6 +282,8 @@ func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
 			out.raw = true
 		case part == "ignore":
 			out.ignore = true
+		case part == "sized1":
+			out.sized1 = true
 		}
 	}
 
@@ -322,6 +333,11 @@ const (
 	// individual values.
 	TPMKindRaw
 
+	// TPMKindSized1Bytes indicates that a go type corresponds to
+	// a variable sized byte slice with a single byte size field,
+	// and is a special type used to support TPMS_PCR_SELECT.
+	TPMKindSized1Bytes
+
 	tpmKindIgnore
 )
 
@@ -350,16 +366,16 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 	}
 
 	if t.Kind() != reflect.Ptr && isCustom(t) {
-		if o.raw || o.sized || o.selector != "" {
-			return TPMKindUnsupported, errors.New(`"raw", "sized" and "selector" options are invalid with custom types`)
+		if o.sized1 || o.raw || o.sized || o.selector != "" {
+			return TPMKindUnsupported, errors.New("invalid options for custom type")
 		}
 		return TPMKindCustom, nil
 	}
 
 	switch t.Kind() {
 	case reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if o.sized || o.raw || o.selector != "" {
-			return TPMKindUnsupported, errors.New(`"sized", "raw" and "selector" options are invalid with primitive types`)
+		if o.sized1 || o.sized || o.raw || o.selector != "" {
+			return TPMKindUnsupported, errors.New("invalid options for primitive type")
 		}
 		return TPMKindPrimitive, nil
 	case reflect.Ptr:
@@ -375,9 +391,13 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		switch {
 		case o.sized || o.selector != "":
 			return TPMKindUnsupported, errors.New(`"sized" and "selector" options are invalid with slice types`)
-		case t == rawBytesType:
-			return TPMKindRaw, nil
-		case o.raw:
+		case o.raw && t == sized1BytesType:
+			return TPMKindUnsupported, errors.New(`"raw" option is invalid with Sized1Bytes type`)
+		case o.raw && o.sized1:
+			return TPMKindUnsupported, errors.New(`"raw" and "sized1" options are mutually exclusive`)
+		case t == sized1BytesType || o.sized1:
+			return TPMKindSized1Bytes, nil
+		case t == rawBytesType || o.raw:
 			return TPMKindRaw, nil
 		case t.Elem().Kind() == reflect.Uint8:
 			return TPMKindSized, nil
@@ -402,8 +422,8 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		if o.sized {
 			return TPMKindUnsupported, errors.New(`"sized" option requires a pointer field`)
 		}
-		if o.raw {
-			return TPMKindUnsupported, errors.New(`"raw" option is invalid with struct types`)
+		if o.raw || o.sized1 {
+			return TPMKindUnsupported, errors.New("invalid options for struct type")
 		}
 
 		if isUnion(t) {
@@ -666,6 +686,16 @@ func (m *marshaller) marshalSized(v reflect.Value) error {
 	return nil
 }
 
+func (m *marshaller) marshalSized1Bytes(v reflect.Value) error {
+	if v.Len() > math.MaxUint8 {
+		return m.newError(v, fmt.Errorf("value size of %d is larger than 2^8-1", v.Len()))
+	}
+	if err := binary.Write(m, binary.BigEndian, uint8(v.Len())); err != nil {
+		return m.newError(v, err)
+	}
+	return m.marshalRaw(v)
+}
+
 func (m *marshaller) marshalRawList(v reflect.Value) error {
 	for i := 0; i < v.Len(); i++ {
 		exit := m.enterListElem(v, i)
@@ -789,6 +819,8 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 		return m.marshalCustom(v)
 	case TPMKindRaw:
 		return m.marshalRaw(v)
+	case TPMKindSized1Bytes:
+		return m.marshalSized1Bytes(v)
 	}
 
 	panic("unhandled kind")
@@ -877,6 +909,29 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 
 	su := &unmarshaller{context: u.context, r: io.LimitReader(u, int64(size))}
 	return su.unmarshalValue(v, opts)
+}
+
+func (u *unmarshaller) unmarshalSized1Bytes(v reflect.Value) error {
+	var size uint8
+	if err := binary.Read(u, binary.BigEndian, &size); err != nil {
+		return u.newError(v, err)
+	}
+
+	switch {
+	case size == 0:
+		// zero sized. Set the slice to nil if it was pre-set.
+		v.Set(reflect.Zero(v.Type()))
+		return nil
+	case v.IsNil() || v.Cap() < int(size):
+		// No pre-allocated slice or one that isn't big enough.
+		// Allocate a new one.
+		v.Set(reflect.MakeSlice(v.Type(), int(size), int(size)))
+	default:
+		// Reuse the pre-allocated slice.
+		v.SetLen(int(size))
+	}
+
+	return u.unmarshalRaw(v)
 }
 
 func (u *unmarshaller) unmarshalRawList(v reflect.Value, n int) (reflect.Value, error) {
@@ -1014,6 +1069,8 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 		return u.unmarshalCustom(v)
 	case TPMKindRaw:
 		return u.unmarshalRaw(v)
+	case TPMKindSized1Bytes:
+		return u.unmarshalSized1Bytes(v)
 	}
 
 	panic("unhandled kind")

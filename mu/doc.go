@@ -54,6 +54,8 @@ TPMI prefixed types with the same underlying type.
 
 The marshalling code parses the "tpm2" tag on struct fields, the value of which is a comma
 separated list of options. These options are:
+  - sized1 - the field is a variable sized buffer with a single byte size field, used
+    to support the TPMS_PCR_SELECT type. This is only valid for byte slice fields.
   - ignore - the field is ignored by this package.
   - selector:<field_name> - override the default selector field for a union member. The
     default behaviour without this option is to use the first field as the selector.

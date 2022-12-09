@@ -85,6 +85,11 @@ type testStructContainingCustom2 struct {
 	X testCustom2
 }
 
+type testStructWithSized1Field struct {
+	A uint16
+	B []byte `tpm2:"sized1"`
+}
+
 type testStructContainingInvalidCustomField struct {
 	A uint32
 	X *testCustom `tpm2:"raw"`
@@ -98,6 +103,11 @@ type testStructContainingInvalidCustomField2 struct {
 type testStructContainingInvalidCustomField3 struct {
 	A uint32
 	X *testCustom `tpm2:"selector:A"`
+}
+
+type testStructContainingInvalidCustomField4 struct {
+	A uint32
+	X *testCustom `tpm2:"sized1"`
 }
 
 type testStructWithInvalidPrimitiveField struct {
@@ -115,6 +125,11 @@ type testStructWithInvalidPrimitiveField3 struct {
 	B uint16 `tpm2:"selector:A"`
 }
 
+type testStructWithInvalidPrimitiveField4 struct {
+	A uint32
+	B uint16 `tpm2:"sized1"`
+}
+
 type testStructWithInvalidSliceField struct {
 	A uint16
 	B []uint32 `tpm2:"sized"`
@@ -125,8 +140,22 @@ type testStructWithInvalidSliceField2 struct {
 	B []uint32 `tpm2:"selector:A"`
 }
 
+type testStructWithInvalidSliceField3 struct {
+	A uint16
+	B Sized1Bytes `tpm2:"raw"`
+}
+
+type testStructWithInvalidSliceField4 struct {
+	A uint16
+	B []byte `tpm2:"raw,sized1"`
+}
+
 type testStructWithInvalidRawField struct {
 	A testStruct `tpm2:"raw"`
+}
+
+type testStructWithInvalidSized1Field struct {
+	A testStruct `tpm2:"sized1"`
 }
 
 type testStructWithRawTagSizedFields struct {
