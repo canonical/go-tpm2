@@ -268,6 +268,17 @@ type options struct {
 	sized1   bool
 }
 
+func (o *options) enterSizedType(v reflect.Value) (exit func()) {
+	orig := *o
+	o.sized = false
+	if v.Kind() == reflect.Slice {
+		o.raw = true
+	}
+	return func() {
+		*o = orig
+	}
+}
+
 func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
 	out = new(options)
 
@@ -365,8 +376,22 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		return tpmKindIgnore, nil
 	}
 
+	sizeSpecifiers := 0
+	if o.sized {
+		sizeSpecifiers += 1
+	}
+	if o.raw {
+		sizeSpecifiers += 1
+	}
+	if o.sized1 {
+		sizeSpecifiers += 1
+	}
+	if sizeSpecifiers > 1 {
+		return TPMKindUnsupported, errors.New(`only one of "sized", "raw" and "sized1" may be specified`)
+	}
+
 	if t.Kind() != reflect.Ptr && isCustom(t) {
-		if o.sized1 || o.raw || o.sized || o.selector != "" {
+		if sizeSpecifiers != 0 || o.selector != "" {
 			return TPMKindUnsupported, errors.New("invalid options for custom type")
 		}
 		return TPMKindCustom, nil
@@ -374,13 +399,15 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 
 	switch t.Kind() {
 	case reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if o.sized1 || o.sized || o.raw || o.selector != "" {
+		if sizeSpecifiers != 0 || o.selector != "" {
 			return TPMKindUnsupported, errors.New("invalid options for primitive type")
 		}
 		return TPMKindPrimitive, nil
 	case reflect.Ptr:
 		switch {
-		case isCustom(t) || isUnion(t) || t.Elem().Kind() != reflect.Struct:
+		case t.Elem().Kind() != reflect.Struct:
+			// Ignore "sized" for pointers to non-structures. If this parameter is
+			// present, we'll return an error after dereferencing.
 			return TPMKindUnsupported, nil
 		case o.sized:
 			return TPMKindSized, nil
@@ -390,11 +417,9 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 	case reflect.Slice:
 		switch {
 		case o.sized || o.selector != "":
-			return TPMKindUnsupported, errors.New(`"sized" and "selector" options are invalid with slice types`)
+			return TPMKindUnsupported, errors.New("invalid options for slice type")
 		case o.raw && t == sized1BytesType:
 			return TPMKindUnsupported, errors.New(`"raw" option is invalid with Sized1Bytes type`)
-		case o.raw && o.sized1:
-			return TPMKindUnsupported, errors.New(`"raw" and "sized1" options are mutually exclusive`)
 		case t == sized1BytesType || o.sized1:
 			return TPMKindSized1Bytes, nil
 		case t == rawBytesType || o.raw:
@@ -405,6 +430,10 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 			return TPMKindList, nil
 		}
 	case reflect.Struct:
+		if sizeSpecifiers > 0 {
+			return TPMKindUnsupported, errors.New("invalid options for struct type")
+		}
+
 		k := TPMKindStruct
 
 		for i := 0; i < t.NumField(); i++ {
@@ -417,13 +446,6 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 				k = TPMKindTaggedUnion
 				break
 			}
-		}
-
-		if o.sized {
-			return TPMKindUnsupported, errors.New(`"sized" option requires a pointer field`)
-		}
-		if o.raw || o.sized1 {
-			return TPMKindUnsupported, errors.New("invalid options for struct type")
 		}
 
 		if isUnion(t) {
@@ -656,7 +678,7 @@ func (m *marshaller) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (m *marshaller) marshalSized(v reflect.Value) error {
+func (m *marshaller) marshalSized(v reflect.Value, opts *options) error {
 	if v.IsNil() {
 		if err := binary.Write(m, binary.BigEndian, uint16(0)); err != nil {
 			return m.newError(v, err)
@@ -664,10 +686,11 @@ func (m *marshaller) marshalSized(v reflect.Value) error {
 		return nil
 	}
 
-	opts := new(options)
-	if v.Kind() == reflect.Slice {
-		opts.raw = true
+	if opts == nil {
+		opts = new(options)
 	}
+	exit := opts.enterSizedType(v)
+	defer exit()
 
 	tmpBuf := new(bytes.Buffer)
 	sm := &marshaller{context: m.context, w: tmpBuf}
@@ -808,7 +831,7 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 	case TPMKindPrimitive:
 		return m.marshalPrimitive(v)
 	case TPMKindSized:
-		return m.marshalSized(v)
+		return m.marshalSized(v, opts)
 	case TPMKindList:
 		return m.marshalList(v)
 	case TPMKindStruct, TPMKindTaggedUnion:
@@ -876,7 +899,7 @@ func (u *unmarshaller) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
+func (u *unmarshaller) unmarshalSized(v reflect.Value, opts *options) error {
 	var size uint16
 	if err := binary.Read(u, binary.BigEndian, &size); err != nil {
 		return u.newError(v, err)
@@ -902,10 +925,11 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value) error {
 		v.SetLen(int(size))
 	}
 
-	opts := new(options)
-	if v.Kind() == reflect.Slice {
-		opts.raw = true
+	if opts == nil {
+		opts = new(options)
 	}
+	exit := opts.enterSizedType(v)
+	defer exit()
 
 	su := &unmarshaller{context: u.context, r: io.LimitReader(u, int64(size))}
 	return su.unmarshalValue(v, opts)
@@ -1058,7 +1082,7 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 	case TPMKindPrimitive:
 		return u.unmarshalPrimitive(v)
 	case TPMKindSized:
-		return u.unmarshalSized(v)
+		return u.unmarshalSized(v, opts)
 	case TPMKindList:
 		return u.unmarshalList(v)
 	case TPMKindStruct, TPMKindTaggedUnion:

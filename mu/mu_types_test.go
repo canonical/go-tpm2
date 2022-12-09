@@ -97,15 +97,10 @@ type testStructContainingInvalidCustomField struct {
 
 type testStructContainingInvalidCustomField2 struct {
 	A uint32
-	X *testCustom `tpm2:"sized"`
-}
-
-type testStructContainingInvalidCustomField3 struct {
-	A uint32
 	X *testCustom `tpm2:"selector:A"`
 }
 
-type testStructContainingInvalidCustomField4 struct {
+type testStructContainingInvalidCustomField3 struct {
 	A uint32
 	X *testCustom `tpm2:"sized1"`
 }

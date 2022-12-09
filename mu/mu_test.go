@@ -665,10 +665,6 @@ func (s *muSuite) TestDetermineTPMKindUnsupported6(c *C) {
 }
 
 func (s *muSuite) TestDetermineTPMKindUnsupported7(c *C) {
-	s.testDetermineTPMKind(c, Sized(&testUnion{}), TPMKindUnsupported)
-}
-
-func (s *muSuite) TestDetermineTPMKindUnsupported8(c *C) {
 	s.testDetermineTPMKind(c, Raw(&testUnion{}), TPMKindUnsupported)
 }
 
@@ -687,6 +683,10 @@ func (s *muSuite) TestDetermineTPMKindSized1(c *C) {
 
 func (s *muSuite) TestDetermineTPMKindSized2(c *C) {
 	s.testDetermineTPMKind(c, Sized(&testStruct{}), TPMKindSized)
+}
+
+func (s *muSuite) TestDetermineTPMKindSized3(c *C) {
+	s.testDetermineTPMKind(c, Sized(&testUnion{}), TPMKindSized)
 }
 
 func (s *muSuite) TestDetermineTPMKindList(c *C) {
@@ -911,7 +911,7 @@ func (s *muSuite) TestMarshalNonAddressableUnion(c *C) {
 
 func (s *muSuite) TestMarshalInvalidSizedField(c *C) {
 	a := testStructWithInvalidSizedField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(\"sized\" option requires a pointer field\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testStruct \\(invalid options for struct type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidSizedField field A\n"+
 		"=== END STACK ===\n")
@@ -1019,15 +1019,6 @@ func (s *muSuite) TestMarshalStructContainingInvalidCustomField3(c *C) {
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
 
-func (s *muSuite) TestMarshalStructContainingInvalidCustomField4(c *C) {
-	a := testStructContainingInvalidCustomField4{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testCustom \\(invalid options for custom type\\)\n\n"+
-		"=== BEGIN STACK ===\n"+
-		"... mu_test.testStructContainingInvalidCustomField4 field X\n"+
-		"=== END STACK ===\n")
-	c.Check(IsValid(a), internal_testutil.IsFalse)
-}
-
 func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField(c *C) {
 	a := testStructWithInvalidPrimitiveField{}
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type uint16 \\(invalid options for primitive type\\)\n\n"+
@@ -1066,7 +1057,7 @@ func (s *muSuite) TestMarshalStructContainingInvalidPrimitiveField4(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidSliceField(c *C) {
 	a := testStructWithInvalidSliceField{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint32 \\(\"sized\" and \"selector\" options are invalid with slice types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint32 \\(invalid options for slice type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidSliceField field B\n"+
 		"=== END STACK ===\n")
@@ -1075,7 +1066,7 @@ func (s *muSuite) TestMarshalStructContainingInvalidSliceField(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidSliceField2(c *C) {
 	a := testStructWithInvalidSliceField2{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint32 \\(\"sized\" and \"selector\" options are invalid with slice types\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint32 \\(invalid options for slice type\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidSliceField2 field B\n"+
 		"=== END STACK ===\n")
@@ -1093,7 +1084,7 @@ func (s *muSuite) TestMarshalStructContainingInvalidSliceField3(c *C) {
 
 func (s *muSuite) TestMarshalStructContainingInvalidSliceField4(c *C) {
 	a := testStructWithInvalidSliceField4{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint8 \\(\"raw\" and \"sized1\" options are mutually exclusive\\)\n\n"+
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type \\[\\]uint8 \\(only one of \"sized\", \"raw\" and \"sized1\" may be specified\\)\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testStructWithInvalidSliceField4 field B\n"+
 		"=== END STACK ===\n")
