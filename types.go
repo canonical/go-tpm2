@@ -85,10 +85,7 @@ func (v PCRValues) SelectionList() (PCRSelectionList, error) {
 		}
 		out = append(out, s)
 	}
-	if !mu.IsValid(out) {
-		return nil, errors.New("cannot create a valid selection")
-	}
-	return out.Sort(), nil
+	return out.Sort()
 }
 
 // ToListAndSelection converts this set of PCR values to a list of PCR

@@ -100,7 +100,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 			return 0, nil, &InvalidResponseError{CommandPCRRead, errors.New("too many digests")}
 		}
 
-		remaining = remaining.Remove(pcrSelectionOut)
+		remaining = remaining.MustRemove(pcrSelectionOut)
 		if remaining.IsEmpty() {
 			break
 		}

@@ -45,7 +45,10 @@ func (s *typesSuite) TestMarshalPCRValuesInvalidPCR(c *C) {
 	values := PCRValues{HashAlgorithmSHA256: {4000: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")}}
 
 	_, err := mu.MarshalToBytes(values)
-	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type tpm2.PCRValues: cannot create a valid selection")
+	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type tpm2.PCRValues: invalid selection list: cannot marshal argument 0 whilst processing element of type tpm2.PCRSelection: invalid PCR index \\(> 2040\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... tpm2.PCRSelectionList index 0\n"+
+		"=== END STACK ===\n")
 }
 
 func (s *typesSuite) TestUnmarshalPCRValuesInvalidPayload(c *C) {

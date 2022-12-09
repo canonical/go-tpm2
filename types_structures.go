@@ -491,7 +491,7 @@ func (b *TaggedHashListBuilder) Finish() (TaggedHashList, error) {
 	return b.hashes, b.err
 }
 
-// MustFinish is the same as [Finish] except if panics if an error
+// MustFinish is the same as [TaggedHashListBuilder.Finish] except if panics if an error
 // occurred.
 func (b *TaggedHashListBuilder) MustFinish() TaggedHashList {
 	l, err := b.Finish()
@@ -521,15 +521,31 @@ func (l PCRSelectionList) WithMinSelectSize(sz uint8) (out PCRSelectionList) {
 // Sort will sort the list of PCR selections in order of ascending algorithm
 // ID. A new list of selections is returned.
 //
-// This will panic if the selection list cannot be marshalled to the TPM wire
-// format. Use mu.IsValid to check if it can actually be serialized correctly.
-func (l PCRSelectionList) Sort() (out PCRSelectionList) {
-	mu.MustCopyValue(&out, l)
+// This will return an error if the selection list cannot be marshalled to
+// the TPM wire format.
+func (l PCRSelectionList) Sort() (out PCRSelectionList, err error) {
+	if err := mu.CopyValue(&out, l); err != nil {
+		return nil, fmt.Errorf("invalid selection list: %w", err)
+	}
 	for i, s := range l {
 		out[i].SizeOfSelect = s.SizeOfSelect
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Hash < out[j].Hash })
-	return
+	return out, nil
+}
+
+// MustSort will sort the list of PCR selections in order of ascending
+// algorithm ID. A new list of selections is returned.
+//
+// This will panic if the selection list cannot be marshalled to the TPM wire
+// format. Use mu.IsValid to check if it can actually be serialized correctly.
+func (l PCRSelectionList) MustSort() (out PCRSelectionList) {
+	var err error
+	out, err = l.Sort()
+	if err != nil {
+		panic(err)
+	}
+	return out
 }
 
 // Merge will merge the PCR selections specified by l and r together and
@@ -538,24 +554,28 @@ func (l PCRSelectionList) Sort() (out PCRSelectionList) {
 // first occurence of the corresponding PCR bank found in l if that exists,
 // or otherwise a selection for that PCR bank will be appended to the result.
 //
-// This will panic if either selection list cannot be marshalled to the TPM
-// wire format. Use mu.IsValid to check if the values can actually be
-// serialized correctly.
-func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
-	mu.MustCopyValue(&out, l)
+// This will return an error if either selection list cannot be marshalled
+// to the TPM wire format.
+func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList, err error) {
+	// Create a copy of the destination list
+	if err := mu.CopyValue(&out, l); err != nil {
+		return nil, fmt.Errorf("invalid destination selection list: %w", err)
+	}
 	for i, s := range l {
 		out[i].SizeOfSelect = s.SizeOfSelect
 	}
 
+	// Iterate over each source selection
 	for _, sr := range r {
 		rbmp, err := sr.Select.ToBitmap(math.MaxUint8)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("invalid source selection with digest %v: %w", sr.Hash, err)
 		}
 
 		dsti := -1
 		var dstbmp *PCRSelectBitmap
 
+		// Find a target selection in the destination list
 		for i, sl := range out {
 			if sl.Hash != sr.Hash {
 				continue
@@ -563,6 +583,8 @@ func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
 
 			lbmp, err := sl.Select.ToBitmap(math.MaxUint8)
 			if err != nil {
+				// This selection is proven to be valid already
+				// because of the earlier copy.
 				panic(err)
 			}
 
@@ -571,45 +593,73 @@ func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList) {
 				dstbmp = lbmp
 			}
 
+			// Avoid duplicated PCRs by clearing any in this source selection
+			// that exist in any selection in the destination list.
 			for j := 0; j < math.MaxUint8; j++ {
 				rbmp.Bytes[j] &^= lbmp.Bytes[j]
 			}
 		}
 
 		if dsti > -1 {
+			// We already have a target selection. Set the PCRs from the
+			// source selection
 			for j := 0; j < math.MaxUint8; j++ {
 				dstbmp.Bytes[j] |= rbmp.Bytes[j]
 			}
 			out[dsti].Select = dstbmp.ToPCRs()
 		} else {
+			// We don't have a target selection, so create one.
 			var sr2 PCRSelection
-			mu.MustCopyValue(&sr2, sr)
+			mu.MustCopyValue(&sr2, sr) // source proven to be valid earlier
 			sr2.SizeOfSelect = sr.SizeOfSelect
 			out = append(out, sr2)
 		}
 	}
 
+	return out, nil
+}
+
+// MustMerge will merge the PCR selections specified by l and r together
+// and return a new set of PCR selections which contains a combination of
+// both. For each PCR found in r that isn't found in l, it will be added
+// to the first occurence of the corresponding PCR bank found in l if that
+// exists, or otherwise a selection for that PCR bank will be appended to
+// the result.
+//
+// This will panic if either selection list cannot be marshalled to the TPM
+// wire format. Use mu.IsValid to check if the values can actually be
+// serialized correctly.
+func (l PCRSelectionList) MustMerge(r PCRSelectionList) (out PCRSelectionList) {
+	var err error
+	out, err = l.Merge(r)
+	if err != nil {
+		panic(err)
+	}
 	return out
 }
 
 // Remove will remove the PCR selections in r from the PCR selections in l,
 // and return a new set of selections.
 //
-// This will panic if either selection list cannot be marshalled to the TPM
-// wire format. Use mu.IsValid to check if the values can actually be
-// serialized correctly.
-func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
-	mu.MustCopyValue(&out, l)
+// This will return an error if either selection list cannot be marshalled
+// to the TPM wire format.
+func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList, err error) {
+	// Create a copy of the original selection list
+	if err := mu.CopyValue(&out, l); err != nil {
+		return nil, fmt.Errorf("invalid original selection list: %w", err)
+	}
 	for i, s := range l {
 		out[i].SizeOfSelect = s.SizeOfSelect
 	}
 
+	// Iterate over each selection to remove
 	for _, sr := range r {
 		rbmp, err := sr.Select.ToBitmap(math.MaxUint8)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("invalid selection to remove with digest %v: %w", sr.Hash, err)
 		}
 
+		// Iterate over the destination selection list
 		for i, sl := range out {
 			if sl.Hash != sr.Hash {
 				continue
@@ -617,9 +667,12 @@ func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
 
 			lbmp, err := sl.Select.ToBitmap(math.MaxUint8)
 			if err != nil {
+				// This selection is proven to be valid already
+				// because of the earlier copy.
 				panic(err)
 			}
 
+			// Remove necessary PCRs from the destination selection
 			for j := 0; j < math.MaxUint8; j++ {
 				lbmp.Bytes[j] &^= rbmp.Bytes[j]
 			}
@@ -628,6 +681,7 @@ func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
 		}
 	}
 
+	// Remove any selections from the destination list that are now empty.
 	for i, so := range out {
 		if len(so.Select) > 0 {
 			continue
@@ -638,6 +692,21 @@ func (l PCRSelectionList) Remove(r PCRSelectionList) (out PCRSelectionList) {
 		out = out[:len(out)-1]
 	}
 
+	return out, nil
+}
+
+// MustRemove will remove the PCR selections in r from the PCR selections
+// in l, and return a new set of selections.
+//
+// This will panic if either selection list cannot be marshalled to the TPM
+// wire format. Use mu.IsValid to check if the values can actually be
+// serialized correctly.
+func (l PCRSelectionList) MustRemove(r PCRSelectionList) (out PCRSelectionList) {
+	var err error
+	out, err = l.Remove(r)
+	if err != nil {
+		panic(err)
+	}
 	return out
 }
 

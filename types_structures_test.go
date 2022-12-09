@@ -8,8 +8,6 @@ import (
 	"crypto"
 	"encoding/binary"
 	"io"
-	"reflect"
-	"testing"
 
 	. "gopkg.in/check.v1"
 
@@ -286,7 +284,8 @@ func (s *typesStructuresSuite) TestPCRSelectionListSort(c *C) {
 		{Hash: HashAlgorithmSHA1, Select: []int{8, 3, 7, 4}},
 		{Hash: HashAlgorithmSHA512, Select: []int{9, 10, 2, 1, 5}},
 	}
-	sorted := orig.Sort()
+	sorted, err := orig.Sort()
+	c.Check(err, IsNil)
 	expected := PCRSelectionList{
 		{Hash: HashAlgorithmSHA1, Select: []int{3, 4, 7, 8}},
 		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2}},
@@ -300,7 +299,9 @@ func (s *typesStructuresSuite) TestPCRSelectionListMerge1(c *C) {
 	x := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 1}}}
 	y := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{5, 1, 3}}}
 	expected := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 5}}}
-	c.Check(x.Merge(y), DeepEquals, expected)
+	merged, err := x.Merge(y)
+	c.Check(err, IsNil)
+	c.Check(merged, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListMerge2(c *C) {
@@ -316,7 +317,9 @@ func (s *typesStructuresSuite) TestPCRSelectionListMerge2(c *C) {
 		{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9, 22}},
 		{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 5, 7, 8, 23}},
 	}
-	c.Check(x.Merge(y), DeepEquals, expected)
+	merged, err := x.Merge(y)
+	c.Check(err, IsNil)
+	c.Check(merged, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListMerge3(c *C) {
@@ -332,7 +335,9 @@ func (s *typesStructuresSuite) TestPCRSelectionListMerge3(c *C) {
 		{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 5, 9, 22}},
 		{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 5, 7, 8, 23}},
 	}
-	c.Check(x.Merge(y), DeepEquals, expected)
+	merged, err := x.Merge(y)
+	c.Check(err, IsNil)
+	c.Check(merged, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListMerge4(c *C) {
@@ -342,7 +347,9 @@ func (s *typesStructuresSuite) TestPCRSelectionListMerge4(c *C) {
 		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2}},
 		{Hash: HashAlgorithmSHA1, Select: []int{1, 3, 8}},
 	}
-	c.Check(x.Merge(y), DeepEquals, expected)
+	merged, err := x.Merge(y)
+	c.Check(err, IsNil)
+	c.Check(merged, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListMerge5(c *C) {
@@ -355,7 +362,9 @@ func (s *typesStructuresSuite) TestPCRSelectionListMerge5(c *C) {
 		{Hash: HashAlgorithmSHA256, Select: []int{2, 4, 5, 6, 7}},
 		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 3}},
 	}
-	c.Check(x.Merge(y), DeepEquals, expected)
+	merged, err := x.Merge(y)
+	c.Check(err, IsNil)
+	c.Check(merged, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListMerge6(c *C) {
@@ -365,28 +374,36 @@ func (s *typesStructuresSuite) TestPCRSelectionListMerge6(c *C) {
 		{Hash: HashAlgorithmSHA256, Select: []int{2, 4, 0}},
 	}
 	expected := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6}}}
-	c.Check(x.Merge(y), DeepEquals, expected)
+	merged, err := x.Merge(y)
+	c.Check(err, IsNil)
+	c.Check(merged, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListRemove1(c *C) {
 	x := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}}
 	y := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 4}}}
 	expected := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{1, 5}}}
-	c.Check(x.Remove(y), DeepEquals, expected)
+	removed, err := x.Remove(y)
+	c.Check(err, IsNil)
+	c.Check(removed, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListRemove2(c *C) {
 	x := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}}
 	y := PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 3, 4}}}
 	expected := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}}
-	c.Check(x.Remove(y), DeepEquals, expected)
+	removed, err := x.Remove(y)
+	c.Check(err, IsNil)
+	c.Check(removed, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestPCRSelectionListRemove3(c *C) {
 	x := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}}
 	y := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}}
 	expected := PCRSelectionList{}
-	c.Check(x.Remove(y), DeepEquals, expected)
+	removed, err := x.Remove(y)
+	c.Check(err, IsNil)
+	c.Check(removed, DeepEquals, expected)
 }
 
 func (s *typesStructuresSuite) TestNewTaggedHashSHA1(c *C) {
@@ -534,95 +551,4 @@ func (s *typesStructuresSuite) TestTaggedHashListBuilderError(c *C) {
 
 	_, err := builder.Finish()
 	c.Check(err, ErrorMatches, "encountered error on digest 1: invalid digest size")
-}
-
-func TestPCRSelectionListRemove(t *testing.T) {
-	for _, data := range []struct {
-		desc           string
-		x, y, expected PCRSelectionList
-		err            string
-	}{
-		{
-			desc: "MultipleSelection/1",
-			x: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{1, 3, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 4, 5}}},
-			expected: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 4, 5}},
-				{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 3}}},
-		},
-		{
-			desc: "MultipleSelection/2",
-			x: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 4, 5}},
-				{Hash: HashAlgorithmSHA1, Select: []int{1, 3, 6}}},
-			expected: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 4, 5}},
-				{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 3}}},
-		},
-		{
-			desc: "MultipleSectionEmptyResult/1",
-			x: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{1, 3, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0, 2, 4, 5}}},
-		},
-		{
-			desc: "MultipleSelectionEmptyResult/2",
-			x: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			expected: PCRSelectionList{},
-		},
-		{
-			desc: "MismatchedLength",
-			x: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}}},
-			expected: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-		},
-		{
-			desc: "DuplicateSelection",
-			x: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 4, 5}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}},
-			},
-			y: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 2, 3, 4}}},
-			expected: PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: []int{1, 5}},
-				{Hash: HashAlgorithmSHA256, Select: []int{1, 5}},
-			},
-		},
-		{
-			desc: "MultipleEmptySelection",
-			x: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-			y: PCRSelectionList{{Hash: HashAlgorithmSHA1}, {Hash: HashAlgorithmSHA256}},
-			expected: PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6}},
-				{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5}}},
-		},
-	} {
-		t.Run(data.desc, func(t *testing.T) {
-			res := data.x.Remove(data.y)
-			if !reflect.DeepEqual(res, data.expected) {
-				t.Errorf("Unexpected result %v", res)
-			}
-		})
-	}
 }
