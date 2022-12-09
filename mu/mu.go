@@ -1169,34 +1169,43 @@ func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 }
 
 func copyValue(skip int, dst, src interface{}) error {
-	var wrappedDst *wrappedValue
-	switch w := dst.(type) {
+	var wrappedSrc *wrappedValue
+	switch s := src.(type) {
 	case *wrappedValue:
-		wrappedDst = &wrappedValue{value: w.value, opts: w.opts}
+		wrappedSrc = s
 	default:
-		wrappedDst = &wrappedValue{value: dst}
-
+		wrappedSrc = &wrappedValue{value: s}
 	}
 
-	dstV := reflect.ValueOf(wrappedDst.value)
+	switch d := dst.(type) {
+	case *wrappedValue:
+		_ = d
+		panic("can only pass options to the source")
+	}
+
+	dstV := reflect.ValueOf(dst)
 	if dstV.Kind() != reflect.Ptr {
-		panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", reflect.TypeOf(wrappedDst.value)))
+		panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", reflect.TypeOf(dst)))
 	}
 	if dstV.IsNil() {
 		panic(fmt.Sprintf("cannot unmarshal to nil pointer of type %s", dstV.Type()))
 	}
 
+	dstLocal := dst
+
 	isInterface := false
 	if dstV.Elem().Kind() == reflect.Interface {
-		if !reflect.TypeOf(src).Implements(dstV.Elem().Type()) {
+		if !reflect.TypeOf(wrappedSrc.value).Implements(dstV.Elem().Type()) {
 			panic(fmt.Sprintf("type %s does not implement destination interface %s", reflect.TypeOf(src), dstV.Elem().Type()))
 		}
-		wrappedDst.value = reflect.New(reflect.TypeOf(src)).Interface()
+		dstLocal = reflect.New(reflect.TypeOf(wrappedSrc.value)).Interface()
 		isInterface = true
 	}
 
+	wrappedDst := &wrappedValue{value: dstLocal, opts: wrappedSrc.opts}
+
 	buf := new(bytes.Buffer)
-	if _, err := marshalToWriter(skip+1, buf, src); err != nil {
+	if _, err := marshalToWriter(skip+1, buf, wrappedSrc); err != nil {
 		return err
 	}
 	if _, err := unmarshalFromReader(skip+1, buf, wrappedDst); err != nil {
@@ -1204,15 +1213,16 @@ func copyValue(skip int, dst, src interface{}) error {
 	}
 
 	if isInterface {
-		dstV.Elem().Set(reflect.ValueOf(wrappedDst.value).Elem())
+		dstV.Elem().Set(reflect.ValueOf(dstLocal).Elem())
 	}
 
 	return nil
 }
 
-// CopyValue copies the value of src to dst. The destination must be a pointer to the actual
-// destination value. This works by serializing the source value in the TPM wire format
-// and the deserializing it again into the destination.
+// CopyValue copies the value of src to dst. The destination must be a
+// pointer to the actual destination value. This works by serializing the
+// source value in the TPM wire format and the deserializing it again into
+// the destination.
 //
 // This will return an error for any reason that would cause [MarshalToBytes] or
 // [UnmarshalFromBytes] to return an error.
