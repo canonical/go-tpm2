@@ -51,7 +51,12 @@ func (p *TrialAuthPolicy) beginUpdateForCommand(commandCode tpm2.CommandCode) (h
 	return h, end
 }
 
-func (p *TrialAuthPolicy) update(commandCode tpm2.CommandCode, name tpm2.Name, ref tpm2.Nonce) {
+func (p *TrialAuthPolicy) update(commandCode tpm2.CommandCode, entity Entity, ref tpm2.Nonce) {
+	name := entity.Name()
+	if !name.IsValid() {
+		panic("invalid name")
+	}
+
 	h, end := p.beginUpdateForCommand(commandCode)
 	h.Write(name)
 	end()
@@ -86,14 +91,14 @@ func (p *TrialAuthPolicy) Reset() {
 
 // PolicySigned computes a TPM2_PolicySigned assertion executed for a key with
 // the specified name and the specified policyRef.
-func (p *TrialAuthPolicy) PolicySigned(authName tpm2.Name, policyRef tpm2.Nonce) {
-	p.update(tpm2.CommandPolicySigned, authName, policyRef)
+func (p *TrialAuthPolicy) PolicySigned(auth Entity, policyRef tpm2.Nonce) {
+	p.update(tpm2.CommandPolicySigned, auth, policyRef)
 }
 
 // PolicySecret computes a TPM2_PolicySecret assertion executed for an object
 // with the specified name and the specified policyRef.
-func (p *TrialAuthPolicy) PolicySecret(authName tpm2.Name, policyRef tpm2.Nonce) {
-	p.update(tpm2.CommandPolicySecret, authName, policyRef)
+func (p *TrialAuthPolicy) PolicySecret(auth Entity, policyRef tpm2.Nonce) {
+	p.update(tpm2.CommandPolicySecret, auth, policyRef)
 }
 
 // PolicyOR computes a TPM2_PolicyOR assertion executed for the specified
@@ -134,7 +139,12 @@ func (p *TrialAuthPolicy) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectio
 
 // PolicyNV computes a TPM2_PolicyNV assertion executed for an index for the
 // specified name, with the specified comparison operation.
-func (p *TrialAuthPolicy) PolicyNV(nvIndexName tpm2.Name, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) {
+func (p *TrialAuthPolicy) PolicyNV(nvIndex Entity, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) {
+	name := nvIndex.Name()
+	if !name.IsValid() {
+		panic("invalid index name")
+	}
+
 	h := p.alg.NewHash()
 	h.Write(operandB)
 	binary.Write(h, binary.BigEndian, offset)
@@ -144,7 +154,7 @@ func (p *TrialAuthPolicy) PolicyNV(nvIndexName tpm2.Name, operandB tpm2.Operand,
 
 	h, end := p.beginUpdateForCommand(tpm2.CommandPolicyNV)
 	h.Write(args)
-	h.Write(nvIndexName)
+	h.Write(name)
 	end()
 }
 
@@ -203,11 +213,22 @@ func (p *TrialAuthPolicy) PolicyNameHash(nameHash tpm2.Digest) {
 
 // PolicyDuplicationSelect computes a TPM2_PolicyDuplicationSelect assertion for
 // the object and parent object with the specified names.
-func (p *TrialAuthPolicy) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) {
+func (p *TrialAuthPolicy) PolicyDuplicationSelect(object, newParent Entity, includeObject bool) {
 	h, end := p.beginUpdateForCommand(tpm2.CommandPolicyDuplicationSelect)
+
 	if includeObject {
+		objectName := object.Name()
+		if !objectName.IsValid() {
+			panic("invalid object name")
+		}
 		h.Write(objectName)
 	}
+
+	newParentName := newParent.Name()
+	if !newParentName.IsValid() {
+		panic("invalid new parent name")
+	}
+
 	h.Write(newParentName)
 	binary.Write(h, binary.BigEndian, includeObject)
 	end()
@@ -215,8 +236,8 @@ func (p *TrialAuthPolicy) PolicyDuplicationSelect(objectName, newParentName tpm2
 
 // PolicyAuthorize computes a TPM2_PolicyAuthorize assertion for the key with the
 // specified name and the specified policyRef.
-func (p *TrialAuthPolicy) PolicyAuthorize(policyRef tpm2.Nonce, keySign tpm2.Name) {
-	p.update(tpm2.CommandPolicyAuthorize, keySign, policyRef)
+func (p *TrialAuthPolicy) PolicyAuthorize(policyRef tpm2.Nonce, key Entity) {
+	p.update(tpm2.CommandPolicyAuthorize, key, policyRef)
 }
 
 // PolicyAuthValue computes a TPM2_PolicyAuthValue assertion.

@@ -776,14 +776,14 @@ func TestPolicyDuplicationSelect(t *testing.T) {
 		t.Run(data.desc, func(t *testing.T) {
 			h := crypto.SHA256.New()
 			h.Write(data.objectData)
-			objectName, _ := mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil))
+			objectName, _ := mu.MarshalToBytes(HashAlgorithmSHA256, mu.Raw(h.Sum(nil)))
 
 			h = crypto.SHA256.New()
 			h.Write(data.parentData)
-			newParentName, _ := mu.MarshalToBytes(HashAlgorithmSHA256, h.Sum(nil))
+			newParentName, _ := mu.MarshalToBytes(HashAlgorithmSHA256, mu.Raw(h.Sum(nil)))
 
 			trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
-			trial.PolicyDuplicationSelect(objectName, newParentName, data.includeObject)
+			trial.PolicyDuplicationSelect(Name(objectName), Name(newParentName), data.includeObject)
 
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 			if err != nil {
