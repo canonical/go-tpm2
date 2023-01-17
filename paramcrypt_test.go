@@ -485,7 +485,7 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 						}
 						objectContext.SetAuthValue(testAuth)
 
-						expectedName, err := outPublic.Name()
+						expectedName, err := outPublic.ComputeName()
 						if err != nil {
 							t.Fatalf("Cannot compute name: %v", err)
 						}
@@ -614,7 +614,7 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 					defer flushContext(t, tpm, objectContext)
 					objectContext.SetAuthValue(testAuth)
 
-					expectedName, err := outPublic.Name()
+					expectedName, err := outPublic.ComputeName()
 					if err != nil {
 						t.Fatalf("Cannot compute name: %v", err)
 					}
@@ -715,7 +715,7 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 						}
 						objectContext.SetAuthValue(testAuth)
 
-						expectedName, err := outPublic.Name()
+						expectedName, err := outPublic.ComputeName()
 						if err != nil {
 							t.Fatalf("Cannot compute name: %v", err)
 						}

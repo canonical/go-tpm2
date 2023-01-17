@@ -79,9 +79,7 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 
 	c.Check(index.Handle(), Equals, data.publicInfo.Index)
 
-	expectedName, err := data.publicInfo.Name()
-	c.Check(err, IsNil)
-
+	expectedName := data.publicInfo.Name()
 	c.Check(index.Name(), DeepEquals, expectedName)
 
 	c.Assert(index, internal_testutil.ConvertibleTo, &NvIndexContext{})

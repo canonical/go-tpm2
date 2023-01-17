@@ -55,6 +55,22 @@ func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName(c *C) {
 	c.Check(err, ErrorMatches, "invalid name")
 }
 
+func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName2(c *C) {
+	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	primary := tpm2.Name(internal_testutil.DecodeHexString(c, "000b4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"))
+
+	_, err := ComputeQualifiedName(tpm2.Name(nil), rootQn, primary)
+	c.Check(err, ErrorMatches, "invalid name")
+}
+
+func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName3(c *C) {
+	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	var primary tpm2.Name
+	leaf := tpm2.Name(internal_testutil.DecodeHexString(c, "000453c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"))
+
+	_, err := ComputeQualifiedName(leaf, rootQn, primary)
+	c.Check(err, ErrorMatches, "cannot compute intermediate QN for ancestor at index 0: invalid name")
+}
 func (s *qnSuiteNoTPM) TestComputeQualifiedNameMismatchedAlgorithms(c *C) {
 	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
 	primary := tpm2.Name(internal_testutil.DecodeHexString(c, "000b4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"))

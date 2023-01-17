@@ -263,8 +263,7 @@ func (s *resourcesSuite) TestCreateNVIndexResourceContextFromPublic(c *C) {
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, pub.Index)
 
-	name, err := pub.Name()
-	c.Check(err, IsNil)
+	name := pub.Name()
 
 	c.Check(rc.Name(), DeepEquals, name)
 	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})

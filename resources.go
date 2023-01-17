@@ -321,7 +321,7 @@ func (t *TPMContext) makeObjectContextFromTPM(context HandleContext, sessions ..
 	if err != nil {
 		return nil, err
 	}
-	if n, err := pub.Name(); err != nil {
+	if n, err := pub.ComputeName(); err != nil {
 		return nil, &InvalidResponseError{CommandReadPublic, fmt.Errorf("cannot compute name of returned public area: %w", err)}
 	} else if !bytes.Equal(n, name) {
 		return nil, &InvalidResponseError{CommandReadPublic, errors.New("name and public area don't match")}
@@ -339,14 +339,12 @@ func (r *nvIndexContext) GetPublic() *NVPublic {
 
 func (r *nvIndexContext) SetAttr(a NVAttributes) {
 	r.Data.NV.Attrs |= a
-	name, _ := r.Data.NV.Name()
-	r.N = name
+	r.N = r.Data.NV.Name()
 }
 
 func (r *nvIndexContext) ClearAttr(a NVAttributes) {
 	r.Data.NV.Attrs &= ^a
-	name, _ := r.Data.NV.Name()
-	r.N = name
+	r.N = r.Data.NV.Name()
 }
 
 func (r *nvIndexContext) Attrs() NVAttributes {
@@ -368,7 +366,7 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context HandleContext, sessions .
 	if err != nil {
 		return nil, err
 	}
-	if n, err := pub.Name(); err != nil {
+	if n, err := pub.ComputeName(); err != nil {
 		return nil, &InvalidResponseError{CommandNVReadPublic, fmt.Errorf("cannot compute name of returned public area: %w", err)}
 	} else if !bytes.Equal(n, name) {
 		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("name and public area don't match")}
@@ -654,7 +652,7 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 // the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be
 // provided by calling ResourceContext.SetAuthValue.
 func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
-	name, err := pub.Name()
+	name, err := pub.ComputeName()
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
@@ -669,7 +667,7 @@ func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, err
 // the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be
 // provided by calling ResourceContext.SetAuthValue.
 func CreateObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
-	name, err := pub.Name()
+	name, err := pub.ComputeName()
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}

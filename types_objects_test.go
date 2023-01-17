@@ -135,7 +135,7 @@ func TestPublicName(t *testing.T) {
 		t.Fatalf("ReadPublic failed: %v", err)
 	}
 
-	name, err := pub.Name()
+	name, err := pub.ComputeName()
 	if err != nil {
 		t.Fatalf("Public.Name() failed: %v", err)
 	}

@@ -224,7 +224,7 @@ func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
 	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, templates.NewRSAKeyWithDefaults(0), nil, nil, nil)
 	c.Assert(err, IsNil)
 
-	expectedName, err := pub.Name()
+	expectedName, err := pub.ComputeName()
 	c.Assert(err, IsNil)
 
 	object, err := s.TPM.Load(primary, priv, pub, parentAuthSession)
@@ -288,7 +288,7 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 	c.Check(authArea, internal_testutil.LenEquals, 0)
 
 	_, handle, _, _ := s.LastCommand(c).UnmarshalResponse(c)
-	expectedName, _ := data.inPublic.Name()
+	expectedName := data.inPublic.Name()
 
 	c.Check(object.Handle(), Equals, handle)
 	c.Check(object.Name(), DeepEquals, expectedName)

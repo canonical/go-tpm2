@@ -29,10 +29,7 @@ func TestNVPublicName(t *testing.T) {
 	}
 	defer undefineNVSpace(t, tpm, rc, owner)
 
-	name, err := pub.Name()
-	if err != nil {
-		t.Fatalf("NVPublic.Name() failed: %v", err)
-	}
+	name := pub.Name()
 
 	// rc.Name() is what the TPM returned from NVReadPublic
 	if !bytes.Equal(rc.Name(), name) {

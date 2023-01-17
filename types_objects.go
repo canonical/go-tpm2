@@ -173,24 +173,33 @@ type Public struct {
 	Unique     *PublicIDU       // Type specific unique identifier
 }
 
-// Name computes the name of this object
-func (p *Public) Name() (Name, error) {
+// ComputeName computes the name of this object
+func (p *Public) ComputeName() (Name, error) {
 	if !p.NameAlg.Available() {
 		return nil, fmt.Errorf("unsupported name algorithm or algorithm not linked into binary: %v", p.NameAlg)
 	}
-	hasher := p.NameAlg.NewHash()
-	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
+	h := p.NameAlg.NewHash()
+	if _, err := mu.MarshalToWriter(h, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil))), nil
+	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(h.Sum(nil))), nil
 }
 
 func (p *Public) compareName(name Name) bool {
-	n, err := p.Name()
+	n, err := p.ComputeName()
 	if err != nil {
 		return false
 	}
 	return bytes.Equal(n, name)
+}
+
+// Name implements [util.Entity].
+//
+// This computes the name from the public area. If the name cannot be computed
+// then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
+func (p *Public) Name() Name {
+	name, _ := p.ComputeName()
+	return name
 }
 
 func (p *Public) ToTemplate() (Template, error) {
@@ -277,16 +286,25 @@ type PublicDerived struct {
 	Unique *Derive
 }
 
-// Name computes the name of this object
-func (p *PublicDerived) Name() (Name, error) {
+// ComputeName computes the name of this object
+func (p *PublicDerived) ComputeName() (Name, error) {
 	if !p.NameAlg.Available() {
 		return nil, fmt.Errorf("unsupported name algorithm or algorithm not linked into binary: %v", p.NameAlg)
 	}
-	hasher := p.NameAlg.NewHash()
-	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
+	h := p.NameAlg.NewHash()
+	if _, err := mu.MarshalToWriter(h, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil))), nil
+	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(h.Sum(nil))), nil
+}
+
+// Name implements [util.Entity].
+//
+// This computes the name from the public area. If the name cannot be computed
+// then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
+func (p *PublicDerived) Name() Name {
+	name, _ := p.ComputeName()
+	return name
 }
 
 func (p *PublicDerived) ToTemplate() (Template, error) {

@@ -105,7 +105,7 @@ func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKe
 		}
 	}
 
-	name, err := public.Name()
+	name, err := public.ComputeName()
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name: %w", err)
 	}
@@ -212,7 +212,7 @@ func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tp
 		}
 	}
 
-	name, err := public.Name()
+	name, err := public.ComputeName()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot compute name: %w", err)
 	}

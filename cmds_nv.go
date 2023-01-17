@@ -84,7 +84,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 	if publicInfo == nil {
 		return nil, makeInvalidArgError("publicInfo", "nil value")
 	}
-	name, err := publicInfo.Name()
+	name, err := publicInfo.ComputeName()
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name from public info: %v", err)
 	}

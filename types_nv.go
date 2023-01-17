@@ -85,21 +85,30 @@ type NVPublic struct {
 }
 
 // Name computes the name of this NV index
-func (p *NVPublic) Name() (Name, error) {
+func (p *NVPublic) ComputeName() (Name, error) {
 	if !p.NameAlg.Available() {
 		return nil, fmt.Errorf("unsupported name algorithm or algorithm not linked into binary: %v", p.NameAlg)
 	}
-	hasher := p.NameAlg.NewHash()
-	if _, err := mu.MarshalToWriter(hasher, p); err != nil {
+	h := p.NameAlg.NewHash()
+	if _, err := mu.MarshalToWriter(h, p); err != nil {
 		return nil, fmt.Errorf("cannot marshal public object: %v", err)
 	}
-	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(hasher.Sum(nil))), nil
+	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(h.Sum(nil))), nil
 }
 
 func (p *NVPublic) compareName(name Name) bool {
-	n, err := p.Name()
+	n, err := p.ComputeName()
 	if err != nil {
 		return false
 	}
 	return bytes.Equal(n, name)
+}
+
+// Name implements [util.Entity].
+//
+// This computes the name from the public area. If the name cannot be computed
+// then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
+func (p *NVPublic) Name() Name {
+	name, _ := p.ComputeName()
+	return name
 }
