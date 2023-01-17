@@ -34,14 +34,13 @@ import (
 // inner wrapper. In this case, the symmetric key for the inner wrapper
 // must be supplied using the innerSymmetricKey argument.
 func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSecret tpm2.EncryptedSecret, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
-	if outerHashAlg != tpm2.HashAlgorithmNull && !outerHashAlg.Available() {
-		return nil, fmt.Errorf("digest algorithm %v is not available", outerHashAlg)
-	}
-
 	var seed []byte
 	if len(outerSecret) > 0 {
 		if privKey == nil {
 			return nil, errors.New("parent private key is required for outer wrapper")
+		}
+		if outerHashAlg != tpm2.HashAlgorithmNull && !outerHashAlg.Available() {
+			return nil, fmt.Errorf("digest algorithm %v is not available", outerHashAlg)
 		}
 
 		var err error
@@ -96,7 +95,12 @@ func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tp
 	}
 
 	var seed []byte
+	var outerHashAlg tpm2.HashAlgorithmId
+	var outerSymmetricAlg *tpm2.SymDefObject
 	if parentPublic != nil {
+		outerHashAlg = parentPublic.NameAlg
+		outerSymmetricAlg = &parentPublic.Params.AsymDetail(parentPublic.Type).Symmetric
+
 		if parentPublic.NameAlg != tpm2.HashAlgorithmNull && !parentPublic.NameAlg.Available() {
 			return nil, nil, nil, fmt.Errorf("digest algorithm %v is not available", parentPublic.NameAlg)
 		}
@@ -109,7 +113,7 @@ func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tp
 		}
 	}
 
-	innerSymmetricKeyOut, duplicate, err = SensitiveToDuplicate(sensitive, name, parentPublic, seed, innerSymmetricAlg, innerSymmetricKey)
+	innerSymmetricKeyOut, duplicate, err = SensitiveToDuplicate(sensitive, name, outerHashAlg, outerSymmetricAlg, seed, innerSymmetricAlg, innerSymmetricKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}

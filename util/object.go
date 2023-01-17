@@ -30,7 +30,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 	if !hashAlg.Available() {
 		return nil, errors.New("digest algorithm is not available")
 	}
-	if !symmetricAlg.Algorithm.IsValidBlockCipher() {
+	if symmetricAlg == nil || !symmetricAlg.Algorithm.IsValidBlockCipher() {
 		return nil, errors.New("symmetric algorithm is not a valid block cipher")
 	}
 
@@ -88,7 +88,7 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 	if !hashAlg.Available() {
 		return nil, errors.New("digest algorithm is not available")
 	}
-	if !symmetricAlg.Algorithm.IsValidBlockCipher() {
+	if symmetricAlg == nil || !symmetricAlg.Algorithm.IsValidBlockCipher() {
 		return nil, errors.New("symmetric algorithm is not a valid block cipher")
 	}
 
@@ -160,11 +160,6 @@ func SensitiveToPrivate(sensitive *tpm2.Sensitive, name tpm2.Name, hashAlg tpm2.
 func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (sensitive *tpm2.Sensitive, err error) {
 	if len(outerSeed) > 0 {
 		// Remove outer wrapper
-		if outerSymmetricAlg == nil {
-			return nil, errors.New("missing outer symmetric algorithm")
-		}
-
-		var err error
 		duplicate, err = UnwrapOuter(outerHashAlg, outerSymmetricAlg, name, outerSeed, false, duplicate)
 		if err != nil {
 			return nil, fmt.Errorf("cannot unwrap outer wrapper: %w", err)
@@ -222,7 +217,7 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg t
 // an inner integrity digest computed with the object's name algorithm from the sensitive
 // data and its name, and then encrypting the data with innerSymmetricKeyIn. If
 // innerSymmetricKeyIn isn't supplied, a random key will be created and returned.
-func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm2.Public, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, err error) {
+func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, err error) {
 	applyInnerWrapper := false
 	if innerSymmetricAlg != nil && innerSymmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
 		applyInnerWrapper = true
@@ -275,8 +270,7 @@ func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, parent *tpm
 
 	if applyOuterWrapper {
 		// Apply outer wrapper
-		var err error
-		duplicate, err = ProduceOuterWrap(parent.NameAlg, &parent.Params.AsymDetail(parent.Type).Symmetric, name, outerSeed, false, duplicate)
+		duplicate, err = ProduceOuterWrap(outerHashAlg, outerSymmetricAlg, name, outerSeed, false, duplicate)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
 		}
