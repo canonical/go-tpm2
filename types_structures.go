@@ -44,6 +44,7 @@ type TaggedHashU struct {
 	SHA3_512 [64]byte
 }
 
+// Select implements [mu.Union].
 func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(HashAlgorithmId) {
 	case HashAlgorithmSHA1:
@@ -203,6 +204,7 @@ const (
 	NameTypeDigest
 )
 
+// Name implements [util.Entity].
 func (n Name) Name() Name {
 	return n
 }
@@ -324,10 +326,15 @@ func (d PCRSelect) ToBitmap(minsize uint8) (out *PCRSelectBitmap, err error) {
 	return out, nil
 }
 
+// Marshal implements [mu.CustomMarshaller].
+//
+// Note that this type cannot be marshalled directly and will result in a
+// panic if this is attempted.
 func (d PCRSelect) Marshal(w io.Writer) error {
 	panic("PCRSelect cannot be marshalled directly. Use it as part of PCRSelection or convert it to PCRSelectBitmap")
 }
 
+// Unmarshal implements [mu.CustomMarshaller].
 func (d *PCRSelect) Unmarshal(r io.Reader) error {
 	var b PCRSelectBitmap
 	if _, err := mu.UnmarshalFromReader(r, &b); err != nil {
@@ -355,6 +362,7 @@ type PCRSelection struct {
 	SizeOfSelect uint8
 }
 
+// Marshal implements [mu.CustomMarshaller].
 func (s PCRSelection) Marshal(w io.Writer) error {
 	bmp, err := s.Select.ToBitmap(s.SizeOfSelect)
 	if err != nil {
@@ -364,6 +372,7 @@ func (s PCRSelection) Marshal(w io.Writer) error {
 	return err
 }
 
+// Unmarshal implements [mu.CustomMarshaller].
 func (s *PCRSelection) Unmarshal(r io.Reader) error {
 	var b PCRSelectBitmap
 	if _, err := mu.UnmarshalFromReader(r, &s.Hash, &b); err != nil {
@@ -766,6 +775,7 @@ type CapabilitiesU struct {
 	AuthPolicies  TaggedPolicyList
 }
 
+// Select implements [mu.Union].
 func (c *CapabilitiesU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(Capability) {
 	case CapabilityAlgs:
@@ -892,6 +902,7 @@ type AttestU struct {
 	NV           *NVCertifyInfo
 }
 
+// Select implements [mu.Union].
 func (a *AttestU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(StructTag) {
 	case TagAttestNV:

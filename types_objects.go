@@ -48,6 +48,7 @@ type PublicIDU struct {
 	ECC       *ECCPoint
 }
 
+// Select implements [mu.Union].
 func (p *PublicIDU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
@@ -118,6 +119,7 @@ type PublicParamsU struct {
 	ECCDetail       *ECCParams
 }
 
+// Select implements [mu.Union].
 func (p *PublicParamsU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:
@@ -317,6 +319,7 @@ type SensitiveCompositeU struct {
 	Sym  SymKey
 }
 
+// Select implements [mu.Union].
 func (s *SensitiveCompositeU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(ObjectTypeId) {
 	case ObjectTypeRSA:

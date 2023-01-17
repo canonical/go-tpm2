@@ -49,6 +49,7 @@ type Tcti struct {
 	r io.Reader
 }
 
+// Read implmements [tpm2.TCTI].
 func (t *Tcti) Read(data []byte) (int, error) {
 	if t.r == nil {
 		var size uint32
@@ -72,6 +73,7 @@ func (t *Tcti) Read(data []byte) (int, error) {
 	return n, err
 }
 
+// Write implmements [tpm2.TCTI].
 func (t *Tcti) Write(data []byte) (int, error) {
 	buf := mu.MustMarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
 
@@ -83,6 +85,7 @@ func (t *Tcti) Write(data []byte) (int, error) {
 	return n, err
 }
 
+// Close implements [tpm2.TCTI].
 func (t *Tcti) Close() (err error) {
 	binary.Write(t.platform, binary.BigEndian, cmdSessionEnd)
 	binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd)
@@ -95,11 +98,13 @@ func (t *Tcti) Close() (err error) {
 	return err
 }
 
+// SetLocality implements [tpm2.TCTI].
 func (t *Tcti) SetLocality(locality uint8) error {
 	t.locality = locality
 	return nil
 }
 
+// MakeSticky implements [tpm2.TCTI].
 func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }
@@ -120,13 +125,15 @@ func (t *Tcti) platformCommand(cmd uint32) error {
 	return nil
 }
 
-// Reset submits the reset command on the platform connection, which initiates a reset of the TPM simulator and results in the
-// execution of _TPM_Init().
+// Reset submits the reset command on the platform connection, which
+// initiates a reset of the TPM simulator and results in the execution
+// of _TPM_Init().
 func (t *Tcti) Reset() error {
 	return t.platformCommand(cmdReset)
 }
 
-// Stop submits a stop command on both the TPM command and platform channels, which initiates a shutdown of the TPM simulator.
+// Stop submits a stop command on both the TPM command and platform
+// channels, which initiates a shutdown of the TPM simulator.
 func (t *Tcti) Stop() (out error) {
 	if err := binary.Write(t.platform, binary.BigEndian, cmdStop); err != nil {
 		return err
@@ -134,11 +141,13 @@ func (t *Tcti) Stop() (out error) {
 	return binary.Write(t.tpm, binary.BigEndian, cmdStop)
 }
 
-// OpenConnection attempts to open a connection to a TPM simulator on the specified host and port.
-// The port argument corresponds to the TPM command server. The simulator will also provide a
-// platform server on port+1. If host is an empty string, it defaults to "localhost".
+// OpenConnection attempts to open a connection to a TPM simulator on the
+// specified host and port. The port argument corresponds to the TPM
+// command server. The simulator will also provide a platform server on
+// port+1. If host is an empty string, it defaults to "localhost".
 //
-// If successful, it returns a new Tcti instance which can be passed to tpm2.NewTPMContext.
+// If successful, it returns a new Tcti instance which can be passed to
+// tpm2.NewTPMContext.
 func OpenConnection(host string, port uint) (*Tcti, error) {
 	if host == "" {
 		host = "localhost"

@@ -50,6 +50,7 @@ func (d *TctiDevice) readMoreData() error {
 	return nil
 }
 
+// Read implmements [tpm2.TCTI].
 func (d *TctiDevice) Read(data []byte) (int, error) {
 	if d.buf == nil {
 		if err := d.readMoreData(); err != nil {
@@ -64,18 +65,22 @@ func (d *TctiDevice) Read(data []byte) (int, error) {
 	return n, err
 }
 
+// Write implmements [tpm2.TCTI].
 func (d *TctiDevice) Write(data []byte) (int, error) {
 	return d.f.Write(data)
 }
 
+// Close implements [tpm2.TCTI].
 func (d *TctiDevice) Close() error {
 	return d.f.Close()
 }
 
+// SetLocality implements [tpm2.TCTI].
 func (d *TctiDevice) SetLocality(locality uint8) error {
 	return errors.New("not implemented")
 }
 
+// MakeSticky implements [tpm2.TCTI].
 func (d *TctiDevice) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }

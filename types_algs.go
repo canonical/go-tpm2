@@ -28,6 +28,7 @@ type SymKeyBitsU struct {
 	XOR HashAlgorithmId
 }
 
+// Select implements [mu.Union].
 func (b *SymKeyBitsU) Select(selector reflect.Value) interface{} {
 	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
@@ -56,6 +57,7 @@ type SymModeU struct {
 	Sym SymModeId
 }
 
+// Select implements [mu.Union].
 func (m *SymModeU) Select(selector reflect.Value) interface{} {
 	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
 	case AlgorithmAES:
@@ -159,6 +161,7 @@ type SchemeKeyedHashU struct {
 	XOR  *SchemeXOR
 }
 
+// Select implements [mu.Union].
 func (d *SchemeKeyedHashU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(KeyedHashSchemeId) {
 	case KeyedHashSchemeHMAC:
@@ -209,6 +212,7 @@ type SigSchemeU struct {
 	HMAC      *SchemeHMAC
 }
 
+// Select implements [mu.Union].
 func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
@@ -296,6 +300,7 @@ type KDFSchemeU struct {
 	KDF1_SP800_108 *SchemeKDF1_SP800_108
 }
 
+// Select implements [mu.Union].
 func (s *KDFSchemeU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(KDFAlgorithmId) {
 	case KDFAlgorithmMGF1:
@@ -400,6 +405,7 @@ type AsymSchemeU struct {
 	ECMQV     *KeySchemeECMQV
 }
 
+// Select implements [mu.Union].
 func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 	switch selector.Convert(reflect.TypeOf(AsymSchemeId(0))).Interface().(AsymSchemeId) {
 	case AsymSchemeRSASSA:
@@ -565,6 +571,7 @@ type SignatureU struct {
 	HMAC      *TaggedHash
 }
 
+// Select implements [mu.Union].
 func (s *SignatureU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
