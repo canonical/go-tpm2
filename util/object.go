@@ -119,18 +119,7 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 	return mu.MustMarshalToBytes(integrity, mu.RawBytes(data)), nil
 }
 
-// DuplicateToSensitive unwraps the supplied duplication blob. The supplied name
-// is the name of the duplication object.
-//
-// If a outerSeed is supplied, it removes the outer wrapper using the specified
-// outerHashAlg and outerSymmetricAlg - these normally correspond to properties
-// of the new parent's public area when importing a duplication object with
-// TPM2_Import.
-//
-// If innerSymmetricAlg is supplied, it removes the inner wrapper - first
-// by decrypting it with the supplied innerSymmetricKey, and then checking
-// the inner integrity digest is valid and returning an error if it isn't.
-func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (sensitive *tpm2.Sensitive, err error) {
+func duplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (sensitive *tpm2.Sensitive, err error) {
 	if len(outerSeed) > 0 {
 		// Remove outer wrapper
 		duplicate, err = UnwrapOuter(outerHashAlg, outerSymmetricAlg, name, outerSeed, false, duplicate)
@@ -180,21 +169,7 @@ func DuplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg t
 	return sensitive, nil
 }
 
-// SensitiveToDuplicate creates a duplication blob from the supplied sensitive
-// structure. The supplied name is the name of the object associated with
-// sensitive.
-//
-// If a outerSeed is supplied, an outer wrapper will be applied using the
-// specified outerHashAlg and outerSymmetricAlg - these normally correspond to
-// properties of the new parent's public area when importing a duplication
-// object with TPM2_Import.
-//
-// If innerSymmetricAlg is defined, an inner wrapper will be applied, first
-// by prepending an inner integrity digest computed with the object's name
-// algorithm from the sensitive data and its name, and then encrypting the
-// data with innerSymmetricKeyIn. If innerSymmetricKeyIn isn't supplied, a
-// random key will be created and returned.
-func SensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, err error) {
+func sensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, err error) {
 	applyInnerWrapper := false
 	if innerSymmetricAlg != nil && innerSymmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
 		applyInnerWrapper = true

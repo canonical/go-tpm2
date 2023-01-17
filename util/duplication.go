@@ -55,7 +55,7 @@ func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKe
 		return nil, fmt.Errorf("cannot compute name: %w", err)
 	}
 
-	return DuplicateToSensitive(duplicate, name, outerHashAlg, outerSymmetricAlg, seed, innerSymmetricAlg, innerSymmetricKey)
+	return duplicateToSensitive(duplicate, name, outerHashAlg, outerSymmetricAlg, seed, innerSymmetricAlg, innerSymmetricKey)
 }
 
 // CreateDuplicationObject creates a duplication object that can be
@@ -114,7 +114,7 @@ func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tp
 		}
 	}
 
-	innerSymmetricKeyOut, duplicate, err = SensitiveToDuplicate(sensitive, name, outerHashAlg, outerSymmetricAlg, seed, innerSymmetricAlg, innerSymmetricKey)
+	innerSymmetricKeyOut, duplicate, err = sensitiveToDuplicate(sensitive, name, outerHashAlg, outerSymmetricAlg, seed, innerSymmetricAlg, innerSymmetricKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
