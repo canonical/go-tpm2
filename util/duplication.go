@@ -59,7 +59,8 @@ func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKe
 }
 
 // CreateDuplicationObject creates a duplication object that can be
-// imported in to a TPM from the supplied sensitive area.
+// imported in to a TPM with the TPM2_Import command from the supplied
+// sensitive area.
 //
 // If parentPublic is supplied, an outer wrapper will be applied to the
 // duplication object. The parentPublic argument should correspond to the
