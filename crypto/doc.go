@@ -3,6 +3,6 @@
 // See LICENCE file for details.
 
 /*
-Package crypto contains cryptographic functions that are useful when using go-tpm2.
+Package crypto contains low-level cryptographic functions that are used by go-tpm2 and might be useful when using go-tpm2.
 */
 package crypto
