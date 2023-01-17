@@ -104,7 +104,7 @@ func (p *NVPublic) compareName(name Name) bool {
 	return bytes.Equal(n, name)
 }
 
-// Name implements [util.Entity].
+// Name implements [github.com/canonical/go-tpm2/util.Entity].
 //
 // This computes the name from the public area. If the name cannot be computed
 // then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
