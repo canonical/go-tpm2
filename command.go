@@ -100,7 +100,10 @@ func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []Au
 	case len(authArea) > 0:
 		header.Tag = TagSessions
 
-		aBytes := mu.MustMarshalToBytes(mu.Raw(authArea))
+		aBytes, err := mu.MarshalToBytes(mu.Raw(authArea))
+		if err != nil {
+			return nil, fmt.Errorf("cannot marshal authArea: %w", err)
+		}
 		if int64(len(aBytes)) > math.MaxUint32 {
 			return nil, errors.New("authArea is too large")
 		}

@@ -13,6 +13,7 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/canonical/go-tpm2"
@@ -249,7 +250,9 @@ func VerifyAttestationSignature(key crypto.PublicKey, attest *tpm2.Attest, signa
 	}
 
 	h := hashAlg.NewHash()
-	mu.MustMarshalToWriter(h, attest)
+	if _, err := mu.MarshalToWriter(h, attest); err != nil {
+		return false, fmt.Errorf("cannot marshal attestation structure: %w", err)
+	}
 
 	return VerifySignature(key, h.Sum(nil), signature)
 }

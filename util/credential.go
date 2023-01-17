@@ -29,12 +29,15 @@ func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Na
 		return nil, nil, errors.New("name algorithm for key is not available")
 	}
 
+	credentialBlob, err = mu.MarshalToBytes(credential)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot marshal credential: %w", err)
+	}
+
 	secret, seed, err := crypto.SecretEncrypt(key.Public(), key.NameAlg.GetHash(), []byte(tpm2.IdentityKey))
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
 	}
-
-	credentialBlob = mu.MustMarshalToBytes(credential)
 
 	credentialBlob, err = ProduceOuterWrap(key.NameAlg, &key.Params.AsymDetail(key.Type).Symmetric, objectName, seed, false, credentialBlob)
 	if err != nil {
