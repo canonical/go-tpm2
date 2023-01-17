@@ -10,6 +10,7 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/crypto"
+	internal_util "github.com/canonical/go-tpm2/internal/util"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -39,7 +40,7 @@ func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Na
 		return nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
 	}
 
-	credentialBlob, err = ProduceOuterWrap(key.NameAlg, &key.Params.AsymDetail(key.Type).Symmetric, objectName, seed, false, credentialBlob)
+	credentialBlob, err = internal_util.ProduceOuterWrap(key.NameAlg, &key.Params.AsymDetail(key.Type).Symmetric, objectName, seed, false, credentialBlob)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
 	}

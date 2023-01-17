@@ -482,7 +482,7 @@ func (s *objectSuite) TestMakeCredential(c *C) {
 	seed, err := tpm2_crypto.SecretDecrypt(key, crypto.SHA256, []byte(IdentityKey), secret)
 	c.Check(err, IsNil)
 
-	recoveredCredential, err := util.UnwrapOuter(HashAlgorithmSHA256, &ekPub.Params.RSADetail.Symmetric, name, seed, false, credentialBlob)
+	recoveredCredential, err := testutil.UnwrapOuter(HashAlgorithmSHA256, &ekPub.Params.RSADetail.Symmetric, name, seed, false, credentialBlob)
 	c.Check(err, IsNil)
 
 	_, err = mu.UnmarshalFromBytes(recoveredCredential, &recoveredCredential)

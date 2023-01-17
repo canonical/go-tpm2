@@ -5,13 +5,68 @@
 package util
 
 import (
+	"bytes"
 	"crypto"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/canonical/go-tpm2"
 	tpm2_crypto "github.com/canonical/go-tpm2/crypto"
+	internal_util "github.com/canonical/go-tpm2/internal/util"
+	"github.com/canonical/go-tpm2/mu"
 )
+
+func duplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (sensitive *tpm2.Sensitive, err error) {
+	if len(outerSeed) > 0 {
+		// Remove outer wrapper
+		duplicate, err = internal_util.UnwrapOuter(outerHashAlg, outerSymmetricAlg, name, outerSeed, false, duplicate)
+		if err != nil {
+			return nil, fmt.Errorf("cannot unwrap outer wrapper: %w", err)
+		}
+	}
+
+	if innerSymmetricAlg != nil && innerSymmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
+		// Remove inner wrapper
+		if name.Algorithm() == tpm2.HashAlgorithmNull {
+			return nil, errors.New("invalid name")
+		}
+		if !name.Algorithm().Available() {
+			return nil, errors.New("name algorithm is not available")
+		}
+		if !innerSymmetricAlg.Algorithm.IsValidBlockCipher() {
+			return nil, errors.New("inner symmetric algorithm is not a valid block cipher")
+		}
+
+		if err := tpm2_crypto.SymmetricDecrypt(innerSymmetricAlg.Algorithm, innerSymmetricKey, make([]byte, innerSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+			return nil, fmt.Errorf("cannot decrypt inner wrapper: %w", err)
+		}
+
+		r := bytes.NewReader(duplicate)
+
+		var innerIntegrity []byte
+		if _, err := mu.UnmarshalFromReader(r, &innerIntegrity); err != nil {
+			return nil, fmt.Errorf("cannot unmarshal inner integrity digest: %w", err)
+		}
+
+		duplicate, _ = ioutil.ReadAll(r)
+
+		h := name.Algorithm().NewHash()
+		h.Write(duplicate)
+		h.Write(name)
+
+		if !bytes.Equal(h.Sum(nil), innerIntegrity) {
+			return nil, errors.New("inner integrity digest is invalid")
+		}
+	}
+
+	if _, err := mu.UnmarshalFromBytes(duplicate, mu.Sized(&sensitive)); err != nil {
+		return nil, fmt.Errorf("cannot unmarhsal sensitive: %w", err)
+	}
+
+	return sensitive, nil
+}
 
 // UnwrapDuplicationObject unwraps the supplied duplication object and
 // returns the corresponding sensitive area. The duplication object will
@@ -61,6 +116,68 @@ func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKe
 	}
 
 	return sensitive, nil
+}
+
+func sensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSeed []byte, innerSymmetricAlg *tpm2.SymDefObject, innerSymmetricKey tpm2.Data) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, err error) {
+	applyInnerWrapper := false
+	if innerSymmetricAlg != nil && innerSymmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull {
+		applyInnerWrapper = true
+	}
+
+	applyOuterWrapper := false
+	if len(outerSeed) > 0 {
+		applyOuterWrapper = true
+	}
+
+	duplicate, err = mu.MarshalToBytes(mu.Sized(sensitive))
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot marshal sensitive: %w", err)
+	}
+
+	if applyInnerWrapper {
+		if name.Algorithm() == tpm2.HashAlgorithmNull {
+			return nil, nil, errors.New("invalid name")
+		}
+		if !name.Algorithm().Available() {
+			return nil, nil, errors.New("name algorithm is not available")
+		}
+		if !innerSymmetricAlg.Algorithm.IsValidBlockCipher() {
+			return nil, nil, errors.New("inner symmetric algorithm is not a valid block cipher")
+		}
+
+		// Apply inner wrapper
+		h := name.Algorithm().NewHash()
+		h.Write(duplicate)
+		h.Write(name)
+
+		innerIntegrity := h.Sum(nil)
+
+		duplicate = mu.MustMarshalToBytes(innerIntegrity, mu.RawBytes(duplicate))
+
+		if len(innerSymmetricKey) == 0 {
+			innerSymmetricKeyOut = make([]byte, innerSymmetricAlg.KeyBits.Sym/8)
+			if _, err := rand.Read(innerSymmetricKeyOut); err != nil {
+				return nil, nil, fmt.Errorf("cannot obtain symmetric key for inner wrapper: %w", err)
+			}
+			innerSymmetricKey = innerSymmetricKeyOut
+		} else if len(innerSymmetricKey) != int(innerSymmetricAlg.KeyBits.Sym/8) {
+			return nil, nil, errors.New("the supplied symmetric key for inner wrapper has the wrong length")
+		}
+
+		if err := tpm2_crypto.SymmetricEncrypt(innerSymmetricAlg.Algorithm, innerSymmetricKey, make([]byte, innerSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+			return nil, nil, fmt.Errorf("cannot apply inner wrapper: %w", err)
+		}
+	}
+
+	if applyOuterWrapper {
+		// Apply outer wrapper
+		duplicate, err = internal_util.ProduceOuterWrap(outerHashAlg, outerSymmetricAlg, name, outerSeed, false, duplicate)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
+		}
+	}
+
+	return innerSymmetricKeyOut, duplicate, nil
 }
 
 // CreateDuplicationObject creates a duplication object that can be
