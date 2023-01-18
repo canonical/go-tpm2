@@ -173,7 +173,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 // the current digest of the audit session corresponding to
 // sessionContext.
 //
-// The privacyAdminContext argument must be a [ResourceContext] that
+// The privacyAdminContext argument must be a ResourceContext that
 // corresponds to [HandleEndorsement]. This command requires authorization
 // with the user auth role for privacyAdminContext, with session based
 // authorization provided via privacyAdminContextAuthSession.
@@ -223,7 +223,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 // to obtain the current command audit digest, the current audit digest
 // algorithm and a digest of the list of commands being audited.
 //
-// The privacyContext argument must be a [ResourceContext] corresponding
+// The privacyContext argument must be a ResourceContext corresponding
 // to [HandleEndorsement]. This command requires authorization with the
 // user auth role for privacyContext, with session based authorization
 // provided via privacyContextAuthSession.
@@ -272,7 +272,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 // GetTime executes the TPM2_GetTime command in order to obtain the
 // current values of time and clock.
 //
-// The privacyAdminContext argument must be a [ResourceContext] that
+// The privacyAdminContext argument must be a ResourceContext that
 // corresponds to [HandleEndorsement]. The command requires authorization
 // with the user auth role for privacyAdminContext, with session based
 // authorization provided via privacyAdminContextAuthSession.
