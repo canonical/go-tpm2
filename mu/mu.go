@@ -78,7 +78,7 @@ var _ CustomMarshaller = struct {
 type empty struct{}
 
 // NilUnionValue is a special value, the type of which should be returned from implementations
-// of Union.Select to indicate that a union contains no data for a particular selector value.
+// of [Union].Select to indicate that a union contains no data for a particular selector value.
 var NilUnionValue empty
 
 // RawBytes is a special byte slice type which is marshalled and unmarshalled without a

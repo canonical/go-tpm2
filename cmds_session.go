@@ -12,58 +12,86 @@ import (
 	"github.com/canonical/go-tpm2/crypto"
 )
 
-// StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session. On successful completion, it will
-// return a SessionContext that corresponds to the new session.
+// StartAuthSession executes the TPM2_StartAuthSession command to start an authorization session.
+// On successful completion, it will return a SessionContext that corresponds to the new session.
 //
-// The type of session is defined by the sessionType parameter. If sessionType is SessionTypeHMAC or SessionTypePolicy, then the
-// created session may be used for authorization. If sessionType is SessionTypeTrial, then the created session can only be used for
-// computing an authorization policy digest.
+// The type of session is defined by the sessionType parameter. If sessionType is
+// [SessionTypeHMAC] or [SessionTypePolicy], then the created session may be used for
+// authorization. If sessionType is [SessionTypeTrial], then the created session can only be used
+// for computing an authorization policy digest.
 //
-// The authHash parameter defines the algorithm used for computing command and response parameter digests, command and response
-// HMACs, and derivation of the session key and symmetric keys for parameter encryption where used. The size of the digest algorithm
-// is used to determine the nonce size used for the session.
+// The authHash parameter defines the algorithm used for computing command and response parameter
+// digests, command and response HMACs, and derivation of the session key and symmetric keys for
+// parameter encryption where used. The size of the digest algorithm is used to determine the nonce
+// size used for the session.
 //
-// If tpmKey is provided, it must correspond to an asymmetric decrypt key in the TPM. In this case, a random salt value will
-// contribute to the session key derivation, and the salt will be encrypted using the method specified by tpmKey before being sent to
-// the TPM. If tpmKey is provided but does not correspond to an asymmetric key, a *TPMHandleError error with an error code of ErrorKey
-// will be returned for handle index 1. If tpmKey is provided but corresponds to an object with only its public part loaded, a
-// *TPMHandleError error with an error code of ErrorHandle will be returned for handle index 1. If tpmKey is provided but does not
-// correspond to a decrypt key, a *TPMHandleError error with an error code of ErrorAttributes will be returned for handle index 1.
+// If tpmKey is provided then a salted session is created. The key must correspond to an asymmetric
+// decrypt key in the TPM - it must have a type of [ObjectTypeRSA] or [ObjectTypeECC] and it must
+// have the [AttrDecrypt] attribute set. In this case, a random salt value will be established
+// which will contribute to the session key derivation. If tpmKey has the type of [ObjectTypeRSA],
+// the random salt will be created on the host and RSA-OAEP encrypted with the public part of
+// tpmKey before being sent to the TPM. If tpmKey has the type of [ObjectTypeECC], ECDH is used to
+// derive a random salt, using tpmKey and an ephemeral host key. If tpmKey is provided but does not
+// correspond to an asymmetric key, a *[TPMHandleError] error with an error code of [ErrorKey] will
+// be returned for handle index 1. If tpmKey is provided but corresponds to an object with only its
+// public part loaded, a *[TPMHandleError] error with an error code of [ErrorHandle] will be
+// returned for handle index 1. If tpmKey is provided but does not correspond to a decrypt key, a
+// *[TPMHandleError] error with an error code of [ErrorAttributes] will be returned for handle
+// index 1.
 //
-// If tpmkey is provided but decryption of the salt fails on the TPM, a *TPMParameterError error with an error code of ErrorValue or
-// ErrorKey may be returned for parameter index 2.
+// If tpmkey is provided but establishment of the salt fails on the TPM, a *[TPMParameterError]
+// error with an error code of [ErrorValue] or [ErrorKey] may be returned for parameter index 2.
 //
-// If bind is specified, then the auhorization value for the corresponding resource must be known, by calling
-// ResourceContext.SetAuthValue on bind before calling this function - the authorization value will contribute to the session key
-// derivation. The created session will be bound to the resource associated with bind, unless the authorization value of that resource
-// is subsequently changed. If bind corresponds to a transient object and only the public part of the object is loaded, or if bind
-// corresponds to a NV index with a type of NVTypePinPass or NVTypePinFail, a *TPMHandleError error with an error code of ErrorHandle
-// will be returned for handle index 2.
+// If tpmKey is not provided, an unsalted session is created.
 //
-// If a session key is computed, this will be used (along with the authorization value of resources that the session is being used
-// for authorization of if the session is not bound to them) to derive a HMAC key for generating command and response HMACs. If both
-// tpmKey and bind are nil, no session key is created.
+// If bind is specified then a bound session is created. The authorization value for the
+// corresponding bind resource must be known, by calling [ResourceContext].SetAuthValue on bind
+// before calling this function. In this case, the authorization value will contribute to the
+// session key derivation. The created session will be bound to the resource associated with bind,
+// unless the authorization value of that resource is subsequently changed. If bind corresponds to
+// a transient object and only the public part of the object is loaded, or if bind corresponds to
+// a NV index with a type of [NVTypePinPass] or [NVTypePinFail], a *[TPMHandleError] error with an
+// error code of [ErrorHandle] will be returned for handle index 2.
 //
-// If symmetric is provided, it defines the symmetric algorithm to use if the session is subsequently used for session based command
-// or response parameter encryption. Session based parameter encryption allows the first command and/or response parameter for a
-// command to be encrypted between the TPM and host CPU for supported parameter types (go types that correspond to TPM2B prefixed
-// types). If symmetric is provided and corresponds to a symmetric block cipher (ie, the Algorithm field is not SymAlgorithmXOR) then
-// the value of symmetric.Mode.Sym() must be SymModeCFB, else a *TPMParameterError error with an error code of ErrorMode is returned
+// If tpmKey or bind is specified, a session key is computed. If neither tpmKey or bind are
+// specified, then no session key is computed.
+//
+// When the created session is used for authorization, a HMAC key used to generate and verify
+// command and response HMACs is created. If the session is used for authorization of the bound
+// resource, then the HMAC key is generated from the session key if there is one. If the session is
+// used for authorization of any other resource, then the HMAC key is generated from the session
+// key (if there is one) and the authorization value of the resource that the session is being used
+// for authorization of.
+//
+// If symmetric is provided, it defines the symmetric algorithm to use if the session is
+// subsequently used for session based command or response parameter encryption. Session based
+// parameter encryption allows the first command and/or response parameter for a command to be
+// encrypted between the TPM and host CPU for supported parameter types (go types that correspond
+// to TPM2B prefixed types). If symmetric is provided and corresponds to a symmetric block cipher
+// (ie, the Algorithm field is not [SymAlgorithmXOR]) then the symmetric mode must be
+// [SymModeCFB], else a *[TPMParameterError] error with an error code of [ErrorMode] is returned
 // for parameter index 4.
 //
-// If a SessionContext instance with the AttrCommandEncrypt attribute set is provided in the variable length sessions parameter, then
-// the initial caller nonce will be encrypted as this is the first command parameter, despite not being exposed via this API. If a
-// SessionContext instance with the AttrResponseEncrypt attribute set is provided, then the initial TPM nonce will be encrypted in the
-// response.
+// When the created session is used for parameter encryption, the encryption key is derived from
+// the session key if there is one. If the session is also used for authorization, then the
+// encryption key derivation also uses the authorization value of the resource that the session is
+// being used for authorization of, regardless of whether it is bound to it.
 //
-// If sessionType is SessionTypeHMAC and the session is subsequently used for authorization of a resource to which the session is not
-// bound, the authorization value of that resource must be known as it is used to derive the key for computing command and response
-// HMACs.
+// If a SessionContext instance with the [AttrCommandEncrypt] attribute set is provided in the
+// variable length sessions parameter, then the initial caller nonce will be encrypted as this is
+// the first command parameter, despite not being exposed via this API. If a SessionContext
+// instance with the AttrResponseEncrypt attribute set is provided, then the initial TPM nonce will
+// be encrypted in the response.
 //
-// If no more sessions can be created without first context loading the oldest saved session, then a *TPMWarning error with a warning
-// code of WarningContextGap will be returned. If there are no more slots available for loaded sessions, a *TPMWarning error with a
-// warning code of WarningSessionMemory will be returned. If there are no more session handles available, a *TPMwarning error with
-// a warning code of WarningSessionHandles will be returned.
+// If sessionType is [SessionTypeHMAC] and the session is subsequently used for authorization of a
+// resource to which the session is not bound, the authorization value of that resource must be
+// known as it is used to derive the key for computing command and response HMACs.
+//
+// If no more sessions can be created without first context loading the oldest saved session, then
+// a *[TPMWarning] error with a warning code of [WarningContextGap] will be returned. If there are
+// no more slots available for loaded sessions, a *[TPMWarning] error with a warning code of
+// [WarningSessionMemory] will be returned. If there are no more session handles available, a
+// *[TPMwarning] error with a warning code of [WarningSessionHandles] will be returned.
 func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType SessionType, symmetric *SymDef, authHash HashAlgorithmId, sessions ...SessionContext) (sessionContext SessionContext, err error) {
 	if symmetric == nil {
 		symmetric = &SymDef{Algorithm: SymAlgorithmNull}
@@ -149,8 +177,8 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	return makeSessionContext(sessionHandle, data), nil
 }
 
-// PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with sessionContext, to reset the policy
-// authorization session to its initial state.
+// PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with
+// sessionContext, to reset the policy authorization session to its initial state.
 func (t *TPMContext) PolicyRestart(sessionContext SessionContext, sessions ...SessionContext) error {
 	return t.StartCommand(CommandPolicyRestart).
 		AddHandles(UseHandleContext(sessionContext)).

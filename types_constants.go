@@ -241,10 +241,11 @@ func (rc ResponseCode) F() bool {
 	return rc&responseCodeF != 0
 }
 
-// V returns the V field of the response code and is only relevant for
-// format-zero response codes. If this is set then it is a TPM2 code returned
-// when the response tag is TPM_ST_NO_SESSIONS. If it is not set then it is a
-// TPM1.2 code returned when the response tag is TPM_TAG_RSP_COMMAND.
+// V returns the V field of the response code, corresponding to the version
+// and is only relevant for format-zero response codes. If this is set
+// then it is a TPM2 code returned when the response tag is
+// TPM_ST_NO_SESSIONS. If it is not set then it is a TPM1.2 code returned
+// when the response tag is TPM_TAG_RSP_COMMAND.
 //
 // This will panic if the F field is set.
 func (rc ResponseCode) V() bool {
@@ -254,9 +255,10 @@ func (rc ResponseCode) V() bool {
 	return rc&responseCodeV != 0
 }
 
-// T returns the T field of the response code and is only relevant for
-// format-zero response codes. If this is set then the code is defined by the
-// TPM vendor. If it is not set then the code is defined by the TCG.
+// T returns the T field of the response code, corresponding to the
+// TCG/Vendor indicator and is only relevant for format-zero response
+// codes. If this is set then the code is defined by the TPM vendor. If
+// it is not set then the code is defined by the TCG.
 //
 // This will panic if the F field is set.
 func (rc ResponseCode) T() bool {
@@ -266,9 +268,10 @@ func (rc ResponseCode) T() bool {
 	return rc&responseCodeT != 0
 }
 
-// S returns the S field of the response code and is only relevant for
-// format-zero response codes. If this is set then the code indicates a
-// warning. If it is not set then the code indicates an error.
+// S returns the S field of the response code, corresponding to the
+// severity and is only relevant for format-zero response codes. If this
+// is set then the code indicates a warning. If it is not set then the
+// code indicates an error.
 //
 // This will panic if the F field is set.
 func (rc ResponseCode) S() bool {

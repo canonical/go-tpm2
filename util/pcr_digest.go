@@ -15,7 +15,7 @@ import (
 // ComputePCRDigest computes a digest using the specified algorithm from the provided set of PCR
 // values and the provided PCR selections. The digest is computed the same way as PCRComputeCurrentDigest
 // as defined in the TPM reference implementation. It is most useful for computing an input to
-// TPMContext.PolicyPCR or TrialAuthPolicy.PolicyPCR, and for validating quotes and creation data.
+// [tpm2.TPMContext.PolicyPCR] or [TrialAuthPolicy.PolicyPCR], and for validating quotes and creation data.
 func ComputePCRDigest(alg tpm2.HashAlgorithmId, pcrs tpm2.PCRSelectionList, values tpm2.PCRValues) (tpm2.Digest, error) {
 	if !alg.Available() {
 		return nil, errors.New("algorithm is not available")

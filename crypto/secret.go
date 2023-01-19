@@ -29,12 +29,18 @@ func zeroExtendBytes(x *big.Int, l int) (out []byte) {
 	return
 }
 
-// SecretDecrypt recovers a seed from the supplied secret structure
-// using the private key. It can be used to recover secrets created by the TPM,
-// such as those created by the TPM2_Duplicate command.
+// SecretDecrypt recovers a seed from the supplied secret structure using the supplied private key.
+// It can be used to recover secrets created by the TPM, such as those created by the
+// TPM2_Duplicate command.
 //
-// The specified digest algorithm must match the name algorithm of the public
-// area associated with the supplied private key.
+// If priv is a *[rsa.PrivateKey], this will recover the seed by decrypting the supplied secret
+// with RSA-OAEP.
+//
+// If priv is a *[ecdsa.PrivateKey], this uses ECDH to derive the seed using the supplied secret,
+// which will contain a serialized ephemeral peer key.
+//
+// The specified digest algorithm must match the name algorithm of the public area associated with
+// the supplied private key.
 //
 // This will panic if hashAlg is not available.
 func SecretDecrypt(priv crypto.PrivateKey, hashAlg crypto.Hash, label, secret []byte) (seed []byte, err error) {
@@ -66,15 +72,19 @@ func SecretDecrypt(priv crypto.PrivateKey, hashAlg crypto.Hash, label, secret []
 	}
 }
 
-// SecretEncrypt creates a seed and associated secret value using the supplied
-// public key and digest algorithm. The corresponding private key can recover the
-// seed from the returned secret value.
-//
-// This is useful for sharing secrets with the TPM via the TPM2_Import,
+// SecretEncrypt establishes a seed and associated secret value using the supplied public key and
+// digest algorithm. The corresponding private key can recover the seed from the returned secret
+// value. This is useful for sharing secrets with the TPM via the TPM2_Import,
 // TPM2_ActivateCredential and TPM2_StartAuthSession commands.
 //
-// The supplied digest algorithm must match the name algorithm of the public area
-// associated with the supplied public key.
+// If public is a *[rsa.PublicKey], this will generate a random seed and then RSA-OAEP encrypt it
+// to create the secret.
+//
+// If public is a *[ecdsa.PublicKey], this uses ECDH to derive a seed value using an an ephemeral
+// key. The secret contains the serialized form of the public part of the ephemeral key.
+//
+// The supplied digest algorithm must match the name algorithm of the public area associated with
+// the supplied public key.
 //
 // This will panic if hashAlg is not available.
 func SecretEncrypt(public crypto.PublicKey, hashAlg crypto.Hash, label []byte) (secret []byte, seed []byte, err error) {

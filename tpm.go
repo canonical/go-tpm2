@@ -213,71 +213,63 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 // Section 26 - Miscellaneous Management Functions
 // Section 27 - Field Upgrade
 
-// TPMContext is the main entry point by which commands are executed on a
-// TPM device using this package. It provides convenience functions for
-// supported commands and communicates with the underlying device via a
-// transmission interface, which is provided to [NewTPMContext].
-// Convenience functions are wrappers around [TPMContext.StartCommand],
-// which may be used directly for custom commands or commands that aren't
-// supported directly by this package.
+// TPMContext is the main entry point by which commands are executed on a TPM device using this
+// package. It provides convenience functions for supported commands and communicates with the
+// underlying device via a transmission interface, which is provided to [NewTPMContext].
+// Convenience functions are wrappers around [TPMContext.StartCommand], which may be used directly
+// for custom commands or commands that aren't supported directly by this package.
 //
-// Methods that execute commands on the TPM may return errors from the TPM
-// in some cases. These are in the form of *[TPMError], *[TPMWarning],
-// *[TPMHandleError], *[TPMSessionError], *[TPMParameterError] and
-// *[TPMVendorError] types.
+// Methods that execute commands on the TPM may return errors from the TPM where a command responds
+// with a [ResponseCode] other than [ResponseSuccess]. These errors are in the form of *[TPMError],
+// *[TPMWarning], *[TPMHandleError], *[TPMSessionError], *[TPMParameterError] and *[TPMVendorError]
+// types.
 //
-// Some methods make use of resources on the TPM, and use of these
-// resources may require authorization with one of 3 roles depending on
-// the command: user, admin or duplication. The role determines the
-// required authorization type (passphrase, HMAC session, or policy
-// session), which is dependent on the type of the resource.
+// Some commands make use of resources on the TPM, and use of these resources may require
+// authorization with one of 3 roles depending on the command: user, admin or duplication. The role
+// determines the required authorization type (passphrase, HMAC session, or policy session), which
+// is dependent on the type of the resource.
 //
-// Methods that require authorization for a [ResourceContext] provide an
-// associated [SessionContext] argument. Setting this to nil specifies
-// passphrase authorization. A HMAC or policy session can be used by
-// supplying a [SessionContext] associated with a session of the
-// corresponding type.
+// Commands that make use of resources on the TPM accept command handle arguments. Convenience
+// methods generally use [ResourceContext] to represent these.
 //
-// If the authorization value of a resource is required as part of the
-// authorization (eg, for passphrase authorization, a HMAC session that is
-// not bound to the specified resource, or a policy session that contains
-// the TPM2_PolicyPassword or TPM2_PolicyAuthValue assertion), it is
-// obtained from the [ResourceContext] supplied to the method and should
-// be set by calling [ResourceContext.SetAuthValue] before the method is
-// called.
+// Convenience methods that require authorization for a [ResourceContext] provide an associated
+// [SessionContext] argument to represent a session. Setting this to nil specifies passphrase
+// authorization. A HMAC or policy session can be used by supplying a [SessionContext] associated
+// with a session of the corresponding type.
 //
-// Where a method requires authorization with the user role for a
-// resource, the following authorization types are permitted:
+// If the authorization value of a resource is required as part of the authorization (eg, for
+// passphrase authorization, a HMAC session that is not bound to the specified resource, or a
+// policy session that contains the TPM2_PolicyPassword or TPM2_PolicyAuthValue assertion), it is
+// obtained from the [ResourceContext] supplied to the method and should be set by calling
+// [ResourceContext].SetAuthValue before the method is called.
 //
-//   - [HandleTypePCR]: passphrase or HMAC session if no auth policy is
-//     set, or a policy session if an auth policy is set.
-//   - [HandleTypeNVIndex]: passphrase, HMAC session or policy session
-//     depending on attributes.
-//   - [HandleTypePermanent]: passphrase or HMAC session. A policy
-//     session can also be used if an auth policy is set.
-//   - [HandleTypeTransient] / [HandleTypePersistent]: policy session.
-//     Passphrase or HMAC session can also be used if [AttrWithUserAuth]
-//     is set.
+// Where a command requires authorization with the user role for a resource, the following
+// authorization types are permitted:
 //
-// Where a command requires authorization with the admin role for a
-// resource, the following authorization types are permitted:
+//   - [HandleTypePCR]: passphrase or HMAC session if no auth policy is set, or a policy session if
+//     an auth policy is set.
+//   - [HandleTypeNVIndex]: passphrase, HMAC session or policy session depending on attributes.
+//   - [HandleTypePermanent]: passphrase or HMAC session. A policy session can also be used if an
+//     auth policy is set.
+//   - [HandleTypeTransient] / [HandleTypePersistent]: policy session. Passphrase or HMAC session
+//     can also be used if [AttrWithUserAuth] is set.
+//
+// Where a command requires authorization with the admin role for a resource, the following
+// authorization types are permitted:
 //
 //   - [HandleTypeNVIndex]: policy session.
-//   - [HandleTypeTransient] / [HandleTypePersistent]: policy session.
-//     Passphrase or HMAC session can also be used if
-//     [AttrAdminWithPolicy] is not set.
+//   - [HandleTypeTransient] / [HandleTypePersistent]: policy session. Passphrase or HMAC session
+//     can also be used if [AttrAdminWithPolicy] is not set.
 //
-// Where a command requires authorization with the duplication role for a
-// resource, a policy session is required.
+// Where a command requires authorization with the duplication role for a resource, a policy
+// session is required.
 //
-// Where a policy session is used for a resource that requires
-// authorization with the admin or duplication role, the session must
-// contain the TPM2_PolicyCommandCode assertion.
+// Where a policy session is used for a resource that requires authorization with the admin or
+// duplication role, the session must contain the TPM2_PolicyCommandCode assertion.
 //
-// Some methods also accept a variable number of optional [SessionContext]
-// arguments - these are for sessions that don't provide authorization for
-// a corresponding TPM resource. These sessions may be used for the
-// purposes of session based parameter encryption or command auditing.
+// Some convenience methods also accept a variable number of optional [SessionContext] arguments -
+// these are for sessions that don't provide authorization for a corresponding TPM resource. These
+// sessions may be used for the purposes of session based parameter encryption or command auditing.
 type TPMContext struct {
 	tcti                  TCTI
 	permanentResources    map[Handle]*permanentContext
@@ -299,17 +291,15 @@ func (t *TPMContext) Close() error {
 	return nil
 }
 
-// RunCommandBytes is a low-level interface for executing a command. The
-// caller is responsible for supplying a properly serialized command
-// packet, which can be created with [MarshalCommandPacket].
+// RunCommandBytes is a low-level interface for executing a command. The caller is responsible for
+// supplying a properly serialized command packet, which can be created with
+// [MarshalCommandPacket].
 //
-// If successful, this function will return the response packet. No
-// checking is performed on this response packet. An error will only be
-// returned if the transmission interface returns an error.
+// If successful, this function will return the response packet. No checking is performed on this
+// response packet. An error will only be returned if the transmission interface returns an error.
 //
-// Most users will want to use one of the many convenience functions
-// provided by TPMContext instead, or [TPMContext.StartCommand] if one
-// doesn't already exist.
+// Most users will want to use one of the many convenience functions provided by TPMContext
+// instead, or [TPMContext.StartCommand] if one doesn't already exist.
 func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, error) {
 	if _, err := t.tcti.Write(packet); err != nil {
 		return nil, &TctiError{"write", err}
@@ -323,28 +313,25 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 	return ResponsePacket(resp), nil
 }
 
-// RunCommand is a low-level interface for executing a command. The caller
-// supplies the command code, list of command handles, command auth area
-// and marshalled command parameters. The caller should also supply a
-// pointer to a response handle if the command returns one. On success,
-// the response parameter bytes and response auth area are returned. This
-// function does no checking of the auth response.
+// RunCommand is a low-level interface for executing a command. The caller supplies the command
+// code, list of command handles, command auth area and marshalled command parameters. The caller
+// should also supply a pointer to a response handle if the command returns one. On success, the
+// response parameter bytes and response auth area are returned. This function does no checking of
+// the auth response.
 //
-// If the TPM returns a response indicating that the command should be
-// retried, this function will retry up to a maximum number of times
-// defined by the number supplied to [TPMContext.SetMaxSubmissions].
+// If the TPM returns a response indicating that the command should be retried, this function will
+// retry up to a maximum number of times defined by the number supplied to
+// [TPMContext.SetMaxSubmissions].
 //
-// A *[TctiError] will be returned if the transmission interface returns
-// an error.
+// A *[TctiError] will be returned if the transmission interface returns an error.
 //
-// One of *[TPMWarning], *[TPMError], *[TPMParameterError],
-// *[TPMHandleError] or *[TPMSessionError] will be returned if the TPM
-// returns a response code other than [ResponseSuccess].
+// One of *[TPMWarning], *[TPMError], *[TPMParameterError], *[TPMHandleError] or
+// *[TPMSessionError] will be returned if the TPM returns a response code other than
+// [ResponseSuccess].
 //
-// There's almost no need for most users to use this API directly. Most
-// users will want to use one of the many convenience functions provided
-// by TPMContext instead, or [TPMContext.StartCommand] if one doesn't
-// already exist.
+// There's almost no need for most users to use this API directly. Most users will want to use one
+// of the many convenience functions provided by TPMContext instead, or [TPMContext.StartCommand]
+// if one doesn't already exist.
 func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cAuthArea []AuthCommand, cpBytes []byte, rHandle *Handle) (rpBytes []byte, rAuthArea []AuthResponse, err error) {
 	cmd, err := MarshalCommandPacket(commandCode, cHandles, cAuthArea, cpBytes)
 	if err != nil {
@@ -381,35 +368,30 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 	}
 }
 
-// StartCommand is the high-level function for beginning the process of
-// executing a command. It returns a CommandContext that can be used to
-// assemble a command, properly serialize a command packet and then submit
-// the packet for execution via [TPMContext.RunCommand].
+// StartCommand is the high-level function for beginning the process of executing a command. It
+// returns a CommandContext that can be used to assemble a command, properly serialize a command
+// packet and then submit the packet for execution via [TPMContext.RunCommand].
 //
-// Most users will want to use one of the many convenience functions
-// provided by TPMContext, which are just wrappers around this.
+// Most users will want to use one of the many convenience functions provided by TPMContext,
+// which are just wrappers around this.
 func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
 	return &CommandContext{
 		dispatcher: &t.execContext,
 		cmd:        cmdContext{CommandCode: commandCode}}
 }
 
-// SetMaxSubmissions sets the maximum number of times that
-// [CommandContext] will attempt to submit a command before failing with
-// an error. The default value is 5.
+// SetMaxSubmissions sets the maximum number of times that [CommandContext] will attempt to submit
+// a command before failing with an error. The default value is 5.
 func (t *TPMContext) SetMaxSubmissions(max uint) {
 	t.maxSubmissions = max
 }
 
-// InitProperties executes one or more TPM2_GetCapability commands to
-// initialize properties used internally by TPMContext. This is normally
-// done automatically by functions that require these properties when they
-// are used for the first time, but this function is provided so that the
-// command can be audited, and so the exclusivity of an audit session can
-// be preserved.
+// InitProperties executes one or more TPM2_GetCapability commands to initialize properties used
+// internally by TPMContext. This is normally done automatically by functions that require these
+// properties when they are used for the first time, but this function is provided so that the
+// command can be audited, and so the exclusivity of an audit session can be preserved.
 //
-// Any sessions supplied should have the [AttrContinueSession] attribute
-// set.
+// Any sessions supplied should have the [AttrContinueSession] attribute set.
 func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
 	props, err := t.GetCapabilityTPMProperties(PropertyFixed, CapabilityMaxProperties, sessions...)
 	if err != nil {
@@ -464,11 +446,10 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 	return t.InitProperties()
 }
 
-// NewTPMContext creates a new instance of TPMContext, which communicates
-// with the TPM using the transmission interface provided via the tcti
-// parameter. The transmission interface must not be nil - it is expected
-// that the caller checks the error returned from the function that is
-// used to create it.
+// NewTPMContext creates a new instance of TPMContext, which communicates with the TPM using the
+// transmission interface provided via the tcti parameter. The transmission interface must not be
+// nil - it is expected that the caller checks the error returned from the function that is/ used
+// to create it.
 func NewTPMContext(tcti TCTI) *TPMContext {
 	if tcti == nil {
 		panic("nil transmission interface")

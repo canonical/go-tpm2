@@ -37,8 +37,9 @@ type NVPinCounterParams struct {
 	Limit uint32
 }
 
-// NVAttributes corresponds to the TPMA_NV type, and represents the attributes of a NV index. When exchanged with the TPM, some bits
-// are reserved to encode the type of the NV index (NVType).
+// NVAttributes corresponds to the TPMA_NV type, and represents the
+// attributes of a NV index. When exchanged with the TPM, some bits
+// are reserved to encode the type of the NV index ([NVType]).
 type NVAttributes uint32
 
 // Type returns the NVType encoded in a NVAttributes value.
@@ -46,7 +47,7 @@ func (a NVAttributes) Type() NVType {
 	return NVType((a & 0xf0) >> 4)
 }
 
-// AttrsOnly returns the NVAttributes without the encoded NVType.
+// AttrsOnly returns the NVAttributes without the encoded [NVType].
 func (a NVAttributes) AttrsOnly() NVAttributes {
 	return a & ^NVAttributes(0xf0)
 }

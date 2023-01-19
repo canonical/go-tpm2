@@ -25,7 +25,7 @@ type Empty struct{}
 // 10.3) Hash/Digest structures
 
 // TaggedHashU is a union type that corresponds to the TPMU_HA type. The
-// selector type is HashAlgorithmId. Mapping of selector values to fields is
+// selector type is [HashAlgorithmId]. Mapping of selector values to fields is
 // as follows:
 //   - HashAlgorithmSHA1: SHA1
 //   - HashAlgorithmSHA256: SHA256
@@ -136,11 +136,11 @@ func (h *TaggedHash) Digest() Digest {
 // 10.4 Sized Buffers
 
 // Digest corresponds to the TPM2B_DIGEST type. The largest size of this supported
-// by the TPM can be determined by calling TPMContext.GetMaxDigest.
+// by the TPM can be determined by calling [TPMContext.GetMaxDigest].
 type Digest []byte
 
 // Data corresponds to the TPM2B_DATA type. The largest size of this supported by
-// the TPM can be determined by calling TPMContext.GetMaxData.
+// the TPM can be determined by calling [TPMContext.GetMaxData].
 type Data []byte
 
 // Nonce corresponds to the TPM2B_NONCE type.
@@ -162,11 +162,11 @@ const (
 type Event []byte
 
 // MaxBuffer corresponds to the TPM2B_MAX_BUFFER type. The largest size of this supported
-// by the TPM can be determined by calling TPMContext.GetInputBuffer.
+// by the TPM can be determined by calling [TPMContext.GetInputBuffer].
 type MaxBuffer []byte
 
 // MaxNVBuffer corresponds to the TPM2B_MAX_NV_BUFFER type. The largest size of this
-// supported by the TPM can be determined by calling TPMContext.GetNVBufferMax.
+// supported by the TPM can be determined by calling [TPMContext.GetNVBufferMax].
 type MaxNVBuffer []byte
 
 // Timeout corresponds to the TPM2B_TIMEOUT type. The spec defines this
@@ -175,7 +175,7 @@ type MaxNVBuffer []byte
 // but we have to preserve the original buffer because there is no
 // guarantees that it is always 8 bytes, and the actual TPM buffer
 // must be recreated accurately in order for ticket validation to
-// work correctly in TPMContext.PolicyTicket.
+// work correctly in [TPMContext.PolicyTicket].
 type Timeout []byte
 
 // Value returns the value as a uint64. The spec defines the TPM2B_TIMEOUT
@@ -236,7 +236,7 @@ func (n Name) Type() NameType {
 }
 
 // Handle returns the handle of the resource that this name corresponds to. If
-// Type does not return NameTypeHandle, it will panic.
+// Type does not return [NameTypeHandle], it will panic.
 func (n Name) Handle() Handle {
 	if n.Type() != NameTypeHandle {
 		panic("name is not a handle")
@@ -245,7 +245,7 @@ func (n Name) Handle() Handle {
 }
 
 // Algorithm returns the digest algorithm of this name. If Type does not return
-// NameTypeDigest, it will return HashAlgorithmNull.
+// [NameTypeDigest], it will return [HashAlgorithmNull].
 func (n Name) Algorithm() HashAlgorithmId {
 	if n.Type() != NameTypeDigest {
 		return HashAlgorithmNull
@@ -255,7 +255,7 @@ func (n Name) Algorithm() HashAlgorithmId {
 }
 
 // Digest returns the name as a digest without the algorithm identifier. If
-// Type does not return NameTypeDigest, it will panic.
+// Type does not return [NameTypeDigest], it will panic.
 func (n Name) Digest() Digest {
 	if n.Type() != NameTypeDigest {
 		panic("name is not a valid digest")
@@ -267,7 +267,7 @@ func (n Name) Digest() Digest {
 
 // PCRSelectBitmap correspnds to the TPMS_PCR_SELECT type, and is a bitmap
 // that defines a selection of PCRs. Note that it is easier to work with the
-// PCRSelect type instead, which is a slice of PCR indexes.
+// [PCRSelect] type instead, which is a slice of PCR indexes.
 type PCRSelectBitmap struct {
 	Bytes mu.Sized1Bytes
 }

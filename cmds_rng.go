@@ -6,8 +6,8 @@ package tpm2
 
 // Section 16 - Random Number Generator
 
-// GetRandom executes the TPM2_GetRandom command to return the requested
-// number of bytes from the TPM's random number generator.
+// GetRandom executes the TPM2_GetRandom command to return the requested number of bytes from the
+// TPM's random number generator.
 func (t *TPMContext) GetRandom(bytesRequested uint16, sessions ...SessionContext) (randomBytes Digest, err error) {
 	if err := t.StartCommand(CommandGetRandom).
 		AddParams(bytesRequested).

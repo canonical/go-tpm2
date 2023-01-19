@@ -10,7 +10,8 @@ package tpm2
 // ContextData corresponds to the TPM2B_CONTEXT_DATA type.
 type ContextData []byte
 
-// Context corresponds to the TPMS_CONTEXT type and is used in TPMContext.ContextLoad and TPMContext.ContextSave.
+// Context corresponds to the TPMS_CONTEXT type which represents a saved
+// object or session context.
 type Context struct {
 	Sequence    uint64      // Sequence number of the context
 	SavedHandle Handle      // Handle indicating if this is a session or object

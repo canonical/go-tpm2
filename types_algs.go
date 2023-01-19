@@ -15,9 +15,9 @@ import (
 
 // 11.1) Symmetric
 
-// SymKeyBitsU is a union type that corresponds to the TPMU_SYM_KEY_BITS type
-// and is used to specify symmetric encryption key sizes. The selector type is
-// AlgorithmId. Mapping of selector values to fields is as follows:
+// SymKeyBitsU is a union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to
+// specify symmetric encryption key sizes. The selector type is [AlgorithmId]. Mapping of
+// selector values to fields is as follows:
 //   - AlgorithmAES: Sym
 //   - AlgorithmSM4: Sym
 //   - AlgorithmCamellia: Sym
@@ -47,7 +47,7 @@ func (b *SymKeyBitsU) Select(selector reflect.Value) interface{} {
 }
 
 // SymModeU is a union type that corresponds to the TPMU_SYM_MODE type. The selector
-// type is AlgorithmId. The mapping of selector values to fields is as follows:
+// type is [AlgorithmId]. The mapping of selector values to fields is as follows:
 //   - AlgorithmAES: Sym
 //   - AlgorithmSM4: Sym
 //   - AlgorithmCamellia: Sym
@@ -151,7 +151,7 @@ type SchemeXOR struct {
 }
 
 // SchemeKeyedHashU is a union type that corresponds to the TPMU_SCHEME_KEYED_HASH type.
-// The selector type is KeyedHashSchemeId. The mapping of selector values to fields is
+// The selector type is [KeyedHashSchemeId]. The mapping of selector values to fields is
 // as follows:
 //   - KeyedHashSchemeHMAC: HMAC
 //   - KeyedHashSchemeXOR: XOR
@@ -193,7 +193,7 @@ type SigSchemeSM2 SchemeHash
 type SigSchemeECSchnorr SchemeHash
 
 // SigSchemeU is a union type that corresponds to the TPMU_SIG_SCHEME type. The
-// selector type is SigSchemeId. The mapping of selector value to fields is as follows:
+// selector type is [SigSchemeId]. The mapping of selector value to fields is as follows:
 //   - SigSchemeAlgRSASSA: RSASSA
 //   - SigSchemeAlgRSAPSS: RSAPSS
 //   - SigSchemeAlgECDSA: ECDSA
@@ -237,7 +237,7 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 }
 
 // Any returns the signature scheme associated with scheme as a *SchemeHash.
-// It panics if the specified scheme is invalid (SigSchemeId.IsValid returns
+// It panics if the specified scheme is invalid ([SigSchemeId.IsValid] returns
 // false), or the appropriate field isn't set.
 func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
 	if !scheme.IsValid() {
@@ -286,7 +286,7 @@ type SchemeKDF2 SchemeHash
 type SchemeKDF1_SP800_108 SchemeHash
 
 // KDFSchemeU is a union type that corresponds to the TPMU_KDF_SCHEME
-// type. The selector type is KDFAlgorithmId. The mapping of selector
+// type. The selector type is [KDFAlgorithmId]. The mapping of selector
 // value to field is as follows:
 //   - KDFAlgorithmMGF1: MGF1
 //   - KDFAlgorithmKDF1_SP800_56A: KDF1_SP800_56A
@@ -380,7 +380,7 @@ const (
 )
 
 // AsymSchemeU is a union type that corresponds to the TPMU_ASYM_SCHEME type. The
-// selector type is AsymSchemeId. The mapping of selector values to fields is as follows:
+// selector type is [AsymSchemeId]. The mapping of selector values to fields is as follows:
 //   - AsymSchemeRSASSA: RSASSA
 //   - AsymSchemeRSAES: RSAES
 //   - AsymSchemeRSAPSS: RSAPSS
@@ -437,7 +437,7 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 
 // Any returns the asymmetric scheme associated with scheme as a *SchemeHash.
 // It panics if the specified scheme does not have an associated digest algorithm
-// (AsymSchemeId.HasDigest returns false), or if the appropriate field isn't set.
+// ([AsymSchemeId.HasDigest] returns false), or if the appropriate field isn't set.
 func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
 	if !scheme.HasDigest() {
 		panic("invalid asymmetric scheme")
@@ -552,7 +552,7 @@ type SignatureSM2 SignatureECC
 type SignatureECSchnorr SignatureECC
 
 // SignatureU is a union type that corresponds to TPMU_SIGNATURE. The selector
-// type is SigSchemeId. The mapping of selector values to fields is as follows:
+// type is [SigSchemeId]. The mapping of selector values to fields is as follows:
 //   - SigSchemeAlgRSASSA: RSASSA
 //   - SigSchemeAlgRSAPSS: RSAPSS
 //   - SigSchemeAlgECDSA: ECDSA
@@ -596,7 +596,7 @@ func (s *SignatureU) Select(selector reflect.Value) interface{} {
 }
 
 // Any returns the signature associated with scheme as a *SchemeHash. It
-// panics if scheme is SigSchemeAlgNull or the appropriate field isn't
+// panics if scheme is [SigSchemeAlgNull] or the appropriate field isn't
 // set.
 func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
 	if !scheme.IsValid() {
@@ -623,8 +623,8 @@ func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
 	}
 }
 
-// Signature corresponds to the TPMT_SIGNATURE type. It is returned by the attestation
-// commands, and is a parameter for TPMContext.VerifySignature and TPMContext.PolicySigned.
+// Signature corresponds to the TPMT_SIGNATURE type which represents a
+// signature.
 type Signature struct {
 	SigAlg    SigSchemeId // Signature algorithm
 	Signature *SignatureU // Actual signature

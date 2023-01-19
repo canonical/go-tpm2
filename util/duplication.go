@@ -68,26 +68,23 @@ func duplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg t
 	return sensitive, nil
 }
 
-// UnwrapDuplicationObject unwraps the supplied duplication object and
-// returns the corresponding sensitive area. The duplication object will
-// normally be created by executing the TPM2_Duplicate command.
+// UnwrapDuplicationObject unwraps the supplied duplication object and returns the corresponding
+// sensitive area. The duplication object will normally be created by executing the
+// [tpm2.TPMContext.Duplicate] command.
 //
-// If outerSecret is supplied then it is assumed that the object
-// has an outer wrapper. For an object duplicated with TPM2_Duplicate,
-// outerSecret is the seed returned by this command. In this
-// case, privKey, outerHashAlg and outerSymmetricAlg must be supplied -
-// privKey is the key with which outerSecret is protected (the
-// new parent when using TPM2_Duplicate), outerHashAlg is the algorithm used
-// for integrity checking and key derivation (the new parent's name
-// algorithm when using TPM2_Duplicate) and must not be HashAlgorithmNull,
-// and outerSymmetricAlg defines the symmetric algorithm for the outer
-// wrapper (the new parent's symmetric algorithm when using
-// TPM2_Duplicate) and must not be SymObjectAlgorithmNull).
+// If outerSecret is supplied then it is assumed that the object has an outer duplication wrapper.
+// For an object duplicated with [tpm2.TPMContext.Duplicate], outerSecret is the secret structure
+// returned by this command. In this case, privKey, outerHashAlg and outerSymmetricAlg must be
+// supplied - privKey is the key that recovers the seed used to generate the outer wrapper (the new
+// parent when using [tpm2.TPMContext.Duplicate]), outerHashAlg is the algorithm used for integrity
+// checking and key derivation (the new parent's name algorithm when using
+// [tpm2.TPMContext.Duplicate]) and must not be [tpm2.HashAlgorithmNull], and outerSymmetricAlg
+// defines the symmetric algorithm for the outer wrapper (the new parent's symmetric algorithm when
+// using [tpm2.TPMContext.Duplicate]) and must not be [tpm2.SymObjectAlgorithmNull]).
 //
-// If innerSymmetricAlg is supplied and the Algorithm field is not
-// SymObjectAlgorithmNull, then it is assumed that the object has an
-// inner wrapper. In this case, the symmetric key for the inner wrapper
-// must be supplied using the innerSymmetricKey argument.
+// If innerSymmetricAlg is supplied and the Algorithm field is not [tpm2.SymObjectAlgorithmNull],
+// then it is assumed that the object has an inner duplication wrapper. In this case, the symmetric
+// key for the inner wrapper must be supplied using the innerSymmetricKey argument.
 func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKey crypto.PrivateKey, outerHashAlg tpm2.HashAlgorithmId, outerSymmetricAlg *tpm2.SymDefObject, outerSecret tpm2.EncryptedSecret, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (*tpm2.Sensitive, error) {
 	var seed []byte
 	if len(outerSecret) > 0 {
@@ -180,24 +177,20 @@ func sensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAl
 	return innerSymmetricKeyOut, duplicate, nil
 }
 
-// CreateDuplicationObject creates a duplication object that can be
-// imported in to a TPM with the TPM2_Import command from the supplied
-// sensitive area.
+// CreateDuplicationObject creates a duplication object that can be imported in to a TPM with the
+// [tpm2.TPMContext.Import] command from the supplied sensitive area.
 //
-// If parentPublic is supplied, an outer wrapper will be applied to the
-// duplication object. The parentPublic argument should correspond to the
-// public area of the storage key to which the duplication object will be
-// imported. When applying the outer wrapper, the seed used to derive the
-// symmetric key and HMAC key will be encrypted using parentPublic and
-// returned.
+// If parentPublic is supplied, an outer duplication wrapper will be applied to the duplication
+// object. The parentPublic argument should correspond to the public area of the storage key to
+// which the duplication object will be imported. A secret structure will be returned as
+// [tpm2.EncryptedSecret] which can be used by the private part of parentPublic in order to
+// recover the seed used to generate the outer wrapper.
 //
-// If innerSymmetricAlg is supplied and the Algorithm field is not
-// SymObjectAlgorithmNull, this function will apply an inner wrapper to
-// the duplication object. If innerSymmetricKey is supplied, it will be
-// used as the symmetric key for the inner wrapper. It must have a size
-// appropriate for the selected symmetric algorithm. If
-// innerSymmetricKey is not supplied, a symmetric key will be created and
-// returned.
+// If innerSymmetricAlg is supplied and the Algorithm field is not [tpm2.SymObjectAlgorithmNull],
+// this function will apply an inner duplication wrapper to the duplication object. If
+// innerSymmetricKey is supplied, it will be used as the symmetric key for the inner wrapper. It
+// must have a size appropriate for the selected symmetric algorithm. If innerSymmetricKey is not
+// supplied, a symmetric key will be created and returned as [tpm2.Data].
 func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Public, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, outerSecret tpm2.EncryptedSecret, err error) {
 	if public.Attrs&(tpm2.AttrFixedTPM|tpm2.AttrFixedParent) != 0 {
 		return nil, nil, nil, errors.New("object must be a duplication root")

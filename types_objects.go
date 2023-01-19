@@ -36,7 +36,7 @@ const (
 )
 
 // PublicIDU is a union type that corresponds to the TPMU_PUBLIC_ID type. The selector type
-// is ObjectTypeId. The mapping of selector values to fields is as follows:
+// is [ObjectTypeId]. The mapping of selector values to fields is as follows:
 //   - ObjectTypeRSA: RSA
 //   - ObjectTypeKeyedHash: KeyedHash
 //   - ObjectTypeECC: ECC
@@ -106,7 +106,7 @@ type ECCParams struct {
 }
 
 // PublicParamsU is a union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector
-// type is ObjectTypeId.
+// type is ]ObjectTypeId].
 // The mapping of selector values to fields is as follows:
 //   - ObjectTypeRSA: RSADetail
 //   - ObjectTypeKeyedHash: KeyedHashDetail
@@ -136,7 +136,7 @@ func (p *PublicParamsU) Select(selector reflect.Value) interface{} {
 }
 
 // AsymDetail returns the parameters associated with the specified object type
-// as *AsymParams. It panics if the type is not ObjectTypeRSA or ObjectTypeECC,
+// as *AsymParams. It panics if the type is not [ObjectTypeRSA] or [ObjectTypeECC],
 // or the appropriate field isn't set.
 func (p PublicParamsU) AsymDetail(t ObjectTypeId) *AsymParams {
 	switch t {
@@ -273,7 +273,7 @@ func (p *Public) Public() crypto.PublicKey {
 }
 
 // PublicDerived is similar to Public but can be used as a template to create a derived object
-// with TPMContext.CreateLoaded
+// with [TPMContext.CreateLoaded].
 type PublicDerived struct {
 	Type       ObjectTypeId     // Type of this object
 	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
@@ -324,7 +324,7 @@ type Template []byte
 type PrivateVendorSpecific []byte
 
 // SensitiveCompositeU is a union type that corresponds to the TPMU_SENSITIVE_COMPOSITE
-// type. The selector type is ObjectTypeId. The mapping of selector values to fields is
+// type. The selector type is [ObjectTypeId]. The mapping of selector values to fields is
 // as follows:
 //   - ObjectTypeRSA: RSA
 //   - ObjectTypeECC: ECC

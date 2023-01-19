@@ -17,12 +17,13 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// HandleContext corresponds to an entity that resides on the TPM. Implementations of HandleContext maintain some host-side
-// state in order to be able to participate in HMAC sessions. They are invalidated when used in a command that results in the
-// entity being flushed or evicted from the TPM. Once invalidated, they can no longer be used.
+// HandleContext corresponds to an entity that resides on the TPM. Implementations of HandleContext
+// maintain some host-side state in order to be able to participate in sessions. They are
+// invalidated when used in a command that results in the entity being flushed or evicted from the
+// TPM. Once invalidated, they can no longer be used.
 type HandleContext interface {
-	// Handle returns the handle of the corresponding entity on the TPM. If the HandleContext has been invalidated then this will
-	// return HandleUnassigned.
+	// Handle returns the handle of the corresponding entity on the TPM. If the HandleContext has been
+	// invalidated then this will return HandleUnassigned.
 	Handle() Handle
 	Name() Name                        // The name of the entity
 	SerializeToBytes() []byte          // Return a byte slice containing the serialized form of this HandleContext
@@ -67,9 +68,9 @@ type sessionContextInternal interface {
 type ResourceContext interface {
 	HandleContext
 
-	// SetAuthValue sets the authorization value that will be used in authorization roles where knowledge of the authorization
-	// value is required. Functions that create resources on the TPM and return a ResourceContext will set this automatically,
-	// else it will need to be set manually.
+	// SetAuthValue sets the authorization value that will be used in authorization roles where
+	// knowledge of the authorization value is required. Functions that create resources on the TPM
+	// and return a ResourceContext will set this automatically, else it will need to be set manually.
 	SetAuthValue([]byte)
 }
 
@@ -471,22 +472,22 @@ func (t *TPMContext) makeResourceContextFromTPM(handle HandleContext, sessions .
 	return rc, nil
 }
 
-// CreateResourceContextFromTPM creates and returns a new ResourceContext for the
-// specified handle. It will execute a command to read the public area from the TPM
-// in order to initialize state that is maintained on the host side. A
-// ResourceUnavailableError error will be returned if the specified handle references.
+// CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle.
+// It will execute a command to read the public area from the TPM in order to initialize state that
+// is maintained on the host side. A [ResourceUnavailableError] error will be returned if the
+// specified handle references a resource that doesn't exist.
 //
 // The public area and name returned from the TPM are checked for consistency.
 //
-// If any sessions are supplied, the public area is read from the TPM twice. The
-// second time uses the supplied sessions.
+// If any sessions are supplied, the public area is read from the TPM twice. The second time uses
+// the supplied sessions.
 //
-// This function will panic if handle doesn't correspond to a NV index, transient object
-// or persistent object.
+// This function will panic if handle doesn't correspond to a NV index, transient object or
+// persistent object.
 //
-// If subsequent use of the returned ResourceContext requires knowledge of the authorization
-// value of the corresponding TPM resource, this should be provided by calling
-// ResourceContext.SetAuthValue.
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization value
+// of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
 func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
 	rc, err := t.makeResourceContextFromTPM(makePartialHandleContext(handle))
 	if err != nil {
@@ -500,12 +501,12 @@ func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...Ses
 	return t.makeResourceContextFromTPM(rc, sessions...)
 }
 
-// CreatePartialHandleContext creates a new HandleContext for the specified handle. The
-// returned HandleContext is partial and cannot be used in any command other than
-// TPMContext.FlushContext, TPMContext.ReadPublic or TPMContext.NVReadPublic.
+// CreatePartialHandleContext creates a new HandleContext for the specified handle. The returned
+// HandleContext is partial and cannot be used in any command other than [TPMContext.FlushContext],
+// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic], and it cannot be used with any sessions.
 //
-// This function will panic if handle doesn't correspond to a session, transient or
-// persistent object, or NV index.
+// This function will panic if handle doesn't correspond to a session, transient or persistent
+// object, or NV index.
 func CreatePartialHandleContext(handle Handle) HandleContext {
 	switch handle.Type() {
 	case HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypeTransient, HandleTypePersistent:
@@ -519,8 +520,9 @@ func CreatePartialHandleContext(handle Handle) HandleContext {
 //
 // This function will panic if handle does not correspond to a permanent or PCR handle.
 //
-// If subsequent use of the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource,
-// this should be provided by calling ResourceContext.SetAuthValue.
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization value
+// of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
 func (t *TPMContext) GetPermanentContext(handle Handle) ResourceContext {
 	switch handle.Type() {
 	case HandleTypePermanent, HandleTypePCR:
@@ -566,8 +568,8 @@ func (t *TPMContext) PlatformNVHandleContext() ResourceContext {
 	return t.GetPermanentContext(HandlePlatformNV)
 }
 
-// PCRHandleContext returns the ResourceContext corresponding to the PCR at the specified index. It will panic if pcr is not a valid
-// PCR index.
+// PCRHandleContext returns the ResourceContext corresponding to the PCR at the specified index.
+// It will panic if pcr is not a valid PCR index.
 func (t *TPMContext) PCRHandleContext(pcr int) ResourceContext {
 	h := Handle(pcr)
 	if h.Type() != HandleTypePCR {
@@ -576,13 +578,16 @@ func (t *TPMContext) PCRHandleContext(pcr int) ResourceContext {
 	return t.GetPermanentContext(h)
 }
 
-// CreateHandleContextFromReader returns a new HandleContext created from the serialized data read from the supplied io.Reader. This
-// should contain data that was previously created by HandleContext.SerializeToBytes or HandleContext.SerializeToWriter.
+// CreateHandleContextFromReader returns a new HandleContext created from the serialized data read
+// from the supplied io.Reader. This should contain data that was previously created by
+// [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
 //
-// If the supplied data corresponds to a session then a SessionContext will be returned, else a ResourceContext will be returned.
+// If the supplied data corresponds to a session then a [SessionContext] will be returned, else a
+// [ResourceContext] will be returned.
 //
-// If a ResourceContext is returned and subsequent use of it requires knowledge of the authorization value of the corresponding TPM
-// resource, this should be provided by calling ResourceContext.SetAuthValue.
+// If a ResourceContext is returned and subsequent use of it requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
 func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var integrityAlg HashAlgorithmId
 	var integrity []byte
@@ -632,13 +637,16 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	return hc, nil
 }
 
-// CreateHandleContextFromBytes returns a new HandleContext created from the serialized data read from the supplied byte slice. This
-// should contain data that was previously created by HandleContext.SerializeToBytes or HandleContext.SerializeToWriter.
+// CreateHandleContextFromBytes returns a new HandleContext created from the serialized data read
+// from the supplied byte slice. This should contain data that was previously created by
+// [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
 //
-// If the supplied data corresponds to a session then a SessionContext will be returned, else a ResourceContext will be returned.
+// If the supplied data corresponds to a session then a [SessionContext] will be returned, else a
+// [ResourceContext] will be returned.
 //
-// If a ResourceContext is returned and subsequent use of it requires knowledge of the authorization value of the corresponding TPM
-// resource, this should be provided by calling ResourceContext.SetAuthValue.
+// If a ResourceContext is returned and subsequent use of it requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
 func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 	buf := bytes.NewReader(b)
 	rc, err := CreateHandleContextFromReader(buf)
@@ -648,9 +656,10 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 	return rc, len(b) - buf.Len(), nil
 }
 
-// CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided public area. If subsequent use of
-// the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be
-// provided by calling ResourceContext.SetAuthValue.
+// CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided
+// public area. If subsequent use of the returned ResourceContext requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
 func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
 	name, err := pub.ComputeName()
 	if err != nil {
@@ -663,9 +672,10 @@ func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, err
 	return rc, nil
 }
 
-// CreateObjectResourceContextFromPublic returns a new ResourceContext created from the provided public area. If subsequent use of
-// the returned ResourceContext requires knowledge of the authorization value of the corresponding TPM resource, this should be
-// provided by calling ResourceContext.SetAuthValue.
+// CreateObjectResourceContextFromPublic returns a new ResourceContext created from the provided
+// public area. If subsequent use of the returned ResourceContext requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
 func CreateObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
 	name, err := pub.ComputeName()
 	if err != nil {

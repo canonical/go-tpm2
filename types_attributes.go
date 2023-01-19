@@ -109,7 +109,7 @@ const (
 )
 
 // PermanentAttributes corresponds to the TPMA_PERMANENT type and is returned
-// when querying the value of PropertyPermanent.
+// when querying the value of [PropertyPermanent].
 type PermanentAttributes uint32
 
 const (
@@ -123,7 +123,7 @@ const (
 
 // StatupClearAttributes corresponds to the TPMA_STARTUP_CLEAR type and
 // is used to report details of properties that reset after a Startup(CLEAR).
-// It is returned when querying the value of PropertyStartupClear.
+// It is returned when querying the value of [PropertyStartupClear].
 type StartupClearAttributes uint32
 
 const (
@@ -136,7 +136,7 @@ const (
 
 // MemoryAttributes corresponds to the TPMA_MEMORY type and is used to
 // report details about memory management. It is returned when querying
-// the value of PropertyMemory.
+// the value of [PropertyMemory].
 type MemoryAttributes uint32
 
 const (

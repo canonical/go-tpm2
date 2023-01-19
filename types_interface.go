@@ -69,19 +69,20 @@ func (a HashAlgorithmId) IsValid() bool {
 	return true
 }
 
-// Available determines if the TPM digest algorithm has an equivalent go crypto.Hash
-// that is linked into the current binary.
+// Available determines if the TPM digest algorithm has an equivalent go
+// crypto.Hash that is linked into the current binary.
 func (a HashAlgorithmId) Available() bool {
 	return a.GetHash().Available()
 }
 
-// NewHash constructs a new hash.Hash implementation for this algorithm. It will panic if
-// HashAlgorithmId.Available returns false.
+// NewHash constructs a new hash.Hash implementation for this algorithm.
+// It will panic if [HashAlgorithmId.Available] returns false.
 func (a HashAlgorithmId) NewHash() hash.Hash {
 	return a.GetHash().New()
 }
 
-// Size returns the size of the algorithm. It will panic if IsValid returns false.
+// Size returns the size of the algorithm. It will panic if
+// [HashAlgorithmId.IsValid] returns false.
 func (a HashAlgorithmId) Size() int {
 	switch a {
 	case HashAlgorithmSHA1:
@@ -121,8 +122,8 @@ const (
 type SymAlgorithmId AlgorithmId
 
 // IsValidBlockCipher determines if this algorithm is a valid block cipher.
-// This should be checked by code that deserializes an algorithm before calling
-// BlockSize if it does not want to panic.
+// This should be checked by code that deserializes an algorithm before
+// calling [SymAlgorithmId.BlockSize] if it does not want to panic.
 func (a SymAlgorithmId) IsValidBlockCipher() bool {
 	switch a {
 	case SymAlgorithmTDES:
@@ -135,14 +136,15 @@ func (a SymAlgorithmId) IsValidBlockCipher() bool {
 	return true
 }
 
-// Available indicates whether the TPM symmetric cipher has a registered go implementation.
+// Available indicates whether the TPM symmetric cipher has a registered
+// go implementation.
 func (a SymAlgorithmId) Available() bool {
 	_, ok := symmetricAlgs[a]
 	return ok
 }
 
-// BlockSize indicates the block size of the symmetric cipher. This will panic if
-// IsValidBlockCipher returns false.
+// BlockSize indicates the block size of the symmetric cipher. This will
+// panic if [SymAlgorithmId.IsValidBlockCipher] returns false.
 func (a SymAlgorithmId) BlockSize() int {
 	switch a {
 	case SymAlgorithmTDES:
@@ -158,8 +160,8 @@ func (a SymAlgorithmId) BlockSize() int {
 	}
 }
 
-// NewCipher constructs a new symmetric cipher with the supplied key, if there is a go
-// implementation registered.
+// NewCipher constructs a new symmetric cipher with the supplied key, if
+// there is a go implementation registered.
 func (a SymAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
 	if !a.IsValidBlockCipher() {
 		return nil, fmt.Errorf("%v is not a valid block cipher", a)
@@ -184,25 +186,26 @@ const (
 type SymObjectAlgorithmId AlgorithmId
 
 // IsValidBlockCipher determines if this algorithm is a valid block cipher.
-// This should be checked by code that deserializes an algorithm before calling
-// BlockSize if it does not want to panic.
+// This should be checked by code that deserializes an algorithm before
+// calling [SymObjectAlgorithmId.BlockSize] if it does not want to panic.
 func (a SymObjectAlgorithmId) IsValidBlockCipher() bool {
 	return SymAlgorithmId(a).IsValidBlockCipher()
 }
 
-// Available indicates whether the TPM symmetric cipher has a registered go implementation.
+// Available indicates whether the TPM symmetric cipher has a registered
+// go implementation.
 func (a SymObjectAlgorithmId) Available() bool {
 	return SymAlgorithmId(a).Available()
 }
 
-// BlockSize indicates the block size of the symmetric cipher. This will panic if
-// IsValidBlockCipher returns false.
+// BlockSize indicates the block size of the symmetric cipher. This will
+// panic if [SymObjectAlgorithmId.IsValidBlockCipher] returns false.
 func (a SymObjectAlgorithmId) BlockSize() int {
 	return SymAlgorithmId(a).BlockSize()
 }
 
-// NewCipher constructs a new symmetric cipher with the supplied key, if there is a go
-// implementation registered.
+// NewCipher constructs a new symmetric cipher with the supplied key, if
+// there is a go implementation registered.
 func (a SymObjectAlgorithmId) NewCipher(key []byte) (cipher.Block, error) {
 	return SymAlgorithmId(a).NewCipher(key)
 }

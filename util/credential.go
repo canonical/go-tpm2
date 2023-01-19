@@ -14,14 +14,15 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// MakeCredential performs the duties of a certificate authority in order to
-// create an activation credential. It produces a seed and encrypts this with
-// the supplied public key. The seed and supplied object name is then used to
-// apply an outer wrapper to the credential.
+// MakeCredential performs the duties of a certificate authority in order to create an activation
+// credential. It establishes a seed which is used to protect the activation credential (see
+// section 24 - "Credential Protection" of Part 1 of the Trusted Platform Module Library
+// specification).
 //
-// The encrypted credential blob and encrypted seed are returned, and these can
-// be passed to the TPM2_ActivateCredential on the TPM on which both the private
-// part of key and the object associated with objectName are loaded.
+// The encrypted and integrity protected credential blob and a secret are returned, and these can
+// be supplied to the TPM2_ActivateCredential command on the TPM on which both the private part of
+// key and the object associated with objectName are loaded in order to recover the activation
+// credential.
 func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Name) (credentialBlob tpm2.IDObjectRaw, secret tpm2.EncryptedSecret, err error) {
 	if !key.IsStorageParent() || !key.IsAsymmetric() {
 		return nil, nil, errors.New("key must be an asymmetric storage parent")

@@ -14,11 +14,11 @@ import (
 	"github.com/canonical/go-tpm2/templates"
 )
 
-// NewExternalRSAPublicKey creates a public area from the supplied RSA
-// public key with the specified name algorithm, key usage and scheme,
-// for use with the TPM2_LoadExternal command. If nameAlg is
-// HashAlgorithmNull, then HashAlgorithmSHA256 is used. If no usage is
-// specified, the public area will include both sign and decrypt attributes.
+// NewExternalRSAPublicKey creates a public area from the supplied RSA public key with the
+// specified name algorithm, key usage and scheme, for use with the
+// [tpm2.TPMContext.LoadExternal] command. If nameAlg is [tpm2.HashAlgorithmNull], then
+// [tpm2.HashAlgorithmSHA256] is used. If no usage is specified, the public area will include both
+// sign and decrypt attributes.
 func NewExternalRSAPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUsage, scheme *tpm2.RSAScheme, key *rsa.PublicKey) *tpm2.Public {
 	pub := templates.NewRSAKey(nameAlg, usage, scheme, uint16(len(key.N.Bytes())*8))
 	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth)
@@ -28,20 +28,18 @@ func NewExternalRSAPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUs
 	return pub
 }
 
-// NewExternalRSAPublicKeyWithDefaults creates a public area from the
-// supplied RSA with the specified key usage, SHA256 as the name algorithm
-// and the scheme unset, for use with the TPM2_LoadExternal command. If no
-// usage is specified, the public area will include both sign and decrypt
-// attributes.
+// NewExternalRSAPublicKeyWithDefaults creates a public area from the supplied RSA with the
+// specified key usage, SHA256 as the name algorithm and the scheme unset, for use with the
+// [tpm2.TPMContext.LoadExternal] command. If no usage is specified, the public area will include
+// both sign and decrypt attributes.
 func NewExternalRSAPublicKeyWithDefaults(usage templates.KeyUsage, key *rsa.PublicKey) *tpm2.Public {
 	return NewExternalRSAPublicKey(tpm2.HashAlgorithmNull, usage, nil, key)
 }
 
-// NewExternalECCPublicKey creates a public area from the supplied
-// elliptic public key with the specified name algorithm, key usage
-// and scheme, for use with the TPM2_LoadExternal command. If nameAlg
-// is HashAlgorithmNull, then HashAlgorithmSHA256 is used. If no usage is
-// specified, the public area will include both sign and decrypt attributes.
+// NewExternalECCPublicKey creates a public area from the supplied elliptic public key with the
+// specified name algorithm, key usage and scheme, for use with the [tpm2.TPMContext.LoadExternal]
+// command. If nameAlg is [tpm2.HashAlgorithmNull], then [tpm2.HashAlgorithmSHA256] is used. If no
+// usage is specified, the public area will include both sign and decrypt attributes.
 func NewExternalECCPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUsage, scheme *tpm2.ECCScheme, key *ecdsa.PublicKey) *tpm2.Public {
 	var curve tpm2.ECCCurve
 	switch key.Curve {
@@ -67,29 +65,27 @@ func NewExternalECCPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUs
 	return pub
 }
 
-// NewExternalECCPublicKeyWithDefaults creates a public area from the
-// supplied elliptic public key with the specified key usage, SHA256
-// as the name algorithm and the scheme unset, for use with the
-// TPM2_LoadExternal command. If no usage is specified, the public area
-// will include both sign and decrypt attributes.
+// NewExternalECCPublicKeyWithDefaults creates a public area from the supplied elliptic public key
+// with the specified key usage, SHA256 as the name algorithm and the scheme unset, for use with
+// the [tpm2.TPMContext.LoadExternal] command. If no usage is specified, the public area will
+// include both sign and decrypt attributes.
 func NewExternalECCPublicKeyWithDefaults(usage templates.KeyUsage, key *ecdsa.PublicKey) *tpm2.Public {
 	return NewExternalECCPublicKey(tpm2.HashAlgorithmNull, usage, nil, key)
 }
 
-// NewExternalSealedObject creates both the public and sensitive areas for a
-// sealed object containing the supplied data, with the specified name
-// algorithm and authorization value. If nameAlgorithm is HashAlgorithmNull,
-// then HashAlgorithmSHA256 is used.
+// NewExternalSealedObject creates both the public and sensitive areas for a sealed object
+// containing the supplied data, with the specified name algorithm and authorization value. If
+// nameAlgorithm is [tpm2.HashAlgorithmNull], then [tpm2.HashAlgorithmSHA256] is used.
 //
 // It will panic if authValue is larger than the size of the name algorithm.
 //
-// The returned public and sensitive areas can be made into a duplication
-// object with CreateDuplicationObject for importing into a TPM.
+// The returned public and sensitive areas can be made into a duplication object with
+// [CreateDuplicationObject] for importing into a TPM.
 //
-// The public area has the AttrUserWithAuth set in order to permit authentication
-// for the user auth role using the sensitive area's authorization value. In order
-// to require authentication for the user auth role using an authorization policy,
-// remove the AttrUserWithAuth attribute.
+// The public area has the [tpm2.AttrUserWithAuth] set in order to permit authentication for the
+// user auth role using the sensitive area's authorization value. In order to require
+// authentication for the user auth role using an authorization policy, remove the
+// [tpm2.AttrUserWithAuth] attribute.
 func NewExternalSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, data []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	pub := templates.NewSealedObject(nameAlg)
 	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
@@ -114,20 +110,20 @@ func NewExternalSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, 
 	return pub, sensitive
 }
 
-// NewExternalHMACKey creates both the public and sensitive areas for the
-// supplied HMAC key with the specified name algorithm, scheme algorithm
-// and auth value. If nameAlg is HashAlgorithmNull, then HashAlgorithmSHA256
-// is used. If schemeAlg is HashAlgorithmNull, then nameAlg is used.
+// NewExternalHMACKey creates both the public and sensitive areas for the supplied HMAC key with
+// the specified name algorithm, scheme algorithm and auth value. If nameAlg is
+// [tpm2.HashAlgorithmNull], then [tpm2.HashAlgorithmSHA256] is used. If schemeAlg is
+// [tpm2.HashAlgorithmNull], then nameAlg is used.
 //
 // It will panic if authValue is larger than the size of the name algorithm.
 //
-// The returned public and sensitive areas can be made into a duplication
-// object with CreateDuplicationObject for importing into a TPM.
+// The returned public and sensitive areas can be made into a duplication object with
+// [CreateDuplicationObject] for importing into a TPM.
 //
-// The public area has the AttrUserWithAuth set in order to permit authentication
-// for the user auth role using the sensitive area's authorization value. In order
-// to require authentication for the user auth role using an authorization policy,
-// remove the AttrUserWithAuth attribute.
+// The public area has the [tpm2.AttrUserWithAuth] set in order to permit authentication for the
+// user auth role using the sensitive area's authorization value. In order to require
+// authentication for the user auth role using an authorization policy, remove the
+// [tpm2.AttrUserWithAuth] attribute.
 func NewExternalHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	pub := templates.NewHMACKey(nameAlg, schemeAlg)
 	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
@@ -152,19 +148,18 @@ func NewExternalHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId, authValue tpm2.
 	return pub, sensitive
 }
 
-// NewExternalHMACKeyWithDefaults creates both the public and sensitive
-// areas for the supplied HMAC key with the specified auth value and with
-// SHA256 as both the name and scheme algorithm.
+// NewExternalHMACKeyWithDefaults creates both the public and sensitive areas for the supplied HMAC
+// key with the specified auth value and with SHA256 as both the name and scheme algorithm.
 //
 // It will panic if authValue is larger than the size of the name algorithm.
 //
-// The returned public and sensitive areas can be made into a duplication
-// object with CreateDuplicationObject for importing into a TPM.
+// The returned public and sensitive areas can be made into a duplication object with
+// [CreateDuplicationObject] for importing into a TPM.
 //
-// The public area has the AttrUserWithAuth set in order to permit authentication
-// for the user auth role using the sensitive area's authorization value. In order
-// to require authentication for the user auth role using an authorization policy,
-// remove the AttrUserWithAuth attribute.
+// The public area has the [tpm2.AttrUserWithAuth] set in order to permit authentication for the
+// user auth role using the sensitive area's authorization value. In order to require
+// authentication for the user auth role using an authorization policy, remove the
+// [tpm2.AttrUserWithAuth] attribute.
 func NewExternalHMACKeyWithDefaults(authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	return NewExternalHMACKey(tpm2.HashAlgorithmNull, tpm2.HashAlgorithmNull, authValue, key)
 }

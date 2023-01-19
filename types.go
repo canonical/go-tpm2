@@ -12,8 +12,8 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// TPMManufacturer corresponds to the TPM manufacturer and is returned when querying the value PropertyManufacturer with
-// TPMContext.GetCapabilityTPMProperties
+// TPMManufacturer corresponds to the TPM manufacturer and is returned
+// when querying the value [PropertyManufacturer].
 type TPMManufacturer uint32
 
 const (
@@ -169,8 +169,8 @@ func (v PCRValues) SetValue(alg HashAlgorithmId, pcr int, digest Digest) error {
 	return nil
 }
 
-// PublicTemplate exists to allow either Public or PublicDerived structures
-// to be used as the template value for TPMContext.CreateLoaded.
+// PublicTemplate exists to allow a type to be marshalled to the
+// Template type.
 type PublicTemplate interface {
 	ToTemplate() (Template, error)
 }

@@ -33,10 +33,9 @@ func computeOneQualifiedName(entity Entity, parentQn tpm2.Name) (tpm2.Name, erro
 	return mu.MustMarshalToBytes(entity.Name().Algorithm(), mu.RawBytes(h.Sum(nil))), nil
 }
 
-// ComputeQualifiedName computes the qualified name of an object from the
-// specified qualified name of a root object and a list of ancestor objects.
-// The ancestor objects are ordered starting with the immediate child of the
-// object associated with the root qualified name.
+// ComputeQualifiedName computes the qualified name of an object from the specified qualified name
+// of a root object and a list of ancestor objects. The ancestor objects are ordered starting with
+// the immediate child of the object associated with the root qualified name.
 func ComputeQualifiedName(entity Entity, rootQn tpm2.Name, ancestors ...Entity) (tpm2.Name, error) {
 	lastQn := rootQn
 
@@ -51,9 +50,9 @@ func ComputeQualifiedName(entity Entity, rootQn tpm2.Name, ancestors ...Entity) 
 	return computeOneQualifiedName(entity, lastQn)
 }
 
-// ComputeQualifiedNameInHierarchy computes the qualified name of an object
-// protected in the specified hierarchy from a list of ancestor objects. The
-// ancestor objects are ordered starting from the primary object.
+// ComputeQualifiedNameInHierarchy computes the qualified name of an object protected in the
+// specified hierarchy from a list of ancestor objects. The ancestor objects are ordered
+// starting from the primary object.
 func ComputeQualifiedNameInHierarchy(entity Entity, hierarchy tpm2.Handle, ancestors ...Entity) (tpm2.Name, error) {
 	switch hierarchy {
 	case tpm2.HandleOwner, tpm2.HandleNull, tpm2.HandleEndorsement, tpm2.HandlePlatform:
