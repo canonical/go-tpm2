@@ -58,19 +58,19 @@ type TPMDevice struct {
 	version   int
 }
 
-func (d *TPMDevice) openInternal() (*Tcti, error) {
+func (d *TPMDevice) openInternal() (*Tcti, *os.File, error) {
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	conn, err := f.SyscallConn()
 	if err != nil {
 		f.Close()
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &Tcti{f: f, conn: conn}, nil
+	return &Tcti{closer: f, conn: conn}, f, nil
 }
 
 // Path returns the path of the character device.
@@ -90,7 +90,8 @@ func (d *TPMDevice) MajorVersion() int {
 
 // Open implements [tpm2.TPMDevice.Open].
 func (d *TPMDevice) Open() (tpm2.TCTI, error) {
-	return d.openInternal()
+	tcti, _, err := d.openInternal()
+	return tcti, err
 }
 
 // ShouldRetry implements [tpm2.TPMDevice].
@@ -149,9 +150,9 @@ func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
 
 // Tcti represents a connection to a Linux TPM character device.
 type Tcti struct {
-	f    *os.File
-	conn syscall.RawConn
-	buf  *bytes.Reader
+	closer io.Closer
+	conn   syscall.RawConn
+	buf    *bytes.Reader
 
 	timeout time.Duration
 }
@@ -169,18 +170,18 @@ func (d *Tcti) pollReadyToRead() error {
 			fds := []unix.PollFd{unix.PollFd{Fd: int32(fd), Events: unix.POLLIN}}
 			n, err := unix.Ppoll(fds, timeout, nil)
 			if err != nil {
-				return fmt.Errorf("polling device failed: %w", err)
+				return fmt.Errorf("ppoll failed: %w", err)
 			}
 			if n == 0 {
 				return os.ErrDeadlineExceeded
 			}
 			if fds[0].Events != fds[0].Revents {
-				return fmt.Errorf("invalid poll events returned: %d", fds[0].Revents)
+				return fmt.Errorf("ppoll returned invalid events: %d", fds[0].Revents)
 			}
 			return nil
 		}()
 	}); err != nil {
-		return fmt.Errorf("cannot poll device: %w", err)
+		return err
 	}
 
 	return pollErr
@@ -191,14 +192,23 @@ func (d *Tcti) readMoreData() error {
 		return err
 	}
 
-	buf := make([]byte, maxCommandSize)
-	n, err := d.f.Read(buf)
-	if err != nil {
-		return fmt.Errorf("reading from device failed: %w", err)
+	var readErr error
+	if err := d.conn.Read(func(fd uintptr) bool {
+		readErr = func() error {
+			buf := make([]byte, maxCommandSize)
+			n, err := syscall.Read(int(fd), buf)
+			if err != nil {
+				return fmt.Errorf("read failed: %w", err)
+			}
+			d.buf = bytes.NewReader(buf[:n])
+			return nil
+		}()
+		return true
+	}); err != nil {
+		return err
 	}
 
-	d.buf = bytes.NewReader(buf[:n])
-	return nil
+	return readErr
 }
 
 // Read implmements [tpm2.TCTI].
@@ -218,12 +228,20 @@ func (d *Tcti) Read(data []byte) (int, error) {
 
 // Write implmements [tpm2.TCTI].
 func (d *Tcti) Write(data []byte) (int, error) {
-	return d.f.Write(data)
+	var n int
+	var writeErr error
+	if err := d.conn.Write(func(fd uintptr) bool {
+		n, writeErr = syscall.Write(int(fd), data)
+		return true
+	}); err != nil {
+		return 0, err
+	}
+	return n, writeErr
 }
 
 // Close implements [tpm2.TCTI].
 func (d *Tcti) Close() error {
-	return d.f.Close()
+	return d.closer.Close()
 }
 
 // SetTimeout implements [tpm2.TCTI].
@@ -245,12 +263,12 @@ func (d *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 // Deprecated: Use [TPMDeviceRaw] and [TPMDeviceRM].
 func OpenDevice(path string) (*Tcti, error) {
 	device := &TPMDevice{path: path}
-	tcti, err := device.openInternal()
+	tcti, f, err := device.openInternal()
 	if err != nil {
 		return nil, err
 	}
 
-	s, err := tcti.f.Stat()
+	s, err := f.Stat()
 	if err != nil {
 		return nil, err
 	}
