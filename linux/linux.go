@@ -228,6 +228,10 @@ func (d *Tcti) Read(data []byte) (int, error) {
 
 // Write implmements [tpm2.TCTI].
 func (d *Tcti) Write(data []byte) (int, error) {
+	if d.buf != nil {
+		return 0, errors.New("unread bytes from previous response")
+	}
+
 	var n int
 	var writeErr error
 	if err := d.conn.Write(func(fd uintptr) bool {

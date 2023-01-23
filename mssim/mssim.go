@@ -120,7 +120,8 @@ type Tcti struct {
 	timeout  time.Duration
 	locality uint8 // Locality of commands submitted to the simulator on this interface
 
-	r io.Reader
+	commandInProgress bool
+	r                 io.Reader
 }
 
 // Read implmements [tpm2.TCTI].
@@ -135,20 +136,21 @@ func (t *Tcti) Read(data []byte) (int, error) {
 	if t.r == nil {
 		var size uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
-			return 0, fmt.Errorf("cannot read response size from TPM command channel: %w", err)
+			return 0, err
 		}
 
+		t.commandInProgress = false
 		t.r = io.LimitReader(t.tpm, int64(size))
 	}
 
 	n, err := t.r.Read(data)
 	if err == io.EOF {
-		t.r = nil
-
 		var trash uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
-			return n, fmt.Errorf("cannot read zero bytes from TPM command channel after response: %w", err)
+			return 0, err
 		}
+		t.r = nil
+
 	}
 
 	return n, err
@@ -156,12 +158,19 @@ func (t *Tcti) Read(data []byte) (int, error) {
 
 // Write implmements [tpm2.TCTI].
 func (t *Tcti) Write(data []byte) (int, error) {
+	if t.commandInProgress || t.r != nil {
+		return 0, errors.New("command in progress or unread bytes from previous response")
+	}
+
 	buf := mu.MustMarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
 
 	n, err := t.tpm.Write(buf)
 	n -= (len(buf) - len(data))
 	if n < 0 {
 		n = 0
+	}
+	if err == nil {
+		t.commandInProgress = true
 	}
 	return n, err
 }
