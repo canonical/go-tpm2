@@ -400,6 +400,13 @@ func (t *TPMContext) SetMaxSubmissions(max uint) {
 	t.maxSubmissions = max
 }
 
+// SetCommandTimeout sets the maximum time that the context will wait for a response before a
+// command times out. Set this to [InfiniteTimeout] to disable the timeout entirely, which is
+// the default value.
+func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
+	return t.tcti.SetTimeout(timeout)
+}
+
 // InitProperties executes one or more TPM2_GetCapability commands to initialize properties used
 // internally by TPMContext. This is normally done automatically by functions that require these
 // properties when they are used for the first time, but this function is provided so that the
@@ -483,6 +490,13 @@ func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
 
 	tcti, err := device.Open()
 	if err != nil {
+		return nil, err
+	}
+	err = tcti.SetTimeout(InfiniteTimeout)
+	switch {
+	case errors.Is(err, ErrTimeoutNotSupported):
+		// ignore
+	case err != nil:
 		return nil, err
 	}
 

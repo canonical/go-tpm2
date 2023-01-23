@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -62,7 +64,13 @@ func (d *TPMDevice) openInternal() (*Tcti, error) {
 		return nil, err
 	}
 
-	return &Tcti{f: f}, nil
+	conn, err := f.SyscallConn()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	return &Tcti{f: f, conn: conn}, nil
 }
 
 // Path returns the path of the character device.
@@ -141,19 +149,46 @@ func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
 
 // Tcti represents a connection to a Linux TPM character device.
 type Tcti struct {
-	f   *os.File
-	buf *bytes.Reader
+	f    *os.File
+	conn syscall.RawConn
+	buf  *bytes.Reader
+
+	timeout time.Duration
+}
+
+func (d *Tcti) pollReadyToRead() error {
+	var timeout *unix.Timespec
+	if d.timeout != tpm2.InfiniteTimeout {
+		timeout = new(unix.Timespec)
+		*timeout = unix.NsecToTimespec(int64(d.timeout))
+	}
+
+	var pollErr error
+	if err := d.conn.Control(func(fd uintptr) {
+		pollErr = func() error {
+			fds := []unix.PollFd{unix.PollFd{Fd: int32(fd), Events: unix.POLLIN}}
+			n, err := unix.Ppoll(fds, timeout, nil)
+			if err != nil {
+				return fmt.Errorf("polling device failed: %w", err)
+			}
+			if n == 0 {
+				return os.ErrDeadlineExceeded
+			}
+			if fds[0].Events != fds[0].Revents {
+				return fmt.Errorf("invalid poll events returned: %d", fds[0].Revents)
+			}
+			return nil
+		}()
+	}); err != nil {
+		return fmt.Errorf("cannot poll device: %w", err)
+	}
+
+	return pollErr
 }
 
 func (d *Tcti) readMoreData() error {
-	fds := []unix.PollFd{unix.PollFd{Fd: int32(d.f.Fd()), Events: unix.POLLIN}}
-	_, err := unix.Ppoll(fds, nil, nil)
-	if err != nil {
-		return fmt.Errorf("polling device failed: %w", err)
-	}
-
-	if fds[0].Events != fds[0].Revents {
-		return fmt.Errorf("invalid poll events returned: %d", fds[0].Revents)
+	if err := d.pollReadyToRead(); err != nil {
+		return err
 	}
 
 	buf := make([]byte, maxCommandSize)
@@ -189,6 +224,12 @@ func (d *Tcti) Write(data []byte) (int, error) {
 // Close implements [tpm2.TCTI].
 func (d *Tcti) Close() error {
 	return d.f.Close()
+}
+
+// SetTimeout implements [tpm2.TCTI].
+func (d *Tcti) SetTimeout(timeout time.Duration) error {
+	d.timeout = timeout
+	return nil
 }
 
 // MakeSticky implements [tpm2.TCTI].

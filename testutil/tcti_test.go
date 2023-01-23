@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"math"
+	"time"
 
 	. "gopkg.in/check.v1"
 
@@ -44,6 +45,10 @@ func (t *ignoreCloseTcti) Close() error {
 	}
 	t.closed = true
 	return nil
+}
+
+func (t *ignoreCloseTcti) SetTimeout(timeout time.Duration) error {
+	return t.tcti.SetTimeout(timeout)
 }
 
 func (t *ignoreCloseTcti) MakeSticky(handle tpm2.Handle, sticky bool) error {

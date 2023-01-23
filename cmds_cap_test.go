@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"time"
 
 	. "github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
@@ -603,6 +604,10 @@ func (t *mockTPM12Tcti) Write(data []byte) (int, error) {
 }
 
 func (t *mockTPM12Tcti) Close() error {
+	return nil
+}
+
+func (t *mockTPM12Tcti) SetTimeout(timeout time.Duration) error {
 	return nil
 }
 

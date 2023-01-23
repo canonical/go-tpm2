@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
@@ -69,6 +70,7 @@ func (d *Device) openInternal() (*Tcti, error) {
 	platformAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port()+1)
 
 	tcti := new(Tcti)
+	tcti.timeout = tpm2.InfiniteTimeout
 	tcti.locality = 3
 
 	tpm, err := net.Dial("tcp", tpmAddress)
@@ -112,16 +114,24 @@ func (d *Device) String() string {
 // Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2
 // simulator interface.
 type Tcti struct {
-	locality uint8 // Locality of commands submitted to the simulator on this interface
-
 	tpm      net.Conn
 	platform net.Conn
+
+	timeout  time.Duration
+	locality uint8 // Locality of commands submitted to the simulator on this interface
 
 	r io.Reader
 }
 
 // Read implmements [tpm2.TCTI].
 func (t *Tcti) Read(data []byte) (int, error) {
+	if t.timeout == tpm2.InfiniteTimeout {
+		var zero time.Time
+		t.tpm.SetReadDeadline(zero)
+	} else {
+		t.tpm.SetReadDeadline(time.Now().Add(t.timeout))
+	}
+
 	if t.r == nil {
 		var size uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
@@ -169,11 +179,17 @@ func (t *Tcti) Close() (err error) {
 	return err
 }
 
+func (t *Tcti) SetTimeout(timeout time.Duration) error {
+	t.timeout = timeout
+	return nil
+}
+
 // MakeSticky implements [tpm2.TCTI].
 func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }
 
+// SetTimeout implements [tpm2.TCTI].
 func (t *Tcti) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
 		return fmt.Errorf("cannot send command: %w", err)

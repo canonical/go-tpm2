@@ -4,10 +4,23 @@
 
 package tpm2
 
+import (
+	"errors"
+	"time"
+)
+
+// InfiniteTimeout can be used to configure an infinite timeout.
+const InfiniteTimeout = -1 * time.Millisecond
+
+// ErrTimeoutNotSupported indicates that a [TCTI] implementation does not support
+// configuring the command timeout.
+var ErrTimeoutNotSupported = errors.New("configurable command timeouts are not supported")
+
 // XXX: Note that the "TCG TSS 2.0 TPM Command Transmission Interface (TCTI) API Specification"
 // defines the following callbacks:
 // - transmit, which is equivalent to io.Writer.
-// - receive, which is equivalent to io.Reader.
+// - receive, which is equivalent to io.Reader, although that lacks the ability to specify
+//   a timeout.
 // - finalize, which is equivalent to io.Closer.
 // - cancel, which we don't implement at the moment, and the Linux character device doesn't
 //   support cancellation anyway.
@@ -28,6 +41,10 @@ type TCTI interface {
 	Write(p []byte) (int, error)
 
 	Close() error
+
+	// SetTimeout sets the amount of time to wait before Read times out. Set to InfiniteTimeout to
+	// never time out.
+	SetTimeout(timeout time.Duration) error
 
 	// MakeSticky requests that the underlying resource manager does not unload the resource
 	// associated with the supplied handle between commands.
