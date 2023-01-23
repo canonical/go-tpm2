@@ -99,6 +99,11 @@ func (d *Device) Open() (tpm2.TCTI, error) {
 	return d.openInternal()
 }
 
+// ShouldRetry implements [tpm2.TPMDevice].
+func (d *Device) ShouldRetry() bool {
+	return true
+}
+
 // String implements [fmt.Stringer].
 func (d *Device) String() string {
 	return fmt.Sprintf("mssim device, host=\"%s\", port=%d", d.Host(), d.Port())

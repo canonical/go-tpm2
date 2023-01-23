@@ -271,6 +271,7 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 // these are for sessions that don't provide authorization for a corresponding TPM resource. These
 // sessions may be used for the purposes of session based parameter encryption or command auditing.
 type TPMContext struct {
+	device                TPMDevice
 	tcti                  TCTI
 	permanentResources    map[Handle]*permanentContext
 	maxSubmissions        uint
@@ -321,7 +322,7 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 //
 // If the TPM returns a response indicating that the command should be retried, this function will
 // retry up to a maximum number of times defined by the number supplied to
-// [TPMContext.SetMaxSubmissions].
+// [TPMContext.SetMaxSubmissions], if required by the underlying [TPMDevice].
 //
 // A *[TctiError] will be returned if the transmission interface returns an error.
 //
@@ -359,7 +360,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 			return nil, nil, &InvalidResponseError{commandCode, err}
 		}
 
-		if tries >= t.maxSubmissions {
+		if !t.device.ShouldRetry() || tries >= t.maxSubmissions {
 			return nil, nil, err
 		}
 		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
@@ -446,6 +447,57 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 	return t.InitProperties()
 }
 
+// TPMDevice corresponds a TPM device.
+type TPMDevice interface {
+	// Open opens a communication channel with the TPM device.
+	Open() (TCTI, error)
+
+	// ShouldRetry indicates whether TPMContext should resubmit commands
+	// when the TPM response indicates that a command should be retried.
+	// Some backends may have already retried, in which case TPMContext
+	// should not retry.
+	ShouldRetry() bool
+
+	fmt.Stringer
+}
+
+// OpenTPMDevice opens the supplied TPM device and returns a new instance of TPMContext which
+// communicates with the device using the newly opened communication channel.
+func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
+	if device == nil {
+		return nil, errors.New("no device")
+	}
+
+	tcti, err := device.Open()
+	if err != nil {
+		return nil, err
+	}
+
+	tpm := new(TPMContext)
+	tpm.device = device
+	tpm.tcti = tcti
+	tpm.permanentResources = make(map[Handle]*permanentContext)
+	tpm.maxSubmissions = 5
+	tpm.execContext.dispatcher = tpm
+	return tpm, nil
+}
+
+type dummyTPMDevice struct {
+	tcti TCTI
+}
+
+func (d *dummyTPMDevice) Open() (TCTI, error) {
+	return d.tcti, nil
+}
+
+func (d *dummyTPMDevice) ShouldRetry() bool {
+	return true
+}
+
+func (d *dummyTPMDevice) String() string {
+	return ""
+}
+
 // NewTPMContext creates a new instance of TPMContext, which communicates with the TPM using the
 // transmission interface provided via the tcti parameter. The transmission interface must not be
 // nil - it is expected that the caller checks the error returned from the function that is/ used
@@ -457,31 +509,11 @@ func NewTPMContext(tcti TCTI) *TPMContext {
 		panic("nil transmission interface")
 	}
 
-	t := new(TPMContext)
-	t.tcti = tcti
-	t.permanentResources = make(map[Handle]*permanentContext)
-	t.maxSubmissions = 5
-	t.execContext.dispatcher = t
-
-	return t
-}
-
-// TPMDevice corresponds a TPM device.
-type TPMDevice interface {
-	// Open opens a communication channel with the TPM device.
-	Open() (TCTI, error)
-	fmt.Stringer
-}
-
-// OpenTPMDevice opens the supplied TPM device and returns a new instance of TPMContext which
-// communicates with the device using the newly opened communication channel.
-func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
-	if device == nil {
-		return nil, errors.New("no device")
-	}
-	tcti, err := device.Open()
+	device := &dummyTPMDevice{tcti: tcti}
+	tpm, err := OpenTPMDevice(device)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return NewTPMContext(tcti), nil
+
+	return tpm
 }
