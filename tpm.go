@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"time"
 
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -339,7 +340,10 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 		return nil, nil, fmt.Errorf("cannot serialize command packet: %w", err)
 	}
 
-	for tries := uint(1); ; tries++ {
+	try := uint(1)
+	retryDelay := 20 * time.Millisecond
+
+	for {
 		var err error
 		resp, err := t.RunCommandBytes(cmd)
 		if err != nil {
@@ -360,12 +364,17 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 			return nil, nil, &InvalidResponseError{commandCode, err}
 		}
 
-		if !t.device.ShouldRetry() || tries >= t.maxSubmissions {
+		if !t.device.ShouldRetry() || try >= t.maxSubmissions {
 			return nil, nil, err
 		}
 		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
 			return nil, nil, err
 		}
+
+		time.Sleep(retryDelay)
+
+		try++
+		retryDelay *= 2
 	}
 }
 
@@ -382,7 +391,11 @@ func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
 }
 
 // SetMaxSubmissions sets the maximum number of times that [CommandContext] will attempt to submit
-// a command before failing with an error. The default value is 5.
+// a command before failing with an error. The default value is 5. Setting this to 1 disables
+// resubmission. Note that 1 and 0 behave the same.
+//
+// Each submission is performed after an incremental delay. The first submission is delayed for
+// 20ms, with the delay time doubling for each subsequent submission.
 func (t *TPMContext) SetMaxSubmissions(max uint) {
 	t.maxSubmissions = max
 }
