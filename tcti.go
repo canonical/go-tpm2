@@ -9,14 +9,11 @@ package tpm2
 // - transmit, which is equivalent to io.Writer.
 // - receive, which is equivalent to io.Reader.
 // - finalize, which is equivalent to io.Closer.
-// - cancel, which we don't implement at the moment because there's not a mechanism to cancel
-//   an operation in go-tpm2. Perhaps if we move the call to Read() to a separate go routine and pass
-//   a context around, we could cancel using a deadline. Not today though, and the Linux character
-//   device driver doesn't provide a mechanism to cancel so it probably wouldn't be worth the effort
-//   anyway.
+// - cancel, which we don't implement at the moment, and the Linux character device doesn't
+//   support cancellation anyway.
 // - getPollHandles, doesn't really make sense here because go's runtime does the polling on
 //   Read.
-// - setLocality.
+// - setLocality, makes no sense in this package.
 // - makeSticky, not implemented yet by any TCTI implementation in tss2 AFAICT.
 
 // TCTI represents a communication channel to a TPM implementation.
@@ -31,9 +28,6 @@ type TCTI interface {
 	Write(p []byte) (int, error)
 
 	Close() error
-
-	// SetLocality sets the locality that will be used for subsequent commands.
-	SetLocality(locality uint8) error
 
 	// MakeSticky requests that the underlying resource manager does not unload the resource
 	// associated with the supplied handle between commands.

@@ -450,6 +450,8 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 // transmission interface provided via the tcti parameter. The transmission interface must not be
 // nil - it is expected that the caller checks the error returned from the function that is/ used
 // to create it.
+//
+// Deprecated: Use [OpenTPMDevice] instead.
 func NewTPMContext(tcti TCTI) *TPMContext {
 	if tcti == nil {
 		panic("nil transmission interface")
@@ -462,4 +464,24 @@ func NewTPMContext(tcti TCTI) *TPMContext {
 	t.execContext.dispatcher = t
 
 	return t
+}
+
+// TPMDevice corresponds a TPM device.
+type TPMDevice interface {
+	// Open opens a communication channel with the TPM device.
+	Open() (TCTI, error)
+	fmt.Stringer
+}
+
+// OpenTPMDevice opens the supplied TPM device and returns a new instance of TPMContext which
+// communicates with the device using the newly opened communication channel.
+func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
+	if device == nil {
+		return nil, errors.New("no device")
+	}
+	tcti, err := device.Open()
+	if err != nil {
+		return nil, err
+	}
+	return NewTPMContext(tcti), nil
 }

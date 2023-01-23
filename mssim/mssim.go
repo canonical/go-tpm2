@@ -25,6 +25,12 @@ const (
 	cmdReset          uint32 = 17
 	cmdSessionEnd     uint32 = 20
 	cmdStop           uint32 = 21
+
+	DefaultPort uint = 2321
+)
+
+var (
+	DefaultDevice *Device = &Device{port: DefaultPort}
 )
 
 // PlatformCommandError corresponds to an error code in response to a platform command
@@ -36,6 +42,66 @@ type PlatformCommandError struct {
 
 func (e *PlatformCommandError) Error() string {
 	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
+}
+
+// Device describes a TPM simulator device.
+type Device struct {
+	host string
+	port uint
+}
+
+// Host is the host that the TPM simulator is running on.
+func (d *Device) Host() string {
+	if d.host == "" {
+		return "localhost"
+	}
+	return d.host
+}
+
+// Port is the port number of the TPM simulator's command channel.
+// Its platform channel runs on the next port number.
+func (d *Device) Port() uint {
+	return d.port
+}
+
+func (d *Device) openInternal() (*Tcti, error) {
+	tpmAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port())
+	platformAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port()+1)
+
+	tcti := new(Tcti)
+	tcti.locality = 3
+
+	tpm, err := net.Dial("tcp", tpmAddress)
+	if err != nil {
+		return nil, fmt.Errorf("cannot connect to TPM socket: %w", err)
+	}
+	tcti.tpm = tpm
+
+	platform, err := net.Dial("tcp", platformAddress)
+	if err != nil {
+		tcti.tpm.Close()
+		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
+	}
+	tcti.platform = platform
+
+	if err := tcti.platformCommand(cmdPowerOn); err != nil {
+		return nil, fmt.Errorf("cannot complete power on command: %w", err)
+	}
+	if err := tcti.platformCommand(cmdNVOn); err != nil {
+		return nil, fmt.Errorf("cannot complete NV on command: %w", err)
+	}
+
+	return tcti, nil
+}
+
+// Open implements [tpm2.TPMDevice].
+func (d *Device) Open() (tpm2.TCTI, error) {
+	return d.openInternal()
+}
+
+// String implements [fmt.Stringer].
+func (d *Device) String() string {
+	return fmt.Sprintf("mssim device, host=\"%s\", port=%d", d.Host(), d.Port())
 }
 
 // Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2
@@ -98,12 +164,6 @@ func (t *Tcti) Close() (err error) {
 	return err
 }
 
-// SetLocality implements [tpm2.TCTI].
-func (t *Tcti) SetLocality(locality uint8) error {
-	t.locality = locality
-	return nil
-}
-
 // MakeSticky implements [tpm2.TCTI].
 func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
@@ -125,6 +185,12 @@ func (t *Tcti) platformCommand(cmd uint32) error {
 	return nil
 }
 
+// SetLocality sets the locality to be used for the next command.
+func (t *Tcti) SetLocality(locality uint8) error {
+	t.locality = locality
+	return nil
+}
+
 // Reset submits the reset command on the platform connection, which
 // initiates a reset of the TPM simulator and results in the execution
 // of _TPM_Init().
@@ -141,6 +207,17 @@ func (t *Tcti) Stop() (out error) {
 	return binary.Write(t.tpm, binary.BigEndian, cmdStop)
 }
 
+// NewLocalDevice returns a new device structure for the specified port on the
+// local machine.
+func NewLocalDevice(port uint) *Device {
+	return &Device{port: port}
+}
+
+// NewDevice returns a new device structure for the specified host and port.
+func NewDevice(host string, port uint) *Device {
+	return &Device{host: host, port: port}
+}
+
 // OpenConnection attempts to open a connection to a TPM simulator on the
 // specified host and port. The port argument corresponds to the TPM
 // command server. The simulator will also provide a platform server on
@@ -148,36 +225,9 @@ func (t *Tcti) Stop() (out error) {
 //
 // If successful, it returns a new Tcti instance which can be passed to
 // tpm2.NewTPMContext.
+//
+// Deprecated: Use [NewDevice], [NewLocalDevice] or [DefaultDevice].
 func OpenConnection(host string, port uint) (*Tcti, error) {
-	if host == "" {
-		host = "localhost"
-	}
-
-	tpmAddress := fmt.Sprintf("%s:%d", host, port)
-	platformAddress := fmt.Sprintf("%s:%d", host, port+1)
-
-	tcti := new(Tcti)
-	tcti.locality = 3
-
-	tpm, err := net.Dial("tcp", tpmAddress)
-	if err != nil {
-		return nil, fmt.Errorf("cannot connect to TPM socket: %w", err)
-	}
-	tcti.tpm = tpm
-
-	platform, err := net.Dial("tcp", platformAddress)
-	if err != nil {
-		tcti.tpm.Close()
-		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
-	}
-	tcti.platform = platform
-
-	if err := tcti.platformCommand(cmdPowerOn); err != nil {
-		return nil, fmt.Errorf("cannot complete power on command: %w", err)
-	}
-	if err := tcti.platformCommand(cmdNVOn); err != nil {
-		return nil, fmt.Errorf("cannot complete NV on command: %w", err)
-	}
-
-	return tcti, nil
+	device := NewDevice(host, port)
+	return device.openInternal()
 }

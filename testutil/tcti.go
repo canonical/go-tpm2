@@ -994,10 +994,6 @@ func (t *TCTI) Close() error {
 	return nil
 }
 
-func (t *TCTI) SetLocality(locality uint8) error {
-	return t.tcti.SetLocality(locality)
-}
-
 func (t *TCTI) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return t.tcti.MakeSticky(handle, sticky)
 }

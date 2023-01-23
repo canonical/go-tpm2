@@ -46,10 +46,6 @@ func (t *ignoreCloseTcti) Close() error {
 	return nil
 }
 
-func (t *ignoreCloseTcti) SetLocality(locality uint8) error {
-	return t.tcti.SetLocality(locality)
-}
-
 func (t *ignoreCloseTcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return t.tcti.MakeSticky(handle, sticky)
 }
