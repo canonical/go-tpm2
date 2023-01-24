@@ -403,6 +403,9 @@ func (t *TPMContext) SetMaxSubmissions(max uint) {
 // SetCommandTimeout sets the maximum time that the context will wait for a response before a
 // command times out. Set this to [InfiniteTimeout] to disable the timeout entirely, which is
 // the default value.
+//
+// Note that there isn't a way to reattempt to the fetch the result of a command that times out.
+// If a command times out, the connection will generally be unusable for future commands.
 func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
 	return t.tcti.SetTimeout(timeout)
 }

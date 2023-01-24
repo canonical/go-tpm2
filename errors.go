@@ -68,7 +68,8 @@ func (e ResourceUnavailableError) Is(target error) bool {
 //   - There were an unexpected number of response auths.
 //   - A response auth was invalid.
 //
-// Any sessions used in the command that caused this error should be considered invalid.
+// Any session contexts associated with the command that caused this error should be considered
+// invalid.
 //
 // It is possible that the TPM command completed successfully.
 //
@@ -91,7 +92,8 @@ func (e *InvalidResponseError) Error() string {
 }
 
 // InvalidAuthResponseError is returned from any [TPMContext] method that executes a TPM command if
-// one of the response auth HMACs is invalid.
+// one of the response auth HMACs is invalid. If this error occurs, session contexts associated
+// with the command that caused this error should be considered invalid.
 type InvalidAuthResponseError struct {
 	Index int // Index of the session responsible for this error, starting from 1
 	msg   string
@@ -102,6 +104,8 @@ func (e *InvalidAuthResponseError) Error() string {
 }
 
 // TctiError is returned from any [TPMContext] method if the underlying [TCTI] returns an error.
+// If this error occurs, the underlying connection will generally be unusable for subsequent
+// commands.
 type TctiError struct {
 	Op  string // The operation that caused the error
 	err error
