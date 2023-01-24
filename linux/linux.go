@@ -152,12 +152,12 @@ func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
 type Tcti struct {
 	closer io.Closer
 	conn   syscall.RawConn
-	buf    *bytes.Reader
+	rsp    *bytes.Reader
 
 	timeout time.Duration
 }
 
-func (d *Tcti) pollReadyToRead() error {
+func (d *Tcti) pollReadyToRead() (ready bool, err error) {
 	var timeout *unix.Timespec
 	if d.timeout != tpm2.InfiniteTimeout {
 		timeout = new(unix.Timespec)
@@ -166,69 +166,95 @@ func (d *Tcti) pollReadyToRead() error {
 
 	var pollErr error
 	if err := d.conn.Control(func(fd uintptr) {
-		pollErr = func() error {
+		ready, pollErr = func() (bool, error) {
 			fds := []unix.PollFd{unix.PollFd{Fd: int32(fd), Events: unix.POLLIN}}
 			n, err := unix.Ppoll(fds, timeout, nil)
 			if err != nil {
-				return fmt.Errorf("ppoll failed: %w", err)
+				return false, fmt.Errorf("ppoll failed: %w", err)
 			}
 			if n == 0 {
-				return os.ErrDeadlineExceeded
+				return false, nil
 			}
 			if fds[0].Events != fds[0].Revents {
-				return fmt.Errorf("ppoll returned invalid events: %d", fds[0].Revents)
+				return false, fmt.Errorf("ppoll returned invalid events: %d", fds[0].Revents)
 			}
-			return nil
+			return true, nil
 		}()
 	}); err != nil {
-		return err
+		return false, err
 	}
 
-	return pollErr
+	return ready, pollErr
 }
 
-func (d *Tcti) readMoreData() error {
-	if err := d.pollReadyToRead(); err != nil {
-		return err
-	}
-
+func (d *Tcti) read(data []byte) (n int, err error) {
 	var readErr error
 	if err := d.conn.Read(func(fd uintptr) bool {
-		readErr = func() error {
-			buf := make([]byte, maxCommandSize)
-			n, err := syscall.Read(int(fd), buf)
-			if err != nil {
-				return fmt.Errorf("read failed: %w", err)
-			}
-			d.buf = bytes.NewReader(buf[:n])
-			return nil
-		}()
+		n, readErr = syscall.Read(int(fd), data)
 		return true
 	}); err != nil {
+		return 0, err
+	}
+
+	return n, readErr
+}
+
+func (d *Tcti) readNextResponse() error {
+	// Note that the TPM character device read and poll implementations are a bit funky.
+	// read() can return 0 instead of -EWOULDBLOCK if a response is not ready. This is
+	// problematic because go's netpoller tries a read before deciding whether to park
+	// the current routine and waking it when it later becomes ready to read, and this
+	// causes it just immediately returning io.EOF.
+	//
+	// To work around this, we do our own poll / read dance, but even this doesn't work
+	// as expected in practise.
+	//
+	// read() can also block until the current command completes even in non-blocking
+	// mode if we call it whilst the kernel TPM async worker is dispatching the command,
+	// because it takes a lock held by the worker, so we don't try it before polling.
+	//
+	// However, poll() will block until the current command completes if we call it whilst
+	// the kernel worker is dispatching the command, ignoring any timeout, because it
+	// takes a lock held by the worker.
+	ready, err := d.pollReadyToRead()
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return os.ErrDeadlineExceeded
+	}
+
+	buf := make([]byte, maxCommandSize)
+	n, err := d.read(buf)
+	if err != nil {
 		return err
 	}
 
-	return readErr
+	d.rsp = bytes.NewReader(buf[:n])
+	return nil
 }
 
 // Read implmements [tpm2.TCTI].
 func (d *Tcti) Read(data []byte) (int, error) {
-	if d.buf == nil {
-		if err := d.readMoreData(); err != nil {
+	if d.rsp == nil {
+		// Newer kernels support partial reads, but there is no way to detect
+		// for this support from userspace, so always read responses in a single
+		// call.
+		if err := d.readNextResponse(); err != nil {
 			return 0, err
 		}
 	}
 
-	n, err := d.buf.Read(data)
+	n, err := d.rsp.Read(data)
 	if err == io.EOF {
-		d.buf = nil
+		d.rsp = nil
 	}
 	return n, err
 }
 
 // Write implmements [tpm2.TCTI].
 func (d *Tcti) Write(data []byte) (int, error) {
-	if d.buf != nil {
+	if d.rsp != nil {
 		return 0, errors.New("unread bytes from previous response")
 	}
 
