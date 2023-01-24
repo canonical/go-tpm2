@@ -18,7 +18,6 @@ const (
 )
 
 type CmdContext = cmdContext
-type CommandDispatcher = commandDispatcher
 type NvIndexContext = nvIndexContext
 type ObjectContext = objectContext
 type PolicyHMACType = policyHMACType
@@ -41,7 +40,7 @@ func (c *CommandContext) Cmd() *CmdContext {
 	return &c.cmd
 }
 
-func (c *ResponseContext) Dispatcher() CommandDispatcher {
+func (c *ResponseContext) Dispatcher() commandDispatcher {
 	return c.dispatcher
 }
 
@@ -66,7 +65,7 @@ func MockRandReader(r io.Reader) (restore func()) {
 	}
 }
 
-func NewMockCommandContext(dispatcher CommandDispatcher, cmd *CmdContext) *CommandContext {
+func NewMockCommandContext(dispatcher commandDispatcher, cmd *CmdContext) *CommandContext {
 	c := &CommandContext{dispatcher: dispatcher}
 	if cmd != nil {
 		c.cmd = *cmd
@@ -74,7 +73,7 @@ func NewMockCommandContext(dispatcher CommandDispatcher, cmd *CmdContext) *Comma
 	return c
 }
 
-func NewMockResponseContext(dispatcher CommandDispatcher, rsp *RspContext) *ResponseContext {
+func NewMockResponseContext(dispatcher commandDispatcher, rsp *RspContext) *ResponseContext {
 	return &ResponseContext{
 		dispatcher: dispatcher,
 		rsp:        rsp}
