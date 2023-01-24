@@ -43,6 +43,8 @@ var (
 	// ErrNoTPMDevices indicates that there are no TPM devices.
 	ErrNoTPMDevices = errors.New("no TPM devices are available")
 
+	errClosed = errors.New("use of closed file")
+
 	sysfsPath = "/sys"
 )
 
@@ -70,7 +72,7 @@ func (d *TPMDevice) openInternal() (*Tcti, *os.File, error) {
 		return nil, nil, err
 	}
 
-	return &Tcti{closer: f, conn: conn}, f, nil
+	return &Tcti{name: d.path, closer: f, conn: conn}, f, nil
 }
 
 // Path returns the path of the character device.
@@ -150,6 +152,7 @@ func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
 
 // Tcti represents a connection to a Linux TPM character device.
 type Tcti struct {
+	name   string
 	closer io.Closer
 	conn   syscall.RawConn
 	rsp    *bytes.Reader
@@ -157,7 +160,20 @@ type Tcti struct {
 	timeout time.Duration
 }
 
-func (d *Tcti) pollReadyToRead() (ready bool, err error) {
+func (d *Tcti) wrapErr(op string, err error) error {
+	if err == nil || err == io.EOF {
+		return err
+	}
+	if err == errClosed {
+		err = os.ErrClosed
+	}
+	return &os.PathError{
+		Op:   op,
+		Path: d.name,
+		Err:  err}
+}
+
+func (d *Tcti) pollReadyToRead() error {
 	var timeout *unix.Timespec
 	if d.timeout != tpm2.InfiniteTimeout {
 		timeout = new(unix.Timespec)
@@ -166,25 +182,27 @@ func (d *Tcti) pollReadyToRead() (ready bool, err error) {
 
 	var pollErr error
 	if err := d.conn.Control(func(fd uintptr) {
-		ready, pollErr = func() (bool, error) {
+		pollErr = func() error {
 			fds := []unix.PollFd{unix.PollFd{Fd: int32(fd), Events: unix.POLLIN}}
 			n, err := unix.Ppoll(fds, timeout, nil)
 			if err != nil {
-				return false, fmt.Errorf("ppoll failed: %w", err)
+				return err
 			}
 			if n == 0 {
-				return false, nil
+				return os.ErrDeadlineExceeded
 			}
 			if fds[0].Events != fds[0].Revents {
-				return false, fmt.Errorf("ppoll returned invalid events: %d", fds[0].Revents)
+				return fmt.Errorf("invalid revents: %d", fds[0].Revents)
 			}
-			return true, nil
+			return nil
 		}()
 	}); err != nil {
-		return false, err
+		// The only error that can be returned from this is poll.ErrFileClosing
+		// which is private
+		return d.wrapErr("poll", errClosed)
 	}
 
-	return ready, pollErr
+	return d.wrapErr("poll", pollErr)
 }
 
 func (d *Tcti) read(data []byte) (n int, err error) {
@@ -193,10 +211,15 @@ func (d *Tcti) read(data []byte) (n int, err error) {
 		n, readErr = syscall.Read(int(fd), data)
 		return true
 	}); err != nil {
-		return 0, err
+		// The only error that can be returned from this is poll.ErrFileClosing
+		// which is private
+		return 0, d.wrapErr("read", errClosed)
 	}
 
-	return n, readErr
+	if n == 0 && readErr == nil {
+		readErr = io.EOF
+	}
+	return n, d.wrapErr("read", readErr)
 }
 
 func (d *Tcti) readNextResponse() error {
@@ -216,12 +239,8 @@ func (d *Tcti) readNextResponse() error {
 	// However, poll() will block until the current command completes if we call it whilst
 	// the kernel worker is dispatching the command, ignoring any timeout, because it
 	// takes a lock held by the worker.
-	ready, err := d.pollReadyToRead()
-	if err != nil {
+	if err := d.pollReadyToRead(); err != nil {
 		return err
-	}
-	if !ready {
-		return os.ErrDeadlineExceeded
 	}
 
 	buf := make([]byte, maxCommandSize)
@@ -255,7 +274,10 @@ func (d *Tcti) Read(data []byte) (int, error) {
 // Write implmements [tpm2.TCTI].
 func (d *Tcti) Write(data []byte) (int, error) {
 	if d.rsp != nil {
-		return 0, errors.New("unread bytes from previous response")
+		// Don't start a new command before the previous response has been fully read.
+		// This doesn't catch the case where we haven't fetched the previous response
+		// from the device, but the subsequent write will fail with -EBUSY
+		return 0, d.wrapErr("write", errors.New("unread bytes from previous response"))
 	}
 
 	var n int
@@ -264,9 +286,15 @@ func (d *Tcti) Write(data []byte) (int, error) {
 		n, writeErr = syscall.Write(int(fd), data)
 		return true
 	}); err != nil {
-		return 0, err
+		// The only error that can be returned from this is poll.ErrFileClosing
+		// which is private
+		return 0, d.wrapErr("write", errClosed)
 	}
-	return n, writeErr
+
+	if n < len(data) && writeErr == nil {
+		writeErr = io.ErrShortWrite
+	}
+	return n, d.wrapErr("write", writeErr)
 }
 
 // Close implements [tpm2.TCTI].
