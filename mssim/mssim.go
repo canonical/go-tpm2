@@ -126,14 +126,15 @@ type Tcti struct {
 
 // Read implmements [tpm2.TCTI].
 func (t *Tcti) Read(data []byte) (int, error) {
-	if t.timeout == tpm2.InfiniteTimeout {
-		var zero time.Time
-		t.tpm.SetReadDeadline(zero)
-	} else {
-		t.tpm.SetReadDeadline(time.Now().Add(t.timeout))
-	}
-
 	if t.r == nil {
+		var deadline time.Time
+		if t.timeout != tpm2.InfiniteTimeout {
+			deadline = time.Now().Add(t.timeout)
+		}
+		if err := t.tpm.SetReadDeadline(deadline); err != nil {
+			return 0, fmt.Errorf("cannot set read deadline: %w", err)
+		}
+
 		var size uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
 			return 0, err
@@ -145,6 +146,10 @@ func (t *Tcti) Read(data []byte) (int, error) {
 
 	n, err := t.r.Read(data)
 	if err == io.EOF {
+		// Clear the deadline because we might have exceeded it by now
+		var noDeadline time.Time
+		t.tpm.SetReadDeadline(noDeadline)
+
 		var trash uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
 			return 0, err
