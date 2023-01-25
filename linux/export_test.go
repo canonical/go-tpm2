@@ -4,6 +4,10 @@
 
 package linux
 
+type PpiImpl = ppiImpl
+
+var NewPPI = newPPI
+
 func MockSysfsPath(path string) (restore func()) {
 	orig := sysfsPath
 	sysfsPath = path
@@ -12,13 +16,14 @@ func MockSysfsPath(path string) (restore func()) {
 	}
 }
 
-func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int) *TPMDeviceRaw {
+func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int, pp *PpiImpl) *TPMDeviceRaw {
 	return &TPMDeviceRaw{
 		TPMDevice: TPMDevice{
 			path:      path,
 			sysfsPath: sysfsPath,
 			version:   version},
-		devno: devno}
+		devno: devno,
+		ppi:   pp}
 }
 
 func NewMockTPMDeviceRM(path, sysfsPath string, version int, raw *TPMDeviceRaw) *TPMDeviceRM {

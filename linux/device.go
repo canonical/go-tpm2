@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/ppi"
 )
 
 const (
@@ -24,6 +25,10 @@ const (
 var (
 	// ErrDefaultNotTPM2Device indicates that the default device is not a TPM device.
 	ErrDefaultNotTPM2Device = errors.New("the default TPM device is not a TPM2 device")
+
+	// ErrNoPhysicalPresenceInterface indicates that there is no physical presence interface
+	// available for a TPM device.
+	ErrNoPhysicalPresenceInterface = errors.New("no physical presence interface available")
 
 	// ErrNoResourceManagedDevice indicates that a TPM device has no corresponding resource
 	// managed device.
@@ -99,6 +104,16 @@ func (d *TPMDevice) String() string {
 type TPMDeviceRaw struct {
 	TPMDevice
 	devno int
+	ppi   *ppiImpl
+}
+
+// PhysicalPresenceInterface returns the physical presence interface associated
+// with this device.
+func (d *TPMDeviceRaw) PhysicalPresenceInterface() (*ppi.PPI, error) {
+	if d.ppi == nil {
+		return nil, ErrNoPhysicalPresenceInterface
+	}
+	return ppi.NewPPI(d.ppi), nil
 }
 
 // ResourceManagedDevice returns the corresponding resource managed device if one
@@ -232,12 +247,18 @@ func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
 			return nil, fmt.Errorf("cannot determine version of TPM device at %s: %w", sysfsPath, err)
 		}
 
+		ppi, err := newPPI(filepath.Join(sysfsPath, "ppi"))
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("cannot initialize PPI for TPM device at %s: %w", sysfsPath, err)
+		}
+
 		out = append(out, &TPMDeviceRaw{
 			TPMDevice: TPMDevice{
 				path:      filepath.Join(devPath, entry.Name()),
 				sysfsPath: sysfsPath,
 				version:   version},
-			devno: devno})
+			devno: devno,
+			ppi:   ppi})
 	}
 
 	sort.Slice(out, func(i, j int) bool {
