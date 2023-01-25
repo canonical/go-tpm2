@@ -21,6 +21,11 @@ const (
 	maxCommandSize int = 4096
 )
 
+type timeoutError struct{}
+
+func (e timeoutError) Error() string { return "i/o timeout" }
+func (e timeoutError) Timeout() bool { return true }
+
 // Tcti represents a connection to a Linux TPM character device.
 type Tcti struct {
 	name   string
@@ -60,7 +65,7 @@ func (d *Tcti) pollReadyToRead() error {
 				return err
 			}
 			if n == 0 {
-				return os.ErrDeadlineExceeded
+				return timeoutError{}
 			}
 			if fds[0].Events != fds[0].Revents {
 				return fmt.Errorf("invalid revents: %d", fds[0].Revents)
