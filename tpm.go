@@ -216,7 +216,7 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 
 // TPMContext is the main entry point by which commands are executed on a TPM device using this
 // package. It provides convenience functions for supported commands and communicates with the
-// underlying device via a transmission interface, and is created by calling [OpenTPMDevice].
+// underlying device via a transmission interface, which is provided to [NewTPMContext].
 // Convenience functions are wrappers around [TPMContext.StartCommand], which may be used directly
 // for custom commands or commands that aren't supported directly by this package.
 //

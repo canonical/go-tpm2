@@ -205,9 +205,11 @@ func AddCommandLineFlags() {
 
 // TPMSimulatorOptions provide the options to LaunchTPMSimulator
 type TPMSimulatorOptions struct {
-	SourcePath     string // Path for the source persistent data file
-	Manufacture    bool   // Indicates that the simulator should be executed in re-manufacture mode
-	SavePersistent bool   // Saves the persistent data file back to SourcePath on exit
+	SourcePath     string    // Path for the source persistent data file
+	Manufacture    bool      // Indicates that the simulator should be executed in re-manufacture mode
+	SavePersistent bool      // Saves the persistent data file back to SourcePath on exit
+	Stdout         io.Writer // specify stdout for simulator
+	Stderr         io.Writer // specify stderr for simulator
 }
 
 // LaunchTPMSimulator launches a TPM simulator. If opts.SourcePath is empty, or it points to a
@@ -438,6 +440,8 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 
 	cmd = exec.Command(mssimPath, args...)
 	cmd.Dir = mssimTmpDir // Run from the temporary directory we created
+	cmd.Stdout = opts.Stdout
+	cmd.Stderr = opts.Stderr
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("cannot start simulator: %w", err)
