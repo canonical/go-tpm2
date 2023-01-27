@@ -342,7 +342,7 @@ func (c *tpmSimulatorLaunchContext) shutdown() error {
 	return errors.New(msg)
 }
 
-func (c *tpmSimulatorLaunchContext) launch(port uint, opts *TPMSimulatorOptions) error {
+func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 	noEphemeral := true // XXX: try to autodetect this
 
 	if opts.SourcePath == "" && opts.SavePersistent {
@@ -352,7 +352,10 @@ func (c *tpmSimulatorLaunchContext) launch(port uint, opts *TPMSimulatorOptions)
 		return errors.New("KeepWorkDir requires WorkDir")
 	}
 
-	c.port = port
+	c.port = opts.Port
+	if c.port == 0 {
+		c.port = MssimPort
+	}
 	c.keepWorkDir = opts.KeepWorkDir
 	if opts.SavePersistent {
 		c.persistentSavePath = opts.SourcePath
@@ -496,6 +499,10 @@ Loop:
 
 // TPMSimulatorOptions provide the options to LaunchTPMSimulator
 type TPMSimulatorOptions struct {
+	// Port is the TCP port to use for the command channel. This port + 1 will also be used for the
+	// platform channel. If this is zero, then the value of [MssimPort] will be used.
+	Port uint
+
 	SourcePath     string    // Path for the source persistent data file
 	Manufacture    bool      // Indicates that the simulator should be executed in re-manufacture mode
 	SavePersistent bool      // Saves the persistent data file back to SourcePath on exit
@@ -505,10 +512,14 @@ type TPMSimulatorOptions struct {
 	KeepWorkDir    bool      // Keep the working directory on exit. Requires WorkDir.
 }
 
-// LaunchTPMSimulator launches a TPM simulator. If opts.SourcePath and opts.WorkDir are empty,
-// the simulator will run with ephemeral storage if this is supported. When not using ephemeral
-// storage, a temporary working directory is created in XDG_RUNTIME_DIR. The location of the
-// temporary working directory can be overridden with opts.WorkDir.
+// LaunchTPMSimulator launches a TPM simulator with the TCP command channel listening on
+// opts.Port. The platform channel will listen on opts.Port + 1. If opts.Port is zero, then
+// the value of [MssimPort] is used.
+//
+// If opts.SourcePath and opts.WorkDir are empty, the simulator will run with ephemeral storage
+// if this is supported. When not using ephemeral storage, a temporary working directory is
+// created in XDG_RUNTIME_DIR. The location of the temporary working directory can be overridden
+// with opts.WorkDir.
 //
 // If opts.SourcePath is not empty, the file at the specified path will be copied to the
 // working directory and used as the persistent NV storage. If opts.SavePersistent is also true,
@@ -523,7 +534,7 @@ type TPMSimulatorOptions struct {
 func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	// Pick sensible defaults
 	if opts == nil {
-		opts = &TPMSimulatorOptions{Manufacture: true}
+		opts = &TPMSimulatorOptions{Port: MssimPort, Manufacture: true}
 	}
 
 	ctx := new(tpmSimulatorLaunchContext)
@@ -536,7 +547,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		ctx.shutdown()
 	}()
 
-	if err := ctx.launch(MssimPort, opts); err != nil {
+	if err := ctx.launch(opts); err != nil {
 		return nil, err
 	}
 
