@@ -203,6 +203,142 @@ func AddCommandLineFlags() {
 	flag.UintVar(&MssimPort, "mssim-port", 2321, "The port number of the TPM simulator command channel (default: 2321)")
 }
 
+type tpmSimulatorShutdownContext struct {
+	cmd                *exec.Cmd
+	port               uint
+	persistentSavePath string
+	workDir            string
+	keepWorkDir        bool
+
+	errs []error
+}
+
+func (c *tpmSimulatorShutdownContext) captureErr(task string, fn func() error) {
+	if err := fn(); err != nil {
+		c.errs = append(c.errs, fmt.Errorf("%s failed: %w", task, err))
+	}
+}
+
+func (c *tpmSimulatorShutdownContext) kill() error {
+	if err := c.cmd.Process.Kill(); err != nil {
+		return fmt.Errorf("cannot kill simulator: %w", err)
+	}
+	return nil
+}
+
+func (c *tpmSimulatorShutdownContext) wait() error {
+	if err := c.cmd.Wait(); err != nil {
+		return fmt.Errorf("simulator returned an error: %w", err)
+	}
+	return nil
+}
+
+func (c *tpmSimulatorShutdownContext) terminateFn(stopOk bool) func() error {
+	if stopOk {
+		return c.wait
+	}
+	return c.kill
+}
+
+func (c *tpmSimulatorShutdownContext) stopAndTerminate() (err error) {
+	if c.cmd == nil || c.cmd.Process == nil {
+		return nil
+	}
+
+	defer func() {
+		stopOk := true
+		if err != nil {
+			stopOk = false
+		}
+		c.captureErr("terminate", c.terminateFn(stopOk))
+	}()
+
+	tcti, err := mssim.OpenConnection("", c.port)
+	if err != nil {
+		return fmt.Errorf("cannot open simulator connection for stop: %w", err)
+	}
+
+	tpm := tpm2.NewTPMContext(tcti)
+	tpm.SetCommandTimeout(5 * time.Second)
+
+	c.captureErr("shutdown", func() error {
+		return tpm.Shutdown(tpm2.StartupClear)
+	})
+	if err := tcti.Stop(); err != nil {
+		return fmt.Errorf("cannot stop simulator: %w", err)
+	}
+	if err := tpm.Close(); err != nil {
+		return fmt.Errorf("cannot close simulator: %w", err)
+	}
+
+	return nil
+}
+
+func (c *tpmSimulatorShutdownContext) savePersistent() error {
+	if c.persistentSavePath == "" {
+		// Nothing else to do
+		return nil
+	}
+
+	// Open the updated persistent storage
+	src, err := os.Open(filepath.Join(c.workDir, "NVChip"))
+	switch {
+	case os.IsNotExist(err):
+		// No storage - this means we failed before the simulator started
+		return nil
+	case err != nil:
+		return fmt.Errorf("cannot open simulator's persistent data: %w", err)
+	}
+	defer src.Close()
+
+	// Atomically write to the source directory
+	dest, err := osutil.NewAtomicFile(c.persistentSavePath, 0644, 0, sys.UserID(osutil.NoChown), sys.GroupID(osutil.NoChown))
+	if err != nil {
+		return fmt.Errorf("cannot create atomic file: %w", err)
+	}
+	defer dest.Cancel()
+
+	if _, err := io.Copy(dest, src); err != nil {
+		return fmt.Errorf("cannot copy simulator's persistent data to destination: %w", err)
+	}
+	if err := dest.Commit(); err != nil {
+		return fmt.Errorf("cannot commit saved persistent data: %w", err)
+	}
+
+	return nil
+}
+
+func (c *tpmSimulatorShutdownContext) cleanWorkDir() error {
+	if c.workDir == "" {
+		return nil
+	}
+	if c.keepWorkDir {
+		fmt.Printf("\n*** Saved working directory: %s ***\n\n", c.workDir)
+		return nil
+	}
+	if err := os.RemoveAll(c.workDir); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *tpmSimulatorShutdownContext) shutdown() error {
+	c.captureErr("stop and terminate", c.stopAndTerminate)
+	c.captureErr("save persistent", c.savePersistent)
+	c.captureErr("cleanup workdir", c.cleanWorkDir)
+
+	if len(c.errs) == 0 {
+		return nil
+	}
+
+	msg := "cannot properly shut down the simulator because of the following errors:\n"
+	for _, err := range c.errs {
+		msg += "* " + err.Error() + "\n"
+	}
+	return errors.New(msg)
+}
+
 // TPMSimulatorOptions provide the options to LaunchTPMSimulator
 type TPMSimulatorOptions struct {
 	SourcePath     string    // Path for the source persistent data file
@@ -283,97 +419,11 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		return nil, errors.New("cannot determine XDG_RUNTIME_DIR")
 	}
 
-	var workDir string
-	var cmd *exec.Cmd
-
-	// At this point, we have stuff to clean up on early failure.
-	cleanup := func() {
-		// Defer saving the persistent data and removing the temporary directory
-		defer func() {
-			// Defer removal of the temporary directory
-			defer func() {
-				if workDir == "" {
-					return
-				}
-				if opts.KeepWorkDir {
-					fmt.Printf("\n*** Saved working directory: %s ***\n\n", workDir)
-					return
-				}
-				os.RemoveAll(workDir)
-			}()
-
-			if !opts.SavePersistent {
-				// Nothing else to do
-				return
-			}
-
-			// Open the updated persistent storage
-			src, err := os.Open(filepath.Join(workDir, "NVChip"))
-			switch {
-			case os.IsNotExist(err):
-				// No storage - this means we failed before the simulator started
-				return
-			case err != nil:
-				fmt.Fprintf(os.Stderr, "Cannot open TPM simulator persistent data: %v\n", err)
-				return
-			}
-			defer src.Close()
-
-			// Atomically write to the source directory
-			dest, err := osutil.NewAtomicFile(opts.SourcePath, 0644, 0, sys.UserID(osutil.NoChown), sys.GroupID(osutil.NoChown))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot create new atomic file for saving TPM simulator persistent data: %v\n", err)
-				return
-			}
-			defer dest.Cancel()
-
-			if _, err := io.Copy(dest, src); err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot copy TPM simulator persistent data: %v\n", err)
-				return
-			}
-
-			if err := dest.Commit(); err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot commit TPM simulator persistent data: %v\n", err)
-			}
-		}()
-
-		if cmd != nil && cmd.Process != nil {
-			// If we've called exec.Cmd.Start, attempt to stop the simulator.
-			cleanShutdown := false
-			// Defer the call to exec.Cmd.Wait or os.Process.Kill until after we've initiated the shutdown.
-			defer func() {
-				if cleanShutdown {
-					if err := cmd.Wait(); err != nil {
-						fmt.Fprintf(os.Stderr, "TPM simulator finished with an error: %v", err)
-					}
-				} else {
-					fmt.Fprintf(os.Stderr, "Killing TPM simulator\n")
-					if err := cmd.Process.Kill(); err != nil {
-						fmt.Fprintf(os.Stderr, "Cannot send signal to TPM simulator: %v\n", err)
-					}
-				}
-			}()
-
-			tcti, err := mssim.OpenConnection("", MssimPort)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot open TPM simulator connection for shutdown: %v\n", err)
-				return
-			}
-
-			tpm := tpm2.NewTPMContext(tcti)
-			if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
-				fmt.Fprintf(os.Stderr, "TPM simulator shutdown failed: %v\n", err)
-			}
-			if err := tcti.Stop(); err != nil {
-				fmt.Fprintf(os.Stderr, "TPM simulator stop failed: %v\n", err)
-				return
-			}
-			if err := tpm.Close(); err != nil {
-				fmt.Fprintf(os.Stderr, "TPM simulator connection close failed: %v\n", err)
-				return
-			}
-			cleanShutdown = true
-		}
+	ctx := &tpmSimulatorShutdownContext{
+		port:        MssimPort,
+		keepWorkDir: opts.KeepWorkDir}
+	if opts.SavePersistent {
+		ctx.persistentSavePath = opts.SourcePath
 	}
 
 	// Defer cleanup on failure
@@ -381,7 +431,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		if err == nil {
 			return
 		}
-		cleanup()
+		ctx.shutdown()
 	}()
 
 	// Determine working directory location
@@ -405,10 +455,11 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		if err := os.MkdirAll(workDirRoot, 0755); err != nil {
 			return nil, fmt.Errorf("cannot create workdir root: %w", err)
 		}
-		workDir, err = ioutil.TempDir(workDirRoot, workDirPrefix)
+		workDir, err := ioutil.TempDir(workDirRoot, workDirPrefix)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create workdir for simulator: %w", err)
 		}
+		ctx.workDir = workDir
 	}
 
 	// Copy any pre-existing persistent data in to the working directory
@@ -423,7 +474,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 		default:
 			// We have a source file. Copy it to the working directory
 			defer source.Close()
-			dest, err := os.Create(filepath.Join(workDir, "NVChip"))
+			dest, err := os.Create(filepath.Join(ctx.workDir, "NVChip"))
 			if err != nil {
 				return nil, fmt.Errorf("cannot create working copy of persistent storage for simulator: %w", err)
 			}
@@ -438,17 +489,19 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	if opts.Manufacture {
 		args = append(args, "-m")
 	}
-	if workDir == "" {
+	if ctx.workDir == "" {
 		args = append(args, "-e")
 	}
 	args = append(args, strconv.FormatUint(uint64(MssimPort), 10))
 
-	cmd = exec.Command(mssimPath, args...)
-	cmd.Dir = workDir // Run from the temporary directory we created
+	cmd := exec.Command(mssimPath, args...)
+	cmd.Dir = ctx.workDir // Run from the working directory
 	cmd.Stdout = opts.Stdout
 	cmd.Stderr = opts.Stderr
 
-	if err := cmd.Start(); err != nil {
+	ctx.cmd = cmd
+
+	if err := ctx.cmd.Start(); err != nil {
 		return nil, fmt.Errorf("cannot start simulator: %w", err)
 	}
 
@@ -457,7 +510,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 Loop:
 	for i := 0; ; i++ {
 		var err error
-		tcti, err = mssim.OpenConnection("", MssimPort)
+		tcti, err = mssim.OpenConnection("", ctx.port)
 		switch {
 		case err != nil && i == 4:
 			return nil, fmt.Errorf("cannot open simulator connection: %w", err)
@@ -475,7 +528,9 @@ Loop:
 		return nil, fmt.Errorf("simulator startup failed: %w", err)
 	}
 
-	return cleanup, nil
+	return func() {
+		ctx.shutdown()
+	}, nil
 }
 
 func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
