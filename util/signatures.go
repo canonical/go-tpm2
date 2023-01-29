@@ -7,16 +7,13 @@ package util
 import (
 	"crypto"
 	"crypto/ecdsa"
-	"crypto/hmac"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/subtle"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/cryptutil"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -26,85 +23,44 @@ import (
 //
 // In order to create a HMAC, the supplied private key should be a byte slice containing the HMAC
 // key.
+//
+// Deprecated: Use [cryptutil.Sign] instead.
 func Sign(key crypto.PrivateKey, scheme *tpm2.SigScheme, digest []byte) (*tpm2.Signature, error) {
-	hashAlg := scheme.Details.Any(scheme.Scheme).HashAlg
-	if !hashAlg.Available() {
-		return nil, errors.New("digest algorithm is not available")
-	}
-
-	if len(digest) != hashAlg.Size() {
-		return nil, errors.New("invalid digest length")
-	}
+	var signer crypto.Signer
+	var opts crypto.SignerOpts = scheme.Details.Any(scheme.Scheme).HashAlg.GetHash()
 
 	switch k := key.(type) {
 	case *rsa.PrivateKey:
 		switch scheme.Scheme {
 		case tpm2.SigSchemeAlgRSASSA:
-			sig, err := rsa.SignPKCS1v15(rand.Reader, k, hashAlg.GetHash(), digest)
-			if err != nil {
-				return nil, err
-			}
-
-			return &tpm2.Signature{
-				SigAlg: tpm2.SigSchemeAlgRSASSA,
-				Signature: &tpm2.SignatureU{
-					RSASSA: &tpm2.SignatureRSASSA{
-						Hash: hashAlg,
-						Sig:  sig}}}, nil
+			signer = k
 		case tpm2.SigSchemeAlgRSAPSS:
-			options := rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}
-			sig, err := rsa.SignPSS(rand.Reader, k, hashAlg.GetHash(), digest, &options)
-			if err != nil {
-				return nil, err
-			}
-
-			return &tpm2.Signature{
-				SigAlg: tpm2.SigSchemeAlgRSAPSS,
-				Signature: &tpm2.SignatureU{
-					RSAPSS: &tpm2.SignatureRSAPSS{
-						Hash: hashAlg,
-						Sig:  sig}}}, nil
+			signer = k
+			opts = &rsa.PSSOptions{
+				SaltLength: rsa.PSSSaltLengthEqualsHash,
+				Hash:       scheme.Details.RSAPSS.HashAlg.GetHash()}
 		default:
 			return nil, errors.New("unsupported RSA signature scheme")
 		}
 	case *ecdsa.PrivateKey:
 		switch scheme.Scheme {
 		case tpm2.SigSchemeAlgECDSA:
-			r, s, err := ecdsa.Sign(rand.Reader, k, digest)
-			if err != nil {
-				return nil, err
-			}
-
-			return &tpm2.Signature{
-				SigAlg: tpm2.SigSchemeAlgECDSA,
-				Signature: &tpm2.SignatureU{
-					ECDSA: &tpm2.SignatureECDSA{
-						Hash:       hashAlg,
-						SignatureR: r.Bytes(),
-						SignatureS: s.Bytes()}}}, nil
+			signer = k
 		default:
 			return nil, errors.New("unsupported ECC signature scheme")
 		}
 	case []byte:
 		switch scheme.Scheme {
 		case tpm2.SigSchemeAlgHMAC:
-			h := hmac.New(hashAlg.NewHash, k)
-			h.Write(digest)
-
-			taggedHash, err := tpm2.NewTaggedHash(hashAlg, h.Sum(nil))
-			if err != nil {
-				return nil, err
-			}
-
-			return &tpm2.Signature{
-				SigAlg:    tpm2.SigSchemeAlgHMAC,
-				Signature: &tpm2.SignatureU{HMAC: taggedHash}}, nil
+			signer = cryptutil.HMACKey(k)
 		default:
 			return nil, errors.New("unsupported keyed hash scheme")
 		}
 	default:
 		return nil, errors.New("unsupported private key type")
 	}
+
+	return cryptutil.Sign(signer, digest, opts)
 }
 
 // VerifySignature verifies a signature created by a TPM using the supplied public key. Note that
@@ -112,65 +68,16 @@ func Sign(key crypto.PrivateKey, scheme *tpm2.SigScheme, digest []byte) (*tpm2.S
 //
 // In order to verify a HMAC signature, the supplied public key should be a byte slice containing
 // the HMAC key.
+//
+// Deprecated: Use [cryptutil.Verify] instead.
 func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signature) (ok bool, err error) {
-	if !signature.Signature.Any(signature.SigAlg).HashAlg.Available() {
-		return false, errors.New("digest algorithm is not available")
-	}
-
 	switch k := key.(type) {
-	case *rsa.PublicKey:
-		switch signature.SigAlg {
-		case tpm2.SigSchemeAlgRSASSA:
-			if err := rsa.VerifyPKCS1v15(k, signature.Signature.RSASSA.Hash.GetHash(), digest, signature.Signature.RSASSA.Sig); err != nil {
-				if err == rsa.ErrVerification {
-					return false, nil
-				}
-				return false, err
-			}
-			return true, nil
-		case tpm2.SigSchemeAlgRSAPSS:
-			options := rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}
-			if err := rsa.VerifyPSS(k, signature.Signature.RSAPSS.Hash.GetHash(), digest, signature.Signature.RSAPSS.Sig, &options); err != nil {
-				if err == rsa.ErrVerification {
-					return false, nil
-				}
-				return false, err
-			}
-			return true, nil
-		default:
-			return false, errors.New("unsupported RSA signature algorithm")
-		}
-	case *ecdsa.PublicKey:
-		switch signature.SigAlg {
-		case tpm2.SigSchemeAlgECDSA:
-			ok = ecdsa.Verify(k, digest, new(big.Int).SetBytes(signature.Signature.ECDSA.SignatureR),
-				new(big.Int).SetBytes(signature.Signature.ECDSA.SignatureS))
-			return ok, nil
-		default:
-			return false, errors.New("unsupported ECC signature algorithm")
-		}
 	case []byte:
-		switch signature.SigAlg {
-		case tpm2.SigSchemeAlgHMAC:
-			if !signature.Signature.HMAC.HashAlg.IsValid() {
-				return false, errors.New("invalid HMAC algorithm")
-			}
-			scheme := &tpm2.SigScheme{
-				Scheme: tpm2.SigSchemeAlgHMAC,
-				Details: &tpm2.SigSchemeU{
-					HMAC: &tpm2.SchemeHMAC{
-						HashAlg: signature.Signature.HMAC.HashAlg}}}
-			test, err := Sign(k, scheme, digest)
-			if err != nil {
-				return false, err
-			}
-			return subtle.ConstantTimeCompare(signature.Signature.HMAC.Digest(), test.Signature.HMAC.Digest()) == 1, nil
-		default:
-			return false, errors.New("unsupported keyed hash signature algorithm")
-		}
+		key = cryptutil.HMACKey(k)
 	default:
-		return false, errors.New("invalid public key type")
+		// pass as is
 	}
+	return cryptutil.VerifySignature(key, digest, signature)
 }
 
 // SignPolicyAuthorization creates a signed authorization using the supplied key and signature

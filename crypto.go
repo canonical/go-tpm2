@@ -14,7 +14,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/canonical/go-tpm2/crypto"
+	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 )
 
 type NewCipherFunc func([]byte) (cipher.Block, error)
@@ -83,5 +83,5 @@ func cryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, 
 		}
 	}
 
-	return crypto.SecretEncrypt(pub, public.NameAlg.GetHash(), label)
+	return internal_crypt.SecretEncrypt(pub, public.NameAlg.GetHash(), label)
 }

@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/crypto"
+	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 	internal_util "github.com/canonical/go-tpm2/internal/util"
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -36,7 +36,7 @@ func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Na
 		return nil, nil, fmt.Errorf("cannot marshal credential: %w", err)
 	}
 
-	secret, seed, err := crypto.SecretEncrypt(key.Public(), key.NameAlg.GetHash(), []byte(tpm2.IdentityKey))
+	secret, seed, err := internal_crypt.SecretEncrypt(key.Public(), key.NameAlg.GetHash(), []byte(tpm2.IdentityKey))
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
 	}

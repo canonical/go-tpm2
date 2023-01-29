@@ -13,7 +13,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/crypto"
+	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/testutil"
 )
@@ -1242,13 +1242,13 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 
 		switch sessionData.Symmetric.Algorithm {
 		case SymAlgorithmAES:
-			k := crypto.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
+			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 			offset := (sessionData.Symmetric.KeyBits.Sym + 7) / 8
 			symKey := k[0:offset]
 			iv := k[offset:]
-			c.Check(crypto.SymmetricDecrypt(sessionData.Symmetric.Algorithm, symKey, iv, recovered[2:n+2]), IsNil)
+			c.Check(internal_crypt.SymmetricDecrypt(sessionData.Symmetric.Algorithm, symKey, iv, recovered[2:n+2]), IsNil)
 		case SymAlgorithmXOR:
-			crypto.XORObfuscation(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), sessionData.NonceCaller, sessionData.NonceTPM, recovered[2:n+2])
+			internal_crypt.XORObfuscation(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), sessionData.NonceCaller, sessionData.NonceTPM, recovered[2:n+2])
 		}
 	}
 	c.Check(recovered, DeepEquals, origCpBytes)
@@ -1490,13 +1490,13 @@ func (s *authSuite) testSessionParamsProcessResponseAuthArea(c *C, data *testSes
 
 		switch sessionData.Symmetric.Algorithm {
 		case SymAlgorithmAES:
-			k := crypto.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), auth.Nonce, sessionData.NonceCaller, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
+			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), auth.Nonce, sessionData.NonceCaller, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
 			offset := (sessionData.Symmetric.KeyBits.Sym + 7) / 8
 			symKey := k[0:offset]
 			iv := k[offset:]
-			c.Check(crypto.SymmetricEncrypt(sessionData.Symmetric.Algorithm, symKey, iv, rpBytes[2:n+2]), IsNil)
+			c.Check(internal_crypt.SymmetricEncrypt(sessionData.Symmetric.Algorithm, symKey, iv, rpBytes[2:n+2]), IsNil)
 		case SymAlgorithmXOR:
-			crypto.XORObfuscation(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), auth.Nonce, sessionData.NonceCaller, rpBytes[2:n+2])
+			internal_crypt.XORObfuscation(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), auth.Nonce, sessionData.NonceCaller, rpBytes[2:n+2])
 		}
 	}
 

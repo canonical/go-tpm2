@@ -13,7 +13,7 @@ import (
 	"io/ioutil"
 
 	"github.com/canonical/go-tpm2"
-	tpm2_crypto "github.com/canonical/go-tpm2/crypto"
+	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 	internal_util "github.com/canonical/go-tpm2/internal/util"
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -39,7 +39,7 @@ func duplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg t
 			return nil, errors.New("inner symmetric algorithm is not a valid block cipher")
 		}
 
-		if err := tpm2_crypto.SymmetricDecrypt(innerSymmetricAlg.Algorithm, innerSymmetricKey, make([]byte, innerSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+		if err := internal_crypt.SymmetricDecrypt(innerSymmetricAlg.Algorithm, innerSymmetricKey, make([]byte, innerSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, fmt.Errorf("cannot decrypt inner wrapper: %w", err)
 		}
 
@@ -96,7 +96,7 @@ func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKe
 		}
 
 		var err error
-		seed, err = tpm2_crypto.SecretDecrypt(privKey, outerHashAlg.GetHash(), []byte(tpm2.DuplicateString), outerSecret)
+		seed, err = internal_crypt.SecretDecrypt(privKey, outerHashAlg.GetHash(), []byte(tpm2.DuplicateString), outerSecret)
 		if err != nil {
 			return nil, fmt.Errorf("cannot decrypt symmetric seed: %w", err)
 		}
@@ -161,7 +161,7 @@ func sensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAl
 			return nil, nil, errors.New("the supplied symmetric key for inner wrapper has the wrong length")
 		}
 
-		if err := tpm2_crypto.SymmetricEncrypt(innerSymmetricAlg.Algorithm, innerSymmetricKey, make([]byte, innerSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
+		if err := internal_crypt.SymmetricEncrypt(innerSymmetricAlg.Algorithm, innerSymmetricKey, make([]byte, innerSymmetricAlg.Algorithm.BlockSize()), duplicate); err != nil {
 			return nil, nil, fmt.Errorf("cannot apply inner wrapper: %w", err)
 		}
 	}
@@ -223,7 +223,7 @@ func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tp
 		if !parentPublic.IsStorageParent() || !parentPublic.IsAsymmetric() {
 			return nil, nil, nil, errors.New("parent object must be an asymmetric storage key")
 		}
-		outerSecret, seed, err = tpm2_crypto.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
+		outerSecret, seed, err = internal_crypt.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("cannot create encrypted outer symmetric seed: %w", err)
 		}
