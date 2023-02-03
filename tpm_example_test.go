@@ -13,7 +13,7 @@ import (
 	"github.com/canonical/go-tpm2/mssim"
 )
 
-func ExampleOpenTPMContext_linux() {
+func ExampleOpenTPMDevice_linux() {
 	// Open the default Linux TPM2 character device.
 
 	device, err := linux.DefaultTPM2Device()
@@ -32,7 +32,7 @@ func ExampleOpenTPMContext_linux() {
 	// ...
 }
 
-func ExampleOpenTPMContext_simulator() {
+func ExampleOpenTPMDevice_simulator() {
 	// Open the TPM simulator on the default port (2321).
 
 	tpm, err := tpm2.OpenTPMDevice(mssim.DefaultDevice)
