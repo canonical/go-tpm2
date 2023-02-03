@@ -204,7 +204,7 @@ const (
 	NameTypeDigest
 )
 
-// Name implements [util.Entity].
+// Name implements [github.com/canonical/go-tpm2/object.Named].
 func (n Name) Name() Name {
 	return n
 }

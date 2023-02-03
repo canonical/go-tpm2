@@ -18,7 +18,7 @@ import (
 	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
@@ -153,7 +153,7 @@ func (s *objectSuite) testCreate(c *C, data *testCreateData) (outPrivate Private
 func (s *objectSuite) TestCreateRSA(c *C) {
 	s.testCreate(c, &testCreateData{
 		parent:        s.CreateStoragePrimaryKeyRSA(c),
-		template:      templates.NewRSAKeyWithDefaults(0),
+		template:      objectutil.NewRSAKeyTemplate(objectutil.UsageSign),
 		sensitiveSize: 640,
 		hierarchy:     HandleOwner})
 }
@@ -161,7 +161,7 @@ func (s *objectSuite) TestCreateRSA(c *C) {
 func (s *objectSuite) TestCreateECCRestricted(c *C) {
 	s.testCreate(c, &testCreateData{
 		parent:        s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAStorageKeyTemplate()),
-		template:      templates.NewRestrictedECCSigningKeyWithDefaults(),
+		template:      objectutil.NewECCAttestationKeyTemplate(),
 		sensitiveSize: 32,
 		hierarchy:     HandleEndorsement})
 }
@@ -192,7 +192,7 @@ func (s *objectSuite) TestCreateWithSensitive(c *C) {
 func (s *objectSuite) TestCreateWithOutsideInfo(c *C) {
 	s.testCreate(c, &testCreateData{
 		parent:        s.CreateStoragePrimaryKeyRSA(c),
-		template:      templates.NewRSAKeyWithDefaults(0),
+		template:      objectutil.NewRSAKeyTemplate(objectutil.UsageSign),
 		outsideInfo:   []byte("foo"),
 		sensitiveSize: 640,
 		hierarchy:     HandleOwner})
@@ -201,7 +201,7 @@ func (s *objectSuite) TestCreateWithOutsideInfo(c *C) {
 func (s *objectSuite) TestCreateWithCreationPCR(c *C) {
 	s.testCreate(c, &testCreateData{
 		parent:        s.CreateStoragePrimaryKeyRSA(c),
-		template:      templates.NewRSAKeyWithDefaults(0),
+		template:      objectutil.NewRSAKeyTemplate(objectutil.UsageSign),
 		creationPCR:   PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7}}},
 		sensitiveSize: 640,
 		hierarchy:     HandleOwner})
@@ -210,7 +210,7 @@ func (s *objectSuite) TestCreateWithCreationPCR(c *C) {
 func (s *objectSuite) TestCreateWithParentAuthSession(c *C) {
 	s.testCreate(c, &testCreateData{
 		parent:            s.CreateStoragePrimaryKeyRSA(c),
-		template:          templates.NewRSAKeyWithDefaults(0),
+		template:          objectutil.NewRSAKeyTemplate(objectutil.UsageSign),
 		parentAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		sensitiveSize:     640,
 		hierarchy:         HandleOwner})
@@ -221,7 +221,7 @@ func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
 
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, templates.NewRSAKeyWithDefaults(0), nil, nil, nil)
+	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, objectutil.NewRSAKeyTemplate(objectutil.UsageSign), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	expectedName, err := pub.ComputeName()
@@ -258,7 +258,7 @@ func (s *objectSuite) TestLoadWithParentAuthSession(c *C) {
 func (s *objectSuite) TestReadPublic(c *C) {
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	priv, expectedPub, _, _, _, err := s.TPM.Create(primary, nil, templates.NewRSAKeyWithDefaults(0), nil, nil, nil)
+	priv, expectedPub, _, _, _, err := s.TPM.Create(primary, nil, objectutil.NewRSAKeyTemplate(objectutil.UsageSign), nil, nil, nil)
 	c.Check(err, IsNil)
 
 	object, err := s.TPM.Load(primary, priv, expectedPub, nil)
@@ -269,7 +269,7 @@ func (s *objectSuite) TestReadPublic(c *C) {
 	c.Check(pub, DeepEquals, expectedPub)
 	c.Check(name, DeepEquals, object.Name())
 
-	expectedQn, err := util.ComputeQualifiedNameInHierarchy(object, HandleOwner, primary)
+	expectedQn, err := objectutil.ComputeQualifiedNameInHierarchy(object, HandleOwner, primary)
 	c.Check(err, IsNil)
 	c.Check(qn, DeepEquals, expectedQn)
 }
@@ -307,8 +307,11 @@ func (s *objectSuite) TestLoadExternalRSAPub(c *C) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
 
+	pub, err := objectutil.NewRSAPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
 	s.testLoadExternal(c, &testLoadExternalData{
-		inPublic:  util.NewExternalRSAPublicKeyWithDefaults(0, &key.PublicKey),
+		inPublic:  pub,
 		hierarchy: HandleOwner})
 }
 
@@ -316,8 +319,11 @@ func (s *objectSuite) TestLoadExternalECCPub(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
+	pub, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
 	s.testLoadExternal(c, &testLoadExternalData{
-		inPublic:  util.NewExternalECCPublicKeyWithDefaults(0, &key.PublicKey),
+		inPublic:  pub,
 		hierarchy: HandleOwner})
 }
 
@@ -509,7 +515,7 @@ func (s *objectSuite) testActivateCredential(c *C, data *testActivateCredentialD
 
 	credential := []byte("secret credential")
 
-	credentialBlob, secret, err := util.MakeCredential(primaryPub, credential, object.Name())
+	credentialBlob, secret, err := objectutil.MakeCredential(primaryPub, credential, object.Name())
 	c.Check(err, IsNil)
 
 	sessionHandles := HandleList{authSessionHandle(data.activateAuthSession), authSessionHandle(data.keyAuthSession)}

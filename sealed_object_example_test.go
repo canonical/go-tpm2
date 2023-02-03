@@ -13,7 +13,7 @@ import (
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/linux"
 	"github.com/canonical/go-tpm2/mu"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/util"
 )
 
@@ -54,7 +54,7 @@ func seal(secret []byte, pcrSelection tpm2.PCRSelectionList, w io.Writer) error 
 	}
 
 	if srk == nil || srk.Handle() == tpm2.HandleUnassigned {
-		template := templates.NewRSAStorageKeyWithDefaults()
+		template := objectutil.NewRSAStorageKeyTemplate()
 		template.Unique.RSA = make(tpm2.PublicKeyRSA, 256)
 
 		object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, template, nil, nil, nil)
@@ -72,7 +72,7 @@ func seal(secret []byte, pcrSelection tpm2.PCRSelectionList, w io.Writer) error 
 	}
 
 	// Build the sealed object template
-	template := templates.NewSealedObject(tpm2.HashAlgorithmSHA256)
+	template := objectutil.NewSealedObjectTemplate()
 
 	// Disallow passphrase authorization for the user role
 	template.Attrs &^= tpm2.AttrUserWithAuth

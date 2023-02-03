@@ -2,7 +2,7 @@
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
 
-package util_test
+package objectutil_test
 
 import (
 	. "gopkg.in/check.v1"
@@ -10,9 +10,8 @@ import (
 	"github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
-	"github.com/canonical/go-tpm2/objectutil"
+	. "github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
-	. "github.com/canonical/go-tpm2/util"
 )
 
 type qnSuiteNoTPM struct{}
@@ -110,7 +109,7 @@ func (s *qnSuite) TestComputeQualifiedName(c *C) {
 	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, objectutil.NewRSAKeyTemplate(objectutil.UsageSign), nil, nil, nil)
+	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, NewRSAKeyTemplate(UsageDecrypt|UsageSign), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	leaf, err := s.TPM.Load(primary, priv, pub, nil)
@@ -133,7 +132,7 @@ func (s *qnSuite) TestComputeQualifiedNameInHierarchy(c *C) {
 	intermediate, err := s.TPM.Load(primary, priv, pub, nil)
 	c.Assert(err, IsNil)
 
-	priv, pub, _, _, _, err = s.TPM.Create(intermediate, nil, objectutil.NewRSAKeyTemplate(objectutil.UsageSign), nil, nil, nil)
+	priv, pub, _, _, _, err = s.TPM.Create(intermediate, nil, NewRSAKeyTemplate(UsageDecrypt|UsageSign), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	leaf, err := s.TPM.Load(intermediate, priv, pub, nil)

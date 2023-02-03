@@ -19,6 +19,8 @@ import (
 // [tpm2.TPMContext.LoadExternal] command. If nameAlg is [tpm2.HashAlgorithmNull], then
 // [tpm2.HashAlgorithmSHA256] is used. If no usage is specified, the public area will include both
 // sign and decrypt attributes.
+//
+// Deprecated: Use [github.com/canonical/go-tpm2/object.NewRSAPublicKey].
 func NewExternalRSAPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUsage, scheme *tpm2.RSAScheme, key *rsa.PublicKey) *tpm2.Public {
 	pub := templates.NewRSAKey(nameAlg, usage, scheme, uint16(len(key.N.Bytes())*8))
 	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth)
@@ -32,6 +34,8 @@ func NewExternalRSAPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUs
 // specified key usage, SHA256 as the name algorithm and the scheme unset, for use with the
 // [tpm2.TPMContext.LoadExternal] command. If no usage is specified, the public area will include
 // both sign and decrypt attributes.
+//
+// Deprecated: Use [github.com/canonical/go-tpm2/object.NewRSAPublicKey].
 func NewExternalRSAPublicKeyWithDefaults(usage templates.KeyUsage, key *rsa.PublicKey) *tpm2.Public {
 	return NewExternalRSAPublicKey(tpm2.HashAlgorithmNull, usage, nil, key)
 }
@@ -40,6 +44,8 @@ func NewExternalRSAPublicKeyWithDefaults(usage templates.KeyUsage, key *rsa.Publ
 // specified name algorithm, key usage and scheme, for use with the [tpm2.TPMContext.LoadExternal]
 // command. If nameAlg is [tpm2.HashAlgorithmNull], then [tpm2.HashAlgorithmSHA256] is used. If no
 // usage is specified, the public area will include both sign and decrypt attributes.
+//
+// Deprecated: Use [github.com/canonical/go-tpm2/object.NewECCPublicKey].
 func NewExternalECCPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUsage, scheme *tpm2.ECCScheme, key *ecdsa.PublicKey) *tpm2.Public {
 	var curve tpm2.ECCCurve
 	switch key.Curve {
@@ -69,6 +75,8 @@ func NewExternalECCPublicKey(nameAlg tpm2.HashAlgorithmId, usage templates.KeyUs
 // with the specified key usage, SHA256 as the name algorithm and the scheme unset, for use with
 // the [tpm2.TPMContext.LoadExternal] command. If no usage is specified, the public area will
 // include both sign and decrypt attributes.
+//
+// Deprecated: Use [github.com/canonical/go-tpm2/object.NewECCPublicKey].
 func NewExternalECCPublicKeyWithDefaults(usage templates.KeyUsage, key *ecdsa.PublicKey) *tpm2.Public {
 	return NewExternalECCPublicKey(tpm2.HashAlgorithmNull, usage, nil, key)
 }
@@ -86,6 +94,8 @@ func NewExternalECCPublicKeyWithDefaults(usage templates.KeyUsage, key *ecdsa.Pu
 // user auth role using the sensitive area's authorization value. In order to require
 // authentication for the user auth role using an authorization policy, remove the
 // [tpm2.AttrUserWithAuth] attribute.
+//
+// Deprecated: Use [github.com/canonical/go-tpm2/object.NewSealedObject].
 func NewExternalSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, data []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	pub := templates.NewSealedObject(nameAlg)
 	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
@@ -124,6 +134,8 @@ func NewExternalSealedObject(nameAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, 
 // user auth role using the sensitive area's authorization value. In order to require
 // authentication for the user auth role using an authorization policy, remove the
 // [tpm2.AttrUserWithAuth] attribute.
+//
+// Deprecated: Use [github.com/canonical/go-tpm2/object.NewHMACKey].
 func NewExternalHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId, authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	pub := templates.NewHMACKey(nameAlg, schemeAlg)
 	pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
@@ -160,6 +172,8 @@ func NewExternalHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId, authValue tpm2.
 // user auth role using the sensitive area's authorization value. In order to require
 // authentication for the user auth role using an authorization policy, remove the
 // [tpm2.AttrUserWithAuth] attribute.
+//
+// Deprecated: Use [github.com/canonical/go-tpm2/object.NewHMACKey].
 func NewExternalHMACKeyWithDefaults(authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	return NewExternalHMACKey(tpm2.HashAlgorithmNull, tpm2.HashAlgorithmNull, authValue, key)
 }

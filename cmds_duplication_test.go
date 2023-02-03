@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
@@ -103,7 +104,7 @@ func TestDuplicate(t *testing.T) {
 			parentSymmetricAlg = &parentPub.Params.AsymDetail(parentPub.Type).Symmetric
 		}
 
-		sensitiveDup, err := util.UnwrapDuplicationObject(duplicate, pub, privKey, parentNameAlg, parentSymmetricAlg, inSymSeed, encryptionKey, symmetricAlg)
+		sensitiveDup, err := objectutil.UnwrapDuplicated(duplicate, pub, privKey, parentNameAlg, parentSymmetricAlg, inSymSeed, encryptionKey, symmetricAlg)
 		if err != nil {
 			t.Fatalf("Unwrap failed: %v", err)
 		}
@@ -237,7 +238,7 @@ func TestImport(t *testing.T) {
 	}
 
 	t.Run("NoWrappers", func(t *testing.T) {
-		_, duplicate, _, err := util.CreateDuplicationObject(objectSensitive, objectPublic, nil, nil, nil)
+		_, duplicate, _, err := objectutil.CreateImportable(objectSensitive, objectPublic, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
@@ -249,7 +250,7 @@ func TestImport(t *testing.T) {
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      &SymModeU{Sym: SymModeCFB}}
-		encryptionKey, duplicate, _, err := util.CreateDuplicationObject(objectSensitive, objectPublic, nil, nil, symmetricAlg)
+		encryptionKey, duplicate, _, err := objectutil.CreateImportable(objectSensitive, objectPublic, nil, nil, symmetricAlg)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
@@ -262,7 +263,7 @@ func TestImport(t *testing.T) {
 			t.Fatalf("ReadPublic failed: %v", err)
 		}
 
-		_, duplicate, outSymSeed, err := util.CreateDuplicationObject(objectSensitive, objectPublic, primaryPublic, nil, nil)
+		_, duplicate, outSymSeed, err := objectutil.CreateImportable(objectSensitive, objectPublic, primaryPublic, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
@@ -270,7 +271,7 @@ func TestImport(t *testing.T) {
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		_, duplicate, _, err := util.CreateDuplicationObject(objectSensitive, objectPublic, nil, nil, nil)
+		_, duplicate, _, err := objectutil.CreateImportable(objectSensitive, objectPublic, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}

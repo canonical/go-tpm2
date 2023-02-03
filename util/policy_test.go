@@ -14,7 +14,7 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
 	. "github.com/canonical/go-tpm2/util"
 )
@@ -45,7 +45,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testPolicySignedData) {
 				Hash: tpm2.HashAlgorithmSHA256,
 				Sig:  make([]byte, 256)}}}
 
-	pub := NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+	pub := NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey)
 
 	pubKey, err := s.TPM.LoadExternal(nil, pub, tpm2.HandleOwner)
 	c.Assert(err, IsNil)

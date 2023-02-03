@@ -1,5 +1,5 @@
 /*
-Package mu provides helpers to marshalling to and unmarshalling from the TPM wire format.
+Package mu provides helpers for marshalling to and unmarshalling from the TPM wire format.
 
 Go types are marshalled to and from the TPM wire format according to the following rules:
 

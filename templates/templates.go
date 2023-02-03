@@ -3,21 +3,22 @@
 // See LICENCE file for details.
 
 /*
-Package template contains helpers for constructing templates to create objects with go-tpm2.
+Package templates is deprecated and shouldn't be used. Use objects instead.
 */
 package templates
 
 import (
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/objectutil"
 )
 
-type KeyUsage int
+type KeyUsage = objectutil.Usage
 
 const (
-	KeyUsageSign KeyUsage = 1 << iota
-	KeyUsageDecrypt
+	KeyUsageSign    = objectutil.UsageSign
+	KeyUsageDecrypt = objectutil.UsageDecrypt
 
-	KeyUsageEncrypt = KeyUsageSign
+	KeyUsageEncrypt = objectutil.UsageEncrypt
 )
 
 // NewRSAStorageKey returns a template for a RSA storage parent with the specified
@@ -36,6 +37,8 @@ const (
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewRSAStorageKeyTemplate].
 func NewRSAStorageKey(nameAlg tpm2.HashAlgorithmId, algorithm tpm2.SymObjectAlgorithmId, symKeyBits, asymKeyBits uint16) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -79,6 +82,8 @@ func NewRSAStorageKey(nameAlg tpm2.HashAlgorithmId, algorithm tpm2.SymObjectAlgo
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewRSAStorageKeyTemplate].
 func NewRSAStorageKeyWithDefaults() *tpm2.Public {
 	return NewRSAStorageKey(tpm2.HashAlgorithmNull, tpm2.SymObjectAlgorithmNull, 0, 0)
 }
@@ -99,6 +104,8 @@ func NewRSAStorageKeyWithDefaults() *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewRSAAttestationKeyTemplate].
 func NewRestrictedRSASigningKey(nameAlg tpm2.HashAlgorithmId, scheme *tpm2.RSAScheme, keyBits uint16) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -139,6 +146,8 @@ func NewRestrictedRSASigningKey(nameAlg tpm2.HashAlgorithmId, scheme *tpm2.RSASc
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewRSAAttestationKeyTemplate].
 func NewRestrictedRSASigningKeyWithDefaults() *tpm2.Public {
 	return NewRestrictedRSASigningKey(tpm2.HashAlgorithmNull, nil, 0)
 }
@@ -159,6 +168,8 @@ func NewRestrictedRSASigningKeyWithDefaults() *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewRSAKeyTemplate].
 func NewRSAKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.RSAScheme, keyBits uint16) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
 	if usage == 0 {
@@ -208,6 +219,8 @@ func NewRSAKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.RSASch
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewRSAKeyTemplate].
 func NewRSAKeyWithDefaults(usage KeyUsage) *tpm2.Public {
 	return NewRSAKey(tpm2.HashAlgorithmNull, usage, nil, 0)
 }
@@ -225,6 +238,8 @@ func NewRSAKeyWithDefaults(usage KeyUsage) *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewSealedObjectTemplate].
 func NewSealedObject(nameAlg tpm2.HashAlgorithmId) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -254,6 +269,8 @@ func NewSealedObject(nameAlg tpm2.HashAlgorithmId) *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewECCStorageKeyTemplate].
 func NewECCStorageKey(nameAlg tpm2.HashAlgorithmId, algorithm tpm2.SymObjectAlgorithmId, keyBits uint16, curve tpm2.ECCCurve) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -294,6 +311,8 @@ func NewECCStorageKey(nameAlg tpm2.HashAlgorithmId, algorithm tpm2.SymObjectAlgo
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewECCStorageKeyTemplate].
 func NewECCStorageKeyWithDefaults() *tpm2.Public {
 	return NewECCStorageKey(tpm2.HashAlgorithmNull, tpm2.SymObjectAlgorithmNull, 0, tpm2.ECCCurveNIST_P256)
 }
@@ -313,6 +332,8 @@ func NewECCStorageKeyWithDefaults() *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewECCAttestationKeyTemplate].
 func NewRestrictedECCSigningKey(nameAlg tpm2.HashAlgorithmId, scheme *tpm2.ECCScheme, curve tpm2.ECCCurve) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -349,6 +370,8 @@ func NewRestrictedECCSigningKey(nameAlg tpm2.HashAlgorithmId, scheme *tpm2.ECCSc
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewECCAttestationKeyTemplate].
 func NewRestrictedECCSigningKeyWithDefaults() *tpm2.Public {
 	return NewRestrictedECCSigningKey(tpm2.HashAlgorithmNull, nil, tpm2.ECCCurveNIST_P256)
 }
@@ -368,6 +391,8 @@ func NewRestrictedECCSigningKeyWithDefaults() *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewECCKeyTemplate].
 func NewECCKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.ECCScheme, curve tpm2.ECCCurve) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
 	if usage == 0 {
@@ -414,6 +439,8 @@ func NewECCKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, scheme *tpm2.ECCSch
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewECCKeyTemplate].
 func NewECCKeyWithDefaults(usage KeyUsage) *tpm2.Public {
 	return NewECCKey(tpm2.HashAlgorithmNull, usage, nil, tpm2.ECCCurveNIST_P256)
 }
@@ -437,6 +464,8 @@ func NewECCKeyWithDefaults(usage KeyUsage) *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewSymmetricStorageKeyTemplate].
 func NewSymmetricStorageKey(nameAlg tpm2.HashAlgorithmId, algorithm tpm2.SymObjectAlgorithmId, keyBits uint16) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -476,6 +505,8 @@ func NewSymmetricStorageKey(nameAlg tpm2.HashAlgorithmId, algorithm tpm2.SymObje
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewSymmetricStorageKeyTemplate].
 func NewSymmetricStorageKeyWithDefaults() *tpm2.Public {
 	return NewSymmetricStorageKey(tpm2.HashAlgorithmNull, tpm2.SymObjectAlgorithmNull, 0)
 }
@@ -500,6 +531,8 @@ func NewSymmetricStorageKeyWithDefaults() *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewSymmetricKeyTemplate].
 func NewSymmetricKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, algorithm tpm2.SymObjectAlgorithmId, keyBits uint16, mode tpm2.SymModeId) *tpm2.Public {
 	attrs := tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth
 	if usage == 0 {
@@ -552,6 +585,8 @@ func NewSymmetricKey(nameAlg tpm2.HashAlgorithmId, usage KeyUsage, algorithm tpm
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewSymmetricKeyTemplate].
 func NewSymmetricKeyWithDefaults(usage KeyUsage) *tpm2.Public {
 	return NewSymmetricKey(tpm2.HashAlgorithmNull, usage, tpm2.SymObjectAlgorithmNull, 0, tpm2.SymModeCFB)
 }
@@ -573,6 +608,8 @@ func NewSymmetricKeyWithDefaults(usage KeyUsage) *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewHMACKeyTemplate].
 func NewHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -610,6 +647,8 @@ func NewHMACKey(nameAlg, schemeAlg tpm2.HashAlgorithmId) *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewHMACKeyTemplate].
 func NewHMACKeyWithDefaults() *tpm2.Public {
 	return NewHMACKey(tpm2.HashAlgorithmNull, tpm2.HashAlgorithmNull)
 }
@@ -632,6 +671,8 @@ func NewHMACKeyWithDefaults() *tpm2.Public {
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewDerivationParentTemplate].
 func NewDerivationParentKey(nameAlg, schemeAlg tpm2.HashAlgorithmId) *tpm2.Public {
 	if nameAlg == tpm2.HashAlgorithmNull {
 		nameAlg = tpm2.HashAlgorithmSHA256
@@ -670,6 +711,8 @@ func NewDerivationParentKey(nameAlg, schemeAlg tpm2.HashAlgorithmId) *tpm2.Publi
 // the user auth role using the created object's authorization value. In order to
 // require authentication for the user auth role using an authorization policy,
 // remove the AttrUserWithAuth attribute.
+//
+// Deprecated: Use [objectutil.NewDerivationParentTemplate].
 func NewDerivationParentKeyWithDefaults() *tpm2.Public {
 	return NewDerivationParentKey(tpm2.HashAlgorithmNull, tpm2.HashAlgorithmNull)
 }

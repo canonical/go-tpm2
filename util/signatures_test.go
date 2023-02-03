@@ -16,7 +16,7 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
 	. "github.com/canonical/go-tpm2/util"
 )
@@ -49,7 +49,7 @@ func (s *signaturesSuite) TestSignRSASSA(c *C) {
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSASSA)
 	c.Check(sig.Signature.RSASSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
 
-	pubKey := NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+	pubKey := NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey)
 
 	rc, err := s.TPM.LoadExternal(nil, pubKey, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
@@ -76,7 +76,7 @@ func (s *signaturesSuite) TestSignRSAPSS(c *C) {
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSAPSS)
 	c.Check(sig.Signature.RSAPSS.Hash, Equals, tpm2.HashAlgorithmSHA256)
 
-	pubKey := NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+	pubKey := NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey)
 
 	rc, err := s.TPM.LoadExternal(nil, pubKey, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
@@ -103,7 +103,7 @@ func (s *signaturesSuite) TestSignECDSA(c *C) {
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgECDSA)
 	c.Check(sig.Signature.ECDSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
 
-	pubKey := NewExternalECCPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+	pubKey := NewExternalECCPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey)
 
 	rc, err := s.TPM.LoadExternal(nil, pubKey, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
@@ -140,7 +140,7 @@ func (s *signaturesSuite) TestSignHMAC(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSASSA(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -163,7 +163,7 @@ func (s *signaturesSuite) TestVerifyRSASSA(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -186,7 +186,7 @@ func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -209,7 +209,7 @@ func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -232,7 +232,7 @@ func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyECDSA(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -255,7 +255,7 @@ func (s *signaturesSuite) TestVerifyECDSA(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyECDSAInvalid(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -364,7 +364,7 @@ func (s *signaturesSuite) TestSignPolicyAuthorizationRSASSA(c *C) {
 
 	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
 		key: key,
-		pub: NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub: NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
 			Details: &tpm2.SigSchemeU{
@@ -378,7 +378,7 @@ func (s *signaturesSuite) TestSignPolicyAuthorizationECDSA(c *C) {
 
 	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
 		key: key,
-		pub: NewExternalECCPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub: NewExternalECCPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgECDSA,
 			Details: &tpm2.SigSchemeU{
@@ -392,7 +392,7 @@ func (s *signaturesSuite) TestSignPolicyAuthorizationIncludeNonce(c *C) {
 
 	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
 		key: key,
-		pub: NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub: NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
 			Details: &tpm2.SigSchemeU{
@@ -407,7 +407,7 @@ func (s *signaturesSuite) TestSignPolicyAuthorizationWithExpiration(c *C) {
 
 	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
 		key: key,
-		pub: NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub: NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
 			Details: &tpm2.SigSchemeU{
@@ -426,7 +426,7 @@ func (s *signaturesSuite) TestSignPolicyAuthorizationWithCpHash(c *C) {
 
 	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
 		key: key,
-		pub: NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub: NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
 			Details: &tpm2.SigSchemeU{
@@ -441,7 +441,7 @@ func (s *signaturesSuite) TestSignPolicyAuthorizationWithPolicyRef(c *C) {
 
 	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
 		key: key,
-		pub: NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub: NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
 			Details: &tpm2.SigSchemeU{
@@ -459,7 +459,7 @@ func (s *signaturesSuite) TestSignPolicyAuthorizationAllRestrictions(c *C) {
 
 	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
 		key: key,
-		pub: NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub: NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
 			Details: &tpm2.SigSchemeU{
@@ -506,7 +506,7 @@ func (s *signaturesSuite) TestPolicyAuthorizeRSASSA(c *C) {
 
 	s.testPolicyAuthorize(c, &testSignPolicyAuthorizeData{
 		key:     key,
-		pub:     NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub:     NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		command: tpm2.CommandUnseal,
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
@@ -521,7 +521,7 @@ func (s *signaturesSuite) TestPolicyAuthorizeECDSA(c *C) {
 
 	s.testPolicyAuthorize(c, &testSignPolicyAuthorizeData{
 		key:     key,
-		pub:     NewExternalECCPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub:     NewExternalECCPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		command: tpm2.CommandUnseal,
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgECDSA,
@@ -536,7 +536,7 @@ func (s *signaturesSuite) TestPolicyAuthorizeDifferentPolicy(c *C) {
 
 	s.testPolicyAuthorize(c, &testSignPolicyAuthorizeData{
 		key:     key,
-		pub:     NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub:     NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		command: tpm2.CommandObjectChangeAuth,
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,
@@ -551,7 +551,7 @@ func (s *signaturesSuite) TestPolicyAuthorizeWithPolicyRef(c *C) {
 
 	s.testPolicyAuthorize(c, &testSignPolicyAuthorizeData{
 		key:     key,
-		pub:     NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey),
+		pub:     NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey),
 		command: tpm2.CommandUnseal,
 		scheme: &tpm2.SigScheme{
 			Scheme: tpm2.SigSchemeAlgRSASSA,

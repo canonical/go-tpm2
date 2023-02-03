@@ -10,7 +10,7 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/linux"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 )
 
 func ExampleTPMContext_Create_createPassphraseProtectedSealedObject() {
@@ -32,7 +32,7 @@ func ExampleTPMContext_Create_createPassphraseProtectedSealedObject() {
 		return
 	}
 
-	template := templates.NewSealedObject(tpm2.HashAlgorithmSHA256)
+	template := objectutil.NewSealedObjectTemplate()
 
 	sensitive := &tpm2.SensitiveCreate{
 		UserAuth: []byte("passphrase"),

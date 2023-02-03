@@ -6,62 +6,83 @@ package testutil
 
 import (
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 )
 
-// NewRSAStorageKeyTemplate is a wrapper around templates.NewRSAStorageKeyWithDefaults
-// that defines the noDA attribute.
+func rsaSchemeOption(scheme *tpm2.RSAScheme) objectutil.PublicTemplateOption {
+	schemeId := tpm2.RSASchemeNull
+	hashAlg := tpm2.HashAlgorithmNull
+	if scheme != nil {
+		schemeId = scheme.Scheme
+		if tpm2.AsymSchemeId(schemeId).HasDigest() {
+			hashAlg = scheme.Details.Any(tpm2.AsymSchemeId(schemeId)).HashAlg
+		}
+	}
+	return objectutil.WithRSAScheme(schemeId, hashAlg)
+}
+
+func eccSchemeOption(scheme *tpm2.ECCScheme) objectutil.PublicTemplateOption {
+	schemeId := tpm2.ECCSchemeNull
+	hashAlg := tpm2.HashAlgorithmNull
+	if scheme != nil {
+		schemeId = scheme.Scheme
+		if tpm2.AsymSchemeId(schemeId).HasDigest() {
+			hashAlg = scheme.Details.Any(tpm2.AsymSchemeId(schemeId)).HashAlg
+		}
+	}
+	return objectutil.WithECCScheme(schemeId, hashAlg)
+}
+
+// NewRSAStorageKeyTemplate is a wrapper around [objectutil.NewRSAStorageKeyTemplate] that defines the
+// noDA attribute.
 func NewRSAStorageKeyTemplate() *tpm2.Public {
-	template := templates.NewRSAStorageKeyWithDefaults()
-	template.Attrs |= tpm2.AttrNoDA
-	return template
+	return objectutil.NewRSAStorageKeyTemplate(objectutil.WithoutDictionaryAttackProtection())
 }
 
-// NewRestrictedRSASigningKeyTemplate is a wrapper around templates.NewRestrictedRSASigningKey
-// that defines the noDA attribute, SHA256 for the name algorithm and 2048 bits for the key
-// size.
+// NewRestrictedRSASigningKeyTemplate is a wrapper around [objectutil.NewRSAAttestationKeyTemplate]
+// that defines the noDA attribute.
 func NewRestrictedRSASigningKeyTemplate(scheme *tpm2.RSAScheme) *tpm2.Public {
-	template := templates.NewRestrictedRSASigningKey(tpm2.HashAlgorithmSHA256, scheme, 2048)
-	template.Attrs |= tpm2.AttrNoDA
-	return template
+	options := []objectutil.PublicTemplateOption{objectutil.WithoutDictionaryAttackProtection()}
+	if scheme != nil {
+		options = append(options, rsaSchemeOption(scheme))
+	}
+	return objectutil.NewRSAAttestationKeyTemplate(options...)
 }
 
-// NewRSAKeyTemplate is a wrapper around templates.NewRSAKey that defines the noDA attribute,
-// SHA256 for the name algorithm and 2048 bits for the key size.
-func NewRSAKeyTemplate(usage templates.KeyUsage, scheme *tpm2.RSAScheme) *tpm2.Public {
-	template := templates.NewRSAKey(tpm2.HashAlgorithmSHA256, usage, scheme, 2048)
-	template.Attrs |= tpm2.AttrNoDA
-	return template
+// NewRSAKeyTemplate is a wrapper around [objectutil.NewRSAKeyTemplate] that defines the noDA
+// attribute.
+func NewRSAKeyTemplate(usage objectutil.Usage, scheme *tpm2.RSAScheme) *tpm2.Public {
+	return objectutil.NewRSAKeyTemplate(usage,
+		objectutil.WithoutDictionaryAttackProtection(),
+		rsaSchemeOption(scheme))
 }
 
-// NewSealedObject is a wrapper around templates.NewSealedObject that defines the noDA
+// NewSealedObject is a wrapper around [objectutil.NewSealedObjectTemplate] that defines the noDA
 // attribute.
 func NewSealedObjectTemplate() *tpm2.Public {
-	template := templates.NewSealedObject(tpm2.HashAlgorithmSHA256)
-	template.Attrs |= tpm2.AttrNoDA
-	return template
+	return objectutil.NewSealedObjectTemplate(objectutil.WithoutDictionaryAttackProtection())
 }
 
-// NewECCStorageKeyTemplate is a wrapper around templates.NewECCStorageKeyWithDefaults
-// that defines the noDA attribute.
+// NewECCStorageKeyTemplate is a wrapper around [objectutil.NewECCStorageKeyTemplate] that defines the
+// noDA attribute.
 func NewECCStorageKeyTemplate() *tpm2.Public {
-	template := templates.NewECCStorageKeyWithDefaults()
-	template.Attrs |= tpm2.AttrNoDA
-	return template
+	return objectutil.NewECCStorageKeyTemplate(objectutil.WithoutDictionaryAttackProtection())
 }
 
-// NewRestrictedECCSigningKeyTemplate is a wrapper around templates.NewRestrictedECCSigningKey
-// that defines the noDA attribute, SHA256 for the name algorithm and NIST-P256 as the curve.
+// NewRestrictedECCSigningKeyTemplate is a wrapper around [objectutil.NewECCAttestationKeyTemplate]
+// that defines the noDA attribute.
 func NewRestrictedECCSigningKeyTemplate(scheme *tpm2.ECCScheme) *tpm2.Public {
-	template := templates.NewRestrictedECCSigningKey(tpm2.HashAlgorithmSHA256, scheme, tpm2.ECCCurveNIST_P256)
-	template.Attrs |= tpm2.AttrNoDA
-	return template
+	options := []objectutil.PublicTemplateOption{objectutil.WithoutDictionaryAttackProtection()}
+	if scheme != nil {
+		options = append(options, eccSchemeOption(scheme))
+	}
+	return objectutil.NewECCAttestationKeyTemplate(options...)
 }
 
-// NewECCKeyTemplate is a wrapper around templates.NewECCKey that defines the noDA attribute,
-// SHA256 for the name algorithm and NIST-P256 as the curve.
-func NewECCKeyTemplate(usage templates.KeyUsage, scheme *tpm2.ECCScheme) *tpm2.Public {
-	template := templates.NewECCKey(tpm2.HashAlgorithmSHA256, usage, scheme, tpm2.ECCCurveNIST_P256)
-	template.Attrs |= tpm2.AttrNoDA
-	return template
+// NewECCKeyTemplate is a wrapper around [objectutil.NewECCKeyTemplate] that defines the noDA
+// attribute.
+func NewECCKeyTemplate(usage objectutil.Usage, scheme *tpm2.ECCScheme) *tpm2.Public {
+	return objectutil.NewECCKeyTemplate(usage,
+		objectutil.WithoutDictionaryAttackProtection(),
+		eccSchemeOption(scheme))
 }

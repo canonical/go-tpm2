@@ -10,7 +10,7 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/linux"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 )
 
 func ExampleTPMContext_CreatePrimary_createPrimaryStorageKeyInStorageHierarchy() {
@@ -24,7 +24,7 @@ func ExampleTPMContext_CreatePrimary_createPrimaryStorageKeyInStorageHierarchy()
 	tpm := tpm2.NewTPMContext(tcti)
 	defer tpm.Close()
 
-	template := templates.NewRSAStorageKeyWithDefaults()
+	template := objectutil.NewRSAStorageKeyTemplate()
 
 	object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, template, nil, nil, nil)
 	if err != nil {

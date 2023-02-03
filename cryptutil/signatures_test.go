@@ -17,9 +17,8 @@ import (
 	"github.com/canonical/go-tpm2"
 	. "github.com/canonical/go-tpm2/cryptutil"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
-	"github.com/canonical/go-tpm2/util"
 )
 
 type signaturesSuite struct {
@@ -45,7 +44,8 @@ func (s *signaturesSuite) TestSignRSASSA(c *C) {
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSASSA)
 	c.Check(sig.Signature.RSASSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
 
-	pubKey := util.NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+	pubKey, err := objectutil.NewRSAPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
 
 	rc, err := s.TPM.LoadExternal(nil, pubKey, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
@@ -67,7 +67,8 @@ func (s *signaturesSuite) TestSignRSAPSS(c *C) {
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSAPSS)
 	c.Check(sig.Signature.RSAPSS.Hash, Equals, tpm2.HashAlgorithmSHA256)
 
-	pubKey := util.NewExternalRSAPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+	pubKey, err := objectutil.NewRSAPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
 
 	rc, err := s.TPM.LoadExternal(nil, pubKey, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
@@ -89,7 +90,8 @@ func (s *signaturesSuite) TestSignECDSA(c *C) {
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgECDSA)
 	c.Check(sig.Signature.ECDSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
 
-	pubKey := util.NewExternalECCPublicKeyWithDefaults(templates.KeyUsageSign, &key.PublicKey)
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
 
 	rc, err := s.TPM.LoadExternal(nil, pubKey, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
@@ -111,7 +113,7 @@ func (s *signaturesSuite) TestSignHMAC(c *C) {
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgHMAC)
 	c.Check(sig.Signature.HMAC.HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 
-	pub, sensitive := util.NewExternalHMACKey(tpm2.HashAlgorithmSHA256, tpm2.HashAlgorithmSHA256, nil, key)
+	pub, sensitive, err := objectutil.NewHMACKey(rand.Reader, key, nil)
 
 	rc, err := s.TPM.LoadExternal(sensitive, pub, tpm2.HandleNull)
 	c.Assert(err, IsNil)
@@ -121,7 +123,7 @@ func (s *signaturesSuite) TestSignHMAC(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSASSA(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -144,7 +146,7 @@ func (s *signaturesSuite) TestVerifyRSASSA(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -167,7 +169,7 @@ func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -190,7 +192,7 @@ func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -213,7 +215,7 @@ func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyECDSA(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
@@ -236,7 +238,7 @@ func (s *signaturesSuite) TestVerifyECDSA(c *C) {
 }
 
 func (s *signaturesSuite) TestVerifyECDSAInvalid(c *C) {
-	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(templates.KeyUsageSign, nil))
+	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(objectutil.UsageSign, nil))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")

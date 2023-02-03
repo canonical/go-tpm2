@@ -10,7 +10,7 @@ import (
 	. "github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
-	"github.com/canonical/go-tpm2/templates"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
@@ -122,7 +122,7 @@ func (s *attestationSuite) TestCertifyExtraData(c *C) {
 
 func (s *attestationSuite) TestCertifyInScheme(c *C) {
 	data := &testCertifyData{
-		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -199,7 +199,7 @@ func (s *attestationSuite) TestCertifyCreationExtraData(c *C) {
 
 func (s *attestationSuite) TestCertifyCreationInScheme(c *C) {
 	data := &testCertifyCreationData{
-		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -300,7 +300,7 @@ func (s *attestationSuite) TestQuoteWithExtraData(c *C) {
 
 func (s *attestationSuite) TestQuoteInScheme(c *C) {
 	data := &testQuoteData{
-		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -392,7 +392,7 @@ func (s *attestationSuite) TestGetTimeExtraData(c *C) {
 
 func (s *attestationSuite) TestGetTimeInScheme(c *C) {
 	data := &testGetTimeData{
-		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(templates.KeyUsageSign, nil)),
+		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
