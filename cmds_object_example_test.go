@@ -14,18 +14,24 @@ import (
 )
 
 func ExampleTPMContext_Create_createPassphraseProtectedSealedObject() {
-	// Use TPMContext.Create to seal some arbitrary data in a
-	// passphrase protected object.
+	// Use TPMContext.Create to seal some arbitrary data in a passphrase protected object.
 
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	passphrase := []byte("passphrase")
+	secret := []byte("secret data")
+
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
-	// We need a parent object, eg, the shared SRK. Assume it already exists.
+	// We need a storage parent, eg, the shared SRK. Assume it already exists.
 	srk, err := tpm.CreateResourceContextFromTPM(0x81000001)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -35,8 +41,8 @@ func ExampleTPMContext_Create_createPassphraseProtectedSealedObject() {
 	template := objectutil.NewSealedObjectTemplate()
 
 	sensitive := &tpm2.SensitiveCreate{
-		UserAuth: []byte("passphrase"),
-		Data:     []byte("secret data")}
+		UserAuth: passphrase,
+		Data:     secret}
 
 	priv, pub, _, _, _, err := tpm.Create(srk, sensitive, template, nil, nil, nil)
 	if err != nil {
@@ -45,8 +51,9 @@ func ExampleTPMContext_Create_createPassphraseProtectedSealedObject() {
 	}
 
 	// priv and pub contain the private and public parts of the sealed object,
-	// and these can be serialized to persistent storage somewhere. The mu
-	// subpackage can be used to serialize them in the TPM wire format.
+	// and these can be serialized to persistent storage somewhere, or loaded in
+	// to the TPM with the TPMContext.Load function. The mu/ subpackage can be used
+	// to serialize them in the TPM wire format.
 	_ = priv
 	_ = pub
 }

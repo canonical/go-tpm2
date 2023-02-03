@@ -5,9 +5,7 @@
 package tpm2_test
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/canonical/go-tpm2"
@@ -17,75 +15,43 @@ import (
 	"github.com/canonical/go-tpm2/util"
 )
 
-const (
-	// forceCreateSRK controls whether seal unconditionally creates a SRK
-	// at srkHandle
-	forceCreateSRK = true
+// srkHandle defines the handle for the SRK
+const srkHandle = 0x81000001
 
-	// srkHandle defines the handle for the SRK
-	srkHandle = 0x81000001
-)
-
-// seal seals the supplied secret to a sealed object in the storage hierarchy
-// of the TPM, using a simple authorization policy that is gated on the current
-// values of the PCRs included in the specified selection. The sealed object and
-// metadata are serialized to the supplied io.Writer.
-func seal(secret []byte, pcrSelection tpm2.PCRSelectionList, w io.Writer) error {
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+// seal protects the supplied secret in the storage hierarchy of the TPM using
+// a simple authorization policy that is gated on the current values of the PCRs
+// included in the specified selection. The sealed object and metadata are
+// serialized and returned in a form that can be passed to the unseal function.
+func seal(secret []byte, pcrSelection tpm2.PCRSelectionList) ([]byte, error) {
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		return nil, err
+	}
 	defer tpm.Close()
 
-	// Ensure we have a storage root key (SRK)
+	// Use the shared SRK as the storage object, and assume that it already exists.
 	srk, err := tpm.CreateResourceContextFromTPM(srkHandle)
-	switch {
-	case tpm2.IsResourceUnavailableError(err, srkHandle):
-		// No existing object - nothing to do
-	case err != nil:
-		// Unexpected error
-		return err
-	case forceCreateSRK:
-		// Evict the existing object
-		if _, err := tpm.EvictControl(tpm.OwnerHandleContext(), srk, srk.Handle(), nil); err != nil {
-			return err
-		}
-	}
-
-	if srk == nil || srk.Handle() == tpm2.HandleUnassigned {
-		template := objectutil.NewRSAStorageKeyTemplate()
-		template.Unique.RSA = make(tpm2.PublicKeyRSA, 256)
-
-		object, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, template, nil, nil, nil)
-		if err != nil {
-			return err
-		}
-
-		srk, err = tpm.EvictControl(tpm.OwnerHandleContext(), object, srkHandle, nil)
-		if err != nil {
-			tpm.FlushContext(object)
-			return err
-		}
-
-		tpm.FlushContext(object)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build the sealed object template
-	template := objectutil.NewSealedObjectTemplate()
-
-	// Disallow passphrase authorization for the user role
-	template.Attrs &^= tpm2.AttrUserWithAuth
+	template := objectutil.NewSealedObjectTemplate(
+		objectutil.WithUserAuthMode(objectutil.RequirePolicy))
 
 	// Compute a simple PCR policy using the TPM's current values
 	_, values, err := tpm.PCRRead(pcrSelection)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	digest, err := util.ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrSelection, values)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	trial := util.ComputeAuthPolicy(tpm2.HashAlgorithmSHA256)
@@ -98,29 +64,32 @@ func seal(secret []byte, pcrSelection tpm2.PCRSelectionList, w io.Writer) error 
 	// Create the sealed object
 	priv, pub, _, _, _, err := tpm.Create(srk, sensitive, template, nil, nil, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// Encode the sealed object
-	_, err = mu.MarshalToWriter(w, priv, pub, pcrSelection)
-	return err
+	// Encode and return the sealed object
+	return mu.MarshalToBytes(priv, pub, pcrSelection)
 }
 
-// unseal attempts to recover a secret previously sealed by the seal function
-func unseal(r io.Reader) ([]byte, error) {
+// unseal attempts to recover a secret from the supplied blob previously created by the seal
+// function.
+func unseal(data []byte) ([]byte, error) {
 	// Decode the sealed object
 	var priv tpm2.Private
 	var pub *tpm2.Public
 	var pcrSelection tpm2.PCRSelectionList
-	if _, err := mu.UnmarshalFromReader(r, &priv, &pub, &pcrSelection); err != nil {
+	if _, err := mu.UnmarshalFromBytes(data, &priv, &pub, &pcrSelection); err != nil {
 		return nil, err
 	}
 
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		return nil, err
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		return nil, err
+	}
 	defer tpm.Close()
 
 	srk, err := tpm.CreateResourceContextFromTPM(srkHandle)
@@ -151,19 +120,23 @@ func unseal(r io.Reader) ([]byte, error) {
 
 func Example_sealingASecret() {
 	// Seal a secret to the storage hierarchy of the TPM using an authorization policy
-	// that is gated on the value of PCR7.
+	// that is gated on the current value of PCR7.
+	//
+	// Don't assume that this is a secure way to protect a key - it's just an example!
+
 	secret := []byte("secret data")
+	pcrSelection := tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}}
 
-	// Use a memory buffer for storing the encoded sealed object, but this could
-	// be a file or some other persistent storage.
-	buf := new(bytes.Buffer)
-
-	if err := seal(secret, tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}}, buf); err != nil {
+	sealedData, err := seal(secret, pcrSelection)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "cannot seal:", err)
 		return
 	}
 
-	recoveredSecret, err := unseal(buf)
+	// sealedData contains a serialized blob containing our secret that has been protected by the
+	// TPM. It could be written somewhere to be read back later on.
+
+	recoveredSecret, err := unseal(sealedData)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "cannot unseal:", err)
 		return

@@ -14,14 +14,17 @@ import (
 )
 
 func ExampleTPMContext_CreatePrimary_createPrimaryStorageKeyInStorageHierarchy() {
-	// Use TPMContext.CreatePrimary to create a primary storage key in the
-	// storage hierarchy.
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	// Use TPMContext.CreatePrimary to create a primary storage key in the storage hierarchy.
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
 	template := objectutil.NewRSAStorageKeyTemplate()
@@ -31,7 +34,11 @@ func ExampleTPMContext_CreatePrimary_createPrimaryStorageKeyInStorageHierarchy()
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	defer tpm.FlushContext(object)
 
 	// object is the handle to the new transient primary object
+	// ...
+	// ... do something with object
+	// ...
+
+	tpm.FlushContext(object)
 }

@@ -13,26 +13,33 @@ import (
 	"github.com/canonical/go-tpm2/mssim"
 )
 
-func ExampleNewTPMContext_linux() {
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+func ExampleOpenTPMContext_linux() {
+	// Open the default Linux TPM2 character device.
+
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
 	// Use TPMContext
 	// ...
 }
 
-func ExampleNewTPMContext_simulator() {
-	tcti, err := mssim.OpenConnection("", 2321)
+func ExampleOpenTPMContext_simulator() {
+	// Open the TPM simulator on the default port (2321).
+
+	tpm, err := tpm2.OpenTPMDevice(mssim.DefaultDevice)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
 	defer tpm.Close()
 
 	// Use TPMContext
@@ -41,23 +48,30 @@ func ExampleNewTPMContext_simulator() {
 
 func ExampleTPMContext_cleartextPassphraseAuth() {
 	// Change the authorization value for the storage hierarchy using
-	// a cleartext passphrase for authorization. The existing authorization
-	// value is sent to the TPM in cleartext.
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	// a cleartext passphrase for authorization.
+
+	oldPassphrase := []byte("passphrase")
+	newPassphrase := []byte("esarhpssap")
+
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
-	// Assume the current authorization value is "passphrase".
-	tpm.OwnerHandleContext().SetAuthValue([]byte("passphrase"))
+	tpm.OwnerHandleContext().SetAuthValue(oldPassphrase)
 
-	// Set the new authorization value to "foo". Note that we don't pass
+	// Change the new authorization value. Note that we don't pass
 	// in a session argument - TPMContext creates a password session
-	// automatically.
-	if err := tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), nil); err != nil {
+	// automatically. Both the old and new passphrases are sent to the
+	// TPM in cleartext.
+	if err := tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), newPassphrase, nil); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
@@ -65,15 +79,21 @@ func ExampleTPMContext_cleartextPassphraseAuth() {
 
 func ExampleTPMContext_hMACSessionAuth() {
 	// Change the authorization value for the storage hierarchy using
-	// a HMAC session for authorization. The current passphrase is used
-	// to derive the key for the command HMAC which is verified on the TPM.
-	// The current passphrase is not sent to the TPM in cleartext.
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	// a HMAC session for authorization.
+
+	oldPassphrase := []byte("passphrase")
+	newPassphrase := []byte("esarhpssap")
+
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
 	// Create an unbounded, unsalted HMAC session.
@@ -84,29 +104,40 @@ func ExampleTPMContext_hMACSessionAuth() {
 	}
 	defer tpm.FlushContext(session)
 
-	// Assume the current authorization value is "passphrase".
-	tpm.OwnerHandleContext().SetAuthValue([]byte("passphrase"))
+	tpm.OwnerHandleContext().SetAuthValue(oldPassphrase)
 
-	// Set the new authorization value to "foo". Note that the new passphrase
-	// is sent to the TPM in cleartext.
-	if err := tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), []byte("foo"), session); err != nil {
+	// Change the authorization value. Note that we pass in the HMAC session
+	// context. The current passphrase is not sent to the TPM - it is used to
+	// derive the key used to create a command HMAC, which is then verified on
+	// the TPM. The new passphrase is sent to the TPM in cleartext.
+	if err := tpm.HierarchyChangeAuth(tpm.OwnerHandleContext(), newPassphrase, session); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 }
 
 func ExampleTPMContext_policySessionAuth() {
-	// Change the authorization value of an existing NV index using a
-	// policy session for authorization.
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	// Change the authorization value of an existing NV index at handle 0x0180000 using a
+	// policy session for authorization. The policy for the index asserts that the caller
+	// must know the existing authorization value.
+
+	handle := tpm2.Handle(0x01800000)
+	oldPassphrase := []byte("passphrase")
+	newPassphrase := []byte("esarhpssap")
+
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
-	index, err := tpm.CreateResourceContextFromTPM(0x01800000)
+	index, err := tpm.CreateResourceContextFromTPM(handle)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
@@ -128,10 +159,9 @@ func ExampleTPMContext_policySessionAuth() {
 		return
 	}
 
-	// Assume the current authorization value is "passphrase".
-	index.SetAuthValue([]byte("passphrase"))
+	index.SetAuthValue(oldPassphrase)
 
-	if err := tpm.NVChangeAuth(index, []byte("foo"), session); err != nil {
+	if err := tpm.NVChangeAuth(index, newPassphrase, session); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}

@@ -14,12 +14,18 @@ import (
 )
 
 func ExampleTPMContext_EvictControl_persistTransientObject() {
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	// Create a primary object and then use TPMContext.EvictControl to store it in NV memory
+	// at handle 0x81000001.
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
 	template := objectutil.NewRSAStorageKeyTemplate()
@@ -42,12 +48,17 @@ func ExampleTPMContext_EvictControl_persistTransientObject() {
 }
 
 func ExampleTPMContext_EvictControl_evictPersistentObject() {
-	tcti, err := linux.OpenDevice("/dev/tpm0")
+	// Use TPMContext.EvictControl to remove the object at handle 0x81000001 from NV memory.
+	device, err := linux.DefaultTPM2Device()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	defer tpm.Close()
 
 	persistent, err := tpm.CreateResourceContextFromTPM(0x81000001)
