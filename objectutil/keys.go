@@ -129,7 +129,8 @@ func NewECCPublicKey(key *ecdsa.PublicKey, options ...PublicTemplateOption) (*tp
 //   - SHA-256 for the name algorithm - customize with [WithNameAlg].
 //   - Authorization with the object's auth value is permitted for both the user and admin roles -
 //     customize with [WithUserAuthMode] and [WithAdminAuthMode].
-//   - DA protected - customize with [WithDictionaryAttackMode].
+//   - DA protected - customize with [WithDictionaryAttackProtection] and
+//     [WithoutDictionaryAttackProtection].
 //
 // The returned public and sensitive area can be loaded into a TPM with
 // [tpm2.TPMContext.LoadExternal] or imported into a hierarchy by creating an importable object
@@ -175,7 +176,8 @@ func NewSealedObject(rand io.Reader, data []byte, authValue tpm2.Auth, options .
 //   - SHA-256 for the name algorithm - customize with [WithNameAlg].
 //   - Authorization with the object's auth value is permitted for both the user and admin roles -
 //     customize with [WithUserAuthMode] and [WithAdminAuthMode].
-//   - DA protected - customize with [WithDictionaryAttackMode].
+//   - DA protected - customize with [WithDictionaryAttackProtection] and
+//     [WithoutDictionaryAttackProtection].
 //   - AES-128-CFB for the symmetric scheme - customize with [WithSymmetricScheme].
 //
 // The returned public and sensitive area can be loaded into a TPM with
@@ -247,7 +249,8 @@ func NewSymmetricKey(rand io.Reader, usage Usage, key []byte, authValue tpm2.Aut
 //   - SHA-256 for the name algorithm - customize with [WithNameAlg].
 //   - Authorization with the object's auth value is permitted for both the user and admin roles -
 //     customize with [WithUserAuthMode] and [WithAdminAuthMode].
-//   - DA protected - customize with [WithDictionaryAttackMode].
+//   - DA protected - customize with [WithDictionaryAttackProtection] and
+//     [WithoutDictionaryAttackProtection].
 //   - SHA-256 for the HMAC digest algorithm - customize with [WithHMACDigest].
 //
 // The returned public and sensitive area can be loaded into a TPM with

@@ -15,7 +15,7 @@ import (
 //
 // This will panic if hashAlg is not available.
 //
-// Depracted: Use [github.com/canonical/go-tpm2/cryptutil.KDFa].
+// Deprecated: Use [github.com/canonical/go-tpm2/cryptutil.KDFa].
 func KDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, sizeInBits int) []byte {
 	return internal_crypt.KDFa(hashAlg, key, label, contextU, contextV, sizeInBits)
 }
@@ -25,7 +25,7 @@ func KDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, sizeInBits
 //
 // This will panic if hashAlg is not available.
 //
-// Depracted: Use [github.com/canonical/go-tpm2/cryptutil.KDFe].
+// Deprecated: Use [github.com/canonical/go-tpm2/cryptutil.KDFe].
 func KDFe(hashAlg crypto.Hash, z, label, partyUInfo, partyVInfo []byte, sizeInBits int) []byte {
 	return internal_crypt.KDFe(hashAlg, z, label, partyUInfo, partyVInfo, sizeInBits)
 }
