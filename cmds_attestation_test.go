@@ -55,7 +55,7 @@ func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign
 		c.Check(signature.SigAlg, Equals, SigSchemeAlgNull)
 	} else {
 		c.Check(signature.SigAlg, Equals, scheme.Scheme)
-		c.Check(signature.Signature.Any(signature.SigAlg).HashAlg, Equals, scheme.Details.Any(scheme.Scheme).HashAlg)
+		c.Check(signature.HashAlg(), Equals, scheme.AnyDetails().HashAlg)
 
 		pub, _, _, err := s.TPM.ReadPublic(sign)
 		c.Assert(err, IsNil)

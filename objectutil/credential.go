@@ -24,6 +24,9 @@ import (
 // key and the object associated with objectName are loaded in order to recover the activation
 // credential.
 func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Name) (credentialBlob tpm2.IDObjectRaw, secret tpm2.EncryptedSecret, err error) {
+	if !mu.IsValid(key) {
+		return nil, nil, errors.New("key is not valid")
+	}
 	if !key.IsStorageParent() || !key.IsAsymmetric() {
 		return nil, nil, errors.New("key must be an asymmetric storage parent")
 	}
@@ -41,7 +44,7 @@ func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Na
 		return nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
 	}
 
-	credentialBlob, err = internal_util.ProduceOuterWrap(key.NameAlg, &key.Params.AsymDetail(key.Type).Symmetric, objectName, seed, false, credentialBlob)
+	credentialBlob, err = internal_util.ProduceOuterWrap(key.NameAlg, &key.AsymDetail().Symmetric, objectName, seed, false, credentialBlob)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
 	}

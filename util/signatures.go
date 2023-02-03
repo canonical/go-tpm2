@@ -27,7 +27,7 @@ import (
 // Deprecated: Use [cryptutil.Sign] instead.
 func Sign(key crypto.PrivateKey, scheme *tpm2.SigScheme, digest []byte) (*tpm2.Signature, error) {
 	var signer crypto.Signer
-	var opts crypto.SignerOpts = scheme.Details.Any(scheme.Scheme).HashAlg.GetHash()
+	var opts crypto.SignerOpts = scheme.AnyDetails().HashAlg.GetHash()
 
 	switch k := key.(type) {
 	case *rsa.PrivateKey:
@@ -95,7 +95,7 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 // associated command code and set of command parameters. The command parameter digest can be
 // computed using [ComputeCpHash].
 func SignPolicyAuthorization(key crypto.PrivateKey, scheme *tpm2.SigScheme, nonceTPM tpm2.Nonce, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32) (*tpm2.Signature, error) {
-	hashAlg := scheme.Details.Any(scheme.Scheme).HashAlg
+	hashAlg := scheme.AnyDetails().HashAlg
 	if !hashAlg.Available() {
 		return nil, errors.New("digest algorithm is not available")
 	}
@@ -131,7 +131,7 @@ func ComputePolicyAuthorizeDigest(alg tpm2.HashAlgorithmId, approvedPolicy tpm2.
 // The digest algorithm used for the signature must match the name algorithm in the public area
 // associated with the supplied private key.
 func PolicyAuthorize(key crypto.PrivateKey, scheme *tpm2.SigScheme, approvedPolicy tpm2.Digest, policyRef tpm2.Nonce) (tpm2.Digest, *tpm2.Signature, error) {
-	hashAlg := scheme.Details.Any(scheme.Scheme).HashAlg
+	hashAlg := scheme.AnyDetails().HashAlg
 	if !hashAlg.Available() {
 		return nil, nil, errors.New("digest algorithm is not available")
 	}
@@ -152,7 +152,10 @@ func PolicyAuthorize(key crypto.PrivateKey, scheme *tpm2.SigScheme, approvedPoli
 // In order to verify a HMAC signature, the supplied public key should be a byte slice containing
 // the HMAC key.
 func VerifyAttestationSignature(key crypto.PublicKey, attest *tpm2.Attest, signature *tpm2.Signature) (ok bool, err error) {
-	hashAlg := signature.Signature.Any(signature.SigAlg).HashAlg
+	if !signature.SigAlg.IsValid() {
+		return false, errors.New("invalid signature algorithm")
+	}
+	hashAlg := signature.HashAlg()
 	if !hashAlg.Available() {
 		return false, errors.New("digest algorithm is not available")
 	}

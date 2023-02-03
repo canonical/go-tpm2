@@ -214,15 +214,19 @@ func CreateImportable(sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Publ
 	var outerHashAlg tpm2.HashAlgorithmId
 	var outerSymmetricAlg *tpm2.SymDefObject
 	if parentPublic != nil {
-		outerHashAlg = parentPublic.NameAlg
-		outerSymmetricAlg = &parentPublic.Params.AsymDetail(parentPublic.Type).Symmetric
-
+		if !mu.IsValid(parentPublic) {
+			return nil, nil, nil, errors.New("parent object is invalid")
+		}
 		if parentPublic.NameAlg != tpm2.HashAlgorithmNull && !parentPublic.NameAlg.Available() {
 			return nil, nil, nil, fmt.Errorf("digest algorithm %v is not available", parentPublic.NameAlg)
 		}
 		if !parentPublic.IsStorageParent() || !parentPublic.IsAsymmetric() {
 			return nil, nil, nil, errors.New("parent object must be an asymmetric storage key")
 		}
+
+		outerHashAlg = parentPublic.NameAlg
+		outerSymmetricAlg = &parentPublic.AsymDetail().Symmetric
+
 		outerSecret, seed, err = internal_crypt.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("cannot create encrypted outer symmetric seed: %w", err)

@@ -62,9 +62,6 @@ func digestFromSignerOpts(opts crypto.SignerOpts) tpm2.HashAlgorithmId {
 // signature can be verified on a TPM using the associated public key.
 func Sign(signer crypto.Signer, digest []byte, opts crypto.SignerOpts) (*tpm2.Signature, error) {
 	hashAlg := digestFromSignerOpts(opts)
-	if len(digest) != hashAlg.Size() {
-		return nil, errors.New("invalid digest length")
-	}
 
 	switch k := signer.Public().(type) {
 	case *rsa.PublicKey:
@@ -137,15 +134,19 @@ func Sign(signer crypto.Signer, digest []byte, opts crypto.SignerOpts) (*tpm2.Si
 // VerifySignature verifies a signature created by a TPM using the supplied public key. Note that
 // only RSA-SSA, RSA-PSS, ECDSA and HMAC signatures are supported.
 func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signature) (ok bool, err error) {
-	if !signature.Signature.Any(signature.SigAlg).HashAlg.Available() {
-		return false, errors.New("digest algorithm is not available")
+	if !signature.SigAlg.IsValid() {
+		return false, errors.New("invalid signature algorithm")
+	}
+	hashAlg := signature.HashAlg()
+	if !hashAlg.IsValid() {
+		return false, errors.New("invalid digest algorithm")
 	}
 
 	switch k := key.(type) {
 	case *rsa.PublicKey:
 		switch signature.SigAlg {
 		case tpm2.SigSchemeAlgRSASSA:
-			if err := rsa.VerifyPKCS1v15(k, signature.Signature.RSASSA.Hash.GetHash(), digest, signature.Signature.RSASSA.Sig); err != nil {
+			if err := rsa.VerifyPKCS1v15(k, hashAlg.GetHash(), digest, signature.Signature.RSASSA.Sig); err != nil {
 				if err == rsa.ErrVerification {
 					return false, nil
 				}
@@ -153,8 +154,11 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 			}
 			return true, nil
 		case tpm2.SigSchemeAlgRSAPSS:
+			if !hashAlg.Available() {
+				return false, errors.New("digest algorithm is not available")
+			}
 			options := rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}
-			if err := rsa.VerifyPSS(k, signature.Signature.RSAPSS.Hash.GetHash(), digest, signature.Signature.RSAPSS.Sig, &options); err != nil {
+			if err := rsa.VerifyPSS(k, hashAlg.GetHash(), digest, signature.Signature.RSAPSS.Sig, &options); err != nil {
 				if err == rsa.ErrVerification {
 					return false, nil
 				}
@@ -176,10 +180,10 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 	case HMACKey:
 		switch signature.SigAlg {
 		case tpm2.SigSchemeAlgHMAC:
-			if !signature.Signature.HMAC.HashAlg.IsValid() {
-				return false, errors.New("invalid HMAC algorithm")
+			if !hashAlg.Available() {
+				return false, errors.New("digest algorithm is not available")
 			}
-			test, err := Sign(k, digest, signature.Signature.HMAC.HashAlg.GetHash())
+			test, err := Sign(k, digest, hashAlg.GetHash())
 			if err != nil {
 				return false, err
 			}

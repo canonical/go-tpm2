@@ -138,6 +138,8 @@ func (p *PublicParamsU) Select(selector reflect.Value) interface{} {
 // AsymDetail returns the parameters associated with the specified object type
 // as *AsymParams. It panics if the type is not [ObjectTypeRSA] or [ObjectTypeECC],
 // or the appropriate field isn't set.
+//
+// Deprecated: Use [Public.AsymDetail] instead.
 func (p PublicParamsU) AsymDetail(t ObjectTypeId) *AsymParams {
 	switch t {
 	case ObjectTypeRSA:
@@ -191,6 +193,30 @@ func (p *Public) compareName(name Name) bool {
 		return false
 	}
 	return bytes.Equal(n, name)
+}
+
+// AsymDetail returns the asymmetric parameters associated with the object. It panics if it is
+// not an asymmetric key ([Public.IsAsymmetric] returns false) or if the public area is invalid
+// ([mu.IsValid] returns false). The public area will be valid if it was constructed by the
+// [github.com/canonical/go-tpm2/mu] package.
+func (p *Public) AsymDetail() *AsymParams {
+	switch p.Type {
+	case ObjectTypeRSA, ObjectTypeECC:
+		data := mu.MustMarshalToBytes(p)
+
+		var t ObjectTypeId
+		var nameAlg HashAlgorithmId
+		var attrs ObjectAttributes
+		var policy Digest
+		var params *AsymParams
+		if _, err := mu.UnmarshalFromBytes(data, &t, &nameAlg, &attrs, &policy, &params); err != nil {
+			panic(err)
+		}
+
+		return params
+	default:
+		panic("invalid type")
+	}
 }
 
 // Name implements [github.com/canonical/go-tpm2/object.Named].
@@ -355,6 +381,8 @@ func (s *SensitiveCompositeU) Select(selector reflect.Value) interface{} {
 
 // Any returns the value associated with the specified object type as
 // PrivateVendorSpecific.
+//
+// Deprecated: Use [Sensitive.AnySensitive] instead.
 func (s SensitiveCompositeU) Any(t ObjectTypeId) PrivateVendorSpecific {
 	switch t {
 	case ObjectTypeRSA:
@@ -376,6 +404,26 @@ type Sensitive struct {
 	AuthValue Auth                 // Authorization value
 	SeedValue Digest               // For a parent object, the seed value for protecting descendant objects
 	Sensitive *SensitiveCompositeU // Type specific private data
+}
+
+func (s *Sensitive) AnySensitive() PrivateVendorSpecific {
+	sensitive := s.Sensitive
+	if sensitive == nil {
+		sensitive = new(SensitiveCompositeU)
+	}
+
+	switch s.Type {
+	case ObjectTypeRSA:
+		return PrivateVendorSpecific(sensitive.RSA)
+	case ObjectTypeECC:
+		return PrivateVendorSpecific(sensitive.ECC)
+	case ObjectTypeKeyedHash:
+		return PrivateVendorSpecific(sensitive.Bits)
+	case ObjectTypeSymCipher:
+		return PrivateVendorSpecific(sensitive.Sym)
+	default:
+		panic("invalid object type")
+	}
 }
 
 // Private corresponds to the TPM2B_PRIVATE type.

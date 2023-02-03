@@ -14,8 +14,9 @@ func rsaSchemeOption(scheme *tpm2.RSAScheme) objectutil.PublicTemplateOption {
 	hashAlg := tpm2.HashAlgorithmNull
 	if scheme != nil {
 		schemeId = scheme.Scheme
-		if tpm2.AsymSchemeId(schemeId).HasDigest() {
-			hashAlg = scheme.Details.Any(tpm2.AsymSchemeId(schemeId)).HashAlg
+		details := scheme.AnyDetails()
+		if details != nil {
+			hashAlg = details.HashAlg
 		}
 	}
 	return objectutil.WithRSAScheme(schemeId, hashAlg)
@@ -26,8 +27,9 @@ func eccSchemeOption(scheme *tpm2.ECCScheme) objectutil.PublicTemplateOption {
 	hashAlg := tpm2.HashAlgorithmNull
 	if scheme != nil {
 		schemeId = scheme.Scheme
-		if tpm2.AsymSchemeId(schemeId).HasDigest() {
-			hashAlg = scheme.Details.Any(tpm2.AsymSchemeId(schemeId)).HashAlg
+		details := scheme.AnyDetails()
+		if details != nil {
+			hashAlg = details.HashAlg
 		}
 	}
 	return objectutil.WithECCScheme(schemeId, hashAlg)

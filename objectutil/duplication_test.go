@@ -46,7 +46,7 @@ func (s *duplicationSuite) testCreateUnwrapDuplication(c *C, data *testCreateUnw
 	var parentSymmetricAlg *tpm2.SymDefObject
 	if data.parentPublic != nil {
 		parentNameAlg = data.parentPublic.NameAlg
-		parentSymmetricAlg = &data.parentPublic.Params.AsymDetail(data.parentPublic.Type).Symmetric
+		parentSymmetricAlg = &data.parentPublic.AsymDetail().Symmetric
 	}
 
 	sensitive, err := UnwrapDuplicated(duplicate, public, data.parentPriv, parentNameAlg, parentSymmetricAlg, symSeed, encryptionKey, data.symmetricAlg)

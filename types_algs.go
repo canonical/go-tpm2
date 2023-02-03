@@ -239,11 +239,9 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 // Any returns the signature scheme associated with scheme as a *SchemeHash.
 // It panics if the specified scheme is invalid ([SigSchemeId.IsValid] returns
 // false), or the appropriate field isn't set.
+//
+// Deprecated: Use [SigScheme.AnyDetails] instead.
 func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
-	if !scheme.IsValid() {
-		panic("invalid scheme")
-	}
-
 	switch scheme {
 	case SigSchemeAlgRSASSA:
 		return (*SchemeHash)(&(*s.RSASSA))
@@ -260,7 +258,7 @@ func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
 	case SigSchemeAlgHMAC:
 		return (*SchemeHash)(&(*s.HMAC))
 	default:
-		panic("not reached")
+		panic("invalid scheme")
 	}
 }
 
@@ -268,6 +266,27 @@ func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
 type SigScheme struct {
 	Scheme  SigSchemeId // Scheme selector
 	Details *SigSchemeU // Scheme specific parameters
+}
+
+// AnyDetails returns the details of the signature scheme. If the scheme is [SigSchemeAlgNull],
+// then nil is returned. If the scheme is not otherwise valid, it will panic.
+func (s *SigScheme) AnyDetails() *SchemeHash {
+	switch {
+	case s.Scheme == SigSchemeAlgNull:
+		return nil
+	case !s.Scheme.IsValid():
+		panic("invalid scheme")
+	}
+
+	data := mu.MustMarshalToBytes(s)
+
+	var scheme SigSchemeId
+	var details *SchemeHash
+	if _, err := mu.UnmarshalFromBytes(data, &scheme, &details); err != nil {
+		panic(err)
+	}
+
+	return details
 }
 
 // 11.2.2 Encryption Schemes
@@ -438,6 +457,9 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 // Any returns the asymmetric scheme associated with scheme as a *SchemeHash.
 // It panics if the specified scheme does not have an associated digest algorithm
 // ([AsymSchemeId.HasDigest] returns false), or if the appropriate field isn't set.
+//
+// Deprecated: Use [AsymScheme.AnyDetails], [RSAScheme.AnyDetails] or
+// [ECCScheme.AnyDetails] instead.
 func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
 	if !scheme.HasDigest() {
 		panic("invalid asymmetric scheme")
@@ -473,6 +495,30 @@ type AsymScheme struct {
 	Details *AsymSchemeU // Scheme specific parameters
 }
 
+// AnyDetails returns the details of the asymmetric scheme. If the scheme is [AsymSchemeNull],
+// or doesn't have a digest, then nil is returned. If the scheme is not otherwise valid, it
+// will panic.
+func (s *AsymScheme) AnyDetails() *SchemeHash {
+	switch {
+	case s.Scheme == AsymSchemeNull:
+		return nil
+	case !s.Scheme.HasDigest():
+		return nil
+	case !s.Scheme.IsValid():
+		panic("invalid scheme")
+	}
+
+	data := mu.MustMarshalToBytes(s)
+
+	var scheme AsymSchemeId
+	var details *SchemeHash
+	if _, err := mu.UnmarshalFromBytes(data, &scheme, &details); err != nil {
+		panic(err)
+	}
+
+	return details
+}
+
 // 11.2.4 RSA
 
 // RSASchemeId corresponds to the TPMI_ALG_RSA_SCHEME type.
@@ -490,6 +536,16 @@ const (
 type RSAScheme struct {
 	Scheme  RSASchemeId  // Scheme selector
 	Details *AsymSchemeU // Scheme specific parameters.
+}
+
+// AnyDetails returns the details of the RSA scheme. If the scheme is [RSASchemeNull],
+// or doesn't have a digest, then nil is returned. If the scheme is not otherwise valid, it
+// will panic.
+func (s *RSAScheme) AnyDetails() *SchemeHash {
+	scheme := AsymScheme{
+		Scheme:  AsymSchemeId(s.Scheme),
+		Details: s.Details}
+	return scheme.AnyDetails()
 }
 
 // PublicKeyRSA corresponds to the TPM2B_PUBLIC_KEY_RSA type.
@@ -527,6 +583,15 @@ const (
 type ECCScheme struct {
 	Scheme  ECCSchemeId  // Scheme selector
 	Details *AsymSchemeU // Scheme specific parameters.
+}
+
+// AnyDetails returns the details of the ECC scheme. If the scheme is [ECCSchemeNull]
+// then nil is returned. If the scheme is not otherwise valid, it will panic.
+func (s *ECCScheme) AnyDetails() *SchemeHash {
+	scheme := AsymScheme{
+		Scheme:  AsymSchemeId(s.Scheme),
+		Details: s.Details}
+	return scheme.AnyDetails()
 }
 
 // 11.3 Signatures
@@ -598,6 +663,8 @@ func (s *SignatureU) Select(selector reflect.Value) interface{} {
 // Any returns the signature associated with scheme as a *SchemeHash. It
 // panics if scheme is [SigSchemeAlgNull] or the appropriate field isn't
 // set.
+//
+// Deprecated: Use [Signature.Digest] instead.
 func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
 	if !scheme.IsValid() {
 		panic("invalid signature scheme")
@@ -628,6 +695,26 @@ func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
 type Signature struct {
 	SigAlg    SigSchemeId // Signature algorithm
 	Signature *SignatureU // Actual signature
+}
+
+// HashAlg returns the digest algorithm used to create the signature. This will panic if
+// the signature algorithm is not valid ([SigSchemeId.IsValid] returns false) or if the signature
+// structure is otherwise invalid ([mu.IsValid] returns false). The signature structure will be
+// valid if it was constructed by the [github.com/canonical/go-tpm2/mu] package.
+func (s *Signature) HashAlg() HashAlgorithmId {
+	if !s.SigAlg.IsValid() {
+		panic("invalid scheme")
+	}
+
+	data := mu.MustMarshalToBytes(s)
+
+	var alg SigSchemeId
+	var hashAlg HashAlgorithmId
+	if _, err := mu.UnmarshalFromBytes(data, &alg, &hashAlg); err != nil {
+		panic(err)
+	}
+
+	return hashAlg
 }
 
 // 11.4) Key/Secret Exchange
