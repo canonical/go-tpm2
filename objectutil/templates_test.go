@@ -495,9 +495,9 @@ func (s *templatesSuite) TestNewRSAAttestationKeyTemplate(c *C) {
 			RSADetail: &tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme: tpm2.RSAScheme{
-					Scheme: tpm2.RSASchemeRSASSA,
+					Scheme: tpm2.RSASchemeRSAPSS,
 					Details: &tpm2.AsymSchemeU{
-						RSASSA: &tpm2.SigSchemeRSASSA{HashAlg: tpm2.HashAlgorithmSHA256}}},
+						RSAPSS: &tpm2.SigSchemeRSAPSS{HashAlg: tpm2.HashAlgorithmSHA256}}},
 				KeyBits: 2048}}})
 }
 

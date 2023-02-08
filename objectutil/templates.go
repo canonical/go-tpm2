@@ -483,7 +483,7 @@ func NewRSAStorageKeyTemplate(options ...PublicTemplateOption) *tpm2.Public {
 //     [WithoutDictionaryAttackProtection].
 //   - Not duplicable - customize with [WithProtectionGroupMode] and [WithDuplicationMode].
 //   - RSA key size of 2048 bits - customize with [WithRSAKeyBits].
-//   - RSA-SSA and SHA-256 for the RSA scheme - customize with [WithRSAScheme].
+//   - RSA-PSS and SHA-256 for the RSA scheme - customize with [WithRSAScheme].
 func NewRSAAttestationKeyTemplate(options ...PublicTemplateOption) *tpm2.Public {
 	template := &tpm2.Public{
 		Type:    tpm2.ObjectTypeRSA,
@@ -493,9 +493,9 @@ func NewRSAAttestationKeyTemplate(options ...PublicTemplateOption) *tpm2.Public 
 			RSADetail: &tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme: tpm2.RSAScheme{
-					Scheme: tpm2.RSASchemeRSASSA,
+					Scheme: tpm2.RSASchemeRSAPSS,
 					Details: &tpm2.AsymSchemeU{
-						RSASSA: &tpm2.SigSchemeRSASSA{HashAlg: tpm2.HashAlgorithmSHA256}}},
+						RSAPSS: &tpm2.SigSchemeRSAPSS{HashAlg: tpm2.HashAlgorithmSHA256}}},
 				KeyBits:  2048,
 				Exponent: 0}}}
 	applyPublicTemplateOptions(template, options...)

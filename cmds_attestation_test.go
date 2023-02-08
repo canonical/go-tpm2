@@ -110,9 +110,9 @@ func (s *attestationSuite) TestCertifyWithSignature(c *C) {
 		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 func (s *attestationSuite) TestCertifyExtraData(c *C) {
@@ -143,9 +143,9 @@ func (s *attestationSuite) TestCertifySignAuthSession(c *C) {
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 type testCertifyCreationData struct {
@@ -187,9 +187,9 @@ func (s *attestationSuite) TestCertifyCreationWithSignature(c *C) {
 		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 func (s *attestationSuite) TestCertifyCreationExtraData(c *C) {
@@ -215,9 +215,9 @@ func (s *attestationSuite) TestCertifyCreationSignAuthSession(c *C) {
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 func (s *attestationSuite) TestCertifyCreationInvalidTicket(c *C) {
@@ -280,9 +280,9 @@ func (s *attestationSuite) TestQuote(c *C) {
 		signHierarchy: HandleEndorsement,
 		alg:           HashAlgorithmSHA256,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 func (s *attestationSuite) TestQuoteWithExtraData(c *C) {
@@ -293,9 +293,9 @@ func (s *attestationSuite) TestQuoteWithExtraData(c *C) {
 		signHierarchy:  HandleEndorsement,
 		alg:            HashAlgorithmSHA256,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 func (s *attestationSuite) TestQuoteInScheme(c *C) {
@@ -319,9 +319,9 @@ func (s *attestationSuite) TestQuoteDifferentPCRs(c *C) {
 		signHierarchy: HandleEndorsement,
 		alg:           HashAlgorithmSHA256,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 func (s *attestationSuite) TestQuoteSignAuthSession(c *C) {
@@ -332,9 +332,9 @@ func (s *attestationSuite) TestQuoteSignAuthSession(c *C) {
 		signHierarchy:   HandleEndorsement,
 		alg:             HashAlgorithmSHA256,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 type testGetTimeData struct {
@@ -380,9 +380,9 @@ func (s *attestationSuite) TestGetTimeWithSignature(c *C) {
 		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
 func (s *attestationSuite) TestGetTimeExtraData(c *C) {
@@ -413,7 +413,7 @@ func (s *attestationSuite) TestGetTimeSignAuthSession(c *C) {
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
 		signScheme: &SigScheme{
-			Scheme: SigSchemeAlgRSASSA,
+			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
-				RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}})
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
