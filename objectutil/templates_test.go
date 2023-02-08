@@ -158,6 +158,24 @@ func (s *templatesSuite) TestWithSymmetricSchemeInvalidType(c *C) {
 	c.Check(func() { WithSymmetricScheme(tpm2.SymObjectAlgorithmAES, 128, tpm2.SymModeCFB)(pub) }, PanicMatches, "invalid object type")
 }
 
+func (s *templatesSuite) TestWithSymmetricUnique(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeSymCipher,
+		Params: &tpm2.PublicParamsU{SymDetail: new(tpm2.SymCipherParams)}}
+	WithSymmetricUnique(make([]byte, 256))(pub)
+	c.Check(pub, DeepEquals, &tpm2.Public{
+		Type:   tpm2.ObjectTypeSymCipher,
+		Params: &tpm2.PublicParamsU{SymDetail: new(tpm2.SymCipherParams)},
+		Unique: &tpm2.PublicIDU{Sym: make([]byte, 256)}})
+}
+
+func (s *templatesSuite) TestWithSymmetricUniqueInvalidType(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeECC,
+		Params: &tpm2.PublicParamsU{ECCDetail: new(tpm2.ECCParams)}}
+	c.Check(func() { WithSymmetricUnique(make([]byte, 256))(pub) }, PanicMatches, "invalid object type")
+}
+
 func (s *templatesSuite) TestWithRSAKeyBits2048(c *C) {
 	pub := &tpm2.Public{
 		Type:   tpm2.ObjectTypeRSA,
@@ -185,6 +203,37 @@ func (s *templatesSuite) TestWithRSAKeyBitsInvalidType(c *C) {
 		Type:   tpm2.ObjectTypeECC,
 		Params: &tpm2.PublicParamsU{ECCDetail: new(tpm2.ECCParams)}}
 	c.Check(func() { WithRSAKeyBits(2048)(pub) }, PanicMatches, "invalid object type")
+}
+
+func (s *templatesSuite) TestWithRSAParams2048AndDefaultExp(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeRSA,
+		Params: &tpm2.PublicParamsU{RSADetail: new(tpm2.RSAParams)}}
+	WithRSAParams(2048, tpm2.DefaultRSAExponent)(pub)
+	c.Check(pub, DeepEquals, &tpm2.Public{
+		Type: tpm2.ObjectTypeRSA,
+		Params: &tpm2.PublicParamsU{
+			RSADetail: &tpm2.RSAParams{KeyBits: 2048}}})
+}
+
+func (s *templatesSuite) TestWithRSAParams3072AndNonDefaultExp(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeRSA,
+		Params: &tpm2.PublicParamsU{RSADetail: new(tpm2.RSAParams)}}
+	WithRSAParams(3072, 257)(pub)
+	c.Check(pub, DeepEquals, &tpm2.Public{
+		Type: tpm2.ObjectTypeRSA,
+		Params: &tpm2.PublicParamsU{
+			RSADetail: &tpm2.RSAParams{
+				KeyBits:  3072,
+				Exponent: 257}}})
+}
+
+func (s *templatesSuite) TestWithRSAParamsInvalidType(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeECC,
+		Params: &tpm2.PublicParamsU{ECCDetail: new(tpm2.ECCParams)}}
+	c.Check(func() { WithRSAParams(2048, tpm2.DefaultRSAExponent)(pub) }, PanicMatches, "invalid object type")
 }
 
 func (s *templatesSuite) TestWithRSASchemeSSA(c *C) {
@@ -222,6 +271,24 @@ func (s *templatesSuite) TestWithRSASchemeInvalidType(c *C) {
 		Type:   tpm2.ObjectTypeECC,
 		Params: &tpm2.PublicParamsU{ECCDetail: new(tpm2.ECCParams)}}
 	c.Check(func() { WithRSAScheme(tpm2.RSASchemeRSASSA, tpm2.HashAlgorithmSHA256)(pub) }, PanicMatches, "invalid object type")
+}
+
+func (s *templatesSuite) TestWithRSAUnique(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeRSA,
+		Params: &tpm2.PublicParamsU{RSADetail: new(tpm2.RSAParams)}}
+	WithRSAUnique(make([]byte, 256))(pub)
+	c.Check(pub, DeepEquals, &tpm2.Public{
+		Type:   tpm2.ObjectTypeRSA,
+		Params: &tpm2.PublicParamsU{RSADetail: new(tpm2.RSAParams)},
+		Unique: &tpm2.PublicIDU{RSA: make([]byte, 256)}})
+}
+
+func (s *templatesSuite) TestWithRSAUniqueInvalidType(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeECC,
+		Params: &tpm2.PublicParamsU{ECCDetail: new(tpm2.ECCParams)}}
+	c.Check(func() { WithRSAUnique(make([]byte, 256))(pub) }, PanicMatches, "invalid object type")
 }
 
 func (s *templatesSuite) TestWithECCCurveP256(c *C) {
@@ -290,6 +357,24 @@ func (s *templatesSuite) TestWithECCSchemeInvalidType(c *C) {
 	c.Check(func() { WithECCScheme(tpm2.ECCSchemeECDSA, tpm2.HashAlgorithmSHA256)(pub) }, PanicMatches, "invalid object type")
 }
 
+func (s *templatesSuite) TestWithECCUnique(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeECC,
+		Params: &tpm2.PublicParamsU{ECCDetail: new(tpm2.ECCParams)}}
+	WithECCUnique(&tpm2.ECCPoint{X: make([]byte, 32), Y: make([]byte, 32)})(pub)
+	c.Check(pub, DeepEquals, &tpm2.Public{
+		Type:   tpm2.ObjectTypeECC,
+		Params: &tpm2.PublicParamsU{ECCDetail: new(tpm2.ECCParams)},
+		Unique: &tpm2.PublicIDU{ECC: &tpm2.ECCPoint{X: make([]byte, 32), Y: make([]byte, 32)}}})
+}
+
+func (s *templatesSuite) TestWithECCUniqueInvalidType(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeRSA,
+		Params: &tpm2.PublicParamsU{RSADetail: new(tpm2.RSAParams)}}
+	c.Check(func() { WithECCUnique(new(tpm2.ECCPoint))(pub) }, PanicMatches, "invalid object type")
+}
+
 func (s *templatesSuite) TestWithHMACDigestSHA256(c *C) {
 	pub := &tpm2.Public{
 		Type: tpm2.ObjectTypeKeyedHash,
@@ -345,6 +430,24 @@ func (s *templatesSuite) TestWithHMACDigestInvalidType2(c *C) {
 		Params: &tpm2.PublicParamsU{
 			SymDetail: new(tpm2.SymCipherParams)}}
 	c.Check(func() { WithHMACDigest(tpm2.HashAlgorithmSHA256)(pub) }, PanicMatches, "invalid object type")
+}
+
+func (s *templatesSuite) TestWithKeyedHashUnique(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeKeyedHash,
+		Params: &tpm2.PublicParamsU{KeyedHashDetail: new(tpm2.KeyedHashParams)}}
+	WithKeyedHashUnique(make([]byte, 256))(pub)
+	c.Check(pub, DeepEquals, &tpm2.Public{
+		Type:   tpm2.ObjectTypeKeyedHash,
+		Params: &tpm2.PublicParamsU{KeyedHashDetail: new(tpm2.KeyedHashParams)},
+		Unique: &tpm2.PublicIDU{KeyedHash: make([]byte, 256)}})
+}
+
+func (s *templatesSuite) TestWithKeyedHashUniqueInvalidType(c *C) {
+	pub := &tpm2.Public{
+		Type:   tpm2.ObjectTypeSymCipher,
+		Params: &tpm2.PublicParamsU{SymDetail: new(tpm2.SymCipherParams)}}
+	c.Check(func() { WithKeyedHashUnique(make([]byte, 256))(pub) }, PanicMatches, "invalid object type")
 }
 
 func (s *templatesSuite) TestNewRSAStorageKeyTemplate(c *C) {

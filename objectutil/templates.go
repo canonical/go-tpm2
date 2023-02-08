@@ -240,6 +240,21 @@ func WithSymmetricScheme(alg tpm2.SymObjectAlgorithmId, keyBits uint16, mode tpm
 	}
 }
 
+// WithSymmetricUnique returns an option for the specified public identity. This will panic for
+// objects with a type other than [tpm2.ObjectTypeSymCipher].
+//
+// This is useful when creating templates for primary keys.
+func WithSymmetricUnique(unique tpm2.Digest) PublicTemplateOption {
+	return func(pub *tpm2.Public) {
+		if pub.Type != tpm2.ObjectTypeSymCipher {
+			panic("invalid object type")
+		}
+
+		pub.Unique = &tpm2.PublicIDU{Sym: make([]byte, len(unique))}
+		copy(pub.Unique.Sym, unique)
+	}
+}
+
 // WithRSAKeyBits returns an option for the specified RSA key size in bits. This will panic for
 // objects with a type other than [tpm2.ObjectTypeRSA].
 func WithRSAKeyBits(keyBits uint16) PublicTemplateOption {
@@ -249,6 +264,22 @@ func WithRSAKeyBits(keyBits uint16) PublicTemplateOption {
 		}
 
 		pub.Params.RSADetail.KeyBits = keyBits
+	}
+}
+
+// WithRSAParams returns an option for the specified RSA key size in bits and the specified
+// pbulic exponent. This will panic for objects with a type other than [tpm2.ObjectTypeRSA].
+func WithRSAParams(keyBits uint16, exponent uint32) PublicTemplateOption {
+	return func(pub *tpm2.Public) {
+		if pub.Type != tpm2.ObjectTypeRSA {
+			panic("invalid object type")
+		}
+
+		if exponent == tpm2.DefaultRSAExponent {
+			exponent = 0
+		}
+		pub.Params.RSADetail.KeyBits = keyBits
+		pub.Params.RSADetail.Exponent = exponent
 	}
 }
 
@@ -281,6 +312,21 @@ func WithRSAScheme(scheme tpm2.RSASchemeId, hashAlg tpm2.HashAlgorithmId) Public
 		}
 
 		pub.Params.RSADetail.Scheme = s
+	}
+}
+
+// WithRSAUnique returns an option for the specified public identity. This will panic for
+// objects with a type other than [tpm2.ObjectTypeRSA].
+//
+// This is useful when creating templates for primary keys.
+func WithRSAUnique(unique tpm2.PublicKeyRSA) PublicTemplateOption {
+	return func(pub *tpm2.Public) {
+		if pub.Type != tpm2.ObjectTypeRSA {
+			panic("invalid object type")
+		}
+
+		pub.Unique = &tpm2.PublicIDU{RSA: make([]byte, len(unique))}
+		copy(pub.Unique.RSA, unique)
 	}
 }
 
@@ -329,6 +375,25 @@ func WithECCScheme(scheme tpm2.ECCSchemeId, hashAlg tpm2.HashAlgorithmId) Public
 	}
 }
 
+// WithECCUnique returns an option for the specified public identity. This will panic for
+// objects with a type other than [tpm2.ObjectTypeECC].
+//
+// This is useful when creating templates for primary keys.
+func WithECCUnique(unique *tpm2.ECCPoint) PublicTemplateOption {
+	return func(pub *tpm2.Public) {
+		if pub.Type != tpm2.ObjectTypeECC {
+			panic("invalid object type")
+		}
+
+		pub.Unique = &tpm2.PublicIDU{
+			ECC: &tpm2.ECCPoint{
+				X: make([]byte, len(unique.X)),
+				Y: make([]byte, len(unique.Y))}}
+		copy(pub.Unique.ECC.X, unique.X)
+		copy(pub.Unique.ECC.Y, unique.Y)
+	}
+}
+
 // WithHMACDigest returns an option for the specified HMAC digest algorithm. This will panic for
 // objects with a type other than [tpm2.ObjectTypeKeyedHash] and a scheme other than
 // [tpm2.KeyedHashSchemeHMAC].
@@ -353,6 +418,21 @@ func WithDerivationScheme(hashAlg tpm2.HashAlgorithmId, kdf tpm2.KDFAlgorithmId)
 		}
 
 		pub.Params.KeyedHashDetail.Scheme.Details.XOR = &tpm2.SchemeXOR{HashAlg: hashAlg, KDF: kdf}
+	}
+}
+
+// WithKeyedHashUnique returns an option for the specified public identity. This will panic for
+// objects with a type other than [tpm2.ObjectTypeKeyedHash].
+//
+// This is useful when creating templates for primary keys.
+func WithKeyedHashUnique(unique tpm2.Digest) PublicTemplateOption {
+	return func(pub *tpm2.Public) {
+		if pub.Type != tpm2.ObjectTypeKeyedHash {
+			panic("invalid object type")
+		}
+
+		pub.Unique = &tpm2.PublicIDU{KeyedHash: make([]byte, len(unique))}
+		copy(pub.Unique.KeyedHash, unique)
 	}
 }
 
