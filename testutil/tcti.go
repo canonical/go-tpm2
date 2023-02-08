@@ -547,87 +547,74 @@ func (t *TCTI) Write(data []byte) (int, error) {
 
 	switch commandCode {
 	case tpm2.CommandNVUndefineSpaceSpecial:
-		commandFeatures |= TPMFeaturePersistent
 		nvIndex := handles[0]
-		if info, ok := t.handles[nvIndex]; !ok {
+		if info, ok := t.handles[nvIndex]; !ok || !info.created {
 			fmt.Fprintf(os.Stderr, "Requesting to undefine index %v not known to the test fixture\n", nvIndex)
-		} else if info.created {
-			commandFeatures &^= TPMFeaturePersistent
+			commandFeatures |= TPMFeaturePersistent
 		}
 	case tpm2.CommandEvictControl:
 		object := handles[1]
 		if object.Type() == tpm2.HandleTypePersistent {
-			commandFeatures |= TPMFeaturePersistent
-			if info, ok := t.handles[object]; !ok {
+			if info, ok := t.handles[object]; !ok || !info.created {
 				fmt.Fprintf(os.Stderr, "Requesting eviction of persistent object %v not known to the test fixture\n", object)
-			} else if info.created {
-				commandFeatures &^= TPMFeaturePersistent
+				commandFeatures |= TPMFeaturePersistent
 			}
 		}
 	case tpm2.CommandHierarchyControl:
-		commandFeatures |= TPMFeatureStClearChange
-		if t.permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
-			// We can reenable hierarchies, as long as the platform hierarchy
-			// isn't being disabled.
-			var enable tpm2.Handle
-			var state bool
-			if _, err := mu.UnmarshalFromBytes(pBytes, &enable, &state); err != nil {
-				return 0, fmt.Errorf("cannot unmarshal parameters: %w", err)
-			}
-
-			if enable != tpm2.HandlePlatform {
-				commandFeatures &^= TPMFeatureStClearChange
-			}
+		var enable tpm2.Handle
+		var state bool
+		if _, err := mu.UnmarshalFromBytes(pBytes, &enable, &state); err != nil {
+			return 0, fmt.Errorf("cannot unmarshal parameters: %w", err)
+		}
+		switch {
+		case t.permittedFeatures&TPMFeaturePlatformHierarchy == 0:
+			// We can't reenable hierarchies so this change will require a restart or reset.
+			commandFeatures |= TPMFeatureStClearChange
+		case enable == tpm2.HandlePlatform:
+			// We won't be able to reenable hierarchies because the platform hierarchy is
+			// being disabled. This change will require a restart or reset.
+			commandFeatures |= TPMFeatureStClearChange
 		}
 	case tpm2.CommandNVUndefineSpace:
-		commandFeatures |= TPMFeaturePersistent
 		nvIndex := handles[1]
-		if info, ok := t.handles[nvIndex]; !ok {
+		if info, ok := t.handles[nvIndex]; !ok || !info.created {
 			fmt.Fprintf(os.Stderr, "Requesting to undefine index %v not known to the test fixture\n", nvIndex)
-		} else if info.created {
-			commandFeatures &^= TPMFeaturePersistent
+			commandFeatures |= TPMFeaturePersistent
 		}
 	case tpm2.CommandClear:
 		commandFeatures |= TPMFeatureClear
-		// Make TPMFeatureClear imply TPMFeatureNV for this command.
+		// Permitting TPMFeatureClear should imply TPMFeatureNV is permitted for this command.
 		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandClearControl:
-		commandFeatures |= TPMFeatureClearControl
-		if t.permittedFeatures&TPMFeaturePlatformHierarchy > 0 {
-			// We can revert changes to disableClear
-			commandFeatures &^= TPMFeatureClearControl
+		if t.permittedFeatures&TPMFeaturePlatformHierarchy == 0 {
+			// We can't revert changes to disableClear.
+			commandFeatures |= TPMFeatureClearControl
 		}
 		if t.permittedFeatures&TPMFeatureClearControl > 0 {
-			// Make TPMFeatureClearControl imply TPMFeatureNV for this command.
+			// Permitting TPMFeatureClearControl should imply TPMFeatureNV is permitted for this command.
 			commandFeatures &^= TPMFeatureNV
 		}
 	case tpm2.CommandNVGlobalWriteLock:
 		commandFeatures |= TPMFeatureNVGlobalWriteLock
-		// Make TPMFeatureNVGlobalWriteLock imply TPMFeatureNV for this command.
+		// Permitting TPMFeatureNVGlobalWriteLock should imply TPMFeatureNV is permitted for this command.
 		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandNVIncrement:
-		commandFeatures |= TPMFeaturePersistent
 		nvIndex := handles[1]
-		if info, ok := t.handles[nvIndex]; !ok {
+		if info, ok := t.handles[nvIndex]; !ok || !info.created {
 			fmt.Fprintf(os.Stderr, "Requesting to modify index %v not known to the test fixture\n", nvIndex)
-		} else if info.created {
-			commandFeatures &^= TPMFeaturePersistent
+			commandFeatures |= TPMFeaturePersistent
 		}
 	case tpm2.CommandNVSetBits:
-		commandFeatures |= TPMFeaturePersistent
 		nvIndex := handles[1]
-		if info, ok := t.handles[nvIndex]; !ok {
+		if info, ok := t.handles[nvIndex]; !ok || !info.created {
 			fmt.Fprintf(os.Stderr, "Requesting to modify index %v not known to the test fixture\n", nvIndex)
-		} else if info.created {
-			commandFeatures &^= TPMFeaturePersistent
+			commandFeatures |= TPMFeaturePersistent
 		}
 	case tpm2.CommandNVWrite:
-		commandFeatures |= TPMFeaturePersistent
 		nvIndex := handles[1]
-		if info, ok := t.handles[nvIndex]; !ok {
+		if info, ok := t.handles[nvIndex]; !ok || !info.created {
 			fmt.Fprintf(os.Stderr, "Requesting to modify index %v not known to the test fixture\n", nvIndex)
-		} else if info.created {
-			commandFeatures &^= TPMFeaturePersistent
+			commandFeatures |= TPMFeaturePersistent
 		}
 	case tpm2.CommandNVWriteLock:
 		nvIndex := handles[1]
@@ -643,27 +630,24 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			}
 		}
 	case tpm2.CommandSetCommandCodeAuditStatus:
-		commandFeatures |= TPMFeatureSetCommandCodeAuditStatus
-		if t.permittedFeatures&TPMFeatureEndorsementHierarchy > 0 {
-			// We can revert changes to this. Note that reverting requires the use
-			// of the storage or platform hierarchy too, which is checked implicitly.
-			commandFeatures &^= TPMFeatureSetCommandCodeAuditStatus
+		if t.permittedFeatures&TPMFeatureEndorsementHierarchy == 0 {
+			// We can't revert changes to this because the endorsement hierarchy was required
+			// to  read the initial settings.
+			commandFeatures |= TPMFeatureSetCommandCodeAuditStatus
 		}
 		if t.permittedFeatures&TPMFeatureSetCommandCodeAuditStatus > 0 {
-			// Make TPMFeatureSetCommandCodeAuditStatus imply TPMFeatureNV for this command.
+			// Permitting TPMFeatureSetCommandCodeAuditStatus should imply TPMFeatureNV is permitted for this command.
 			commandFeatures &^= TPMFeatureNV
 		}
 	case tpm2.CommandShutdown:
 		commandFeatures |= TPMFeatureShutdown
-		// Make TPMFeatureShutdown imply TPMFeatureNV for this command.
+		// Permitting TPMFeatureShutdown should imply TPMFeatureNV is permitted for this command.
 		commandFeatures &^= TPMFeatureNV
 	case tpm2.CommandNVReadLock:
-		commandFeatures |= TPMFeatureStClearChange
 		nvIndex := handles[1]
-		if info, ok := t.handles[nvIndex]; !ok {
+		if info, ok := t.handles[nvIndex]; !ok || (!info.created && info.nvPub.Attrs&tpm2.AttrNVReadStClear != 0) {
 			fmt.Fprintf(os.Stderr, "Requesting to read lock index %v not known to the test fixture\n", nvIndex)
-		} else if info.created || info.nvPub.Attrs&tpm2.AttrNVReadStClear == 0 {
-			commandFeatures &^= TPMFeatureStClearChange
+			commandFeatures |= TPMFeatureStClearChange
 		}
 	}
 
@@ -686,7 +670,7 @@ func (t *TCTI) Write(data []byte) (int, error) {
 			return 0, err
 		}
 		if !daExcempt && t.permittedFeatures&TPMFeatureLockoutHierarchy == 0 {
-			// We can't reset the DA counter
+			// We can't reset the DA counter in the event of an auth failure.
 			commandFeatures |= TPMFeatureDAProtectedCapability
 		}
 	}
@@ -717,8 +701,9 @@ func (t *TCTI) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
 	platform.SetAuthValue(auth)
 	if err := tpm.HierarchyChangeAuth(platform, nil, nil); err != nil {
 		if tpm2.IsTPMHandleError(err, tpm2.ErrorHierarchy, tpm2.CommandHierarchyChangeAuth, 1) {
-			// Hierarchy was disabled which was permitted with TPMFeatureStClearChange, so
-			// this is ok as it will be restored on the next TPM2_Startup(CLEAR).
+			// Platform hierarchy was disabled which was already checked to be permitted via
+			// TPMFeatureStClearChange. The auth value will be restored on the next
+			// TPM2_Startup(CLEAR).
 			return nil
 		}
 		return fmt.Errorf("cannot clear auth value for %v: %w", tpm2.HandlePlatform, err)
@@ -732,7 +717,8 @@ func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 	}
 
 	if t.permittedFeatures&TPMFeaturePlatformHierarchy == 0 {
-		// Permitted via TPMFeatureStClearChange
+		// TPM2_HierarchyControl was already checked to be permitted via TPMFeatureStClearChange.
+		// The hierarchies will be restored on the next TPM2_Startup(CLEAR).
 		return errs
 	}
 
@@ -749,8 +735,9 @@ func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 
 		if err := tpm.HierarchyControl(tpm.PlatformHandleContext(), hierarchy, state, nil); err != nil {
 			if tpm2.IsTPMHandleError(err, tpm2.ErrorHierarchy, tpm2.CommandHierarchyControl, 1) {
-				// The platform hierarchy was disabled which was permitted with TPMFeatureStClearChange,
-				// so this is ok as it will be restored on the next TPM2_Startup(CLEAR).
+				// The platform hierarchy was disabled which already checked to be permitted via
+				// TPMFeatureStClearChange. The hierarchies will be restored on the next
+				// TPM2_Startup(CLEAR).
 				break
 			}
 			errs = append(errs, fmt.Errorf("cannot restore hierarchy %v: %w", hierarchy, err))
@@ -778,7 +765,8 @@ func (t *TCTI) restoreDisableClear(tpm *tpm2.TPMContext) error {
 	}
 
 	if t.permittedFeatures&TPMFeaturePlatformHierarchy == 0 {
-		// Permitted via TPMFeatureClearControl
+		// TPM2_ClearControl was already checked to be permitted via TPMFeatureClearControl. The
+		// state of disableClear can only be restored with the platform hierarchy.
 		return nil
 	}
 
@@ -794,15 +782,20 @@ func (t *TCTI) restoreDisableClear(tpm *tpm2.TPMContext) error {
 }
 
 func (t *TCTI) restoreDA(errs []error, tpm *tpm2.TPMContext) []error {
-	if t.permittedFeatures&TPMFeatureLockoutHierarchy > 0 {
-		if err := tpm.DictionaryAttackLockReset(tpm.LockoutHandleContext(), nil); err != nil {
-			errs = append(errs, fmt.Errorf("cannot reset DA counter: %w", err))
-		}
-		if t.didSetDaParams {
-			if err := tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), t.restoreDaParams.maxTries, t.restoreDaParams.recoveryTime, t.restoreDaParams.lockoutRecovery, nil); err != nil {
-				errs = append(errs, fmt.Errorf("cannot restore DA parameters: %w", err))
-			}
-		}
+	if t.permittedFeatures&TPMFeatureLockoutHierarchy == 0 {
+		// If the test is not permitted to use the lockout hierarchy, it was not permitted to
+		// make changes to the DA settings.
+		return errs
+	}
+
+	if err := tpm.DictionaryAttackLockReset(tpm.LockoutHandleContext(), nil); err != nil {
+		errs = append(errs, fmt.Errorf("cannot reset DA counter: %w", err))
+	}
+	if !t.didSetDaParams {
+		return errs
+	}
+	if err := tpm.DictionaryAttackParameters(tpm.LockoutHandleContext(), t.restoreDaParams.maxTries, t.restoreDaParams.recoveryTime, t.restoreDaParams.lockoutRecovery, nil); err != nil {
+		errs = append(errs, fmt.Errorf("cannot restore DA parameters: %w", err))
 	}
 
 	return errs
@@ -856,7 +849,8 @@ func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 	}
 
 	if t.permittedFeatures&TPMFeatureEndorsementHierarchy == 0 {
-		// Permitted via TPMFeatureSetCommandCodeAuditStatus
+		// TPM2_SetCommandCodeAuthStatus was already checked to be permitted via
+		// TPMFeatureSetCommandCodeAuditStatus
 		return nil
 	}
 
