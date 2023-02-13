@@ -106,9 +106,8 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
-	// XXX: Make NVReadPublic work with HandleContext and use that directly here
-	_, err = s.TPM.NewResourceContext(data.publicInfo.Index)
-	c.Check(err, DeepEquals, ResourceUnavailableError{data.publicInfo.Index})
+	_, _, err = s.TPM.NVReadPublic(NewLimitedHandleContext(data.publicInfo.Index))
+	c.Check(err, internal_testutil.ErrorIs, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
 }
 
 func (s *nvSuite) TestDefineAndUndefineSpace(c *C) {
@@ -211,9 +210,8 @@ func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpa
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 
-	// XXX: Make NVReadPublic work with HandleContext and use that directly here
-	_, err := s.TPM.NewResourceContext(pub.Index)
-	c.Check(err, DeepEquals, ResourceUnavailableError{pub.Index})
+	_, _, err := s.TPM.NVReadPublic(NewLimitedHandleContext(pub.Index))
+	c.Check(err, internal_testutil.ErrorIs, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
 
 	return nil
 }

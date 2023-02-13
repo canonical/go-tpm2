@@ -51,9 +51,8 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 
 	c.Check(persist.Handle(), Equals, HandleUnassigned)
 
-	// XXX: Make ReadPublic work with HandleContext and use that directly here
-	_, err = s.TPM.NewResourceContext(data.handle)
-	c.Check(err, DeepEquals, ResourceUnavailableError{data.handle})
+	_, _, _, err = s.TPM.ReadPublic(NewLimitedHandleContext(data.handle))
+	c.Check(err, internal_testutil.ErrorIs, &TPMHandleError{TPMError: &TPMError{Command: CommandReadPublic, Code: ErrorHandle}, Index: 1})
 }
 
 type contextSuite struct {
@@ -226,9 +225,8 @@ func (s *contextSuite) TestFlushContextTransient(c *C) {
 
 	c.Check(object.Handle(), Equals, HandleUnassigned)
 
-	// XXX: Make ReadPublic work with HandleContext and use that directly here
-	_, err := s.TPM.NewResourceContext(handle)
-	c.Check(err, DeepEquals, ResourceUnavailableError{handle})
+	_, _, _, err := s.TPM.ReadPublic(NewLimitedHandleContext(handle))
+	c.Check(err, internal_testutil.ErrorIs, &TPMWarning{Command: CommandReadPublic, Code: WarningReferenceH0})
 }
 
 func (s *contextSuite) TestFlushContextSession(c *C) {
