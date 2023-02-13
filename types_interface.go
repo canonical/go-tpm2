@@ -23,6 +23,8 @@ import (
 // TPM_HANDLE as the underlying type are supported, as this package
 // doesn't use handles in most APIs.
 
+var _ crypto.SignerOpts = HashAlgorithmId(0)
+
 // HashAlgorithmId corresponds to the TPMI_ALG_HASH type
 type HashAlgorithmId AlgorithmId
 

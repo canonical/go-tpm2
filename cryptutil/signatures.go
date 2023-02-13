@@ -22,6 +22,8 @@ import (
 	"github.com/canonical/go-tpm2"
 )
 
+var _ crypto.Signer = HMACKey(nil)
+
 // HMACKey can be used to sign and verify signatures using the [Sign] and [VerifySignature] APIs.
 type HMACKey []byte
 
