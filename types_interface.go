@@ -49,9 +49,20 @@ func (a HashAlgorithmId) GetHash() crypto.Hash {
 	}
 }
 
+// HashFunc implements [crypto.SignerOpts.HashFunc].
+//
+// This will return 0 if the algorithm does not have a corresponding
+// crypto.Hash.
+func (a HashAlgorithmId) HashFunc() crypto.Hash {
+	return a.GetHash()
+}
+
 // IsValid determines if the digest algorithm is valid. This
 // should be checked by code that deserializes an algorithm before
 // calling Size if it does not want to panic.
+//
+// Note that this does not guarantee that the [HashAlgorithmId.GetHash]
+// will return a valid corresponding [crypto.Hash].
 func (a HashAlgorithmId) IsValid() bool {
 	switch a {
 	case HashAlgorithmSHA1:
@@ -70,7 +81,7 @@ func (a HashAlgorithmId) IsValid() bool {
 }
 
 // Available determines if the TPM digest algorithm has an equivalent go
-// crypto.Hash that is linked into the current binary.
+// [crypto.Hash] that is linked into the current binary.
 func (a HashAlgorithmId) Available() bool {
 	return a.GetHash().Available()
 }

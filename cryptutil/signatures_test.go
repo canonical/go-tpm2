@@ -35,11 +35,11 @@ func (s *signaturesSuite) TestSignRSASSA(c *C) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
-	sig, err := Sign(key, digest, crypto.SHA256)
+	sig, err := Sign(key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSASSA)
 	c.Check(sig.Signature.RSASSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
@@ -58,7 +58,7 @@ func (s *signaturesSuite) TestSignRSAPSS(c *C) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
@@ -81,11 +81,11 @@ func (s *signaturesSuite) TestSignECDSA(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
-	sig, err := Sign(key, digest, crypto.SHA256)
+	sig, err := Sign(key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgECDSA)
 	c.Check(sig.Signature.ECDSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
@@ -104,11 +104,11 @@ func (s *signaturesSuite) TestSignHMAC(c *C) {
 	key := make(HMACKey, 32)
 	rand.Read(key)
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
-	sig, err := Sign(key, digest, crypto.SHA256)
+	sig, err := Sign(key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgHMAC)
 	c.Check(sig.Signature.HMAC.HashAlg, Equals, tpm2.HashAlgorithmSHA256)
@@ -148,7 +148,7 @@ func (s *signaturesSuite) TestVerifyRSASSA(c *C) {
 func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
 	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
@@ -171,7 +171,7 @@ func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
 func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
 	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
@@ -194,7 +194,7 @@ func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
 func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
 	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil))
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
@@ -217,7 +217,7 @@ func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
 func (s *signaturesSuite) TestVerifyECDSA(c *C) {
 	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(objectutil.UsageSign, nil))
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
@@ -240,7 +240,7 @@ func (s *signaturesSuite) TestVerifyECDSA(c *C) {
 func (s *signaturesSuite) TestVerifyECDSAInvalid(c *C) {
 	key := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewECCKeyTemplate(objectutil.UsageSign, nil))
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
@@ -269,7 +269,7 @@ func (s *signaturesSuite) TestVerifyHMAC(c *C) {
 	rc, err := s.TPM.LoadExternal(sensitive, pub, tpm2.HandleNull)
 	c.Assert(err, IsNil)
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
@@ -295,7 +295,7 @@ func (s *signaturesSuite) TestVerifyHMACInvalid(c *C) {
 	rc, err := s.TPM.LoadExternal(sensitive, pub, tpm2.HandleNull)
 	c.Assert(err, IsNil)
 
-	h := crypto.SHA256.New()
+	h := tpm2.HashAlgorithmSHA256.NewHash()
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 

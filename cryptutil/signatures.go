@@ -12,6 +12,7 @@ import (
 	"crypto/rsa"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 
@@ -36,33 +37,40 @@ func (k HMACKey) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byt
 	return h.Sum(nil), nil
 }
 
-func digestFromSignerOpts(opts crypto.SignerOpts) tpm2.HashAlgorithmId {
+func digestFromSignerOpts(opts crypto.SignerOpts) (tpm2.HashAlgorithmId, error) {
 	switch opts.HashFunc() {
 	case crypto.SHA1:
-		return tpm2.HashAlgorithmSHA1
+		return tpm2.HashAlgorithmSHA1, nil
 	case crypto.SHA256:
-		return tpm2.HashAlgorithmSHA256
+		return tpm2.HashAlgorithmSHA256, nil
 	case crypto.SHA384:
-		return tpm2.HashAlgorithmSHA384
+		return tpm2.HashAlgorithmSHA384, nil
 	case crypto.SHA512:
-		return tpm2.HashAlgorithmSHA512
+		return tpm2.HashAlgorithmSHA512, nil
 	case crypto.SHA3_256:
-		return tpm2.HashAlgorithmSHA3_256
+		return tpm2.HashAlgorithmSHA3_256, nil
 	case crypto.SHA3_384:
-		return tpm2.HashAlgorithmSHA3_384
+		return tpm2.HashAlgorithmSHA3_384, nil
 	case crypto.SHA3_512:
-		return tpm2.HashAlgorithmSHA3_512
+		return tpm2.HashAlgorithmSHA3_512, nil
 	default:
-		return tpm2.HashAlgorithmNull
+		return tpm2.HashAlgorithmNull, fmt.Errorf("unsupported digest algorithm %v", opts.HashFunc())
 	}
 }
 
 // Sign creates a signature of the supplied digest using the supplied signer and options.
 // Note that only RSA-SSA, RSA-PSS, ECDSA and HMAC signatures can be created. The returned
 // signature can be verified on a TPM using the associated public key.
+//
+// This may panic if the requested digest algorithm is not available.
 func Sign(signer crypto.Signer, digest []byte, opts crypto.SignerOpts) (*tpm2.Signature, error) {
-	hashAlg := digestFromSignerOpts(opts)
+	hashAlg, err := digestFromSignerOpts(opts)
+	if err != nil {
+		return nil, err
+	}
 
+	// Check we have a supported signer type that we can create a tpm2.Signature for
+	// before the actual signing.
 	switch k := signer.Public().(type) {
 	case *rsa.PublicKey:
 		_ = k
@@ -138,7 +146,10 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 		return false, errors.New("invalid signature algorithm")
 	}
 	hashAlg := signature.HashAlg()
-	if !hashAlg.IsValid() {
+
+	// We don't use IsValid here because we want to know if the algorithm has a corresponding
+	// go algorithm ID to avoid a panic later on. SM3 is valid but is not represented in go.
+	if hashAlg.GetHash() == crypto.Hash(0) {
 		return false, errors.New("invalid digest algorithm")
 	}
 
