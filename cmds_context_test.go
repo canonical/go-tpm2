@@ -52,7 +52,7 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	c.Check(persist.Handle(), Equals, HandleUnassigned)
 
 	// XXX: Make ReadPublic work with HandleContext and use that directly here
-	_, err = s.TPM.CreateResourceContextFromTPM(data.handle)
+	_, err = s.TPM.NewResourceContext(data.handle)
 	c.Check(err, DeepEquals, ResourceUnavailableError{data.handle})
 }
 
@@ -127,10 +127,10 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 }
 
 func (s *contextSuite) TestContextSavePartialHandle(c *C) {
-	session := CreatePartialHandleContext(0x02000000)
+	session := NewLimitedHandleContext(0x02000000)
 
 	_, err := s.TPM.ContextSave(session)
-	c.Check(err, ErrorMatches, `invalid saveContext argument: unusable partial HandleContext`)
+	c.Check(err, ErrorMatches, `invalid saveContext argument: unusable limited HandleContext`)
 }
 
 func (s *contextSuite) TestContextSaveSavedSession(c *C) {
@@ -227,7 +227,7 @@ func (s *contextSuite) TestFlushContextTransient(c *C) {
 	c.Check(object.Handle(), Equals, HandleUnassigned)
 
 	// XXX: Make ReadPublic work with HandleContext and use that directly here
-	_, err := s.TPM.CreateResourceContextFromTPM(handle)
+	_, err := s.TPM.NewResourceContext(handle)
 	c.Check(err, DeepEquals, ResourceUnavailableError{handle})
 }
 

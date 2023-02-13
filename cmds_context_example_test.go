@@ -61,7 +61,7 @@ func ExampleTPMContext_EvictControl_evictPersistentObject() {
 	}
 	defer tpm.Close()
 
-	persistent, err := tpm.CreateResourceContextFromTPM(0x81000001)
+	persistent, err := tpm.NewResourceContext(0x81000001)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

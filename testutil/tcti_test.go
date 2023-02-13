@@ -338,7 +338,7 @@ func (s *tctiSuite) TestNVReadLockNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.NVReadLock(index, index, nil), IsNil)
@@ -356,7 +356,7 @@ func (s *tctiSuite) TestNVReadLockNotCreatedDisallowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVReadLock(index, index, nil)
@@ -389,7 +389,7 @@ func (s *tctiSuite) TestNVWriteLockStClearNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
@@ -407,7 +407,7 @@ func (s *tctiSuite) TestNVWriteLockStClearNotCreatedDisallowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWriteLock(index, index, nil)
@@ -588,7 +588,7 @@ func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).PlatformHandleContext(), nil, &nvPublic, nil)
 	c.Assert(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	session, err := s.TPM.StartAuthSession(nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -625,7 +625,7 @@ func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedDisallowed(c *C) {
 		c.Check(s.rawTpm(c).NVUndefineSpaceSpecial(index, s.rawTpm(c).PlatformHandleContext(), session, nil), IsNil)
 	})
 
-	index, err = s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err = s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	session, err := s.TPM.StartAuthSession(nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -647,7 +647,7 @@ func (s *tctiSuite) TestEvictControlNotCreatedAllowed(c *C) {
 	persistent, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), object, 0x81000001, nil)
 	c.Assert(err, IsNil)
 
-	persistent, err = s.TPM.CreateResourceContextFromTPM(persistent.Handle())
+	persistent, err = s.TPM.NewResourceContext(persistent.Handle())
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), persistent, persistent.Handle(), nil)
@@ -664,7 +664,7 @@ func (s *tctiSuite) TestEvictControlNotCreatedDisallowed(c *C) {
 	persistent, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), object, 0x81000001, nil)
 	c.Assert(err, IsNil)
 
-	persistent, err = s.TPM.CreateResourceContextFromTPM(persistent.Handle())
+	persistent, err = s.TPM.NewResourceContext(persistent.Handle())
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), persistent, persistent.Handle(), nil)
@@ -683,7 +683,7 @@ func (s *tctiSuite) TestNVUndefineSpaceNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Assert(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil), IsNil)
@@ -701,7 +701,7 @@ func (s *tctiSuite) TestNVUndefineSpaceNotCreatedDisallowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Assert(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil)
@@ -734,7 +734,7 @@ func (s *tctiSuite) TestNVWriteLockDefineNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
@@ -752,7 +752,7 @@ func (s *tctiSuite) TestNVWriteLockDefineNotCreatedDisallowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWriteLock(index, index, nil)
@@ -785,7 +785,7 @@ func (s *tctiSuite) TestNVIncrementNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.NVIncrement(index, index, nil), IsNil)
@@ -803,7 +803,7 @@ func (s *tctiSuite) TestNVIncrementNotCreatedDisallowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVIncrement(index, index, nil)
@@ -836,7 +836,7 @@ func (s *tctiSuite) TestNVSetBitsNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.NVSetBits(index, index, 0, nil), IsNil)
@@ -854,7 +854,7 @@ func (s *tctiSuite) TestNVSetBitsNotCreatedDisallowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVSetBits(index, index, 0, nil)
@@ -887,7 +887,7 @@ func (s *tctiSuite) TestNVWriteNotCreatedAllowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
@@ -905,7 +905,7 @@ func (s *tctiSuite) TestNVWriteNotCreatedDisallowed(c *C) {
 	_, err := s.rawTpm(c).NVDefineSpace(s.rawTpm(c).OwnerHandleContext(), nil, &nvPublic, nil)
 	c.Check(err, IsNil)
 
-	index, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	index, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWrite(index, index, nil, 0, nil)
@@ -2000,7 +2000,7 @@ func (s *tctiSuite) TestUseExistingObject(c *C) {
 	persist, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), primary, 0x81000001, nil)
 	c.Assert(err, IsNil)
 
-	rc, err := s.TPM.CreateResourceContextFromTPM(persist.Handle())
+	rc, err := s.TPM.NewResourceContext(persist.Handle())
 	c.Check(err, IsNil)
 
 	_, _, _, _, _, err = s.TPM.Create(rc, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
@@ -2018,7 +2018,7 @@ func (s *tctiSuite) TestDontEvictExistingObject(c *C) {
 	persist, err := s.rawTpm(c).EvictControl(s.rawTpm(c).OwnerHandleContext(), primary, 0x81000001, nil)
 	c.Assert(err, IsNil)
 
-	_, err = s.TPM.CreateResourceContextFromTPM(persist.Handle())
+	_, err = s.TPM.NewResourceContext(persist.Handle())
 	c.Check(err, IsNil)
 
 	c.Check(s.TPM.Close(), IsNil)
@@ -2044,7 +2044,7 @@ func (s *tctiSuite) TestUseExistingIndex(c *C) {
 	c.Check(err, IsNil)
 	c.Check(s.rawTpm(c).NVWrite(index, index, []byte("foo"), 0, nil), IsNil)
 
-	rc, err := s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	rc, err := s.TPM.NewResourceContext(nvPublic.Index)
 	c.Check(err, IsNil)
 
 	_, err = s.TPM.NVRead(rc, rc, 8, 0, nil)
@@ -2065,7 +2065,7 @@ func (s *tctiSuite) TestDontEvictExistingIndex(c *C) {
 	c.Check(err, IsNil)
 	c.Check(s.rawTpm(c).NVWrite(index, index, []byte("foo"), 0, nil), IsNil)
 
-	_, err = s.TPM.CreateResourceContextFromTPM(nvPublic.Index)
+	_, err = s.TPM.NewResourceContext(nvPublic.Index)
 	c.Check(err, IsNil)
 
 	c.Check(s.TPM.Close(), IsNil)

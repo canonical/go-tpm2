@@ -97,7 +97,7 @@ import (
 // On successful completion, the NV index will be defined. A ResourceContext corresponding to the
 // new NV index will be returned as long as the go module for the specified name algorithm is
 // loaded into the current binary, else nil will be returned and a ResourceContext can be created
-// manually with [TPMContext.CreateResourceContextFromTPM]. It will not be necessary to call
+// manually with [TPMContext.NewResourceContext]. It will not be necessary to call
 // [ResourceContext].SetAuthValue on the returned ResourceContext - this function sets the correct
 // authorization value so that it can be used in subsequent commands that require knowledge of it.
 func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -126,7 +126,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 	// publicInfo already marshalled correctly, so this can't fail.
 	mu.MustCopyValue(&public, publicInfo)
 
-	rc := makeNVIndexContext(name, public)
+	rc := newNVIndexContext(name, public)
 	rc.authValue = make([]byte, len(auth))
 	copy(rc.authValue, auth)
 

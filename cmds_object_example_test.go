@@ -32,7 +32,7 @@ func ExampleTPMContext_Create_createPassphraseProtectedSealedObject() {
 	defer tpm.Close()
 
 	// We need a storage parent, eg, the shared SRK. Assume it already exists.
-	srk, err := tpm.CreateResourceContextFromTPM(0x81000001)
+	srk, err := tpm.NewResourceContext(0x81000001)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

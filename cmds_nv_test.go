@@ -107,7 +107,7 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	// XXX: Make NVReadPublic work with HandleContext and use that directly here
-	_, err = s.TPM.CreateResourceContextFromTPM(data.publicInfo.Index)
+	_, err = s.TPM.NewResourceContext(data.publicInfo.Index)
 	c.Check(err, DeepEquals, ResourceUnavailableError{data.publicInfo.Index})
 }
 
@@ -212,7 +212,7 @@ func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpa
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 
 	// XXX: Make NVReadPublic work with HandleContext and use that directly here
-	_, err := s.TPM.CreateResourceContextFromTPM(pub.Index)
+	_, err := s.TPM.NewResourceContext(pub.Index)
 	c.Check(err, DeepEquals, ResourceUnavailableError{pub.Index})
 
 	return nil

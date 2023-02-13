@@ -357,10 +357,10 @@ func TestClear(t *testing.T) {
 		cleared = true
 
 		// Verify that the objects we created have gone so we know that the command executed
-		if _, err := tpm.CreateResourceContextFromTPM(primaryHandle); err == nil {
+		if _, err := tpm.NewResourceContext(primaryHandle); err == nil {
 			t.Errorf("Clear didn't evict owner object")
 		}
-		if _, err := tpm.CreateResourceContextFromTPM(primaryPersistHandle); err == nil {
+		if _, err := tpm.NewResourceContext(primaryPersistHandle); err == nil {
 			t.Errorf("Clear didn't evict owner object")
 		}
 

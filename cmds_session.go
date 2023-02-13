@@ -174,7 +174,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		data.SessionKey = internal_crypt.KDFa(authHash.GetHash(), key, []byte(SessionKey), []byte(nonceTPM), nonceCaller, digestSize*8)
 	}
 
-	return makeSessionContext(sessionHandle, data), nil
+	return newSessionContext(sessionHandle, data), nil
 }
 
 // PolicyRestart executes the TPM2_PolicyRestart command on the policy session associated with

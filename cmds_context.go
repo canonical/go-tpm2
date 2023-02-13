@@ -36,8 +36,8 @@ import (
 func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, err error) {
 	switch c := saveContext.(type) {
 	case *handleContext:
-		if c.Type == handleContextTypePartial {
-			return nil, makeInvalidArgError("saveContext", "unusable partial HandleContext")
+		if c.Type == handleContextTypeLimited {
+			return nil, makeInvalidArgError("saveContext", "unusable limited HandleContext")
 		}
 	}
 
@@ -102,7 +102,7 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		return nil, fmt.Errorf("cannot unmarshal context blob: %w", err)
 	}
 
-	hc, _, err := CreateHandleContextFromBytes(contextData)
+	hc, _, err := NewHandleContextFromBytes(contextData)
 	if err != nil {
 		return nil, fmt.Errorf("cannot unmarshal handle context: %w", err)
 	}
@@ -229,5 +229,5 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 		return nil, nil
 	}
 
-	return makeObjectContext(persistentHandle, object.Name(), public), nil
+	return newObjectContext(persistentHandle, object.Name(), public), nil
 }

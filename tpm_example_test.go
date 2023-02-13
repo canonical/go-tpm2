@@ -137,7 +137,7 @@ func ExampleTPMContext_policySessionAuth() {
 	}
 	defer tpm.Close()
 
-	index, err := tpm.CreateResourceContextFromTPM(handle)
+	index, err := tpm.NewResourceContext(handle)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

@@ -85,7 +85,7 @@ type resourceContextInternal interface {
 type handleContextType uint8
 
 const (
-	handleContextTypePartial handleContextType = iota
+	handleContextTypeLimited handleContextType = iota
 	handleContextTypePermanent
 	handleContextTypeObject
 	handleContextTypeNvIndex
@@ -118,7 +118,7 @@ type handleContextU struct {
 
 func (d *handleContextU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(handleContextType) {
-	case handleContextTypePartial, handleContextTypePermanent:
+	case handleContextTypeLimited, handleContextTypePermanent:
 		return mu.NilUnionValue
 	case handleContextTypeObject:
 		return &d.Object
@@ -252,11 +252,11 @@ func (h *handleContext) checkConsistency() error {
 	return nil
 }
 
-func makePartialHandleContext(handle Handle) *handleContext {
+func newLimitedHandleContext(handle Handle) *handleContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
 	return &handleContext{
-		Type: handleContextTypePartial,
+		Type: handleContextTypeLimited,
 		H:    handle,
 		N:    name}
 }
@@ -284,7 +284,7 @@ type permanentContext struct {
 
 func (r *permanentContext) Invalidate() {}
 
-func makePermanentContext(handle Handle) *permanentContext {
+func newPermanentContext(handle Handle) *permanentContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
 	return &permanentContext{
@@ -296,7 +296,7 @@ func makePermanentContext(handle Handle) *permanentContext {
 }
 
 func nullResource() ResourceContext {
-	return makePermanentContext(HandleNull)
+	return newPermanentContext(HandleNull)
 }
 
 type objectContext struct {
@@ -307,7 +307,7 @@ func (r *objectContext) GetPublic() *Public {
 	return r.Data.Object
 }
 
-func makeObjectContext(handle Handle, name Name, public *Public) *objectContext {
+func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 	return &objectContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
@@ -317,7 +317,7 @@ func makeObjectContext(handle Handle, name Name, public *Public) *objectContext 
 				Data: &handleContextU{Object: public}}}}
 }
 
-func (t *TPMContext) makeObjectContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
+func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
 	pub, name, _, err := t.ReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -325,7 +325,7 @@ func (t *TPMContext) makeObjectContextFromTPM(context HandleContext, sessions ..
 	if pub.NameAlg.Available() && !pub.compareName(name) {
 		return nil, &InvalidResponseError{CommandReadPublic, errors.New("name and public area returned from TPM don't match")}
 	}
-	return makeObjectContext(context.Handle(), name, pub), nil
+	return newObjectContext(context.Handle(), name, pub), nil
 }
 
 type nvIndexContext struct {
@@ -350,7 +350,7 @@ func (r *nvIndexContext) Attrs() NVAttributes {
 	return r.Data.NV.Attrs
 }
 
-func makeNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
+func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 	return &nvIndexContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
@@ -360,7 +360,7 @@ func makeNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 				Data: &handleContextU{NV: public}}}}
 }
 
-func (t *TPMContext) makeNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
+func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
 	pub, name, err := t.NVReadPublic(context, sessions...)
 	if err != nil {
 		return nil, err
@@ -371,7 +371,7 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context HandleContext, sessions .
 	if pub.Index != context.Handle() {
 		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("unexpected index in public area")}
 	}
-	return makeNVIndexContext(name, pub), nil
+	return newNVIndexContext(name, pub), nil
 }
 
 type sessionContext struct {
@@ -431,7 +431,7 @@ func (r *sessionContext) Unload() {
 	r.handleContext.Data.Session.Data = nil
 }
 
-func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext {
+func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
 	return &sessionContext{
@@ -443,15 +443,15 @@ func makeSessionContext(handle Handle, data *sessionContextData) *sessionContext
 }
 
 func pwSession() SessionContext {
-	return makeSessionContext(HandlePW, new(sessionContextData)).WithAttrs(AttrContinueSession)
+	return newSessionContext(HandlePW, new(sessionContextData)).WithAttrs(AttrContinueSession)
 }
 
-func (t *TPMContext) makeResourceContextFromTPM(handle HandleContext, sessions ...SessionContext) (rc ResourceContext, err error) {
+func (t *TPMContext) newResourceContextFromTPM(handle HandleContext, sessions ...SessionContext) (rc ResourceContext, err error) {
 	switch handle.Handle().Type() {
 	case HandleTypeNVIndex:
-		rc, err = t.makeNVIndexContextFromTPM(handle, sessions...)
+		rc, err = t.newNVIndexContextFromTPM(handle, sessions...)
 	case HandleTypeTransient, HandleTypePersistent:
-		rc, err = t.makeObjectContextFromTPM(handle, sessions...)
+		rc, err = t.newObjectContextFromTPM(handle, sessions...)
 	default:
 		panic("invalid handle type")
 	}
@@ -466,6 +466,36 @@ func (t *TPMContext) makeResourceContextFromTPM(handle HandleContext, sessions .
 	}
 
 	return rc, nil
+}
+
+// NewResourceContext creates and returns a new ResourceContext for the specified handle. It will
+// execute a command to read the public area from the TPM in order to initialize state that
+// is maintained on the host side. A [ResourceUnavailableError] error will be returned if the
+// specified handle references a resource that doesn't exist.
+//
+// The public area and name returned from the TPM are checked for consistency as long as the
+// corresponding name algorithm is linked into the current binary.
+//
+// If any sessions are supplied, the public area is read from the TPM twice. The second time uses
+// the supplied sessions.
+//
+// This function will panic if handle doesn't correspond to a NV index, transient object or
+// persistent object.
+//
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization value
+// of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
+func (t *TPMContext) NewResourceContext(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
+	rc, err := t.newResourceContextFromTPM(newLimitedHandleContext(handle))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sessions) == 0 {
+		return rc, nil
+	}
+
+	return t.newResourceContextFromTPM(rc, sessions...)
 }
 
 // CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle.
@@ -485,17 +515,25 @@ func (t *TPMContext) makeResourceContextFromTPM(handle HandleContext, sessions .
 // If subsequent use of the returned ResourceContext requires knowledge of the authorization value
 // of the corresponding TPM resource, this should be provided by calling
 // [ResourceContext].SetAuthValue.
+//
+// Deprecated: Use [TPMContext.NewResourceContext] instead.
 func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
-	rc, err := t.makeResourceContextFromTPM(makePartialHandleContext(handle))
-	if err != nil {
-		return nil, err
-	}
+	return t.NewResourceContext(handle, sessions...)
+}
 
-	if len(sessions) == 0 {
-		return rc, nil
+// NewLimitedHandleContext creates a new HandleContext for the specified handle. The returned
+// HandleContext can not be used in any commands other than [TPMContext.FlushContext],
+// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic], and it cannot be used with any sessions.
+//
+// This function will panic if handle doesn't correspond to a session, transient or persistent
+// object, or NV index.
+func NewLimitedHandleContext(handle Handle) HandleContext {
+	switch handle.Type() {
+	case HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypeTransient, HandleTypePersistent:
+		return newLimitedHandleContext(handle)
+	default:
+		panic("invalid handle type")
 	}
-
-	return t.makeResourceContextFromTPM(rc, sessions...)
 }
 
 // CreatePartialHandleContext creates a new HandleContext for the specified handle. The returned
@@ -504,13 +542,10 @@ func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...Ses
 //
 // This function will panic if handle doesn't correspond to a session, transient or persistent
 // object, or NV index.
+//
+// Deprecated: Use [NewLimitedHandleContext].
 func CreatePartialHandleContext(handle Handle) HandleContext {
-	switch handle.Type() {
-	case HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypeTransient, HandleTypePersistent:
-		return makePartialHandleContext(handle)
-	default:
-		panic("invalid handle type")
-	}
+	return NewLimitedHandleContext(handle)
 }
 
 // GetPermanentContext returns a ResourceContext for the specified permanent handle or PCR handle.
@@ -527,7 +562,7 @@ func (t *TPMContext) GetPermanentContext(handle Handle) ResourceContext {
 			return rc
 		}
 
-		rc := makePermanentContext(handle)
+		rc := newPermanentContext(handle)
 		t.permanentResources[handle] = rc
 		return rc
 	default:
@@ -575,7 +610,7 @@ func (t *TPMContext) PCRHandleContext(pcr int) ResourceContext {
 	return t.GetPermanentContext(h)
 }
 
-// CreateHandleContextFromReader returns a new HandleContext created from the serialized data read
+// NewHandleContextFromReader returns a new HandleContext created from the serialized data read
 // from the supplied io.Reader. This should contain data that was previously created by
 // [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
 //
@@ -585,7 +620,7 @@ func (t *TPMContext) PCRHandleContext(pcr int) ResourceContext {
 // If a ResourceContext is returned and subsequent use of it requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
 // [ResourceContext].SetAuthValue.
-func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
+func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var integrityAlg HashAlgorithmId
 	var integrity []byte
 	var b []byte
@@ -634,6 +669,41 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	return hc, nil
 }
 
+// CreateHandleContextFromReader returns a new HandleContext created from the serialized data read
+// from the supplied io.Reader. This should contain data that was previously created by
+// [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
+//
+// If the supplied data corresponds to a session then a [SessionContext] will be returned, else a
+// [ResourceContext] will be returned.
+//
+// If a ResourceContext is returned and subsequent use of it requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
+//
+// Deprecated: Use [NewHandleContextFromReader].
+func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
+	return NewHandleContextFromReader(r)
+}
+
+// NewHandleContextFromBytes returns a new HandleContext created from the serialized data read
+// from the supplied byte slice. This should contain data that was previously created by
+// [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
+//
+// If the supplied data corresponds to a session then a [SessionContext] will be returned, else a
+// [ResourceContext] will be returned.
+//
+// If a ResourceContext is returned and subsequent use of it requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
+func NewHandleContextFromBytes(b []byte) (HandleContext, int, error) {
+	buf := bytes.NewReader(b)
+	rc, err := NewHandleContextFromReader(buf)
+	if err != nil {
+		return nil, 0, err
+	}
+	return rc, len(b) - buf.Len(), nil
+}
+
 // CreateHandleContextFromBytes returns a new HandleContext created from the serialized data read
 // from the supplied byte slice. This should contain data that was previously created by
 // [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
@@ -644,13 +714,28 @@ func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
 // If a ResourceContext is returned and subsequent use of it requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
 // [ResourceContext].SetAuthValue.
+//
+// Deprecated: Use [NewHandleContextFromBytes].
 func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
-	buf := bytes.NewReader(b)
-	rc, err := CreateHandleContextFromReader(buf)
+	return NewHandleContextFromBytes(b)
+}
+
+// NewNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided
+// public area. If subsequent use of the returned ResourceContext requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
+//
+// This requires that the associated name algorithm is linked into the current binary.
+func NewNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
+	name, err := pub.ComputeName()
 	if err != nil {
-		return nil, 0, err
+		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
-	return rc, len(b) - buf.Len(), nil
+	rc := newNVIndexContext(name, pub)
+	if err := rc.checkConsistency(); err != nil {
+		return nil, err
+	}
+	return rc, nil
 }
 
 // CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided
@@ -659,12 +744,24 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 // [ResourceContext].SetAuthValue.
 //
 // This requires that the associated name algorithm is linked into the current binary.
+//
+// Deprecated: Use [NewNVIndexResourceContextFromPublic].
 func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
+	return NewNVIndexResourceContextFromPublic(pub)
+}
+
+// NewObjectResourceContextFromPublic returns a new ResourceContext created from the provided
+// public area. If subsequent use of the returned ResourceContext requires knowledge of the
+// authorization value of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
+//
+// This requires that the associated name algorithm is linked into the current binary.
+func NewObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
 	name, err := pub.ComputeName()
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
-	rc := makeNVIndexContext(name, pub)
+	rc := newObjectContext(handle, name, pub)
 	if err := rc.checkConsistency(); err != nil {
 		return nil, err
 	}
@@ -677,14 +774,8 @@ func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, err
 // [ResourceContext].SetAuthValue.
 //
 // This requires that the associated name algorithm is linked into the current binary.
+//
+// Deprecated: Use [NewObjectResourceContextFromPublic].
 func CreateObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
-	name, err := pub.ComputeName()
-	if err != nil {
-		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
-	}
-	rc := makeObjectContext(handle, name, pub)
-	if err := rc.checkConsistency(); err != nil {
-		return nil, err
-	}
-	return rc, nil
+	return NewObjectResourceContextFromPublic(handle, pub)
 }

@@ -263,7 +263,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 		// if this fails then the TPM should have returned an error.
 		return nil, &InvalidResponseError{CommandLoad, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
 	}
-	return makeObjectContext(objectHandle, name, public), nil
+	return newObjectContext(objectHandle, name, public), nil
 }
 
 // LoadExternal executes the TPM2_LoadExternal command in order to load an object that is not a
@@ -368,7 +368,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 		// if this fails then the TPM should have returned an error.
 		return nil, &InvalidResponseError{CommandLoadExternal, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
 	}
-	rc := makeObjectContext(objectHandle, name, public)
+	rc := newObjectContext(objectHandle, name, public)
 	if inPrivate != nil {
 		rc.authValue = make([]byte, len(inPrivate.AuthValue))
 		copy(rc.authValue, inPrivate.AuthValue)
@@ -713,7 +713,7 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 	if err := mu.CopyValue(&public, outPublic); err != nil {
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, fmt.Errorf("cannot copy returned public area from TPM: %w", err)}
 	}
-	rc := makeObjectContext(objectHandle, name, public)
+	rc := newObjectContext(objectHandle, name, public)
 	rc.authValue = make([]byte, len(inSensitive.UserAuth))
 	copy(rc.authValue, inSensitive.UserAuth)
 

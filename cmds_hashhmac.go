@@ -43,7 +43,7 @@ func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashA
 		return nil, err
 	}
 
-	rc := makeObjectContext(sequenceHandle, nil, nil)
+	rc := newObjectContext(sequenceHandle, nil, nil)
 	rc.authValue = make([]byte, len(auth))
 	copy(rc.authValue, auth)
 	return rc, nil
@@ -70,7 +70,7 @@ func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessi
 		return nil, err
 	}
 
-	rc := makeObjectContext(sequenceHandle, nil, nil)
+	rc := newObjectContext(sequenceHandle, nil, nil)
 	rc.authValue = make([]byte, len(auth))
 	copy(rc.authValue, auth)
 	return rc, nil

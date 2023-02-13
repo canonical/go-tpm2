@@ -34,7 +34,7 @@ func seal(secret []byte, pcrSelection tpm2.PCRSelectionList) ([]byte, error) {
 	defer tpm.Close()
 
 	// Use the shared SRK as the storage object, and assume that it already exists.
-	srk, err := tpm.CreateResourceContextFromTPM(srkHandle)
+	srk, err := tpm.NewResourceContext(srkHandle)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func unseal(data []byte) ([]byte, error) {
 	}
 	defer tpm.Close()
 
-	srk, err := tpm.CreateResourceContextFromTPM(srkHandle)
+	srk, err := tpm.NewResourceContext(srkHandle)
 	if err != nil {
 		return nil, err
 	}

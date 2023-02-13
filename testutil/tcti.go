@@ -805,7 +805,7 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 			}
 
 			auth := tpm.GetPermanentContext(info.auth())
-			index, err := tpm2.CreateNVIndexResourceContextFromPublic(info.nvPub)
+			index, err := tpm2.NewNVIndexResourceContextFromPublic(info.nvPub)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
 				continue
@@ -815,10 +815,10 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 				errs = append(errs, fmt.Errorf("cannot undefine %v: %w", info.handle, err))
 			}
 		case tpm2.HandleTypeHMACSession, tpm2.HandleTypePolicySession, tpm2.HandleTypeTransient:
-			tpm.FlushContext(tpm2.CreatePartialHandleContext(info.handle))
+			tpm.FlushContext(tpm2.NewLimitedHandleContext(info.handle))
 		case tpm2.HandleTypePersistent:
 			auth := tpm.GetPermanentContext(info.auth())
-			object, err := tpm2.CreateObjectResourceContextFromPublic(info.handle, info.pub)
+			object, err := tpm2.NewObjectResourceContextFromPublic(info.handle, info.pub)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
 				continue
