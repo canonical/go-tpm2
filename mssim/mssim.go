@@ -96,12 +96,12 @@ func (d *Device) openInternal() (*Tcti, error) {
 	return tcti, nil
 }
 
-// Open implements [tpm2.TPMDevice].
+// Open implements [tpm2.TPMDevice.Open].
 func (d *Device) Open() (tpm2.TCTI, error) {
 	return d.openInternal()
 }
 
-// ShouldRetry implements [tpm2.TPMDevice].
+// ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
 func (d *Device) ShouldRetry() bool {
 	return true
 }
@@ -124,7 +124,7 @@ type Tcti struct {
 	r                 io.Reader
 }
 
-// Read implmements [tpm2.TCTI].
+// Read implmements [tpm2.TCTI.Read].
 func (t *Tcti) Read(data []byte) (int, error) {
 	if t.r == nil {
 		var deadline time.Time
@@ -161,7 +161,7 @@ func (t *Tcti) Read(data []byte) (int, error) {
 	return n, err
 }
 
-// Write implmements [tpm2.TCTI].
+// Write implmements [tpm2.TCTI.Write].
 func (t *Tcti) Write(data []byte) (int, error) {
 	if t.commandInProgress || t.r != nil {
 		return 0, errors.New("command in progress or unread bytes from previous response")
@@ -180,7 +180,7 @@ func (t *Tcti) Write(data []byte) (int, error) {
 	return n, err
 }
 
-// Close implements [tpm2.TCTI].
+// Close implements [tpm2.TCTI.Close].
 func (t *Tcti) Close() (err error) {
 	binary.Write(t.platform, binary.BigEndian, cmdSessionEnd)
 	binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd)
@@ -198,12 +198,12 @@ func (t *Tcti) SetTimeout(timeout time.Duration) error {
 	return nil
 }
 
-// MakeSticky implements [tpm2.TCTI].
+// MakeSticky implements [tpm2.TCTI.MakeSticky].
 func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }
 
-// SetTimeout implements [tpm2.TCTI].
+// SetTimeout implements [tpm2.TCTI.SetTimeout].
 func (t *Tcti) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
 		return fmt.Errorf("cannot send command: %w", err)

@@ -90,7 +90,7 @@ func (d *TPMDevice) Open() (tpm2.TCTI, error) {
 	return tcti, err
 }
 
-// ShouldRetry implements [tpm2.TPMDevice].
+// ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
 func (d *TPMDevice) ShouldRetry() bool {
 	return false
 }

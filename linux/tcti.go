@@ -173,18 +173,18 @@ func (d *Tcti) Write(data []byte) (int, error) {
 	return n, d.wrapErr("write", writeErr)
 }
 
-// Close implements [tpm2.TCTI].
+// Close implements [tpm2.TCTI.Close].
 func (d *Tcti) Close() error {
 	return d.closer.Close()
 }
 
-// SetTimeout implements [tpm2.TCTI].
+// SetTimeout implements [tpm2.TCTI.SetTimeout].
 func (d *Tcti) SetTimeout(timeout time.Duration) error {
 	d.timeout = timeout
 	return nil
 }
 
-// MakeSticky implements [tpm2.TCTI].
+// MakeSticky implements [tpm2.TCTI.MakeSticky].
 func (d *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }

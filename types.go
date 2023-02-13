@@ -44,7 +44,7 @@ const (
 // PCR index. It can be marshalled to and from the TPM wire format.
 type PCRValues map[HashAlgorithmId]map[int]Digest
 
-// Marshal implements [mu.CustomMarshaller].
+// Marshal implements [mu.CustomMarshaller.Marshal].
 func (v PCRValues) Marshal(w io.Writer) error {
 	pcrs, digests, err := v.ToListAndSelection()
 	if err != nil {
@@ -54,7 +54,7 @@ func (v PCRValues) Marshal(w io.Writer) error {
 	return err
 }
 
-// Unmarshal implements [mu.CustomMarshaller].
+// Unmarshal implements [mu.CustomMarshaller.Unmarshal].
 func (v *PCRValues) Unmarshal(r io.Reader) error {
 	v2 := make(PCRValues)
 	*v = v2
