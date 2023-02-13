@@ -100,10 +100,26 @@ func (s *templatesSuite) TestWithDuplicationModeDuplicationRoot3(c *C) {
 	c.Check(pub.Attrs, Equals, tpm2.AttrEncryptedDuplication|tpm2.AttrSign)
 }
 
-func (s *templatesSuite) TestWithDuplicationModeDuplicationRootEncrypted(c *C) {
+func (s *templatesSuite) TestWithDuplicationModeDuplicationRootEncrypted1(c *C) {
 	pub := &tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSign}
 	WithDuplicationMode(DuplicationRootEncrypted)(pub)
 	c.Check(pub.Attrs, Equals, tpm2.AttrEncryptedDuplication|tpm2.AttrSign)
+}
+
+func (s *templatesSuite) TestWithDuplicationModeDuplicationRootEncrypted2(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrFixedParent | tpm2.AttrEncryptedDuplication | tpm2.AttrSign}
+	WithDuplicationMode(DuplicationRootEncrypted)(pub)
+	c.Check(pub.Attrs, Equals, tpm2.AttrEncryptedDuplication|tpm2.AttrSign)
+}
+
+func (s *templatesSuite) TestWithDuplicationModeInvalidHierarchyConfig(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrSign}
+	c.Check(func() { WithDuplicationMode(FixedParent)(pub) }, PanicMatches, "invalid hierarchy config - use WithProtectionGroupMode first")
+}
+
+func (s *templatesSuite) TestWithDuplicationModeInvalidProtectionGroupMode(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrFixedParent | tpm2.AttrSign}
+	c.Check(func() { WithDuplicationMode(DuplicationRootEncrypted)(pub) }, PanicMatches, "invalid mode for protection group")
 }
 
 func (s *templatesSuite) TestWithSymmetricSchemeRSA(c *C) {

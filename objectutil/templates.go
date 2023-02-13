@@ -153,7 +153,7 @@ func WithProtectionGroupMode(mode ProtectionGroupMode) PublicTemplateOption {
 			pub.Attrs &^= tpm2.AttrFixedTPM
 			pub.Attrs |= tpm2.AttrFixedParent | tpm2.AttrEncryptedDuplication
 		default:
-			panic("invalid config")
+			panic("invalid mode")
 		}
 	}
 }
@@ -197,20 +197,22 @@ const (
 func WithDuplicationMode(mode DuplicationMode) PublicTemplateOption {
 	return func(pub *tpm2.Public) {
 		if pub.Attrs&tpm2.AttrFixedParent == 0 {
-			panic("invalid hierarchy config")
+			panic("invalid hierarchy config - use WithProtectionGroupMode first")
 		}
 
 		switch mode {
 		case FixedParent:
+			// no changes
 		case DuplicationRoot:
 			pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
 		case DuplicationRootEncrypted:
 			if pub.Attrs&(tpm2.AttrFixedTPM|tpm2.AttrEncryptedDuplication) == 0 {
+				panic("invalid mode for protection group")
 			}
 			pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
 			pub.Attrs |= tpm2.AttrEncryptedDuplication
 		default:
-			panic("invalid config")
+			panic("invalid mode")
 		}
 	}
 }
