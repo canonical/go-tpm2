@@ -94,19 +94,13 @@ import (
 // If there is insufficient space for the index, a *[TPMError] error with an error code of
 // [ErrorNVSpace] will be returned.
 //
-// On successful completion, the NV index will be defined and a ResourceContext corresponding to
-// the new NV index will be returned. It will not be necessary to call
+// On successful completion, the NV index will be defined. A ResourceContext corresponding to the
+// new NV index will be returned as long as the go module for the specified name algorithm is
+// loaded into the current binary, else nil will be returned and a ResourceContext can be created
+// manually with [TPMContext.CreateResourceContextFromTPM]. It will not be necessary to call
 // [ResourceContext].SetAuthValue on the returned ResourceContext - this function sets the correct
 // authorization value so that it can be used in subsequent commands that require knowledge of it.
 func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
-	if publicInfo == nil {
-		return nil, makeInvalidArgError("publicInfo", "nil value")
-	}
-	name, err := publicInfo.ComputeName()
-	if err != nil {
-		return nil, fmt.Errorf("cannot compute name from public info: %v", err)
-	}
-
 	if err := t.StartCommand(CommandNVDefineSpace).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession)).
 		AddParams(auth, mu.Sized(publicInfo)).
@@ -115,9 +109,23 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 		return nil, err
 	}
 
+	if publicInfo == nil {
+		return nil, &InvalidResponseError{CommandNVDefineSpace, errors.New("expected an error from the TPM because no public area was supplied")}
+	}
+	if !publicInfo.NameAlg.Available() {
+		// we can't create a ResourceContext here without doing NVReadPublic.
+		return nil, nil
+	}
+
+	name, err := publicInfo.ComputeName()
+	if err != nil {
+		return nil, &InvalidResponseError{CommandNVDefineSpace, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
+	}
+
 	var public *NVPublic
 	// publicInfo already marshalled correctly, so this can't fail.
 	mu.MustCopyValue(&public, publicInfo)
+
 	rc := makeNVIndexContext(name, public)
 	rc.authValue = make([]byte, len(auth))
 	copy(rc.authValue, auth)

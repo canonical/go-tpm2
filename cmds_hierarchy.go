@@ -151,7 +151,11 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
-	if outPublic == nil || !outPublic.compareName(name) {
+	if outPublic == nil {
+		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
+			errors.New("no public area returned from TPM")}
+	}
+	if outPublic.NameAlg.Available() && !outPublic.compareName(name) {
 		return nil, nil, nil, nil, nil, &InvalidResponseError{CommandCreatePrimary,
 			errors.New("name and public area returned from TPM are not consistent")}
 	}

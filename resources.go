@@ -189,7 +189,7 @@ func (h *handleContext) checkConsistency() error {
 		if h.Data.Object == nil {
 			return errors.New("no public area for object context")
 		}
-		if !h.Data.Object.compareName(h.Name()) {
+		if h.Data.Object.NameAlg.Available() && !h.Data.Object.compareName(h.Name()) {
 			return errors.New("name inconsistent with public area for object context")
 		}
 	case handleContextTypeNvIndex:
@@ -199,7 +199,7 @@ func (h *handleContext) checkConsistency() error {
 		if h.Data.NV == nil {
 			return errors.New("no public area for NV context")
 		}
-		if !h.Data.NV.compareName(h.Name()) {
+		if h.Data.NV.NameAlg.Available() && !h.Data.NV.compareName(h.Name()) {
 			return errors.New("name inconsistent with public area for NV context")
 		}
 	case handleContextTypeSession:
@@ -322,10 +322,8 @@ func (t *TPMContext) makeObjectContextFromTPM(context HandleContext, sessions ..
 	if err != nil {
 		return nil, err
 	}
-	if n, err := pub.ComputeName(); err != nil {
-		return nil, &InvalidResponseError{CommandReadPublic, fmt.Errorf("cannot compute name of returned public area: %w", err)}
-	} else if !bytes.Equal(n, name) {
-		return nil, &InvalidResponseError{CommandReadPublic, errors.New("name and public area don't match")}
+	if pub.NameAlg.Available() && !pub.compareName(name) {
+		return nil, &InvalidResponseError{CommandReadPublic, errors.New("name and public area returned from TPM don't match")}
 	}
 	return makeObjectContext(context.Handle(), name, pub), nil
 }
@@ -367,10 +365,8 @@ func (t *TPMContext) makeNVIndexContextFromTPM(context HandleContext, sessions .
 	if err != nil {
 		return nil, err
 	}
-	if n, err := pub.ComputeName(); err != nil {
-		return nil, &InvalidResponseError{CommandNVReadPublic, fmt.Errorf("cannot compute name of returned public area: %w", err)}
-	} else if !bytes.Equal(n, name) {
-		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("name and public area don't match")}
+	if pub.NameAlg.Available() && !pub.compareName(name) {
+		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("name and public area returned from TPM don't match")}
 	}
 	if pub.Index != context.Handle() {
 		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("unexpected index in public area")}
@@ -477,7 +473,8 @@ func (t *TPMContext) makeResourceContextFromTPM(handle HandleContext, sessions .
 // is maintained on the host side. A [ResourceUnavailableError] error will be returned if the
 // specified handle references a resource that doesn't exist.
 //
-// The public area and name returned from the TPM are checked for consistency.
+// The public area and name returned from the TPM are checked for consistency as long as the
+// corresponding name algorithm is linked into the current binary.
 //
 // If any sessions are supplied, the public area is read from the TPM twice. The second time uses
 // the supplied sessions.
@@ -660,6 +657,8 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 // public area. If subsequent use of the returned ResourceContext requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
 // [ResourceContext].SetAuthValue.
+//
+// This requires that the associated name algorithm is linked into the current binary.
 func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
 	name, err := pub.ComputeName()
 	if err != nil {
@@ -676,6 +675,8 @@ func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, err
 // public area. If subsequent use of the returned ResourceContext requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
 // [ResourceContext].SetAuthValue.
+//
+// This requires that the associated name algorithm is linked into the current binary.
 func CreateObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
 	name, err := pub.ComputeName()
 	if err != nil {

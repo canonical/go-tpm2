@@ -251,13 +251,18 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	if objectHandle.Type() != HandleTypeTransient {
 		return nil, &InvalidResponseError{CommandLoad, fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
-	if inPublic == nil || !inPublic.compareName(name) {
-		return nil, &InvalidResponseError{CommandLoad, errors.New("name returned from TPM not consistent with loaded public area")}
+	if inPublic == nil {
+		return nil, &InvalidResponseError{CommandLoad, errors.New("expected an error from the TPM because no public area was supplied")}
+	}
+	if inPublic.NameAlg.Available() && !inPublic.compareName(name) {
+		return nil, &InvalidResponseError{CommandLoad, errors.New("name returned from TPM not consistent with supplied public area")}
 	}
 
 	var public *Public
-	// inPublic already marshalled successfully, so this can't fail.
-	mu.MustCopyValue(&public, inPublic)
+	if err := mu.CopyValue(&public, inPublic); err != nil {
+		// if this fails then the TPM should have returned an error.
+		return nil, &InvalidResponseError{CommandLoad, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
+	}
 	return makeObjectContext(objectHandle, name, public), nil
 }
 
@@ -351,13 +356,18 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 		return nil, &InvalidResponseError{CommandLoadExternal,
 			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
-	if inPublic == nil || !inPublic.compareName(name) {
-		return nil, &InvalidResponseError{CommandLoadExternal, errors.New("name returned from TPM not consistent with loaded public area")}
+	if inPublic == nil {
+		return nil, &InvalidResponseError{CommandLoadExternal, errors.New("expected an error from the TPM because no public area was supplied")}
+	}
+	if inPublic.NameAlg.Available() && !inPublic.compareName(name) {
+		return nil, &InvalidResponseError{CommandLoadExternal, errors.New("name returned from TPM not consistent with supplied public area")}
 	}
 
 	var public *Public
-	// inPublic already marshalled succesfully, so this can't fail.
-	mu.MustCopyValue(&public, inPublic)
+	if err := mu.CopyValue(&public, inPublic); err != nil {
+		// if this fails then the TPM should have returned an error.
+		return nil, &InvalidResponseError{CommandLoadExternal, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
+	}
 	rc := makeObjectContext(objectHandle, name, public)
 	if inPrivate != nil {
 		rc.authValue = make([]byte, len(inPrivate.AuthValue))
@@ -692,7 +702,10 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded,
 			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
-	if outPublic == nil || !outPublic.compareName(name) {
+	if outPublic == nil {
+		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, errors.New("no public area returned from TPM")}
+	}
+	if outPublic.NameAlg.Available() && !outPublic.compareName(name) {
 		return nil, nil, nil, &InvalidResponseError{CommandCreateLoaded, errors.New("name and public area returned from TPM are not consistent")}
 	}
 
