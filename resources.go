@@ -727,15 +727,30 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 //
 // This requires that the associated name algorithm is linked into the current binary.
 func NewNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
-	name, err := pub.ComputeName()
-	if err != nil {
-		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
+	switch pub.Index.Type() {
+	case HandleTypeNVIndex:
+		name, err := pub.ComputeName()
+		if err != nil {
+			return nil, fmt.Errorf("cannot compute name from public area: %v", err)
+		}
+		return newNVIndexContext(name, pub), nil
+	default:
+		return nil, errors.New("invalid handle type")
 	}
-	rc := newNVIndexContext(name, pub)
-	if err := rc.checkConsistency(); err != nil {
-		return nil, err
+}
+
+// NewNVIndexResourceContextFromPublicAndName returns a new ResourceContext created from the
+// provided public area and name. This is useful for creating a ResourceContext for an object
+// that uses a name algorithm that is not available. If subsequent use of the returned
+// ResourceContext requires knowledge of the authorization value of the corresponding TPM
+// resource, this should be provided by calling [ResourceContext].SetAuthValue.
+func NewNVIndexResourceContextFromPublicAndName(pub *NVPublic, name Name) ResourceContext {
+	switch pub.Index.Type() {
+	case HandleTypeNVIndex:
+		return newNVIndexContext(name, pub)
+	default:
+		panic("invalid handle type")
 	}
-	return rc, nil
 }
 
 // CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided
@@ -757,15 +772,30 @@ func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, err
 //
 // This requires that the associated name algorithm is linked into the current binary.
 func NewObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
-	name, err := pub.ComputeName()
-	if err != nil {
-		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
+	switch handle.Type() {
+	case HandleTypeTransient, HandleTypePersistent:
+		name, err := pub.ComputeName()
+		if err != nil {
+			return nil, fmt.Errorf("cannot compute name from public area: %v", err)
+		}
+		return newObjectContext(handle, name, pub), nil
+	default:
+		return nil, errors.New("invalid handle type")
 	}
-	rc := newObjectContext(handle, name, pub)
-	if err := rc.checkConsistency(); err != nil {
-		return nil, err
+}
+
+// NewObjectResourceContextFromPublicAndName returns a new ResourceContext created from the
+// provided public area and name. This is useful for creating a ResourceContext for an object
+// that uses a name algorithm that is not available. If subsequent use of the returned
+// ResourceContext requires knowledge of the authorization value of the corresponding TPM
+// resource, this should be provided by calling [ResourceContext].SetAuthValue.
+func NewObjectResourceContextFromPublicAndName(handle Handle, pub *Public, name Name) ResourceContext {
+	switch handle.Type() {
+	case HandleTypeTransient, HandleTypePersistent:
+		return newObjectContext(handle, name, pub)
+	default:
+		panic("invalid handle type")
 	}
-	return rc, nil
 }
 
 // CreateObjectResourceContextFromPublic returns a new ResourceContext created from the provided

@@ -270,6 +270,23 @@ func (s *resourcesSuite) TestNewNVIndexResourceContextFromPublic(c *C) {
 	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
 }
 
+func (s *resourcesSuite) TestNewNVIndexResourceContextFromPublicAndName(c *C) {
+	pub := NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x018100ff),
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
+		Size:    8}
+	name, err := pub.ComputeName()
+	c.Assert(err, IsNil)
+
+	rc := NewNVIndexResourceContextFromPublicAndName(&pub, name)
+	c.Assert(rc, NotNil)
+	c.Check(rc.Handle(), Equals, pub.Index)
+	c.Check(rc.Name(), DeepEquals, name)
+	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
+	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+}
+
 func (s *resourcesSuite) TestNewObjectResourceContextFromPublic(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 
@@ -278,6 +295,20 @@ func (s *resourcesSuite) TestNewObjectResourceContextFromPublic(c *C) {
 
 	rc2, err := NewObjectResourceContextFromPublic(rc.Handle(), pub)
 	c.Assert(err, IsNil)
+	c.Assert(rc2, NotNil)
+	c.Check(rc2.Handle(), Equals, rc.Handle())
+	c.Check(rc2.Name(), DeepEquals, rc.Name())
+	c.Check(rc2, internal_testutil.ConvertibleTo, &ObjectContext{})
+	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
+}
+
+func (s *resourcesSuite) TestNewObjectResourceContextFromPublicAndName(c *C) {
+	rc := s.CreateStoragePrimaryKeyRSA(c)
+
+	pub, name, _, err := s.TPM.ReadPublic(rc)
+	c.Assert(err, IsNil)
+
+	rc2 := NewObjectResourceContextFromPublicAndName(rc.Handle(), pub, name)
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
