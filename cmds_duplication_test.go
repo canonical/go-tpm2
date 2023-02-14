@@ -238,7 +238,7 @@ func TestImport(t *testing.T) {
 	}
 
 	t.Run("NoWrappers", func(t *testing.T) {
-		_, duplicate, _, err := objectutil.CreateImportable(objectSensitive, objectPublic, nil, nil, nil)
+		_, duplicate, _, err := objectutil.CreateImportable(rand.Reader, objectSensitive, objectPublic, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
@@ -250,7 +250,7 @@ func TestImport(t *testing.T) {
 			Algorithm: SymObjectAlgorithmAES,
 			KeyBits:   &SymKeyBitsU{Sym: 128},
 			Mode:      &SymModeU{Sym: SymModeCFB}}
-		encryptionKey, duplicate, _, err := objectutil.CreateImportable(objectSensitive, objectPublic, nil, nil, symmetricAlg)
+		encryptionKey, duplicate, _, err := objectutil.CreateImportable(rand.Reader, objectSensitive, objectPublic, nil, nil, symmetricAlg)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
@@ -263,7 +263,7 @@ func TestImport(t *testing.T) {
 			t.Fatalf("ReadPublic failed: %v", err)
 		}
 
-		_, duplicate, outSymSeed, err := objectutil.CreateImportable(objectSensitive, objectPublic, primaryPublic, nil, nil)
+		_, duplicate, outSymSeed, err := objectutil.CreateImportable(rand.Reader, objectSensitive, objectPublic, primaryPublic, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}
@@ -271,7 +271,7 @@ func TestImport(t *testing.T) {
 	})
 
 	t.Run("UseSessionAuth", func(t *testing.T) {
-		_, duplicate, _, err := objectutil.CreateImportable(objectSensitive, objectPublic, nil, nil, nil)
+		_, duplicate, _, err := objectutil.CreateImportable(rand.Reader, objectSensitive, objectPublic, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)
 		}

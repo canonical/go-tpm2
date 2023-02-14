@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 
 	"github.com/canonical/go-tpm2"
@@ -191,7 +192,7 @@ func sensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAl
 // innerSymmetricKey is supplied, it will be used as the symmetric key for the inner wrapper. It
 // must have a size appropriate for the selected symmetric algorithm. If innerSymmetricKey is not
 // supplied, a symmetric key will be created and returned as [tpm2.Data].
-func CreateImportable(sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Public, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, outerSecret tpm2.EncryptedSecret, err error) {
+func CreateImportable(rand io.Reader, sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Public, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, outerSecret tpm2.EncryptedSecret, err error) {
 	if public.Attrs&(tpm2.AttrFixedTPM|tpm2.AttrFixedParent) != 0 {
 		return nil, nil, nil, errors.New("object must be a duplication root")
 	}
@@ -227,7 +228,7 @@ func CreateImportable(sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Publ
 		outerHashAlg = parentPublic.NameAlg
 		outerSymmetricAlg = &parentPublic.AsymDetail().Symmetric
 
-		outerSecret, seed, err = internal_crypt.SecretEncrypt(parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
+		outerSecret, seed, err = internal_crypt.SecretEncrypt(rand, parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("cannot create encrypted outer symmetric seed: %w", err)
 		}

@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"errors"
+	"io"
 
 	"github.com/canonical/go-tpm2"
 	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
@@ -40,7 +41,7 @@ func SecretDecrypt(priv crypto.PrivateKey, hashAlg tpm2.HashAlgorithmId, label, 
 //
 // If public has the type [tpm2.ObjectTypeECC], this uses ECDH to derive a seed value using an an
 // ephemeral key. The secret contains the serialized form of the public part of the ephemeral key.
-func SecretEncrypt(public *tpm2.Public, label []byte) (secret tpm2.EncryptedSecret, seed []byte, err error) {
+func SecretEncrypt(rand io.Reader, public *tpm2.Public, label []byte) (secret tpm2.EncryptedSecret, seed []byte, err error) {
 	if !public.NameAlg.Available() {
 		return nil, nil, errors.New("digest algorithm is not available")
 	}
@@ -58,5 +59,5 @@ func SecretEncrypt(public *tpm2.Public, label []byte) (secret tpm2.EncryptedSecr
 		}
 	}
 
-	return internal_crypt.SecretEncrypt(pub, public.NameAlg.GetHash(), label)
+	return internal_crypt.SecretEncrypt(rand, pub, public.NameAlg.GetHash(), label)
 }

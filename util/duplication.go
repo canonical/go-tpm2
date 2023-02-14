@@ -6,6 +6,7 @@ package util
 
 import (
 	"crypto"
+	"crypto/rand"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/objectutil"
@@ -51,5 +52,5 @@ func UnwrapDuplicationObject(duplicate tpm2.Private, public *tpm2.Public, privKe
 //
 // Deprecated: Use [objectutil.CreateImportable].
 func CreateDuplicationObject(sensitive *tpm2.Sensitive, public, parentPublic *tpm2.Public, innerSymmetricKey tpm2.Data, innerSymmetricAlg *tpm2.SymDefObject) (innerSymmetricKeyOut tpm2.Data, duplicate tpm2.Private, outerSecret tpm2.EncryptedSecret, err error) {
-	return objectutil.CreateImportable(sensitive, public, parentPublic, innerSymmetricKey, innerSymmetricAlg)
+	return objectutil.CreateImportable(rand.Reader, sensitive, public, parentPublic, innerSymmetricKey, innerSymmetricAlg)
 }

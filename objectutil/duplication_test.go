@@ -33,7 +33,7 @@ func (s *duplicationSuite) testCreateUnwrapDuplication(c *C, data *testCreateUnw
 	public, sensitiveIn, err := NewSealedObject(rand.Reader, []byte("super secret data"), []byte("foo"))
 	c.Assert(err, IsNil)
 
-	encryptionKey, duplicate, symSeed, err := CreateImportable(sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
+	encryptionKey, duplicate, symSeed, err := CreateImportable(rand.Reader, sensitiveIn, public, data.parentPublic, data.encryptionKey, data.symmetricAlg)
 	c.Check(err, IsNil)
 	if data.symmetricAlg != nil && data.symmetricAlg.Algorithm != tpm2.SymObjectAlgorithmNull && len(data.encryptionKey) == 0 {
 		c.Check(encryptionKey, internal_testutil.LenEquals, int(data.symmetricAlg.KeyBits.Sym/8))

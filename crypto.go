@@ -83,5 +83,5 @@ func cryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, 
 		}
 	}
 
-	return internal_crypt.SecretEncrypt(pub, public.NameAlg.GetHash(), label)
+	return internal_crypt.SecretEncrypt(rand.Reader, pub, public.NameAlg.GetHash(), label)
 }

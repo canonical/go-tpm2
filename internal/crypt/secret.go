@@ -8,10 +8,10 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/canonical/go-tpm2/mu"
@@ -49,7 +49,7 @@ func SecretDecrypt(priv crypto.PrivateKey, hashAlg crypto.Hash, label, secret []
 		h := hashAlg.New()
 		label0 := make([]byte, len(label)+1)
 		copy(label0, label)
-		return rsa.DecryptOAEP(h, rand.Reader, p, secret, label0)
+		return rsa.DecryptOAEP(h, nil, p, secret, label0)
 	case *ecdsa.PrivateKey:
 		var ephPoint eccPoint
 		if _, err := mu.UnmarshalFromBytes(secret, &ephPoint); err != nil {
@@ -87,7 +87,7 @@ func SecretDecrypt(priv crypto.PrivateKey, hashAlg crypto.Hash, label, secret []
 // the supplied public key.
 //
 // This will panic if hashAlg is not available.
-func SecretEncrypt(public crypto.PublicKey, hashAlg crypto.Hash, label []byte) (secret []byte, seed []byte, err error) {
+func SecretEncrypt(rand io.Reader, public crypto.PublicKey, hashAlg crypto.Hash, label []byte) (secret []byte, seed []byte, err error) {
 	digestSize := hashAlg.Size()
 
 	switch p := public.(type) {
@@ -100,7 +100,7 @@ func SecretEncrypt(public crypto.PublicKey, hashAlg crypto.Hash, label []byte) (
 		h := hashAlg.New()
 		label0 := make([]byte, len(label)+1)
 		copy(label0, label)
-		encryptedSecret, err := rsa.EncryptOAEP(h, rand.Reader, p, secret, label0)
+		encryptedSecret, err := rsa.EncryptOAEP(h, rand, p, secret, label0)
 		return encryptedSecret, secret, err
 	case *ecdsa.PublicKey:
 		if p.Curve == nil {
@@ -110,7 +110,7 @@ func SecretEncrypt(public crypto.PublicKey, hashAlg crypto.Hash, label []byte) (
 			return nil, nil, errors.New("public key is not on curve")
 		}
 
-		ephPriv, ephX, ephY, err := elliptic.GenerateKey(p.Curve, rand.Reader)
+		ephPriv, ephX, ephY, err := elliptic.GenerateKey(p.Curve, rand)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot generate ephemeral ECC key: %v", err)
 		}

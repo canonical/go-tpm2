@@ -5,6 +5,8 @@
 package util
 
 import (
+	"crypto/rand"
+
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/objectutil"
 )
@@ -21,5 +23,5 @@ import (
 //
 // Deprecated: Use [objectutil.MakeCredential].
 func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Name) (credentialBlob tpm2.IDObjectRaw, secret tpm2.EncryptedSecret, err error) {
-	return objectutil.MakeCredential(key, credential, objectName)
+	return objectutil.MakeCredential(rand.Reader, key, credential, objectName)
 }

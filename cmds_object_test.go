@@ -515,7 +515,7 @@ func (s *objectSuite) testActivateCredential(c *C, data *testActivateCredentialD
 
 	credential := []byte("secret credential")
 
-	credentialBlob, secret, err := objectutil.MakeCredential(primaryPub, credential, object.Name())
+	credentialBlob, secret, err := objectutil.MakeCredential(rand.Reader, primaryPub, credential, object.Name())
 	c.Check(err, IsNil)
 
 	sessionHandles := HandleList{authSessionHandle(data.activateAuthSession), authSessionHandle(data.keyAuthSession)}

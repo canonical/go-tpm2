@@ -6,6 +6,7 @@ package crypto
 
 import (
 	"crypto"
+	"crypto/rand"
 
 	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 )
@@ -48,5 +49,5 @@ func SecretDecrypt(priv crypto.PrivateKey, hashAlg crypto.Hash, label, secret []
 //
 // Deprecated: Use [github.com/canonical/go-tpm2/cryptutil.SecretEncrypt].
 func SecretEncrypt(public crypto.PublicKey, hashAlg crypto.Hash, label []byte) (secret []byte, seed []byte, err error) {
-	return internal_crypt.SecretEncrypt(public, hashAlg, label)
+	return internal_crypt.SecretEncrypt(rand.Reader, public, hashAlg, label)
 }

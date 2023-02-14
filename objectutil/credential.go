@@ -7,6 +7,7 @@ package objectutil
 import (
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/canonical/go-tpm2"
 	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
@@ -23,7 +24,7 @@ import (
 // be supplied to the TPM2_ActivateCredential command on the TPM on which both the private part of
 // key and the object associated with objectName are loaded in order to recover the activation
 // credential.
-func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Name) (credentialBlob tpm2.IDObjectRaw, secret tpm2.EncryptedSecret, err error) {
+func MakeCredential(rand io.Reader, key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Name) (credentialBlob tpm2.IDObjectRaw, secret tpm2.EncryptedSecret, err error) {
 	if !mu.IsValid(key) {
 		return nil, nil, errors.New("key is not valid")
 	}
@@ -39,7 +40,7 @@ func MakeCredential(key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Na
 		return nil, nil, fmt.Errorf("cannot marshal credential: %w", err)
 	}
 
-	secret, seed, err := internal_crypt.SecretEncrypt(key.Public(), key.NameAlg.GetHash(), []byte(tpm2.IdentityKey))
+	secret, seed, err := internal_crypt.SecretEncrypt(rand, key.Public(), key.NameAlg.GetHash(), []byte(tpm2.IdentityKey))
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
 	}
