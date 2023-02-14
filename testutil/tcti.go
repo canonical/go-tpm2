@@ -805,7 +805,7 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 			}
 
 			auth := tpm.GetPermanentContext(info.auth())
-			index, err := tpm2.NewNVIndexResourceContextFromPublic(info.nvPub)
+			index, err := tpm2.NewNVIndexResourceContextFromPub(info.nvPub)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
 				continue
@@ -818,7 +818,7 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 			tpm.FlushContext(tpm2.NewLimitedHandleContext(info.handle))
 		case tpm2.HandleTypePersistent:
 			auth := tpm.GetPermanentContext(info.auth())
-			object, err := tpm2.NewObjectResourceContextFromPublic(info.handle, info.pub)
+			object, err := tpm2.NewObjectResourceContextFromPub(info.handle, info.pub)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("cannot create ResourceContext for %v: %w", info.handle, err))
 				continue

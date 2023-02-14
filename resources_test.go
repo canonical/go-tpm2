@@ -252,13 +252,13 @@ func (s *resourcesSuite) TestNewResourceContextWithSessionNV(c *C) {
 		name:   rc.Name()})
 }
 
-func (s *resourcesSuite) TestNewNVIndexResourceContextFromPublic(c *C) {
+func (s *resourcesSuite) TestNewNVIndexResourceContextFromPub(c *C) {
 	pub := NVPublic{
 		Index:   s.NextAvailableHandle(c, 0x018100ff),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthRead | AttrNVAuthWrite),
 		Size:    8}
-	rc, err := NewNVIndexResourceContextFromPublic(&pub)
+	rc, err := NewNVIndexResourceContextFromPub(&pub)
 	c.Assert(err, IsNil)
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, pub.Index)
@@ -270,7 +270,7 @@ func (s *resourcesSuite) TestNewNVIndexResourceContextFromPublic(c *C) {
 	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
 }
 
-func (s *resourcesSuite) TestNewNVIndexResourceContextFromPublicAndName(c *C) {
+func (s *resourcesSuite) TestNewNVIndexResourceContext(c *C) {
 	pub := NVPublic{
 		Index:   s.NextAvailableHandle(c, 0x018100ff),
 		NameAlg: HashAlgorithmSHA256,
@@ -279,7 +279,7 @@ func (s *resourcesSuite) TestNewNVIndexResourceContextFromPublicAndName(c *C) {
 	name, err := pub.ComputeName()
 	c.Assert(err, IsNil)
 
-	rc := NewNVIndexResourceContextFromPublicAndName(&pub, name)
+	rc := NewNVIndexResourceContext(&pub, name)
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, pub.Index)
 	c.Check(rc.Name(), DeepEquals, name)
@@ -287,13 +287,13 @@ func (s *resourcesSuite) TestNewNVIndexResourceContextFromPublicAndName(c *C) {
 	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
 }
 
-func (s *resourcesSuite) TestNewObjectResourceContextFromPublic(c *C) {
+func (s *resourcesSuite) TestNewObjectResourceContextFromPub(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 
 	pub, _, _, err := s.TPM.ReadPublic(rc)
 	c.Assert(err, IsNil)
 
-	rc2, err := NewObjectResourceContextFromPublic(rc.Handle(), pub)
+	rc2, err := NewObjectResourceContextFromPub(rc.Handle(), pub)
 	c.Assert(err, IsNil)
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
@@ -302,13 +302,13 @@ func (s *resourcesSuite) TestNewObjectResourceContextFromPublic(c *C) {
 	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
 }
 
-func (s *resourcesSuite) TestNewObjectResourceContextFromPublicAndName(c *C) {
+func (s *resourcesSuite) TestNewObjectResourceContext(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 
 	pub, name, _, err := s.TPM.ReadPublic(rc)
 	c.Assert(err, IsNil)
 
-	rc2 := NewObjectResourceContextFromPublicAndName(rc.Handle(), pub, name)
+	rc2 := NewObjectResourceContext(rc.Handle(), pub, name)
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
