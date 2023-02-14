@@ -39,6 +39,7 @@ type TaggedHashU struct {
 	SHA256   [32]byte
 	SHA384   [48]byte
 	SHA512   [64]byte
+	SM3_256  [32]byte
 	SHA3_256 [32]byte
 	SHA3_384 [48]byte
 	SHA3_512 [64]byte
@@ -55,6 +56,8 @@ func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
 		return &u.SHA384
 	case HashAlgorithmSHA512:
 		return &u.SHA512
+	case HashAlgorithmSM3_256:
+		return &u.SM3_256
 	case HashAlgorithmSHA3_256:
 		return &u.SHA3_256
 	case HashAlgorithmSHA3_384:
@@ -93,6 +96,8 @@ func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
 		copy(digestData.SHA384[:], digest)
 	case HashAlgorithmSHA512:
 		copy(digestData.SHA512[:], digest)
+	case HashAlgorithmSM3_256:
+		copy(digestData.SM3_256[:], digest)
 	case HashAlgorithmSHA3_256:
 		copy(digestData.SHA3_256[:], digest)
 	case HashAlgorithmSHA3_384:
@@ -122,6 +127,8 @@ func (h *TaggedHash) Digest() Digest {
 		copy(out, h.DigestData.SHA384[:])
 	case HashAlgorithmSHA512:
 		copy(out, h.DigestData.SHA512[:])
+	case HashAlgorithmSM3_256:
+		copy(out, h.DigestData.SM3_256[:])
 	case HashAlgorithmSHA3_256:
 		copy(out, h.DigestData.SHA3_256[:])
 	case HashAlgorithmSHA3_384:
