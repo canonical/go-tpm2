@@ -169,87 +169,31 @@ func (h *handleContext) Invalidate() {
 	binary.BigEndian.PutUint32(h.N, uint32(h.H))
 }
 
-func (h *handleContext) checkConsistency() error {
+func (h *handleContext) checkValid() error {
 	switch h.Type {
-	case handleContextTypePermanent:
-		switch h.Handle().Type() {
-		case HandleTypePCR, HandleTypePermanent:
-		default:
-			return errors.New("inconsistent handle type for permanent context")
-		}
-		if h.Name().Type() != NameTypeHandle || h.Name().Handle() != h.Handle() {
-			return errors.New("name inconsistent with handle for permanent context")
-		}
-	case handleContextTypeObject:
-		switch h.Handle().Type() {
-		case HandleTypeTransient, HandleTypePersistent:
-		default:
-			return errors.New("inconsistent handle type for object context")
-		}
-		if h.Data.Object == nil {
-			return errors.New("no public area for object context")
-		}
-		if h.Data.Object.NameAlg.Available() && !h.Data.Object.compareName(h.Name()) {
-			return errors.New("name inconsistent with public area for object context")
-		}
-	case handleContextTypeNvIndex:
-		if h.Handle().Type() != HandleTypeNVIndex {
-			return errors.New("inconsistent handle type for NV context")
-		}
-		if h.Data.NV == nil {
-			return errors.New("no public area for NV context")
-		}
-		if h.Data.NV.NameAlg.Available() && !h.Data.NV.compareName(h.Name()) {
-			return errors.New("name inconsistent with public area for NV context")
-		}
+	case handleContextTypePermanent, handleContextTypeObject, handleContextTypeNvIndex:
+		return nil
 	case handleContextTypeSession:
-		switch h.Handle().Type() {
-		case HandleTypeHMACSession, HandleTypePolicySession:
-		default:
-			return errors.New("inconsistent handle type for session context")
-		}
-		if h.Name().Type() != NameTypeHandle || h.Name().Handle() != h.Handle() {
-			return errors.New("name inconsistent with handle for session context")
-		}
 		data := h.Data.Session.Data
-		if data != nil {
-			if !data.IsAudit && data.IsExclusive {
-				return errors.New("inconsistent audit attributes for session context")
-			}
-			if !data.HashAlg.Available() {
-				return errors.New("invalid digest algorithm for session context")
-			}
-			switch data.SessionType {
-			case SessionTypeHMAC, SessionTypePolicy, SessionTypeTrial:
-			default:
-				return errors.New("invalid session type for session context")
-			}
-			if data.PolicyHMACType > policyHMACTypeMax {
-				return errors.New("invalid policy session HMAC type for session context")
-			}
-			if (data.IsBound && len(data.BoundEntity) == 0) || (!data.IsBound && len(data.BoundEntity) > 0) {
-				return errors.New("invalid bind properties for session context")
-			}
-			digestSize := data.HashAlg.Size()
-			if len(data.SessionKey) != digestSize && len(data.SessionKey) != 0 {
-				return errors.New("unexpected session key size for session context")
-			}
-			if len(data.NonceCaller) != digestSize || len(data.NonceTPM) != digestSize {
-				return errors.New("unexpected nonce size for session context")
-			}
-			switch data.Symmetric.Algorithm {
-			case SymAlgorithmAES, SymAlgorithmXOR, SymAlgorithmNull:
-			default:
-				return errors.New("invalid symmetric algorithm for session context")
-			}
-			if data.Symmetric.Algorithm == SymAlgorithmAES && data.Symmetric.Mode.Sym != SymModeCFB {
-				return errors.New("invalid symmetric mode for session context")
-			}
+		if data == nil {
+			return nil
 		}
+		if !data.HashAlg.Available() {
+			return errors.New("digest algorithm for session context is not available")
+		}
+		switch data.SessionType {
+		case SessionTypeHMAC, SessionTypePolicy, SessionTypeTrial:
+		default:
+			return errors.New("invalid session type for session context")
+		}
+		if data.PolicyHMACType > policyHMACTypeMax {
+			return errors.New("invalid policy session HMAC type for session context")
+		}
+		return nil
 	default:
-		return errors.New("unrecognized context type")
+		// shouldn't happen because it should have failed to unmarshal
+		panic("invalid context type")
 	}
-	return nil
 }
 
 func newLimitedHandleContext(handle Handle) *handleContext {
@@ -650,7 +594,7 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 		return nil, errors.New("cannot create a permanent context from serialized data")
 	}
 
-	if err := data.checkConsistency(); err != nil {
+	if err := data.checkValid(); err != nil {
 		return nil, err
 	}
 
@@ -727,16 +671,11 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 //
 // This requires that the associated name algorithm is linked into the current binary.
 func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
-	switch pub.Index.Type() {
-	case HandleTypeNVIndex:
-		name, err := pub.ComputeName()
-		if err != nil {
-			return nil, fmt.Errorf("cannot compute name from public area: %v", err)
-		}
-		return newNVIndexContext(name, pub), nil
-	default:
-		return nil, errors.New("invalid handle type")
+	name, err := pub.ComputeName()
+	if err != nil {
+		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
+	return newNVIndexContext(name, pub), nil
 }
 
 // NewNVIndexResourceContext returns a new ResourceContext created from the provided public area
@@ -744,15 +683,8 @@ func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
 // name algorithm that is not available. If subsequent use of the returned ResourceContext requires
 // knowledge of the authorization value of the corresponding TPM resource, this should be provided
 // by calling [ResourceContext].SetAuthValue.
-//
-// This will panic if the handle type associated with pub is not [HandleTypeNVIndex].
 func NewNVIndexResourceContext(pub *NVPublic, name Name) ResourceContext {
-	switch pub.Index.Type() {
-	case HandleTypeNVIndex:
-		return newNVIndexContext(name, pub)
-	default:
-		panic("invalid handle type")
-	}
+	return newNVIndexContext(name, pub)
 }
 
 // CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided
