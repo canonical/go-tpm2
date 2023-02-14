@@ -8,7 +8,6 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/subtle"
 	"errors"
@@ -65,7 +64,7 @@ func digestFromSignerOpts(opts crypto.SignerOpts) (tpm2.HashAlgorithmId, error) 
 // signature can be verified on a TPM using the associated public key.
 //
 // This may panic if the requested digest algorithm is not available.
-func Sign(signer crypto.Signer, digest []byte, opts crypto.SignerOpts) (*tpm2.Signature, error) {
+func Sign(rand io.Reader, signer crypto.Signer, digest []byte, opts crypto.SignerOpts) (*tpm2.Signature, error) {
 	hashAlg, err := digestFromSignerOpts(opts)
 	if err != nil {
 		return nil, err
@@ -84,7 +83,7 @@ func Sign(signer crypto.Signer, digest []byte, opts crypto.SignerOpts) (*tpm2.Si
 		return nil, errors.New("unsupported key type")
 	}
 
-	sig, err := signer.Sign(rand.Reader, digest, opts)
+	sig, err := signer.Sign(rand, digest, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +195,7 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 			if !hashAlg.Available() {
 				return false, errors.New("digest algorithm is not available")
 			}
-			test, err := Sign(k, digest, hashAlg.GetHash())
+			test, err := Sign(nil, k, digest, hashAlg.GetHash())
 			if err != nil {
 				return false, err
 			}

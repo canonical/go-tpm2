@@ -39,7 +39,7 @@ func (s *signaturesSuite) TestSignRSASSA(c *C) {
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
-	sig, err := Sign(key, digest, tpm2.HashAlgorithmSHA256)
+	sig, err := Sign(rand.Reader, key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSASSA)
 	c.Check(sig.Signature.RSASSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
@@ -62,7 +62,7 @@ func (s *signaturesSuite) TestSignRSAPSS(c *C) {
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
-	sig, err := Sign(key, digest, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256})
+	sig, err := Sign(rand.Reader, key, digest, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256})
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSAPSS)
 	c.Check(sig.Signature.RSAPSS.Hash, Equals, tpm2.HashAlgorithmSHA256)
@@ -85,7 +85,7 @@ func (s *signaturesSuite) TestSignECDSA(c *C) {
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
-	sig, err := Sign(key, digest, tpm2.HashAlgorithmSHA256)
+	sig, err := Sign(rand.Reader, key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgECDSA)
 	c.Check(sig.Signature.ECDSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
@@ -108,7 +108,7 @@ func (s *signaturesSuite) TestSignHMAC(c *C) {
 	io.WriteString(h, "foo")
 	digest := h.Sum(nil)
 
-	sig, err := Sign(key, digest, tpm2.HashAlgorithmSHA256)
+	sig, err := Sign(rand.Reader, key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgHMAC)
 	c.Check(sig.Signature.HMAC.HashAlg, Equals, tpm2.HashAlgorithmSHA256)

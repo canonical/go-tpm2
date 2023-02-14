@@ -7,6 +7,7 @@ package util
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/rsa"
 	"encoding/binary"
 	"errors"
@@ -60,7 +61,7 @@ func Sign(key crypto.PrivateKey, scheme *tpm2.SigScheme, digest []byte) (*tpm2.S
 		return nil, errors.New("unsupported private key type")
 	}
 
-	return cryptutil.Sign(signer, digest, opts)
+	return cryptutil.Sign(rand.Reader, signer, digest, opts)
 }
 
 // VerifySignature verifies a signature created by a TPM using the supplied public key. Note that
