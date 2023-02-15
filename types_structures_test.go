@@ -437,6 +437,30 @@ func (s *typesStructuresSuite) TestNewTaggedHashError(c *C) {
 	c.Assert(err, ErrorMatches, "invalid digest size")
 }
 
+func (s *typesStructuresSuite) TestMakeTaggedHashSHA1(c *C) {
+	digest := internal_testutil.DecodeHexString(c, "e5fa44f2b31c1fb553b6021e7360d07d5d91ff5e")
+
+	expected := TaggedHash{
+		HashAlg:    HashAlgorithmSHA1,
+		DigestData: new(TaggedHashU)}
+	copy(expected.DigestData.SHA1[:], digest)
+
+	h := MakeTaggedHash(HashAlgorithmSHA1, digest)
+	c.Check(h, DeepEquals, expected)
+}
+
+func (s *typesStructuresSuite) TestMakeTaggedHashSHA256(c *C) {
+	digest := internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")
+
+	expected := TaggedHash{
+		HashAlg:    HashAlgorithmSHA256,
+		DigestData: new(TaggedHashU)}
+	copy(expected.DigestData.SHA256[:], digest)
+
+	h := MakeTaggedHash(HashAlgorithmSHA256, digest)
+	c.Check(h, DeepEquals, expected)
+}
+
 type testTaggedHashData struct {
 	alg      HashAlgorithmId
 	digest   Digest

@@ -78,6 +78,8 @@ type TaggedHash struct {
 // NewTaggedHash creates a new tagged hash that represents the specified
 // digest. It will return an error if the algorithm is invalid or the
 // size of the digest doesn't match the algorithm.
+//
+// Deprecated: Use [MakeTaggedHash].
 func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
 	if !alg.IsValid() {
 		return nil, errors.New("invalid algorithm")
@@ -109,6 +111,35 @@ func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
 	return &TaggedHash{
 		HashAlg:    alg,
 		DigestData: digestData}, nil
+}
+
+// MakeTaggedHash creates a new tagged hash that represents the specified
+// digest. It will panic if the algorithm is invalid. The supplied digest
+// should be the correct length - it will be padded if it's too short or
+// truncated if it's too long.
+func MakeTaggedHash(alg HashAlgorithmId, digest Digest) TaggedHash {
+	digestData := new(TaggedHashU)
+	switch alg {
+	case HashAlgorithmSHA1:
+		copy(digestData.SHA1[:], digest)
+	case HashAlgorithmSHA256:
+		copy(digestData.SHA256[:], digest)
+	case HashAlgorithmSHA384:
+		copy(digestData.SHA384[:], digest)
+	case HashAlgorithmSHA512:
+		copy(digestData.SHA512[:], digest)
+	case HashAlgorithmSM3_256:
+		copy(digestData.SM3_256[:], digest)
+	case HashAlgorithmSHA3_256:
+		copy(digestData.SHA3_256[:], digest)
+	case HashAlgorithmSHA3_384:
+		copy(digestData.SHA3_384[:], digest)
+	case HashAlgorithmSHA3_512:
+		copy(digestData.SHA3_512[:], digest)
+	}
+	return TaggedHash{
+		HashAlg:    alg,
+		DigestData: digestData}
 }
 
 // Digest returns the value of this tagged hash. It will panic
@@ -475,12 +506,16 @@ type TaggedHashList []TaggedHash
 // TaggedHashListBuilder facilitates creating a [TaggedHashList]. It
 // allows a list to be constructed without having to check for errors
 // until the end.
+//
+// Deprecated: Use [TaggedHashList] and [MakeTaggedHash].
 type TaggedHashListBuilder struct {
 	hashes TaggedHashList
 	err    error
 }
 
 // NewTaggedHashListBuilder returns a new TaggedHashListBuilder.
+//
+// Deprecated: Use [TaggedHashList] and [MakeTaggedHash].
 func NewTaggedHashListBuilder() *TaggedHashListBuilder {
 	return new(TaggedHashListBuilder)
 }

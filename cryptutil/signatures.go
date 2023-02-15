@@ -127,14 +127,10 @@ func Sign(rand io.Reader, signer crypto.Signer, digest []byte, opts crypto.Signe
 					SignatureS: s.Bytes()}}}, nil
 	case HMACKey:
 		_ = k
-		h, err := tpm2.NewTaggedHash(hashAlg, sig)
-		if err != nil {
-			return nil, err
-		}
-
+		d := tpm2.MakeTaggedHash(hashAlg, sig)
 		return &tpm2.Signature{
 			SigAlg:    tpm2.SigSchemeAlgHMAC,
-			Signature: &tpm2.SignatureU{HMAC: h}}, nil
+			Signature: &tpm2.SignatureU{HMAC: &d}}, nil
 	default:
 		panic("not reached")
 	}

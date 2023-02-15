@@ -58,8 +58,7 @@ func TestPCRExtend(t *testing.T) {
 				h := alg.NewHash()
 				h.Write(data.data)
 
-				ta, _ := NewTaggedHash(alg, h.Sum(nil))
-				hashList = append(hashList, *ta)
+				hashList = append(hashList, MakeTaggedHash(alg, h.Sum(nil)))
 			}
 
 			if err := tpm.PCRExtend(tpm.PCRHandleContext(data.index), hashList, nil); err != nil {
@@ -320,7 +319,7 @@ func TestPCRRead(t *testing.T) {
 			t.Errorf("Unexpected digests returned")
 		}
 
-		if err := tpm.PCRExtend(tpm.PCRHandleContext(7), NewTaggedHashListBuilder().Append(HashAlgorithmSHA256, make(Digest, 32)).MustFinish(), nil); err != nil {
+		if err := tpm.PCRExtend(tpm.PCRHandleContext(7), TaggedHashList{MakeTaggedHash(HashAlgorithmSHA256, make(Digest, 32))}, nil); err != nil {
 			t.Fatalf("PCRExtend failed: %v", err)
 		}
 
