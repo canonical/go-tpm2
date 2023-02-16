@@ -14,7 +14,7 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// NVDefineSpace executes the TPM2_NV_DefineSpace command to reserve space to hold the data
+// NVDefineSpaceRaw executes the TPM2_NV_DefineSpace command to reserve space to hold the data
 // associated with a NV index described by the publicInfo parameter. The Index field of publicInfo
 // defines the handle at which the index should be reserved. The NameAlg field defines the digest
 // algorithm for computing the name of the NV index. The Attrs field is used to describe attributes
@@ -94,32 +94,113 @@ import (
 // If there is insufficient space for the index, a *[TPMError] error with an error code of
 // [ErrorNVSpace] will be returned.
 //
-// On successful completion, the NV index will be defined. A ResourceContext corresponding to the
-// new NV index will be returned as long as the go module for the specified name algorithm is
-// loaded into the current binary, else nil will be returned and a ResourceContext can be created
-// manually with [TPMContext.NewResourceContext]. It will not be necessary to call
-// [ResourceContext].SetAuthValue on the returned ResourceContext - this function sets the correct
-// authorization value so that it can be used in subsequent commands that require knowledge of it.
-func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
-	if err := t.StartCommand(CommandNVDefineSpace).
+// On successful completion, the NV index will be defined.
+func (t *TPMContext) NVDefineSpaceRaw(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession SessionContext, sessions ...SessionContext) error {
+	return t.StartCommand(CommandNVDefineSpace).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession)).
 		AddParams(auth, mu.Sized(publicInfo)).
 		AddExtraSessions(sessions...).
-		Run(nil); err != nil {
-		return nil, err
-	}
+		Run(nil)
+}
 
+// NVDefineSpace executes the TPM2_NV_DefineSpace command to reserve space to hold the data
+// associated with a NV index described by the publicInfo parameter. The Index field of publicInfo
+// defines the handle at which the index should be reserved. The NameAlg field defines the digest
+// algorithm for computing the name of the NV index. The Attrs field is used to describe attributes
+// for the index, as well as its type. An authorization policy for the index can be defined using
+// the AuthPolicy field of publicInfo. The Size field defines the size of the index.
+//
+// The name algorithm must be linked into the current binary. To create an NV index with a name
+// algorithm that is not available, use [TPMContext.NVDefineSpaceRaw].
+//
+// The auth parameter specifies an authorization value for the NV index.
+//
+// The authContext parameter specifies the hierarchy used for authorization, and should correspond
+// to [HandlePlatform] or [HandleOwner]. The command requires authorization with the user auth role
+// for the specified hierarchy, with session based authorization provided via
+// authContextAuthSession.
+//
+// If the Attrs field of publicInfo has [AttrNVPolicyDelete] set but TPM2_NV_UndefineSpaceSpecial
+// isn't supported, or the Attrs field defines a type that is unsupported, a *[TPMParameterError]
+// error with an error code of [ErrorAttributes] will be returned for parameter index 2.
+//
+// If the AuthPolicy field of publicInfo defines an authorization policy digest then the digest
+// length must match the size of the name algorithm defined by the NameAlg field of publicInfo,
+// else a *[TPMParameterError] error with an error code of [ErrorSize] will be returned for
+// parameter index 2.
+//
+// If the length of auth is greater than the name algorithm selected by the NameAlg field of the
+// publicInfo parameter, a *[TPMParameterError] error with an error code of [ErrorSize] will be
+// returned for parameter index 1.
+//
+// If authContext corresponds to [HandlePlatform] but the [AttrPhEnableNV] attribute is clear, a
+// *[TPMHandleError] error with an error code of [ErrorHierarchy] will be returned.
+//
+// If the type indicated by the Attrs field of publicInfo isn't supported by the TPM, a
+// *[TPMParameterError] error with an error code of [ErrorAttributes] will be returned for
+// parameter index 2.
+//
+// If the type defined by publicInfo is [NVTypeCounter], [NVTypeBits], [NVTypePinPass] or
+// [NVTypePinFail], the Size field of publicInfo must be 8. If the type defined by publicInfo is
+// [NVTypeExtend], the Size field of publicInfo must match the size of the name algorithm defined
+// by the NameAlg field. If the size is unexpected, or the size for an index of type
+// [NVTypeOrdinary] is too large, a *[TPMParameterError] error with an error code of [ErrorSize]
+// will be returned for parameter index 2.
+//
+// If the type defined by publicInfo is [NVTypeCounter], then the Attrs field must not have the
+// [AttrNVClearStClear] attribute set, else a *[TPMParameterError] error with an error code of
+// [ErrorAttributes] will be returned for parameter index 2.
+//
+// If the type defined by publicInfo is [NVTypePinFail], then the Attrs field must have the
+// [AttrNVNoDA] attribute set. If the type is either [NVTypePinPass] or [NVTypePinFail], then the
+// Attrs field must have the [AttrNVAuthWrite], [AttrNVGlobalLock] and [AttrNVWriteDefine]
+// attributes clear, else a *[TPMParameterError] error with an error code of [ErrorAttributes] will
+// be returned for parameter index 2.
+//
+// If the Attrs field of publicInfo has either [AttrNVWriteLocked], [AttrNVReadLocked] or
+// [AttrNVWritten] set, a *[TPMParameterError] error with an error code of [ErrorAttributes] will
+// be returned for parameter index 2.
+//
+// The Attrs field of publicInfo must have one of either [AttrNVPPWrite], [AttrNVOwnerWrite],
+// [AttrNVAuthWrite] or [AttrNVPolicyWrite] set, and must also have one of either [AttrNVPPRead],
+// [AttrNVOwnerRead], [AttrNVAuthRead] or [AttrNVPolicyRead set]. If there is no way to read or
+// write an index, a *[TPMParameterError] error with an error code of [ErrorAttributes] will be
+// returned for parameter index 2.
+//
+// If the Attrs field of publicInfo has [AttrNVClearStClear] set, a *[TPMParameterError] error with
+// an error code of [ErrorAttributes] will be returned for parameter index 2 if
+// [AttrNVWriteDefine] is set.
+//
+// If authContext corresponds to [HandlePlatform], then the Attrs field of publicInfo must have the
+// [AttrNVPlatformCreate] attribute set. If authContext corresponds to [HandleOwner], then the
+// [AttrNVPlatformCreate] attributes must be clear, else a *[TPMHandleError] error with an error
+// code of [ErrorAttributes] will be returned.
+//
+// If the Attrs field of publicInfo has the [AttrNVPolicyDelete] attribute set, then
+// [HandlePlatform] must be used for authorization via authContext, else a *[TPMParameterError]
+// error with an error code of [ErrorAttributes] will be returned for parameter index 2.
+//
+// If an index is already defined at the location specified by the Index field of publicInfo, a
+// *[TPMError] error with an error code of [ErrorNVDefined] will be returned.
+//
+// If there is insufficient space for the index, a *[TPMError] error with an error code of
+// [ErrorNVSpace] will be returned.
+//
+// On successful completion, the NV index will be defined and a ResourceContext corresponding to
+// the new index will be returned. It will not be necessary to call [ResourceContext].SetAuthValue
+// on the returned ResourceContext - this function sets the correct authorization value so that it
+// can be used in subsequent commands that require knowledge of it.
+func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
 	if publicInfo == nil {
-		return nil, &InvalidResponseError{CommandNVDefineSpace, errors.New("expected an error from the TPM because no public area was supplied")}
+		return nil, makeInvalidArgError("publicInfo", "nil value")
 	}
-	if !publicInfo.NameAlg.Available() {
-		// we can't create a ResourceContext here without doing NVReadPublic.
-		return nil, nil
-	}
-
 	name, err := publicInfo.ComputeName()
 	if err != nil {
-		return nil, &InvalidResponseError{CommandNVDefineSpace, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
+		return nil, fmt.Errorf("cannot compute name from public info: %v", err)
+	}
+
+	if err := t.NVDefineSpaceRaw(authContext, auth, publicInfo, authContextAuthSession, sessions...); err != nil {
+		return nil, err
 	}
 
 	var public *NVPublic
