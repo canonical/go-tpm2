@@ -82,6 +82,21 @@ type resourceContextInternal interface {
 	SetHandle(handle Handle)
 }
 
+type objectContextInternal interface {
+	resourceContextInternal
+
+	GetPublic() *Public
+}
+
+type nvIndexContextInternal interface {
+	resourceContextInternal
+
+	GetPublic() *NVPublic
+	SetAttr(a NVAttributes)
+	ClearAttr(a NVAttributes)
+	Attrs() NVAttributes
+}
+
 type handleContextType uint8
 
 const (
@@ -90,6 +105,7 @@ const (
 	handleContextTypeObject
 	handleContextTypeNvIndex
 	handleContextTypeSession
+	handleContextTypeLimitedResource
 )
 
 type sessionContextData struct {
@@ -118,7 +134,7 @@ type handleContextU struct {
 
 func (d *handleContextU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(handleContextType) {
-	case handleContextTypeLimited, handleContextTypePermanent:
+	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeLimitedResource:
 		return mu.NilUnionValue
 	case handleContextTypeObject:
 		return &d.Object
@@ -171,7 +187,7 @@ func (h *handleContext) Invalidate() {
 
 func (h *handleContext) checkValid() error {
 	switch h.Type {
-	case handleContextTypePermanent, handleContextTypeObject, handleContextTypeNvIndex:
+	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeObject, handleContextTypeNvIndex, handleContextTypeLimitedResource:
 		return nil
 	case handleContextTypeSession:
 		data := h.Data.Session.Data
@@ -208,6 +224,14 @@ func newLimitedHandleContext(handle Handle) *handleContext {
 type resourceContext struct {
 	handleContext
 	authValue []byte
+}
+
+func newLimitedResourceContext(handle Handle, name Name) *resourceContext {
+	return &resourceContext{
+		handleContext: handleContext{
+			Type: handleContextTypeLimitedResource,
+			H:    handle,
+			N:    name}}
 }
 
 func (r *resourceContext) SetAuthValue(authValue []byte) {
@@ -600,12 +624,16 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 
 	var hc HandleContext
 	switch data.Type {
+	case handleContextTypeLimited:
+		hc = data
 	case handleContextTypeObject:
 		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
 	case handleContextTypeNvIndex:
 		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
 	case handleContextTypeSession:
 		hc = &sessionContext{handleContext: data}
+	case handleContextTypeLimitedResource:
+		hc = &resourceContext{handleContext: *data}
 	default:
 		panic("not reached")
 	}
@@ -646,6 +674,22 @@ func NewHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 		return nil, 0, err
 	}
 	return rc, len(b) - buf.Len(), nil
+}
+
+// NewLimitedResourceContext creates a new ResourceContext with the specified handle and name. The
+// returned ResourceContext has limited functionality - eg, it cannot be used in functions that
+// require knowledge of the public area associated with the resource (such as
+// [TPMContext.StartAuthSession] and some NV functions).
+//
+// This function will panic if handle doesn't correspond to a transient or persistent object, or an
+// NV index.
+func NewLimitedResourceContext(handle Handle, name Name) ResourceContext {
+	switch handle.Type() {
+	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
+		return newLimitedResourceContext(handle, name)
+	default:
+		panic("invalid handle type")
+	}
 }
 
 // CreateHandleContextFromBytes returns a new HandleContext created from the serialized data read

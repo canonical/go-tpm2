@@ -105,7 +105,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var encryptedSalt EncryptedSecret
 	tpmKeyHandle := HandleNull
 	if tpmKey != nil {
-		object, isObject := tpmKey.(*objectContext)
+		object, isObject := tpmKey.(objectContextInternal)
 		if !isObject {
 			return nil, makeInvalidArgError("tpmKey", "resource context is not an object")
 		}

@@ -122,6 +122,21 @@ func (s *resourcesSuite) TestNewLimitedHandleContextForWrongType(c *C) {
 	c.Check(func() { NewLimitedHandleContext(0x00000000) }, PanicMatches, "invalid handle type")
 }
 
+func (s *resourcesSuite) testNewLimitedResourceContext(c *C, handle Handle, name Name) {
+	rc := NewLimitedResourceContext(handle, name)
+	c.Assert(rc, NotNil)
+	c.Check(rc.Handle(), Equals, handle)
+	c.Check(rc.Name(), DeepEquals, name)
+}
+
+func (s *resourcesSuite) TestNewLimitedResourceContextTransient(c *C) {
+	s.testNewLimitedResourceContext(c, 0x80000001, internal_testutil.DecodeHexString(c, "000b000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"))
+}
+
+func (s *resourcesSuite) TestNewLimitedResourceContextPersistent(c *C) {
+	s.testNewLimitedResourceContext(c, 0x81000002, internal_testutil.DecodeHexString(c, "0004000102030405060708090a0b0c0d0e0f10111213"))
+}
+
 type testNewObjectHandleContextFromBytesData struct {
 	b      []byte
 	handle Handle

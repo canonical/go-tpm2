@@ -317,7 +317,8 @@ func (t *TPMContext) NVReadPublic(nvIndex HandleContext, sessions ...SessionCont
 // will be returned.
 //
 // On successful completion, the [AttrNVWritten] flag will be set if this is the first time that
-// the index has been written to.
+// the index has been written to. The name of nvIndex will be updated accordingly as long as it
+// wasn't created with [NewLimitedResourceContext].
 func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNVBuffer, offset uint16, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.StartCommand(CommandNVWrite).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)).
@@ -327,7 +328,9 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
+	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+		nv.SetAttr(AttrNVWritten)
+	}
 	return nil
 }
 
@@ -419,7 +422,8 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 
 // NVSetPinCounterParams is a convenience function for [TPMContext.NVWrite] for updating the
 // contents of the NV pin pass or NV pin fail index associated with nvIndex. If the type of nvIndex
-// is not NVTypePinPass of NVTypePinFail, an error will be returned.
+// is not NVTypePinPass of NVTypePinFail, an error will be returned. This will return an error if
+// nvIndex was created with [NewLimitedResourceContext].
 //
 // The command requires authorization, defined by the state of the [AttrNVPPWrite],
 // [AttrNVOwnerWrite], [AttrNVAuthWrite] and [AttrNVPolicyWrite] attributes. The handle used for
@@ -444,7 +448,7 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 // On successful completion, the [AttrNVWritten] flag will be set if this is the first time that
 // the index has been written to.
 func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext, params *NVPinCounterParams, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	context, isNv := nvIndex.(*nvIndexContext)
+	context, isNv := nvIndex.(nvIndexContextInternal)
 	if !isNv {
 		return errors.New("nvIndex does not correspond to a NV index")
 	}
@@ -482,7 +486,8 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 // [ErrorAttributes] will be returned for handle index 2.
 //
 // On successful completion, the [AttrNVWritten] flag will be set if this is the first time that
-// the index has been written to.
+// the index has been written to. The name of nvIndex will be updated accordingly as long as it
+// wasn't created with [NewLimitedResourceContext].
 func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.StartCommand(CommandNVIncrement).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)).
@@ -491,7 +496,9 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
+	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+		nv.SetAttr(AttrNVWritten)
+	}
 	return nil
 }
 
@@ -522,7 +529,8 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 // [ErrorAttributes] will be returned for handle index 2.
 //
 // On successful completion, the [AttrNVWritten] flag will be set if this is the first time that
-// the index has been written to.
+// the index has been written to. The name of nvIndex will be updated accordingly as long as it
+// wasn't created with [NewLimitedResourceContext].
 func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBuffer, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.StartCommand(CommandNVExtend).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)).
@@ -532,7 +540,9 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
+	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+		nv.SetAttr(AttrNVWritten)
+	}
 	return nil
 }
 
@@ -563,7 +573,8 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 // [ErrorAttributes] will be returned for handle index 2.
 //
 // On successful completion, the [AttrNVWritten] flag will be set if this is the first time that
-// the index has been written to.
+// the index has been written to. The name of nvIndex will be updated accordingly as long as it
+// wasn't created with [NewLimitedResourceContext].
 func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.StartCommand(CommandNVSetBits).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)).
@@ -573,7 +584,9 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).SetAttr(AttrNVWritten)
+	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+		nv.SetAttr(AttrNVWritten)
+	}
 	return nil
 }
 
@@ -601,9 +614,11 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 // *[TPMHandleError] error with an error code of [ErrorAttributes] will be returned for handle
 // index 2.
 //
-// On successful completion, the [AttrNVWriteLocked] attribute will be set. It will be cleared
-// again (and writes will be reenabled) on the next TPM reset or TPM restart unless the index has
-// the [AttrNVWriteDefine] attribute set and [AttrNVWritten] attribute is set.
+// On successful completion, the [AttrNVWriteLocked] attribute will be set. The name of nvIndex
+// will be updated accordingly as long as it wasn't created with [NewLimitedResourceContext].
+// The attribute will be cleared again (and writes will be reenabled) on the next TPM reset or TPM
+// restart unless the index has the [AttrNVWriteDefine] attribute set and [AttrNVWritten] attribute
+// is set.
 func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.StartCommand(CommandNVWriteLock).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)).
@@ -612,7 +627,9 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).SetAttr(AttrNVWriteLocked)
+	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+		nv.SetAttr(AttrNVWriteLocked)
+	}
 	return nil
 }
 
@@ -791,7 +808,8 @@ func (t *TPMContext) nvReadUint64(authContext, nvIndex ResourceContext, authCont
 
 // NVReadBits is a convenience function for [TPMContext.NVRead] for reading the contents of the NV
 // bit field index associated with nvIndex. If the type of nvIndex is not [NVTypeBits], an error
-// will be returned.
+// will be returned. This will return an error if nvIndex was created with
+// [NewLimitedResourceContext].
 //
 // The command requires authorization, defined by the state of the [AttrNVPPRead],
 // [AttrNVOwnerRead], [AttrNVAuthRead] and [AttrNVPolicyRead] attributes. The handle used for
@@ -818,7 +836,7 @@ func (t *TPMContext) nvReadUint64(authContext, nvIndex ResourceContext, authCont
 //
 // On successful completion, the current bitfield value will be returned.
 func (t *TPMContext) NVReadBits(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
-	context, isNv := nvIndex.(*nvIndexContext)
+	context, isNv := nvIndex.(nvIndexContextInternal)
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
@@ -830,7 +848,8 @@ func (t *TPMContext) NVReadBits(authContext, nvIndex ResourceContext, authContex
 
 // NVReadCounter is a convenience function for [TPMContext.NVRead] for reading the contents of the
 // NV counter index associated with nvIndex. If the type of nvIndex is not [NVTypeCounter], an
-// error will be returned.
+// error will be returned. This will return an error if nvIndex was created with
+// [NewLimitedResourceContext].
 //
 // The command requires authorization, defined by the state of the [AttrNVPPRead],
 // [AttrNVOwnerRead], [AttrNVAuthRead] and [AttrNVPolicyRead] attributes. The handle used for
@@ -857,7 +876,7 @@ func (t *TPMContext) NVReadBits(authContext, nvIndex ResourceContext, authContex
 //
 // On successful completion, the current counter value will be returned.
 func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
-	context, isNv := nvIndex.(*nvIndexContext)
+	context, isNv := nvIndex.(nvIndexContextInternal)
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
@@ -869,7 +888,8 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 
 // NVReadPinCounterParams is a convenience function for [TPMContext.NVRead] for reading the
 // contents of the NV pin pass or NV pin fail index associated with nvIndex. If the type of nvIndex
-// is not [NVTypePinPass] or [NVTypePinFail], an error will be returned.
+// is not [NVTypePinPass] or [NVTypePinFail], an error will be returned. This will return an error
+// if nvIndex was created with [NewLimitedResourceContext].
 //
 // The command requires authorization, defined by the state of the [AttrNVPPRead],
 // [AttrNVOwnerRead], [AttrNVAuthRead] and [AttrNVPolicyRead] attributes. The handle used for
@@ -896,7 +916,7 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 //
 // On successful completion, the current PIN count and limit will be returned.
 func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (*NVPinCounterParams, error) {
-	context, isNv := nvIndex.(*nvIndexContext)
+	context, isNv := nvIndex.(nvIndexContextInternal)
 	if !isNv {
 		return nil, errors.New("nvIndex does not correspond to a NV index")
 	}
@@ -937,8 +957,10 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 // If the index doesn't have the [AttrNVReadStClear] attribute set, then a *[TPMHandleError] error
 // with an error code of [ErrorAttributes] will be returned for handle index 2.
 //
-// On successful completion, the [AttrNVReadLocked] attribute will be set. It will be cleared again
-// (and reads will be reenabled) on the next TPM reset or TPM restart.
+// On successful completion, the [AttrNVReadLocked] attribute will be set. The name of nvIndex will
+// be updated accordingly as long as it wasn't created with [NewLimitedResourceContext]. The
+// attribute will be cleared again (and reads will be reenabled) on the next TPM reset or TPM
+// restart.
 func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	if err := t.StartCommand(CommandNVReadLock).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex)).
@@ -947,7 +969,9 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 		return err
 	}
 
-	nvIndex.(*nvIndexContext).SetAttr(AttrNVReadLocked)
+	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+		nv.SetAttr(AttrNVReadLocked)
+	}
 	return nil
 }
 

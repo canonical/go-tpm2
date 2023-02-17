@@ -34,17 +34,14 @@ import (
 // assigned for the session, a *[TPMWarning] error with a warning code of [WarningContextGap] will
 // be returned.
 func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, err error) {
-	switch c := saveContext.(type) {
-	case *handleContext:
-		if c.Type == handleContextTypeLimited {
-			return nil, makeInvalidArgError("saveContext", "unusable limited HandleContext")
-		}
-	}
-
 	if err := t.StartCommand(CommandContextSave).
 		AddHandles(UseHandleContext(saveContext)).
 		Run(nil, &context); err != nil {
 		return nil, err
+	}
+
+	if saveContext == nil {
+		return nil, &InvalidResponseError{CommandContextSave, errors.New("expected an error from the TPM")}
 	}
 
 	blob, err := mu.MarshalToBytes(saveContext.SerializeToBytes(), context.Blob)
@@ -89,8 +86,8 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 // a warning code of either [WarningSessionMemory] or [WarningObjectMemory] will be returned.
 //
 // On successful completion, it returns a HandleContext which corresponds to the resource loaded in
-// to the TPM. If the context corresponds to an object, this will be a new [ResourceContext]. If
-// context corresponds to a session, then this will be a new [SessionContext].
+// to the TPM. The returned context will be equivalent to the HandleContext originally passed to
+// [TPMContext.ContextSave].
 func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext, err error) {
 	if context == nil {
 		return nil, makeInvalidArgError("context", "nil value")
@@ -111,9 +108,6 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if hc.Handle() != context.SavedHandle {
 			return nil, errors.New("host and TPM context blobs have inconsistent handles")
-		}
-		if hc.(sessionContextInternal).Data() == nil {
-			return nil, errors.New("invalid host context blob")
 		}
 	case HandleTypeTransient:
 	default:
@@ -144,7 +138,9 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
 		}
-		hc.(sessionContextInternal).Data().IsExclusive = false
+		if sc, isSession := hc.(sessionContextInternal); isSession {
+			sc.Data().IsExclusive = false
+		}
 	default:
 		panic("not reached")
 	}
@@ -203,17 +199,19 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 // handle, a *[TPMError] error with an error code of [ErrorNVDefined] will be returned.
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that
-// corresponds to the persistent object. On successful completion of evicting a persistent object,
-// it returns a nil ResourceContext, and object will be invalidated.
+// corresponds to the persistent object. If object was created with [NewLimitedResourceContext],
+// then a similarly limited context will be returned for the new persistent object. On successful
+// completion of evicting a persistent object, it returns a nil ResourceContext, and object will be
+// invalidated.
 func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
-	if object == nil {
-		return nil, makeInvalidArgError("object", "nil value")
-	}
-
 	var public *Public
-	if object.Handle() != persistentHandle {
-		if err := mu.CopyValue(&public, object.(*objectContext).GetPublic()); err != nil {
-			return nil, fmt.Errorf("cannot copy public area of object: %v", err)
+	if object != nil && object.Handle() != persistentHandle {
+		// We are persisting an object
+		if obj, isObj := object.(objectContextInternal); isObj {
+			// This is not a limited ResourceContext - copy the public area
+			if err := mu.CopyValue(&public, obj.GetPublic()); err != nil {
+				return nil, fmt.Errorf("cannot copy public area of object: %v", err)
+			}
 		}
 	}
 
@@ -224,10 +222,19 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 		return nil, err
 	}
 
-	if object.Handle() == persistentHandle {
+	if object == nil {
+		return nil, &InvalidResponseError{CommandEvictControl, errors.New("expected an error from the TPM")}
+	}
+	name := make(Name, len(object.Name()))
+	copy(name, object.Name())
+
+	switch {
+	case object.Handle() == persistentHandle:
 		object.(handleContextInternal).Invalidate()
 		return nil, nil
+	case public != nil:
+		return newObjectContext(persistentHandle, name, public), nil
+	default:
+		return newLimitedResourceContext(persistentHandle, name), nil
 	}
-
-	return newObjectContext(persistentHandle, object.Name(), public), nil
 }

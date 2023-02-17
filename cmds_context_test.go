@@ -125,11 +125,28 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 	c.Check(session.Handle(), Not(internal_testutil.IsOneOf(Equals)), handles)
 }
 
-func (s *contextSuite) TestContextSavePartialHandle(c *C) {
-	session := NewLimitedHandleContext(0x02000000)
+func (s *contextSuite) TestContextSaveLimitedResourceContext(c *C) {
+	object := s.CreateStoragePrimaryKeyRSA(c)
 
-	_, err := s.TPM.ContextSave(session)
-	c.Check(err, ErrorMatches, `invalid saveContext argument: unusable limited HandleContext`)
+	lr := NewLimitedResourceContext(object.Handle(), object.Name())
+
+	context, err := s.TPM.ContextSave(lr)
+	c.Assert(err, IsNil)
+	c.Check(context.SavedHandle, Equals, Handle(0x80000000))
+	c.Check(context.Hierarchy, Equals, HandleOwner)
+	c.Check(context.Blob, NotNil)
+}
+
+func (s *contextSuite) TestContextSaveLimitedHandleContext(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+
+	lh := NewLimitedHandleContext(session.Handle())
+
+	context, err := s.TPM.ContextSave(lh)
+	c.Assert(err, IsNil)
+	c.Check(context.SavedHandle, Equals, session.Handle())
+	c.Check(context.Hierarchy, Equals, HandleNull)
+	c.Check(context.Blob, NotNil)
 }
 
 func (s *contextSuite) TestContextSaveSavedSession(c *C) {
@@ -161,7 +178,7 @@ func (s *contextSuite) TestContextSaveAndLoadTransient(c *C) {
 	c.Assert(restored, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(restored.(*ObjectContext).GetPublic(), DeepEquals, object.(*ObjectContext).GetPublic())
 
-	pub, name, _, err := s.TPM.ReadPublic(restored.(ResourceContext))
+	pub, name, _, err := s.TPM.ReadPublic(restored)
 	c.Assert(err, IsNil)
 	c.Check(pub, DeepEquals, object.(*ObjectContext).GetPublic())
 	c.Check(name, DeepEquals, object.Name())
@@ -170,13 +187,8 @@ func (s *contextSuite) TestContextSaveAndLoadTransient(c *C) {
 func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 
-	origData := session.(SessionContextInternal).Data()
-	{
-		b, err := mu.MarshalToBytes(origData)
-		c.Assert(err, IsNil)
-		_, err = mu.UnmarshalFromBytes(b, &origData)
-		c.Assert(err, IsNil)
-	}
+	var origData *SessionContextData
+	mu.MustCopyValue(&origData, session.(SessionContextInternal).Data())
 
 	context, err := s.TPM.ContextSave(session)
 	c.Assert(err, IsNil)
@@ -196,6 +208,51 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
 	c.Check(session.Handle(), internal_testutil.IsOneOf(Equals), handles)
+}
+
+func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
+
+	lh := NewLimitedHandleContext(session.Handle())
+
+	context, err := s.TPM.ContextSave(lh)
+	c.Assert(err, IsNil)
+
+	restored, err := s.TPM.ContextLoad(context)
+	c.Assert(err, IsNil)
+
+	var sample SessionContext
+	c.Check(restored, Not(Implements), &sample)
+
+	c.Check(restored.Handle(), Equals, lh.Handle())
+	c.Check(restored.Name(), DeepEquals, lh.Name())
+
+	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
+	c.Assert(err, IsNil)
+	c.Check(lh.Handle(), internal_testutil.IsOneOf(Equals), handles)
+}
+
+func (s *contextSuite) TestContextSaveAndLoadTransientLimitedResource(c *C) {
+	object := s.CreateStoragePrimaryKeyRSA(c)
+
+	lr := NewLimitedResourceContext(object.Handle(), object.Name())
+
+	context, err := s.TPM.ContextSave(lr)
+	c.Assert(err, IsNil)
+
+	restored, err := s.TPM.ContextLoad(context)
+	c.Assert(err, IsNil)
+
+	var sample ResourceContext
+	c.Check(restored, Implements, &sample)
+
+	c.Check(restored.Handle().Type(), Equals, HandleTypeTransient)
+	c.Check(restored.Handle(), Not(Equals), lr.Handle())
+	c.Check(restored.Name(), DeepEquals, lr.Name())
+
+	_, name, _, err := s.TPM.ReadPublic(restored)
+	c.Assert(err, IsNil)
+	c.Check(name, DeepEquals, lr.Name())
 }
 
 func (s *contextSuite) TestEvictControl(c *C) {
