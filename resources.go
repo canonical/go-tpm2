@@ -47,6 +47,7 @@ type SessionContext interface {
 	IsAudit() bool     // Whether the session has been used for audit
 	IsExclusive() bool // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
 
+	Attrs() SessionAttributes                         // The attributes associated with this session
 	SetAttrs(attrs SessionAttributes)                 // Set the attributes that will be used for this SessionContext
 	WithAttrs(attrs SessionAttributes) SessionContext // Return a duplicate of this SessionContext with the specified attributes
 
@@ -60,7 +61,6 @@ type sessionContextInternal interface {
 	SessionContext
 	handleContextInternalMixin
 
-	Attrs() SessionAttributes
 	Data() *sessionContextData
 	Unload()
 }
@@ -371,6 +371,17 @@ func (r *sessionContext) IsExclusive() bool {
 	return d.IsExclusive
 }
 
+func (r *sessionContext) Attrs() SessionAttributes {
+	attrs := r.attrs
+	if attrs&AttrAuditExclusive > 0 {
+		attrs |= AttrAudit
+	}
+	if attrs&AttrAuditReset > 0 {
+		attrs |= AttrAudit
+	}
+	return attrs
+}
+
 func (r *sessionContext) SetAttrs(attrs SessionAttributes) {
 	r.attrs = attrs
 }
@@ -385,10 +396,6 @@ func (r *sessionContext) IncludeAttrs(attrs SessionAttributes) SessionContext {
 
 func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
 	return &sessionContext{handleContext: r.handleContext, attrs: r.attrs &^ attrs}
-}
-
-func (r *sessionContext) Attrs() SessionAttributes {
-	return r.attrs
 }
 
 func (r *sessionContext) Data() *sessionContextData {

@@ -113,7 +113,7 @@ func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDe
 func (s *sessionParam) ComputeCommandHMAC(commandCode CommandCode, commandHandles []Name, cpBytes []byte) []byte {
 	data := s.Session.Data()
 	cpHash := cryptComputeCpHash(data.HashAlg, commandCode, commandHandles, cpBytes)
-	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.DecryptNonce, s.EncryptNonce, s.Session.Attrs().canonicalize())
+	h, _ := s.computeHMAC(cpHash, data.NonceCaller, data.NonceTPM, s.DecryptNonce, s.EncryptNonce, s.Session.Attrs())
 	return h
 }
 
@@ -136,7 +136,7 @@ func (s *sessionParam) BuildCommandAuth(commandCode CommandCode, commandHandles 
 	return &AuthCommand{
 		SessionHandle:     s.Session.Handle(),
 		Nonce:             data.NonceCaller,
-		SessionAttributes: s.Session.Attrs().canonicalize(),
+		SessionAttributes: s.Session.Attrs(),
 		HMAC:              hmac}
 }
 

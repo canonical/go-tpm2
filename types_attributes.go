@@ -43,16 +43,6 @@ const (
 // the attributes for a session.
 type SessionAttributes uint8
 
-func (a SessionAttributes) canonicalize() SessionAttributes {
-	if a&AttrAuditExclusive > 0 {
-		a |= AttrAudit
-	}
-	if a&AttrAuditReset > 0 {
-		a |= AttrAudit
-	}
-	return a
-}
-
 const (
 	// AttrContinueSession corresponds to continueSession and specifies that the session should not be flushed
 	// from the TPM after it is used. If a session is used without this flag, it will be flushed from the TPM
