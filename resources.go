@@ -32,6 +32,7 @@ type HandleContext interface {
 
 type handleContextInternalMixin interface {
 	Invalidate()
+	SetHandle(handle Handle)
 }
 
 type handleContextInternal interface {
@@ -79,7 +80,6 @@ type resourceContextInternal interface {
 	handleContextInternalMixin
 
 	GetAuthValue() []byte
-	SetHandle(handle Handle)
 }
 
 type objectContextInternal interface {
@@ -185,6 +185,10 @@ func (h *handleContext) Invalidate() {
 	binary.BigEndian.PutUint32(h.N, uint32(h.H))
 }
 
+func (h *handleContext) SetHandle(handle Handle) {
+	h.H = handle
+}
+
 func (h *handleContext) checkValid() error {
 	switch h.Type {
 	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeObject, handleContextTypeNvIndex, handleContextTypeLimitedResource:
@@ -240,10 +244,6 @@ func (r *resourceContext) SetAuthValue(authValue []byte) {
 
 func (r *resourceContext) GetAuthValue() []byte {
 	return bytes.TrimRight(r.authValue, "\x00")
-}
-
-func (r *resourceContext) SetHandle(handle Handle) {
-	r.handleContext.H = handle
 }
 
 type permanentContext struct {
@@ -397,6 +397,10 @@ func (r *sessionContext) Data() *sessionContextData {
 
 func (r *sessionContext) Unload() {
 	r.handleContext.Data.Session.Data = nil
+}
+
+func (r *sessionContext) SetHandle(handle Handle) {
+	panic("calling SetHandle on sessionContext is invalid")
 }
 
 func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {

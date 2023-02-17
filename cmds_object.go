@@ -252,7 +252,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 		return nil, &InvalidResponseError{CommandLoad, fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if inPublic == nil {
-		return nil, &InvalidResponseError{CommandLoad, errors.New("expected an error from the TPM because no public area was supplied")}
+		return nil, &InvalidResponseError{CommandLoad, errors.New("expected an error because no public area was supplied")}
 	}
 	if inPublic.NameAlg.Available() && !inPublic.compareName(name) {
 		return nil, &InvalidResponseError{CommandLoad, errors.New("name returned from TPM not consistent with supplied public area")}
@@ -261,7 +261,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 	var public *Public
 	if err := mu.CopyValue(&public, inPublic); err != nil {
 		// if this fails then the TPM should have returned an error.
-		return nil, &InvalidResponseError{CommandLoad, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
+		return nil, &InvalidResponseError{CommandLoad, fmt.Errorf("expected an error because the public area was invalid: %w", err)}
 	}
 	return newObjectContext(objectHandle, name, public), nil
 }
@@ -357,7 +357,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 			fmt.Errorf("handle 0x%08x returned from TPM is the wrong type", objectHandle)}
 	}
 	if inPublic == nil {
-		return nil, &InvalidResponseError{CommandLoadExternal, errors.New("expected an error from the TPM because no public area was supplied")}
+		return nil, &InvalidResponseError{CommandLoadExternal, errors.New("expected an error because no public area was supplied")}
 	}
 	if inPublic.NameAlg.Available() && !inPublic.compareName(name) {
 		return nil, &InvalidResponseError{CommandLoadExternal, errors.New("name returned from TPM not consistent with supplied public area")}
@@ -366,7 +366,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	var public *Public
 	if err := mu.CopyValue(&public, inPublic); err != nil {
 		// if this fails then the TPM should have returned an error.
-		return nil, &InvalidResponseError{CommandLoadExternal, fmt.Errorf("expected an error from the TPM because the public area was invalid: %w", err)}
+		return nil, &InvalidResponseError{CommandLoadExternal, fmt.Errorf("expected an error because the public area was invalid: %w", err)}
 	}
 	rc := newObjectContext(objectHandle, name, public)
 	if inPrivate != nil {

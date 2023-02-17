@@ -229,7 +229,7 @@ func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
 
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
-	c.Check(lh.Handle(), internal_testutil.IsOneOf(Equals), handles)
+	c.Check(session.Handle(), internal_testutil.IsOneOf(Equals), handles)
 }
 
 func (s *contextSuite) TestContextSaveAndLoadTransientLimitedResource(c *C) {
@@ -253,6 +253,27 @@ func (s *contextSuite) TestContextSaveAndLoadTransientLimitedResource(c *C) {
 	_, name, _, err := s.TPM.ReadPublic(restored)
 	c.Assert(err, IsNil)
 	c.Check(name, DeepEquals, lr.Name())
+}
+
+func (s *contextSuite) TestContextSaveAndLoadTransientLimitedHandle(c *C) {
+	object := s.CreateStoragePrimaryKeyRSA(c)
+
+	lh := NewLimitedHandleContext(object.Handle())
+
+	context, err := s.TPM.ContextSave(lh)
+	c.Assert(err, IsNil)
+
+	restored, err := s.TPM.ContextLoad(context)
+	c.Assert(err, IsNil)
+
+	var sample ResourceContext
+	c.Check(restored, Not(Implements), &sample)
+
+	c.Check(restored.Handle().Type(), Equals, HandleTypeTransient)
+	c.Check(restored.Handle(), Not(Equals), lh.Handle())
+	c.Check(restored.Name(), DeepEquals, lh.Name())
+
+	c.Check(s.TPM.DoesHandleExist(restored.Handle()), internal_testutil.IsTrue)
 }
 
 func (s *contextSuite) TestEvictControl(c *C) {

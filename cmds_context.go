@@ -41,7 +41,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 	}
 
 	if saveContext == nil {
-		return nil, &InvalidResponseError{CommandContextSave, errors.New("expected an error from the TPM")}
+		return nil, &InvalidResponseError{CommandContextSave, errors.New("expected an error because no saveContext was supplied")}
 	}
 
 	blob, err := mu.MarshalToBytes(saveContext.SerializeToBytes(), context.Blob)
@@ -133,7 +133,7 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		hc.(resourceContextInternal).SetHandle(loadedHandle)
+		hc.(handleContextInternal).SetHandle(loadedHandle)
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
@@ -223,7 +223,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	}
 
 	if object == nil {
-		return nil, &InvalidResponseError{CommandEvictControl, errors.New("expected an error from the TPM")}
+		return nil, &InvalidResponseError{CommandEvictControl, errors.New("expected an error")}
 	}
 	name := make(Name, len(object.Name()))
 	copy(name, object.Name())
