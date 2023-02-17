@@ -43,9 +43,10 @@ type handleContextInternal interface {
 // SessionContext is a HandleContext that corresponds to a session on the TPM.
 type SessionContext interface {
 	HandleContext
-	NonceTPM() Nonce   // The most recent TPM nonce value
-	IsAudit() bool     // Whether the session has been used for audit
-	IsExclusive() bool // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
+	HashAlg() HashAlgorithmId // The session's digest algorithm. Will be HashAlgorithmNul if the context corresponds to a saved session.
+	NonceTPM() Nonce          // The most recent TPM nonce value. Can be empty if this context corresponds to a saved session.
+	IsAudit() bool            // Whether the session has been used for audit
+	IsExclusive() bool        // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
 
 	Attrs() SessionAttributes                         // The attributes associated with this session
 	SetAttrs(attrs SessionAttributes)                 // Set the attributes that will be used for this SessionContext
@@ -345,6 +346,14 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 type sessionContext struct {
 	*handleContext
 	attrs SessionAttributes
+}
+
+func (r *sessionContext) HashAlg() HashAlgorithmId {
+	d := r.Data()
+	if d == nil {
+		return HashAlgorithmNull
+	}
+	return d.HashAlg
 }
 
 func (r *sessionContext) NonceTPM() Nonce {

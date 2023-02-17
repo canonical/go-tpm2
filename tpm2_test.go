@@ -68,6 +68,7 @@ func (s *mockSessionContext) Name() Name {
 
 func (s *mockSessionContext) SerializeToBytes() []byte            { return nil }
 func (s *mockSessionContext) SerializeToWriter(w io.Writer) error { return nil }
+func (s *mockSessionContext) HashAlg() HashAlgorithmId            { return s.data.HashAlg }
 func (s *mockSessionContext) NonceTPM() Nonce                     { return s.data.NonceTPM }
 func (s *mockSessionContext) IsAudit() bool                       { return s.data.IsAudit }
 func (s *mockSessionContext) IsExclusive() bool                   { return s.data.IsExclusive }
