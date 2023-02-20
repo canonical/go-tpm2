@@ -122,7 +122,7 @@ func (s *commandSuite) TestUnmarshalResponsePacketInvalidParamSize(c *C) {
 func (s *commandSuite) TestUnmarshalResponsePacketInvalidAuthArea(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "800200000012000000000000000000000000"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, `cannot unmarshal auth at index 0: cannot unmarshal argument 0 whilst processing element of type tpm2.Auth: unexpected EOF
+	c.Check(err, ErrorMatches, `cannot unmarshal auth at index 0: cannot unmarshal argument 0 whilst processing element of type tpm2.Digest: unexpected EOF
 
 === BEGIN STACK ===
 ... tpm2.AuthResponse field HMAC

@@ -141,7 +141,7 @@ const (
 )
 
 // SchemeHMAC corresponds to the TPMS_SCHEME_HMAC type.
-type SchemeHMAC SchemeHash
+type SchemeHMAC = SchemeHash
 
 // SchemeXOR corresponds to the TPMS_SCHEME_XOR type, and is used to define the XOR encryption
 // scheme.
@@ -185,12 +185,12 @@ type KeyedHashScheme struct {
 
 // 11.2.1 Signing Schemes
 
-type SigSchemeRSASSA SchemeHash
-type SigSchemeRSAPSS SchemeHash
-type SigSchemeECDSA SchemeHash
-type SigSchemeECDAA SchemeECDAA
-type SigSchemeSM2 SchemeHash
-type SigSchemeECSchnorr SchemeHash
+type SigSchemeRSASSA = SchemeHash
+type SigSchemeRSAPSS = SchemeHash
+type SigSchemeECDSA = SchemeHash
+type SigSchemeECDAA = SchemeECDAA
+type SigSchemeSM2 = SchemeHash
+type SigSchemeECSchnorr = SchemeHash
 
 // SigSchemeU is a union type that corresponds to the TPMU_SIG_SCHEME type. The
 // selector type is [SigSchemeId]. The mapping of selector value to fields is as follows:
@@ -291,18 +291,18 @@ func (s *SigScheme) AnyDetails() *SchemeHash {
 
 // 11.2.2 Encryption Schemes
 
-type EncSchemeRSAES Empty
-type EncSchemeOAEP SchemeHash
+type EncSchemeRSAES = Empty
+type EncSchemeOAEP = SchemeHash
 
-type KeySchemeECDH SchemeHash
-type KeySchemeECMQV SchemeHash
+type KeySchemeECDH = SchemeHash
+type KeySchemeECMQV = SchemeHash
 
 // 11.2.3 Key Derivation Schemes
 
-type SchemeMGF1 SchemeHash
-type SchemeKDF1_SP800_56A SchemeHash
-type SchemeKDF2 SchemeHash
-type SchemeKDF1_SP800_108 SchemeHash
+type SchemeMGF1 = SchemeHash
+type SchemeKDF1_SP800_56A = SchemeHash
+type SchemeKDF2 = SchemeHash
+type SchemeKDF1_SP800_108 = SchemeHash
 
 // KDFSchemeU is a union type that corresponds to the TPMU_KDF_SCHEME
 // type. The selector type is [KDFAlgorithmId]. The mapping of selector
@@ -609,12 +609,12 @@ type SignatureECC struct {
 	SignatureS ECCParameter
 }
 
-type SignatureRSASSA SignatureRSA
-type SignatureRSAPSS SignatureRSA
-type SignatureECDSA SignatureECC
-type SignatureECDAA SignatureECC
-type SignatureSM2 SignatureECC
-type SignatureECSchnorr SignatureECC
+type SignatureRSASSA = SignatureRSA
+type SignatureRSAPSS = SignatureRSA
+type SignatureECDSA = SignatureECC
+type SignatureECDAA = SignatureECC
+type SignatureSM2 = SignatureECC
+type SignatureECSchnorr = SignatureECC
 
 // SignatureU is a union type that corresponds to TPMU_SIGNATURE. The selector
 // type is [SigSchemeId]. The mapping of selector values to fields is as follows:

@@ -182,13 +182,13 @@ type Digest []byte
 type Data []byte
 
 // Nonce corresponds to the TPM2B_NONCE type.
-type Nonce Digest
+type Nonce = Digest
 
 // Auth corresponds to the TPM2B_AUTH type.
-type Auth Digest
+type Auth = Digest
 
 // Operand corresponds to the TPM2B_OPERAND type.
-type Operand Digest
+type Operand = Digest
 
 const (
 	// EventMaxSize indicates the maximum size of arguments of the Event type.
