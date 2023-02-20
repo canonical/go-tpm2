@@ -24,7 +24,7 @@ import (
 // be supplied to the TPM2_ActivateCredential command on the TPM on which both the private part of
 // key and the object associated with objectName are loaded in order to recover the activation
 // credential.
-func MakeCredential(rand io.Reader, key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Name) (credentialBlob tpm2.IDObjectRaw, secret tpm2.EncryptedSecret, err error) {
+func MakeCredential(rand io.Reader, key *tpm2.Public, credential tpm2.Digest, objectName tpm2.Name) (credentialBlob tpm2.IDObject, secret tpm2.EncryptedSecret, err error) {
 	if !mu.IsValid(key) {
 		return nil, nil, errors.New("key is not valid")
 	}

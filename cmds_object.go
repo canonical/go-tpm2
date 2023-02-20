@@ -432,7 +432,7 @@ func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...Session
 // On success, the decrypted credential is returned. This is typically used to decrypt a
 // certificate associated with activateContext, or provide a response to a challenge provided by
 // the credential issuer.
-func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObjectRaw, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession SessionContext, sessions ...SessionContext) (certInfo Digest, err error) {
+func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceContext, credentialBlob IDObject, secret EncryptedSecret, activateContextAuthSession, keyContextAuthSession SessionContext, sessions ...SessionContext) (certInfo Digest, err error) {
 	if err := t.StartCommand(CommandActivateCredential).
 		AddHandles(UseResourceContextWithAuth(activateContext, activateContextAuthSession), UseResourceContextWithAuth(keyContext, keyContextAuthSession)).
 		AddParams(credentialBlob, secret).
@@ -472,11 +472,11 @@ func (t *TPMContext) ActivateCredential(activateContext, keyContext ResourceCont
 // [ErrorScheme] will be returned if the padding scheme is invalid or not supported.
 //
 // On success, the encrypted and integrity protected activation credential is returned as
-// IDObjectRaw (see section 24 - "Credential Protection" of Part 1 of the Trusted Platform Module
+// IDObject (see section 24 - "Credential Protection" of Part 1 of the Trusted Platform Module
 // Library specification). A secret which can be used by the private part of the key associated
 // with context to recover the seed used to protect the credential (using the
 // TPM2_ActivateCredential command) is returned as EncryptedSecret.
-func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...SessionContext) (credentialBlob IDObjectRaw, secret EncryptedSecret, err error) {
+func (t *TPMContext) MakeCredential(context ResourceContext, credential Digest, objectName Name, sessions ...SessionContext) (credentialBlob IDObject, secret EncryptedSecret, err error) {
 	if err := t.StartCommand(CommandMakeCredential).
 		AddHandles(UseHandleContext(context)).
 		AddParams(credential, objectName).
