@@ -24,9 +24,10 @@ package tpm2
 // The signature can be created using [github.com/canonical/go-tpm2/util.SignPolicyAuthorization].
 //
 // If includeNonceTPM is set to true, this function includes the most recently received TPM nonce
-// value for the session associated with policySession in the command. In this case, the nonce
-// value must be included in the digest that is signed by the authorizing entity. The current
-// nonce value can be obtained and sent to the signer by calling [SessionContext].NonceTPM
+// value for the session associated with policySession as the first command parameter. In this
+// case, the nonce value must be included in the digest that is signed by the authorizing entity.
+// The current nonce value can be obtained and sent to the signer by calling
+// [SessionContext].NonceTPM
 //
 // The cpHashA parameter allows the session to be bound to a specific command and set of command
 // parameters by providing a command parameter digest. Command parameter digests can be computed
@@ -47,11 +48,12 @@ package tpm2
 // of [ErrorSize] will be returned for parameter index 2.
 //
 // If the expiration parameter is not 0, it sets a timeout based on the absolute value of
-// expiration in seconds since the start of the session by which the authorization will expire. If
-// the session associated with policySession is not a trial session and expiration corresponds to a
-// time in the past, or the TPM's time epoch has changed since the session was started, a
-// *[TPMParameterError] error with an error code of [ErrorExpired] will be returned for parameter
-// index 4.
+// expiration in seconds, by which time the authorization will expire. If includeNonceTPM is true
+// then the timeout is measured from the time that the current TPM nonce was generated for the
+// session, else it is measured from the time that this command is executed. If the session
+// associated with policySession is not a trial session and expiration corresponds to a time in the
+// past, or the TPM's time epoch has changed since the session was started, a *[TPMParameterError]
+// error with an error code of [ErrorExpired] will be returned for parameter index 4.
 //
 // If the session associated with policySession is not a trial session and the signing scheme or
 // digest algorithm associated with the auth parameter is not supported by the TPM, a
@@ -69,7 +71,8 @@ package tpm2
 // expiration is non-zero, the expiration time of the session context will be updated unless it
 // already has an expiration time that is earlier. If expiration is less than zero, a timeout value
 // and corresponding *TkAuth ticket will be returned if policySession does not correspond to a
-// trial session.
+// trial session. If includeNonceTPM is false, the returned ticket will expire on the next TPM
+// reset if that occurs before the timeout.
 func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...SessionContext) (timeout Timeout, policyTicket *TkAuth, err error) {
 	var nonceTPM Nonce
 	if includeNonceTPM {
@@ -95,6 +98,9 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 // assertion, a *[TPMSessionError] error with an error code of [ErrorMode] will be returned for
 // session index 1.
 //
+// This function includes the most recently received TPM nonce value for the session associated
+// with policySession as the first command parameter.
+//
 // The cpHashA parameter allows the session to be bound to a specific command and set of command
 // parameters by providing a command parameter digest. Command parameter digests can be computed
 // using [github.com/canonical/go-tpm2/util.ComputeCpHash], using the digest algorithm for the
@@ -113,11 +119,11 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 // of [ErrorSize] will be returned for parameter index 2.
 //
 // If the expiration parameter is not 0, it sets a timeout based on the absolute value of
-// expiration in seconds since the start of the session by which the authorization will expire. If
-// the session associated with policySession is not a trial session and expiration corresponds to a
-// time in the past, or the TPM's time epoch has changed since the session was started, a
-// *[TPMParameterError] error with an error code of [ErrorExpired] will be returned for parameter
-// index 4.
+// expiration in seconds, by which time the authorization will expire. The timeout is measured from
+// the time that the current TPM nonce was generated for the session. If the session associated
+// with policySession is not a trial session and expiration corresponds to a time in the past, or
+// the TPM's time epoch has changed since the session was started, a *[TPMParameterError] error
+// with an error code of [ErrorExpired] will be returned for parameter index 4.
 //
 // On successful completion, knowledge of the authorization value associated with authContext is
 // proven. The policy digest of the session associated with policySession will be extended to
