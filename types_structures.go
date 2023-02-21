@@ -240,6 +240,9 @@ const (
 
 	// NameTypeDigest means that a Name is a digest.
 	NameTypeDigest
+
+	// NameTypeNone means that a Name is empty.
+	NameTypeNone
 )
 
 // Name implements [github.com/canonical/go-tpm2/objectutil.Named].
@@ -254,11 +257,13 @@ func (n Name) IsValid() bool {
 
 // Type determines the type of this name.
 func (n Name) Type() NameType {
-	if len(n) < binary.Size(HashAlgorithmId(0)) {
-		return NameTypeInvalid
-	}
-	if len(n) == binary.Size(Handle(0)) {
+	switch {
+	case len(n) == 0:
+		return NameTypeNone
+	case len(n) == binary.Size(Handle(0)):
 		return NameTypeHandle
+	case len(n) < binary.Size(HashAlgorithmId(0)):
+		return NameTypeInvalid
 	}
 
 	alg := HashAlgorithmId(binary.BigEndian.Uint16(n))

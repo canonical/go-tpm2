@@ -20,6 +20,16 @@ type typesStructuresSuite struct{}
 
 var _ = Suite(&typesStructuresSuite{})
 
+func (s *typesStructuresSuite) TestNameTypeNone(c *C) {
+	var name Name
+	c.Check(name.Type(), Equals, NameTypeNone)
+}
+
+func (s *typesStructuresSuite) TestNameTypeInvalid(c *C) {
+	name := Name{0, 0}
+	c.Check(name.Type(), Equals, NameTypeInvalid)
+}
+
 func (s *typesStructuresSuite) TestNameTypeInvalidTooShort(c *C) {
 	name := Name{0xaa}
 	c.Check(name.Type(), Equals, NameTypeInvalid)
@@ -77,14 +87,9 @@ func (s *typesStructuresSuite) TestNameAlgorithm2(c *C) {
 	c.Check(name.Algorithm(), Equals, HashAlgorithmSHA1)
 }
 
-func (s *typesStructuresSuite) TestNameAlgorithmHandle(c *C) {
+func (s *typesStructuresSuite) TestNameAlgorithmInvalid(c *C) {
 	name := make(Name, 4)
 	binary.BigEndian.PutUint32(name, uint32(HandleOwner))
-	c.Check(name.Algorithm(), Equals, HashAlgorithmNull)
-}
-
-func (s *typesStructuresSuite) TestNameAlgorithmInvalid(c *C) {
-	var name Name
 	c.Check(name.Algorithm(), Equals, HashAlgorithmNull)
 }
 

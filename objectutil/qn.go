@@ -13,16 +13,16 @@ import (
 )
 
 func computeOneQualifiedName(object Named, parentQn tpm2.Name) (tpm2.Name, error) {
-	if object.Name().Algorithm() == tpm2.HashAlgorithmNull {
+	switch {
+	case object.Name().Type() == tpm2.NameTypeNone:
+		return nil, nil
+	case object.Name().Type() != tpm2.NameTypeDigest:
 		return nil, errors.New("invalid name")
-	}
-	if !object.Name().Algorithm().Available() {
+	case !object.Name().Algorithm().Available():
 		return nil, errors.New("name algorithm is not available")
-	}
-	if !parentQn.IsValid() {
+	case !parentQn.IsValid() || parentQn.Type() == tpm2.NameTypeNone:
 		return nil, errors.New("invalid parent qualified name")
-	}
-	if parentQn.Algorithm() != tpm2.HashAlgorithmNull && parentQn.Algorithm() != object.Name().Algorithm() {
+	case parentQn.Algorithm() != tpm2.HashAlgorithmNull && parentQn.Algorithm() != object.Name().Algorithm():
 		return nil, errors.New("name algorithm mismatch")
 	}
 

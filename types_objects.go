@@ -224,7 +224,10 @@ func (p *Public) AsymDetail() *AsymParams {
 // This computes the name from the public area. If the name cannot be computed
 // then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
 func (p *Public) Name() Name {
-	name, _ := p.ComputeName()
+	name, err := p.ComputeName()
+	if err != nil {
+		return Name{0, 0}
+	}
 	return name
 }
 
@@ -329,7 +332,10 @@ func (p *PublicDerived) ComputeName() (Name, error) {
 // This computes the name from the public area. If the name cannot be computed
 // then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
 func (p *PublicDerived) Name() Name {
-	name, _ := p.ComputeName()
+	name, err := p.ComputeName()
+	if err != nil {
+		return Name{0, 0}
+	}
 	return name
 }
 

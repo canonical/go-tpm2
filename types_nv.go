@@ -110,6 +110,9 @@ func (p *NVPublic) compareName(name Name) bool {
 // This computes the name from the public area. If the name cannot be computed
 // then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
 func (p *NVPublic) Name() Name {
-	name, _ := p.ComputeName()
+	name, err := p.ComputeName()
+	if err != nil {
+		return Name{0, 0}
+	}
 	return name
 }
