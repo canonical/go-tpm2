@@ -107,7 +107,8 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	_, _, err = s.TPM.NVReadPublic(NewLimitedHandleContext(data.publicInfo.Index))
-	c.Check(err, internal_testutil.ErrorIs, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
+	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
 }
 
 func (s *nvSuite) TestDefineAndUndefineSpace(c *C) {
@@ -211,7 +212,8 @@ func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpa
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
 
 	_, _, err := s.TPM.NVReadPublic(NewLimitedHandleContext(pub.Index))
-	c.Check(err, internal_testutil.ErrorIs, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
+	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
 
 	return nil
 }

@@ -52,7 +52,8 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	c.Check(persist.Handle(), Equals, HandleUnassigned)
 
 	_, _, _, err = s.TPM.ReadPublic(NewLimitedHandleContext(data.handle))
-	c.Check(err, internal_testutil.ErrorIs, &TPMHandleError{TPMError: &TPMError{Command: CommandReadPublic, Code: ErrorHandle}, Index: 1})
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
+	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandReadPublic, Code: ErrorHandle}, Index: 1})
 }
 
 type contextSuite struct {
@@ -304,7 +305,8 @@ func (s *contextSuite) TestFlushContextTransient(c *C) {
 	c.Check(object.Handle(), Equals, HandleUnassigned)
 
 	_, _, _, err := s.TPM.ReadPublic(NewLimitedHandleContext(handle))
-	c.Check(err, internal_testutil.ErrorIs, &TPMWarning{Command: CommandReadPublic, Code: WarningReferenceH0})
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMWarning{})
+	c.Check(err.(*TPMWarning), DeepEquals, &TPMWarning{Command: CommandReadPublic, Code: WarningReferenceH0})
 }
 
 func (s *contextSuite) TestFlushContextSession(c *C) {
