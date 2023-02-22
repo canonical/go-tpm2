@@ -20,6 +20,16 @@ type typesStructuresSuite struct{}
 
 var _ = Suite(&typesStructuresSuite{})
 
+func (s *typesStructuresSuite) TestMakeHandleNameOwner(c *C) {
+	name := MakeHandleName(HandleOwner)
+	c.Check(name, DeepEquals, Name(internal_testutil.DecodeHexString(c, "40000001")))
+}
+
+func (s *typesStructuresSuite) TestMakeHandleNameEndorsement(c *C) {
+	name := MakeHandleName(HandleEndorsement)
+	c.Check(name, DeepEquals, Name(internal_testutil.DecodeHexString(c, "4000000b")))
+}
+
 func (s *typesStructuresSuite) TestNameTypeNone(c *C) {
 	var name Name
 	c.Check(name.Type(), Equals, NameTypeNone)

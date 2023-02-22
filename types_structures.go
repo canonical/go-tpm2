@@ -228,6 +228,17 @@ func (t Timeout) Value() uint64 {
 // Name corresponds to the TPM2B_NAME type.
 type Name []byte
 
+// MakeHandleName creates a Name from the specified handle. This will panic if the
+// specified handle doesn't correspond to a PCR, session or permanent resource.
+func MakeHandleName(handle Handle) Name {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent:
+		return mu.MustMarshalToBytes(handle)
+	default:
+		panic("invalid handle type")
+	}
+}
+
 // NameType describes the type of a name.
 type NameType int
 

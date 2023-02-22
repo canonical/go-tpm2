@@ -12,7 +12,6 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
-	"github.com/canonical/go-tpm2/mu"
 	. "github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
 )
@@ -31,7 +30,7 @@ var _ = Suite(&qnSuiteNoTPM{})
 var _ = Suite(&qnSuite{})
 
 func (s *qnSuiteNoTPM) TestComputeQualifiedName(c *C) {
-	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	rootQn := tpm2.MakeHandleName(tpm2.HandleOwner)
 	primary := tpm2.Name(internal_testutil.DecodeHexString(c, "000b4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"))
 	leaf := tpm2.Name(internal_testutil.DecodeHexString(c, "000b53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"))
 
@@ -49,7 +48,7 @@ func (s *qnSuiteNoTPM) TestComputeQualifiedName(c *C) {
 }
 
 func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName(c *C) {
-	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	rootQn := tpm2.MakeHandleName(tpm2.HandleOwner)
 	primary := tpm2.Name(internal_testutil.DecodeHexString(c, "000b4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"))
 	leaf := tpm2.Name(internal_testutil.DecodeHexString(c, "000453c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"))
 
@@ -58,7 +57,7 @@ func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName(c *C) {
 }
 
 func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName2(c *C) {
-	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	rootQn := tpm2.MakeHandleName(tpm2.HandleOwner)
 	primary := tpm2.Name(internal_testutil.DecodeHexString(c, "000b4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"))
 
 	_, err := ComputeQualifiedName(tpm2.Name{0, 0}, rootQn, primary)
@@ -66,7 +65,7 @@ func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName2(c *C) {
 }
 
 func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName3(c *C) {
-	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	rootQn := tpm2.MakeHandleName(tpm2.HandleOwner)
 	primary := tpm2.Name{0, 0}
 	leaf := tpm2.Name(internal_testutil.DecodeHexString(c, "000b53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"))
 
@@ -75,7 +74,7 @@ func (s *qnSuiteNoTPM) TestComputeQualifiedNameInvalidName3(c *C) {
 }
 
 func (s *qnSuiteNoTPM) TestComputeQualifiedNameMismatchedAlgorithms(c *C) {
-	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	rootQn := tpm2.MakeHandleName(tpm2.HandleOwner)
 	primary := tpm2.Name(internal_testutil.DecodeHexString(c, "000b4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"))
 	leaf := tpm2.Name(internal_testutil.DecodeHexString(c, "00047448d8798a4380162d4b56f9b452e2f6f9e24e7a"))
 
@@ -110,7 +109,7 @@ func (s *qnSuiteNoTPM) TestComputeQualifiedNameInHierarchy(c *C) {
 }
 
 func (s *qnSuite) TestComputeQualifiedName(c *C) {
-	rootQn := mu.MustMarshalToBytes(tpm2.HandleOwner)
+	rootQn := tpm2.MakeHandleName(tpm2.HandleOwner)
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
 	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, NewRSAKeyTemplate(UsageDecrypt|UsageSign), nil, nil, nil)
