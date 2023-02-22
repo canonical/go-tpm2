@@ -267,12 +267,46 @@ func (t *TPMContext) GetCapabilityHandles(firstHandle Handle, propertyCount uint
 
 // DoesHandleExist is a convenience function for [TPMContext.GetCapability] that determines if a
 // resource with the specified handle exists on the TPM. This will indicate that the resource does
-// not exist if the TPM returns an error.
+// not exist if the TPM returns an error. If handle corresponds to a session, this will only return
+// true if the session is loaded.
 func (t *TPMContext) DoesHandleExist(handle Handle, sessions ...SessionContext) bool {
+	origHandle := handle
+	if handle.Type() == HandleTypeSavedSession {
+		handle &= 0x00ffffff
+		handle |= Handle(HandleTypeLoadedSession) << 24
+	}
+
 	handles, err := t.GetCapabilityHandles(handle, 1, sessions...)
 	if err != nil {
 		return false
 	}
+	if len(handles) == 0 || handles[0] != origHandle {
+		return false
+	}
+	return true
+}
+
+// DoesSavedSessionExist is a convenience function for [TPMContext.GetCapability] that determines
+// if the specified handle corresponds to a saved session. This will indicate that there is no
+// saved session if the TPM returns an error.
+func (t *TPMContext) DoesSavedSessionExist(handle Handle, sessions ...SessionContext) bool {
+	switch handle.Type() {
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		// ok
+	default:
+		return false
+	}
+
+	handle &= 0x00ffffff
+	handle |= Handle(HandleTypeSavedSession) << 24
+
+	handles, err := t.GetCapabilityHandles(handle, 1, sessions...)
+	if err != nil {
+		return false
+	}
+
+	handle &= 0x00ffffff
+	handle |= Handle(HandleTypeHMACSession) << 24
 	if len(handles) == 0 || handles[0] != handle {
 		return false
 	}

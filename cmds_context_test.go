@@ -120,10 +120,8 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 
 	c.Check(session.(SessionContextInternal).Data(), IsNil)
 
-	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
-	c.Assert(err, IsNil)
-
-	c.Check(session.Handle(), Not(internal_testutil.IsOneOf(Equals)), handles)
+	c.Check(s.TPM.DoesHandleExist(session.Handle()), internal_testutil.IsFalse)
+	c.Check(s.TPM.DoesSavedSessionExist(session.Handle()), internal_testutil.IsTrue)
 }
 
 func (s *contextSuite) TestContextSaveLimitedResourceContext(c *C) {
@@ -148,6 +146,9 @@ func (s *contextSuite) TestContextSaveLimitedHandleContext(c *C) {
 	c.Check(context.SavedHandle, Equals, session.Handle())
 	c.Check(context.Hierarchy, Equals, HandleNull)
 	c.Check(context.Blob, NotNil)
+
+	c.Check(s.TPM.DoesHandleExist(session.Handle()), internal_testutil.IsFalse)
+	c.Check(s.TPM.DoesSavedSessionExist(session.Handle()), internal_testutil.IsTrue)
 }
 
 func (s *contextSuite) TestContextSaveSavedSession(c *C) {
@@ -206,9 +207,7 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 	c.Check(restored, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 	c.Check(restored.(SessionContextInternal).Data(), DeepEquals, origData)
 
-	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
-	c.Assert(err, IsNil)
-	c.Check(session.Handle(), internal_testutil.IsOneOf(Equals), handles)
+	c.Check(s.TPM.DoesHandleExist(restored.Handle()), internal_testutil.IsTrue)
 }
 
 func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
@@ -228,9 +227,7 @@ func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
 	c.Check(restored.Handle(), Equals, lh.Handle())
 	c.Check(restored.Name(), DeepEquals, lh.Name())
 
-	handles, err := s.TPM.GetCapabilityHandles(HandleTypeLoadedSession.BaseHandle(), CapabilityMaxProperties)
-	c.Assert(err, IsNil)
-	c.Check(session.Handle(), internal_testutil.IsOneOf(Equals), handles)
+	c.Check(s.TPM.DoesHandleExist(restored.Handle()), internal_testutil.IsTrue)
 }
 
 func (s *contextSuite) TestContextSaveAndLoadTransientLimitedResource(c *C) {

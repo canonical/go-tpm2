@@ -351,6 +351,46 @@ func (s *capabilitiesSuite) TestDoesHandleNotExist(c *C) {
 	c.Check(s.TPM.DoesHandleExist(0x40000000), internal_testutil.IsFalse)
 }
 
+func (s *capabilitiesSuite) TestDoesHandleExistHMACSession(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	c.Check(s.TPM.DoesHandleExist(session.Handle()), internal_testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestDoesHandleNotExistHMACSession(c *C) {
+	c.Check(s.TPM.DoesHandleExist(0x02000010), internal_testutil.IsFalse)
+}
+
+func (s *capabilitiesSuite) TestDoesHandleExistPolicySession(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
+	c.Check(s.TPM.DoesHandleExist(session.Handle()), internal_testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestDoesHandleNotExistPolicySession(c *C) {
+	c.Check(s.TPM.DoesHandleExist(0x03000010), internal_testutil.IsFalse)
+}
+
+func (s *capabilitiesSuite) TestDoesSavedSessionExistHMACSession(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	_, err := s.TPM.ContextSave(session)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.DoesSavedSessionExist(session.Handle()), internal_testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestDoesSavedSessionNotExistHMACSession(c *C) {
+	c.Check(s.TPM.DoesSavedSessionExist(0x02000010), internal_testutil.IsFalse)
+}
+
+func (s *capabilitiesSuite) TestDoesSavedSessionExistPolicySession(c *C) {
+	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
+	_, err := s.TPM.ContextSave(session)
+	c.Check(err, IsNil)
+	c.Check(s.TPM.DoesSavedSessionExist(session.Handle()), internal_testutil.IsTrue)
+}
+
+func (s *capabilitiesSuite) TestDoesSavedSessionNotExistPolicySession(c *C) {
+	c.Check(s.TPM.DoesSavedSessionExist(0x03000010), internal_testutil.IsFalse)
+}
+
 func (s *capabilitiesSuite) TestGetCapabilityPCRs(c *C) {
 	expected := PCRSelectionList{
 		{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}, SizeOfSelect: 3},
