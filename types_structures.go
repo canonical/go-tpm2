@@ -48,6 +48,8 @@ type TaggedHashU struct {
 // Select implements [mu.Union].
 func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
 	switch selector.Interface().(HashAlgorithmId) {
+	case HashAlgorithmNull:
+		return mu.NilUnionValue
 	case HashAlgorithmSHA1:
 		return &u.SHA1
 	case HashAlgorithmSHA256:
@@ -143,10 +145,14 @@ func MakeTaggedHash(alg HashAlgorithmId, digest Digest) TaggedHash {
 }
 
 // Digest returns the value of this tagged hash. It will panic
-// if the digest algorithm is not valid. It will be valid if
-// this tagged hash was created by unmarshalling it, else
-// check [HashAlgorithmId.IsValid].
+// if the digest algorithm is invalid and not [HashAlgorithmNull].
+// It will be valid if this tagged hash was created by unmarshalling
+// it, else check the value of the HashAlg field first.
 func (h *TaggedHash) Digest() Digest {
+	if h.HashAlg == HashAlgorithmNull {
+		return nil
+	}
+
 	out := make(Digest, h.HashAlg.Size())
 
 	switch h.HashAlg {

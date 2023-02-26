@@ -483,8 +483,7 @@ type testTaggedHashData struct {
 }
 
 func (s *typesStructuresSuite) testTaggedHash(c *C, data *testTaggedHashData) {
-	h, err := NewTaggedHash(data.alg, data.digest)
-	c.Assert(err, IsNil)
+	h := MakeTaggedHash(data.alg, data.digest)
 
 	c.Check(h.HashAlg, Equals, data.alg)
 	c.Check(h.Digest(), DeepEquals, data.digest)
@@ -493,10 +492,16 @@ func (s *typesStructuresSuite) testTaggedHash(c *C, data *testTaggedHashData) {
 	c.Check(err, IsNil)
 	c.Check(b, DeepEquals, data.expected)
 
-	var h2 *TaggedHash
+	var h2 TaggedHash
 	_, err = mu.UnmarshalFromBytes(b, &h2)
 	c.Check(err, IsNil)
 	c.Check(h2, DeepEquals, h)
+}
+
+func (s *typesStructuresSuite) TestTaggedHashNull(c *C) {
+	s.testTaggedHash(c, &testTaggedHashData{
+		alg:      HashAlgorithmNull,
+		expected: internal_testutil.DecodeHexString(c, "0010")})
 }
 
 func (s *typesStructuresSuite) TestTaggedHashSHA1(c *C) {
