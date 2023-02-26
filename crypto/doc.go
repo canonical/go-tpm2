@@ -3,6 +3,6 @@
 // See LICENCE file for details.
 
 /*
-Package crypto is deprecated and should't be used. Use cryptutil instead.
+Package crypto is deprecated and should't be used - use cryptutil instead.
 */
 package crypto
