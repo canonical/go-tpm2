@@ -26,7 +26,7 @@ import (
 type mockPolicyExecuteHelper struct {
 	loadFn            func(tpm2.Name) (tpm2.ResourceContext, error)
 	authorizeFn       func(tpm2.ResourceContext) (tpm2.SessionContext, error)
-	signAuthorization func(*tpm2.Public, tpm2.Nonce, tpm2.Nonce) (*PolicyAuthorization, error)
+	signAuthorization func(tpm2.ResourceContext, tpm2.Nonce) (*PolicyAuthorization, error)
 }
 
 func (h *mockPolicyExecuteHelper) Load(name tpm2.Name) (tpm2.ResourceContext, error) {
@@ -43,11 +43,11 @@ func (h *mockPolicyExecuteHelper) Authorize(resource tpm2.ResourceContext) (tpm2
 	return h.authorizeFn(resource)
 }
 
-func (h *mockPolicyExecuteHelper) SignAuthorization(authKey *tpm2.Public, policyRef, nonceTPM tpm2.Nonce) (*PolicyAuthorization, error) {
+func (h *mockPolicyExecuteHelper) SignAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
 	if h.signAuthorization == nil {
 		return nil, errors.New("not implemented")
 	}
-	return h.signAuthorization(authKey, policyRef, nonceTPM)
+	return h.signAuthorization(authKey, policyRef)
 }
 
 type policySuite struct {
@@ -486,7 +486,7 @@ type testExecutePolicySignedData struct {
 
 	signer          crypto.Signer
 	includeNonceTPM bool
-	cpHashA         tpm2.Digest
+	cpHashA         CpHash
 	expiration      int32
 	signerOpts      crypto.SignerOpts
 }
@@ -503,26 +503,25 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 	providedAuth := false
 
 	var helper mockPolicyExecuteHelper
-	helper.signAuthorization = func(authKey *tpm2.Public, policyRef, nonceTPM tpm2.Nonce) (*PolicyAuthorization, error) {
+	helper.signAuthorization = func(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
 		c.Check(providedAuth, internal_testutil.IsFalse)
-		c.Check(authKey, testutil.TPMValueDeepEquals, data.authKey)
+		c.Check(authKey.Name(), DeepEquals, data.authKey.Name())
 
-		if !data.includeNonceTPM {
-			nonceTPM = nil
+		var nonceTPM tpm2.Nonce
+		if data.includeNonceTPM {
+			nonceTPM = session.NonceTPM()
 		}
-		auth, err := SignPolicyAuthorization(rand.Reader, data.signer, nonceTPM, data.cpHashA, policyRef, data.expiration, data.signerOpts)
+
+		auth, err := NewPolicyAuthorization(authKey, policyRef, session.HashAlg(), nonceTPM, data.cpHashA, data.expiration)
 		if err != nil {
 			return nil, err
 		}
-		r := &PolicyAuthorization{
-			AuthName:   authKey.Name(),
-			PolicyRef:  policyRef,
-			NonceTPM:   nonceTPM,
-			CpHash:     data.cpHashA,
-			Expiration: data.expiration,
-			Signature:  auth}
-		mu.MustCopyValue(&savedAuth, r)
-		return r, nil
+
+		if err := auth.Sign(rand.Reader, data.signer, data.signerOpts); err != nil {
+			return nil, err
+		}
+		mu.MustCopyValue(&savedAuth, auth)
+		return auth, nil
 	}
 
 	params := data.params
@@ -531,7 +530,10 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 			params = new(PolicyExecuteParams)
 		}
 
-		auth, err := helper.SignAuthorization(data.authKey, data.policyRef, session.NonceTPM())
+		authKey, err := tpm2.NewObjectResourceContextFromPub(0x80000000, data.authKey)
+		c.Assert(err, IsNil)
+
+		auth, err := helper.SignAuthorization(authKey, data.policyRef)
 		c.Assert(err, IsNil)
 		params.Authorizations = append(params.Authorizations, auth)
 		providedAuth = true
@@ -539,10 +541,13 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 
 	tickets, auths, err := policy.Execute(s.TPM, session, params, &helper)
 	if data.expiration < 0 && err == nil {
+		expectedCpHash, err := data.cpHashA.Digest(session.HashAlg())
+		c.Check(err, IsNil)
+
 		c.Assert(tickets, internal_testutil.LenEquals, 1)
 		c.Check(tickets[0].AuthName, DeepEquals, data.authKey.Name())
 		c.Check(tickets[0].PolicyRef, DeepEquals, data.policyRef)
-		c.Check(tickets[0].CpHash, DeepEquals, data.cpHashA)
+		c.Check(tickets[0].CpHash, DeepEquals, expectedCpHash)
 		c.Check(tickets[0].Ticket.Tag, Equals, tpm2.TagAuthSigned)
 		c.Check(tickets[0].Ticket.Hierarchy, Equals, tpm2.HandleOwner)
 	} else {
@@ -617,14 +622,11 @@ func (s *policySuite) TestPolicySignedWithCpHash(c *C) {
 	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	h := crypto.SHA256.New()
-	io.WriteString(h, "bar")
-
 	err = s.testPolicySigned(c, &testExecutePolicySignedData{
 		authKey:    pubKey,
 		policyRef:  []byte("foo"),
 		signer:     key,
-		cpHashA:    h.Sum(nil),
+		cpHashA:    CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, IsNil)
 }
@@ -639,8 +641,8 @@ func (s *policySuite) TestPolicySignedWithExpiration(c *C) {
 	err = s.testPolicySigned(c, &testExecutePolicySignedData{
 		authKey:    pubKey,
 		policyRef:  []byte("foo"),
-		expiration: 100,
 		signer:     key,
+		expiration: 100,
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, IsNil)
 }
@@ -655,8 +657,9 @@ func (s *policySuite) TestPolicySignedWithRequestedTicket(c *C) {
 	err = s.testPolicySigned(c, &testExecutePolicySignedData{
 		authKey:    pubKey,
 		policyRef:  []byte("foo"),
-		expiration: -100,
 		signer:     key,
+		cpHashA:    CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
+		expiration: -100,
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, IsNil)
 }
@@ -729,19 +732,15 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	var helper mockPolicyExecuteHelper
-	helper.signAuthorization = func(authKey *tpm2.Public, policyRef, nonceTPM tpm2.Nonce) (*PolicyAuthorization, error) {
-		c.Check(authKey, testutil.TPMValueDeepEquals, authKey)
-
-		auth, err := SignPolicyAuthorization(rand.Reader, key, nonceTPM, nil, policyRef, -100, tpm2.HashAlgorithmSHA256)
+	helper.signAuthorization = func(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
+		auth, err := NewPolicyAuthorization(authKey, policyRef, session.HashAlg(), session.NonceTPM(), nil, -100)
 		if err != nil {
 			return nil, err
 		}
-		return &PolicyAuthorization{
-			AuthName:   authKey.Name(),
-			PolicyRef:  policyRef,
-			NonceTPM:   nonceTPM,
-			Expiration: -100,
-			Signature:  auth}, nil
+		if err := auth.Sign(rand.Reader, key, tpm2.HashAlgorithmSHA256); err != nil {
+			return nil, err
+		}
+		return auth, nil
 	}
 
 	tickets, auths, err := policy.Execute(s.TPM, session, nil, &helper)

@@ -406,7 +406,7 @@ func (c *policyComputeContext) secretParams(authName tpm2.Name, policyRef tpm2.N
 	return nil
 }
 
-func (c *policyComputeContext) signAuthorization(authKey *tpm2.Public, authKeyName tpm2.Name, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
+func (c *policyComputeContext) signAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
 	return new(PolicyAuthorization), nil
 }
 

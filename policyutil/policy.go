@@ -5,7 +5,6 @@
 package policyutil
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/sha256"
 	"errors"
@@ -62,38 +61,6 @@ type PolicySecretParams struct {
 	Expiration int32
 }
 
-// PolicyAuthorization represents a signed authorization for a TPM2_PolicySigned assertion.
-type PolicyAuthorization struct {
-	AuthName  tpm2.Name  // The name of the auth object associated with the corresponding TPM2_PolicySigned assertion
-	PolicyRef tpm2.Nonce // The policy ref of the corresponding assertion
-
-	// NonceTPM indicates that the authorization is bound to the session with the specified TPM nonce
-	// and has to match the value included in the signature. If not provided, the authorization is not
-	// bound to a specific session.
-	NonceTPM tpm2.Nonce
-
-	// CpHash indicates that the authorization is bound to the command parameters associated with
-	// this digest. It has to match the value included in the signature. If not provided, the
-	// authorization is not bound to any specific command parameters.
-	CpHash tpm2.Digest
-
-	// Expiration indicates that the authorization contains a timeout based on the absolute value of
-	// this field in seconds, after which the authorization will expire. It has to match the value
-	// included in the signature. If NonceTPM is provided, the timeout is measured from the time that
-	// this nonce was generated. If NonceTPM is not provided, the timeout is measured from the time
-	// that the TPM2_PolicySigned assertion is executed with this authorization. This can be used to
-	// request a ticket that can be used in a subsequent policy execution by specifying a negative
-	// value, in which case this field and the CpHash field restrict the validity period and scope of
-	// the returned ticket. If the authorization isn't bound to a specific session, the returned
-	// ticket will expire on the next TPM reset.
-	Expiration int32
-
-	// Signature is the actual signed authorization and can be generated with
-	// [SignPolicyAuthorization]. The values in the signature must match the values of corresponding
-	// fields in this struct.
-	Signature *tpm2.Signature
-}
-
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
 type PolicyExecuteParams struct {
 	SecretParams   []*PolicySecretParams  // Parameters for TPM2_PolicySecret assertions
@@ -123,11 +90,8 @@ type PolicyExecuteHelper interface {
 
 	// SignAuthorization requests a signed authorization for a TPM2_PolicySigned assertion.
 	// The authorization must be signed by the private key associated with authKey and must
-	// contain the specified policyRef. The authorizing party decides whether to include the
-	// TPM nonce in order to bind the authorization to the current session, and they decide
-	// whether to restrict the authorization to a specific set of command parameters (defined
-	// by cpHashA) and whether the authorization has an expiration.
-	SignAuthorization(authKey *tpm2.Public, policyRef, nonceTPM tpm2.Nonce) (*PolicyAuthorization, error)
+	// contain the specified policyRef.
+	SignAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error)
 }
 
 type policySession interface {
@@ -271,7 +235,7 @@ type policyRunContext interface {
 	session() policySession
 
 	secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams
-	signAuthorization(authKey *tpm2.Public, authKeyName tpm2.Name, policyRef tpm2.Nonce) (*PolicyAuthorization, error)
+	signAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error)
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 
 	loadResourceHandle(handle tpm2.Handle) (tpm2.ResourceContext, error)
@@ -434,7 +398,7 @@ func (e *policySigned) run(context policyRunContext) error {
 		}
 	}
 
-	auth, err := context.signAuthorization(e.AuthKey, authKey.resource().Name(), e.PolicyRef)
+	auth, err := context.signAuthorization(authKey.resource(), e.PolicyRef)
 	if err != nil {
 		return fmt.Errorf("cannot obtain signed authorization for PolicySigned assertion: %w", err)
 	}
@@ -701,8 +665,8 @@ func (c *policyExecuteContext) secretParams(authName tpm2.Name, policyRef tpm2.N
 	return c.secretParamsMap[policyParamKey(authName, policyRef)]
 }
 
-func (c *policyExecuteContext) signAuthorization(authKey *tpm2.Public, authKeyName tpm2.Name, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
-	key := policyParamKey(authKeyName, policyRef)
+func (c *policyExecuteContext) signAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
+	key := policyParamKey(authKey.Name(), policyRef)
 
 	auth, found := c.authorizationMap[key]
 	if found {
@@ -714,12 +678,9 @@ func (c *policyExecuteContext) signAuthorization(authKey *tpm2.Public, authKeyNa
 		return nil, errors.New("no helper")
 	}
 
-	auth, err := c.helper.SignAuthorization(authKey, policyRef, c.policySession.policySession.NonceTPM())
+	auth, err := c.helper.SignAuthorization(authKey, policyRef)
 	if err != nil {
 		return nil, err
-	}
-	if len(auth.NonceTPM) > 0 && !bytes.Equal(auth.NonceTPM, c.policySession.policySession.NonceTPM()) {
-		return nil, errors.New("returned authorization has an invalid session nonce")
 	}
 	c.authorizationMap[key] = auth
 	c.usedAuthorizations[key] = auth
