@@ -219,7 +219,8 @@ func (p *Public) AsymDetail() *AsymParams {
 	}
 }
 
-// Name implements [github.com/canonical/go-tpm2/objectutil.Named].
+// Name implements [github.com/canonical/go-tpm2/objectutil.Named] and
+// [github.com/canonical/go-tpm2/policyutil.Named].
 //
 // This computes the name from the public area. If the name cannot be computed
 // then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
@@ -327,7 +328,8 @@ func (p *PublicDerived) ComputeName() (Name, error) {
 	return mu.MustMarshalToBytes(p.NameAlg, mu.RawBytes(h.Sum(nil))), nil
 }
 
-// Name implements [github.com/canonical/go-tpm2/objectutil.Named].
+// Name implements [github.com/canonical/go-tpm2/objectutil.Named] and
+// [github.com/canonical/go-tpm2/policyutil.Named].
 //
 // This computes the name from the public area. If the name cannot be computed
 // then an invalid name is returned ([Name.Type] will return NameTypeInvalid).

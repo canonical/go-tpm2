@@ -105,7 +105,8 @@ func (p *NVPublic) compareName(name Name) bool {
 	return bytes.Equal(n, name)
 }
 
-// Name implements [github.com/canonical/go-tpm2/objectutil.Named].
+// Name implements [github.com/canonical/go-tpm2/objectutil.Named] and
+// [github.com/canonical/go-tpm2/policyutil.Named].
 //
 // This computes the name from the public area. If the name cannot be computed
 // then an invalid name is returned ([Name.Type] will return NameTypeInvalid).
@@ -115,4 +116,9 @@ func (p *NVPublic) Name() Name {
 		return Name{0, 0}
 	}
 	return name
+}
+
+// Handle implements [github.com/canonical/go-tpm2/policyutil.NVIndex].
+func (p *NVPublic) Handle() Handle {
+	return p.Index
 }

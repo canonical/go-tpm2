@@ -95,6 +95,8 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 // If cpHash is supplied, then the signed authorization is only valid for use in a command with the
 // associated command code and set of command parameters. The command parameter digest can be
 // computed using [ComputeCpHash].
+//
+// Deprecated: Use [policyutil.SignPolicyAuthorization].
 func SignPolicyAuthorization(key crypto.PrivateKey, scheme *tpm2.SigScheme, nonceTPM tpm2.Nonce, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32) (*tpm2.Signature, error) {
 	hashAlg := scheme.AnyDetails().HashAlg
 	if !hashAlg.Available() {

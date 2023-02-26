@@ -22,6 +22,8 @@ import (
 // a command and set of command parameters, such as [tpm2.TPMContext.PolicySigned],
 // [tpm2.TPMContext.PolicySecret], [tpm2.TPMContext.PolicyTicket] and
 // [tpm2.TPMContext.PolicyCpHash].
+//
+// Deprecated: Use [policyutil.ComputeCpHash].
 func ComputeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles []Entity, params ...interface{}) (tpm2.Digest, error) {
 	if !alg.Available() {
 		return nil, errors.New("algorithm is not available")
