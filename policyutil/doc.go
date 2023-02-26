@@ -3,6 +3,6 @@
 // See LICENCE file for details.
 
 /*
-Package objectutil contains utilities for creating and working with objects.
+Package policyutil contains utilties for constructing and executing authorization policies.
 */
-package objectutil
+package policyutil

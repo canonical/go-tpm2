@@ -3,7 +3,7 @@
 // See LICENCE file for details.
 
 /*
-Package templates is deprecated and shouldn't be used. Use objects instead.
+Package templates is deprecated and shouldn't be used. Use objectutil instead.
 */
 package templates
 
