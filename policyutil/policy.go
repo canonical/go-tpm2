@@ -252,6 +252,35 @@ type policyElementRunner interface {
 	run(context policyRunContext) error
 }
 
+type taggedHash struct {
+	HashAlg tpm2.HashAlgorithmId
+	Digest  tpm2.Digest
+}
+
+func (h taggedHash) Marshal(w io.Writer) error {
+	ta := tpm2.MakeTaggedHash(h.HashAlg, h.Digest)
+	_, err := mu.MarshalToWriter(w, ta)
+	return err
+}
+
+func (h *taggedHash) Unmarshal(r io.Reader) error {
+	var ta tpm2.TaggedHash
+	if _, err := mu.UnmarshalFromReader(r, &ta); err != nil {
+		return err
+	}
+
+	if ta.HashAlg != tpm2.HashAlgorithmNull && !ta.HashAlg.IsValid() {
+		return errors.New("invalid digest algorithm")
+	}
+
+	*h = taggedHash{
+		HashAlg: ta.HashAlg,
+		Digest:  ta.Digest()}
+	return nil
+}
+
+type taggedHashList []taggedHash
+
 type policyNV struct {
 	NvIndex   tpm2.Handle
 	OperandB  tpm2.Operand
@@ -447,7 +476,7 @@ func (e *policyCounterTimer) run(context policyRunContext) error {
 }
 
 type policyCpHash struct {
-	Digests tpm2.TaggedHashList
+	Digests taggedHashList
 }
 
 func (e *policyCpHash) run(context policyRunContext) error {
@@ -456,7 +485,7 @@ func (e *policyCpHash) run(context policyRunContext) error {
 		if digest.HashAlg != context.session().HashAlg() {
 			continue
 		}
-		cpHashA = digest.Digest()
+		cpHashA = digest.Digest
 		break
 	}
 	if cpHashA == nil {
@@ -466,7 +495,7 @@ func (e *policyCpHash) run(context policyRunContext) error {
 }
 
 type policyNameHash struct {
-	Digests tpm2.TaggedHashList
+	Digests taggedHashList
 }
 
 func (e *policyNameHash) run(context policyRunContext) error {
@@ -475,7 +504,7 @@ func (e *policyNameHash) run(context policyRunContext) error {
 		if digest.HashAlg != context.session().HashAlg() {
 			continue
 		}
-		nameHash = digest.Digest()
+		nameHash = digest.Digest
 		break
 	}
 	if nameHash == nil {
@@ -486,7 +515,7 @@ func (e *policyNameHash) run(context policyRunContext) error {
 
 type pcrValue struct {
 	PCR    tpm2.Handle
-	Digest tpm2.TaggedHash
+	Digest taggedHash
 }
 
 type pcrValueList []pcrValue
@@ -501,7 +530,7 @@ func (e *policyPCR) run(context policyRunContext) error {
 		if value.PCR.Type() != tpm2.HandleTypePCR {
 			return fmt.Errorf("invalid PCR handle at index %d for PolicyPCR assertion", i)
 		}
-		if err := values.SetValue(value.Digest.HashAlg, int(value.PCR), value.Digest.Digest()); err != nil {
+		if err := values.SetValue(value.Digest.HashAlg, int(value.PCR), value.Digest.Digest); err != nil {
 			return fmt.Errorf("invalid PCR value at index %d for PolicyPCR assertion: %w", i, err)
 		}
 	}

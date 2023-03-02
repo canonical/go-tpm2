@@ -8,6 +8,8 @@ import "github.com/canonical/go-tpm2"
 
 type PcrValue = pcrValue
 type PcrValueList = pcrValueList
+type TaggedHash = taggedHash
+type TaggedHashList = taggedHashList
 
 func NewMockPolicyNVElement(nvIndex tpm2.Handle, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
 	return &policyElement{
@@ -61,14 +63,14 @@ func NewMockPolicyCounterTimerElement(operandB tpm2.Operand, offset uint16, oper
 				Operation: operation}}}
 }
 
-func NewMockPolicyCpHashElement(digests tpm2.TaggedHashList) *policyElement {
+func NewMockPolicyCpHashElement(digests taggedHashList) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
 			CpHash: &policyCpHash{Digests: digests}}}
 }
 
-func NewMockPolicyNameHashElement(digests tpm2.TaggedHashList) *policyElement {
+func NewMockPolicyNameHashElement(digests taggedHashList) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{

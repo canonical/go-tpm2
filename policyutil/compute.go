@@ -250,13 +250,13 @@ func (b *PolicyComputeBranch) PolicyCounterTimer(operandB tpm2.Operand, offset u
 // PolicyCpHash adds a TPM2_PolicyCpHash assertion to this branch in order to bind the policy to
 // the supplied command parameters.
 func (b *PolicyComputeBranch) PolicyCpHash(cpHashA CpHash) error {
-	var digests tpm2.TaggedHashList
+	var digests taggedHashList
 	for _, alg := range b.c.algs {
 		digest, err := cpHashA.Digest(alg)
 		if err != nil {
 			return b.c.fail(fmt.Errorf("cannot compute cpHash for algorithm %v: %w", alg, err))
 		}
-		digests = append(digests, tpm2.MakeTaggedHash(alg, digest))
+		digests = append(digests, taggedHash{HashAlg: alg, Digest: digest})
 	}
 
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
@@ -269,13 +269,13 @@ func (b *PolicyComputeBranch) PolicyCpHash(cpHashA CpHash) error {
 // PolicyNameHash adds a TPM2_PolicyNameHash assertion to this branch in order to bind the policy to
 // the supplied command handles.
 func (b *PolicyComputeBranch) PolicyNameHash(nameHash NameHash) error {
-	var digests tpm2.TaggedHashList
+	var digests taggedHashList
 	for _, alg := range b.c.algs {
 		digest, err := nameHash.Digest(alg)
 		if err != nil {
 			return b.c.fail(fmt.Errorf("cannot compute nameHash for algorithm %v: %w", alg, err))
 		}
-		digests = append(digests, tpm2.MakeTaggedHash(alg, digest))
+		digests = append(digests, taggedHash{HashAlg: alg, Digest: digest})
 	}
 
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
@@ -300,7 +300,7 @@ func (b *PolicyComputeBranch) PolicyPCR(values tpm2.PCRValues) error {
 			}
 			pcrs = append(pcrs, pcrValue{
 				PCR:    tpm2.Handle(pcr),
-				Digest: tpm2.MakeTaggedHash(alg, digest)})
+				Digest: taggedHash{HashAlg: alg, Digest: digest}})
 		}
 	}
 	sort.Slice(pcrs, func(i, j int) bool {

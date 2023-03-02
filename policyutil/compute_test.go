@@ -380,17 +380,17 @@ type testComputePolicyCpHashData struct {
 }
 
 func (s *computeSuite) testPolicyCpHash(c *C, data *testComputePolicyCpHashData) {
-	var digests tpm2.TaggedHashList
+	var cpHashes TaggedHashList
 	for _, alg := range data.algs {
 		cpHashA, err := data.cpHashA.Digest(alg)
 		c.Assert(err, IsNil)
-		digests = append(digests, tpm2.MakeTaggedHash(alg, cpHashA))
+		cpHashes = append(cpHashes, TaggedHash{HashAlg: alg, Digest: cpHashA})
 	}
 
 	pc := ComputePolicy(data.algs...)
 	c.Check(pc.RootBranch().PolicyCpHash(data.cpHashA), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyCpHashElement(digests))
+	expectedPolicy := NewMockPolicy(NewMockPolicyCpHashElement(cpHashes))
 
 	digests, policy, err := pc.Policy()
 	c.Check(err, IsNil)
@@ -451,17 +451,17 @@ type testComputePolicyNameHashData struct {
 }
 
 func (s *computeSuite) testPolicyNameHash(c *C, data *testComputePolicyNameHashData) {
-	var digests tpm2.TaggedHashList
+	var nameHashes TaggedHashList
 	for _, alg := range data.algs {
 		nameHash, err := data.nameHash.Digest(alg)
 		c.Assert(err, IsNil)
-		digests = append(digests, tpm2.MakeTaggedHash(alg, nameHash))
+		nameHashes = append(nameHashes, TaggedHash{HashAlg: alg, Digest: nameHash})
 	}
 
 	pc := ComputePolicy(data.algs...)
 	c.Check(pc.RootBranch().PolicyNameHash(data.nameHash), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyNameHashElement(digests))
+	expectedPolicy := NewMockPolicy(NewMockPolicyNameHashElement(nameHashes))
 
 	digests, policy, err := pc.Policy()
 	c.Check(err, IsNil)
@@ -543,8 +543,8 @@ func (s *computeSuite) TestPolicyPCR(c *C) {
 				4: foo,
 				7: bar}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, foo)},
-			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, bar)}},
+			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: foo}},
+			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: bar}}},
 		expectedDigest: internal_testutil.DecodeHexString(c, "5dedc710ee0e797130756bd024372dfa9a9e3fc5b5c60897304fdda88ec2b887")})
 }
 
@@ -564,8 +564,8 @@ func (s *computeSuite) TestPolicyPCRDifferentDigest(c *C) {
 				4: bar,
 				7: foo}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, bar)},
-			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, foo)}},
+			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: bar}},
+			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: foo}}},
 		expectedDigest: internal_testutil.DecodeHexString(c, "463dc37a6f3a37d7125524a2e6047c4befa650cdbb53369615503ca422f10da1")})
 }
 
@@ -585,8 +585,8 @@ func (s *computeSuite) TestPolicyPCRDifferentDigestAndSelection(c *C) {
 				4: foo,
 				7: bar}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, foo)},
-			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, bar)}},
+			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA1, Digest: foo}},
+			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA1, Digest: bar}}},
 		expectedDigest: internal_testutil.DecodeHexString(c, "52ec898cf6a800715e9314c90ba91636970ceeea6416bf2da62b5e633480aa43")})
 }
 
@@ -609,8 +609,8 @@ func (s *computeSuite) TestPolicyPCRMultipleBanks(c *C) {
 			tpm2.HashAlgorithmSHA256: {
 				7: bar}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, foo)},
-			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, bar)}},
+			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA1, Digest: foo}},
+			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: bar}}},
 		expectedDigest: internal_testutil.DecodeHexString(c, "5079c1d53de12dd44e988d5b0a31cd30701ffb24b7bd5d5b68d5f9f5819163be")})
 }
 
