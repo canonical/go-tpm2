@@ -23,31 +23,23 @@ import (
 	"github.com/canonical/go-tpm2/testutil"
 )
 
-type mockPolicyExecuteHelper struct {
-	loadFn            func(tpm2.Name) (tpm2.ResourceContext, error)
-	authorizeFn       func(tpm2.ResourceContext) (tpm2.SessionContext, error)
-	signAuthorization func(tpm2.ResourceContext, tpm2.Nonce) (*PolicyAuthorization, error)
+type mockPolicyResourceHelper struct {
+	loadFn      func(tpm2.Name) (tpm2.ResourceContext, error)
+	authorizeFn func(tpm2.ResourceContext) (tpm2.SessionContext, error)
 }
 
-func (h *mockPolicyExecuteHelper) Load(name tpm2.Name) (tpm2.ResourceContext, error) {
+func (h *mockPolicyResourceHelper) Load(name tpm2.Name) (tpm2.ResourceContext, error) {
 	if h.loadFn == nil {
 		return nil, errors.New("not implemented")
 	}
 	return h.loadFn(name)
 }
 
-func (h *mockPolicyExecuteHelper) Authorize(resource tpm2.ResourceContext) (tpm2.SessionContext, error) {
+func (h *mockPolicyResourceHelper) Authorize(resource tpm2.ResourceContext) (tpm2.SessionContext, error) {
 	if h.authorizeFn == nil {
 		return nil, errors.New("not implemented")
 	}
 	return h.authorizeFn(resource)
-}
-
-func (h *mockPolicyExecuteHelper) SignAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
-	if h.signAuthorization == nil {
-		return nil, errors.New("not implemented")
-	}
-	return h.signAuthorization(authKey, policyRef)
 }
 
 type policySuite struct {
@@ -93,15 +85,14 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	var helper mockPolicyExecuteHelper
+	var helper mockPolicyResourceHelper
 	helper.authorizeFn = func(resource tpm2.ResourceContext) (tpm2.SessionContext, error) {
 		c.Check(resource.Name(), DeepEquals, readAuth.Name())
 		return data.authSession, nil
 	}
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, &helper)
+	tickets, err := policy.Execute(s.TPM, session, nil, &helper)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 	if err != nil {
 		return err
 	}
@@ -236,7 +227,7 @@ func (s *policySuite) TestPolicyNVMissingIndex(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	_, _, err = policy.Execute(s.TPM, session, nil, nil)
+	_, err = policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, ErrorMatches, "cannot create context for PolicyNV index: a resource at handle 0x0181f000 is not available on the TPM")
 }
 
@@ -267,7 +258,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	var helper mockPolicyExecuteHelper
+	var helper mockPolicyResourceHelper
 	helper.loadFn = func(name tpm2.Name) (tpm2.ResourceContext, error) {
 		c.Check(name, DeepEquals, data.authObject.Name())
 		return data.authObject, nil
@@ -277,7 +268,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 		return data.authSession, nil
 	}
 
-	tickets, auths, err := policy.Execute(s.TPM, session, data.params, &helper)
+	tickets, err := policy.Execute(s.TPM, session, data.params, &helper)
 	if data.expectedExpiration < 0 {
 		c.Assert(tickets, internal_testutil.LenEquals, 1)
 		c.Check(tickets[0].AuthName, DeepEquals, authObjectName)
@@ -288,7 +279,6 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 	} else {
 		c.Check(tickets, internal_testutil.LenEquals, 0)
 	}
-	c.Check(auths, internal_testutil.LenEquals, 0)
 	if err != nil {
 		return err
 	}
@@ -441,7 +431,7 @@ func (s *policySuite) TestPolicySecretTicket(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	var helper mockPolicyExecuteHelper
+	var helper mockPolicyResourceHelper
 	helper.loadFn = func(name tpm2.Name) (tpm2.ResourceContext, error) {
 		c.Check(name, DeepEquals, authObject.Name())
 		return authObject, nil
@@ -457,20 +447,18 @@ func (s *policySuite) TestPolicySecretTicket(c *C) {
 			PolicyRef:  policyRef,
 			Expiration: -1000}}}
 
-	tickets, auths, err := policy.Execute(s.TPM, session, params, &helper)
+	tickets, err := policy.Execute(s.TPM, session, params, &helper)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 1)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	c.Check(s.TPM.PolicyRestart(session), IsNil)
 
 	params = &PolicyExecuteParams{Tickets: tickets}
 
-	tickets, auths, err = policy.Execute(s.TPM, session, params, nil)
+	tickets, err = policy.Execute(s.TPM, session, params, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 1)
 	c.Check(tickets, DeepEquals, params.Tickets)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -481,8 +469,7 @@ type testExecutePolicySignedData struct {
 	authKey   *tpm2.Public
 	policyRef tpm2.Nonce
 
-	params      *PolicyExecuteParams
-	provideAuth bool
+	params *PolicyExecuteParams
 
 	signer          crypto.Signer
 	includeNonceTPM bool
@@ -499,47 +486,26 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	var savedAuth *PolicyAuthorization
-	providedAuth := false
-
-	var helper mockPolicyExecuteHelper
-	helper.signAuthorization = func(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
-		c.Check(providedAuth, internal_testutil.IsFalse)
-		c.Check(authKey.Name(), DeepEquals, data.authKey.Name())
-
-		var nonceTPM tpm2.Nonce
-		if data.includeNonceTPM {
-			nonceTPM = session.NonceTPM()
-		}
-
-		auth, err := NewPolicyAuthorization(authKey, policyRef, session.HashAlg(), nonceTPM, data.cpHashA, data.expiration)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := auth.Sign(rand.Reader, data.signer, data.signerOpts); err != nil {
-			return nil, err
-		}
-		mu.MustCopyValue(&savedAuth, auth)
-		return auth, nil
+	var nonceTPM tpm2.Nonce
+	if data.includeNonceTPM {
+		nonceTPM = session.NonceTPM()
 	}
 
-	params := data.params
-	if data.provideAuth {
-		if params == nil {
-			params = new(PolicyExecuteParams)
-		}
+	auth, err := NewPolicyAuthorization(data.authKey, data.policyRef, session.HashAlg(), nonceTPM, data.cpHashA, data.expiration)
+	c.Assert(err, IsNil)
+	c.Check(auth.Sign(rand.Reader, data.signer, data.signerOpts), IsNil)
 
-		authKey, err := tpm2.NewObjectResourceContextFromPub(0x80000000, data.authKey)
-		c.Assert(err, IsNil)
-
-		auth, err := helper.SignAuthorization(authKey, data.policyRef)
-		c.Assert(err, IsNil)
-		params.Authorizations = append(params.Authorizations, auth)
-		providedAuth = true
+	var params *PolicyExecuteParams
+	if data.params != nil {
+		params = &(*data.params)
+	}
+	if params == nil {
+		params = new(PolicyExecuteParams)
 	}
 
-	tickets, auths, err := policy.Execute(s.TPM, session, params, &helper)
+	params.Authorizations = append(params.Authorizations, auth)
+
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
 	if data.expiration < 0 && err == nil {
 		expectedCpHash, err := data.cpHashA.Digest(session.HashAlg())
 		c.Check(err, IsNil)
@@ -552,12 +518,6 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		c.Check(tickets[0].Ticket.Hierarchy, Equals, tpm2.HandleOwner)
 	} else {
 		c.Check(tickets, internal_testutil.LenEquals, 0)
-	}
-	if !data.includeNonceTPM && err == nil {
-		c.Assert(auths, internal_testutil.LenEquals, 1)
-		c.Check(auths[0], DeepEquals, savedAuth)
-	} else {
-		c.Check(auths, internal_testutil.LenEquals, 0)
 	}
 	if err != nil {
 		return err
@@ -683,22 +643,6 @@ func (s *policySuite) TestPolicySignedWithInvalidSignature(c *C) {
 	c.Check(err.(*tpm2.TPMParameterError), DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicySigned, Code: tpm2.ErrorSignature}, Index: 5})
 }
 
-func (s *policySuite) TestPolicySignedWithProvidedAuth(c *C) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	c.Assert(err, IsNil)
-
-	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
-	c.Assert(err, IsNil)
-
-	err = s.testPolicySigned(c, &testExecutePolicySignedData{
-		authKey:     pubKey,
-		policyRef:   []byte("foo"),
-		provideAuth: true,
-		signer:      key,
-		signerOpts:  tpm2.HashAlgorithmSHA256})
-	c.Check(err, IsNil)
-}
-
 func (s *policySuite) TestPolicySignedWithNonMatchingAuth(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
@@ -731,32 +675,24 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	var helper mockPolicyExecuteHelper
-	helper.signAuthorization = func(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
-		auth, err := NewPolicyAuthorization(authKey, policyRef, session.HashAlg(), session.NonceTPM(), nil, -100)
-		if err != nil {
-			return nil, err
-		}
-		if err := auth.Sign(rand.Reader, key, tpm2.HashAlgorithmSHA256); err != nil {
-			return nil, err
-		}
-		return auth, nil
-	}
+	auth, err := NewPolicyAuthorization(authKey, nil, session.HashAlg(), session.NonceTPM(), nil, -100)
+	c.Assert(err, IsNil)
+	c.Check(auth.Sign(rand.Reader, key, tpm2.HashAlgorithmSHA256), IsNil)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, &helper)
+	params := &PolicyExecuteParams{Authorizations: []*PolicyAuthorization{auth}}
+
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 1)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	c.Check(s.TPM.PolicyRestart(session), IsNil)
 
-	params := &PolicyExecuteParams{Tickets: tickets}
+	params = &PolicyExecuteParams{Tickets: tickets}
 
-	tickets, auths, err = policy.Execute(s.TPM, session, params, nil)
+	tickets, err = policy.Execute(s.TPM, session, params, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 1)
 	c.Check(tickets, DeepEquals, params.Tickets)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -771,10 +707,9 @@ func (s *policySuite) TestPolicyAuthValue(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	// TPM2_PolicyPassword and TPM2_PolicyAuthValue have the same digest, so make sure
 	// we executed the correct command.
@@ -793,10 +728,9 @@ func (s *policySuite) testPolicyCommandCode(c *C, code tpm2.CommandCode) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -825,12 +759,11 @@ func (s *policySuite) testPolicyCounterTimer(c *C, data *testExecutePolicyCounte
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	if err != nil {
 		return err
 	}
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -892,10 +825,9 @@ func (s *policySuite) testPolicyCpHash(c *C, cpHashA CpHash) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -918,10 +850,9 @@ func (s *policySuite) TestPolicyCpHashMultipleDigests(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -936,7 +867,7 @@ func (s *policySuite) TestPolicyCpHashMissingDigest(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	_, _, err = policy.Execute(s.TPM, session, nil, nil)
+	_, err = policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, ErrorMatches, "no digest for session algorithm available for PolicyCpHash assertion")
 }
 
@@ -948,10 +879,9 @@ func (s *policySuite) testPolicyNameHash(c *C, nameHash NameHash) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -974,10 +904,9 @@ func (s *policySuite) TestPolicyNameHashMultipleDigests(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -992,7 +921,7 @@ func (s *policySuite) TestPolicyNameHashMissingDigest(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	_, _, err = policy.Execute(s.TPM, session, nil, nil)
+	_, err = policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, ErrorMatches, "no digest for session algorithm available for PolicyNameHash assertion")
 }
 
@@ -1003,12 +932,11 @@ func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	if err != nil {
 		return err
 	}
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -1056,10 +984,9 @@ func (s *policySuite) testPolicyDuplicationSelect(c *C, data *testExecutePolicyD
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -1119,10 +1046,9 @@ func (s *policySuite) TestPolicyPassword(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	// TPM2_PolicyPassword and TPM2_PolicyAuthValue have the same digest, so make sure
 	// we executed the correct command.
@@ -1141,10 +1067,9 @@ func (s *policySuite) testPolicyNvWritten(c *C, writtenSet bool) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	tickets, auths, err := policy.Execute(s.TPM, session, nil, nil)
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(auths, internal_testutil.LenEquals, 0)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)

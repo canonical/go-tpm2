@@ -68,8 +68,9 @@ type PolicyExecuteParams struct {
 	Authorizations []*PolicyAuthorization // Authorizations for TPM2_PolicySigned assertions
 }
 
-// PolicyExecuteHelper allows an application to customize the execution of a policy.
-type PolicyExecuteHelper interface {
+// PolicyResourceHelper provides a way for an application to perform operations on
+// resources when executing a policy.
+type PolicyResourceHelper interface {
 	// Load requests that a resource with the specified name is loaded into the TPM if it
 	// needs to be, and a resource context corresponding to it returned.
 	//
@@ -87,11 +88,6 @@ type PolicyExecuteHelper interface {
 	//
 	// This is required to support TPM2_PolicyNV and TPM2_PolicySecret.
 	Authorize(resource tpm2.ResourceContext) (tpm2.SessionContext, error)
-
-	// SignAuthorization requests a signed authorization for a TPM2_PolicySigned assertion.
-	// The authorization must be signed by the private key associated with authKey and must
-	// contain the specified policyRef.
-	SignAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error)
 }
 
 type policySession interface {
@@ -117,11 +113,11 @@ type policySession interface {
 type realPolicySession struct {
 	tpm           *tpm2.TPMContext
 	policySession tpm2.SessionContext
-	helper        PolicyExecuteHelper
+	helper        PolicyResourceHelper
 	sessions      []tpm2.SessionContext
 }
 
-func newRealPolicySession(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, helper PolicyExecuteHelper, sessions ...tpm2.SessionContext) *realPolicySession {
+func newRealPolicySession(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, helper PolicyResourceHelper, sessions ...tpm2.SessionContext) *realPolicySession {
 	return &realPolicySession{
 		tpm:           tpm,
 		policySession: policySession,
@@ -235,7 +231,7 @@ type policyRunContext interface {
 	session() policySession
 
 	secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams
-	signAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error)
+	signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyAuthorization
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 
 	loadResourceHandle(handle tpm2.Handle) (tpm2.ResourceContext, error)
@@ -427,9 +423,9 @@ func (e *policySigned) run(context policyRunContext) error {
 		}
 	}
 
-	auth, err := context.signAuthorization(authKey.resource(), e.PolicyRef)
-	if err != nil {
-		return fmt.Errorf("cannot obtain signed authorization for PolicySigned assertion: %w", err)
+	auth := context.signedAuthorization(authKey.resource().Name(), e.PolicyRef)
+	if auth == nil {
+		return errors.New("no signed authorization available")
 	}
 
 	includeNonceTPM := false
@@ -677,13 +673,12 @@ type policyExecuteContext struct {
 	secretParamsMap  map[paramKey]*PolicySecretParams
 	ticketMap        map[paramKey]*PolicyTicket
 	authorizationMap map[paramKey]*PolicyAuthorization
-	helper           PolicyExecuteHelper
+	helper           PolicyResourceHelper
 	sessions         []tpm2.SessionContext
 
 	elements []policyElementRunner
 
-	usedTickets        map[paramKey]*PolicyTicket
-	usedAuthorizations map[paramKey]*PolicyAuthorization
+	usedTickets map[paramKey]*PolicyTicket
 }
 
 func (c *policyExecuteContext) session() policySession {
@@ -694,26 +689,8 @@ func (c *policyExecuteContext) secretParams(authName tpm2.Name, policyRef tpm2.N
 	return c.secretParamsMap[policyParamKey(authName, policyRef)]
 }
 
-func (c *policyExecuteContext) signAuthorization(authKey tpm2.ResourceContext, policyRef tpm2.Nonce) (*PolicyAuthorization, error) {
-	key := policyParamKey(authKey.Name(), policyRef)
-
-	auth, found := c.authorizationMap[key]
-	if found {
-		c.usedAuthorizations[key] = auth
-		return auth, nil
-	}
-
-	if c.helper == nil {
-		return nil, errors.New("no helper")
-	}
-
-	auth, err := c.helper.SignAuthorization(authKey, policyRef)
-	if err != nil {
-		return nil, err
-	}
-	c.authorizationMap[key] = auth
-	c.usedAuthorizations[key] = auth
-	return auth, nil
+func (c *policyExecuteContext) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyAuthorization {
+	return c.authorizationMap[policyParamKey(authName, policyRef)]
 }
 
 func (c *policyExecuteContext) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
@@ -784,7 +761,7 @@ func (c *policyExecuteContext) usedTicket(ticket *PolicyTicket) {
 
 // Execute runs this policy using the supplied TPM context and on the supplied policy session.
 //
-// The caller may supply an implementation of PolicyExecuteHelper to assist with the execution
+// The caller may supply an implementation of PolicyResourceHelper to assist with the execution
 // of this policy - some policy assertions require this.
 //
 // The caller may supply additional parameters via the PolicyExecuteParams struct. This can contain
@@ -793,23 +770,20 @@ func (c *policyExecuteContext) usedTicket(ticket *PolicyTicket) {
 // these parameters are associated with a policy assertion by a name and policy reference.
 //
 // On success, the supplied policy session may be used for authorization in a context that requires
-// that this policy is satisfied. It will also return a list of tickets generated by any assertions,
-// and a list of policy authorizations that were used if they can be used in a subsequent policy
-// execution.
-func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, params *PolicyExecuteParams, helper PolicyExecuteHelper, sessions ...tpm2.SessionContext) ([]*PolicyTicket, []*PolicyAuthorization, error) {
+// that this policy is satisfied. It will also return a list of tickets generated by any assertions.
+func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, params *PolicyExecuteParams, helper PolicyResourceHelper, sessions ...tpm2.SessionContext) ([]*PolicyTicket, error) {
 	if params == nil {
 		params = new(PolicyExecuteParams)
 	}
 
 	context := &policyExecuteContext{
-		policySession:      newRealPolicySession(tpm, policySession, helper, sessions...),
-		secretParamsMap:    make(map[paramKey]*PolicySecretParams),
-		ticketMap:          make(map[paramKey]*PolicyTicket),
-		authorizationMap:   make(map[paramKey]*PolicyAuthorization),
-		helper:             helper,
-		elements:           make([]policyElementRunner, 0, len(p.policy.Policy)),
-		usedTickets:        make(map[paramKey]*PolicyTicket),
-		usedAuthorizations: make(map[paramKey]*PolicyAuthorization)}
+		policySession:    newRealPolicySession(tpm, policySession, helper, sessions...),
+		secretParamsMap:  make(map[paramKey]*PolicySecretParams),
+		ticketMap:        make(map[paramKey]*PolicyTicket),
+		authorizationMap: make(map[paramKey]*PolicyAuthorization),
+		helper:           helper,
+		elements:         make([]policyElementRunner, 0, len(p.policy.Policy)),
+		usedTickets:      make(map[paramKey]*PolicyTicket)}
 	for _, param := range params.SecretParams {
 		context.secretParamsMap[policyParamKey(param.AuthName, param.PolicyRef)] = param
 	}
@@ -828,7 +802,7 @@ func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 		context.elements = context.elements[1:]
 
 		if err := element.run(context); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
@@ -841,14 +815,5 @@ func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 		tickets = append(tickets, ticket)
 	}
 
-	var auths []*PolicyAuthorization
-	for _, auth := range context.usedAuthorizations {
-		if len(auth.NonceTPM) > 0 {
-			// skip authorizations that contain the session nonce
-			continue
-		}
-		auths = append(auths, auth)
-	}
-
-	return tickets, auths, nil
+	return tickets, nil
 }
