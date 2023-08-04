@@ -161,6 +161,66 @@ func (s *trialPolicySessionContext) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
+type trialPolicyParams struct{}
+
+func (p *trialPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
+	return nil
+}
+
+func (p *trialPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyAuthorization {
+	return new(PolicyAuthorization)
+}
+
+func (p *trialPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+	return nil
+}
+
+type trialPolicyResources struct {
+	nvIndices map[tpm2.Handle]tpm2.Name
+}
+
+func newTrialPolicyResources(nvIndices map[tpm2.Handle]tpm2.Name) *trialPolicyResources {
+	return &trialPolicyResources{nvIndices: nvIndices}
+}
+
+func (r *trialPolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
+	switch handle.Type() {
+	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
+		// the handle is not relevant here
+		return tpm2.NewLimitedResourceContext(0x80000000, tpm2.MakeHandleName(handle)), nil
+	case tpm2.HandleTypeNVIndex:
+		name, exists := r.nvIndices[handle]
+		if !exists {
+			return nil, errors.New("unrecognized NV index handle")
+		}
+		return tpm2.NewLimitedResourceContext(handle, name), nil
+	default:
+		return nil, errors.New("invalid handle type")
+	}
+}
+
+func (r *trialPolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
+	// the handle is not relevant here
+	return newPolicyResourceContextNonFlushable(tpm2.NewLimitedResourceContext(0x80000000, name)), nil
+}
+
+func (r *trialPolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
+	// the handle is not relevant here
+	resource, err := tpm2.NewObjectResourceContextFromPub(0x80000000, public)
+	if err != nil {
+		return nil, err
+	}
+	return newPolicyResourceContextNonFlushable(resource), nil
+}
+
+func (r *trialPolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
+	return new(tpm2.NVPublic), nil
+}
+
+func (r *trialPolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
+	return nil, nil
+}
+
 // PolicyComputeBranch corresponds to a branch in a policy that is being computed.
 type PolicyComputeBranch struct {
 	c      *PolicyComputer
@@ -392,68 +452,6 @@ func (c *PolicyComputer) RootBranch() *PolicyComputeBranch {
 	return c.root
 }
 
-type policyComputeContext struct {
-	policySession *trialPolicySessionContext
-	nvIndices     map[tpm2.Handle]tpm2.Name
-	elements      []policyElementRunner
-}
-
-func (c *policyComputeContext) session() policySession {
-	return c.policySession
-}
-
-func (c *policyComputeContext) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
-	return nil
-}
-
-func (c *policyComputeContext) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyAuthorization {
-	return new(PolicyAuthorization)
-}
-
-func (c *policyComputeContext) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
-	return nil
-}
-
-func (c *policyComputeContext) loadResourceHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
-	switch handle.Type() {
-	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
-		// the handle is not relevant here
-		return tpm2.NewLimitedResourceContext(0x80000000, tpm2.MakeHandleName(handle)), nil
-	case tpm2.HandleTypeNVIndex:
-		name, exists := c.nvIndices[handle]
-		if !exists {
-			return nil, errors.New("unrecognized NV index handle")
-		}
-		return tpm2.NewLimitedResourceContext(handle, name), nil
-	default:
-		return nil, errors.New("invalid handle type")
-	}
-}
-
-func (c *policyComputeContext) loadResourceName(name tpm2.Name) (policyResourceContext, error) {
-	// the handle is not relevant here
-	return newPolicyResourceContextNonFlushable(tpm2.NewLimitedResourceContext(0x80000000, name)), nil
-}
-
-func (c *policyComputeContext) loadExternalResource(pub *tpm2.Public) (policyResourceContext, error) {
-	// the handle is not relevant here
-	resource, err := tpm2.NewObjectResourceContextFromPub(0x80000000, pub)
-	if err != nil {
-		return nil, err
-	}
-	return newPolicyResourceContextNonFlushable(resource), nil
-}
-
-func (c *policyComputeContext) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
-	return new(tpm2.NVPublic), nil
-}
-
-func (c *policyComputeContext) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
-	return nil, nil
-}
-
-func (c *policyComputeContext) usedTicket(ticket *PolicyTicket) {}
-
 // Policy returns the computed authorization policy digests and policy metadata. The
 // returned metadata can be used to execute the computed policy.
 func (c *PolicyComputer) Policy() (tpm2.TaggedHashList, *Policy, error) {
@@ -463,24 +461,18 @@ func (c *PolicyComputer) Policy() (tpm2.TaggedHashList, *Policy, error) {
 
 	var digests tpm2.TaggedHashList
 	for _, alg := range c.algs {
-		context := &policyComputeContext{
-			policySession: newTrialPolicySessionContext(alg),
-			nvIndices:     c.nvIndices,
-			elements:      make([]policyElementRunner, 0, len(c.root.policy.Policy))}
-		for _, element := range c.root.policy.Policy {
-			context.elements = append(context.elements, element.runner())
+		session := newTrialPolicySessionContext(alg)
+		runner := newPolicyRunner(
+			session,
+			new(trialPolicyParams),
+			newTrialPolicyResources(c.nvIndices),
+		)
+
+		if err := runner.run(c.root.policy); err != nil {
+			return nil, nil, err
 		}
 
-		for len(context.elements) > 0 {
-			element := context.elements[0]
-			context.elements = context.elements[1:]
-
-			if err := element.run(context); err != nil {
-				return nil, nil, err
-			}
-		}
-
-		digests = append(digests, tpm2.MakeTaggedHash(alg, context.policySession.digest))
+		digests = append(digests, tpm2.MakeTaggedHash(alg, session.digest))
 	}
 
 	var policy policy
