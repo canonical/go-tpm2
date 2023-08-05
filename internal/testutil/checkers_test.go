@@ -220,3 +220,13 @@ func (s *checkersSuite) TestLenEquals(c *C) {
 	testCheck(c, LenEquals, false, "actual length: 3", "foo", 4)
 	testCheck(c, LenEquals, false, "value doesn't have a length", 4, 4)
 }
+
+func (s *checkersSuite) TestLenGreaterEquals(c *C) {
+	testInfo(c, LenGreaterEquals, "LenGreaterEquals", []string{"value", "n"})
+	testCheck(c, LenGreaterEquals, true, "", []int{0, 0, 0, 0}, 4)
+	testCheck(c, LenGreaterEquals, true, "", map[int]int{0: 0, 1: 1}, 1)
+	testCheck(c, LenGreaterEquals, true, "", "foo", 2)
+	testCheck(c, LenGreaterEquals, true, "", [2]int{0, 0}, 2)
+	testCheck(c, LenGreaterEquals, false, "actual length: 3", "foo", 4)
+	testCheck(c, LenGreaterEquals, false, "value doesn't have a length", 4, 4)
+}
