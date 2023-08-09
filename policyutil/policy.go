@@ -768,6 +768,11 @@ func (e *policyNameHash) run(context policyRunContext) error {
 	return context.session().PolicyNameHash(nameHash)
 }
 
+type policyBranch struct {
+	PolicyDigests taggedHashList
+	Policy        policyElements
+}
+
 type pcrValue struct {
 	PCR    tpm2.Handle
 	Digest taggedHash

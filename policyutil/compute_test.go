@@ -117,24 +117,24 @@ func (s *computeSuite) TestPolicyNVDifferentOperation(c *C) {
 
 func (s *computeSuite) TestPolicyNVInvalidName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{Index: 0x01000000}, nil, 0, tpm2.OpEq), IsNil)
+	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{Index: 0x01000000}, nil, 0, tpm2.OpEq), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: invalid index name`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyNV assertion: invalid index name")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing TPM2_PolicyNV assertion: cannot update context for algorithm TPM_ALG_SHA256: invalid index name`)
 }
 
 func (s *computeSuite) TestPolicyNVInvalidIndex(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNV(new(tpm2.NVPublic), nil, 0, tpm2.OpEq), ErrorMatches, "nvIndex has invalid handle type")
+	c.Check(pc.RootBranch().PolicyNV(new(tpm2.NVPublic), nil, 0, tpm2.OpEq), ErrorMatches, `nvIndex has invalid handle type`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "nvIndex has invalid handle type")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing PolicyNV: nvIndex has invalid handle type`)
 }
 
 func (s *computeSuite) TestPolicyNVMismatchedNames(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{NameAlg: tpm2.HashAlgorithmSHA256, Index: 0x01000000}, nil, 0, tpm2.OpEq), IsNil)
-	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{NameAlg: tpm2.HashAlgorithmSHA1, Index: 0x01000000}, nil, 0, tpm2.OpEq), ErrorMatches, "nvIndex already exists in this profile but with a different name")
+	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{NameAlg: tpm2.HashAlgorithmSHA1, Index: 0x01000000}, nil, 0, tpm2.OpEq), ErrorMatches, `nvIndex already exists in this profile but with a different name`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "nvIndex already exists in this profile but with a different name")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing PolicyNV: nvIndex already exists in this profile but with a different name`)
 }
 
 type testComputePolicySecretData struct {
@@ -146,7 +146,7 @@ type testComputePolicySecretData struct {
 
 func (s *computeSuite) testPolicySecret(c *C, data *testComputePolicySecretData) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicySecret(data.authObjectName, data.policyRef)
+	c.Check(pc.RootBranch().PolicySecret(data.authObjectName, data.policyRef), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicySecretElement(data.authObjectName, data.policyRef))
 
@@ -185,9 +185,9 @@ func (s *computeSuite) TestPolicySecretDifferentAuthObject(c *C) {
 
 func (s *computeSuite) TestPolicySecretInvalidName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicySecret(tpm2.Name{0, 0}, nil)
+	c.Check(pc.RootBranch().PolicySecret(tpm2.Name{0, 0}, nil), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: invalid authObject name`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "cannot process TPM2_PolicySecret assertion: invalid authObject name")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing TPM2_PolicySecret assertion: cannot update context for algorithm TPM_ALG_SHA256: invalid authObject name`)
 }
 
 type testComputePolicySignedData struct {
@@ -199,7 +199,7 @@ type testComputePolicySignedData struct {
 
 func (s *computeSuite) testPolicySigned(c *C, data *testComputePolicySignedData) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicySigned(data.authKey, data.policyRef)
+	c.Check(pc.RootBranch().PolicySigned(data.authKey, data.policyRef), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicySignedElement(data.authKey, data.policyRef))
 
@@ -275,7 +275,7 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 
 func (s *computeSuite) TestPolicyAuthValue(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyAuthValue()
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicyAuthValueElement())
 
@@ -294,7 +294,7 @@ type testComputePolicyCommandCodeData struct {
 
 func (s *computeSuite) testPolicyCommandCode(c *C, data *testComputePolicyCommandCodeData) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyCommandCode(data.code)
+	c.Check(pc.RootBranch().PolicyCommandCode(data.code), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicyCommandCodeElement(data.code))
 
@@ -328,7 +328,7 @@ type testComputePolicyCounterTimerData struct {
 
 func (s *computeSuite) testPolicyCounterTimer(c *C, data *testComputePolicyCounterTimerData) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyCounterTimer(data.operandB, data.offset, data.operation)
+	c.Check(pc.RootBranch().PolicyCounterTimer(data.operandB, data.offset, data.operation), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicyCounterTimerElement(data.operandB, data.offset, data.operation))
 
@@ -437,9 +437,9 @@ func (s *computeSuite) TestPolicyCpHashMultipleDigests(c *C) {
 
 func (s *computeSuite) TestPolicyCpHashInvalidDigest(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyCpHash(CommandParameterDigest(tpm2.HashAlgorithmSHA1, nil)), ErrorMatches, "cannot compute cpHash for algorithm TPM_ALG_SHA256: no digest for algorithm")
+	c.Check(pc.RootBranch().PolicyCpHash(CommandParameterDigest(tpm2.HashAlgorithmSHA1, nil)), ErrorMatches, `cannot compute cpHash for algorithm TPM_ALG_SHA256: no digest for algorithm`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "cannot compute cpHash for algorithm TPM_ALG_SHA256: no digest for algorithm")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing PolicyCpHash: cannot compute cpHash for algorithm TPM_ALG_SHA256: no digest for algorithm`)
 }
 
 type testComputePolicyNameHashData struct {
@@ -501,9 +501,9 @@ func (s *computeSuite) TestPolicyNameHashMultipleDigests(c *C) {
 
 func (s *computeSuite) TestPolicyNameHashInvalidDigest(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNameHash(CommandHandleDigest(tpm2.HashAlgorithmSHA1, nil)), ErrorMatches, "cannot compute nameHash for algorithm TPM_ALG_SHA256: no digest for algorithm")
+	c.Check(pc.RootBranch().PolicyNameHash(CommandHandleDigest(tpm2.HashAlgorithmSHA1, nil)), ErrorMatches, `cannot compute nameHash for algorithm TPM_ALG_SHA256: no digest for algorithm`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "cannot compute nameHash for algorithm TPM_ALG_SHA256: no digest for algorithm")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing PolicyNameHash: cannot compute nameHash for algorithm TPM_ALG_SHA256: no digest for algorithm`)
 }
 
 type testComputePolicyPCRData struct {
@@ -616,16 +616,16 @@ func (s *computeSuite) TestPolicyPCRMultipleBanks(c *C) {
 
 func (s *computeSuite) TestPolicyPCRInvalidAlg(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmNull: {4: nil}}), ErrorMatches, "invalid digest algorithm TPM_ALG_NULL")
+	c.Check(pc.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmNull: {4: nil}}), ErrorMatches, `invalid digest algorithm TPM_ALG_NULL`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "invalid digest algorithm TPM_ALG_NULL")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing PolicyPCR: invalid digest algorithm TPM_ALG_NULL`)
 }
 
 func (s *computeSuite) TestPolicyPCRInvalidDigest(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: []byte{0}}}), ErrorMatches, "invalid digest size for PCR 4, algorithm TPM_ALG_SHA256")
+	c.Check(pc.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: []byte{0}}}), ErrorMatches, `invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "invalid digest size for PCR 4, algorithm TPM_ALG_SHA256")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing PolicyPCR: invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
 }
 
 type testComputePolicyDuplicationSelectData struct {
@@ -638,7 +638,7 @@ type testComputePolicyDuplicationSelectData struct {
 
 func (s *computeSuite) testPolicyDuplicationSelect(c *C, data *testComputePolicyDuplicationSelectData) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyDuplicationSelect(data.object, data.newParent, data.includeObject)
+	c.Check(pc.RootBranch().PolicyDuplicationSelect(data.object, data.newParent, data.includeObject), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicyDuplicationSelectElement(data.object.Name(), data.newParent.Name(), data.includeObject))
 
@@ -700,21 +700,21 @@ func (s *computeSuite) TestPolicyDuplicationSelectDifferentNames(c *C) {
 
 func (s *computeSuite) TestPolicyDuplicationSelectInvalidNewParentName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyDuplicationSelect(nil, tpm2.Name{0, 0}, false)
+	c.Check(pc.RootBranch().PolicyDuplicationSelect(nil, tpm2.Name{0, 0}, false), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: invalid newParent name`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyDuplicationSelect assertion: invalid newParent name")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing TPM2_PolicyDuplicationSelect assertion: cannot update context for algorithm TPM_ALG_SHA256: invalid newParent name`)
 }
 
 func (s *computeSuite) TestPolicyDuplicationSelectInvalidObjectName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyDuplicationSelect(tpm2.Name{0, 0}, nil, true)
+	c.Check(pc.RootBranch().PolicyDuplicationSelect(tpm2.Name{0, 0}, nil, true), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: invalid object name`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyDuplicationSelect assertion: invalid object name")
+	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when processing TPM2_PolicyDuplicationSelect assertion: cannot update context for algorithm TPM_ALG_SHA256: invalid object name`)
 }
 
 func (s *computeSuite) TestPolicyPassword(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyPassword()
+	c.Check(pc.RootBranch().PolicyPassword(), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicyPasswordElement())
 
@@ -733,7 +733,7 @@ type testComputePolicyNvWrittenData struct {
 
 func (s *computeSuite) testPolicyNvWritten(c *C, data *testComputePolicyNvWrittenData) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyNvWritten(data.writtenSet)
+	c.Check(pc.RootBranch().PolicyNvWritten(data.writtenSet), IsNil)
 
 	expectedPolicy := NewMockPolicy(NewMockPolicyNvWrittenElement(data.writtenSet))
 
@@ -759,9 +759,9 @@ func (s *computeSuite) TestPolicyNvWrittenTrue(c *C) {
 
 func (s *computeSuite) TestPolicyMixed(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar"))
-	pc.RootBranch().PolicyAuthValue()
-	pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	c.Check(pc.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")), IsNil)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")),
@@ -778,9 +778,9 @@ func (s *computeSuite) TestPolicyMixed(c *C) {
 
 func (s *computeSuite) TestPolicyMixedSHA1(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
-	pc.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar"))
-	pc.RootBranch().PolicyAuthValue()
-	pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	c.Check(pc.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")), IsNil)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")),

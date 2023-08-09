@@ -15,24 +15,21 @@ import (
 )
 
 type trialPolicySessionContext struct {
-	alg    tpm2.HashAlgorithmId
-	digest tpm2.Digest
+	digest *taggedHash
 }
 
-func newTrialPolicySessionContext(alg tpm2.HashAlgorithmId) *trialPolicySessionContext {
-	return &trialPolicySessionContext{
-		alg:    alg,
-		digest: make(tpm2.Digest, alg.Size())}
+func newTrialPolicySessionContext(digest *taggedHash) *trialPolicySessionContext {
+	return &trialPolicySessionContext{digest: digest}
 }
 
 func (s *trialPolicySessionContext) updateForCommand(command tpm2.CommandCode, params ...interface{}) error {
-	h := s.alg.NewHash()
-	h.Write(s.digest)
+	h := s.digest.HashAlg.NewHash()
+	h.Write(s.digest.Digest)
 	mu.MustMarshalToWriter(h, command)
 	if _, err := mu.MarshalToWriter(h, params...); err != nil {
 		return err
 	}
-	s.digest = h.Sum(nil)
+	s.digest.Digest = h.Sum(nil)
 	return nil
 }
 
@@ -45,21 +42,21 @@ func (s *trialPolicySessionContext) mustUpdateForCommand(command tpm2.CommandCod
 func (s *trialPolicySessionContext) policyUpdate(command tpm2.CommandCode, name tpm2.Name, policyRef tpm2.Nonce) {
 	s.mustUpdateForCommand(command, mu.Raw(name))
 
-	h := s.alg.NewHash()
-	h.Write(s.digest)
+	h := s.digest.HashAlg.NewHash()
+	h.Write(s.digest.Digest)
 	mu.MustMarshalToWriter(h, mu.Raw(policyRef))
-	s.digest = h.Sum(nil)
+	s.digest.Digest = h.Sum(nil)
 }
 
 func (s *trialPolicySessionContext) HashAlg() tpm2.HashAlgorithmId {
-	return s.alg
+	return s.digest.HashAlg
 }
 
 func (s *trialPolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
 	if !index.Name().IsValid() {
 		return errors.New("invalid index name")
 	}
-	h := s.alg.NewHash()
+	h := s.digest.HashAlg.NewHash()
 	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
 
 	s.mustUpdateForCommand(tpm2.CommandPolicyNV, mu.Raw(h.Sum(nil)), mu.Raw(index.Name()))
@@ -95,7 +92,7 @@ func (s *trialPolicySessionContext) PolicyCommandCode(code tpm2.CommandCode) err
 }
 
 func (s *trialPolicySessionContext) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
-	h := s.alg.NewHash()
+	h := s.digest.HashAlg.NewHash()
 	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
 
 	s.mustUpdateForCommand(tpm2.CommandPolicyCounterTimer, mu.Raw(h.Sum(nil)))
@@ -119,7 +116,7 @@ func (s *trialPolicySessionContext) PolicyOR(pHashList tpm2.DigestList) error {
 
 	digests := new(bytes.Buffer)
 	for i, digest := range pHashList {
-		if len(digest) != s.alg.Size() {
+		if len(digest) != s.digest.HashAlg.Size() {
 			return fmt.Errorf("invalid digest length at branch %d", i)
 		}
 		digests.Write(digest)
@@ -223,8 +220,19 @@ func (r *trialPolicyResources) authorize(context tpm2.ResourceContext) (tpm2.Ses
 
 // PolicyComputeBranch corresponds to a branch in a policy that is being computed.
 type PolicyComputeBranch struct {
-	c      *PolicyComputer
-	policy policy
+	c        *PolicyComputer
+	contexts []policyRunContext
+	policy   *policyBranch
+}
+
+func (b *PolicyComputeBranch) runElementForEachContext(element policyElementRunner) error {
+	for _, context := range b.contexts {
+		if err := element.run(context); err != nil {
+			return fmt.Errorf("cannot update context for algorithm %v: %w", context.session().HashAlg(), err)
+		}
+	}
+
+	return nil
 }
 
 // PolicyNV adds a TPM2_PolicyNV assertion to this branch in order to bind the policy to the
@@ -233,96 +241,138 @@ type PolicyComputeBranch struct {
 // the comparison via the offset argument, and a comparison operator via the operation argument.
 func (b *PolicyComputeBranch) PolicyNV(nvIndex NVIndex, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
 	if nvIndex.Handle().Type() != tpm2.HandleTypeNVIndex {
-		return b.c.fail(errors.New("nvIndex has invalid handle type"))
+		return b.c.fail("PolicyNV", errors.New("nvIndex has invalid handle type"))
 	}
 	if name, exists := b.c.nvIndices[nvIndex.Handle()]; exists && !bytes.Equal(name, nvIndex.Name()) {
-		return b.c.fail(errors.New("nvIndex already exists in this profile but with a different name"))
+		return b.c.fail("PolicyNV", errors.New("nvIndex already exists in this profile but with a different name"))
 	}
 
+	element := &policyNV{
+		NvIndex:   nvIndex.Handle(),
+		OperandB:  operandB,
+		Offset:    offset,
+		Operation: operation}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyNV,
-		Details: &policyElementDetails{
-			NV: &policyNV{
-				NvIndex:   nvIndex.Handle(),
-				OperandB:  operandB,
-				Offset:    offset,
-				Operation: operation}}})
+		Type:    tpm2.CommandPolicyNV,
+		Details: &policyElementDetails{NV: element}})
 	b.c.nvIndices[nvIndex.Handle()] = nvIndex.Name()
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
 	return nil
 }
 
 // PolicySecret adds a TPM2_PolicySecret assertion to this branch so that the policy requires
 // knowledge of the authorization value of the object associated with authObject.
-func (b *PolicyComputeBranch) PolicySecret(authObject Named, policyRef tpm2.Nonce) {
+func (b *PolicyComputeBranch) PolicySecret(authObject Named, policyRef tpm2.Nonce) error {
 	var authObjectName tpm2.Name
 	if authObject != nil {
 		authObjectName = authObject.Name()
 	}
+
+	element := &policySecret{
+		AuthObjectName: authObjectName,
+		PolicyRef:      policyRef}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicySecret,
-		Details: &policyElementDetails{
-			Secret: &policySecret{
-				AuthObjectName: authObjectName,
-				PolicyRef:      policyRef}}})
+		Type:    tpm2.CommandPolicySecret,
+		Details: &policyElementDetails{Secret: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicySigned adds a TPM2_PolicySigned assertion to this branch so that the policy requires
 // an assertion signed by the owner of the supplied key.
-func (b *PolicyComputeBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.Nonce) {
+func (b *PolicyComputeBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.Nonce) error {
+	element := &policySigned{
+		AuthKey:   authKey,
+		PolicyRef: policyRef}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicySigned,
-		Details: &policyElementDetails{
-			Signed: &policySigned{
-				AuthKey:   authKey,
-				PolicyRef: policyRef}}})
+		Type:    tpm2.CommandPolicySigned,
+		Details: &policyElementDetails{Signed: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicyAuthValue adds a TPM2_PolicyAuthValue assertion to this branch so that the policy
 // requires knowledge of the authorization value of the resource on which the policy session
 // is used.
-func (b *PolicyComputeBranch) PolicyAuthValue() {
+func (b *PolicyComputeBranch) PolicyAuthValue() error {
+	element := new(policyAuthValue)
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
 		Type:    tpm2.CommandPolicyAuthValue,
-		Details: &policyElementDetails{AuthValue: new(policyAuthValue)}})
+		Details: &policyElementDetails{AuthValue: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicyCommandCode adds a TPM2_PolicyCommandCode assertion to this branch to bind the policy
 // to the specified command.
-func (b *PolicyComputeBranch) PolicyCommandCode(code tpm2.CommandCode) {
+func (b *PolicyComputeBranch) PolicyCommandCode(code tpm2.CommandCode) error {
+	element := &policyCommandCode{CommandCode: code}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyCommandCode,
-		Details: &policyElementDetails{
-			CommandCode: &policyCommandCode{CommandCode: code}}})
+		Type:    tpm2.CommandPolicyCommandCode,
+		Details: &policyElementDetails{CommandCode: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicyCounterTimer adds a TPM2_PolicyCounterTimer assertion to this branch to bind the policy
 // to the contents of the [tpm2.TimeInfo] structure.
-func (b *PolicyComputeBranch) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) {
+func (b *PolicyComputeBranch) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+	element := &policyCounterTimer{
+		OperandB:  operandB,
+		Offset:    offset,
+		Operation: operation}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyCounterTimer,
-		Details: &policyElementDetails{
-			CounterTimer: &policyCounterTimer{
-				OperandB:  operandB,
-				Offset:    offset,
-				Operation: operation}}})
+		Type:    tpm2.CommandPolicyCounterTimer,
+		Details: &policyElementDetails{CounterTimer: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicyCpHash adds a TPM2_PolicyCpHash assertion to this branch in order to bind the policy to
 // the supplied command parameters.
 func (b *PolicyComputeBranch) PolicyCpHash(cpHashA CpHash) error {
 	var digests taggedHashList
-	for _, alg := range b.c.algs {
-		digest, err := cpHashA.Digest(alg)
+	for _, d := range b.policy.PolicyDigests {
+		digest, err := cpHashA.Digest(d.HashAlg)
 		if err != nil {
-			return b.c.fail(fmt.Errorf("cannot compute cpHash for algorithm %v: %w", alg, err))
+			return b.c.fail("PolicyCpHash", fmt.Errorf("cannot compute cpHash for algorithm %v: %w", d.HashAlg, err))
 		}
-		digests = append(digests, taggedHash{HashAlg: alg, Digest: digest})
+		digests = append(digests, taggedHash{HashAlg: d.HashAlg, Digest: digest})
 	}
 
+	element := &policyCpHash{Digests: digests}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyCpHash,
-		Details: &policyElementDetails{
-			CpHash: &policyCpHash{Digests: digests}}})
+		Type:    tpm2.CommandPolicyCpHash,
+		Details: &policyElementDetails{CpHash: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
 	return nil
 }
 
@@ -330,18 +380,23 @@ func (b *PolicyComputeBranch) PolicyCpHash(cpHashA CpHash) error {
 // the supplied command handles.
 func (b *PolicyComputeBranch) PolicyNameHash(nameHash NameHash) error {
 	var digests taggedHashList
-	for _, alg := range b.c.algs {
-		digest, err := nameHash.Digest(alg)
+	for _, d := range b.policy.PolicyDigests {
+		digest, err := nameHash.Digest(d.HashAlg)
 		if err != nil {
-			return b.c.fail(fmt.Errorf("cannot compute nameHash for algorithm %v: %w", alg, err))
+			return b.c.fail("PolicyNameHash", fmt.Errorf("cannot compute nameHash for algorithm %v: %w", d.HashAlg, err))
 		}
-		digests = append(digests, taggedHash{HashAlg: alg, Digest: digest})
+		digests = append(digests, taggedHash{HashAlg: d.HashAlg, Digest: digest})
 	}
 
+	element := &policyNameHash{Digests: digests}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyNameHash,
-		Details: &policyElementDetails{
-			NameHash: &policyNameHash{Digests: digests}}})
+		Type:    tpm2.CommandPolicyNameHash,
+		Details: &policyElementDetails{NameHash: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
 	return nil
 }
 
@@ -351,12 +406,12 @@ func (b *PolicyComputeBranch) PolicyPCR(values tpm2.PCRValues) error {
 	var pcrs pcrValueList
 	for alg := range values {
 		if !alg.IsValid() {
-			return b.c.fail(fmt.Errorf("invalid digest algorithm %v", alg))
+			return b.c.fail("PolicyPCR", fmt.Errorf("invalid digest algorithm %v", alg))
 		}
 		for pcr := range values[alg] {
 			digest := values[alg][pcr]
 			if len(digest) != alg.Size() {
-				return b.c.fail(fmt.Errorf("invalid digest size for PCR %v, algorithm %v", pcr, alg))
+				return b.c.fail("PolicyPCR", fmt.Errorf("invalid digest size for PCR %v, algorithm %v", pcr, alg))
 			}
 			pcrs = append(pcrs, pcrValue{
 				PCR:    tpm2.Handle(pcr),
@@ -367,10 +422,15 @@ func (b *PolicyComputeBranch) PolicyPCR(values tpm2.PCRValues) error {
 		return pcrs[i].PCR < pcrs[j].PCR || pcrs[i].Digest.HashAlg < pcrs[j].Digest.HashAlg
 	})
 
+	element := &policyPCR{PCRs: pcrs}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyPCR,
-		Details: &policyElementDetails{
-			PCR: &policyPCR{PCRs: pcrs}}})
+		Type:    tpm2.CommandPolicyPCR,
+		Details: &policyElementDetails{PCR: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
 	return nil
 }
 
@@ -378,7 +438,7 @@ func (b *PolicyComputeBranch) PolicyPCR(values tpm2.PCRValues) error {
 // to permit duplication of object to newParent with the [tpm2.TPMContext.Duplicate] function. Note
 // that object must be supplied even if includeObject is false because the assertion sets the name
 // hash of the session context to restrict the usage of the session to the specified pair of objects.
-func (b *PolicyComputeBranch) PolicyDuplicationSelect(object, newParent Named, includeObject bool) {
+func (b *PolicyComputeBranch) PolicyDuplicationSelect(object, newParent Named, includeObject bool) error {
 	var objectName tpm2.Name
 	if object != nil {
 		objectName = object.Name()
@@ -387,37 +447,56 @@ func (b *PolicyComputeBranch) PolicyDuplicationSelect(object, newParent Named, i
 	if newParent != nil {
 		newParentName = newParent.Name()
 	}
+
+	element := &policyDuplicationSelect{
+		Object:        objectName,
+		NewParent:     newParentName,
+		IncludeObject: includeObject}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyDuplicationSelect,
-		Details: &policyElementDetails{
-			DuplicationSelect: &policyDuplicationSelect{
-				Object:        objectName,
-				NewParent:     newParentName,
-				IncludeObject: includeObject}}})
+		Type:    tpm2.CommandPolicyDuplicationSelect,
+		Details: &policyElementDetails{DuplicationSelect: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicyPassword adds a TPM2_PolicyPassword assertion to this branch so that the policy
 // requires knowledge of the authorization value of the resource on which the policy session
 // is used.
-func (b *PolicyComputeBranch) PolicyPassword() {
+func (b *PolicyComputeBranch) PolicyPassword() error {
+	element := new(policyPassword)
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
 		Type:    tpm2.CommandPolicyPassword,
-		Details: &policyElementDetails{Password: new(policyPassword)}})
+		Details: &policyElementDetails{Password: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicyNvWritten adds a TPM2_PolicyNvWritten assertion to this branch in order to bind the
 // policy to the status of the [tpm2.AttrNVWritten] attribute for the NV index on which the
 // session is used.
-func (b *PolicyComputeBranch) PolicyNvWritten(writtenSet bool) {
+func (b *PolicyComputeBranch) PolicyNvWritten(writtenSet bool) error {
+	element := &policyNvWritten{WrittenSet: writtenSet}
 	b.policy.Policy = append(b.policy.Policy, &policyElement{
-		Type: tpm2.CommandPolicyNvWritten,
-		Details: &policyElementDetails{
-			NvWritten: &policyNvWritten{WrittenSet: writtenSet}}})
+		Type:    tpm2.CommandPolicyNvWritten,
+		Details: &policyElementDetails{NvWritten: element}})
+
+	if err := b.runElementForEachContext(element); err != nil {
+		return b.c.fail(element.name(), err)
+	}
+
+	return nil
 }
 
 // PolicyComputer provides a way to compute an authorization policy.
 type PolicyComputer struct {
-	algs      []tpm2.HashAlgorithmId
 	root      *PolicyComputeBranch
 	nvIndices map[tpm2.Handle]tpm2.Name
 
@@ -432,16 +511,27 @@ func ComputePolicy(algs ...tpm2.HashAlgorithmId) *PolicyComputer {
 			panic(fmt.Sprintf("digest algorithm %v is not available", alg))
 		}
 	}
-	c := &PolicyComputer{
-		algs:      algs,
-		nvIndices: make(map[tpm2.Handle]tpm2.Name)}
-	c.root = &PolicyComputeBranch{c: c}
+	c := &PolicyComputer{nvIndices: make(map[tpm2.Handle]tpm2.Name)}
+	c.root = &PolicyComputeBranch{
+		c:      c,
+		policy: new(policyBranch),
+	}
+	for _, alg := range algs {
+		c.root.policy.PolicyDigests = append(c.root.policy.PolicyDigests, taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())})
+	}
+	for i := range c.root.policy.PolicyDigests {
+		c.root.contexts = append(c.root.contexts, newPolicyRunner(
+			newTrialPolicySessionContext(&c.root.policy.PolicyDigests[i]),
+			new(trialPolicyParams),
+			newTrialPolicyResources(c.nvIndices),
+		))
+	}
 	return c
 }
 
-func (c *PolicyComputer) fail(err error) error {
+func (c *PolicyComputer) fail(name string, err error) error {
 	if c.err == nil {
-		c.err = err
+		c.err = fmt.Errorf("encountered an error when processing %s: %w", name, err)
 	}
 
 	return err
@@ -456,27 +546,16 @@ func (c *PolicyComputer) RootBranch() *PolicyComputeBranch {
 // returned metadata can be used to execute the computed policy.
 func (c *PolicyComputer) Policy() (tpm2.TaggedHashList, *Policy, error) {
 	if c.err != nil {
-		return nil, nil, c.err
+		return nil, nil, fmt.Errorf("could not compute policy: %w", c.err)
 	}
 
 	var digests tpm2.TaggedHashList
-	for _, alg := range c.algs {
-		session := newTrialPolicySessionContext(alg)
-		runner := newPolicyRunner(
-			session,
-			new(trialPolicyParams),
-			newTrialPolicyResources(c.nvIndices),
-		)
-
-		if err := runner.run(c.root.policy); err != nil {
-			return nil, nil, err
-		}
-
-		digests = append(digests, tpm2.MakeTaggedHash(alg, session.digest))
+	for _, digest := range c.root.policy.PolicyDigests {
+		digests = append(digests, tpm2.MakeTaggedHash(digest.HashAlg, digest.Digest))
 	}
 
 	var policy policy
-	if err := mu.CopyValue(&policy, c.root.policy); err != nil {
+	if err := mu.CopyValue(&policy.Policy, c.root.policy.Policy); err != nil {
 		return nil, nil, fmt.Errorf("cannot copy policy metadata: %w", err)
 	}
 
