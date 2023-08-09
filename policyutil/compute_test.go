@@ -119,7 +119,7 @@ func (s *computeSuite) TestPolicyNVInvalidName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{Index: 0x01000000}, nil, 0, tpm2.OpEq), IsNil)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "invalid PolicyNV index name")
+	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyNV assertion: invalid index name")
 }
 
 func (s *computeSuite) TestPolicyNVInvalidIndex(c *C) {
@@ -187,7 +187,7 @@ func (s *computeSuite) TestPolicySecretInvalidName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	pc.RootBranch().PolicySecret(tpm2.Name{0, 0}, nil)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "invalid PolicySecret auth object name")
+	c.Check(err, ErrorMatches, "cannot process TPM2_PolicySecret assertion: invalid authObject name")
 }
 
 type testComputePolicySignedData struct {
@@ -702,14 +702,14 @@ func (s *computeSuite) TestPolicyDuplicationSelectInvalidNewParentName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	pc.RootBranch().PolicyDuplicationSelect(nil, tpm2.Name{0, 0}, false)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "invalid PolicyDuplicationSelect newParent name")
+	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyDuplicationSelect assertion: invalid newParent name")
 }
 
 func (s *computeSuite) TestPolicyDuplicationSelectInvalidObjectName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	pc.RootBranch().PolicyDuplicationSelect(tpm2.Name{0, 0}, nil, true)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, "invalid PolicyDuplicationSelect object name")
+	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyDuplicationSelect assertion: invalid object name")
 }
 
 func (s *computeSuite) TestPolicyPassword(c *C) {

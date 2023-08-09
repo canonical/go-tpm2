@@ -18,6 +18,10 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+// ErrMissingDigest is returned from [Policy.Execute] when a TPM2_PolicyCpHash or
+// TPM2_PolicyNameHash assertion is missing a digest for the selected session algorithm.
+var ErrMissingDigest = errors.New("missing digest for session algorithm")
+
 type paramKey [sha256.Size]byte
 
 func policyParamKey(authName tpm2.Name, policyRef tpm2.Nonce) paramKey {
@@ -72,7 +76,7 @@ type AuthorizationNotFoundError struct {
 }
 
 func (e *AuthorizationNotFoundError) Error() string {
-	return fmt.Sprintf("missing authorization for TPM2_PolicySigned assertion (authName: %#x, policyRef: %#x)", e.AuthName, e.PolicyRef)
+	return fmt.Sprintf("missing signed authorization for assertion with authName: %#x, policyRef: %#x)", e.AuthName, e.PolicyRef)
 }
 
 // ResourceNotFoundError is returned from [Policy.Execute] if the policy required a resource
@@ -503,6 +507,7 @@ func (r *realPolicyResources) authorize(context tpm2.ResourceContext) (tpm2.Sess
 }
 
 type policyElementRunner interface {
+	name() string
 	run(context policyRunContext) error
 }
 
@@ -542,15 +547,17 @@ type policyNV struct {
 	Operation tpm2.ArithmeticOp
 }
 
+func (*policyNV) name() string { return "TPM2_PolicyNV assertion" }
+
 func (e *policyNV) run(context policyRunContext) error {
 	nvIndex, err := context.resources().loadHandle(e.NvIndex)
 	if err != nil {
-		return fmt.Errorf("cannot create context for PolicyNV index: %w", err)
+		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
 
 	pub, err := context.resources().nvReadPublic(nvIndex)
 	if err != nil {
-		return fmt.Errorf("cannot read NV public area for PolicyNV assertion: %w", err)
+		return fmt.Errorf("cannot read nvIndex public area: %w", err)
 	}
 
 	auth := nvIndex
@@ -562,12 +569,12 @@ func (e *policyNV) run(context policyRunContext) error {
 		auth, err = context.resources().loadHandle(tpm2.HandlePlatform)
 	}
 	if err != nil {
-		return fmt.Errorf("cannot create context for PolicyNV auth: %w", err)
+		return fmt.Errorf("cannot create auth context: %w", err)
 	}
 
 	authContextAuthSession, err := context.resources().authorize(auth)
 	if err != nil {
-		return fmt.Errorf("cannot authorize auth object for PolicyNV assertion: %w", err)
+		return fmt.Errorf("cannot authorize auth object: %w", err)
 	}
 
 	return context.session().PolicyNV(auth, nvIndex, e.OperandB, e.Offset, e.Operation, authContextAuthSession)
@@ -577,6 +584,8 @@ type policySecret struct {
 	AuthObjectName tpm2.Name
 	PolicyRef      tpm2.Nonce
 }
+
+func (*policySecret) name() string { return "TPM2_PolicySecret assertion" }
 
 func (e *policySecret) run(context policyRunContext) error {
 	if ticket := context.ticket(e.AuthObjectName, e.PolicyRef); ticket != nil {
@@ -605,19 +614,19 @@ func (e *policySecret) run(context policyRunContext) error {
 		var err error
 		cpHashA, err = params.CpHash.Digest(context.session().HashAlg())
 		if err != nil {
-			return fmt.Errorf("cannot obtain PolicySecret cpHashA: %w", err)
+			return fmt.Errorf("cannot obtain cpHashA: %w", err)
 		}
 	}
 
 	authObject, err := context.resources().loadName(e.AuthObjectName)
 	if err != nil {
-		return fmt.Errorf("cannot create context for PolicySecret auth object: %w", err)
+		return fmt.Errorf("cannot create authObject context: %w", err)
 	}
 	defer authObject.flush()
 
 	authObjectAuthSession, err := context.resources().authorize(authObject.resource())
 	if err != nil {
-		return fmt.Errorf("cannot authorize object for PolicySecret assertion: %w", err)
+		return fmt.Errorf("cannot authorize authObject: %w", err)
 	}
 
 	timeout, ticket, err := context.session().PolicySecret(authObject.resource(), cpHashA, e.PolicyRef, params.Expiration, authObjectAuthSession)
@@ -639,10 +648,12 @@ type policySigned struct {
 	PolicyRef tpm2.Nonce
 }
 
+func (*policySigned) name() string { return "TPM2_PolicySigned assertion" }
+
 func (e *policySigned) run(context policyRunContext) error {
 	authKey, err := context.resources().loadExternal(e.AuthKey)
 	if err != nil {
-		return fmt.Errorf("cannot create context for PolicySigned auth key: %w", err)
+		return fmt.Errorf("cannot create authKey context: %w", err)
 	}
 	defer authKey.flush()
 
@@ -687,6 +698,8 @@ func (e *policySigned) run(context policyRunContext) error {
 
 type policyAuthValue struct{}
 
+func (*policyAuthValue) name() string { return "TPM2_PolicyAuthValue assertion" }
+
 func (*policyAuthValue) run(context policyRunContext) error {
 	return context.session().PolicyAuthValue()
 }
@@ -694,6 +707,8 @@ func (*policyAuthValue) run(context policyRunContext) error {
 type policyCommandCode struct {
 	CommandCode tpm2.CommandCode
 }
+
+func (*policyCommandCode) name() string { return "TPM2_PolicyCommandCode assertion" }
 
 func (e *policyCommandCode) run(context policyRunContext) error {
 	return context.session().PolicyCommandCode(e.CommandCode)
@@ -705,6 +720,8 @@ type policyCounterTimer struct {
 	Operation tpm2.ArithmeticOp
 }
 
+func (*policyCounterTimer) name() string { return "TPM2_PolicyCounterTimer assertion" }
+
 func (e *policyCounterTimer) run(context policyRunContext) error {
 	return context.session().PolicyCounterTimer(e.OperandB, e.Offset, e.Operation)
 }
@@ -712,6 +729,8 @@ func (e *policyCounterTimer) run(context policyRunContext) error {
 type policyCpHash struct {
 	Digests taggedHashList
 }
+
+func (*policyCpHash) name() string { return "TPM2_PolicyCpHash assertion" }
 
 func (e *policyCpHash) run(context policyRunContext) error {
 	var cpHashA tpm2.Digest
@@ -723,7 +742,7 @@ func (e *policyCpHash) run(context policyRunContext) error {
 		break
 	}
 	if cpHashA == nil {
-		return errors.New("no digest for session algorithm available for PolicyCpHash assertion")
+		return ErrMissingDigest
 	}
 	return context.session().PolicyCpHash(cpHashA)
 }
@@ -731,6 +750,8 @@ func (e *policyCpHash) run(context policyRunContext) error {
 type policyNameHash struct {
 	Digests taggedHashList
 }
+
+func (*policyNameHash) name() string { return "TPM2_PolicyNameHash assertion" }
 
 func (e *policyNameHash) run(context policyRunContext) error {
 	var nameHash tpm2.Digest
@@ -742,7 +763,7 @@ func (e *policyNameHash) run(context policyRunContext) error {
 		break
 	}
 	if nameHash == nil {
-		return errors.New("no digest for session algorithm available for PolicyNameHash assertion")
+		return ErrMissingDigest
 	}
 	return context.session().PolicyNameHash(nameHash)
 }
@@ -758,19 +779,21 @@ type policyPCR struct {
 	PCRs pcrValueList
 }
 
+func (*policyPCR) name() string { return "TPM2_PolicyPCR assertion" }
+
 func (e *policyPCR) run(context policyRunContext) error {
 	values := make(tpm2.PCRValues)
 	for i, value := range e.PCRs {
 		if value.PCR.Type() != tpm2.HandleTypePCR {
-			return fmt.Errorf("invalid PCR handle at index %d for PolicyPCR assertion", i)
+			return fmt.Errorf("invalid PCR handle at index %d", i)
 		}
 		if err := values.SetValue(value.Digest.HashAlg, int(value.PCR), value.Digest.Digest); err != nil {
-			return fmt.Errorf("invalid PCR value at index %d for PolicyPCR assertion: %w", i, err)
+			return fmt.Errorf("invalid PCR value at index %d: %w", i, err)
 		}
 	}
 	pcrs, pcrDigest, err := ComputePCRDigestFromAllValues(context.session().HashAlg(), values)
 	if err != nil {
-		return fmt.Errorf("cannot compute PCR digest for PolicyPCR assertion: %w", err)
+		return fmt.Errorf("cannot compute PCR digest: %w", err)
 	}
 	return context.session().PolicyPCR(pcrDigest, pcrs)
 }
@@ -781,11 +804,15 @@ type policyDuplicationSelect struct {
 	IncludeObject bool
 }
 
+func (*policyDuplicationSelect) name() string { return "TPM2_PolicyDuplicationSelect assertion" }
+
 func (e *policyDuplicationSelect) run(context policyRunContext) error {
 	return context.session().PolicyDuplicationSelect(e.Object, e.NewParent, e.IncludeObject)
 }
 
 type policyPassword struct{}
+
+func (*policyPassword) name() string { return "TPM2_PolicyPassword assertion" }
 
 func (*policyPassword) run(context policyRunContext) error {
 	return context.session().PolicyPassword()
@@ -794,6 +821,8 @@ func (*policyPassword) run(context policyRunContext) error {
 type policyNvWritten struct {
 	WrittenSet bool
 }
+
+func (*policyNvWritten) name() string { return "TPM2_PolicyNvWritten assertion" }
 
 func (e *policyNvWritten) run(context policyRunContext) error {
 	return context.session().PolicyNvWritten(e.WrittenSet)
@@ -963,7 +992,7 @@ func (r *policyRunner) run(policy policy) error {
 		r.elements = r.elements[1:]
 
 		if err := element.run(r); err != nil {
-			return err
+			return fmt.Errorf("cannot process %s: %w", element.name(), err)
 		}
 	}
 

@@ -57,7 +57,7 @@ func (s *trialPolicySessionContext) HashAlg() tpm2.HashAlgorithmId {
 
 func (s *trialPolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
 	if !index.Name().IsValid() {
-		return errors.New("invalid PolicyNV index name")
+		return errors.New("invalid index name")
 	}
 	h := s.alg.NewHash()
 	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
@@ -68,7 +68,7 @@ func (s *trialPolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, o
 
 func (s *trialPolicySessionContext) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
 	if !authObject.Name().IsValid() {
-		return nil, nil, errors.New("invalid PolicySecret auth object name")
+		return nil, nil, errors.New("invalid authObject name")
 	}
 	s.policyUpdate(tpm2.CommandPolicySecret, authObject.Name(), policyRef)
 	return nil, nil, nil
@@ -114,13 +114,13 @@ func (s *trialPolicySessionContext) PolicyNameHash(nameHash tpm2.Digest) error {
 
 func (s *trialPolicySessionContext) PolicyOR(pHashList tpm2.DigestList) error {
 	if len(pHashList) < 2 || len(pHashList) > 8 {
-		return errors.New("invalid number of PolicyOR branches")
+		return errors.New("invalid number of branches")
 	}
 
 	digests := new(bytes.Buffer)
 	for i, digest := range pHashList {
 		if len(digest) != s.alg.Size() {
-			return fmt.Errorf("invalid digest length at PolicyOR branch %d", i)
+			return fmt.Errorf("invalid digest length at branch %d", i)
 		}
 		digests.Write(digest)
 	}
@@ -138,11 +138,11 @@ func (s *trialPolicySessionContext) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.P
 
 func (s *trialPolicySessionContext) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
 	if !newParentName.IsValid() {
-		return errors.New("invalid PolicyDuplicationSelect newParent name")
+		return errors.New("invalid newParent name")
 	}
 	if includeObject {
 		if !objectName.IsValid() {
-			return errors.New("invalid PolicyDuplicationSelect object name")
+			return errors.New("invalid object name")
 		}
 		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.Raw(objectName), mu.Raw(newParentName), includeObject)
 	} else {
