@@ -34,6 +34,86 @@ func (h *mockPolicyResourceAuthorizer) Authorize(resource tpm2.ResourceContext) 
 	return h.authorizeFn(resource)
 }
 
+type policySuiteNoTPM struct{}
+
+var _ = Suite(&policySuiteNoTPM{})
+
+func (s *policySuiteNoTPM) testMarshalUnmarshalPolicyBranchName(c *C, name PolicyBranchName, expected []byte) {
+	b, err := mu.MarshalToBytes(name)
+	c.Check(err, IsNil)
+	c.Check(b, DeepEquals, expected)
+	c.Logf("%x", b)
+
+	var recoveredName PolicyBranchName
+	_, err = mu.UnmarshalFromBytes(b, &recoveredName)
+	c.Check(recoveredName, Equals, name)
+}
+
+func (s *policySuiteNoTPM) TestMarshalUnmarshalPolicyBranchName1(c *C) {
+	s.testMarshalUnmarshalPolicyBranchName(c, "foo", []byte{0x00, 0x03, 0x66, 0x6f, 0x6f})
+}
+
+func (s *policySuiteNoTPM) TestMarshalUnmarshalPolicyBranchName2(c *C) {
+	s.testMarshalUnmarshalPolicyBranchName(c, "bar", []byte{0x00, 0x03, 0x62, 0x61, 0x72})
+}
+
+func (s *policySuiteNoTPM) TestMarshalInvalidPolicyBranchName(c *C) {
+	_, err := mu.MarshalToBytes(PolicyBranchName("$foo"))
+	c.Check(err, ErrorMatches, `cannot marshal argument 0 whilst processing element of type policyutil.PolicyBranchName: invalid name`)
+}
+
+func (s *policySuiteNoTPM) TestUnmarshalInvalidPolicyBranchName(c *C) {
+	var name PolicyBranchName
+	_, err := mu.UnmarshalFromBytes([]byte{0x00, 0x04, 0x24, 0x66, 0x6f, 0x6f}, &name)
+	c.Check(err, ErrorMatches, `cannot unmarshal argument 0 whilst processing element of type policyutil.PolicyBranchName: invalid name`)
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponent(c *C) {
+	path := PolicyBranchPath("foo/bar")
+	next, remaining, err := path.PopNextComponent()
+	c.Check(err, IsNil)
+	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(remaining, Equals, PolicyBranchPath("bar"))
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentLeadingSeparator(c *C) {
+	path := PolicyBranchPath("foo/bar")
+	next, remaining, err := path.PopNextComponent()
+	c.Check(err, IsNil)
+	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(remaining, Equals, PolicyBranchPath("bar"))
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentLast(c *C) {
+	path := PolicyBranchPath("bar")
+	next, remaining, err := path.PopNextComponent()
+	c.Check(err, IsNil)
+	c.Check(next, Equals, PolicyBranchPath("bar"))
+	c.Check(remaining, Equals, PolicyBranchPath(""))
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentEmpty(c *C) {
+	path := PolicyBranchPath("")
+	_, _, err := path.PopNextComponent()
+	c.Check(err, ErrorMatches, `no more path components`)
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleLeadingSeparators(c *C) {
+	path := PolicyBranchPath("///foo/bar")
+	next, remaining, err := path.PopNextComponent()
+	c.Check(err, IsNil)
+	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(remaining, Equals, PolicyBranchPath("bar"))
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleIntermediateSeparators(c *C) {
+	path := PolicyBranchPath("foo////bar")
+	next, remaining, err := path.PopNextComponent()
+	c.Check(err, IsNil)
+	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(remaining, Equals, PolicyBranchPath("///bar"))
+}
+
 type policySuite struct {
 	testutil.TPMTest
 }
@@ -1000,6 +1080,375 @@ func (s *policySuite) TestPolicyNameHashMissingDigest(c *C) {
 
 	_, err = policy.Execute(s.TPM, session, nil, nil)
 	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyNameHash assertion: missing digest for session algorithm")
+	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+}
+
+type testExecutePolicyORData struct {
+	alg tpm2.HashAlgorithmId
+}
+
+func (s *policySuite) testPolicyOR(c *C, pHashList tpm2.DigestList) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), IsNil)
+	expectedDigests, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigests[0].Digest())
+}
+
+func (s *policySuite) TestPolicyOR(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	digests, _, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	pHashList := tpm2.DigestList{digests[0].Digest()}
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	pHashList = append(pHashList, h.Sum(nil))
+
+	s.testPolicyOR(c, pHashList)
+}
+
+func (s *policySuite) TestPolicyORDifferentHashList(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	digests, _, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	var pHashList tpm2.DigestList
+	for _, data := range []string{"foo", "bar"} {
+		h := crypto.SHA256.New()
+		io.WriteString(h, data)
+		pHashList = append(pHashList, h.Sum(nil))
+	}
+	pHashList = append(pHashList, digests[0].Digest())
+
+	s.testPolicyOR(c, pHashList)
+}
+
+func (s *policySuite) TestPolicyORMultipleDigests(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA1, tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	digests, _, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	pHashListSHA1 := tpm2.DigestList{digests[0].Digest()}
+	pHashListSHA256 := tpm2.DigestList{digests[1].Digest()}
+	h := crypto.SHA1.New()
+	io.WriteString(h, "foo")
+	pHashListSHA1 = append(pHashListSHA1, h.Sum(nil))
+	h = crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	pHashListSHA256 = append(pHashListSHA256, h.Sum(nil))
+
+	pc = ComputePolicy(tpm2.HashAlgorithmSHA1, tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashListSHA256), NewPolicyORHashList(tpm2.HashAlgorithmSHA1, pHashListSHA1)), IsNil)
+	expectedDigests, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	tickets, err := policy.Execute(s.TPM, session, nil, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigests[1].Digest())
+}
+
+func (s *policySuite) TestPolicyORMissingDigest(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	digests, _, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	pHashList := tpm2.DigestList{digests[0].Digest()}
+	h := crypto.SHA1.New()
+	io.WriteString(h, "foo")
+	pHashList = append(pHashList, h.Sum(nil))
+
+	pc = ComputePolicy(tpm2.HashAlgorithmSHA1)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA1, pHashList)), IsNil)
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	_, err = policy.Execute(s.TPM, session, nil, nil)
+	c.Check(err, ErrorMatches, `cannot process TPM2_PolicyOR assertion: cannot process digest at index 0: missing digest for session algorithm`)
+	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+}
+
+func (s *policySuite) testPolicyBranches(c *C, selectedPath PolicyBranchPath) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	expectedDigests, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: selectedPath,
+	}
+
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigests[0].Digest())
+}
+
+func (s *policySuite) TestPolicyBranches(c *C) {
+	s.testPolicyBranches(c, "branch1")
+}
+
+func (s *policySuite) TestPolicyBranchesNumericSelector(c *C) {
+	s.testPolicyBranches(c, "$0")
+}
+
+func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicyAuthValue(), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	expectedDigests, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "branch2",
+	}
+
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigests[0].Digest())
+}
+
+func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA1, tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	expectedDigests, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "branch1",
+	}
+
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigests[1].Digest())
+}
+
+func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "$2",
+	}
+
+	_, err = policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: selected path 2 out of range`)
+}
+
+func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "$foo",
+	}
+
+	_, err = policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: badly formatted path component "\$foo": expected integer`)
+}
+
+func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "foo",
+	}
+
+	_, err = policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: no branch with name "foo"`)
+}
+
+func (s *policySuite) TestPolicyBranchesNoSelectedBranch(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	_, err = policy.Execute(s.TPM, session, nil, nil)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: no more path components`)
+}
+
+func (s *policySuite) TestPolicyBranchesMissingDigest(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "branch1",
+	}
+
+	_, err = policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: invalid branch 0: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 }
 

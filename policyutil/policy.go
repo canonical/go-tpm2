@@ -13,14 +13,22 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// ErrMissingDigest is returned from [Policy.Execute] when a TPM2_PolicyCpHash or
-// TPM2_PolicyNameHash assertion is missing a digest for the selected session algorithm.
-var ErrMissingDigest = errors.New("missing digest for session algorithm")
+const (
+	commandPolicyBranchNode tpm2.CommandCode = 0x20010171
+)
+
+var (
+	// ErrMissingDigest is returned from [Policy.Execute] when a TPM2_PolicyCpHash or
+	// TPM2_PolicyNameHash assertion is missing a digest for the selected session algorithm.
+	ErrMissingDigest = errors.New("missing digest for session algorithm")
+)
 
 type paramKey [sha256.Size]byte
 
@@ -134,12 +142,72 @@ type PolicyResources struct {
 	Unloaded []*LoadableObject
 }
 
+// PolicyBranchName corresponds to the name of a branch. Valid names are UTF-8
+// strings that start with characters other than '$'. A branch doesn't have to have
+// a name, in which case it can be selected by its index.
+type PolicyBranchName string
+
+func (n PolicyBranchName) isValid() bool {
+	if !utf8.ValidString(string(n)) {
+		return false
+	}
+	if len(n) > 0 && n[0] == '$' {
+		return false
+	}
+	return true
+}
+
+func (n PolicyBranchName) Marshal(w io.Writer) error {
+	if !n.isValid() {
+		return errors.New("invalid name")
+	}
+	_, err := mu.MarshalToWriter(w, []byte(n))
+	return err
+}
+
+func (n *PolicyBranchName) Unmarshal(r io.Reader) error {
+	var b []byte
+	if _, err := mu.UnmarshalFromReader(r, &b); err != nil {
+		return err
+	}
+	name := PolicyBranchName(b)
+	if !name.isValid() {
+		return errors.New("invalid name")
+	}
+	*n = name
+	return nil
+}
+
+// PolicyBranchPath identifies an execution path through the branches in a profile,
+// with each branch selector separated by a '/' character. Each branch can either
+// be selected by its name (if it has one), or a numeric identifier of the form
+// "$n" which selects a branch at a node using its index.
+type PolicyBranchPath string
+
+func (p PolicyBranchPath) popNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath, err error) {
+	remaining = p
+	for len(remaining) > 0 {
+		s := strings.SplitN(string(remaining), "/", 2)
+		remaining = ""
+		if len(s) == 2 {
+			remaining = PolicyBranchPath(s[1])
+		}
+		component := PolicyBranchPath(s[0])
+		if len(component) > 0 {
+			return component, remaining, nil
+		}
+	}
+
+	return "", "", errors.New("no more path components")
+}
+
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
 type PolicyExecuteParams struct {
 	Resources      *PolicyResources       // Resources required by the policy
 	SecretParams   []*PolicySecretParams  // Parameters for TPM2_PolicySecret assertions
 	Tickets        []*PolicyTicket        // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
 	Authorizations []*PolicyAuthorization // Authorizations for TPM2_PolicySigned assertions
+	SelectedPath   PolicyBranchPath       // The selected path to execute
 }
 
 // PolicyResourceAuthorizer provides a way for an application to authorize resources
@@ -196,6 +264,14 @@ type policyResources interface {
 	authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error)
 }
 
+type policyBranchDispatcher interface {
+	queueBranch(branch policyElements)
+}
+
+type policyBranchHandler interface {
+	handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error
+}
+
 type policyRunContext interface {
 	session() policySession
 	params() policyParams
@@ -203,6 +279,8 @@ type policyRunContext interface {
 
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 	addTicket(ticket *PolicyTicket)
+
+	handleBranches(branches policyBranches) error
 }
 
 type realPolicySession struct {
@@ -506,6 +584,83 @@ func (r *realPolicyResources) authorize(context tpm2.ResourceContext) (tpm2.Sess
 	return r.authorizer.Authorize(context)
 }
 
+type realPolicyBranchHandler struct {
+	sessionAlg tpm2.HashAlgorithmId
+	current    PolicyBranchPath
+	remaining  PolicyBranchPath
+}
+
+func newRealPolicyBranchHandler(sessionAlg tpm2.HashAlgorithmId, path PolicyBranchPath) *realPolicyBranchHandler {
+	return &realPolicyBranchHandler{
+		sessionAlg: sessionAlg,
+		current:    "/",
+		remaining:  path,
+	}
+}
+
+func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error {
+	next, remaining, err := h.remaining.popNextComponent()
+	if err != nil {
+		return fmt.Errorf("cannot select branch: %w", err)
+	}
+
+	h.current = PolicyBranchPath(strings.Join([]string{string(h.current), string(next)}, "/"))
+	h.remaining = remaining
+
+	var selected int
+	if next[0] == '$' {
+		if _, err := fmt.Sscanf(string(next), "$%d", &selected); err != nil {
+			return fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
+		}
+		if selected < 0 || selected >= len(branches) {
+			return fmt.Errorf("cannot select branch: selected path %d out of range", selected)
+		}
+	} else {
+		selected = -1
+		for i, branch := range branches {
+			if len(branch.Name) == 0 {
+				continue
+			}
+			if branch.Name == PolicyBranchName(next) {
+				selected = i
+				break
+			}
+		}
+		if selected == -1 {
+			return fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
+		}
+	}
+
+	var digests tpm2.DigestList
+	for i, branch := range branches {
+		foundDigest := false
+		for _, digest := range branch.PolicyDigests {
+			if digest.HashAlg != h.sessionAlg {
+				continue
+			}
+
+			digests = append(digests, digest.Digest)
+			foundDigest = true
+			break
+		}
+		if !foundDigest {
+			return fmt.Errorf("invalid branch %d: %w", i, ErrMissingDigest)
+		}
+	}
+
+	branch := branches[selected].Policy
+
+	tree, err := newPolicyOrTree(h.sessionAlg, digests)
+	if err != nil {
+		return fmt.Errorf("cannot create policy OR tree: %w", err)
+	}
+	branch = append(branch, tree.selectBranch(selected)...)
+
+	dispatcher.queueBranch(branch)
+
+	return nil
+}
+
 type policyElementRunner interface {
 	name() string
 	run(context policyRunContext) error
@@ -769,8 +924,47 @@ func (e *policyNameHash) run(context policyRunContext) error {
 }
 
 type policyBranch struct {
+	Name          PolicyBranchName
 	PolicyDigests taggedHashList
 	Policy        policyElements
+}
+
+type policyBranches []policyBranch
+
+type policyBranchNode struct {
+	Branches policyBranches
+}
+
+func (*policyBranchNode) name() string { return "branch node" }
+
+func (e *policyBranchNode) run(context policyRunContext) error {
+	return context.handleBranches(e.Branches)
+}
+
+type policyOR struct {
+	HashList []taggedHashList
+}
+
+func (*policyOR) name() string { return "TPM2_PolicyOR assertion" }
+
+func (e *policyOR) run(context policyRunContext) error {
+	var pHashList tpm2.DigestList
+	for i, h := range e.HashList {
+		found := false
+		for _, digest := range h {
+			if digest.HashAlg != context.session().HashAlg() {
+				continue
+			}
+			pHashList = append(pHashList, digest.Digest)
+			found = true
+			break
+		}
+		if !found {
+			return fmt.Errorf("cannot process digest at index %d: %w", i, ErrMissingDigest)
+		}
+	}
+
+	return context.session().PolicyOR(pHashList)
 }
 
 type pcrValue struct {
@@ -842,10 +1036,13 @@ type policyElementDetails struct {
 	CounterTimer      *policyCounterTimer
 	CpHash            *policyCpHash
 	NameHash          *policyNameHash
+	OR                *policyOR
 	PCR               *policyPCR
 	DuplicationSelect *policyDuplicationSelect
 	Password          *policyPassword
 	NvWritten         *policyNvWritten
+
+	BranchNode *policyBranchNode
 }
 
 func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
@@ -866,6 +1063,8 @@ func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
 		return &d.CpHash
 	case tpm2.CommandPolicyNameHash:
 		return &d.NameHash
+	case tpm2.CommandPolicyOR:
+		return &d.OR
 	case tpm2.CommandPolicyPCR:
 		return &d.PCR
 	case tpm2.CommandPolicyDuplicationSelect:
@@ -874,6 +1073,8 @@ func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
 		return &d.Password
 	case tpm2.CommandPolicyNvWritten:
 		return &d.NvWritten
+	case commandPolicyBranchNode:
+		return &d.BranchNode
 	default:
 		return nil
 	}
@@ -902,6 +1103,8 @@ func (e *policyElement) runner() policyElementRunner {
 		return e.Details.CpHash
 	case tpm2.CommandPolicyNameHash:
 		return e.Details.NameHash
+	case tpm2.CommandPolicyOR:
+		return e.Details.OR
 	case tpm2.CommandPolicyPCR:
 		return e.Details.PCR
 	case tpm2.CommandPolicyDuplicationSelect:
@@ -910,6 +1113,8 @@ func (e *policyElement) runner() policyElementRunner {
 		return e.Details.Password
 	case tpm2.CommandPolicyNvWritten:
 		return e.Details.NvWritten
+	case commandPolicyBranchNode:
+		return e.Details.BranchNode
 	default:
 		panic("invalid type")
 	}
@@ -943,17 +1148,19 @@ type policyRunner struct {
 	policySession   policySession
 	policyParams    policyParams
 	policyResources policyResources
+	branchHandler   policyBranchHandler
 
 	tickets map[paramKey]*PolicyTicket
 
 	elements []policyElementRunner
 }
 
-func newPolicyRunner(session policySession, params policyParams, resources policyResources) *policyRunner {
+func newPolicyRunner(session policySession, params policyParams, resources policyResources, branchHandler policyBranchHandler) *policyRunner {
 	return &policyRunner{
 		policySession:   session,
 		policyParams:    params,
 		policyResources: resources,
+		branchHandler:   branchHandler,
 		tickets:         make(map[paramKey]*PolicyTicket),
 	}
 }
@@ -985,9 +1192,24 @@ func (r *policyRunner) addTicket(ticket *PolicyTicket) {
 	r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 }
 
-func (r *policyRunner) run(policy policy) error {
+func (r *policyRunner) handleBranches(branches policyBranches) error {
+	if err := r.branchHandler.handleBranches(r, branches); err != nil {
+		return fmt.Errorf("cannot process branch node: %w", err)
+	}
+	return nil
+}
+
+func (r *policyRunner) queueBranch(branch policyElements) {
 	var elements []policyElementRunner
-	for _, element := range policy.Policy {
+	for _, element := range branch {
+		elements = append(elements, element.runner())
+	}
+	r.elements = append(elements, r.elements...)
+}
+
+func (r *policyRunner) run(policy policyElements) error {
+	var elements []policyElementRunner
+	for _, element := range policy {
 		elements = append(elements, element.runner())
 	}
 	r.elements = elements
@@ -1030,9 +1252,10 @@ func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 		newRealPolicySession(tpm, policySession, sessions...),
 		newRealPolicyParams(params),
 		newRealPolicyResources(tpm, params.Resources, authorizer, sessions...),
+		newRealPolicyBranchHandler(policySession.HashAlg(), params.SelectedPath),
 	)
 
-	if err := runner.run(p.policy); err != nil {
+	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, err
 	}
 

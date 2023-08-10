@@ -6,10 +6,37 @@ package policyutil
 
 import "github.com/canonical/go-tpm2"
 
+var (
+	NewPolicyOrTree              = newPolicyOrTree
+	NewTrialPolicySessionContext = newTrialPolicySessionContext
+)
+
 type PcrValue = pcrValue
 type PcrValueList = pcrValueList
+type PolicyElements = policyElements
+type PolicyOrTree = policyOrTree
 type TaggedHash = taggedHash
 type TaggedHashList = taggedHashList
+
+func (n *policyOrNode) Parent() *policyOrNode {
+	return n.parent
+}
+
+func (n *policyOrNode) Digests() tpm2.DigestList {
+	return n.digests
+}
+
+func (t *PolicyOrTree) LeafNodes() []*policyOrNode {
+	return t.leafNodes
+}
+
+func (t *PolicyOrTree) SelectBranch(i int) policyElements {
+	return t.selectBranch(i)
+}
+
+func (p PolicyBranchPath) PopNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath, err error) {
+	return p.popNextComponent()
+}
 
 func NewMockPolicyNVElement(nvIndex tpm2.Handle, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
 	return &policyElement{
@@ -75,6 +102,27 @@ func NewMockPolicyNameHashElement(digests taggedHashList) *policyElement {
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
 			NameHash: &policyNameHash{Digests: digests}}}
+}
+
+func NewMockPolicyORElement(hashList []taggedHashList) *policyElement {
+	return &policyElement{
+		Type: tpm2.CommandPolicyOR,
+		Details: &policyElementDetails{
+			OR: &policyOR{HashList: hashList}}}
+}
+
+func NewMockPolicyBranch(name PolicyBranchName, digests taggedHashList, elements ...*policyElement) policyBranch {
+	return policyBranch{
+		Name:          name,
+		PolicyDigests: digests,
+		Policy:        elements}
+}
+
+func NewMockPolicyBranchNodeElement(branches ...policyBranch) *policyElement {
+	return &policyElement{
+		Type: commandPolicyBranchNode,
+		Details: &policyElementDetails{
+			BranchNode: &policyBranchNode{Branches: branches}}}
 }
 
 func NewMockPolicyPCRElement(pcrs PcrValueList) *policyElement {
