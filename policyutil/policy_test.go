@@ -70,46 +70,42 @@ func (s *policySuiteNoTPM) TestUnmarshalInvalidPolicyBranchName(c *C) {
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponent(c *C) {
 	path := PolicyBranchPath("foo/bar")
-	next, remaining, err := path.PopNextComponent()
-	c.Check(err, IsNil)
+	next, remaining := path.PopNextComponent()
 	c.Check(next, Equals, PolicyBranchPath("foo"))
 	c.Check(remaining, Equals, PolicyBranchPath("bar"))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentLeadingSeparator(c *C) {
 	path := PolicyBranchPath("foo/bar")
-	next, remaining, err := path.PopNextComponent()
-	c.Check(err, IsNil)
+	next, remaining := path.PopNextComponent()
 	c.Check(next, Equals, PolicyBranchPath("foo"))
 	c.Check(remaining, Equals, PolicyBranchPath("bar"))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentLast(c *C) {
 	path := PolicyBranchPath("bar")
-	next, remaining, err := path.PopNextComponent()
-	c.Check(err, IsNil)
+	next, remaining := path.PopNextComponent()
 	c.Check(next, Equals, PolicyBranchPath("bar"))
 	c.Check(remaining, Equals, PolicyBranchPath(""))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentEmpty(c *C) {
 	path := PolicyBranchPath("")
-	_, _, err := path.PopNextComponent()
-	c.Check(err, ErrorMatches, `no more path components`)
+	next, remaining := path.PopNextComponent()
+	c.Check(next, Equals, PolicyBranchPath(""))
+	c.Check(remaining, Equals, PolicyBranchPath(""))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleLeadingSeparators(c *C) {
 	path := PolicyBranchPath("///foo/bar")
-	next, remaining, err := path.PopNextComponent()
-	c.Check(err, IsNil)
+	next, remaining := path.PopNextComponent()
 	c.Check(next, Equals, PolicyBranchPath("foo"))
 	c.Check(remaining, Equals, PolicyBranchPath("bar"))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleIntermediateSeparators(c *C) {
 	path := PolicyBranchPath("foo////bar")
-	next, remaining, err := path.PopNextComponent()
-	c.Check(err, IsNil)
+	next, remaining := path.PopNextComponent()
 	c.Check(next, Equals, PolicyBranchPath("foo"))
 	c.Check(remaining, Equals, PolicyBranchPath("///bar"))
 }
@@ -1232,7 +1228,7 @@ func (s *policySuite) TestPolicyBranches(c *C) {
 }
 
 func (s *policySuite) TestPolicyBranchesNumericSelector(c *C) {
-	s.testPolicyBranches(c, "$0")
+	s.testPolicyBranches(c, "$[0]")
 }
 
 func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
@@ -1328,11 +1324,11 @@ func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		SelectedPath: "$2",
+		SelectedPath: "$[2]",
 	}
 
 	_, err = policy.Execute(s.TPM, session, params, nil)
-	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: selected path 2 out of range`)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot select branch: selected path 2 out of range`)
 }
 
 func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
@@ -1362,7 +1358,7 @@ func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
 	}
 
 	_, err = policy.Execute(s.TPM, session, params, nil)
-	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: badly formatted path component "\$foo": expected integer`)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot select branch: badly formatted path component "\$foo": input does not match format`)
 }
 
 func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
@@ -1392,7 +1388,7 @@ func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
 	}
 
 	_, err = policy.Execute(s.TPM, session, params, nil)
-	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: no branch with name "foo"`)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot select branch: no branch with name "foo"`)
 }
 
 func (s *policySuite) TestPolicyBranchesNoSelectedBranch(c *C) {
@@ -1418,7 +1414,7 @@ func (s *policySuite) TestPolicyBranchesNoSelectedBranch(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, err = policy.Execute(s.TPM, session, nil, nil)
-	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: cannot select branch: no more path components`)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot select branch: no more path components`)
 }
 
 func (s *policySuite) TestPolicyBranchesMissingDigest(c *C) {
@@ -1448,7 +1444,7 @@ func (s *policySuite) TestPolicyBranchesMissingDigest(c *C) {
 	}
 
 	_, err = policy.Execute(s.TPM, session, params, nil)
-	c.Check(err, ErrorMatches, `cannot process branch node: cannot process branch node: invalid branch 0: missing digest for session algorithm`)
+	c.Check(err, ErrorMatches, `cannot process branch node: invalid branch 0: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 }
 
@@ -1611,4 +1607,94 @@ func (s *policySuite) TestPolicyNvWrittenFalse(c *C) {
 
 func (s *policySuite) TestPolicyNvWrittenTrue(c *C) {
 	s.testPolicyNvWritten(c, true)
+}
+
+type policySuitePCR struct {
+	testutil.TPMTest
+}
+
+func (s *policySuitePCR) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureNV | testutil.TPMFeaturePCR
+}
+
+var _ = Suite(&policySuitePCR{})
+
+func (s *policySuitePCR) testPolicyBranchesAutoSelected(c *C, path PolicyBranchPath) {
+	_, err := s.TPM.PCREvent(s.TPM.PCRHandleContext(23), []byte("foo"), nil)
+	c.Check(err, IsNil)
+
+	_, pcrValues, err := s.TPM.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7, 23}}})
+	c.Assert(err, IsNil)
+
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}}), IsNil)
+
+	b2 := node.AddBranch("")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicyPCR(pcrValues), IsNil)
+
+	expectedDigests, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: path,
+	}
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigests[0].Digest())
+}
+
+func (s *policySuitePCR) TestPolicyBranchesAutoSelectedImplicit(c *C) {
+	s.testPolicyBranchesAutoSelected(c, "")
+}
+
+func (s *policySuitePCR) TestPolicyBranchesAutoSelectediExplicit(c *C) {
+	s.testPolicyBranchesAutoSelected(c, "$[*]")
+}
+
+func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
+	_, err := s.TPM.PCREvent(s.TPM.PCRHandleContext(23), []byte("foo"), nil)
+	c.Check(err, IsNil)
+
+	_, pcrValues, err := s.TPM.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7, 23}}})
+	c.Assert(err, IsNil)
+
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+
+	node := pc.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}}), IsNil)
+
+	b2 := node.AddBranch("")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicyPCR(pcrValues), IsNil)
+
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	_, err = s.TPM.PCREvent(s.TPM.PCRHandleContext(23), []byte("foo"), nil)
+	c.Check(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "$[*]",
+	}
+	_, err = policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, ErrorMatches, `cannot process branch node: cannot autoselect branch: no branch is valid for current state`)
 }

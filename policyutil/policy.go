@@ -179,12 +179,16 @@ func (n *PolicyBranchName) Unmarshal(r io.Reader) error {
 }
 
 // PolicyBranchPath identifies an execution path through the branches in a profile,
-// with each branch selector separated by a '/' character. Each branch can either
-// be selected by its name (if it has one), or a numeric identifier of the form
-// "$n" which selects a branch at a node using its index.
+// with each branch selector component is separated by a '/' character. Each branch can
+// either be selected by its name (if it has one), or a numeric identifier of the form
+// "$[n]" which selects a branch at a node using its index.
+//
+// The component "$[*]" enables autoselection for a node, where a branch will be selected
+// automatically. This only works for branches containing TPM2_PolicyPCR assertions
+// where the assertion parameters match the current PCR values.
 type PolicyBranchPath string
 
-func (p PolicyBranchPath) popNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath, err error) {
+func (p PolicyBranchPath) popNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath) {
 	remaining = p
 	for len(remaining) > 0 {
 		s := strings.SplitN(string(remaining), "/", 2)
@@ -194,11 +198,11 @@ func (p PolicyBranchPath) popNextComponent() (next PolicyBranchPath, remaining P
 		}
 		component := PolicyBranchPath(s[0])
 		if len(component) > 0 {
-			return component, remaining, nil
+			return component, remaining
 		}
 	}
 
-	return "", "", errors.New("no more path components")
+	return "", ""
 }
 
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
@@ -584,38 +588,173 @@ func (r *realPolicyResources) authorize(context tpm2.ResourceContext) (tpm2.Sess
 	return r.authorizer.Authorize(context)
 }
 
+type policyBranchAutoSelector struct {
+	tpm        *tpm2.TPMContext
+	sessionAlg tpm2.HashAlgorithmId
+	pcrs       tpm2.PCRSelectionList
+	pcrValues  tpm2.PCRValues
+	sessions   []tpm2.SessionContext
+}
+
+func newPolicyBranchAutoSelector(tpm *tpm2.TPMContext, sessionAlg tpm2.HashAlgorithmId, sessions ...tpm2.SessionContext) *policyBranchAutoSelector {
+	return &policyBranchAutoSelector{
+		tpm:        tpm,
+		sessionAlg: sessionAlg,
+		sessions:   sessions,
+	}
+}
+
+func (s *policyBranchAutoSelector) collectPCRSelectionList(branches policyBranches) {
+	s.pcrs = nil
+	for _, branch := range branches {
+		if len(branch.Policy) != 1 {
+			continue
+		}
+
+		if branch.Policy[0].Type != tpm2.CommandPolicyPCR {
+			continue
+		}
+
+		values, err := branch.Policy[0].Details.PCR.pcrValues()
+		if err != nil {
+			continue
+		}
+		pcrs, err := values.SelectionList()
+		if err != nil {
+			continue
+		}
+
+		s.pcrs = s.pcrs.MustMerge(pcrs)
+	}
+
+	s.pcrValues = nil
+}
+
+func (s *policyBranchAutoSelector) ensureCurrentPCRValues() error {
+	_, values, err := s.tpm.PCRRead(s.pcrs, s.sessions...)
+	if err != nil {
+		return err
+	}
+	s.pcrValues = values
+	return nil
+}
+
+func (s *policyBranchAutoSelector) checkPolicyPCR(pcr *policyPCR) (bool, error) {
+	if err := s.ensureCurrentPCRValues(); err != nil {
+		return false, err
+	}
+
+	values, err := pcr.pcrValues()
+	if err != nil {
+		return false, nil
+	}
+	pcrs, pcrDigest, err := ComputePCRDigestFromAllValues(s.sessionAlg, values)
+	if err != nil {
+		return false, nil
+	}
+
+	currentDigest, err := ComputePCRDigest(s.sessionAlg, pcrs, s.pcrValues)
+	if err != nil {
+		return false, fmt.Errorf("cannot compute PCR digest from current values: %w", err)
+	}
+
+	return bytes.Equal(pcrDigest, currentDigest), nil
+}
+
+func (s *policyBranchAutoSelector) checkBranchValid(branch *policyBranch) (valid bool, err error) {
+	for i, element := range branch.Policy {
+		switch element.Type {
+		case tpm2.CommandPolicyPCR:
+			valid, err = s.checkPolicyPCR(element.Details.PCR)
+		}
+		if err != nil {
+			return false, fmt.Errorf("cannot check element %d: %w", i, err)
+		}
+		if !valid {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func (s *policyBranchAutoSelector) run(branches policyBranches) (int, error) {
+	s.collectPCRSelectionList(branches)
+
+	for i, branch := range branches {
+		valid, err := s.checkBranchValid(&branch)
+		if err != nil {
+			return -1, fmt.Errorf("cannot check whether branch %d can be selected: %w", i, err)
+		}
+		if valid {
+			return i, nil
+		}
+	}
+
+	return -1, nil
+}
+
 type realPolicyBranchHandler struct {
+	tpm        *tpm2.TPMContext
 	sessionAlg tpm2.HashAlgorithmId
 	current    PolicyBranchPath
 	remaining  PolicyBranchPath
+	sessions   []tpm2.SessionContext
 }
 
-func newRealPolicyBranchHandler(sessionAlg tpm2.HashAlgorithmId, path PolicyBranchPath) *realPolicyBranchHandler {
+func newRealPolicyBranchHandler(tpm *tpm2.TPMContext, sessionAlg tpm2.HashAlgorithmId, path PolicyBranchPath, sessions ...tpm2.SessionContext) *realPolicyBranchHandler {
 	return &realPolicyBranchHandler{
+		tpm:        tpm,
 		sessionAlg: sessionAlg,
 		current:    "/",
 		remaining:  path,
+		sessions:   sessions,
 	}
 }
 
+func (h *realPolicyBranchHandler) tryAutoSelectBranch(branches policyBranches) (int, error) {
+	selector := newPolicyBranchAutoSelector(h.tpm, h.sessionAlg, h.sessions...)
+	return selector.run(branches)
+}
+
 func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error {
-	next, remaining, err := h.remaining.popNextComponent()
-	if err != nil {
-		return fmt.Errorf("cannot select branch: %w", err)
-	}
+	next, remaining := h.remaining.popNextComponent()
 
 	h.current = PolicyBranchPath(strings.Join([]string{string(h.current), string(next)}, "/"))
 	h.remaining = remaining
 
 	var selected int
-	if next[0] == '$' {
-		if _, err := fmt.Sscanf(string(next), "$%d", &selected); err != nil {
+	switch {
+	case len(next) == 0:
+		// no branch explictly selected - try to autoselect first
+		var err error
+		selected, err = h.tryAutoSelectBranch(branches)
+		if err != nil {
+			return fmt.Errorf("cannot autoselect branch: %w", err)
+		}
+		if selected == -1 {
+			return errors.New("cannot select branch: no more path components")
+		}
+	case next == "$[*]":
+		// attempt autoselect
+		var err error
+		selected, err = h.tryAutoSelectBranch(branches)
+		if err != nil {
+			return fmt.Errorf("cannot autoselect branch: %w", err)
+		}
+		if selected == -1 {
+			return errors.New("cannot autoselect branch: no branch is valid for current state")
+		}
+	case next[0] == '$':
+		// select branch by index
+		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
 			return fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
 		}
 		if selected < 0 || selected >= len(branches) {
 			return fmt.Errorf("cannot select branch: selected path %d out of range", selected)
 		}
-	} else {
+	default:
+		// select branch by name
 		selected = -1
 		for i, branch := range branches {
 			if len(branch.Name) == 0 {
@@ -981,20 +1120,28 @@ type policyPCR struct {
 func (*policyPCR) name() string { return "TPM2_PolicyPCR assertion" }
 
 func (e *policyPCR) run(context policyRunContext) error {
-	values := make(tpm2.PCRValues)
-	for i, value := range e.PCRs {
-		if value.PCR.Type() != tpm2.HandleTypePCR {
-			return fmt.Errorf("invalid PCR handle at index %d", i)
-		}
-		if err := values.SetValue(value.Digest.HashAlg, int(value.PCR), value.Digest.Digest); err != nil {
-			return fmt.Errorf("invalid PCR value at index %d: %w", i, err)
-		}
+	values, err := e.pcrValues()
+	if err != nil {
+		return err
 	}
 	pcrs, pcrDigest, err := ComputePCRDigestFromAllValues(context.session().HashAlg(), values)
 	if err != nil {
 		return fmt.Errorf("cannot compute PCR digest: %w", err)
 	}
 	return context.session().PolicyPCR(pcrDigest, pcrs)
+}
+
+func (e *policyPCR) pcrValues() (tpm2.PCRValues, error) {
+	values := make(tpm2.PCRValues)
+	for i, value := range e.PCRs {
+		if value.PCR.Type() != tpm2.HandleTypePCR {
+			return nil, fmt.Errorf("invalid PCR handle at index %d", i)
+		}
+		if err := values.SetValue(value.Digest.HashAlg, int(value.PCR), value.Digest.Digest); err != nil {
+			return nil, fmt.Errorf("invalid PCR value at index %d: %w", i, err)
+		}
+	}
+	return values, nil
 }
 
 type policyDuplicationSelect struct {
@@ -1193,10 +1340,7 @@ func (r *policyRunner) addTicket(ticket *PolicyTicket) {
 }
 
 func (r *policyRunner) handleBranches(branches policyBranches) error {
-	if err := r.branchHandler.handleBranches(r, branches); err != nil {
-		return fmt.Errorf("cannot process branch node: %w", err)
-	}
-	return nil
+	return r.branchHandler.handleBranches(r, branches)
 }
 
 func (r *policyRunner) queueBranch(branch policyElements) {
@@ -1252,7 +1396,7 @@ func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 		newRealPolicySession(tpm, policySession, sessions...),
 		newRealPolicyParams(params),
 		newRealPolicyResources(tpm, params.Resources, authorizer, sessions...),
-		newRealPolicyBranchHandler(policySession.HashAlg(), params.SelectedPath),
+		newRealPolicyBranchHandler(tpm, policySession.HashAlg(), params.SelectedPath, sessions...),
 	)
 
 	if err := runner.run(p.policy.Policy); err != nil {

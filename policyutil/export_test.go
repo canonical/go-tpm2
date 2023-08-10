@@ -34,7 +34,7 @@ func (t *PolicyOrTree) SelectBranch(i int) policyElements {
 	return t.selectBranch(i)
 }
 
-func (p PolicyBranchPath) PopNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath, err error) {
+func (p PolicyBranchPath) PopNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath) {
 	return p.popNextComponent()
 }
 
