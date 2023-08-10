@@ -809,10 +809,10 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 			copy(ta.Digest, currentDigest)
 
 			runner := newPolicyRunner(
-				newTrialPolicySessionContext(ta),
-				new(trialPolicyParams),
+				newComputePolicySessionContext(ta),
+				new(computePolicyParams),
 				newRealPolicyResources(h.tpm, h.resources, new(dummyPolicyResourceAuthorizer), h.sessions...),
-				newTrialBranchHandler(h.policySession.HashAlg()),
+				newComputeBranchHandler(h.policySession.HashAlg()),
 			)
 			if err := runner.run(branch.Policy); err != nil {
 				return fmt.Errorf("cannot compute digest for branch %d: %w", i, err)

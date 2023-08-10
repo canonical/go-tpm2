@@ -14,19 +14,19 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-type trialPolicySessionContext struct {
+type computePolicySessionContext struct {
 	digest *taggedHash
 }
 
-func newTrialPolicySessionContext(digest *taggedHash) *trialPolicySessionContext {
-	return &trialPolicySessionContext{digest: digest}
+func newComputePolicySessionContext(digest *taggedHash) *computePolicySessionContext {
+	return &computePolicySessionContext{digest: digest}
 }
 
-func (s *trialPolicySessionContext) reset() {
+func (s *computePolicySessionContext) reset() {
 	s.digest.Digest = make(tpm2.Digest, s.digest.HashAlg.Size())
 }
 
-func (s *trialPolicySessionContext) updateForCommand(command tpm2.CommandCode, params ...interface{}) error {
+func (s *computePolicySessionContext) updateForCommand(command tpm2.CommandCode, params ...interface{}) error {
 	h := s.digest.HashAlg.NewHash()
 	h.Write(s.digest.Digest)
 	mu.MustMarshalToWriter(h, command)
@@ -37,13 +37,13 @@ func (s *trialPolicySessionContext) updateForCommand(command tpm2.CommandCode, p
 	return nil
 }
 
-func (s *trialPolicySessionContext) mustUpdateForCommand(command tpm2.CommandCode, params ...interface{}) {
+func (s *computePolicySessionContext) mustUpdateForCommand(command tpm2.CommandCode, params ...interface{}) {
 	if err := s.updateForCommand(command, params...); err != nil {
 		panic(err)
 	}
 }
 
-func (s *trialPolicySessionContext) policyUpdate(command tpm2.CommandCode, name tpm2.Name, policyRef tpm2.Nonce) {
+func (s *computePolicySessionContext) policyUpdate(command tpm2.CommandCode, name tpm2.Name, policyRef tpm2.Nonce) {
 	s.mustUpdateForCommand(command, mu.Raw(name))
 
 	h := s.digest.HashAlg.NewHash()
@@ -52,11 +52,11 @@ func (s *trialPolicySessionContext) policyUpdate(command tpm2.CommandCode, name 
 	s.digest.Digest = h.Sum(nil)
 }
 
-func (s *trialPolicySessionContext) HashAlg() tpm2.HashAlgorithmId {
+func (s *computePolicySessionContext) HashAlg() tpm2.HashAlgorithmId {
 	return s.digest.HashAlg
 }
 
-func (s *trialPolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
+func (s *computePolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
 	if !index.Name().IsValid() {
 		return errors.New("invalid index name")
 	}
@@ -67,7 +67,7 @@ func (s *trialPolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, o
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
+func (s *computePolicySessionContext) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
 	if !authObject.Name().IsValid() {
 		return nil, nil, errors.New("invalid authObject name")
 	}
@@ -75,27 +75,27 @@ func (s *trialPolicySessionContext) PolicySecret(authObject tpm2.ResourceContext
 	return nil, nil, nil
 }
 
-func (s *trialPolicySessionContext) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+func (s *computePolicySessionContext) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
 	s.policyUpdate(tpm2.CommandPolicySigned, authKey.Name(), policyRef)
 	return nil, nil, nil
 }
 
-func (s *trialPolicySessionContext) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+func (s *computePolicySessionContext) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
 	s.policyUpdate(tpm2.CommandPolicyAuthorize, keySign, policyRef)
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyAuthValue() error {
+func (s *computePolicySessionContext) PolicyAuthValue() error {
 	s.mustUpdateForCommand(tpm2.CommandPolicyAuthValue)
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyCommandCode(code tpm2.CommandCode) error {
+func (s *computePolicySessionContext) PolicyCommandCode(code tpm2.CommandCode) error {
 	s.mustUpdateForCommand(tpm2.CommandPolicyCommandCode, code)
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+func (s *computePolicySessionContext) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
 	h := s.digest.HashAlg.NewHash()
 	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
 
@@ -103,17 +103,17 @@ func (s *trialPolicySessionContext) PolicyCounterTimer(operandB tpm2.Operand, of
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyCpHash(cpHashA tpm2.Digest) error {
+func (s *computePolicySessionContext) PolicyCpHash(cpHashA tpm2.Digest) error {
 	s.mustUpdateForCommand(tpm2.CommandPolicyCpHash, mu.Raw(cpHashA))
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyNameHash(nameHash tpm2.Digest) error {
+func (s *computePolicySessionContext) PolicyNameHash(nameHash tpm2.Digest) error {
 	s.mustUpdateForCommand(tpm2.CommandPolicyNameHash, mu.Raw(nameHash))
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyOR(pHashList tpm2.DigestList) error {
+func (s *computePolicySessionContext) PolicyOR(pHashList tpm2.DigestList) error {
 	if len(pHashList) < 2 || len(pHashList) > 8 {
 		return errors.New("invalid number of branches")
 	}
@@ -131,15 +131,15 @@ func (s *trialPolicySessionContext) PolicyOR(pHashList tpm2.DigestList) error {
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
+func (s *computePolicySessionContext) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
 	panic("not reached")
 }
 
-func (s *trialPolicySessionContext) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+func (s *computePolicySessionContext) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
 	return s.updateForCommand(tpm2.CommandPolicyPCR, pcrs, mu.Raw(pcrDigest))
 }
 
-func (s *trialPolicySessionContext) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
+func (s *computePolicySessionContext) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
 	if !newParentName.IsValid() {
 		return errors.New("invalid newParent name")
 	}
@@ -154,39 +154,39 @@ func (s *trialPolicySessionContext) PolicyDuplicationSelect(objectName, newParen
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyPassword() error {
+func (s *computePolicySessionContext) PolicyPassword() error {
 	s.mustUpdateForCommand(tpm2.CommandPolicyAuthValue)
 	return nil
 }
 
-func (s *trialPolicySessionContext) PolicyNvWritten(writtenSet bool) error {
+func (s *computePolicySessionContext) PolicyNvWritten(writtenSet bool) error {
 	s.mustUpdateForCommand(tpm2.CommandPolicyNvWritten, writtenSet)
 	return nil
 }
 
-type trialPolicyParams struct{}
+type computePolicyParams struct{}
 
-func (p *trialPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
+func (p *computePolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
 	return nil
 }
 
-func (p *trialPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
+func (p *computePolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
 	return new(PolicySignedAuthorization)
 }
 
-func (p *trialPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+func (p *computePolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
 	return nil
 }
 
-type trialPolicyResources struct {
+type computePolicyResources struct {
 	nvIndices map[tpm2.Handle]tpm2.Name
 }
 
-func newTrialPolicyResources(nvIndices map[tpm2.Handle]tpm2.Name) *trialPolicyResources {
-	return &trialPolicyResources{nvIndices: nvIndices}
+func newComputePolicyResources(nvIndices map[tpm2.Handle]tpm2.Name) *computePolicyResources {
+	return &computePolicyResources{nvIndices: nvIndices}
 }
 
-func (r *trialPolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
+func (r *computePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
 	switch handle.Type() {
 	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
 		// the handle is not relevant here
@@ -202,12 +202,12 @@ func (r *trialPolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceCont
 	}
 }
 
-func (r *trialPolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
+func (r *computePolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
 	// the handle is not relevant here
 	return newPolicyResourceContextNonFlushable(tpm2.NewLimitedResourceContext(0x80000000, name)), nil
 }
 
-func (r *trialPolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
+func (r *computePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
 	// the handle is not relevant here
 	resource, err := tpm2.NewObjectResourceContextFromPub(0x80000000, public)
 	if err != nil {
@@ -216,23 +216,23 @@ func (r *trialPolicyResources) loadExternal(public *tpm2.Public) (policyResource
 	return newPolicyResourceContextNonFlushable(resource), nil
 }
 
-func (r *trialPolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
+func (r *computePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
 	return new(tpm2.NVPublic), nil
 }
 
-func (r *trialPolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
+func (r *computePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
 	return nil, nil
 }
 
-type trialBranchHandler struct {
+type computeBranchHandler struct {
 	sessionAlg tpm2.HashAlgorithmId
 }
 
-func newTrialBranchHandler(alg tpm2.HashAlgorithmId) *trialBranchHandler {
-	return &trialBranchHandler{sessionAlg: alg}
+func newComputeBranchHandler(alg tpm2.HashAlgorithmId) *computeBranchHandler {
+	return &computeBranchHandler{sessionAlg: alg}
 }
 
-func (h *trialBranchHandler) handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error {
+func (h *computeBranchHandler) handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error {
 	var digests tpm2.DigestList
 	for _, branch := range branches {
 		for _, digest := range branch.PolicyDigests {
@@ -357,10 +357,10 @@ func newPolicyComputeBranch(policy *PolicyComputer, name PolicyBranchName, diges
 	}
 	for i := range b.policyBranch.PolicyDigests {
 		b.runners = append(b.runners, newPolicyRunner(
-			newTrialPolicySessionContext(&b.policyBranch.PolicyDigests[i]),
-			new(trialPolicyParams),
-			newTrialPolicyResources(policy.nvIndices),
-			newTrialBranchHandler(b.policyBranch.PolicyDigests[i].HashAlg),
+			newComputePolicySessionContext(&b.policyBranch.PolicyDigests[i]),
+			new(computePolicyParams),
+			newComputePolicyResources(policy.nvIndices),
+			newComputeBranchHandler(b.policyBranch.PolicyDigests[i].HashAlg),
 		))
 	}
 	return b
