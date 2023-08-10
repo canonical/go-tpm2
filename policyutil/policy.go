@@ -287,6 +287,12 @@ type policyRunContext interface {
 	handleBranches(branches policyBranches) error
 }
 
+type dummyPolicyResourceAuthorizer struct{}
+
+func (*dummyPolicyResourceAuthorizer) Authorize(resource tpm2.ResourceContext) (tpm2.SessionContext, error) {
+	return nil, nil
+}
+
 type realPolicySession struct {
 	tpm           *tpm2.TPMContext
 	policySession tpm2.SessionContext
@@ -695,25 +701,31 @@ func (s *policyBranchAutoSelector) run(branches policyBranches) (int, error) {
 }
 
 type realPolicyBranchHandler struct {
-	tpm        *tpm2.TPMContext
-	sessionAlg tpm2.HashAlgorithmId
-	current    PolicyBranchPath
-	remaining  PolicyBranchPath
-	sessions   []tpm2.SessionContext
+	tpm           *tpm2.TPMContext
+	policySession tpm2.SessionContext
+	resources     *PolicyResources
+	current       PolicyBranchPath
+	remaining     PolicyBranchPath
+	sessions      []tpm2.SessionContext
 }
 
-func newRealPolicyBranchHandler(tpm *tpm2.TPMContext, sessionAlg tpm2.HashAlgorithmId, path PolicyBranchPath, sessions ...tpm2.SessionContext) *realPolicyBranchHandler {
+func newRealPolicyBranchHandler(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, resources *PolicyResources, path PolicyBranchPath, sessions ...tpm2.SessionContext) *realPolicyBranchHandler {
+	if resources == nil {
+		resources = new(PolicyResources)
+	}
+
 	return &realPolicyBranchHandler{
-		tpm:        tpm,
-		sessionAlg: sessionAlg,
-		current:    "/",
-		remaining:  path,
-		sessions:   sessions,
+		tpm:           tpm,
+		policySession: policySession,
+		resources:     resources,
+		current:       "/",
+		remaining:     path,
+		sessions:      sessions,
 	}
 }
 
 func (h *realPolicyBranchHandler) tryAutoSelectBranch(branches policyBranches) (int, error) {
-	selector := newPolicyBranchAutoSelector(h.tpm, h.sessionAlg, h.sessions...)
+	selector := newPolicyBranchAutoSelector(h.tpm, h.policySession.HashAlg(), h.sessions...)
 	return selector.run(branches)
 }
 
@@ -770,11 +782,13 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 		}
 	}
 
+	var currentDigest tpm2.Digest
+
 	var digests tpm2.DigestList
 	for i, branch := range branches {
 		foundDigest := false
 		for _, digest := range branch.PolicyDigests {
-			if digest.HashAlg != h.sessionAlg {
+			if digest.HashAlg != h.policySession.HashAlg() {
 				continue
 			}
 
@@ -783,13 +797,34 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 			break
 		}
 		if !foundDigest {
-			return fmt.Errorf("invalid branch %d: %w", i, ErrMissingDigest)
+			if currentDigest == nil {
+				var err error
+				currentDigest, err = h.tpm.PolicyGetDigest(h.policySession, h.sessions...)
+				if err != nil {
+					return err
+				}
+			}
+
+			ta := &taggedHash{HashAlg: h.policySession.HashAlg(), Digest: make(tpm2.Digest, h.policySession.HashAlg().Size())}
+			copy(ta.Digest, currentDigest)
+
+			runner := newPolicyRunner(
+				newTrialPolicySessionContext(ta),
+				new(trialPolicyParams),
+				newRealPolicyResources(h.tpm, h.resources, new(dummyPolicyResourceAuthorizer), h.sessions...),
+				newTrialBranchHandler(h.policySession.HashAlg()),
+			)
+			if err := runner.run(branch.Policy); err != nil {
+				return fmt.Errorf("cannot compute digest for branch %d: %w", i, err)
+			}
+
+			digests = append(digests, ta.Digest)
 		}
 	}
 
 	branch := branches[selected].Policy
 
-	tree, err := newPolicyOrTree(h.sessionAlg, digests)
+	tree, err := newPolicyOrTree(h.policySession.HashAlg(), digests)
 	if err != nil {
 		return fmt.Errorf("cannot create policy OR tree: %w", err)
 	}
@@ -1396,7 +1431,7 @@ func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 		newRealPolicySession(tpm, policySession, sessions...),
 		newRealPolicyParams(params),
 		newRealPolicyResources(tpm, params.Resources, authorizer, sessions...),
-		newRealPolicyBranchHandler(tpm, policySession.HashAlg(), params.SelectedPath, sessions...),
+		newRealPolicyBranchHandler(tpm, policySession, params.Resources, params.SelectedPath, sessions...),
 	)
 
 	if err := runner.run(p.policy.Policy); err != nil {

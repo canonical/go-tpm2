@@ -1417,7 +1417,7 @@ func (s *policySuite) TestPolicyBranchesNoSelectedBranch(c *C) {
 	c.Check(err, ErrorMatches, `cannot process branch node: cannot select branch: no more path components`)
 }
 
-func (s *policySuite) TestPolicyBranchesMissingDigest(c *C) {
+func (s *policySuite) TestPolicyBranchesComputeBranchDigests(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
@@ -1443,9 +1443,13 @@ func (s *policySuite) TestPolicyBranchesMissingDigest(c *C) {
 		SelectedPath: "branch1",
 	}
 
-	_, err = policy.Execute(s.TPM, session, params, nil)
-	c.Check(err, ErrorMatches, `cannot process branch node: invalid branch 0: missing digest for session algorithm`)
-	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "7dd279d84a51aee7d2a5b19f0c9d9eb275015347bf98158a65612831cf4352d5")))
 }
 
 func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
