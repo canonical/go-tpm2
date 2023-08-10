@@ -28,7 +28,7 @@ type authSuite struct {
 
 var _ = Suite(&authSuite{})
 
-type testPolicyAuthorizationData struct {
+type testPolicySignedAuthorizationData struct {
 	authKey         *tpm2.Public
 	policyRef       tpm2.Nonce
 	sessionAlg      tpm2.HashAlgorithmId
@@ -43,7 +43,7 @@ type testPolicyAuthorizationData struct {
 	expectedHash   tpm2.HashAlgorithmId
 }
 
-func (s *authSuite) testPolicyAuthorization(c *C, data *testPolicyAuthorizationData) {
+func (s *authSuite) testPolicySignedAuthorization(c *C, data *testPolicySignedAuthorizationData) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, data.sessionAlg)
 
 	var nonceTPM tpm2.Nonce
@@ -51,7 +51,7 @@ func (s *authSuite) testPolicyAuthorization(c *C, data *testPolicyAuthorizationD
 		nonceTPM = session.NonceTPM()
 	}
 
-	auth, err := NewPolicyAuthorization(data.authKey, data.policyRef, data.sessionAlg, nonceTPM, data.cpHashA, data.expiration)
+	auth, err := NewPolicySignedAuthorization(data.authKey, data.policyRef, data.sessionAlg, nonceTPM, data.cpHashA, data.expiration)
 	c.Assert(err, IsNil)
 
 	c.Check(auth.Sign(rand.Reader, data.signer, data.signerOpts), IsNil)
@@ -73,14 +73,14 @@ func (s *authSuite) testPolicyAuthorization(c *C, data *testPolicyAuthorizationD
 	c.Check(err, IsNil)
 }
 
-func (s *authSuite) TestPolicyAuthorizationRSAPSS(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationRSAPSS(c *C) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewRSAPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:        authKey,
 		sessionAlg:     tpm2.HashAlgorithmSHA256,
 		signer:         key,
@@ -89,14 +89,14 @@ func (s *authSuite) TestPolicyAuthorizationRSAPSS(c *C) {
 		expectedHash:   tpm2.HashAlgorithmSHA256})
 }
 
-func (s *authSuite) TestPolicyAuthorizationECDSA(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationECDSA(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:        authKey,
 		sessionAlg:     tpm2.HashAlgorithmSHA256,
 		signer:         key,
@@ -105,14 +105,14 @@ func (s *authSuite) TestPolicyAuthorizationECDSA(c *C) {
 		expectedHash:   tpm2.HashAlgorithmSHA256})
 }
 
-func (s *authSuite) TestPolicyAuthorizationSHA1(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationSHA1(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:        authKey,
 		sessionAlg:     tpm2.HashAlgorithmSHA256,
 		signer:         key,
@@ -121,14 +121,14 @@ func (s *authSuite) TestPolicyAuthorizationSHA1(c *C) {
 		expectedHash:   tpm2.HashAlgorithmSHA1})
 }
 
-func (s *authSuite) TestPolicyAuthorizationIncludeNonceTPM(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationIncludeNonceTPM(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:         authKey,
 		sessionAlg:      tpm2.HashAlgorithmSHA256,
 		includeNonceTPM: true,
@@ -138,14 +138,14 @@ func (s *authSuite) TestPolicyAuthorizationIncludeNonceTPM(c *C) {
 		expectedHash:    tpm2.HashAlgorithmSHA256})
 }
 
-func (s *authSuite) TestPolicyAuthorizationWithCpHashSHA256(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationWithCpHashSHA256(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:        authKey,
 		sessionAlg:     tpm2.HashAlgorithmSHA256,
 		cpHashA:        CommandParameters(tpm2.CommandUnseal, []Named{objectutil.NewSealedObjectTemplate()}),
@@ -155,14 +155,14 @@ func (s *authSuite) TestPolicyAuthorizationWithCpHashSHA256(c *C) {
 		expectedHash:   tpm2.HashAlgorithmSHA256})
 }
 
-func (s *authSuite) TestPolicyAuthorizationWithCpHashSHA1(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationWithCpHashSHA1(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:        authKey,
 		sessionAlg:     tpm2.HashAlgorithmSHA1,
 		cpHashA:        CommandParameters(tpm2.CommandUnseal, []Named{objectutil.NewSealedObjectTemplate()}),
@@ -172,14 +172,14 @@ func (s *authSuite) TestPolicyAuthorizationWithCpHashSHA1(c *C) {
 		expectedHash:   tpm2.HashAlgorithmSHA256})
 }
 
-func (s *authSuite) TestPolicyAuthorizationWithPolicyRef(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationWithPolicyRef(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:        authKey,
 		policyRef:      []byte("policy"),
 		sessionAlg:     tpm2.HashAlgorithmSHA256,
@@ -189,14 +189,14 @@ func (s *authSuite) TestPolicyAuthorizationWithPolicyRef(c *C) {
 		expectedHash:   tpm2.HashAlgorithmSHA256})
 }
 
-func (s *authSuite) TestPolicyAuthorizationWithExpiration(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationWithExpiration(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:        authKey,
 		sessionAlg:     tpm2.HashAlgorithmSHA256,
 		expiration:     -100,
@@ -206,14 +206,14 @@ func (s *authSuite) TestPolicyAuthorizationWithExpiration(c *C) {
 		expectedHash:   tpm2.HashAlgorithmSHA256})
 }
 
-func (s *authSuite) TestPolicyAuthorizationWithAllRestrictions(c *C) {
+func (s *authSuite) TestPolicySignedAuthorizationWithAllRestrictions(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testPolicyAuthorization(c, &testPolicyAuthorizationData{
+	s.testPolicySignedAuthorization(c, &testPolicySignedAuthorizationData{
 		authKey:         authKey,
 		policyRef:       []byte("policy"),
 		sessionAlg:      tpm2.HashAlgorithmSHA256,
@@ -226,7 +226,7 @@ func (s *authSuite) TestPolicyAuthorizationWithAllRestrictions(c *C) {
 		expectedHash:    tpm2.HashAlgorithmSHA256})
 }
 
-type testSignPolicyAuthorizationData struct {
+type testSignPolicySignedAuthorizationData struct {
 	signer          crypto.Signer
 	includeNonceTPM bool
 	cpHashA         tpm2.Digest
@@ -240,7 +240,7 @@ type testSignPolicyAuthorizationData struct {
 	authKey *tpm2.Public
 }
 
-func (s *authSuite) testSignPolicyAuthorization(c *C, data *testSignPolicyAuthorizationData) {
+func (s *authSuite) testSignPolicySignedAuthorization(c *C, data *testSignPolicySignedAuthorizationData) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	var nonceTPM tpm2.Nonce
@@ -248,7 +248,7 @@ func (s *authSuite) testSignPolicyAuthorization(c *C, data *testSignPolicyAuthor
 		nonceTPM = session.NonceTPM()
 	}
 
-	auth, err := SignPolicyAuthorization(rand.Reader, data.signer, nonceTPM, data.cpHashA, data.policyRef, data.expiration, data.signerOpts)
+	auth, err := SignPolicySignedAuthorization(rand.Reader, data.signer, nonceTPM, data.cpHashA, data.policyRef, data.expiration, data.signerOpts)
 	c.Assert(err, IsNil)
 	c.Check(auth.SigAlg, Equals, data.expectedScheme)
 	c.Check(auth.HashAlg(), Equals, data.expectedHash)
@@ -260,14 +260,14 @@ func (s *authSuite) testSignPolicyAuthorization(c *C, data *testSignPolicyAuthor
 	c.Check(err, IsNil)
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationRSAPSS(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationRSAPSS(c *C) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewRSAPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:         key,
 		signerOpts:     &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256},
 		expectedScheme: tpm2.SigSchemeAlgRSAPSS,
@@ -275,14 +275,14 @@ func (s *authSuite) TestSignPolicyAuthorizationRSAPSS(c *C) {
 		authKey:        authKey})
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationECDSA(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationECDSA(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:         key,
 		signerOpts:     tpm2.HashAlgorithmSHA256,
 		expectedScheme: tpm2.SigSchemeAlgECDSA,
@@ -290,14 +290,14 @@ func (s *authSuite) TestSignPolicyAuthorizationECDSA(c *C) {
 		authKey:        authKey})
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationSHA1(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationSHA1(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:         key,
 		signerOpts:     tpm2.HashAlgorithmSHA1,
 		expectedScheme: tpm2.SigSchemeAlgECDSA,
@@ -305,14 +305,14 @@ func (s *authSuite) TestSignPolicyAuthorizationSHA1(c *C) {
 		authKey:        authKey})
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationIncludeNonceTPM(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationIncludeNonceTPM(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:          key,
 		includeNonceTPM: true,
 		signerOpts:      tpm2.HashAlgorithmSHA256,
@@ -321,7 +321,7 @@ func (s *authSuite) TestSignPolicyAuthorizationIncludeNonceTPM(c *C) {
 		authKey:         authKey})
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationWithCpHash(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationWithCpHash(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
@@ -331,7 +331,7 @@ func (s *authSuite) TestSignPolicyAuthorizationWithCpHash(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "params")
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:         key,
 		cpHashA:        h.Sum(nil),
 		signerOpts:     tpm2.HashAlgorithmSHA256,
@@ -340,14 +340,14 @@ func (s *authSuite) TestSignPolicyAuthorizationWithCpHash(c *C) {
 		authKey:        authKey})
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationWithPolicyRef(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationWithPolicyRef(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:         key,
 		policyRef:      []byte("policy"),
 		signerOpts:     tpm2.HashAlgorithmSHA256,
@@ -356,14 +356,14 @@ func (s *authSuite) TestSignPolicyAuthorizationWithPolicyRef(c *C) {
 		authKey:        authKey})
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationWithExpiration(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationWithExpiration(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
 	authKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:          key,
 		includeNonceTPM: true,
 		expiration:      -100,
@@ -373,7 +373,7 @@ func (s *authSuite) TestSignPolicyAuthorizationWithExpiration(c *C) {
 		authKey:         authKey})
 }
 
-func (s *authSuite) TestSignPolicyAuthorizationWithAllRestrictions(c *C) {
+func (s *authSuite) TestSignPolicySignedAuthorizationWithAllRestrictions(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
 
@@ -383,7 +383,7 @@ func (s *authSuite) TestSignPolicyAuthorizationWithAllRestrictions(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "params")
 
-	s.testSignPolicyAuthorization(c, &testSignPolicyAuthorizationData{
+	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		signer:          key,
 		includeNonceTPM: true,
 		cpHashA:         h.Sum(nil),

@@ -207,11 +207,11 @@ func (p PolicyBranchPath) popNextComponent() (next PolicyBranchPath, remaining P
 
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
 type PolicyExecuteParams struct {
-	Resources      *PolicyResources       // Resources required by the policy
-	SecretParams   []*PolicySecretParams  // Parameters for TPM2_PolicySecret assertions
-	Tickets        []*PolicyTicket        // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
-	Authorizations []*PolicyAuthorization // Authorizations for TPM2_PolicySigned assertions
-	SelectedPath   PolicyBranchPath       // The selected path to execute
+	Resources            *PolicyResources             // Resources required by the policy
+	SecretParams         []*PolicySecretParams        // Parameters for TPM2_PolicySecret assertions
+	SignedAuthorizations []*PolicySignedAuthorization // Authorizations for TPM2_PolicySigned assertions
+	Tickets              []*PolicyTicket              // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
+	SelectedPath         PolicyBranchPath             // The selected path to execute
 }
 
 // PolicyResourceAuthorizer provides a way for an application to authorize resources
@@ -250,7 +250,7 @@ type policySession interface {
 
 type policyParams interface {
 	secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams
-	signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyAuthorization
+	signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 }
 
@@ -367,24 +367,24 @@ func (s *realPolicySession) PolicyNvWritten(writtenSet bool) error {
 
 type realPolicyParams struct {
 	policySecretParams map[paramKey]*PolicySecretParams
-	authorizations     map[paramKey]*PolicyAuthorization
+	authorizations     map[paramKey]*PolicySignedAuthorization
 	tickets            map[paramKey]*PolicyTicket
 }
 
 func newRealPolicyParams(params *PolicyExecuteParams) *realPolicyParams {
 	out := &realPolicyParams{
 		policySecretParams: make(map[paramKey]*PolicySecretParams),
-		authorizations:     make(map[paramKey]*PolicyAuthorization),
+		authorizations:     make(map[paramKey]*PolicySignedAuthorization),
 		tickets:            make(map[paramKey]*PolicyTicket),
 	}
 	for _, param := range params.SecretParams {
 		out.policySecretParams[policyParamKey(param.AuthName, param.PolicyRef)] = param
 	}
+	for _, auth := range params.SignedAuthorizations {
+		out.authorizations[policyParamKey(auth.AuthName, auth.PolicyRef)] = auth
+	}
 	for _, ticket := range params.Tickets {
 		out.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
-	}
-	for _, auth := range params.Authorizations {
-		out.authorizations[policyParamKey(auth.AuthName, auth.PolicyRef)] = auth
 	}
 
 	return out
@@ -394,7 +394,7 @@ func (p *realPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce
 	return p.policySecretParams[policyParamKey(authName, policyRef)]
 }
 
-func (p *realPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyAuthorization {
+func (p *realPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
 	return p.authorizations[policyParamKey(authName, policyRef)]
 }
 

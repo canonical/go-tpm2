@@ -170,8 +170,8 @@ func (p *trialPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonc
 	return nil
 }
 
-func (p *trialPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyAuthorization {
-	return new(PolicyAuthorization)
+func (p *trialPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
+	return new(PolicySignedAuthorization)
 }
 
 func (p *trialPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
