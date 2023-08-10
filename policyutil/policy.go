@@ -441,7 +441,7 @@ func (r *policyResourceContextNoFlush) flush() error {
 	return nil
 }
 
-type realPolicyResources struct {
+type onlinePolicyResources struct {
 	tpm        *tpm2.TPMContext
 	loaded     []tpm2.ResourceContext
 	saved      []*SavedContext
@@ -450,12 +450,12 @@ type realPolicyResources struct {
 	sessions   []tpm2.SessionContext
 }
 
-func newRealPolicyResources(tpm *tpm2.TPMContext, resources *PolicyResources, authorizer PolicyResourceAuthorizer, sessions ...tpm2.SessionContext) *realPolicyResources {
+func newOnlinePolicyResources(tpm *tpm2.TPMContext, resources *PolicyResources, authorizer PolicyResourceAuthorizer, sessions ...tpm2.SessionContext) *onlinePolicyResources {
 	if resources == nil {
 		resources = new(PolicyResources)
 	}
 
-	return &realPolicyResources{
+	return &onlinePolicyResources{
 		tpm:        tpm,
 		loaded:     resources.Loaded,
 		saved:      resources.Saved,
@@ -465,7 +465,7 @@ func newRealPolicyResources(tpm *tpm2.TPMContext, resources *PolicyResources, au
 	}
 }
 
-func (r *realPolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
+func (r *onlinePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
 	switch handle.Type() {
 	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
 		return r.tpm.GetPermanentContext(handle), nil
@@ -476,7 +476,7 @@ func (r *realPolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceConte
 	}
 }
 
-func (r *realPolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
+func (r *onlinePolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
 	if !name.IsValid() {
 		return nil, errors.New("invalid name")
 	}
@@ -574,7 +574,7 @@ func (r *realPolicyResources) loadName(name tpm2.Name) (policyResourceContext, e
 	return nil, ResourceNotFoundError(name)
 }
 
-func (r *realPolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
+func (r *onlinePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
 	rc, err := r.tpm.LoadExternal(nil, public, tpm2.HandleOwner, r.sessions...)
 	if err != nil {
 		return nil, err
@@ -582,12 +582,12 @@ func (r *realPolicyResources) loadExternal(public *tpm2.Public) (policyResourceC
 	return newPolicyResourceContextFlushable(r.tpm, rc), nil
 }
 
-func (r *realPolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
+func (r *onlinePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
 	pub, _, err := r.tpm.NVReadPublic(context)
 	return pub, err
 }
 
-func (r *realPolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
+func (r *onlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
 	if r.authorizer == nil {
 		return nil, errors.New("no authorizer")
 	}
@@ -808,12 +808,7 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 			ta := &taggedHash{HashAlg: h.policySession.HashAlg(), Digest: make(tpm2.Digest, h.policySession.HashAlg().Size())}
 			copy(ta.Digest, currentDigest)
 
-			runner := newPolicyRunner(
-				newComputePolicySessionContext(ta),
-				new(computePolicyParams),
-				newRealPolicyResources(h.tpm, h.resources, new(dummyPolicyResourceAuthorizer), h.sessions...),
-				newComputeBranchHandler(h.policySession.HashAlg()),
-			)
+			runner := newOnlineComputePolicyRunner(h.tpm, ta, h.resources, h.sessions...)
 			if err := runner.run(branch.Policy); err != nil {
 				return fmt.Errorf("cannot compute digest for branch %d: %w", i, err)
 			}
@@ -1347,6 +1342,28 @@ func newPolicyRunner(session policySession, params policyParams, resources polic
 	}
 }
 
+func newRealPolicyRunner(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, params *PolicyExecuteParams, authorizer PolicyResourceAuthorizer, sessions ...tpm2.SessionContext) *policyRunner {
+	if params == nil {
+		params = new(PolicyExecuteParams)
+	}
+
+	return newPolicyRunner(
+		newRealPolicySession(tpm, policySession, sessions...),
+		newRealPolicyParams(params),
+		newOnlinePolicyResources(tpm, params.Resources, authorizer, sessions...),
+		newRealPolicyBranchHandler(tpm, policySession, params.Resources, params.SelectedPath, sessions...),
+	)
+}
+
+func newOnlineComputePolicyRunner(tpm *tpm2.TPMContext, digest *taggedHash, resources *PolicyResources, sessions ...tpm2.SessionContext) *policyRunner {
+	return newPolicyRunner(
+		newComputePolicySessionContext(digest),
+		new(dummyPolicyParams),
+		newOnlinePolicyResources(tpm, resources, new(dummyPolicyResourceAuthorizer), sessions...),
+		newComputeBranchHandler(digest.HashAlg),
+	)
+}
+
 func (r *policyRunner) session() policySession {
 	return r.policySession
 }
@@ -1423,17 +1440,7 @@ func (r *policyRunner) run(policy policyElements) error {
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied. It will also return a list of tickets generated by any assertions.
 func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, params *PolicyExecuteParams, authorizer PolicyResourceAuthorizer, sessions ...tpm2.SessionContext) ([]*PolicyTicket, error) {
-	if params == nil {
-		params = new(PolicyExecuteParams)
-	}
-
-	runner := newPolicyRunner(
-		newRealPolicySession(tpm, policySession, sessions...),
-		newRealPolicyParams(params),
-		newRealPolicyResources(tpm, params.Resources, authorizer, sessions...),
-		newRealPolicyBranchHandler(tpm, policySession, params.Resources, params.SelectedPath, sessions...),
-	)
-
+	runner := newRealPolicyRunner(tpm, policySession, params, authorizer, sessions...)
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, err
 	}

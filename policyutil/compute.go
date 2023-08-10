@@ -164,29 +164,29 @@ func (s *computePolicySessionContext) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
-type computePolicyParams struct{}
+type dummyPolicyParams struct{}
 
-func (p *computePolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
+func (p *dummyPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
 	return nil
 }
 
-func (p *computePolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
+func (p *dummyPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
 	return new(PolicySignedAuthorization)
 }
 
-func (p *computePolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+func (p *dummyPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
 	return nil
 }
 
-type computePolicyResources struct {
+type offlinePolicyResources struct {
 	nvIndices map[tpm2.Handle]tpm2.Name
 }
 
-func newComputePolicyResources(nvIndices map[tpm2.Handle]tpm2.Name) *computePolicyResources {
-	return &computePolicyResources{nvIndices: nvIndices}
+func newOfflinePolicyResources(nvIndices map[tpm2.Handle]tpm2.Name) *offlinePolicyResources {
+	return &offlinePolicyResources{nvIndices: nvIndices}
 }
 
-func (r *computePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
+func (r *offlinePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
 	switch handle.Type() {
 	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
 		// the handle is not relevant here
@@ -202,12 +202,12 @@ func (r *computePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceCo
 	}
 }
 
-func (r *computePolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
+func (r *offlinePolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
 	// the handle is not relevant here
 	return newPolicyResourceContextNonFlushable(tpm2.NewLimitedResourceContext(0x80000000, name)), nil
 }
 
-func (r *computePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
+func (r *offlinePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
 	// the handle is not relevant here
 	resource, err := tpm2.NewObjectResourceContextFromPub(0x80000000, public)
 	if err != nil {
@@ -216,11 +216,11 @@ func (r *computePolicyResources) loadExternal(public *tpm2.Public) (policyResour
 	return newPolicyResourceContextNonFlushable(resource), nil
 }
 
-func (r *computePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
+func (r *offlinePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
 	return new(tpm2.NVPublic), nil
 }
 
-func (r *computePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
+func (r *offlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
 	return nil, nil
 }
 
@@ -335,6 +335,15 @@ func (n *PolicyComputeBranchNode) AddBranch(name PolicyBranchName) *PolicyComput
 	return b
 }
 
+func newOfflineComputePolicyRunner(nvIndices map[tpm2.Handle]tpm2.Name, digest *taggedHash) *policyRunner {
+	return newPolicyRunner(
+		newComputePolicySessionContext(digest),
+		new(dummyPolicyParams),
+		newOfflinePolicyResources(nvIndices),
+		newComputeBranchHandler(digest.HashAlg),
+	)
+}
+
 // PolicyComputeBranch corresponds to a branch in a policy that is being computed.
 type PolicyComputeBranch struct {
 	policy       *PolicyComputer
@@ -356,12 +365,7 @@ func newPolicyComputeBranch(policy *PolicyComputer, name PolicyBranchName, diges
 		b.policyBranch.PolicyDigests = append(b.policyBranch.PolicyDigests, newDigest)
 	}
 	for i := range b.policyBranch.PolicyDigests {
-		b.runners = append(b.runners, newPolicyRunner(
-			newComputePolicySessionContext(&b.policyBranch.PolicyDigests[i]),
-			new(computePolicyParams),
-			newComputePolicyResources(policy.nvIndices),
-			newComputeBranchHandler(b.policyBranch.PolicyDigests[i].HashAlg),
-		))
+		b.runners = append(b.runners, newOfflineComputePolicyRunner(policy.nvIndices, &b.policyBranch.PolicyDigests[i]))
 	}
 	return b
 }
