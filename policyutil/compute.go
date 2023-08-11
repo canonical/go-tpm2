@@ -265,8 +265,9 @@ func (h *computeBranchHandler) handleBranches(dispatcher policyBranchDispatcher,
 }
 
 type PolicyComputeBranchNode struct {
-	parentBranch  *PolicyComputeBranch
-	childBranches []*PolicyComputeBranch
+	parentBranch      *PolicyComputeBranch
+	saveBranchDigests bool
+	childBranches     []*PolicyComputeBranch
 
 	committed bool
 }
@@ -312,7 +313,7 @@ func (n *PolicyComputeBranchNode) commitBranchNode() error {
 	for _, branch := range n.childBranches {
 		branches = append(branches, *branch.policyBranch)
 	}
-	return n.parentBranch.commitBranches(branches)
+	return n.parentBranch.commitBranches(branches, n.saveBranchDigests)
 }
 
 // AddBranch adds a new branch to this branch node. The branch can be created with
@@ -370,7 +371,7 @@ func newPolicyComputeBranch(policy *PolicyComputer, name PolicyBranchName, diges
 	return b
 }
 
-func (b *PolicyComputeBranch) commitBranches(branches []policyBranch) error {
+func (b *PolicyComputeBranch) commitBranches(branches []policyBranch, saveBranchDigests bool) error {
 	b.currentBranchNode = nil
 	if err := b.prepareToModifyBranch(); err != nil {
 		return err
@@ -384,11 +385,17 @@ func (b *PolicyComputeBranch) commitBranches(branches []policyBranch) error {
 			Type: commandPolicyBranchNode,
 			Details: &policyElementDetails{
 				BranchNode: &policyBranchNode{Branches: branches}}}
-		b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 		if err := b.runElementsForEachAlgorithm(element); err != nil {
 			return err
 		}
+
+		if !saveBranchDigests {
+			for i := range element.Details.BranchNode.Branches {
+				element.Details.BranchNode.Branches[i].PolicyDigests = nil
+			}
+		}
+		b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 	}
 
 	return nil
@@ -801,12 +808,19 @@ func (b *PolicyComputeBranch) PolicyNvWritten(writtenSet bool) error {
 // The branches added to the returned branch node will be committed to this branch and
 // the branch node will be locked from further modifications by subsequent additions to this
 // branch, or any ancestor branches, or by calling [PolicyComputer.Policy].
-func (b *PolicyComputeBranch) AddBranchNode() *PolicyComputeBranchNode {
+//
+// The saveBranchDigests argument indicates whether the policy digests associated with
+// each branch should be retained. Omitting them saves space, but they will have to be be
+// recomputed during execution.
+func (b *PolicyComputeBranch) AddBranchNode(saveBranchDigests bool) *PolicyComputeBranchNode {
 	if err := b.prepareToModifyBranch(); err != nil {
 		b.policy.fail("AddBranchNode", err)
 	}
 
-	n := &PolicyComputeBranchNode{parentBranch: b}
+	n := &PolicyComputeBranchNode{
+		parentBranch:      b,
+		saveBranchDigests: saveBranchDigests,
+	}
 	b.currentBranchNode = n
 	return n
 }

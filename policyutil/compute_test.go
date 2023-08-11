@@ -1013,7 +1013,7 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1077,7 +1077,7 @@ func (s *computeSuite) TestLockBranchCommitCurrentBranchNode(c *C) {
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1112,7 +1112,7 @@ func (s *computeSuite) TestEmptyBranchNodeIsElided(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
@@ -1163,7 +1163,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	pc = ComputePolicy(tpm2.HashAlgorithmSHA1, tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1191,6 +1191,68 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 					{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[1]},
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashListSHA256[1]},
 				},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
+			),
+		),
+		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
+	)
+	digests, policy, err := pc.Policy()
+	c.Check(err, IsNil)
+	c.Check(digests, DeepEquals, expectedDigests)
+	c.Check(policy, DeepEquals, expectedPolicy)
+}
+
+func (s *computeSuite) TestPolicyBranchesNoSaveDigests(c *C) {
+	// Compute the expected digests using the low-level PolicyOR
+	var pHashList tpm2.DigestList
+
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
+	digests, _, err := pc.Policy()
+	c.Assert(digests, internal_testutil.LenEquals, 1)
+	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
+	pHashList = append(pHashList, digests[0].Digest())
+
+	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+	c.Check(pc.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+	digests, _, err = pc.Policy()
+	c.Assert(digests, internal_testutil.LenEquals, 1)
+	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
+	pHashList = append(pHashList, digests[0].Digest())
+
+	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), IsNil)
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	expectedDigests, _, err := pc.Policy()
+
+	// Now build a profile with branches
+	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode(false)
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	expectedPolicy := NewMockPolicy(
+		NewMockPolicyNvWrittenElement(true),
+		NewMockPolicyBranchNodeElement(
+			NewMockPolicyBranch(
+				"branch1", nil,
+				NewMockPolicyAuthValueElement(),
+			),
+			NewMockPolicyBranch(
+				"branch2", nil,
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
 			),
 		),

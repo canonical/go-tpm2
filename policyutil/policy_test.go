@@ -1192,7 +1192,7 @@ func (s *policySuite) testPolicyBranches(c *C, selectedPath PolicyBranchPath) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1235,7 +1235,7 @@ func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1270,7 +1270,7 @@ func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA1, tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1305,7 +1305,7 @@ func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1335,7 +1335,7 @@ func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1365,7 +1365,7 @@ func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1395,7 +1395,7 @@ func (s *policySuite) TestPolicyBranchesNoSelectedBranch(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1417,11 +1417,11 @@ func (s *policySuite) TestPolicyBranchesNoSelectedBranch(c *C) {
 	c.Check(err, ErrorMatches, `cannot process branch node: cannot select branch: no more path components`)
 }
 
-func (s *policySuite) TestPolicyBranchesComputeBranchDigests(c *C) {
+func (s *policySuite) TestPolicyBranchesComputeMissingBranchDigests1(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
@@ -1450,6 +1450,41 @@ func (s *policySuite) TestPolicyBranchesComputeBranchDigests(c *C) {
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "7dd279d84a51aee7d2a5b19f0c9d9eb275015347bf98158a65612831cf4352d5")))
+}
+
+func (s *policySuite) TestPolicyBranchesComputeMissingBranchDigests2(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode(false)
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	expectedDigests, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		SelectedPath: "branch1",
+	}
+
+	tickets, err := policy.Execute(s.TPM, session, params, nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigests[0].Digest())
 }
 
 func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
@@ -1632,7 +1667,7 @@ func (s *policySuitePCR) testPolicyBranchesAutoSelected(c *C, path PolicyBranchP
 
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("")
@@ -1677,7 +1712,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 
-	node := pc.RootBranch().AddBranchNode()
+	node := pc.RootBranch().AddBranchNode(true)
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("")
