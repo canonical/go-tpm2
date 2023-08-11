@@ -170,6 +170,10 @@ func (s *computePolicySessionContext) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
+func (s *computePolicySessionContext) PolicyGetDigest() (tpm2.Digest, error) {
+	return s.digest.Digest, nil
+}
+
 // mockPolicyParams is an implementation of policyParams that provides mock parameters
 // to compute a policy.
 type mockPolicyParams struct {
@@ -261,41 +265,53 @@ func (r *offlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.S
 }
 
 type computePolicyFlowHandler struct {
+	runner     *policyRunner
 	sessionAlg tpm2.HashAlgorithmId
 }
 
-func newComputePolicyFlowHandler(alg tpm2.HashAlgorithmId) *computePolicyFlowHandler {
-	return &computePolicyFlowHandler{sessionAlg: alg}
+func newComputePolicyFlowHandler(runner *policyRunner, alg tpm2.HashAlgorithmId) *computePolicyFlowHandler {
+	return &computePolicyFlowHandler{
+		runner:     runner,
+		sessionAlg: alg,
+	}
 }
 
-func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) ([]policyElementRunner, error) {
-	var digests tpm2.DigestList
+func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) error {
+	context := new(policyBranchNodeContext)
+
+	var elements []policyElementRunner
 	for _, branch := range branches {
-		for _, digest := range branch.PolicyDigests {
-			if digest.HashAlg != h.sessionAlg {
-				continue
-			}
-
-			digests = append(digests, digest.Digest)
-			break
-		}
+		branch := branch
+		elements = append(elements, &policyCollectBranchDigest{
+			context:    context,
+			branch:     &branch,
+			dispatcher: h.runner,
+		})
 	}
-	if len(digests) != len(branches) {
-		// PolicyComputeBranch maintains a branch for each algorithm, so there's a bug if
-		// we are missing a digest at this point.
-		panic("missing digests for session algorithm")
-	}
+	elements = append(elements, &policyBranchRun{
+		context:    context,
+		dispatcher: h.runner,
+	})
 
-	tree, err := newPolicyOrTree(h.sessionAlg, digests)
-	if err != nil {
-		// This can only fail if the number of digests is zero or greater than policyOrMaxDigests.
-		// PolicyComputeBranch.commitBranches elides a branch node with zero branches, and
-		// PolicyComputeBranchNode.AddBranch checks that the number of branches doesn't exceed
-		// policyOrMaxDigests, so there's a bug if we reach this.
-		panic(err)
-	}
+	h.runner.runElementsNext(elements)
+	return nil
+}
 
-	return tree.selectBranch(0), nil
+func (h *computePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
+	oldContext := h.runner.policyRunnerContext
+	h.runner.policyRunnerContext = newPolicyRunnerContext(
+		newComputePolicySessionContext(digest),
+		oldContext.policyParams,
+		oldContext.policyResources,
+		oldContext.policyFlowHandler,
+	)
+
+	h.runner.runElementsNext([]policyElementRunner{
+		&policyRunnerRestoreContext{
+			runner:  h.runner,
+			context: oldContext,
+		},
+	})
 }
 
 type PolicyComputeBranchNode struct {
@@ -370,12 +386,12 @@ func (n *PolicyComputeBranchNode) AddBranch(name PolicyBranchName) *PolicyComput
 	return b
 }
 
-func newOfflineComputePolicyRunner(nvIndices map[tpm2.Handle]tpm2.Name, external map[*tpm2.Public]tpm2.Name, signers map[paramKey]*tpm2.Public, digest *taggedHash) *policyRunner {
-	return newPolicyRunner(
+func newOfflineComputePolicyRunnerContext(runner *policyRunner, nvIndices map[tpm2.Handle]tpm2.Name, external map[*tpm2.Public]tpm2.Name, signers map[paramKey]*tpm2.Public, digest *taggedHash) *policyRunnerContext {
+	return newPolicyRunnerContext(
 		newComputePolicySessionContext(digest),
 		newMockPolicyParams(signers, external),
 		newOfflinePolicyResources(nvIndices, external),
-		newComputePolicyFlowHandler(digest.HashAlg),
+		newComputePolicyFlowHandler(runner, digest.HashAlg),
 	)
 }
 
@@ -400,12 +416,15 @@ func newPolicyComputeBranch(policy *PolicyComputer, name PolicyBranchName, diges
 		b.policyBranch.PolicyDigests = append(b.policyBranch.PolicyDigests, newDigest)
 	}
 	for i := range b.policyBranch.PolicyDigests {
-		b.runners = append(b.runners, newOfflineComputePolicyRunner(
+		runner := new(policyRunner)
+		runner.policyRunnerContext = newOfflineComputePolicyRunnerContext(
+			runner,
 			policy.nvIndices,
 			policy.external,
 			policy.signers,
 			&b.policyBranch.PolicyDigests[i],
-		))
+		)
+		b.runners = append(b.runners, runner)
 	}
 	return b
 }
