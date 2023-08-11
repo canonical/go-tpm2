@@ -287,12 +287,8 @@ type policyRunContext interface {
 	handleBranches(branches policyBranches) error
 }
 
-type dummyPolicyResourceAuthorizer struct{}
-
-func (*dummyPolicyResourceAuthorizer) Authorize(resource tpm2.ResourceContext) (tpm2.SessionContext, error) {
-	return nil, nil
-}
-
+// realPolicySession is an implementation of policySession that executes assertions
+// on a TPM.
 type realPolicySession struct {
 	tpm           *tpm2.TPMContext
 	policySession tpm2.SessionContext
@@ -371,6 +367,8 @@ func (s *realPolicySession) PolicyNvWritten(writtenSet bool) error {
 	return s.tpm.PolicyNvWritten(s.policySession, writtenSet, s.sessions...)
 }
 
+// realPolicyParams is an implementation of policyParams that provides real
+// parameters.
 type realPolicyParams struct {
 	policySecretParams map[paramKey]*PolicySecretParams
 	authorizations     map[paramKey]*PolicySignedAuthorization
@@ -387,7 +385,10 @@ func newRealPolicyParams(params *PolicyExecuteParams) *realPolicyParams {
 		out.policySecretParams[policyParamKey(param.AuthName, param.PolicyRef)] = param
 	}
 	for _, auth := range params.SignedAuthorizations {
-		out.authorizations[policyParamKey(auth.AuthName, auth.PolicyRef)] = auth
+		if auth.Authorization == nil {
+			continue
+		}
+		out.authorizations[policyParamKey(auth.Authorization.AuthKey.Name(), auth.Authorization.PolicyRef)] = auth
 	}
 	for _, ticket := range params.Tickets {
 		out.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
@@ -441,6 +442,8 @@ func (r *policyResourceContextNoFlush) flush() error {
 	return nil
 }
 
+// onlinePolicyResources is an implementation of policyResources that requires access
+// to a TPM.
 type onlinePolicyResources struct {
 	tpm        *tpm2.TPMContext
 	loaded     []tpm2.ResourceContext
@@ -592,6 +595,41 @@ func (r *onlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.Se
 		return nil, errors.New("no authorizer")
 	}
 	return r.authorizer.Authorize(context)
+}
+
+// onlineComputePolicyResources is an implementation of policyResources that can be used to
+// compute a policy and which requires access to a TPM for the TPM2_PolicyNV assertion.
+type onlineComputePolicyResources struct {
+	online  *onlinePolicyResources
+	offline *offlinePolicyResources
+}
+
+func newOnlineComputePolicyResources(tpm *tpm2.TPMContext, external map[*tpm2.Public]tpm2.Name, sessions ...tpm2.SessionContext) *onlineComputePolicyResources {
+	return &onlineComputePolicyResources{
+		online:  newOnlinePolicyResources(tpm, nil, nil, sessions...),
+		offline: newOfflinePolicyResources(nil, external),
+	}
+}
+
+func (r *onlineComputePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
+	return r.online.loadHandle(handle)
+}
+
+func (r *onlineComputePolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
+	// the handle is not relevant here
+	return r.offline.loadName(name)
+}
+
+func (r *onlineComputePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
+	return r.offline.loadExternal(public)
+}
+
+func (r *onlineComputePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
+	return r.online.nvReadPublic(context)
+}
+
+func (r *onlineComputePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
+	return r.offline.authorize(context)
 }
 
 type policyBranchAutoSelector struct {
@@ -968,20 +1006,14 @@ func (e *policySecret) run(context policyRunContext) error {
 }
 
 type policySigned struct {
-	AuthKey   *tpm2.Public
-	PolicyRef tpm2.Nonce
+	AuthKeyName tpm2.Name
+	PolicyRef   tpm2.Nonce
 }
 
 func (*policySigned) name() string { return "TPM2_PolicySigned assertion" }
 
 func (e *policySigned) run(context policyRunContext) error {
-	authKey, err := context.resources().loadExternal(e.AuthKey)
-	if err != nil {
-		return fmt.Errorf("cannot create authKey context: %w", err)
-	}
-	defer authKey.flush()
-
-	if ticket := context.ticket(authKey.resource().Name(), e.PolicyRef); ticket != nil {
+	if ticket := context.ticket(e.AuthKeyName, e.PolicyRef); ticket != nil {
 		err := context.session().PolicyTicket(ticket.Timeout, ticket.CpHash, ticket.PolicyRef, ticket.AuthName, ticket.Ticket)
 		switch {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorExpired, tpm2.CommandPolicyTicket, 1):
@@ -996,17 +1028,23 @@ func (e *policySigned) run(context policyRunContext) error {
 		}
 	}
 
-	auth := context.params().signedAuthorization(authKey.resource().Name(), e.PolicyRef)
+	auth := context.params().signedAuthorization(e.AuthKeyName, e.PolicyRef)
 	if auth == nil {
-		return &AuthorizationNotFoundError{AuthName: authKey.resource().Name(), PolicyRef: e.PolicyRef}
+		return &AuthorizationNotFoundError{AuthName: e.AuthKeyName, PolicyRef: e.PolicyRef}
 	}
+
+	authKey, err := context.resources().loadExternal(auth.Authorization.AuthKey)
+	if err != nil {
+		return fmt.Errorf("cannot create authKey context: %w", err)
+	}
+	defer authKey.flush()
 
 	includeNonceTPM := false
 	if len(auth.NonceTPM) > 0 {
 		includeNonceTPM = true
 	}
 
-	timeout, ticket, err := context.session().PolicySigned(authKey.resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.Signature)
+	timeout, ticket, err := context.session().PolicySigned(authKey.resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.Authorization.Signature)
 	if err != nil {
 		return err
 	}
@@ -1356,10 +1394,11 @@ func newRealPolicyRunner(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 }
 
 func newOnlineComputePolicyRunner(tpm *tpm2.TPMContext, digest *taggedHash, resources *PolicyResources, sessions ...tpm2.SessionContext) *policyRunner {
+	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunner(
 		newComputePolicySessionContext(digest),
-		new(dummyPolicyParams),
-		newOnlinePolicyResources(tpm, resources, new(dummyPolicyResourceAuthorizer), sessions...),
+		newMockPolicyParams(make(map[paramKey]*tpm2.Public), external),
+		newOnlineComputePolicyResources(tpm, external, sessions...),
 		newComputeBranchHandler(digest.HashAlg),
 	)
 }

@@ -201,7 +201,7 @@ func (s *computeSuite) testPolicySigned(c *C, data *testComputePolicySignedData)
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicySigned(data.authKey, data.policyRef), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicySignedElement(data.authKey, data.policyRef))
+	expectedPolicy := NewMockPolicy(NewMockPolicySignedElement(data.authKey.Name(), data.policyRef))
 
 	digests, policy, err := pc.Policy()
 	c.Check(err, IsNil)

@@ -15,24 +15,28 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+// PolicyAuthorization corresponds to a signed authorization.
+type PolicyAuthorization struct {
+	AuthKey   *tpm2.Public    // The public key of the signer, associated with the corresponding assertion.
+	PolicyRef tpm2.Nonce      // The policy ref of the corresponding assertion
+	Signature *tpm2.Signature // The actual signature
+}
+
 // PolicySignedAuthorization represents a signed authorization for a TPM2_PolicySigned assertion.
 type PolicySignedAuthorization struct {
-	AuthName   tpm2.Name       // The name of the auth object associated with the corresponding TPM2_PolicySigned assertion
-	PolicyRef  tpm2.Nonce      // The policy ref of the corresponding assertion
-	NonceTPM   tpm2.Nonce      // The TPM nonce of the session that this authorization is bound to
-	CpHash     tpm2.Digest     // The command parameters that this authorization is bound to
-	Expiration int32           // The expiration time of this authorization
-	Signature  *tpm2.Signature // The actual signature
+	NonceTPM      tpm2.Nonce           // The TPM nonce of the session that this authorization is bound to
+	CpHash        tpm2.Digest          // The command parameters that this authorization is bound to
+	Expiration    int32                // The expiration time of this authorization
+	Authorization *PolicyAuthorization // The actual signed authorization
 }
 
 // NewPolicySignedAuthorization creates a new authorization that can be used by [Policy.Execute] for a
-// TPM2_PolicySigned assertion. The authKey and policyRef arguments bind the authorization to a
-// specific assertion in a policy. The sessionAlg argument indicates that session digest algorithm
+// TPM2_PolicySigned assertion. The sessionAlg argument indicates that session digest algorithm
 // that the authorization will be valid for, and must match the session digest algorithm if cpHashA
 // is supplied.
 //
-// The authorizing party chooses the values of the other arguments in order to limit the scope of
-// the authorization.
+// The authorizing party chooses the values of the arguments in order to limit the scope of the
+// authorization.
 //
 // If nonceTPM is supplied, the authorization will be bound to the session with the specified TPM
 // nonce. If it is not supplied, the authorization is not bound to a specific session.
@@ -51,12 +55,7 @@ type PolicySignedAuthorization struct {
 // sessions, and its validity period and scope are restricted by the expiration and cpHashA
 // arguments. If the authorization is not bound to a specific session, the ticket will expire on
 // the next TPM reset if this occurs before the calculated expiration time
-func NewPolicySignedAuthorization(authKey Named, policyRef tpm2.Nonce, sessionAlg tpm2.HashAlgorithmId, nonceTPM tpm2.Nonce, cpHashA CpHash, expiration int32) (*PolicySignedAuthorization, error) {
-	authName := authKey.Name()
-	if !authName.IsValid() {
-		return nil, errors.New("auth key name is invalid")
-	}
-
+func NewPolicySignedAuthorization(sessionAlg tpm2.HashAlgorithmId, nonceTPM tpm2.Nonce, cpHashA CpHash, expiration int32) (*PolicySignedAuthorization, error) {
 	var cpDigest tpm2.Digest
 	if cpHashA != nil {
 		var err error
@@ -67,27 +66,52 @@ func NewPolicySignedAuthorization(authKey Named, policyRef tpm2.Nonce, sessionAl
 	}
 
 	return &PolicySignedAuthorization{
-		AuthName:   authName,
-		PolicyRef:  policyRef,
 		NonceTPM:   nonceTPM,
 		CpHash:     cpDigest,
-		Expiration: expiration}, nil
+		Expiration: expiration,
+	}, nil
 }
 
 // Sign signs this authorization using the supplied signer and options. Note that only RSA-SSA,
 // RSA-PSS, ECDSA and HMAC signatures can be created. The signer must be the owner of the key
 // associated with the AuthName field.
 //
+// The authKey argument is the corresponding public key. Both the authKey and policyRef arguments
+// bind the authorization to a specific assertion in a policy.
+//
 // This will panic if the requested digest algorithm is not available.
-func (a *PolicySignedAuthorization) Sign(rand io.Reader, signer crypto.Signer, opts crypto.SignerOpts) error {
+func (a *PolicySignedAuthorization) Sign(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
 	h := opts.HashFunc().New()
-	mu.MustMarshalToWriter(h, mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash), mu.Raw(a.PolicyRef))
+	mu.MustMarshalToWriter(h, mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash), mu.Raw(policyRef))
 	sig, err := cryptutil.Sign(rand, signer, h.Sum(nil), opts)
 	if err != nil {
 		return err
 	}
-	a.Signature = sig
+	a.Authorization = &PolicyAuthorization{
+		AuthKey:   authKey,
+		PolicyRef: policyRef,
+		Signature: sig,
+	}
 	return nil
+}
+
+// Verify verifies the signature of this signed authorization.
+func (a *PolicySignedAuthorization) Verify() (ok bool, err error) {
+	if a.Authorization == nil {
+		return false, errors.New("authorization is not signed")
+	}
+	if !a.Authorization.Signature.SigAlg.IsValid() {
+		return false, errors.New("invalid signature algorithm")
+	}
+
+	hashAlg := a.Authorization.Signature.HashAlg()
+	if !hashAlg.Available() {
+		return false, errors.New("digest algorithm is not available")
+	}
+
+	h := hashAlg.NewHash()
+	mu.MustMarshalToWriter(h, mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash), mu.Raw(a.Authorization.PolicyRef))
+	return cryptutil.VerifySignature(a.Authorization.AuthKey.Public(), h.Sum(nil), a.Authorization.Signature)
 }
 
 // SignPolicySignedAuthorization creates a signed authorization that can be used in a TPM2_PolicySigned

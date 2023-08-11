@@ -14,6 +14,8 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+// computePolicySessionContext is an implementation of policySession that computes a
+// digest from a sequence of assertions.
 type computePolicySessionContext struct {
 	digest *taggedHash
 }
@@ -164,26 +166,55 @@ func (s *computePolicySessionContext) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
-type dummyPolicyParams struct{}
+// mockPolicyParams is an implementation of policyParams that provides mock parameters
+// to compute a policy.
+type mockPolicyParams struct {
+	signers  map[paramKey]*tpm2.Public  // maps a signed authorization to a dummy public key
+	external map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
+}
 
-func (p *dummyPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
+func newMockPolicyParams(signers map[paramKey]*tpm2.Public, external map[*tpm2.Public]tpm2.Name) *mockPolicyParams {
+	return &mockPolicyParams{
+		signers:  signers,
+		external: external,
+	}
+}
+
+func (p *mockPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
 	return nil
 }
 
-func (p *dummyPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
-	return new(PolicySignedAuthorization)
+func (p *mockPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
+	key, exists := p.signers[policyParamKey(authName, policyRef)]
+	if !exists {
+		key = new(tpm2.Public)
+		p.signers[policyParamKey(authName, policyRef)] = key
+		p.external[key] = authName
+	}
+	return &PolicySignedAuthorization{
+		Authorization: &PolicyAuthorization{
+			AuthKey:   key,
+			PolicyRef: policyRef,
+		},
+	}
 }
 
-func (p *dummyPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+func (p *mockPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
 	return nil
 }
 
+// offlinePolicyResources is an implementation of policyResources that doesn't require
+// access to a TPM.
 type offlinePolicyResources struct {
-	nvIndices map[tpm2.Handle]tpm2.Name
+	nvIndices map[tpm2.Handle]tpm2.Name  // maps a NV index handle to a name
+	external  map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
 }
 
-func newOfflinePolicyResources(nvIndices map[tpm2.Handle]tpm2.Name) *offlinePolicyResources {
-	return &offlinePolicyResources{nvIndices: nvIndices}
+func newOfflinePolicyResources(nvIndices map[tpm2.Handle]tpm2.Name, external map[*tpm2.Public]tpm2.Name) *offlinePolicyResources {
+	return &offlinePolicyResources{
+		nvIndices: nvIndices,
+		external:  external,
+	}
 }
 
 func (r *offlinePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
@@ -208,11 +239,12 @@ func (r *offlinePolicyResources) loadName(name tpm2.Name) (policyResourceContext
 }
 
 func (r *offlinePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
-	// the handle is not relevant here
-	resource, err := tpm2.NewObjectResourceContextFromPub(0x80000000, public)
-	if err != nil {
-		return nil, err
+	name, exists := r.external[public]
+	if !exists {
+		return nil, errors.New("unrecognized external object")
 	}
+	// the handle is not relevant here
+	resource := tpm2.NewLimitedResourceContext(0x80000000, name)
 	return newPolicyResourceContextNonFlushable(resource), nil
 }
 
@@ -336,11 +368,11 @@ func (n *PolicyComputeBranchNode) AddBranch(name PolicyBranchName) *PolicyComput
 	return b
 }
 
-func newOfflineComputePolicyRunner(nvIndices map[tpm2.Handle]tpm2.Name, digest *taggedHash) *policyRunner {
+func newOfflineComputePolicyRunner(nvIndices map[tpm2.Handle]tpm2.Name, external map[*tpm2.Public]tpm2.Name, signers map[paramKey]*tpm2.Public, digest *taggedHash) *policyRunner {
 	return newPolicyRunner(
 		newComputePolicySessionContext(digest),
-		new(dummyPolicyParams),
-		newOfflinePolicyResources(nvIndices),
+		newMockPolicyParams(signers, external),
+		newOfflinePolicyResources(nvIndices, external),
 		newComputeBranchHandler(digest.HashAlg),
 	)
 }
@@ -366,7 +398,12 @@ func newPolicyComputeBranch(policy *PolicyComputer, name PolicyBranchName, diges
 		b.policyBranch.PolicyDigests = append(b.policyBranch.PolicyDigests, newDigest)
 	}
 	for i := range b.policyBranch.PolicyDigests {
-		b.runners = append(b.runners, newOfflineComputePolicyRunner(policy.nvIndices, &b.policyBranch.PolicyDigests[i]))
+		b.runners = append(b.runners, newOfflineComputePolicyRunner(
+			policy.nvIndices,
+			policy.external,
+			policy.signers,
+			&b.policyBranch.PolicyDigests[i],
+		))
 	}
 	return b
 }
@@ -498,17 +535,21 @@ func (b *PolicyComputeBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 
 // PolicySigned adds a TPM2_PolicySigned assertion to this branch so that the policy requires
 // an assertion signed by the owner of the supplied key.
-func (b *PolicyComputeBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.Nonce) error {
+func (b *PolicyComputeBranch) PolicySigned(authKey Named, policyRef tpm2.Nonce) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicySigned", err)
+	}
+
+	if !authKey.Name().IsValid() {
+		return b.policy.fail("PolicySigned", errors.New("invalid authKey"))
 	}
 
 	element := &policyElement{
 		Type: tpm2.CommandPolicySigned,
 		Details: &policyElementDetails{
 			Signed: &policySigned{
-				AuthKey:   authKey,
-				PolicyRef: policyRef}}}
+				AuthKeyName: authKey.Name(),
+				PolicyRef:   policyRef}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	if err := b.runElementsForEachAlgorithm(element); err != nil {
@@ -829,6 +870,8 @@ func (b *PolicyComputeBranch) AddBranchNode(saveBranchDigests bool) *PolicyCompu
 type PolicyComputer struct {
 	root      *PolicyComputeBranch
 	nvIndices map[tpm2.Handle]tpm2.Name
+	external  map[*tpm2.Public]tpm2.Name
+	signers   map[paramKey]*tpm2.Public
 
 	err error
 }
@@ -841,7 +884,11 @@ func ComputePolicy(algs ...tpm2.HashAlgorithmId) *PolicyComputer {
 			panic(fmt.Sprintf("digest algorithm %v is not available", alg))
 		}
 	}
-	c := &PolicyComputer{nvIndices: make(map[tpm2.Handle]tpm2.Name)}
+	c := &PolicyComputer{
+		nvIndices: make(map[tpm2.Handle]tpm2.Name),
+		external:  make(map[*tpm2.Public]tpm2.Name),
+		signers:   make(map[paramKey]*tpm2.Public),
+	}
 
 	var digests taggedHashList
 	for _, alg := range algs {

@@ -17,6 +17,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/objectutil"
 	. "github.com/canonical/go-tpm2/policyutil"
 	"github.com/canonical/go-tpm2/testutil"
@@ -50,15 +51,31 @@ func (s *authSuite) testPolicySignedAuthorization(c *C, data *testPolicySignedAu
 	if data.includeNonceTPM {
 		nonceTPM = session.NonceTPM()
 	}
+	var expectedCpHash tpm2.Digest
+	if data.cpHashA != nil {
+		var err error
+		expectedCpHash, err = data.cpHashA.Digest(data.sessionAlg)
+		c.Assert(err, IsNil)
+	}
 
-	auth, err := NewPolicySignedAuthorization(data.authKey, data.policyRef, data.sessionAlg, nonceTPM, data.cpHashA, data.expiration)
+	auth, err := NewPolicySignedAuthorization(data.sessionAlg, nonceTPM, data.cpHashA, data.expiration)
 	c.Assert(err, IsNil)
+	c.Check(auth.NonceTPM, DeepEquals, nonceTPM)
+	c.Check(auth.CpHash, DeepEquals, expectedCpHash)
+	c.Check(auth.Expiration, Equals, data.expiration)
 
-	c.Check(auth.Sign(rand.Reader, data.signer, data.signerOpts), IsNil)
+	c.Check(auth.Sign(rand.Reader, data.authKey, data.policyRef, data.signer, data.signerOpts), IsNil)
 
-	c.Assert(auth.Signature, NotNil)
-	c.Check(auth.Signature.SigAlg, Equals, data.expectedScheme)
-	c.Check(auth.Signature.HashAlg(), Equals, data.expectedHash)
+	c.Assert(auth.Authorization, NotNil)
+	c.Check(auth.Authorization.AuthKey, DeepEquals, data.authKey)
+	c.Check(auth.Authorization.PolicyRef, DeepEquals, data.policyRef)
+	c.Assert(auth.Authorization.Signature, NotNil)
+	c.Check(auth.Authorization.Signature.SigAlg, Equals, data.expectedScheme)
+	c.Check(auth.Authorization.Signature.HashAlg(), Equals, data.expectedHash)
+
+	ok, err := auth.Verify()
+	c.Check(err, IsNil)
+	c.Check(ok, internal_testutil.IsTrue)
 
 	key, err := s.TPM.LoadExternal(nil, data.authKey, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
@@ -69,7 +86,7 @@ func (s *authSuite) testPolicySignedAuthorization(c *C, data *testPolicySignedAu
 		c.Check(err, IsNil)
 	}
 
-	_, _, err = s.TPM.PolicySigned(key, session, data.includeNonceTPM, cpHashA, data.policyRef, data.expiration, auth.Signature)
+	_, _, err = s.TPM.PolicySigned(key, session, data.includeNonceTPM, cpHashA, data.policyRef, data.expiration, auth.Authorization.Signature)
 	c.Check(err, IsNil)
 }
 

@@ -640,9 +640,9 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		nonceTPM = session.NonceTPM()
 	}
 
-	auth, err := NewPolicySignedAuthorization(data.authKey, data.policyRef, session.HashAlg(), nonceTPM, data.cpHashA, data.expiration)
+	auth, err := NewPolicySignedAuthorization(session.HashAlg(), nonceTPM, data.cpHashA, data.expiration)
 	c.Assert(err, IsNil)
-	c.Check(auth.Sign(rand.Reader, data.signer, data.signerOpts), IsNil)
+	c.Check(auth.Sign(rand.Reader, data.authKey, data.policyRef, data.signer, data.signerOpts), IsNil)
 
 	var params *PolicyExecuteParams
 	if data.params != nil {
@@ -806,7 +806,14 @@ func (s *policySuite) TestPolicySignedWithNonMatchingAuth(c *C) {
 		policyRef: []byte("foo"),
 		params: &PolicyExecuteParams{
 			SignedAuthorizations: []*PolicySignedAuthorization{
-				{AuthName: pubKey.Name(), PolicyRef: []byte("bar")}}},
+				{
+					Authorization: &PolicyAuthorization{
+						AuthKey:   pubKey,
+						PolicyRef: []byte("bar"),
+					},
+				},
+			},
+		},
 		signer:     key,
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, IsNil)
@@ -826,9 +833,9 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	auth, err := NewPolicySignedAuthorization(authKey, nil, session.HashAlg(), session.NonceTPM(), nil, -100)
+	auth, err := NewPolicySignedAuthorization(session.HashAlg(), session.NonceTPM(), nil, -100)
 	c.Assert(err, IsNil)
-	c.Check(auth.Sign(rand.Reader, key, tpm2.HashAlgorithmSHA256), IsNil)
+	c.Check(auth.Sign(rand.Reader, authKey, nil, key, tpm2.HashAlgorithmSHA256), IsNil)
 
 	params := &PolicyExecuteParams{SignedAuthorizations: []*PolicySignedAuthorization{auth}}
 
