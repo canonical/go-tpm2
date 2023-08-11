@@ -78,6 +78,10 @@ func (s *computePolicySessionContext) PolicySecret(authObject tpm2.ResourceConte
 }
 
 func (s *computePolicySessionContext) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	if !authKey.Name().IsValid() {
+		return nil, nil, errors.New("invalid authKey name")
+	}
+
 	s.policyUpdate(tpm2.CommandPolicySigned, authKey.Name(), policyRef)
 	return nil, nil, nil
 }
@@ -513,16 +517,11 @@ func (b *PolicyComputeBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 		return b.policy.fail("PolicySecret", err)
 	}
 
-	var authObjectName tpm2.Name
-	if authObject != nil {
-		authObjectName = authObject.Name()
-	}
-
 	element := &policyElement{
 		Type: tpm2.CommandPolicySecret,
 		Details: &policyElementDetails{
 			Secret: &policySecret{
-				AuthObjectName: authObjectName,
+				AuthObjectName: authObject.Name(),
 				PolicyRef:      policyRef}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
@@ -538,10 +537,6 @@ func (b *PolicyComputeBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 func (b *PolicyComputeBranch) PolicySigned(authKey Named, policyRef tpm2.Nonce) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicySigned", err)
-	}
-
-	if !authKey.Name().IsValid() {
-		return b.policy.fail("PolicySigned", errors.New("invalid authKey"))
 	}
 
 	element := &policyElement{
