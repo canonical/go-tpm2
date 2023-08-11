@@ -272,19 +272,20 @@ type policyBranchDispatcher interface {
 	queueBranch(branch policyElements)
 }
 
-type policyBranchHandler interface {
-	handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error
+type policyFlowHandler interface {
+	handleBranches(branches policyBranches) ([]policyElementRunner, error)
 }
 
 type policyRunContext interface {
 	session() policySession
 	params() policyParams
 	resources() policyResources
+	flowHandler() policyFlowHandler
 
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 	addTicket(ticket *PolicyTicket)
 
-	handleBranches(branches policyBranches) error
+	runElementsNext(elements []policyElementRunner)
 }
 
 // realPolicySession is an implementation of policySession that executes assertions
@@ -738,7 +739,7 @@ func (s *policyBranchAutoSelector) run(branches policyBranches) (int, error) {
 	return -1, nil
 }
 
-type realPolicyBranchHandler struct {
+type realPolicyFlowHandler struct {
 	tpm           *tpm2.TPMContext
 	policySession tpm2.SessionContext
 	resources     *PolicyResources
@@ -747,12 +748,12 @@ type realPolicyBranchHandler struct {
 	sessions      []tpm2.SessionContext
 }
 
-func newRealPolicyBranchHandler(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, resources *PolicyResources, path PolicyBranchPath, sessions ...tpm2.SessionContext) *realPolicyBranchHandler {
+func newRealPolicyFlowHandler(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, resources *PolicyResources, path PolicyBranchPath, sessions ...tpm2.SessionContext) *realPolicyFlowHandler {
 	if resources == nil {
 		resources = new(PolicyResources)
 	}
 
-	return &realPolicyBranchHandler{
+	return &realPolicyFlowHandler{
 		tpm:           tpm,
 		policySession: policySession,
 		resources:     resources,
@@ -762,12 +763,12 @@ func newRealPolicyBranchHandler(tpm *tpm2.TPMContext, policySession tpm2.Session
 	}
 }
 
-func (h *realPolicyBranchHandler) tryAutoSelectBranch(branches policyBranches) (int, error) {
+func (h *realPolicyFlowHandler) tryAutoSelectBranch(branches policyBranches) (int, error) {
 	selector := newPolicyBranchAutoSelector(h.tpm, h.policySession.HashAlg(), h.sessions...)
 	return selector.run(branches)
 }
 
-func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error {
+func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) (elements []policyElementRunner, err error) {
 	next, remaining := h.remaining.popNextComponent()
 
 	h.current = PolicyBranchPath(strings.Join([]string{string(h.current), string(next)}, "/"))
@@ -777,31 +778,29 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 	switch {
 	case len(next) == 0:
 		// no branch explictly selected - try to autoselect first
-		var err error
 		selected, err = h.tryAutoSelectBranch(branches)
 		if err != nil {
-			return fmt.Errorf("cannot autoselect branch: %w", err)
+			return nil, fmt.Errorf("cannot autoselect branch: %w", err)
 		}
 		if selected == -1 {
-			return errors.New("cannot select branch: no more path components")
+			return nil, errors.New("cannot select branch: no more path components")
 		}
 	case next == "$[*]":
 		// attempt autoselect
-		var err error
 		selected, err = h.tryAutoSelectBranch(branches)
 		if err != nil {
-			return fmt.Errorf("cannot autoselect branch: %w", err)
+			return nil, fmt.Errorf("cannot autoselect branch: %w", err)
 		}
 		if selected == -1 {
-			return errors.New("cannot autoselect branch: no branch is valid for current state")
+			return nil, errors.New("cannot autoselect branch: no branch is valid for current state")
 		}
 	case next[0] == '$':
 		// select branch by index
 		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
-			return fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
+			return nil, fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
 		}
 		if selected < 0 || selected >= len(branches) {
-			return fmt.Errorf("cannot select branch: selected path %d out of range", selected)
+			return nil, fmt.Errorf("cannot select branch: selected path %d out of range", selected)
 		}
 	default:
 		// select branch by name
@@ -816,7 +815,7 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 			}
 		}
 		if selected == -1 {
-			return fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
+			return nil, fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
 		}
 	}
 
@@ -836,10 +835,9 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 		}
 		if !foundDigest {
 			if currentDigest == nil {
-				var err error
 				currentDigest, err = h.tpm.PolicyGetDigest(h.policySession, h.sessions...)
 				if err != nil {
-					return err
+					return nil, err
 				}
 			}
 
@@ -848,24 +846,24 @@ func (h *realPolicyBranchHandler) handleBranches(dispatcher policyBranchDispatch
 
 			runner := newOnlineComputePolicyRunner(h.tpm, ta, h.resources, h.sessions...)
 			if err := runner.run(branch.Policy); err != nil {
-				return fmt.Errorf("cannot compute digest for branch %d: %w", i, err)
+				return nil, fmt.Errorf("cannot compute digest for branch %d: %w", i, err)
 			}
 
 			digests = append(digests, ta.Digest)
 		}
 	}
 
-	branch := branches[selected].Policy
-
 	tree, err := newPolicyOrTree(h.policySession.HashAlg(), digests)
 	if err != nil {
-		return fmt.Errorf("cannot create policy OR tree: %w", err)
+		return nil, fmt.Errorf("cannot create PolicyOR tree: %w", err)
 	}
-	branch = append(branch, tree.selectBranch(selected)...)
 
-	dispatcher.queueBranch(branch)
+	for _, element := range branches[selected].Policy {
+		elements = append(elements, element)
+	}
+	elements = append(elements, tree.selectBranch(selected)...)
 
-	return nil
+	return elements, nil
 }
 
 type policyElementRunner interface {
@@ -1145,7 +1143,13 @@ type policyBranchNode struct {
 func (*policyBranchNode) name() string { return "branch node" }
 
 func (e *policyBranchNode) run(context policyRunContext) error {
-	return context.handleBranches(e.Branches)
+	elements, err := context.flowHandler().handleBranches(e.Branches)
+	if err != nil {
+		return err
+	}
+
+	context.runElementsNext(elements)
+	return nil
 }
 
 type policyOR struct {
@@ -1335,6 +1339,14 @@ func (e *policyElement) runner() policyElementRunner {
 	}
 }
 
+func (e *policyElement) name() string {
+	return e.runner().name()
+}
+
+func (e *policyElement) run(context policyRunContext) error {
+	return e.runner().run(context)
+}
+
 type policyElements []*policyElement
 
 type policy struct {
@@ -1360,23 +1372,23 @@ func (p *Policy) Unmarshal(r io.Reader) error {
 }
 
 type policyRunner struct {
-	policySession   policySession
-	policyParams    policyParams
-	policyResources policyResources
-	branchHandler   policyBranchHandler
+	policySession     policySession
+	policyParams      policyParams
+	policyResources   policyResources
+	policyFlowHandler policyFlowHandler
 
 	tickets map[paramKey]*PolicyTicket
 
 	elements []policyElementRunner
 }
 
-func newPolicyRunner(session policySession, params policyParams, resources policyResources, branchHandler policyBranchHandler) *policyRunner {
+func newPolicyRunner(session policySession, params policyParams, resources policyResources, flowHandler policyFlowHandler) *policyRunner {
 	return &policyRunner{
-		policySession:   session,
-		policyParams:    params,
-		policyResources: resources,
-		branchHandler:   branchHandler,
-		tickets:         make(map[paramKey]*PolicyTicket),
+		policySession:     session,
+		policyParams:      params,
+		policyResources:   resources,
+		policyFlowHandler: flowHandler,
+		tickets:           make(map[paramKey]*PolicyTicket),
 	}
 }
 
@@ -1389,7 +1401,7 @@ func newRealPolicyRunner(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 		newRealPolicySession(tpm, policySession, sessions...),
 		newRealPolicyParams(params),
 		newOnlinePolicyResources(tpm, params.Resources, authorizer, sessions...),
-		newRealPolicyBranchHandler(tpm, policySession, params.Resources, params.SelectedPath, sessions...),
+		newRealPolicyFlowHandler(tpm, policySession, params.Resources, params.SelectedPath, sessions...),
 	)
 }
 
@@ -1399,7 +1411,7 @@ func newOnlineComputePolicyRunner(tpm *tpm2.TPMContext, digest *taggedHash, reso
 		newComputePolicySessionContext(digest),
 		newMockPolicyParams(make(map[paramKey]*tpm2.Public), external),
 		newOnlineComputePolicyResources(tpm, external, sessions...),
-		newComputeBranchHandler(digest.HashAlg),
+		newComputePolicyFlowHandler(digest.HashAlg),
 	)
 }
 
@@ -1413,6 +1425,10 @@ func (r *policyRunner) params() policyParams {
 
 func (r *policyRunner) resources() policyResources {
 	return r.policyResources
+}
+
+func (r *policyRunner) flowHandler() policyFlowHandler {
+	return r.policyFlowHandler
 }
 
 func (r *policyRunner) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
@@ -1430,22 +1446,14 @@ func (r *policyRunner) addTicket(ticket *PolicyTicket) {
 	r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 }
 
-func (r *policyRunner) handleBranches(branches policyBranches) error {
-	return r.branchHandler.handleBranches(r, branches)
-}
-
-func (r *policyRunner) queueBranch(branch policyElements) {
-	var elements []policyElementRunner
-	for _, element := range branch {
-		elements = append(elements, element.runner())
-	}
+func (r *policyRunner) runElementsNext(elements []policyElementRunner) {
 	r.elements = append(elements, r.elements...)
 }
 
 func (r *policyRunner) run(policy policyElements) error {
 	var elements []policyElementRunner
 	for _, element := range policy {
-		elements = append(elements, element.runner())
+		elements = append(elements, element)
 	}
 	r.elements = elements
 

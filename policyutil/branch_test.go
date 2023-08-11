@@ -188,7 +188,7 @@ func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeS
 
 	policy, depth := s.checkPolicyOrTree(c, data.alg, data.digests, tree)
 
-	var expected PolicyElements
+	var expected []PolicyElementRunner
 	lists := s.policyOrTreeBranchDigestLists(c, tree, data.selected)
 	for _, digests := range lists {
 		var hashList []TaggedHashList
@@ -196,7 +196,7 @@ func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeS
 			hashList = append(hashList, TaggedHashList{{HashAlg: data.alg, Digest: digest}})
 		}
 
-		expected = append(expected, NewMockPolicyORElement(hashList))
+		expected = append(expected, &PolicyOR{HashList: hashList})
 	}
 	c.Assert(expected, internal_testutil.LenEquals, depth)
 

@@ -260,15 +260,15 @@ func (r *offlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.S
 	return nil, nil
 }
 
-type computeBranchHandler struct {
+type computePolicyFlowHandler struct {
 	sessionAlg tpm2.HashAlgorithmId
 }
 
-func newComputeBranchHandler(alg tpm2.HashAlgorithmId) *computeBranchHandler {
-	return &computeBranchHandler{sessionAlg: alg}
+func newComputePolicyFlowHandler(alg tpm2.HashAlgorithmId) *computePolicyFlowHandler {
+	return &computePolicyFlowHandler{sessionAlg: alg}
 }
 
-func (h *computeBranchHandler) handleBranches(dispatcher policyBranchDispatcher, branches policyBranches) error {
+func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) ([]policyElementRunner, error) {
 	var digests tpm2.DigestList
 	for _, branch := range branches {
 		for _, digest := range branch.PolicyDigests {
@@ -295,9 +295,7 @@ func (h *computeBranchHandler) handleBranches(dispatcher policyBranchDispatcher,
 		panic(err)
 	}
 
-	branch := tree.selectBranch(0)
-	dispatcher.queueBranch(policyElements{branch[len(branch)-1]})
-	return nil
+	return tree.selectBranch(0), nil
 }
 
 type PolicyComputeBranchNode struct {
@@ -377,7 +375,7 @@ func newOfflineComputePolicyRunner(nvIndices map[tpm2.Handle]tpm2.Name, external
 		newComputePolicySessionContext(digest),
 		newMockPolicyParams(signers, external),
 		newOfflinePolicyResources(nvIndices, external),
-		newComputeBranchHandler(digest.HashAlg),
+		newComputePolicyFlowHandler(digest.HashAlg),
 	)
 }
 

@@ -101,7 +101,7 @@ func newPolicyOrTree(alg tpm2.HashAlgorithmId, digests tpm2.DigestList) (out *po
 	return out, nil
 }
 
-func (t *policyOrTree) selectBranch(i int) (out policyElements) {
+func (t *policyOrTree) selectBranch(i int) (out []policyElementRunner) {
 	node := t.leafNodes[i>>3]
 
 	for node != nil {
@@ -109,10 +109,7 @@ func (t *policyOrTree) selectBranch(i int) (out policyElements) {
 		for _, digest := range ensureSufficientORDigests(node.digests) {
 			hashList = append(hashList, taggedHashList{{HashAlg: t.alg, Digest: digest}})
 		}
-		out = append(out, &policyElement{
-			Type: tpm2.CommandPolicyOR,
-			Details: &policyElementDetails{
-				OR: &policyOR{HashList: hashList}}})
+		out = append(out, &policyOR{HashList: hashList})
 		node = node.parent
 	}
 
