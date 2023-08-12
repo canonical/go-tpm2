@@ -844,10 +844,7 @@ func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
 
 	// we've selected a branch
 
-	context := &policyBranchNodeContext{
-		selected: selected,
-		branch:   branches[selected].Policy,
-	}
+	context := &policyBranchNodeContext{selected: selected}
 
 	var elements []policyElementRunner
 
@@ -865,6 +862,7 @@ func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
 	// queue the element that actually runs the selected branch
 	elements = append(elements, &policyBranchRun{
 		context:    context,
+		branch:     branches[selected].Policy,
 		dispatcher: h.runner,
 	})
 
@@ -1168,7 +1166,6 @@ type policyBranchNodeContext struct {
 	currentDigest tpm2.Digest
 	digests       tpm2.DigestList
 	selected      int
-	branch        policyElements
 }
 
 func (c *policyBranchNodeContext) ensureCurrentDigest(session policySession) error {
@@ -1257,6 +1254,7 @@ func (e *policyCommitBranchDigest) run(context policySessionContext) error {
 // a selected branch and the subsequent TPM2_PolicyOR assertions.
 type policyBranchRun struct {
 	context    *policyBranchNodeContext
+	branch     policyElements
 	dispatcher policyRunDispatcher
 }
 
@@ -1264,7 +1262,7 @@ func (*policyBranchRun) name() string { return "run branch" }
 
 func (e *policyBranchRun) run(context policySessionContext) error {
 	var elements []policyElementRunner
-	for _, element := range e.context.branch {
+	for _, element := range e.branch {
 		elements = append(elements, element)
 	}
 
