@@ -181,9 +181,9 @@ type mockPolicyParams struct {
 	external map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
 }
 
-func newMockPolicyParams(signers map[paramKey]*tpm2.Public, external map[*tpm2.Public]tpm2.Name) *mockPolicyParams {
+func newMockPolicyParams(external map[*tpm2.Public]tpm2.Name) *mockPolicyParams {
 	return &mockPolicyParams{
-		signers:  signers,
+		signers:  make(map[paramKey]*tpm2.Public),
 		external: external,
 	}
 }
@@ -265,21 +265,21 @@ func (r *offlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.S
 }
 
 type computePolicyFlowHandler struct {
-	runner     *policyRunner
-	sessionAlg tpm2.HashAlgorithmId
+	runner *policyRunner
 }
 
-func newComputePolicyFlowHandler(runner *policyRunner, alg tpm2.HashAlgorithmId) *computePolicyFlowHandler {
-	return &computePolicyFlowHandler{
-		runner:     runner,
-		sessionAlg: alg,
-	}
+func newComputePolicyFlowHandler(runner *policyRunner) *computePolicyFlowHandler {
+	return &computePolicyFlowHandler{runner: runner}
 }
 
 func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) error {
 	context := new(policyBranchNodeContext)
 
 	var elements []policyElementRunner
+
+	// queue elements to obtain the digest for each branch. This is done asynchronously
+	// because they may have to descend in to each branch to compute the digest, although
+	// this is only the case during policy execution.
 	for _, branch := range branches {
 		branch := branch
 		elements = append(elements, &policyCollectBranchDigest{
@@ -288,6 +288,9 @@ func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) error
 			dispatcher: h.runner,
 		})
 	}
+
+	// queue the element that runs the TPM2_PolicyOR assertions. As this is for
+	// computing a policy, there is no branch seleection and no branch is executed.
 	elements = append(elements, &policyBranchRun{
 		context:    context,
 		dispatcher: h.runner,
@@ -386,12 +389,13 @@ func (n *PolicyComputeBranchNode) AddBranch(name PolicyBranchName) *PolicyComput
 	return b
 }
 
-func newOfflineComputePolicyRunnerContext(runner *policyRunner, nvIndices map[tpm2.Handle]tpm2.Name, external map[*tpm2.Public]tpm2.Name, signers map[paramKey]*tpm2.Public, digest *taggedHash) *policyRunnerContext {
+func newOfflineComputePolicyRunnerContext(runner *policyRunner, nvIndices map[tpm2.Handle]tpm2.Name, digest *taggedHash) *policyRunnerContext {
+	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
 		newComputePolicySessionContext(digest),
-		newMockPolicyParams(signers, external),
+		newMockPolicyParams(external),
 		newOfflinePolicyResources(nvIndices, external),
-		newComputePolicyFlowHandler(runner, digest.HashAlg),
+		newComputePolicyFlowHandler(runner),
 	)
 }
 
@@ -420,8 +424,6 @@ func newPolicyComputeBranch(policy *PolicyComputer, name PolicyBranchName, diges
 		runner.policyRunnerContext = newOfflineComputePolicyRunnerContext(
 			runner,
 			policy.nvIndices,
-			policy.external,
-			policy.signers,
 			&b.policyBranch.PolicyDigests[i],
 		)
 		b.runners = append(b.runners, runner)
@@ -882,8 +884,6 @@ func (b *PolicyComputeBranch) AddBranchNode(saveBranchDigests bool) *PolicyCompu
 type PolicyComputer struct {
 	root      *PolicyComputeBranch
 	nvIndices map[tpm2.Handle]tpm2.Name
-	external  map[*tpm2.Public]tpm2.Name
-	signers   map[paramKey]*tpm2.Public
 
 	err error
 }
@@ -896,11 +896,7 @@ func ComputePolicy(algs ...tpm2.HashAlgorithmId) *PolicyComputer {
 			panic(fmt.Sprintf("digest algorithm %v is not available", alg))
 		}
 	}
-	c := &PolicyComputer{
-		nvIndices: make(map[tpm2.Handle]tpm2.Name),
-		external:  make(map[*tpm2.Public]tpm2.Name),
-		signers:   make(map[paramKey]*tpm2.Public),
-	}
+	c := &PolicyComputer{nvIndices: make(map[tpm2.Handle]tpm2.Name)}
 
 	var digests taggedHashList
 	for _, alg := range algs {

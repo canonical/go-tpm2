@@ -270,6 +270,9 @@ type policyResources interface {
 	authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error)
 }
 
+// policyRunnerRestoreContext is a pseudo policy element that restores the
+// context for a policy runner, and is used when computing branch or authorized
+// policy digests.
 type policyRunnerRestoreContext struct {
 	runner  *policyRunner
 	context *policyRunnerContext
@@ -782,6 +785,7 @@ func (h *realPolicyFlowHandler) tryAutoSelectBranch(branches policyBranches) (in
 }
 
 func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
+	// select a branch first
 	next, remaining := h.remaining.popNextComponent()
 
 	h.current = PolicyBranchPath(strings.Join([]string{string(h.current), string(next)}, "/"))
@@ -833,12 +837,22 @@ func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
 		}
 	}
 
+	if selected == -1 {
+		// the switch branches should have returned a specific error already
+		panic("not reached")
+	}
+
+	// we've selected a branch
+
 	context := &policyBranchNodeContext{
 		selected: selected,
 		branch:   branches[selected].Policy,
 	}
 
 	var elements []policyElementRunner
+
+	// queue elements to obtain the digest for each branch. This is done asynchronously
+	// because they may have to descend in to each branch to compute the digest
 	for _, branch := range branches {
 		branch := branch
 		elements = append(elements, &policyCollectBranchDigest{
@@ -847,6 +861,8 @@ func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
 			dispatcher: h.runner,
 		})
 	}
+
+	// queue the element that actually runs the selected branch
 	elements = append(elements, &policyBranchRun{
 		context:    context,
 		dispatcher: h.runner,
@@ -1168,6 +1184,8 @@ func (c *policyBranchNodeContext) ensureCurrentDigest(session policySession) err
 	return nil
 }
 
+// policyCollectBranchDigest is a pseudo policy element that obtains the digest
+// for a branch, either from the stored value or by computing it.
 type policyCollectBranchDigest struct {
 	context    *policyBranchNodeContext
 	branch     *policyBranch
@@ -1177,39 +1195,52 @@ type policyCollectBranchDigest struct {
 func (*policyCollectBranchDigest) name() string { return "collect branch digest" }
 
 func (e *policyCollectBranchDigest) run(context policySessionContext) error {
+	// see if the branch has a stored value for the current algorithm
 	for _, digest := range e.branch.PolicyDigests {
 		if digest.HashAlg != context.session().HashAlg() {
 			continue
 		}
 
+		// we have a digest, so update the context and we're done.
 		e.context.digests = append(e.context.digests, digest.Digest)
 		return nil
 	}
 
+	// we need to compute the digest, so ensure we have the current session
+	// digest.
 	if err := e.context.ensureCurrentDigest(context.session()); err != nil {
 		return err
 	}
 
-	ta := &taggedHash{
+	// push a new run context that will consume the policy assertions for this
+	// branch so that we can compute its digest.
+	digest := &taggedHash{
 		HashAlg: context.session().HashAlg(),
 		Digest:  make(tpm2.Digest, context.session().HashAlg().Size()),
 	}
-	copy(ta.Digest, e.context.currentDigest)
-	context.flowHandler().pushComputeContext(ta)
+	copy(digest.Digest, e.context.currentDigest)
+	context.flowHandler().pushComputeContext(digest)
 
 	var elements []policyElementRunner
+
+	// queue the elements for this branch
 	for _, element := range e.branch.Policy {
 		elements = append(elements, element)
 	}
+
+	// queue a final element to update the branch node context with the
+	// computed digest.
 	elements = append(elements, &policyCommitBranchDigest{
 		context: e.context,
-		digest:  ta,
+		digest:  digest,
 	})
 
 	e.dispatcher.runElementsNext(elements)
 	return nil
 }
 
+// policyCommitBranchDigest is a pseudo policy element that updates a branch
+// node context with the digest computed for a branch.
 type policyCommitBranchDigest struct {
 	context *policyBranchNodeContext
 	digest  *taggedHash
@@ -1222,6 +1253,8 @@ func (e *policyCommitBranchDigest) run(context policySessionContext) error {
 	return nil
 }
 
+// policyBranchRun is a pseudo policy element that executes the elements of
+// a selected branch and the subsequent TPM2_PolicyOR assertions.
 type policyBranchRun struct {
 	context    *policyBranchNodeContext
 	dispatcher policyRunDispatcher
@@ -1500,9 +1533,9 @@ func newOnlineComputePolicyRunnerContext(tpm *tpm2.TPMContext, runner *policyRun
 	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
 		newComputePolicySessionContext(digest),
-		newMockPolicyParams(make(map[paramKey]*tpm2.Public), external),
+		newMockPolicyParams(external),
 		newOnlineComputePolicyResources(tpm, external, sessions...),
-		newComputePolicyFlowHandler(runner, digest.HashAlg),
+		newComputePolicyFlowHandler(runner),
 	)
 }
 
@@ -1595,4 +1628,198 @@ func (p *Policy) Execute(tpm *tpm2.TPMContext, policySession tpm2.SessionContext
 	}
 
 	return tickets, nil
+}
+
+type policyValidateBranch struct {
+	context    *policyBranchNodeContext
+	branch     *policyBranch
+	dispatcher policyRunDispatcher
+}
+
+func (*policyValidateBranch) name() string { return "validate branch" }
+
+func (e *policyValidateBranch) run(context policySessionContext) error {
+	if err := e.context.ensureCurrentDigest(context.session()); err != nil {
+		return err
+	}
+
+	digest := &taggedHash{
+		HashAlg: context.session().HashAlg(),
+		Digest:  make(tpm2.Digest, context.session().HashAlg().Size()),
+	}
+	copy(digest.Digest, e.context.currentDigest)
+	context.flowHandler().pushComputeContext(digest)
+
+	var elements []policyElementRunner
+
+	for _, element := range e.branch.Policy {
+		elements = append(elements, element)
+	}
+
+	elements = append(elements, &policyValidateBranchComplete{
+		context: e.context,
+		branch:  e.branch,
+		digest:  digest,
+	})
+
+	e.dispatcher.runElementsNext(elements)
+	return nil
+}
+
+type policyValidateBranchComplete struct {
+	context *policyBranchNodeContext
+	branch  *policyBranch
+	digest  *taggedHash
+}
+
+func (*policyValidateBranchComplete) name() string { return "compute validate branch" }
+
+func (e *policyValidateBranchComplete) run(context policySessionContext) error {
+	for _, d := range e.branch.PolicyDigests {
+		if d.HashAlg != e.digest.HashAlg {
+			continue
+		}
+
+		if !bytes.Equal(d.Digest, e.digest.Digest) {
+			return fmt.Errorf("stored and computed branch digest mismatch (computed: %x, stored: %x)", e.digest.Digest, d.Digest)
+		}
+	}
+
+	e.context.digests = append(e.context.digests, e.digest.Digest)
+	return nil
+}
+
+type validatePolicyFlowHandler struct {
+	runner *policyRunner
+}
+
+func newValidatePolicyFlowHandler(runner *policyRunner) *validatePolicyFlowHandler {
+	return &validatePolicyFlowHandler{runner: runner}
+}
+
+func (h *validatePolicyFlowHandler) handleBranches(branches policyBranches) error {
+	context := new(policyBranchNodeContext)
+
+	var elements []policyElementRunner
+	for _, branch := range branches {
+		branch := branch
+		elements = append(elements, &policyValidateBranch{
+			context:    context,
+			branch:     &branch,
+			dispatcher: h.runner,
+		})
+	}
+
+	elements = append(elements, &policyBranchRun{
+		context:    context,
+		dispatcher: h.runner,
+	})
+
+	h.runner.runElementsNext(elements)
+	return nil
+}
+
+func (h *validatePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
+	oldContext := h.runner.policyRunnerContext
+	h.runner.policyRunnerContext = newPolicyRunnerContext(
+		newComputePolicySessionContext(digest),
+		oldContext.policyParams,
+		oldContext.policyResources,
+		oldContext.policyFlowHandler,
+	)
+
+	h.runner.runElementsNext([]policyElementRunner{
+		&policyRunnerRestoreContext{
+			runner:  h.runner,
+			context: oldContext,
+		},
+	})
+}
+
+func newOfflineValidatePolicyRunnerContext(runner *policyRunner, nvIndices map[tpm2.Handle]tpm2.Name, digest *taggedHash) *policyRunnerContext {
+	external := make(map[*tpm2.Public]tpm2.Name)
+	return newPolicyRunnerContext(
+		newComputePolicySessionContext(digest),
+		newMockPolicyParams(external),
+		newOfflinePolicyResources(nvIndices, external),
+		newValidatePolicyFlowHandler(runner),
+	)
+}
+
+func newOnlineValidatePolicyRunnerContext(tpm *tpm2.TPMContext, runner *policyRunner, digest *taggedHash, sessions ...tpm2.SessionContext) *policyRunnerContext {
+	external := make(map[*tpm2.Public]tpm2.Name)
+	return newPolicyRunnerContext(
+		newComputePolicySessionContext(digest),
+		newMockPolicyParams(external),
+		newOnlineComputePolicyResources(tpm, external, sessions...),
+		newValidatePolicyFlowHandler(runner),
+	)
+}
+
+// ValidateOffline performs some checking of every element in the policy, and
+// verifies that every branch is consistent with the stored digests where
+// they exist. On success, it returns the digest correpsonding to this policy
+// for the specified digest algorithm.
+//
+// This method doesn't require access to the TPM, but does require that the
+// public areas for any NV indexes required by TPM2_PolicyNV assertions are
+// supplied, as the policy does not comtain enough information to resolve
+// these.
+func (p *Policy) ValidateOffline(alg tpm2.HashAlgorithmId, nvIndices []NVIndex) (tpm2.Digest, error) {
+	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
+
+	nv := make(map[tpm2.Handle]tpm2.Name)
+	for _, index := range nvIndices {
+		nv[index.Handle()] = index.Name()
+	}
+
+	runner := new(policyRunner)
+	runner.policyRunnerContext = newOfflineValidatePolicyRunnerContext(
+		runner,
+		nv,
+		digest,
+	)
+	if err := runner.run(p.policy.Policy); err != nil {
+		return nil, err
+	}
+
+	//for _, d := range p.policy.PolicyDigests {
+	//	if d.HashAlg != alg {
+	//		continue
+	//	}
+	//
+	//	if !bytes.Equal(d.Digest, digest.Digest) {
+	//		return nil, fmt.Errorf("stored and computed policy digest mismatch (computed: %x, stored: %x)", digest.Digest, d.Digest)
+	//	}
+	//}
+
+	return digest.Digest, nil
+}
+
+// ValidateOnline performs some checking of every element in the policy, and
+// verifies that every branch is consistent with the stored digests where
+// they exist. On success, it returns the digest correpsonding to this policy
+// for the specified digest algorithm.
+//
+// This method uses the TPM in order to resolve TPM2_PolicyNV assertions.
+func (p *Policy) ValidateOnline(tpm *tpm2.TPMContext, alg tpm2.HashAlgorithmId, sessions ...tpm2.SessionContext) (tpm2.Digest, error) {
+	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
+
+	runner := new(policyRunner)
+	runner.policyRunnerContext = newOnlineValidatePolicyRunnerContext(tpm, runner, digest, sessions...)
+	if err := runner.run(p.policy.Policy); err != nil {
+		return nil, err
+	}
+
+	//for _, d := range p.policy.PolicyDigests {
+	//	if d.HashAlg != alg {
+	//		continue
+	//	}
+	//
+	//	if !bytes.Equal(d.Digest, digest.Digest) {
+	//		return nil, fmt.Errorf("stored and computed policy digest mismatch (computed: %x, stored: %x)", digest.Digest, d.Digest)
+	//	}
+	//}
+
+	return digest.Digest, nil
 }
