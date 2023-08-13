@@ -40,7 +40,7 @@ func (s *computeSuite) testPolicyNV(c *C, data *testComputePolicyNVData) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNV(data.nvPub, data.operandB, data.offset, data.operation), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyNVElement(data.nvPub.Index, data.operandB, data.offset, data.operation))
+	expectedPolicy := NewMockPolicy(NewMockPolicyNVElement(data.nvPub, data.operandB, data.offset, data.operation))
 
 	digests, policy, err := pc.Policy()
 	c.Check(err, IsNil)
@@ -113,28 +113,6 @@ func (s *computeSuite) TestPolicyNVDifferentOperation(c *C) {
 		offset:         0,
 		operation:      tpm2.OpUnsignedGE,
 		expectedDigest: internal_testutil.DecodeHexString(c, "f50564e250f80476c988180e87202c01fd52129abfea4f26eae04ac99641f735")})
-}
-
-func (s *computeSuite) TestPolicyNVInvalidName(c *C) {
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{Index: 0x01000000}, nil, 0, tpm2.OpEq), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyNV assertion: invalid index name`)
-	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicyNV: cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyNV assertion: invalid index name`)
-}
-
-func (s *computeSuite) TestPolicyNVInvalidIndex(c *C) {
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNV(new(tpm2.NVPublic), nil, 0, tpm2.OpEq), ErrorMatches, `nvIndex has invalid handle type`)
-	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicyNV: nvIndex has invalid handle type`)
-}
-
-func (s *computeSuite) TestPolicyNVMismatchedNames(c *C) {
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{NameAlg: tpm2.HashAlgorithmSHA256, Index: 0x01000000}, nil, 0, tpm2.OpEq), IsNil)
-	c.Check(pc.RootBranch().PolicyNV(&tpm2.NVPublic{NameAlg: tpm2.HashAlgorithmSHA1, Index: 0x01000000}, nil, 0, tpm2.OpEq), ErrorMatches, `nvIndex already exists in this profile but with a different name`)
-	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicyNV: nvIndex already exists in this profile but with a different name`)
 }
 
 type testComputePolicySecretData struct {

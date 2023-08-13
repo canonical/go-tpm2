@@ -266,7 +266,6 @@ type policyResources interface {
 	loadName(name tpm2.Name) (policyResourceContext, error)
 	loadExternal(pub *tpm2.Public) (policyResourceContext, error)
 
-	nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error)
 	authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error)
 }
 
@@ -493,8 +492,6 @@ func (r *onlinePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceCon
 	switch handle.Type() {
 	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
 		return r.tpm.GetPermanentContext(handle), nil
-	case tpm2.HandleTypeNVIndex:
-		return r.tpm.NewResourceContext(handle, r.sessions...)
 	default:
 		return nil, fmt.Errorf("invalid handle type %v", handle.Type())
 	}
@@ -606,51 +603,11 @@ func (r *onlinePolicyResources) loadExternal(public *tpm2.Public) (policyResourc
 	return newPolicyResourceContextFlushable(r.tpm, rc), nil
 }
 
-func (r *onlinePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
-	pub, _, err := r.tpm.NVReadPublic(context)
-	return pub, err
-}
-
 func (r *onlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
 	if r.authorizer == nil {
 		return nil, errors.New("no authorizer")
 	}
 	return r.authorizer.Authorize(context)
-}
-
-// onlineComputePolicyResources is an implementation of policyResources that can be used to
-// compute a policy and which requires access to a TPM for the TPM2_PolicyNV assertion.
-type onlineComputePolicyResources struct {
-	online  *onlinePolicyResources
-	offline *offlinePolicyResources
-}
-
-func newOnlineComputePolicyResources(tpm *tpm2.TPMContext, external map[*tpm2.Public]tpm2.Name, sessions ...tpm2.SessionContext) *onlineComputePolicyResources {
-	return &onlineComputePolicyResources{
-		online:  newOnlinePolicyResources(tpm, nil, nil, sessions...),
-		offline: newOfflinePolicyResources(nil, external),
-	}
-}
-
-func (r *onlineComputePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
-	return r.online.loadHandle(handle)
-}
-
-func (r *onlineComputePolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
-	// the handle is not relevant here
-	return r.offline.loadName(name)
-}
-
-func (r *onlineComputePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
-	return r.offline.loadExternal(public)
-}
-
-func (r *onlineComputePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
-	return r.online.nvReadPublic(context)
-}
-
-func (r *onlineComputePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
-	return r.offline.authorize(context)
 }
 
 type policyBranchAutoSelector struct {
@@ -872,7 +829,7 @@ func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
 
 func (h *realPolicyFlowHandler) pushComputeContext(digest *taggedHash) {
 	oldContext := h.runner.policyRunnerContext
-	h.runner.policyRunnerContext = newOnlineComputePolicyRunnerContext(h.tpm, h.runner, digest, h.sessions...)
+	h.runner.policyRunnerContext = newComputePolicyRunnerContext(h.runner, digest)
 
 	h.runner.runElementsNext([]policyElementRunner{
 		&policyRunnerRestoreContext{
@@ -917,7 +874,7 @@ func (h *taggedHash) Unmarshal(r io.Reader) error {
 type taggedHashList []taggedHash
 
 type policyNV struct {
-	NvIndex   tpm2.Handle
+	NvIndex   *tpm2.NVPublic
 	OperandB  tpm2.Operand
 	Offset    uint16
 	Operation tpm2.ArithmeticOp
@@ -926,22 +883,17 @@ type policyNV struct {
 func (*policyNV) name() string { return "TPM2_PolicyNV assertion" }
 
 func (e *policyNV) run(context policySessionContext) error {
-	nvIndex, err := context.resources().loadHandle(e.NvIndex)
+	nvIndex, err := tpm2.NewNVIndexResourceContextFromPub(e.NvIndex)
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
-	}
-
-	pub, err := context.resources().nvReadPublic(nvIndex)
-	if err != nil {
-		return fmt.Errorf("cannot read nvIndex public area: %w", err)
 	}
 
 	auth := nvIndex
 	switch {
 	default:
-	case pub.Attrs&tpm2.AttrNVOwnerRead != 0:
+	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
 		auth, err = context.resources().loadHandle(tpm2.HandleOwner)
-	case pub.Attrs&tpm2.AttrNVPPRead != 0:
+	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:
 		auth, err = context.resources().loadHandle(tpm2.HandlePlatform)
 	}
 	if err != nil {
@@ -1527,16 +1479,6 @@ func newRealPolicyRunnerContext(tpm *tpm2.TPMContext, runner *policyRunner, poli
 	)
 }
 
-func newOnlineComputePolicyRunnerContext(tpm *tpm2.TPMContext, runner *policyRunner, digest *taggedHash, sessions ...tpm2.SessionContext) *policyRunnerContext {
-	external := make(map[*tpm2.Public]tpm2.Name)
-	return newPolicyRunnerContext(
-		newComputePolicySessionContext(digest),
-		newMockPolicyParams(external),
-		newOnlineComputePolicyResources(tpm, external, sessions...),
-		newComputePolicyFlowHandler(runner),
-	)
-}
-
 type policyRunner struct {
 	*policyRunnerContext
 	elements []policyElementRunner
@@ -1734,77 +1676,25 @@ func (h *validatePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
 	})
 }
 
-func newOfflineValidatePolicyRunnerContext(runner *policyRunner, nvIndices map[tpm2.Handle]tpm2.Name, digest *taggedHash) *policyRunnerContext {
+func newValidatePolicyRunnerContext(runner *policyRunner, digest *taggedHash) *policyRunnerContext {
 	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
 		newComputePolicySessionContext(digest),
 		newMockPolicyParams(external),
-		newOfflinePolicyResources(nvIndices, external),
+		newOfflinePolicyResources(external),
 		newValidatePolicyFlowHandler(runner),
 	)
 }
 
-func newOnlineValidatePolicyRunnerContext(tpm *tpm2.TPMContext, runner *policyRunner, digest *taggedHash, sessions ...tpm2.SessionContext) *policyRunnerContext {
-	external := make(map[*tpm2.Public]tpm2.Name)
-	return newPolicyRunnerContext(
-		newComputePolicySessionContext(digest),
-		newMockPolicyParams(external),
-		newOnlineComputePolicyResources(tpm, external, sessions...),
-		newValidatePolicyFlowHandler(runner),
-	)
-}
-
-// ValidateOffline performs some checking of every element in the policy, and
+// Validate performs some checking of every element in the policy, and
 // verifies that every branch is consistent with the stored digests where
 // they exist. On success, it returns the digest correpsonding to this policy
 // for the specified digest algorithm.
-//
-// This method doesn't require access to the TPM, but does require that the
-// public areas for any NV indexes required by TPM2_PolicyNV assertions are
-// supplied, as the policy does not comtain enough information to resolve
-// these.
-func (p *Policy) ValidateOffline(alg tpm2.HashAlgorithmId, nvIndices []NVIndex) (tpm2.Digest, error) {
-	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
-
-	nv := make(map[tpm2.Handle]tpm2.Name)
-	for _, index := range nvIndices {
-		nv[index.Handle()] = index.Name()
-	}
-
-	runner := new(policyRunner)
-	runner.policyRunnerContext = newOfflineValidatePolicyRunnerContext(
-		runner,
-		nv,
-		digest,
-	)
-	if err := runner.run(p.policy.Policy); err != nil {
-		return nil, err
-	}
-
-	//for _, d := range p.policy.PolicyDigests {
-	//	if d.HashAlg != alg {
-	//		continue
-	//	}
-	//
-	//	if !bytes.Equal(d.Digest, digest.Digest) {
-	//		return nil, fmt.Errorf("stored and computed policy digest mismatch (computed: %x, stored: %x)", digest.Digest, d.Digest)
-	//	}
-	//}
-
-	return digest.Digest, nil
-}
-
-// ValidateOnline performs some checking of every element in the policy, and
-// verifies that every branch is consistent with the stored digests where
-// they exist. On success, it returns the digest correpsonding to this policy
-// for the specified digest algorithm.
-//
-// This method uses the TPM in order to resolve TPM2_PolicyNV assertions.
-func (p *Policy) ValidateOnline(tpm *tpm2.TPMContext, alg tpm2.HashAlgorithmId, sessions ...tpm2.SessionContext) (tpm2.Digest, error) {
+func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
 
 	runner := new(policyRunner)
-	runner.policyRunnerContext = newOnlineValidatePolicyRunnerContext(tpm, runner, digest, sessions...)
+	runner.policyRunnerContext = newValidatePolicyRunnerContext(runner, digest)
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, err
 	}

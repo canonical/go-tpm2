@@ -214,14 +214,12 @@ func (p *mockPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *Pol
 // offlinePolicyResources is an implementation of policyResources that doesn't require
 // access to a TPM.
 type offlinePolicyResources struct {
-	nvIndices map[tpm2.Handle]tpm2.Name  // maps a NV index handle to a name
-	external  map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
+	external map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
 }
 
-func newOfflinePolicyResources(nvIndices map[tpm2.Handle]tpm2.Name, external map[*tpm2.Public]tpm2.Name) *offlinePolicyResources {
+func newOfflinePolicyResources(external map[*tpm2.Public]tpm2.Name) *offlinePolicyResources {
 	return &offlinePolicyResources{
-		nvIndices: nvIndices,
-		external:  external,
+		external: external,
 	}
 }
 
@@ -230,12 +228,6 @@ func (r *offlinePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceCo
 	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
 		// the handle is not relevant here
 		return tpm2.NewLimitedResourceContext(0x80000000, tpm2.MakeHandleName(handle)), nil
-	case tpm2.HandleTypeNVIndex:
-		name, exists := r.nvIndices[handle]
-		if !exists {
-			return nil, errors.New("unrecognized NV index handle")
-		}
-		return tpm2.NewLimitedResourceContext(handle, name), nil
 	default:
 		return nil, errors.New("invalid handle type")
 	}
@@ -254,10 +246,6 @@ func (r *offlinePolicyResources) loadExternal(public *tpm2.Public) (policyResour
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, name)
 	return newPolicyResourceContextNonFlushable(resource), nil
-}
-
-func (r *offlinePolicyResources) nvReadPublic(context tpm2.HandleContext) (*tpm2.NVPublic, error) {
-	return new(tpm2.NVPublic), nil
 }
 
 func (r *offlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
@@ -389,12 +377,12 @@ func (n *PolicyComputeBranchNode) AddBranch(name PolicyBranchName) *PolicyComput
 	return b
 }
 
-func newOfflineComputePolicyRunnerContext(runner *policyRunner, nvIndices map[tpm2.Handle]tpm2.Name, digest *taggedHash) *policyRunnerContext {
+func newComputePolicyRunnerContext(runner *policyRunner, digest *taggedHash) *policyRunnerContext {
 	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
 		newComputePolicySessionContext(digest),
 		newMockPolicyParams(external),
-		newOfflinePolicyResources(nvIndices, external),
+		newOfflinePolicyResources(external),
 		newComputePolicyFlowHandler(runner),
 	)
 }
@@ -421,9 +409,8 @@ func newPolicyComputeBranch(policy *PolicyComputer, name PolicyBranchName, diges
 	}
 	for i := range b.policyBranch.PolicyDigests {
 		runner := new(policyRunner)
-		runner.policyRunnerContext = newOfflineComputePolicyRunnerContext(
+		runner.policyRunnerContext = newComputePolicyRunnerContext(
 			runner,
-			policy.nvIndices,
 			&b.policyBranch.PolicyDigests[i],
 		)
 		b.runners = append(b.runners, runner)
@@ -500,27 +487,20 @@ func (b *PolicyComputeBranch) lockBranch() error {
 // contents of the specified index. The caller specifies a value to be used for the comparison
 // via the operandB argument, an offset from the start of the NV index data from which to start
 // the comparison via the offset argument, and a comparison operator via the operation argument.
-func (b *PolicyComputeBranch) PolicyNV(nvIndex NVIndex, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+func (b *PolicyComputeBranch) PolicyNV(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicyNV", err)
-	}
-	if nvIndex.Handle().Type() != tpm2.HandleTypeNVIndex {
-		return b.policy.fail("PolicyNV", errors.New("nvIndex has invalid handle type"))
-	}
-	if name, exists := b.policy.nvIndices[nvIndex.Handle()]; exists && !bytes.Equal(name, nvIndex.Name()) {
-		return b.policy.fail("PolicyNV", errors.New("nvIndex already exists in this profile but with a different name"))
 	}
 
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNV,
 		Details: &policyElementDetails{
 			NV: &policyNV{
-				NvIndex:   nvIndex.Handle(),
+				NvIndex:   nvIndex,
 				OperandB:  operandB,
 				Offset:    offset,
 				Operation: operation}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
-	b.policy.nvIndices[nvIndex.Handle()] = nvIndex.Name()
 
 	if err := b.runElementsForEachAlgorithm(element); err != nil {
 		return b.policy.fail("PolicyNV", err)
@@ -882,10 +862,8 @@ func (b *PolicyComputeBranch) AddBranchNode(saveBranchDigests bool) *PolicyCompu
 
 // PolicyComputer provides a way to compute an authorization policy.
 type PolicyComputer struct {
-	root      *PolicyComputeBranch
-	nvIndices map[tpm2.Handle]tpm2.Name
-
-	err error
+	root *PolicyComputeBranch
+	err  error
 }
 
 // ComputePolicy begins the process of computing an authorization policy for the specified
@@ -896,7 +874,7 @@ func ComputePolicy(algs ...tpm2.HashAlgorithmId) *PolicyComputer {
 			panic(fmt.Sprintf("digest algorithm %v is not available", alg))
 		}
 	}
-	c := &PolicyComputer{nvIndices: make(map[tpm2.Handle]tpm2.Name)}
+	c := new(PolicyComputer)
 
 	var digests taggedHashList
 	for _, alg := range algs {

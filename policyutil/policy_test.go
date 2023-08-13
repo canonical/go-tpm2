@@ -110,18 +110,18 @@ func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleIntermedi
 	c.Check(remaining, Equals, PolicyBranchPath("///bar"))
 }
 
-func (s *policySuiteNoTPM) TestPolicyValidateOffline(c *C) {
+func (s *policySuiteNoTPM) TestPolicyValidate(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
 	digests, policy, err := pc.Policy()
 	c.Assert(err, IsNil)
 
-	validatedDigest, err := policy.ValidateOffline(tpm2.HashAlgorithmSHA256, nil)
+	validatedDigest, err := policy.Validate(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(validatedDigest, DeepEquals, digests[0].Digest())
 }
 
-func (s *policySuiteNoTPM) TestPolicyValidateOfflineWithBranches(c *C) {
+func (s *policySuiteNoTPM) TestPolicyValidateWithBranches(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
@@ -141,18 +141,18 @@ func (s *policySuiteNoTPM) TestPolicyValidateOfflineWithBranches(c *C) {
 	digests, policy, err := pc.Policy()
 	c.Assert(err, IsNil)
 
-	validatedDigest, err := policy.ValidateOffline(tpm2.HashAlgorithmSHA256, nil)
+	validatedDigest, err := policy.Validate(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(validatedDigest, DeepEquals, digests[0].Digest())
 }
 
-func (s *policySuiteNoTPM) TestPolicyValidateOfflineMissingDigests(c *C) {
+func (s *policySuiteNoTPM) TestPolicyValidateMissingDigests(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
 	c.Check(pc.RootBranch().PolicyCpHash(CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))), IsNil)
 	_, policy, err := pc.Policy()
 	c.Assert(err, IsNil)
 
-	_, err = policy.ValidateOffline(tpm2.HashAlgorithmSHA256, nil)
+	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
 	c.Check(err, ErrorMatches, `cannot process TPM2_PolicyCpHash assertion: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 }
@@ -328,24 +328,6 @@ func (s *policySuite) TestPolicyNVWithAuthSession(c *C) {
 		operation:   tpm2.OpEq})
 	c.Check(err, IsNil)
 	c.Check(s.TPM.DoesHandleExist(handle), internal_testutil.IsTrue)
-}
-
-func (s *policySuite) TestPolicyNVMissingIndex(c *C) {
-	nvPub := &tpm2.NVPublic{
-		Index:   0x0181f000,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA | tpm2.AttrNVWritten),
-		Size:    8}
-
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	pc.RootBranch().PolicyNV(nvPub, nil, 0, tpm2.OpEq)
-	_, policy, err := pc.Policy()
-	c.Assert(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	_, err = policy.Execute(s.TPM, session, nil, nil)
-	c.Check(err, ErrorMatches, "cannot process TPM2_PolicyNV assertion: cannot create nvIndex context: a resource at handle 0x0181f000 is not available on the TPM")
 }
 
 type testExecutePolicySecretData struct {
@@ -1700,53 +1682,6 @@ func (s *policySuite) TestPolicyNvWrittenFalse(c *C) {
 
 func (s *policySuite) TestPolicyNvWrittenTrue(c *C) {
 	s.testPolicyNvWritten(c, true)
-}
-
-func (s *policySuite) TestPolicyValidateOnline(c *C) {
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyAuthValue(), IsNil)
-	digests, policy, err := pc.Policy()
-	c.Assert(err, IsNil)
-
-	validatedDigest, err := policy.ValidateOnline(s.TPM, tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(validatedDigest, DeepEquals, digests[0].Digest())
-}
-
-func (s *policySuite) TestPolicyValidateOnlineWithBranches(c *C) {
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
-
-	node := pc.RootBranch().AddBranchNode(true)
-	c.Assert(node, NotNil)
-
-	b1 := node.AddBranch("")
-	c.Assert(b1, NotNil)
-	c.Check(b1.PolicyAuthValue(), IsNil)
-
-	b2 := node.AddBranch("")
-	c.Assert(b2, NotNil)
-	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-
-	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-
-	digests, policy, err := pc.Policy()
-	c.Assert(err, IsNil)
-
-	validatedDigest, err := policy.ValidateOnline(s.TPM, tpm2.HashAlgorithmSHA256, nil)
-	c.Check(err, IsNil)
-	c.Check(validatedDigest, DeepEquals, digests[0].Digest())
-}
-
-func (s *policySuite) TestPolicyValidateOnlineMissingDigests(c *C) {
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
-	c.Check(pc.RootBranch().PolicyCpHash(CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))), IsNil)
-	_, policy, err := pc.Policy()
-	c.Assert(err, IsNil)
-
-	_, err = policy.ValidateOnline(s.TPM, tpm2.HashAlgorithmSHA256)
-	c.Check(err, ErrorMatches, `cannot process TPM2_PolicyCpHash assertion: missing digest for session algorithm`)
-	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 }
 
 type policySuitePCR struct {

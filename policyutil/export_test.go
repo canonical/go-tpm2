@@ -39,7 +39,7 @@ func (p PolicyBranchPath) PopNextComponent() (next PolicyBranchPath, remaining P
 	return p.popNextComponent()
 }
 
-func NewMockPolicyNVElement(nvIndex tpm2.Handle, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
+func NewMockPolicyNVElement(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNV,
 		Details: &policyElementDetails{
