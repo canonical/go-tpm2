@@ -146,6 +146,53 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithBranches(c *C) {
 	c.Check(validatedDigest, DeepEquals, digests[0].Digest())
 }
 
+func (s *policySuiteNoTPM) TestPolicyIntrospect(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	info, err := policy.Introspect()
+	c.Check(err, IsNil)
+	c.Check(info.Branches(), DeepEquals, []PolicyBranchPath{""})
+
+	c.Check(info.BranchInformation(""), DeepEquals, &PolicyBranchInformation{
+		Secrets: []PolicyAuthorizationID{
+			{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
+		},
+	})
+}
+
+func (s *policySuiteNoTPM) TestPolicyIntrospectWithBranches(c *C) {
+	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
+	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := pc.RootBranch().AddBranchNode(true)
+	c.Assert(node, NotNil)
+
+	b1 := node.AddBranch("foo")
+	c.Assert(b1, NotNil)
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("")
+	c.Assert(b2, NotNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	_, policy, err := pc.Policy()
+	c.Assert(err, IsNil)
+
+	info, err := policy.Introspect()
+	c.Check(err, IsNil)
+	c.Check(info.Branches(), DeepEquals, []PolicyBranchPath{"$[1]", "foo"})
+
+	c.Check(info.BranchInformation("foo"), DeepEquals, new(PolicyBranchInformation))
+	c.Check(info.BranchInformation("$[1]"), DeepEquals, &PolicyBranchInformation{
+		Secrets: []PolicyAuthorizationID{
+			{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
+		},
+	})
+}
 func (s *policySuiteNoTPM) TestPolicyValidateMissingDigests(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA1)
 	c.Check(pc.RootBranch().PolicyCpHash(CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))), IsNil)

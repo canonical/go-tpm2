@@ -13,6 +13,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -1710,4 +1711,301 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	//}
 
 	return digest.Digest, nil
+}
+
+type introspectPolicyContext struct {
+	completed         map[PolicyBranchPath]*PolicyBranchInformation
+	enteredRootBranch bool
+	currentInfo       PolicyBranchInformation
+	currentPath       PolicyBranchPath
+}
+
+func newIntrospectPolicyContext() *introspectPolicyContext {
+	return &introspectPolicyContext{
+		completed: make(map[PolicyBranchPath]*PolicyBranchInformation),
+	}
+}
+
+type introspectPolicySessionContext struct {
+	context *introspectPolicyContext
+}
+
+func newIntrospectPolicySessionContext(context *introspectPolicyContext) *introspectPolicySessionContext {
+	return &introspectPolicySessionContext{context: context}
+}
+
+func (s *introspectPolicySessionContext) HashAlg() tpm2.HashAlgorithmId {
+	return tpm2.HashAlgorithmNull
+}
+
+func (s *introspectPolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	s.context.currentInfo.Secrets = append(s.context.currentInfo.Secrets, PolicyAuthorizationID{
+		AuthName:  authObject.Name(),
+		PolicyRef: policyRef,
+	})
+	return nil, nil, nil
+}
+
+func (s *introspectPolicySessionContext) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	s.context.currentInfo.Signed = append(s.context.currentInfo.Signed, PolicyAuthorizationID{
+		AuthName:  authKey.Name(),
+		PolicyRef: policyRef,
+	})
+	return nil, nil, nil
+}
+
+func (s *introspectPolicySessionContext) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+	s.context.currentInfo.Authorized = append(s.context.currentInfo.Authorized, PolicyAuthorizationID{
+		AuthName:  keySign,
+		PolicyRef: policyRef,
+	})
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyAuthValue() error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyCommandCode(code tpm2.CommandCode) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyCpHash(cpHashA tpm2.Digest) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyNameHash(nameHash tpm2.Digest) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyOR(pHashList tpm2.DigestList) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
+	panic("not reached")
+}
+
+func (s *introspectPolicySessionContext) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyPassword() error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyNvWritten(writtenSet bool) error {
+	return nil
+}
+
+func (s *introspectPolicySessionContext) PolicyGetDigest() (tpm2.Digest, error) {
+	return nil, nil
+}
+
+type introspectPolicyBranchNodeContext struct {
+	path PolicyBranchPath
+	info PolicyBranchInformation
+}
+
+type policyIntrospectRootBranch struct {
+	context    *introspectPolicyContext
+	elements   policyElements
+	dispatcher policyRunDispatcher
+}
+
+func (*policyIntrospectRootBranch) name() string { return "introspect root policy branch" }
+
+func (e *policyIntrospectRootBranch) run(context policySessionContext) error {
+	var elements []policyElementRunner
+	for _, element := range e.elements {
+		elements = append(elements, element)
+	}
+	elements = append(elements, &policyIntrospectCommitBranch{context: e.context})
+
+	e.dispatcher.runElementsNext(elements)
+	return nil
+}
+
+type policyIntrospectBranch struct {
+	context     *introspectPolicyContext
+	nodeContext *introspectPolicyBranchNodeContext
+	branchIndex int
+	branch      *policyBranch
+	remaining   []policyElementRunner
+	dispatcher  policyRunDispatcher
+}
+
+func (*policyIntrospectBranch) name() string { return "introspect policy branch" }
+
+func (e *policyIntrospectBranch) run(context policySessionContext) error {
+	var pathElements []string
+	if e.nodeContext.path != "" {
+		pathElements = append(pathElements, string(e.nodeContext.path))
+	}
+	name := e.branch.Name
+	if name == "" {
+		name = PolicyBranchName(fmt.Sprintf("$[%d]", e.branchIndex))
+	}
+	pathElements = append(pathElements, string(name))
+	e.context.currentPath = PolicyBranchPath(strings.Join(pathElements, "/"))
+	e.context.currentInfo = e.nodeContext.info
+
+	var elements []policyElementRunner
+	for _, element := range e.branch.Policy {
+		elements = append(elements, element)
+	}
+	elements = append(elements, e.remaining...)
+
+	e.dispatcher.runElementsNext(elements)
+	return nil
+}
+
+type policyIntrospectCommitBranch struct {
+	context *introspectPolicyContext
+}
+
+func (*policyIntrospectCommitBranch) name() string { return "introspect policy branch commit" }
+
+func (e *policyIntrospectCommitBranch) run(context policySessionContext) error {
+	info := e.context.currentInfo
+	e.context.completed[e.context.currentPath] = &info
+	return nil
+}
+
+type introspectPolicyFlowHandler struct {
+	context *introspectPolicyContext
+	runner  *policyRunner
+}
+
+func newIntrospectPolicyFlowHandler(context *introspectPolicyContext, runner *policyRunner) *introspectPolicyFlowHandler {
+	return &introspectPolicyFlowHandler{
+		context: context,
+		runner:  runner,
+	}
+}
+
+func (h *introspectPolicyFlowHandler) handleBranches(branches policyBranches) error {
+	if !h.context.enteredRootBranch {
+		if len(branches) != 1 || len(h.runner.elements) > 0 {
+			panic("unexpected error")
+		}
+		h.runner.elements = []policyElementRunner{
+			&policyIntrospectRootBranch{
+				context:    h.context,
+				elements:   branches[0].Policy,
+				dispatcher: h.runner,
+			},
+		}
+		h.context.enteredRootBranch = true
+		return nil
+	}
+
+	nodeContext := &introspectPolicyBranchNodeContext{
+		path: h.context.currentPath,
+		info: h.context.currentInfo,
+	}
+
+	var elements []policyElementRunner
+	for i, branch := range branches {
+		branch := branch
+		elements = append(elements, &policyIntrospectBranch{
+			context:     h.context,
+			nodeContext: nodeContext,
+			branch:      &branch,
+			branchIndex: i,
+			remaining:   h.runner.elements,
+			dispatcher:  h.runner,
+		})
+	}
+
+	h.runner.elements = elements
+	return nil
+}
+
+func (h *introspectPolicyFlowHandler) pushComputeContext(digest *taggedHash) {}
+
+func newIntrospectPolicyRunnerContext(runner *policyRunner, context *introspectPolicyContext) *policyRunnerContext {
+	external := make(map[*tpm2.Public]tpm2.Name)
+	return newPolicyRunnerContext(
+		newIntrospectPolicySessionContext(context),
+		newMockPolicyParams(external),
+		newOfflinePolicyResources(external),
+		newIntrospectPolicyFlowHandler(context, runner),
+	)
+}
+
+// PolicyAuthorizationID identifies a policy authorization.
+type PolicyAuthorizationID struct {
+	AuthName  tpm2.Name
+	PolicyRef tpm2.Nonce
+}
+
+// PolicyBranchInformation contains information associated with a branch
+// in a policy.
+type PolicyBranchInformation struct {
+	Secrets    []PolicyAuthorizationID // TPM2_PolicySecret assetions
+	Signed     []PolicyAuthorizationID // TPM2_PolicySigned assertions
+	Authorized []PolicyAuthorizationID // TPM2_PolicyAuthorize assertions
+}
+
+// PolicyInformation contains information about a policy, keyed by branch
+// path.
+type PolicyInformation struct {
+	branches map[PolicyBranchPath]*PolicyBranchInformation
+}
+
+// Branches returns a sorted list of paths in this policy.
+func (i *PolicyInformation) Branches() []PolicyBranchPath {
+	var paths []string
+	for k := range i.branches {
+		paths = append(paths, string(k))
+	}
+	sort.Strings(paths)
+
+	var out []PolicyBranchPath
+	for _, path := range paths {
+		out = append(out, PolicyBranchPath(path))
+	}
+	return out
+}
+
+// BranchInformation returns the information associated with a specific branch path.
+func (i *PolicyInformation) BranchInformation(path PolicyBranchPath) *PolicyBranchInformation {
+	return i.branches[path]
+}
+
+// Introspect returns information about a policy.
+func (p *Policy) Introspect() (*PolicyInformation, error) {
+	context := newIntrospectPolicyContext()
+
+	runner := new(policyRunner)
+	runner.policyRunnerContext = newIntrospectPolicyRunnerContext(runner, context)
+
+	root := &policyElement{
+		Type: commandPolicyBranchNode,
+		Details: &policyElementDetails{
+			BranchNode: &policyBranchNode{
+				Branches: policyBranches{{Policy: p.policy.Policy}},
+			},
+		},
+	}
+	if err := runner.run(policyElements{root}); err != nil {
+		return nil, err
+	}
+
+	return &PolicyInformation{
+		branches: context.completed,
+	}, nil
 }
