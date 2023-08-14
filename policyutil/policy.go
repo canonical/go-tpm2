@@ -720,7 +720,6 @@ type realPolicyFlowHandler struct {
 	tpm           *tpm2.TPMContext
 	runner        *policyRunner
 	policySession tpm2.SessionContext
-	current       PolicyBranchPath
 	remaining     PolicyBranchPath
 	sessions      []tpm2.SessionContext
 }
@@ -730,7 +729,6 @@ func newRealPolicyFlowHandler(tpm *tpm2.TPMContext, runner *policyRunner, policy
 		tpm:           tpm,
 		runner:        runner,
 		policySession: policySession,
-		current:       "/",
 		remaining:     path,
 		sessions:      sessions,
 	}
@@ -744,8 +742,6 @@ func (h *realPolicyFlowHandler) tryAutoSelectBranch(branches policyBranches) (in
 func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
 	// select a branch first
 	next, remaining := h.remaining.popNextComponent()
-
-	h.current = PolicyBranchPath(strings.Join([]string{string(h.current), string(next)}, "/"))
 	h.remaining = remaining
 
 	var selected int
