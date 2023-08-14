@@ -631,24 +631,22 @@ func newPolicyBranchAutoSelector(tpm *tpm2.TPMContext, sessionAlg tpm2.HashAlgor
 func (s *policyBranchAutoSelector) collectPCRSelectionList(branches policyBranches) {
 	s.pcrs = nil
 	for _, branch := range branches {
-		if len(branch.Policy) != 1 {
-			continue
-		}
+		for _, element := range branch.Policy {
+			if element.Type != tpm2.CommandPolicyPCR {
+				continue
+			}
 
-		if branch.Policy[0].Type != tpm2.CommandPolicyPCR {
-			continue
-		}
+			values, err := element.Details.PCR.pcrValues()
+			if err != nil {
+				continue
+			}
+			pcrs, err := values.SelectionList()
+			if err != nil {
+				continue
+			}
 
-		values, err := branch.Policy[0].Details.PCR.pcrValues()
-		if err != nil {
-			continue
+			s.pcrs = s.pcrs.MustMerge(pcrs)
 		}
-		pcrs, err := values.SelectionList()
-		if err != nil {
-			continue
-		}
-
-		s.pcrs = s.pcrs.MustMerge(pcrs)
 	}
 
 	s.pcrValues = nil
