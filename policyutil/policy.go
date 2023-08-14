@@ -179,12 +179,13 @@ func (n *PolicyBranchName) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-// PolicyBranchPath identifies an execution path through the branches in a profile,
-// with each branch selector component is separated by a '/' character. Each branch can
-// either be selected by its name (if it has one), or a numeric identifier of the form
-// "$[n]" which selects a branch at a node using its index.
+// PolicyBranchPath uniquely identifies an execution path through the branches in a
+// profile, with each branch selector component being separated by a '/' character. A
+// branch selector selects a branch at a node, and a branch can either be selected by
+// its name (if it has one), or a numeric identifier of the form "$[n]" which selects
+// a branch at a node using its index.
 //
-// The component "$[*]" enables autoselection for a node, where a branch will be selected
+// The component "$auto" enables autoselection for a node, where a branch will be selected
 // automatically. This only works for branches containing TPM2_PolicyPCR assertions
 // where the assertion parameters match the current PCR values.
 type PolicyBranchPath string
@@ -761,7 +762,7 @@ func (h *realPolicyFlowHandler) handleBranches(branches policyBranches) error {
 		if selected == -1 {
 			return errors.New("cannot select branch: no more path components")
 		}
-	case next == "$[*]":
+	case next == "$auto":
 		// attempt autoselect
 		selected, err = h.tryAutoSelectBranch(branches)
 		if err != nil {

@@ -1271,7 +1271,7 @@ func (s *policySuite) TestPolicyORMissingDigest(c *C) {
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 }
 
-func (s *policySuite) testPolicyBranches(c *C, selectedPath PolicyBranchPath) {
+func (s *policySuite) testPolicyBranches(c *C, selectedPath PolicyBranchPath, cmd tpm2.CommandCode) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
 	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
 
@@ -1296,10 +1296,24 @@ func (s *policySuite) testPolicyBranches(c *C, selectedPath PolicyBranchPath) {
 	params := &PolicyExecuteParams{
 		SelectedPath: selectedPath,
 	}
+	authorizer := &mockPolicyResourceAuthorizer{
+		authorizeFn: func(resource tpm2.ResourceContext) (tpm2.SessionContext, error) {
+			return nil, nil
+		},
+	}
 
-	tickets, err := policy.Execute(s.TPM, session, params, nil)
+	s.ForgetCommands()
+
+	tickets, err := policy.Execute(s.TPM, session, params, authorizer)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
+
+	log := s.CommandLog()
+	c.Assert(log, internal_testutil.LenEquals, 4)
+	c.Check(log[0].GetCommandCode(c), Equals, tpm2.CommandPolicyNvWritten)
+	c.Check(log[1].GetCommandCode(c), Equals, cmd)
+	c.Check(log[2].GetCommandCode(c), Equals, tpm2.CommandPolicyOR)
+	c.Check(log[3].GetCommandCode(c), Equals, tpm2.CommandPolicyCommandCode)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -1307,46 +1321,15 @@ func (s *policySuite) testPolicyBranches(c *C, selectedPath PolicyBranchPath) {
 }
 
 func (s *policySuite) TestPolicyBranches(c *C) {
-	s.testPolicyBranches(c, "branch1")
+	s.testPolicyBranches(c, "branch1", tpm2.CommandPolicyAuthValue)
 }
 
 func (s *policySuite) TestPolicyBranchesNumericSelector(c *C) {
-	s.testPolicyBranches(c, "$[0]")
+	s.testPolicyBranches(c, "$[0]", tpm2.CommandPolicyAuthValue)
 }
 
 func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyNvWritten(true), IsNil)
-
-	node := pc.RootBranch().AddBranchNode(true)
-	c.Assert(node, NotNil)
-
-	b1 := node.AddBranch("branch1")
-	c.Assert(b1, NotNil)
-	c.Check(b1.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-
-	b2 := node.AddBranch("branch2")
-	c.Assert(b2, NotNil)
-	c.Check(b2.PolicyAuthValue(), IsNil)
-
-	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-
-	expectedDigests, policy, err := pc.Policy()
-	c.Assert(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	params := &PolicyExecuteParams{
-		SelectedPath: "branch2",
-	}
-
-	tickets, err := policy.Execute(s.TPM, session, params, nil)
-	c.Check(err, IsNil)
-	c.Check(tickets, internal_testutil.LenEquals, 0)
-
-	digest, err := s.TPM.PolicyGetDigest(session)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigests[0].Digest())
+	s.testPolicyBranches(c, "branch2", tpm2.CommandPolicySecret)
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
@@ -1783,7 +1766,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectedImplicit(c *C) {
 }
 
 func (s *policySuitePCR) TestPolicyBranchesAutoSelectediExplicit(c *C) {
-	s.testPolicyBranchesAutoSelected(c, "$[*]")
+	s.testPolicyBranchesAutoSelected(c, "$auto")
 }
 
 func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
@@ -1815,7 +1798,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		SelectedPath: "$[*]",
+		SelectedPath: "$auto",
 	}
 	_, err = policy.Execute(s.TPM, session, params, nil)
 	c.Check(err, ErrorMatches, `cannot process branch node: cannot autoselect branch: no branch is valid for current state`)
