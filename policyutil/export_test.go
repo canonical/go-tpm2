@@ -7,8 +7,8 @@ package policyutil
 import "github.com/canonical/go-tpm2"
 
 var (
-	NewPolicyOrTree                = newPolicyOrTree
-	NewComputePolicySessionContext = newComputePolicySessionContext
+	NewPolicyOrTree         = newPolicyOrTree
+	NewComputePolicySession = newComputePolicySession
 )
 
 type PcrValue = pcrValue

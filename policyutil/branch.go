@@ -70,7 +70,7 @@ func newPolicyOrTree(alg tpm2.HashAlgorithmId, digests tpm2.DigestList) (out *po
 
 			// Consume the next n digests to fit in to this node and produce a single digest
 			// that will go in to the parent node.
-			trial := newComputePolicySessionContext(&taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())})
+			trial := newComputePolicySession(&taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())})
 			trial.PolicyOR(node.digests)
 			nextDigests = append(nextDigests, trial.digest.Digest)
 

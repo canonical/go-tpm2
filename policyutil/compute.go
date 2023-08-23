@@ -5,174 +5,12 @@
 package policyutil
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/mu"
 )
-
-// computePolicySessionContext is an implementation of policySession that computes a
-// digest from a sequence of assertions.
-type computePolicySessionContext struct {
-	digest *taggedHash
-}
-
-func newComputePolicySessionContext(digest *taggedHash) *computePolicySessionContext {
-	return &computePolicySessionContext{digest: digest}
-}
-
-func (s *computePolicySessionContext) reset() {
-	s.digest.Digest = make(tpm2.Digest, s.digest.HashAlg.Size())
-}
-
-func (s *computePolicySessionContext) updateForCommand(command tpm2.CommandCode, params ...interface{}) error {
-	h := s.digest.HashAlg.NewHash()
-	h.Write(s.digest.Digest)
-	mu.MustMarshalToWriter(h, command)
-	if _, err := mu.MarshalToWriter(h, params...); err != nil {
-		return err
-	}
-	s.digest.Digest = h.Sum(nil)
-	return nil
-}
-
-func (s *computePolicySessionContext) mustUpdateForCommand(command tpm2.CommandCode, params ...interface{}) {
-	if err := s.updateForCommand(command, params...); err != nil {
-		panic(err)
-	}
-}
-
-func (s *computePolicySessionContext) policyUpdate(command tpm2.CommandCode, name tpm2.Name, policyRef tpm2.Nonce) {
-	s.mustUpdateForCommand(command, mu.Raw(name))
-
-	h := s.digest.HashAlg.NewHash()
-	h.Write(s.digest.Digest)
-	mu.MustMarshalToWriter(h, mu.Raw(policyRef))
-	s.digest.Digest = h.Sum(nil)
-}
-
-func (s *computePolicySessionContext) HashAlg() tpm2.HashAlgorithmId {
-	return s.digest.HashAlg
-}
-
-func (s *computePolicySessionContext) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
-	if !index.Name().IsValid() {
-		return errors.New("invalid index name")
-	}
-	h := s.digest.HashAlg.NewHash()
-	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
-
-	s.mustUpdateForCommand(tpm2.CommandPolicyNV, mu.Raw(h.Sum(nil)), mu.Raw(index.Name()))
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if !authObject.Name().IsValid() {
-		return nil, nil, errors.New("invalid authObject name")
-	}
-	s.policyUpdate(tpm2.CommandPolicySecret, authObject.Name(), policyRef)
-	return nil, nil, nil
-}
-
-func (s *computePolicySessionContext) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if !authKey.Name().IsValid() {
-		return nil, nil, errors.New("invalid authKey name")
-	}
-
-	s.policyUpdate(tpm2.CommandPolicySigned, authKey.Name(), policyRef)
-	return nil, nil, nil
-}
-
-func (s *computePolicySessionContext) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
-	s.policyUpdate(tpm2.CommandPolicyAuthorize, keySign, policyRef)
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyAuthValue() error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyAuthValue)
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyCommandCode(code tpm2.CommandCode) error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyCommandCode, code)
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
-	h := s.digest.HashAlg.NewHash()
-	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
-
-	s.mustUpdateForCommand(tpm2.CommandPolicyCounterTimer, mu.Raw(h.Sum(nil)))
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyCpHash(cpHashA tpm2.Digest) error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyCpHash, mu.Raw(cpHashA))
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyNameHash(nameHash tpm2.Digest) error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyNameHash, mu.Raw(nameHash))
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyOR(pHashList tpm2.DigestList) error {
-	if len(pHashList) < 2 || len(pHashList) > 8 {
-		return errors.New("invalid number of branches")
-	}
-
-	s.reset()
-
-	digests := new(bytes.Buffer)
-	for i, digest := range pHashList {
-		if len(digest) != s.digest.HashAlg.Size() {
-			return fmt.Errorf("invalid digest length at branch %d", i)
-		}
-		digests.Write(digest)
-	}
-	s.mustUpdateForCommand(tpm2.CommandPolicyOR, mu.Raw(digests.Bytes()))
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
-	panic("not reached")
-}
-
-func (s *computePolicySessionContext) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
-	return s.updateForCommand(tpm2.CommandPolicyPCR, pcrs, mu.Raw(pcrDigest))
-}
-
-func (s *computePolicySessionContext) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	if !newParentName.IsValid() {
-		return errors.New("invalid newParent name")
-	}
-	if includeObject {
-		if !objectName.IsValid() {
-			return errors.New("invalid object name")
-		}
-		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.Raw(objectName), mu.Raw(newParentName), includeObject)
-	} else {
-		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.Raw(newParentName), includeObject)
-	}
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyPassword() error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyAuthValue)
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyNvWritten(writtenSet bool) error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyNvWritten, writtenSet)
-	return nil
-}
-
-func (s *computePolicySessionContext) PolicyGetDigest() (tpm2.Digest, error) {
-	return s.digest.Digest, nil
-}
 
 // mockPolicyParams is an implementation of policyParams that provides mock parameters
 // to compute a policy.
@@ -209,47 +47,6 @@ func (p *mockPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm
 
 func (p *mockPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
 	return nil
-}
-
-// offlinePolicyResources is an implementation of policyResources that doesn't require
-// access to a TPM.
-type offlinePolicyResources struct {
-	external map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
-}
-
-func newOfflinePolicyResources(external map[*tpm2.Public]tpm2.Name) *offlinePolicyResources {
-	return &offlinePolicyResources{
-		external: external,
-	}
-}
-
-func (r *offlinePolicyResources) loadHandle(handle tpm2.Handle) (tpm2.ResourceContext, error) {
-	switch handle.Type() {
-	case tpm2.HandleTypePCR, tpm2.HandleTypePermanent:
-		// the handle is not relevant here
-		return tpm2.NewLimitedResourceContext(0x80000000, tpm2.MakeHandleName(handle)), nil
-	default:
-		return nil, errors.New("invalid handle type")
-	}
-}
-
-func (r *offlinePolicyResources) loadName(name tpm2.Name) (policyResourceContext, error) {
-	// the handle is not relevant here
-	return newPolicyResourceContextNonFlushable(tpm2.NewLimitedResourceContext(0x80000000, name)), nil
-}
-
-func (r *offlinePolicyResources) loadExternal(public *tpm2.Public) (policyResourceContext, error) {
-	name, exists := r.external[public]
-	if !exists {
-		return nil, errors.New("unrecognized external object")
-	}
-	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, name)
-	return newPolicyResourceContextNonFlushable(resource), nil
-}
-
-func (r *offlinePolicyResources) authorize(context tpm2.ResourceContext) (tpm2.SessionContext, error) {
-	return nil, nil
 }
 
 type computePolicyFlowHandler struct {
@@ -291,7 +88,7 @@ func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) error
 func (h *computePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
 	oldContext := h.runner.policyRunnerContext
 	h.runner.policyRunnerContext = newPolicyRunnerContext(
-		newComputePolicySessionContext(digest),
+		newComputePolicySession(digest),
 		oldContext.policyParams,
 		oldContext.policyResources,
 		oldContext.policyFlowHandler,
@@ -380,9 +177,9 @@ func (n *PolicyComputeBranchNode) AddBranch(name PolicyBranchName) *PolicyComput
 func newComputePolicyRunnerContext(runner *policyRunner, digest *taggedHash) *policyRunnerContext {
 	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
-		newComputePolicySessionContext(digest),
+		newComputePolicySession(digest),
 		newMockPolicyParams(external),
-		newOfflinePolicyResources(external),
+		newMockResourceLoader(external),
 		newComputePolicyFlowHandler(runner),
 	)
 }

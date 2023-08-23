@@ -43,7 +43,7 @@ func (s *branchSuite) checkPolicyOrTree(c *C, alg tpm2.HashAlgorithmId, digests 
 			c.Check(nodeDigests[i&0x7], DeepEquals, digest)
 
 			ta := &TaggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
-			trial := NewComputePolicySessionContext(ta)
+			trial := NewComputePolicySession(ta)
 			if len(nodeDigests) == 1 {
 				nodeDigests = tpm2.DigestList{nodeDigests[0], nodeDigests[0]}
 			}
@@ -201,7 +201,7 @@ func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeS
 	c.Assert(expected, internal_testutil.LenEquals, depth)
 
 	ta := &TaggedHash{HashAlg: data.alg, Digest: make(tpm2.Digest, data.alg.Size())}
-	trial := NewComputePolicySessionContext(ta)
+	trial := NewComputePolicySession(ta)
 	trial.PolicyOR(lists[len(lists)-1])
 	c.Check(ta.Digest, DeepEquals, policy)
 
