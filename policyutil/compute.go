@@ -58,34 +58,19 @@ func newComputePolicyFlowHandler(runner *policyRunner) *computePolicyFlowHandler
 }
 
 func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) error {
-	context := new(policyBranchNodeContext)
-
-	var elements []policyElementRunner
-
-	// queue elements to obtain the digest for each branch. This is done asynchronously
-	// because they may have to descend in to each branch to compute the digest, although
-	// this is only the case during policy execution.
-	for _, branch := range branches {
-		branch := branch
-		elements = append(elements, &policyCollectBranchDigest{
-			context:    context,
-			branch:     &branch,
-			dispatcher: h.runner,
-		})
+	context := &policyBranchNodeContext{
+		dispatcher:  h.runner,
+		session:     h.runner.policySession,
+		flowHandler: h.runner.policyFlowHandler,
+		branches:    branches,
 	}
 
-	// queue the element that runs the TPM2_PolicyOR assertions. As this is for
-	// computing a policy, there is no branch seleection and no branch is executed.
-	elements = append(elements, &policyBranchRun{
-		context:    context,
-		dispatcher: h.runner,
+	return context.collectBranchDigests(func() error {
+		return context.completeBranchNode()
 	})
-
-	h.runner.runElementsNext(elements)
-	return nil
 }
 
-func (h *computePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
+func (h *computePolicyFlowHandler) pushComputeContext(digest *taggedHash) (restore func()) {
 	oldContext := h.runner.policyRunnerContext
 	h.runner.policyRunnerContext = newPolicyRunnerContext(
 		newComputePolicySession(digest),
@@ -94,12 +79,9 @@ func (h *computePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
 		oldContext.policyFlowHandler,
 	)
 
-	h.runner.runElementsNext([]policyElementRunner{
-		&policyRunnerRestoreContext{
-			runner:  h.runner,
-			context: oldContext,
-		},
-	})
+	return func() {
+		h.runner.policyRunnerContext = oldContext
+	}
 }
 
 type PolicyComputeBranchNode struct {

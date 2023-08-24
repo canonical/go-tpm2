@@ -13,9 +13,9 @@ var (
 
 type PcrValue = pcrValue
 type PcrValueList = pcrValueList
-type PolicyElementRunner = policyElementRunner
 type PolicyOR = policyOR
 type PolicyOrTree = policyOrTree
+type PolicySessionTask = policySessionTask
 type TaggedHash = taggedHash
 type TaggedHashList = taggedHashList
 
@@ -31,7 +31,7 @@ func (t *PolicyOrTree) LeafNodes() []*policyOrNode {
 	return t.leafNodes
 }
 
-func (t *PolicyOrTree) SelectBranch(i int) []policyElementRunner {
+func (t *PolicyOrTree) SelectBranch(i int) []policySessionTask {
 	return t.selectBranch(i)
 }
 

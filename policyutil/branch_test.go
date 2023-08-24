@@ -188,7 +188,7 @@ func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeS
 
 	policy, depth := s.checkPolicyOrTree(c, data.alg, data.digests, tree)
 
-	var expected []PolicyElementRunner
+	var expected []PolicySessionTask
 	lists := s.policyOrTreeBranchDigestLists(c, tree, data.selected)
 	for _, digests := range lists {
 		var hashList []TaggedHashList

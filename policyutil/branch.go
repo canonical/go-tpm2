@@ -101,7 +101,7 @@ func newPolicyOrTree(alg tpm2.HashAlgorithmId, digests tpm2.DigestList) (out *po
 	return out, nil
 }
 
-func (t *policyOrTree) selectBranch(i int) (out []policyElementRunner) {
+func (t *policyOrTree) selectBranch(i int) (out []policySessionTask) {
 	node := t.leafNodes[i>>3]
 
 	for node != nil {

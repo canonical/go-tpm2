@@ -172,24 +172,29 @@ type policyParams interface {
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 }
 
-// policyRunnerRestoreContext is a pseudo policy element that restores the
-// context for a policy runner, and is used when computing branch or authorized
-// policy digests.
-type policyRunnerRestoreContext struct {
-	runner  *policyRunner
-	context *policyRunnerContext
+type policyDeferredTaskElement struct {
+	taskName string
+	fn       func() error
 }
 
-func (*policyRunnerRestoreContext) name() string { return "restore runner context" }
+func newDeferredTask(name string, fn func() error) *policyDeferredTaskElement {
+	return &policyDeferredTaskElement{
+		taskName: name,
+		fn:       fn,
+	}
+}
 
-func (e *policyRunnerRestoreContext) run(context policySessionContext) error {
-	e.runner.policyRunnerContext = e.context
-	return nil
+func (e *policyDeferredTaskElement) name() string {
+	return e.taskName
+}
+
+func (e *policyDeferredTaskElement) run(context policySessionContext) error {
+	return e.fn()
 }
 
 type policyFlowHandler interface {
 	handleBranches(branches policyBranches) error
-	pushComputeContext(digest *taggedHash)
+	pushComputeContext(digest *taggedHash) func()
 }
 
 type policySessionContext interface {
@@ -203,7 +208,9 @@ type policySessionContext interface {
 }
 
 type policyRunDispatcher interface {
-	runElementsNext(elements []policyElementRunner)
+	runBatchNext(tasks []policySessionTask)
+	runNext(name string, fn func() error)
+	runElementsNext(elements policyElements, done func() error)
 }
 
 // executePolicyParams is an implementation of policyParams that provides real
@@ -427,45 +434,31 @@ func (h *executePolicyFlowHandler) handleBranches(branches policyBranches) error
 
 	// we've selected a branch
 
-	context := &policyBranchNodeContext{selected: selected}
-
-	var elements []policyElementRunner
-
-	// queue elements to obtain the digest for each branch. This is done asynchronously
-	// because they may have to descend in to each branch to compute the digest
-	for _, branch := range branches {
-		branch := branch
-		elements = append(elements, &policyCollectBranchDigest{
-			context:    context,
-			branch:     &branch,
-			dispatcher: h.runner,
-		})
+	context := &policyBranchNodeContext{
+		dispatcher:  h.runner,
+		session:     h.runner.policySession,
+		flowHandler: h.runner.policyFlowHandler,
+		branches:    branches,
+		selected:    selected,
 	}
 
-	// queue the element that actually runs the selected branch
-	elements = append(elements, &policyBranchRun{
-		context:    context,
-		branch:     branches[selected].Policy,
-		dispatcher: h.runner,
+	return context.collectBranchDigests(func() error {
+		return context.runSelectedBranch(func() error {
+			return context.completeBranchNode()
+		})
 	})
-
-	h.runner.runElementsNext(elements)
-	return nil
 }
 
-func (h *executePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
+func (h *executePolicyFlowHandler) pushComputeContext(digest *taggedHash) (restore func()) {
 	oldContext := h.runner.policyRunnerContext
 	h.runner.policyRunnerContext = newComputePolicyRunnerContext(h.runner, digest)
 
-	h.runner.runElementsNext([]policyElementRunner{
-		&policyRunnerRestoreContext{
-			runner:  h.runner,
-			context: oldContext,
-		},
-	})
+	return func() {
+		h.runner.policyRunnerContext = oldContext
+	}
 }
 
-type policyElementRunner interface {
+type policySessionTask interface {
 	name() string
 	run(context policySessionContext) error
 }
@@ -763,17 +756,21 @@ func (e *policyBranchNode) run(context policySessionContext) error {
 }
 
 type policyBranchNodeContext struct {
+	dispatcher    policyRunDispatcher
+	session       Session
+	flowHandler   policyFlowHandler
+	branches      policyBranches
 	currentDigest tpm2.Digest
 	digests       tpm2.DigestList
 	selected      int
 }
 
-func (c *policyBranchNodeContext) ensureCurrentDigest(session Session) error {
-	if len(c.currentDigest) == session.HashAlg().Size() {
+func (c *policyBranchNodeContext) ensureCurrentDigest() error {
+	if len(c.currentDigest) == c.session.HashAlg().Size() {
 		return nil
 	}
 
-	currentDigest, err := session.PolicyGetDigest()
+	currentDigest, err := c.session.PolicyGetDigest()
 	if err != nil {
 		return err
 	}
@@ -781,98 +778,106 @@ func (c *policyBranchNodeContext) ensureCurrentDigest(session Session) error {
 	return nil
 }
 
-// policyCollectBranchDigest is a pseudo policy element that obtains the digest
-// for a branch, either from the stored value or by computing it.
-type policyCollectBranchDigest struct {
-	context    *policyBranchNodeContext
-	branch     *policyBranch
-	dispatcher policyRunDispatcher
-}
+func (c *policyBranchNodeContext) commitBranchDigest(index int, digest tpm2.Digest, done func() error) error {
+	if index != len(c.digests) {
+		return errors.New("internal error: unexpected digest")
+	}
+	c.digests = append(c.digests, digest)
 
-func (*policyCollectBranchDigest) name() string { return "collect branch digest" }
-
-func (e *policyCollectBranchDigest) run(context policySessionContext) error {
-	// see if the branch has a stored value for the current algorithm
-	for _, digest := range e.branch.PolicyDigests {
-		if digest.HashAlg != context.session().HashAlg() {
-			continue
-		}
-
-		// we have a digest, so update the context and we're done.
-		e.context.digests = append(e.context.digests, digest.Digest)
+	if len(c.digests) != len(c.branches) {
 		return nil
 	}
 
+	return done()
+}
+
+func (c *policyBranchNodeContext) collectBranchDigests(done func() error) error {
+	// queue elements to obtain the digest for each branch. This is done asynchronously
+	// because they may have to descend in to each branch to compute the digest, although
+	// this is only the case during policy execution.
+	var tasks []policySessionTask
+	for i := range c.branches {
+		i := i
+		task := newDeferredTask(fmt.Sprintf("collect branch %d digest", i), func() error {
+			return c.collectBranchDigest(i, func(digest tpm2.Digest) error {
+				return c.commitBranchDigest(i, digest, done)
+			})
+		})
+		tasks = append(tasks, task)
+	}
+	c.dispatcher.runBatchNext(tasks)
+
+	return nil
+}
+
+func (c *policyBranchNodeContext) computeBranchDigests(done func() error) error {
+	var tasks []policySessionTask
+	for i := range c.branches {
+		i := i
+		task := newDeferredTask(fmt.Sprintf("compute branch %d digest", i), func() error {
+			return c.computeBranchDigest(i, func(digest tpm2.Digest) error {
+				return c.commitBranchDigest(i, digest, done)
+			})
+		})
+		tasks = append(tasks, task)
+	}
+	c.dispatcher.runBatchNext(tasks)
+
+	return nil
+}
+
+func (c *policyBranchNodeContext) collectBranchDigest(index int, done func(tpm2.Digest) error) error {
+	// see if the branch has a stored value for the current algorithm
+	for _, digest := range c.branches[index].PolicyDigests {
+		if digest.HashAlg != c.session.HashAlg() {
+			continue
+		}
+
+		// we have a digest
+		return done(digest.Digest)
+	}
+
+	c.dispatcher.runNext(fmt.Sprintf("compute branch %d digest", index), func() error {
+		return c.computeBranchDigest(index, done)
+	})
+	return nil
+}
+
+func (c *policyBranchNodeContext) computeBranchDigest(index int, done func(tpm2.Digest) error) error {
 	// we need to compute the digest, so ensure we have the current session
 	// digest.
-	if err := e.context.ensureCurrentDigest(context.session()); err != nil {
+	if err := c.ensureCurrentDigest(); err != nil {
 		return err
 	}
 
 	// push a new run context that will consume the policy assertions for this
 	// branch so that we can compute its digest.
 	digest := &taggedHash{
-		HashAlg: context.session().HashAlg(),
-		Digest:  make(tpm2.Digest, context.session().HashAlg().Size()),
+		HashAlg: c.session.HashAlg(),
+		Digest:  make(tpm2.Digest, c.session.HashAlg().Size()),
 	}
-	copy(digest.Digest, e.context.currentDigest)
-	context.flowHandler().pushComputeContext(digest)
+	copy(digest.Digest, c.currentDigest)
+	restore := c.flowHandler.pushComputeContext(digest)
 
-	var elements []policyElementRunner
-
-	// queue the elements for this branch
-	for _, element := range e.branch.Policy {
-		elements = append(elements, element)
-	}
-
-	// queue a final element to update the branch node context with the
-	// computed digest.
-	elements = append(elements, &policyCommitBranchDigest{
-		context: e.context,
-		digest:  digest,
+	c.dispatcher.runElementsNext(c.branches[index].Policy, func() error {
+		restore()
+		return done(digest.Digest)
 	})
 
-	e.dispatcher.runElementsNext(elements)
 	return nil
 }
 
-// policyCommitBranchDigest is a pseudo policy element that updates a branch
-// node context with the digest computed for a branch.
-type policyCommitBranchDigest struct {
-	context *policyBranchNodeContext
-	digest  *taggedHash
-}
-
-func (*policyCommitBranchDigest) name() string { return "commit branch digest" }
-
-func (e *policyCommitBranchDigest) run(context policySessionContext) error {
-	e.context.digests = append(e.context.digests, e.digest.Digest)
+func (c *policyBranchNodeContext) runSelectedBranch(done func() error) error {
+	c.dispatcher.runElementsNext(c.branches[c.selected].Policy, done)
 	return nil
 }
 
-// policyBranchRun is a pseudo policy element that executes the elements of
-// a selected branch and the subsequent TPM2_PolicyOR assertions.
-type policyBranchRun struct {
-	context    *policyBranchNodeContext
-	branch     policyElements
-	dispatcher policyRunDispatcher
-}
-
-func (*policyBranchRun) name() string { return "run branch" }
-
-func (e *policyBranchRun) run(context policySessionContext) error {
-	var elements []policyElementRunner
-	for _, element := range e.branch {
-		elements = append(elements, element)
-	}
-
-	tree, err := newPolicyOrTree(context.session().HashAlg(), e.context.digests)
+func (c *policyBranchNodeContext) completeBranchNode() error {
+	tree, err := newPolicyOrTree(c.session.HashAlg(), c.digests)
 	if err != nil {
 		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
 	}
-	elements = append(elements, tree.selectBranch(e.context.selected)...)
-
-	e.dispatcher.runElementsNext(elements)
+	c.dispatcher.runBatchNext(tree.selectBranch(c.selected))
 	return nil
 }
 
@@ -1028,7 +1033,7 @@ type policyElement struct {
 	Details *policyElementDetails
 }
 
-func (e *policyElement) runner() policyElementRunner {
+func (e *policyElement) runner() policySessionTask {
 	switch e.Type {
 	case tpm2.CommandPolicyNV:
 		return e.Details.NV
@@ -1116,7 +1121,8 @@ func newPolicyRunnerContext(session Session, params policyParams, resources Reso
 
 type policyRunner struct {
 	*policyRunnerContext
-	elements []policyElementRunner
+	tasks []policySessionTask
+	next  []policySessionTask
 }
 
 func (r *policyRunner) session() Session {
@@ -1150,23 +1156,52 @@ func (r *policyRunner) addTicket(ticket *PolicyTicket) {
 	r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 }
 
-func (r *policyRunner) runElementsNext(elements []policyElementRunner) {
-	r.elements = append(elements, r.elements...)
+func (r *policyRunner) runBatchNext(tasks []policySessionTask) {
+	r.next = append(tasks, r.next...)
+}
+
+func (r *policyRunner) runNext(name string, fn func() error) {
+	r.next = append([]policySessionTask{newDeferredTask(name, fn)}, r.next...)
+}
+
+func (r *policyRunner) runElementsNext(elements policyElements, done func() error) {
+	var tasks []policySessionTask
+	for _, element := range elements {
+		tasks = append(tasks, element)
+	}
+	if done != nil {
+		tasks = append(tasks, newDeferredTask("callback", done))
+	}
+	r.runBatchNext(tasks)
+}
+
+func (r *policyRunner) commitNext() {
+	if len(r.next) == 0 {
+		return
+	}
+	r.tasks = append(r.next, r.tasks...)
+	r.next = nil
+}
+
+func (r *policyRunner) more() bool {
+	return len(r.next) > 0 || len(r.tasks) > 0
+}
+
+func (r *policyRunner) popTask() policySessionTask {
+	r.commitNext()
+	task := r.tasks[0]
+	r.tasks = r.tasks[1:]
+	return task
 }
 
 func (r *policyRunner) run(policy policyElements) error {
-	var elements []policyElementRunner
-	for _, element := range policy {
-		elements = append(elements, element)
-	}
-	r.elements = elements
+	r.tasks = nil
+	r.runElementsNext(policy, nil)
 
-	for len(r.elements) > 0 {
-		element := r.elements[0]
-		r.elements = r.elements[1:]
-
-		if err := element.run(r); err != nil {
-			return fmt.Errorf("cannot process %s: %w", element.name(), err)
+	for r.more() {
+		task := r.popTask()
+		if err := task.run(r); err != nil {
+			return fmt.Errorf("cannot process %s: %w", task.name(), err)
 		}
 	}
 
@@ -1223,65 +1258,6 @@ func (p *Policy) Execute(session Session, params *PolicyExecuteParams, resources
 	return tickets, nil
 }
 
-type policyValidateBranch struct {
-	context    *policyBranchNodeContext
-	branch     *policyBranch
-	dispatcher policyRunDispatcher
-}
-
-func (*policyValidateBranch) name() string { return "validate branch" }
-
-func (e *policyValidateBranch) run(context policySessionContext) error {
-	if err := e.context.ensureCurrentDigest(context.session()); err != nil {
-		return err
-	}
-
-	digest := &taggedHash{
-		HashAlg: context.session().HashAlg(),
-		Digest:  make(tpm2.Digest, context.session().HashAlg().Size()),
-	}
-	copy(digest.Digest, e.context.currentDigest)
-	context.flowHandler().pushComputeContext(digest)
-
-	var elements []policyElementRunner
-
-	for _, element := range e.branch.Policy {
-		elements = append(elements, element)
-	}
-
-	elements = append(elements, &policyValidateBranchComplete{
-		context: e.context,
-		branch:  e.branch,
-		digest:  digest,
-	})
-
-	e.dispatcher.runElementsNext(elements)
-	return nil
-}
-
-type policyValidateBranchComplete struct {
-	context *policyBranchNodeContext
-	branch  *policyBranch
-	digest  *taggedHash
-}
-
-func (*policyValidateBranchComplete) name() string { return "compute validate branch" }
-
-func (e *policyValidateBranchComplete) run(context policySessionContext) error {
-	for _, d := range e.branch.PolicyDigests {
-		if d.HashAlg != e.digest.HashAlg {
-			continue
-		}
-
-		if !bytes.Equal(d.Digest, e.digest.Digest) {
-			return fmt.Errorf("stored and computed branch digest mismatch (computed: %x, stored: %x)", e.digest.Digest, d.Digest)
-		}
-	}
-
-	e.context.digests = append(e.context.digests, e.digest.Digest)
-	return nil
-}
-
 type validatePolicyFlowHandler struct {
 	runner *policyRunner
 }
@@ -1291,28 +1267,31 @@ func newValidatePolicyFlowHandler(runner *policyRunner) *validatePolicyFlowHandl
 }
 
 func (h *validatePolicyFlowHandler) handleBranches(branches policyBranches) error {
-	context := new(policyBranchNodeContext)
-
-	var elements []policyElementRunner
-	for _, branch := range branches {
-		branch := branch
-		elements = append(elements, &policyValidateBranch{
-			context:    context,
-			branch:     &branch,
-			dispatcher: h.runner,
-		})
+	context := &policyBranchNodeContext{
+		dispatcher:  h.runner,
+		session:     h.runner.policySession,
+		flowHandler: h.runner.policyFlowHandler,
+		branches:    branches,
 	}
 
-	elements = append(elements, &policyBranchRun{
-		context:    context,
-		dispatcher: h.runner,
-	})
+	return context.computeBranchDigests(func() error {
+		for i := range branches {
+			computedDigest := context.digests[i]
+			for _, d := range branches[i].PolicyDigests {
+				if d.HashAlg != h.runner.session().HashAlg() {
+					continue
+				}
 
-	h.runner.runElementsNext(elements)
-	return nil
+				if !bytes.Equal(d.Digest, computedDigest) {
+					return fmt.Errorf("stored and computed branch digest mismatch (computed: %x, stored: %x)", computedDigest, d.Digest)
+				}
+			}
+		}
+		return context.completeBranchNode()
+	})
 }
 
-func (h *validatePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
+func (h *validatePolicyFlowHandler) pushComputeContext(digest *taggedHash) (restore func()) {
 	oldContext := h.runner.policyRunnerContext
 	h.runner.policyRunnerContext = newPolicyRunnerContext(
 		newComputePolicySession(digest),
@@ -1321,12 +1300,9 @@ func (h *validatePolicyFlowHandler) pushComputeContext(digest *taggedHash) {
 		oldContext.policyFlowHandler,
 	)
 
-	h.runner.runElementsNext([]policyElementRunner{
-		&policyRunnerRestoreContext{
-			runner:  h.runner,
-			context: oldContext,
-		},
-	})
+	return func() {
+		h.runner.policyRunnerContext = oldContext
+	}
 }
 
 func newValidatePolicyRunnerContext(runner *policyRunner, digest *taggedHash) *policyRunnerContext {
