@@ -16,6 +16,10 @@ type TPMState interface {
 	// PCRValues returns the values of the PCRs associated with
 	// the specified selection.
 	PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
+
+	NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
+
+	ReadClock() (*tpm2.TimeInfo, error)
 }
 
 type tpmState struct {
@@ -36,8 +40,26 @@ func (s *tpmState) PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
 	return values, err
 }
 
+func (s *tpmState) NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
+	index := tpm2.NewLimitedHandleContext(handle)
+	pub, _, err := s.tpm.NVReadPublic(index, s.sessions...)
+	return pub, err
+}
+
+func (s *tpmState) ReadClock() (*tpm2.TimeInfo, error) {
+	return s.tpm.ReadClock(s.sessions...)
+}
+
 type nullTpmState struct{}
 
 func (*nullTpmState) PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
+	return nil, errors.New("no TPM state")
+}
+
+func (*nullTpmState) NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
+	return nil, errors.New("no TPM state")
+}
+
+func (s *nullTpmState) ReadClock() (*tpm2.TimeInfo, error) {
 	return nil, errors.New("no TPM state")
 }
