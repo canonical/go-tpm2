@@ -74,24 +74,36 @@ type PolicySecretParams struct {
 	Expiration int32
 }
 
-// AuthorizationNotFoundError is returned from [Policy.Execute] if the policy required a
-// signed authorization for a TPM2_PolicySigned assertion, but one wasn't supplied and
-// an appropriate ticket was also not supplied.
-type AuthorizationNotFoundError struct {
+// AuthorizationError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
+// and the associated object could not be authorized, or if the policy uses TPM2_PolicySigned
+// and no or an invalid signed authorization was supplied.
+type AuthorizationError struct {
 	AuthName  tpm2.Name
 	PolicyRef tpm2.Nonce
+	err       error
 }
 
-func (e *AuthorizationNotFoundError) Error() string {
-	return fmt.Sprintf("missing signed authorization for assertion with authName: %#x, policyRef: %#x)", e.AuthName, e.PolicyRef)
+func (e *AuthorizationError) Error() string {
+	return fmt.Sprintf("authorization failed for assertion with authName=%#x, policyRef=%#x: %v", e.AuthName, e.PolicyRef, e.err)
 }
 
-// ResourceNotFoundError is returned from [Policy.Execute] if the policy required a resource
-// with the indicated name but one wasn't supplied.
-type ResourceNotFoundError tpm2.Name
+func (e *AuthorizationError) Unwrap() error {
+	return e.err
+}
 
-func (e ResourceNotFoundError) Error() string {
-	return fmt.Sprintf("missing resource with name %#x", tpm2.Name(e))
+// ResourceLoadError is returned from [Policy.Execute] if the policy required a resource that
+// could not be loaded.
+type ResourceLoadError struct {
+	Name tpm2.Name
+	err  error
+}
+
+func (e *ResourceLoadError) Error() string {
+	return fmt.Sprintf("cannot load resource with name %#x: %v", e.Name, e.err)
+}
+
+func (e *ResourceLoadError) Unwrap() error {
+	return e.err
 }
 
 // PolicyBranchName corresponds to the name of a branch. Valid names are UTF-8
@@ -481,7 +493,7 @@ func (e *policySecret) run(context policySessionContext) error {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySecret
 		case err != nil:
-			return err
+			return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 		default:
 			// The ticket was accepted
 			return nil
@@ -505,13 +517,13 @@ func (e *policySecret) run(context policySessionContext) error {
 
 	authObject, err := context.resources().LoadName(e.AuthObjectName)
 	if err != nil {
-		return fmt.Errorf("cannot create authObject context: %w", err)
+		return &ResourceLoadError{Name: e.AuthObjectName, err: err}
 	}
 	defer authObject.Flush()
 
 	session, err := context.resources().Authorize(authObject.Resource())
 	if err != nil {
-		return fmt.Errorf("cannot authorize authObject: %w", err)
+		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
 	defer func() {
 		if session == nil {
@@ -527,7 +539,7 @@ func (e *policySecret) run(context policySessionContext) error {
 
 	timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), cpHashA, e.PolicyRef, params.Expiration, tpmSession)
 	if err != nil {
-		return err
+		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
 
 	context.addTicket(&PolicyTicket{
@@ -555,7 +567,7 @@ func (e *policySigned) run(context policySessionContext) error {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySigned
 		case err != nil:
-			return err
+			return &AuthorizationError{AuthName: e.AuthKeyName, PolicyRef: e.PolicyRef, err: err}
 		default:
 			// The ticket was accepted
 			return nil
@@ -564,7 +576,11 @@ func (e *policySigned) run(context policySessionContext) error {
 
 	auth := context.params().signedAuthorization(e.AuthKeyName, e.PolicyRef)
 	if auth == nil {
-		return &AuthorizationNotFoundError{AuthName: e.AuthKeyName, PolicyRef: e.PolicyRef}
+		return &AuthorizationError{
+			AuthName:  e.AuthKeyName,
+			PolicyRef: e.PolicyRef,
+			err:       errors.New("missing signed authorization"),
+		}
 	}
 
 	authKey, err := context.resources().LoadExternal(auth.Authorization.AuthKey)
@@ -580,7 +596,7 @@ func (e *policySigned) run(context policySessionContext) error {
 
 	timeout, ticket, err := context.session().PolicySigned(authKey.Resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.Authorization.Signature)
 	if err != nil {
-		return err
+		return &AuthorizationError{AuthName: e.AuthKeyName, PolicyRef: e.PolicyRef, err: err}
 	}
 
 	context.addTicket(&PolicyTicket{

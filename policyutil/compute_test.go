@@ -163,9 +163,13 @@ func (s *computeSuite) TestPolicySecretDifferentAuthObject(c *C) {
 
 func (s *computeSuite) TestPolicySecretInvalidName(c *C) {
 	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicySecret(tpm2.Name{0, 0}, nil), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicySecret assertion: invalid authObject name`)
+	c.Check(pc.RootBranch().PolicySecret(tpm2.Name{0, 0}, nil), ErrorMatches,
+		`cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicySecret assertion: authorization failed for assertion with authName=0x0000, policyRef=: invalid authObject name`)
 	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicySecret: cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicySecret assertion: invalid authObject name`)
+	c.Check(err, ErrorMatches,
+		`could not compute policy: encountered an error when calling PolicySecret: cannot update `+
+			`context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicySecret assertion: authorization `+
+			`failed for assertion with authName=0x0000, policyRef=: invalid authObject name`)
 }
 
 type testComputePolicySignedData struct {

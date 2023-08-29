@@ -645,10 +645,16 @@ func (s *policySuite) TestPolicySecretFail(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: s.TPM.OwnerHandleContext(),
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot process TPM2_PolicySecret assertion: TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
-	var e *tpm2.TPMSessionError
-	c.Assert(err, internal_testutil.ErrorAs, &e)
-	c.Check(e, DeepEquals, &tpm2.TPMSessionError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicySecret, Code: tpm2.ErrorBadAuth}, Index: 1})
+	c.Check(err, ErrorMatches, `cannot process TPM2_PolicySecret assertion: authorization failed for assertion with authName=0x40000001, policyRef=0x666f6f: `+
+		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
+	var ae *AuthorizationError
+	c.Assert(err, internal_testutil.ErrorAs, &ae)
+	c.Check(ae.AuthName, DeepEquals, s.TPM.OwnerHandleContext().Name())
+	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
+
+	var se *tpm2.TPMSessionError
+	c.Assert(err, internal_testutil.ErrorAs, &se)
+	c.Check(se, DeepEquals, &tpm2.TPMSessionError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicySecret, Code: tpm2.ErrorBadAuth}, Index: 1})
 }
 
 func (s *policySuite) TestPolicySecretMissingResource(c *C) {
@@ -660,10 +666,11 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	err = s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: saved.Name,
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot process TPM2_PolicySecret assertion: cannot create authObject context: missing resource with name 0x([[:xdigit:]]{68})`)
+	c.Check(err, ErrorMatches, `cannot process TPM2_PolicySecret assertion: cannot load resource with name 0x([[:xdigit:]]{68}): cannot identify resource`)
 
-	var rnfe ResourceNotFoundError
-	c.Check(err, internal_testutil.ErrorAs, &rnfe)
+	var rle *ResourceLoadError
+	c.Check(err, internal_testutil.ErrorAs, &rle)
+	c.Check(rle.Name, DeepEquals, saved.Name)
 }
 
 func (s *policySuite) TestPolicySecretTicket(c *C) {
@@ -880,10 +887,17 @@ func (s *policySuite) TestPolicySignedWithInvalidSignature(c *C) {
 		policyRef:  []byte("foo"),
 		signer:     key,
 		signerOpts: tpm2.HashAlgorithmSHA256})
-	c.Check(err, ErrorMatches, `cannot process TPM2_PolicySigned assertion: TPM returned an error for parameter 5 whilst executing command TPM_CC_PolicySigned: TPM_RC_SIGNATURE \(the signature is not valid\)`)
-	var e *tpm2.TPMParameterError
-	c.Assert(err, internal_testutil.ErrorAs, &e)
-	c.Check(e, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicySigned, Code: tpm2.ErrorSignature}, Index: 5})
+	c.Check(err, ErrorMatches, `cannot process TPM2_PolicySigned assertion: `+
+		`authorization failed for assertion with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
+		`TPM returned an error for parameter 5 whilst executing command TPM_CC_PolicySigned: TPM_RC_SIGNATURE \(the signature is not valid\)`)
+	var ae *AuthorizationError
+	c.Assert(err, internal_testutil.ErrorAs, &ae)
+	c.Check(ae.AuthName, DeepEquals, pubKey.Name())
+	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
+
+	var se *tpm2.TPMParameterError
+	c.Assert(err, internal_testutil.ErrorAs, &se)
+	c.Check(se, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicySigned, Code: tpm2.ErrorSignature}, Index: 5})
 }
 
 func (s *policySuite) TestPolicySignedWithNonMatchingAuth(c *C) {

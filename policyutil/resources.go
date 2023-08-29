@@ -304,7 +304,7 @@ func (l *tpmResourceLoader) LoadName(name tpm2.Name) (ResourceContext, error) {
 		return newResourceContextNonFlushable(resource), nil
 	}
 
-	return nil, ResourceNotFoundError(name)
+	return nil, errors.New("cannot identify resource")
 }
 
 func (l *tpmResourceLoader) LoadExternal(public *tpm2.Public) (ResourceContext, error) {
