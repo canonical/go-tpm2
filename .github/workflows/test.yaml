@@ -6,7 +6,7 @@ on:
     branches: [ "master" ]
 jobs:
   tests:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         goversion: [1.16, 1.15, 1.14, 1.13]
