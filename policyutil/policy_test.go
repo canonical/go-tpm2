@@ -25,15 +25,15 @@ import (
 
 type mockSessionContext struct {
 	session tpm2.SessionContext
-	saved   bool
+	closed  bool
 }
 
 func (c *mockSessionContext) Session() tpm2.SessionContext {
 	return c.session
 }
 
-func (c *mockSessionContext) Save() error {
-	c.saved = true
+func (c *mockSessionContext) Close() error {
+	c.closed = true
 	return nil
 }
 
@@ -41,9 +41,12 @@ type mockPolicyResourceAuthorizer struct {
 	authorizeFn func(tpm2.ResourceContext) (SessionContext, error)
 }
 
-func (h *mockPolicyResourceAuthorizer) Authorize(resource tpm2.ResourceContext) (SessionContext, error) {
+func (h *mockPolicyResourceAuthorizer) NeedAuthorize(resource tpm2.ResourceContext, sessionType tpm2.SessionType) (SessionContext, error) {
 	if h.authorizeFn == nil {
 		return nil, errors.New("not implemented")
+	}
+	if sessionType != tpm2.SessionTypeHMAC {
+		return nil, errors.New("unexpected session type")
 	}
 	return h.authorizeFn(resource)
 }
@@ -265,7 +268,7 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	commands := s.CommandLog()
 	if data.authSession != nil {
-		c.Check(authSession.saved, internal_testutil.IsTrue)
+		c.Check(authSession.closed, internal_testutil.IsTrue)
 	}
 
 	c.Assert(commands, internal_testutil.LenGreaterEquals, 1)
@@ -448,7 +451,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 		c.Check(s.TPM.DoesHandleExist(authObjectHandle), internal_testutil.IsTrue)
 	}
 	if data.authSession != nil {
-		c.Check(authSession.saved, internal_testutil.IsTrue)
+		c.Check(authSession.closed, internal_testutil.IsTrue)
 	}
 
 	c.Assert(commands, internal_testutil.LenGreaterEquals, numCommands)

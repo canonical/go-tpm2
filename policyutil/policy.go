@@ -458,7 +458,7 @@ func (e *policyNV) run(context policySessionContext) error {
 		return fmt.Errorf("cannot create auth context: %w", err)
 	}
 
-	session, err := context.resources().Authorize(auth)
+	session, _, err := context.resources().NeedAuthorize(auth)
 	if err != nil {
 		return fmt.Errorf("cannot authorize auth object: %w", err)
 	}
@@ -466,7 +466,7 @@ func (e *policyNV) run(context policySessionContext) error {
 		if session == nil {
 			return
 		}
-		session.Save()
+		session.Close()
 	}()
 
 	var tpmSession tpm2.SessionContext
@@ -521,7 +521,7 @@ func (e *policySecret) run(context policySessionContext) error {
 	}
 	defer authObject.Flush()
 
-	session, err := context.resources().Authorize(authObject.Resource())
+	session, _, err := context.resources().NeedAuthorize(authObject.Resource())
 	if err != nil {
 		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
@@ -529,7 +529,7 @@ func (e *policySecret) run(context policySessionContext) error {
 		if session == nil {
 			return
 		}
-		session.Save()
+		session.Close()
 	}()
 
 	var tpmSession tpm2.SessionContext

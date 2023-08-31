@@ -35,26 +35,26 @@ type ResourceLoader interface {
 	// the resource is no longer needed.
 	LoadExternal(public *tpm2.Public) (ResourceContext, error)
 
-	// Authorize requests that the supplied resource is authorized. Implementations
-	// should set the authorization value if required, and may return a session. The
-	// Save session of the returned context will be called once the session has been
-	// used.
-	Authorize(resource tpm2.ResourceContext) (SessionContext, error)
+	// NeedAuthorize is called to indicate that the supplied resource needs to be
+	// authorized. Implementations should set the authorization value if required,
+	// and may return a policy and a session. The Close method of the returned
+	// session context will be called once the session has been used.
+	NeedAuthorize(resource tpm2.ResourceContext) (SessionContext, *Policy, error)
 }
 
 type SessionContext interface {
 	Session() tpm2.SessionContext // The actual session
-	Save() error                  // Save the session for future use
+	Close() error                 // Save or flush the session for future use
 }
 
 // ResourceAuthorizer provides a way for an implementation to authorize a resource when
 // using [NewTPMResourceLoader].
 type ResourceAuthorizer interface {
-	// Authorize requests that the supplied resource is authorized. Implementations
-	// should set the authorization value if required, and may return a session. The
-	// Save session of the returned context will be called once the session has been
-	// used.
-	Authorize(resource tpm2.ResourceContext) (SessionContext, error)
+	// NeedAuthorize is called to indicate that the supplied resource needs to be
+	// authorized. Implementations should set the authorization value if required,
+	// and may return a session. The Close method of the returned session context
+	// will be called once the session has been used.
+	NeedAuthorize(resource tpm2.ResourceContext, sessionType tpm2.SessionType) (SessionContext, error)
 }
 
 // SavedResource contains the context of a saved transient object and its name, and
@@ -250,7 +250,7 @@ func (l *tpmResourceLoader) LoadName(name tpm2.Name) (ResourceContext, error) {
 		}
 		defer parent.Flush()
 
-		session, err := l.Authorize(parent.Resource())
+		session, _, err := l.NeedAuthorize(parent.Resource())
 		if err != nil {
 			return nil, fmt.Errorf("cannot authorize parent with name %#x: %w", parent.Resource().Name(), err)
 		}
@@ -258,7 +258,7 @@ func (l *tpmResourceLoader) LoadName(name tpm2.Name) (ResourceContext, error) {
 			if session == nil {
 				return
 			}
-			session.Save()
+			session.Close()
 		}()
 
 		var tpmSession tpm2.SessionContext
@@ -315,8 +315,9 @@ func (l *tpmResourceLoader) LoadExternal(public *tpm2.Public) (ResourceContext, 
 	return newResourceContextFlushable(l.tpm, rc), nil
 }
 
-func (l *tpmResourceLoader) Authorize(resource tpm2.ResourceContext) (SessionContext, error) {
-	return l.authorizer.Authorize(resource)
+func (l *tpmResourceLoader) NeedAuthorize(resource tpm2.ResourceContext) (SessionContext, *Policy, error) {
+	session, err := l.authorizer.NeedAuthorize(resource, tpm2.SessionTypeHMAC)
+	return session, nil, err
 }
 
 // mockResourceLoader is an implementation of policyResources that doesn't require
@@ -356,8 +357,8 @@ func (l *mockResourceLoader) LoadExternal(public *tpm2.Public) (ResourceContext,
 	return newResourceContextNonFlushable(resource), nil
 }
 
-func (l *mockResourceLoader) Authorize(resource tpm2.ResourceContext) (SessionContext, error) {
-	return nil, nil
+func (l *mockResourceLoader) NeedAuthorize(resource tpm2.ResourceContext) (SessionContext, *Policy, error) {
+	return nil, nil, nil
 }
 
 type nullResourceLoader struct{}
@@ -374,12 +375,12 @@ func (*nullResourceLoader) LoadExternal(public *tpm2.Public) (ResourceContext, e
 	return nil, errors.New("no resource loader")
 }
 
-func (*nullResourceLoader) Authorize(resource tpm2.ResourceContext) (SessionContext, error) {
-	return nil, errors.New("no resource loader")
+func (*nullResourceLoader) NeedAuthorize(resource tpm2.ResourceContext) (SessionContext, *Policy, error) {
+	return nil, nil, errors.New("no resource loader")
 }
 
 type nullResourceAuthorizer struct{}
 
-func (*nullResourceAuthorizer) Authorize(resource tpm2.ResourceContext) (SessionContext, error) {
+func (*nullResourceAuthorizer) NeedAuthorize(resource tpm2.ResourceContext, sessionType tpm2.SessionType) (SessionContext, error) {
 	return nil, errors.New("no authorizer")
 }
