@@ -58,7 +58,7 @@ func newComputePolicyFlowHandler(runner *policyRunner) *computePolicyFlowHandler
 }
 
 func (h *computePolicyFlowHandler) handleBranches(branches policyBranches) error {
-	context := &policyBranchNodeContext{
+	context := &policyORContext{
 		dispatcher:  h.runner,
 		session:     h.runner.policySession,
 		flowHandler: h.runner.policyFlowHandler,
@@ -208,17 +208,17 @@ func (b *PolicyComputeBranch) commitBranches(branches []policyBranch, saveBranch
 		// elide the branch node
 	default:
 		element := &policyElement{
-			Type: commandPolicyBranchNode,
+			Type: tpm2.CommandPolicyOR,
 			Details: &policyElementDetails{
-				BranchNode: &policyBranchNode{Branches: branches}}}
+				OR: &policyOR{Branches: branches}}}
 
 		if err := b.runElementsForEachAlgorithm(element); err != nil {
 			return err
 		}
 
 		if !saveBranchDigests {
-			for i := range element.Details.BranchNode.Branches {
-				element.Details.BranchNode.Branches[i].PolicyDigests = nil
+			for i := range element.Details.OR.Branches {
+				element.Details.OR.Branches[i].PolicyDigests = nil
 			}
 		}
 		b.policyBranch.Policy = append(b.policyBranch.Policy, element)
@@ -453,52 +453,6 @@ func (b *PolicyComputeBranch) PolicyNameHash(nameHash NameHash) error {
 	return nil
 }
 
-// PolicyORHashList contains a list of digests supplied to [PolicyComputeBranch.PolicyOR].
-type PolicyORHashList struct {
-	alg       tpm2.HashAlgorithmId
-	pHashList tpm2.DigestList
-}
-
-// NewPolicyORHashList constructs a new PolicyORHashList for the specified digest algorithm
-// and supplied list of digests.
-func NewPolicyORHashList(alg tpm2.HashAlgorithmId, pHashList tpm2.DigestList) *PolicyORHashList {
-	return &PolicyORHashList{
-		alg:       alg,
-		pHashList: pHashList,
-	}
-}
-
-// PolicyOR adds a TPM2_PolicyOR assertion to this branch. This is a low-level API - in general,
-// one will want to use [PolicyComputeBranch.AddBranchNode] and [PolicyComputeBranchNode] when
-// working with branches.
-//
-// The caller must supply a *PolicyORHashList for each digest algorithm that this policy is being
-// computed for.
-func (b *PolicyComputeBranch) PolicyOR(hashList ...*PolicyORHashList) error {
-	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyOR", err)
-	}
-
-	element := &policyElement{
-		Type:    tpm2.CommandPolicyOR,
-		Details: &policyElementDetails{OR: new(policyOR)}}
-	for _, l := range hashList {
-		for i, digest := range l.pHashList {
-			if i >= len(element.Details.OR.HashList) {
-				element.Details.OR.HashList = append(element.Details.OR.HashList, taggedHashList{})
-			}
-			element.Details.OR.HashList[i] = append(element.Details.OR.HashList[i], taggedHash{HashAlg: l.alg, Digest: digest})
-		}
-	}
-	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
-
-	if err := b.runElementsForEachAlgorithm(element); err != nil {
-		return b.policy.fail("PolicyOR", err)
-	}
-
-	return nil
-}
-
 // PolicyPCR adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
 // supplied PCR values.
 func (b *PolicyComputeBranch) PolicyPCR(values tpm2.PCRValues) error {
@@ -645,6 +599,12 @@ type PolicyComputer struct {
 	err  error
 }
 
+func computePolicy(digests taggedHashList) *PolicyComputer {
+	c := new(PolicyComputer)
+	c.root = newPolicyComputeBranch(c, "", digests)
+	return c
+}
+
 // ComputePolicy begins the process of computing an authorization policy for the specified
 // algorithms.
 func ComputePolicy(algs ...tpm2.HashAlgorithmId) *PolicyComputer {
@@ -653,15 +613,13 @@ func ComputePolicy(algs ...tpm2.HashAlgorithmId) *PolicyComputer {
 			panic(fmt.Sprintf("digest algorithm %v is not available", alg))
 		}
 	}
-	c := new(PolicyComputer)
 
 	var digests taggedHashList
 	for _, alg := range algs {
 		digests = append(digests, taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())})
 	}
-	c.root = newPolicyComputeBranch(c, "", digests)
 
-	return c
+	return computePolicy(digests)
 }
 
 func (c *PolicyComputer) fail(name string, err error) error {

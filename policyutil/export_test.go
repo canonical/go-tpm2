@@ -31,12 +31,16 @@ func (t *PolicyOrTree) LeafNodes() []*policyOrNode {
 	return t.leafNodes
 }
 
-func (t *PolicyOrTree) SelectBranch(i int) []policySessionTask {
+func (t *PolicyOrTree) SelectBranch(i int) []tpm2.DigestList {
 	return t.selectBranch(i)
 }
 
 func (p PolicyBranchPath) PopNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath) {
 	return p.popNextComponent()
+}
+
+func ComputePolicyWithDigests(digests TaggedHashList) *PolicyComputer {
+	return computePolicy(digests)
 }
 
 func NewMockPolicyNVElement(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
@@ -105,13 +109,6 @@ func NewMockPolicyNameHashElement(digests taggedHashList) *policyElement {
 			NameHash: &policyNameHash{Digests: digests}}}
 }
 
-func NewMockPolicyORElement(hashList []taggedHashList) *policyElement {
-	return &policyElement{
-		Type: tpm2.CommandPolicyOR,
-		Details: &policyElementDetails{
-			OR: &policyOR{HashList: hashList}}}
-}
-
 func NewMockPolicyBranch(name PolicyBranchName, digests taggedHashList, elements ...*policyElement) policyBranch {
 	return policyBranch{
 		Name:          name,
@@ -119,11 +116,11 @@ func NewMockPolicyBranch(name PolicyBranchName, digests taggedHashList, elements
 		Policy:        elements}
 }
 
-func NewMockPolicyBranchNodeElement(branches ...policyBranch) *policyElement {
+func NewMockPolicyORElement(branches ...policyBranch) *policyElement {
 	return &policyElement{
-		Type: commandPolicyBranchNode,
+		Type: tpm2.CommandPolicyOR,
 		Details: &policyElementDetails{
-			BranchNode: &policyBranchNode{Branches: branches}}}
+			OR: &policyOR{Branches: branches}}}
 }
 
 func NewMockPolicyPCRElement(pcrs PcrValueList) *policyElement {

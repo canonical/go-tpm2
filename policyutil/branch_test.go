@@ -188,25 +188,16 @@ func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeS
 
 	policy, depth := s.checkPolicyOrTree(c, data.alg, data.digests, tree)
 
-	var expected []PolicySessionTask
-	lists := s.policyOrTreeBranchDigestLists(c, tree, data.selected)
-	for _, digests := range lists {
-		var hashList []TaggedHashList
-		for _, digest := range digests {
-			hashList = append(hashList, TaggedHashList{{HashAlg: data.alg, Digest: digest}})
-		}
-
-		expected = append(expected, &PolicyOR{HashList: hashList})
-	}
+	expected := s.policyOrTreeBranchDigestLists(c, tree, data.selected)
 	c.Assert(expected, internal_testutil.LenEquals, depth)
 
 	ta := &TaggedHash{HashAlg: data.alg, Digest: make(tpm2.Digest, data.alg.Size())}
 	trial := NewComputePolicySession(ta)
-	trial.PolicyOR(lists[len(lists)-1])
+	trial.PolicyOR(expected[len(expected)-1])
 	c.Check(ta.Digest, DeepEquals, policy)
 
-	elements := tree.SelectBranch(data.selected)
-	c.Check(elements, DeepEquals, expected)
+	pHashLists := tree.SelectBranch(data.selected)
+	c.Check(pHashLists, DeepEquals, expected)
 }
 
 func (s *branchSuite) TestPolicyOrTreeSelectBranchSingleDigest(c *C) {

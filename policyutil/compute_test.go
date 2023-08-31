@@ -488,185 +488,6 @@ func (s *computeSuite) TestPolicyNameHashInvalidDigest(c *C) {
 	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicyNameHash: cannot compute nameHash for algorithm TPM_ALG_SHA256: no digest for algorithm`)
 }
 
-type testPolicyORData struct {
-	algs             []tpm2.HashAlgorithmId
-	hashLists        []*PolicyORHashList
-	expectedHashList []TaggedHashList
-	expectedDigests  tpm2.TaggedHashList
-}
-
-func (s *computeSuite) testPolicyOR(c *C, data *testPolicyORData) {
-	pc := ComputePolicy(data.algs...)
-	c.Check(pc.RootBranch().PolicyOR(data.hashLists...), IsNil)
-
-	expectedPolicy := NewMockPolicy(NewMockPolicyORElement(data.expectedHashList))
-
-	digests, policy, err := pc.Policy()
-	c.Check(err, IsNil)
-	c.Check(digests, DeepEquals, data.expectedDigests)
-	c.Check(policy, DeepEquals, expectedPolicy)
-}
-
-func (s *computeSuite) TestPolicyOR(c *C) {
-	var pHashList tpm2.DigestList
-	for _, data := range []string{"foo", "bar", "xyz"} {
-		h := crypto.SHA256.New()
-		io.WriteString(h, data)
-		pHashList = append(pHashList, h.Sum(nil))
-	}
-
-	s.testPolicyOR(c, &testPolicyORData{
-		algs:      []tpm2.HashAlgorithmId{tpm2.HashAlgorithmSHA256},
-		hashLists: []*PolicyORHashList{NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)},
-		expectedHashList: []TaggedHashList{
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[0]},
-			},
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[1]},
-			},
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[2]},
-			},
-		},
-		expectedDigests: tpm2.TaggedHashList{
-			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, internal_testutil.DecodeHexString(c, "279c72a6141f45135f7d0667ef67ae3c59adb521493678b00b9d93ed9cc7888c")),
-		},
-	})
-}
-
-func (s *computeSuite) TestPolicyORDifferentDigests(c *C) {
-	var pHashList tpm2.DigestList
-	for _, data := range []string{"foo1", "bar1"} {
-		h := crypto.SHA256.New()
-		io.WriteString(h, data)
-		pHashList = append(pHashList, h.Sum(nil))
-	}
-
-	s.testPolicyOR(c, &testPolicyORData{
-		algs:      []tpm2.HashAlgorithmId{tpm2.HashAlgorithmSHA256},
-		hashLists: []*PolicyORHashList{NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)},
-		expectedHashList: []TaggedHashList{
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[0]},
-			},
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[1]},
-			},
-		},
-		expectedDigests: tpm2.TaggedHashList{
-			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, internal_testutil.DecodeHexString(c, "30083090cb942a839859e7653e40dcb462e47a86ddbaa3d9fc6ecf9aee45529a")),
-		},
-	})
-}
-
-func (s *computeSuite) TestPolicyORSHA1(c *C) {
-	var pHashList tpm2.DigestList
-	for _, data := range []string{"foo", "bar", "xyz"} {
-		h := crypto.SHA1.New()
-		io.WriteString(h, data)
-		pHashList = append(pHashList, h.Sum(nil))
-	}
-
-	s.testPolicyOR(c, &testPolicyORData{
-		algs:      []tpm2.HashAlgorithmId{tpm2.HashAlgorithmSHA1},
-		hashLists: []*PolicyORHashList{NewPolicyORHashList(tpm2.HashAlgorithmSHA1, pHashList)},
-		expectedHashList: []TaggedHashList{
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashList[0]},
-			},
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashList[1]},
-			},
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashList[2]},
-			},
-		},
-		expectedDigests: tpm2.TaggedHashList{
-			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, internal_testutil.DecodeHexString(c, "622390ea33e3f878c1979d70348072072bb51757")),
-		},
-	})
-}
-
-func (s *computeSuite) TestPolicyORMultipleAlgorithms(c *C) {
-	var pHashListSHA1 tpm2.DigestList
-	var pHashListSHA256 tpm2.DigestList
-	for _, data := range []string{"foo", "bar", "xyz"} {
-		h := crypto.SHA1.New()
-		io.WriteString(h, data)
-		pHashListSHA1 = append(pHashListSHA1, h.Sum(nil))
-
-		h = crypto.SHA256.New()
-		io.WriteString(h, data)
-		pHashListSHA256 = append(pHashListSHA256, h.Sum(nil))
-	}
-
-	s.testPolicyOR(c, &testPolicyORData{
-		algs: []tpm2.HashAlgorithmId{tpm2.HashAlgorithmSHA256, tpm2.HashAlgorithmSHA1},
-		hashLists: []*PolicyORHashList{
-			NewPolicyORHashList(tpm2.HashAlgorithmSHA1, pHashListSHA1),
-			NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashListSHA256),
-		},
-		expectedHashList: []TaggedHashList{
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[0]},
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashListSHA256[0]},
-			},
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[1]},
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashListSHA256[1]},
-			},
-			{
-				{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[2]},
-				{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashListSHA256[2]},
-			},
-		},
-		expectedDigests: tpm2.TaggedHashList{
-			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, internal_testutil.DecodeHexString(c, "279c72a6141f45135f7d0667ef67ae3c59adb521493678b00b9d93ed9cc7888c")),
-			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, internal_testutil.DecodeHexString(c, "622390ea33e3f878c1979d70348072072bb51757")),
-		},
-	})
-}
-
-func (s *computeSuite) TestPolicyORMissingDigests(c *C) {
-	var pHashList tpm2.DigestList
-	for _, data := range []string{"foo", "bar", "xyz"} {
-		h := crypto.SHA1.New()
-		io.WriteString(h, data)
-		pHashList = append(pHashList, h.Sum(nil))
-	}
-
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA1, pHashList)), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyOR assertion: cannot process digest at index 0: missing digest for session algorithm`)
-	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicyOR: cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyOR assertion: cannot process digest at index 0: missing digest for session algorithm`)
-}
-
-func (s *computeSuite) TestPolicyORInvalidNumberOfBranches(c *C) {
-	h := crypto.SHA256.New()
-	io.WriteString(h, "foo")
-	digest := h.Sum(nil)
-
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, tpm2.DigestList{digest})), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyOR assertion: invalid number of branches`)
-	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicyOR: cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyOR assertion: invalid number of branches`)
-}
-
-func (s *computeSuite) TestPolicyORInvalidDigestLength(c *C) {
-	var pHashList tpm2.DigestList
-	for _, data := range []string{"foo", "bar", "xyz"} {
-		h := crypto.SHA1.New()
-		io.WriteString(h, data)
-		pHashList = append(pHashList, h.Sum(nil))
-	}
-
-	pc := ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), ErrorMatches, `cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyOR assertion: invalid digest length at branch 0`)
-	_, _, err := pc.Policy()
-	c.Check(err, ErrorMatches, `could not compute policy: encountered an error when calling PolicyOR: cannot update context for algorithm TPM_ALG_SHA256: cannot process TPM2_PolicyOR assertion: invalid digest length at branch 0`)
-}
-
 type testComputePolicyPCRData struct {
 	values         tpm2.PCRValues
 	expectedPcrs   PcrValueList
@@ -986,8 +807,11 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList = append(pHashList, digests[0].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), IsNil)
+	initialDigest := TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial := NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList)
+
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 	expectedDigests, _, err := pc.Policy()
 
@@ -1010,7 +834,7 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyBranchNodeElement(
+		NewMockPolicyORElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[0]}},
 				NewMockPolicyAuthValueElement(),
@@ -1050,8 +874,11 @@ func (s *computeSuite) TestLockBranchCommitCurrentBranchNode(c *C) {
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList = append(pHashList, digests[0].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), IsNil)
+	initialDigest := TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial := NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList)
+
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	expectedDigests, _, err := pc.Policy()
 
 	// Now build a profile with branches
@@ -1073,7 +900,7 @@ func (s *computeSuite) TestLockBranchCommitCurrentBranchNode(c *C) {
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
-		NewMockPolicyBranchNodeElement(
+		NewMockPolicyORElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[0]}},
 				NewMockPolicyAuthValueElement(),
@@ -1136,8 +963,16 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	c.Check(digests[1].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashListSHA256 = append(pHashListSHA256, digests[1].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA1, tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA1, pHashListSHA1), NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashListSHA256)), IsNil)
+	initialDigests := TaggedHashList{
+		{HashAlg: tpm2.HashAlgorithmSHA1, Digest: make(tpm2.Digest, 20)},
+		{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)},
+	}
+	trial := NewComputePolicySession(&initialDigests[0])
+	trial.PolicyOR(pHashListSHA1)
+	trial = NewComputePolicySession(&initialDigests[1])
+	trial.PolicyOR(pHashListSHA256)
+
+	pc = ComputePolicyWithDigests(initialDigests)
 	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 	expectedDigests, _, err := pc.Policy()
 
@@ -1160,7 +995,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyBranchNodeElement(
+		NewMockPolicyORElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[0]},
@@ -1204,8 +1039,11 @@ func (s *computeSuite) TestPolicyBranchesNoSaveDigests(c *C) {
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList = append(pHashList, digests[0].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), IsNil)
+	initialDigest := TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial := NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList)
+
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 	expectedDigests, _, err := pc.Policy()
 
@@ -1228,7 +1066,7 @@ func (s *computeSuite) TestPolicyBranchesNoSaveDigests(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyBranchNodeElement(
+		NewMockPolicyORElement(
 			NewMockPolicyBranch(
 				"branch1", nil,
 				NewMockPolicyAuthValueElement(),
@@ -1266,26 +1104,31 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList = append(pHashList, digests[0].Digest())
 
+	initialDigest := TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial := NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList)
+
 	var pHashList2 tpm2.DigestList
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), IsNil)
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 	digests, _, err = pc.Policy()
 	c.Assert(digests, internal_testutil.LenEquals, 1)
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList2 = append(pHashList2, digests[0].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList)), IsNil)
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	c.Check(pc.RootBranch().PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
 	digests, _, err = pc.Policy()
 	c.Assert(digests, internal_testutil.LenEquals, 1)
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList2 = append(pHashList2, digests[0].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList2)), IsNil)
+	initialDigest = TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial = NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList2)
+
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	expectedDigests, _, err := pc.Policy()
 
 	// Now build a profile with branches
@@ -1314,7 +1157,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyBranchNodeElement(
+		NewMockPolicyORElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[0]},
@@ -1328,7 +1171,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
 			),
 		),
-		NewMockPolicyBranchNodeElement(
+		NewMockPolicyORElement(
 			NewMockPolicyBranch(
 				"branch3", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[0]},
@@ -1372,10 +1215,13 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList1 = append(pHashList1, digests[0].Digest())
 
+	initialDigest := TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial := NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList1)
+
 	var pHashList2 tpm2.DigestList
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList1)), IsNil)
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	digests, _, err = pc.Policy()
 	c.Assert(digests, internal_testutil.LenEquals, 1)
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
@@ -1401,15 +1247,21 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList3 = append(pHashList3, digests[0].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList3)), IsNil)
+	initialDigest = TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial = NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList3)
+
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	digests, _, err = pc.Policy()
 	c.Assert(digests, internal_testutil.LenEquals, 1)
 	c.Check(digests[0].HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 	pHashList2 = append(pHashList2, digests[0].Digest())
 
-	pc = ComputePolicy(tpm2.HashAlgorithmSHA256)
-	c.Check(pc.RootBranch().PolicyOR(NewPolicyORHashList(tpm2.HashAlgorithmSHA256, pHashList2)), IsNil)
+	initialDigest = TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
+	trial = NewComputePolicySession(&initialDigest)
+	trial.PolicyOR(pHashList2)
+
+	pc = ComputePolicyWithDigests(TaggedHashList{initialDigest})
 	expectedDigests, _, err := pc.Policy()
 
 	// Now build a profile with branches
@@ -1451,13 +1303,13 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyBranchNodeElement(
+		NewMockPolicyORElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[0]},
 				},
 				NewMockPolicyAuthValueElement(),
-				NewMockPolicyBranchNodeElement(
+				NewMockPolicyORElement(
 					NewMockPolicyBranch(
 						"branch2", TaggedHashList{
 							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[0]},
@@ -1477,7 +1329,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[1]},
 				},
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
-				NewMockPolicyBranchNodeElement(
+				NewMockPolicyORElement(
 					NewMockPolicyBranch(
 						"branch5", TaggedHashList{
 							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList3[0]},

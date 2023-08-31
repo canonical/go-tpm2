@@ -19,10 +19,6 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-const (
-	commandPolicyBranchNode tpm2.CommandCode = 0x20010171
-)
-
 var (
 	// ErrMissingDigest is returned from [Policy.Execute] when a TPM2_PolicyCpHash or
 	// TPM2_PolicyNameHash assertion is missing a digest for the selected session algorithm.
@@ -359,7 +355,7 @@ func (h *executePolicyFlowHandler) selectAndRunNextBranch(branches policyBranche
 		panic("not reached")
 	}
 
-	context := &policyBranchNodeContext{
+	context := &policyORContext{
 		dispatcher:  h.runner,
 		session:     h.runner.session(),
 		flowHandler: h.runner.flowHandler(),
@@ -688,17 +684,17 @@ type policyBranch struct {
 
 type policyBranches []policyBranch
 
-type policyBranchNode struct {
+type policyOR struct {
 	Branches policyBranches
 }
 
-func (*policyBranchNode) name() string { return "branch node" }
+func (*policyOR) name() string { return "branch node" }
 
-func (e *policyBranchNode) run(context policySessionContext) error {
+func (e *policyOR) run(context policySessionContext) error {
 	return context.flowHandler().handleBranches(e.Branches)
 }
 
-type policyBranchNodeContext struct {
+type policyORContext struct {
 	dispatcher    policyRunDispatcher
 	session       Session
 	flowHandler   policyFlowHandler
@@ -708,7 +704,7 @@ type policyBranchNodeContext struct {
 	selected      int
 }
 
-func (c *policyBranchNodeContext) ensureCurrentDigest() error {
+func (c *policyORContext) ensureCurrentDigest() error {
 	if len(c.currentDigest) == c.session.HashAlg().Size() {
 		return nil
 	}
@@ -721,7 +717,7 @@ func (c *policyBranchNodeContext) ensureCurrentDigest() error {
 	return nil
 }
 
-func (c *policyBranchNodeContext) commitBranchDigest(index int, digest tpm2.Digest, done func() error) error {
+func (c *policyORContext) commitBranchDigest(index int, digest tpm2.Digest, done func() error) error {
 	if index != len(c.digests) {
 		return errors.New("internal error: unexpected digest")
 	}
@@ -734,7 +730,7 @@ func (c *policyBranchNodeContext) commitBranchDigest(index int, digest tpm2.Dige
 	return done()
 }
 
-func (c *policyBranchNodeContext) collectBranchDigests(done func() error) error {
+func (c *policyORContext) collectBranchDigests(done func() error) error {
 	// queue elements to obtain the digest for each branch. This is done asynchronously
 	// because they may have to descend in to each branch to compute the digest, although
 	// this is only the case during policy execution.
@@ -753,7 +749,7 @@ func (c *policyBranchNodeContext) collectBranchDigests(done func() error) error 
 	return nil
 }
 
-func (c *policyBranchNodeContext) computeBranchDigests(done func() error) error {
+func (c *policyORContext) computeBranchDigests(done func() error) error {
 	var tasks []policySessionTask
 	for i := range c.branches {
 		i := i
@@ -769,7 +765,7 @@ func (c *policyBranchNodeContext) computeBranchDigests(done func() error) error 
 	return nil
 }
 
-func (c *policyBranchNodeContext) collectBranchDigest(index int, done func(tpm2.Digest) error) error {
+func (c *policyORContext) collectBranchDigest(index int, done func(tpm2.Digest) error) error {
 	// see if the branch has a stored value for the current algorithm
 	for _, digest := range c.branches[index].PolicyDigests {
 		if digest.HashAlg != c.session.HashAlg() {
@@ -786,7 +782,7 @@ func (c *policyBranchNodeContext) collectBranchDigest(index int, done func(tpm2.
 	return nil
 }
 
-func (c *policyBranchNodeContext) computeBranchDigest(index int, done func(tpm2.Digest) error) error {
+func (c *policyORContext) computeBranchDigest(index int, done func(tpm2.Digest) error) error {
 	// we need to compute the digest, so ensure we have the current session
 	// digest.
 	if err := c.ensureCurrentDigest(); err != nil {
@@ -810,44 +806,25 @@ func (c *policyBranchNodeContext) computeBranchDigest(index int, done func(tpm2.
 	return nil
 }
 
-func (c *policyBranchNodeContext) runSelectedBranch(done func() error) error {
+func (c *policyORContext) runSelectedBranch(done func() error) error {
 	c.dispatcher.runElementsNext(c.branches[c.selected].Policy, done)
 	return nil
 }
 
-func (c *policyBranchNodeContext) completeBranchNode() error {
+func (c *policyORContext) completeBranchNode() error {
 	tree, err := newPolicyOrTree(c.session.HashAlg(), c.digests)
 	if err != nil {
 		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
 	}
-	c.dispatcher.runBatchNext(tree.selectBranch(c.selected))
-	return nil
-}
 
-type policyOR struct {
-	HashList []taggedHashList
-}
+	pHashLists := tree.selectBranch(c.selected)
 
-func (*policyOR) name() string { return "TPM2_PolicyOR assertion" }
-
-func (e *policyOR) run(context policySessionContext) error {
-	var pHashList tpm2.DigestList
-	for i, h := range e.HashList {
-		found := false
-		for _, digest := range h {
-			if digest.HashAlg != context.session().HashAlg() {
-				continue
-			}
-			pHashList = append(pHashList, digest.Digest)
-			found = true
-			break
-		}
-		if !found {
-			return fmt.Errorf("cannot process digest at index %d: %w", i, ErrMissingDigest)
+	for _, pHashList := range pHashLists {
+		if err := c.session.PolicyOR(pHashList); err != nil {
+			return err
 		}
 	}
-
-	return context.session().PolicyOR(pHashList)
+	return nil
 }
 
 type pcrValue struct {
@@ -932,8 +909,6 @@ type policyElementDetails struct {
 	DuplicationSelect *policyDuplicationSelect
 	Password          *policyPassword
 	NvWritten         *policyNvWritten
-
-	BranchNode *policyBranchNode
 }
 
 func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
@@ -964,8 +939,6 @@ func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
 		return &d.Password
 	case tpm2.CommandPolicyNvWritten:
 		return &d.NvWritten
-	case commandPolicyBranchNode:
-		return &d.BranchNode
 	default:
 		return nil
 	}
@@ -1004,8 +977,6 @@ func (e *policyElement) runner() policySessionTask {
 		return e.Details.Password
 	case tpm2.CommandPolicyNvWritten:
 		return e.Details.NvWritten
-	case commandPolicyBranchNode:
-		return e.Details.BranchNode
 	default:
 		panic("invalid type")
 	}
@@ -1228,7 +1199,7 @@ func newValidatePolicyFlowHandler(runner *policyRunner) *validatePolicyFlowHandl
 }
 
 func (h *validatePolicyFlowHandler) handleBranches(branches policyBranches) error {
-	context := &policyBranchNodeContext{
+	context := &policyORContext{
 		dispatcher:  h.runner,
 		session:     h.runner.policySession,
 		flowHandler: h.runner.policyFlowHandler,
