@@ -1286,6 +1286,9 @@ func (p *Policy) computeForDigest(digest *taggedHash) error {
 	return runner.run(p.policy.Policy)
 }
 
+// ComputeFor computes the digest for this policy for the specified algorithm. This also
+// updates stored digests within the policy, so the policy should be persisted after
+// calling this. On success, it returns the computed digest.
 func (p *Policy) ComputeFor(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	digest := taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
 
@@ -1400,9 +1403,9 @@ func newValidatePolicyRunnerContext(runner *policyRunner, digest *taggedHash) *p
 }
 
 // Validate performs some checking of every element in the policy, and
-// verifies that every branch is consistent with the stored digests where
-// they exist. On success, it returns the digest correpsonding to this policy
-// for the specified digest algorithm.
+// verifies that every branch is consistent with their stored digests. On
+// success, it returns the digest correpsonding to this policy for the
+// specified digest algorithm.
 func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
 
@@ -1423,4 +1426,55 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	//}
 
 	return digest.Digest, nil
+}
+
+type listBranchesContext struct {
+	branches []PolicyBranchPath
+	current  PolicyBranchPath
+}
+
+func (c *listBranchesContext) beginBranchNode() (treeWalkerBeginBranchFn, error) {
+	return c.beginBranch, nil
+}
+
+func (c *listBranchesContext) beginBranch(path PolicyBranchPath) error {
+	c.current = path
+	return nil
+}
+
+func (c *listBranchesContext) completeBranch(done bool) error {
+	c.branches = append(c.branches, c.current)
+	return nil
+}
+
+func newListBranchesPolicyRunnerContext(runner *policyRunner, context *listBranchesContext) *policyRunnerContext {
+	external := make(map[*tpm2.Public]tpm2.Name)
+	return newPolicyRunnerContext(
+		new(nullPolicySession),
+		newMockPolicyParams(external),
+		newMockResourceLoader(external),
+		newTreeWalkerPolicyRunnerHelper(runner, tpm2.HashAlgorithmNull, true, context.beginBranchNode, context.completeBranch),
+	)
+}
+
+// Branches returns a list of every branch in this policy.
+func (p *Policy) Branches() ([]PolicyBranchPath, error) {
+	context := new(listBranchesContext)
+
+	runner := new(policyRunner)
+	runner.policyRunnerContext = newListBranchesPolicyRunnerContext(runner, context)
+
+	element := &policyElement{
+		Type: tpm2.CommandPolicyOR,
+		Details: &policyElementDetails{
+			OR: &policyOR{
+				Branches: policyBranches{{Policy: p.policy.Policy}},
+			},
+		},
+	}
+	if err := runner.run(policyElements{element}); err != nil {
+		return nil, err
+	}
+
+	return context.branches, nil
 }

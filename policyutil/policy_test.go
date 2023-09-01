@@ -1192,7 +1192,6 @@ func (s *policySuiteNoTPM) testMarshalUnmarshalPolicyBranchName(c *C, name Polic
 	b, err := mu.MarshalToBytes(name)
 	c.Check(err, IsNil)
 	c.Check(b, DeepEquals, expected)
-	c.Logf("%x", b)
 
 	var recoveredName PolicyBranchName
 	_, err = mu.UnmarshalFromBytes(b, &recoveredName)
@@ -1380,6 +1379,68 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithNameHashMissingDigest(c *C) {
 	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
 	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNameHash assertion: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranches(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	branches, err := policy.Branches()
+	c.Check(err, IsNil)
+	c.Check(branches, DeepEquals, []PolicyBranchPath{""})
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchesWithBranches(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := builder.RootBranch().AddBranchNode()
+
+	b1 := node.AddBranch("branch1")
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	branches, err := policy.Branches()
+	c.Check(err, IsNil)
+	c.Check(branches, DeepEquals, []PolicyBranchPath{"branch1", "branch2"})
+}
+
+func (s *policySuiteNoTPM) TestPolicyBranchesWithMultipleBranchNodes(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node1 := builder.RootBranch().AddBranchNode()
+
+	b1 := node1.AddBranch("branch1")
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node1.AddBranch("branch2")
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	node2 := builder.RootBranch().AddBranchNode()
+
+	b3 := node2.AddBranch("branch3")
+	c.Check(b3.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	b4 := node2.AddBranch("")
+	c.Check(b4.PolicyCommandCode(tpm2.CommandObjectChangeAuth), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	branches, err := policy.Branches()
+	c.Check(err, IsNil)
+	c.Check(branches, DeepEquals, []PolicyBranchPath{"branch1/branch3", "branch1/$[1]", "branch2/branch3", "branch2/$[1]"})
 }
 
 type policySuite struct {

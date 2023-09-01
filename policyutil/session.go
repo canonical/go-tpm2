@@ -278,3 +278,73 @@ func (s *computePolicySession) PolicyNvWritten(writtenSet bool) error {
 func (s *computePolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 	return s.digest.Digest, nil
 }
+
+type nullPolicySession struct{}
+
+func (*nullPolicySession) HashAlg() tpm2.HashAlgorithmId {
+	return tpm2.HashAlgorithmNull
+}
+
+func (*nullPolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	return nil, nil, nil
+}
+
+func (*nullPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	return nil, nil, nil
+}
+
+func (*nullPolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyAuthValue() error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyOR(pHashList tpm2.DigestList) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyPassword() error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyNvWritten(writtenSet bool) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
+	return nil, nil
+}
