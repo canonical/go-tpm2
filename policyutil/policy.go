@@ -215,6 +215,31 @@ type policyParams interface {
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 }
 
+type policyResources interface {
+	LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
+	LoadExternal(public *tpm2.Public) (ResourceContext, error)
+	NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error)
+	Authorize(resource tpm2.ResourceContext) error
+}
+
+type policyRunnerHelper interface {
+	cpHash(cpHash *policyCpHash) (tpm2.Digest, error)
+	nameHash(nameHash *policyNameHash) (tpm2.Digest, error)
+	handleBranches(branches policyBranches) error
+}
+
+type policySessionContext interface {
+	session() Session
+	params() policyParams
+	resources() policyResources
+	helper() policyRunnerHelper
+
+	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
+	addTicket(ticket *PolicyTicket)
+
+	setRequireAuthValue()
+}
+
 type policyDeferredTaskElement struct {
 	taskName string
 	fn       func() error
@@ -235,194 +260,10 @@ func (e *policyDeferredTaskElement) run(context policySessionContext) error {
 	return e.fn()
 }
 
-type policyRunnerHelper interface {
-	cpHash(cpHash *policyCpHash) (tpm2.Digest, error)
-	nameHash(nameHash *policyNameHash) (tpm2.Digest, error)
-	handleBranches(branches policyBranches) error
-}
-
-type policySessionContext interface {
-	session() Session
-	params() policyParams
-	resources() ResourceLoader
-	helper() policyRunnerHelper
-
-	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
-	addTicket(ticket *PolicyTicket)
-
-	setRequireAuthValue()
-}
-
 type policyRunnerTaskStack interface {
 	pushTasks(tasks []policySessionTask)
 	pushTask(name string, fn func() error)
 	pushElements(elements policyElements)
-}
-
-// executePolicyParams is an implementation of policyParams that provides real
-// parameters.
-type executePolicyParams struct {
-	policySecretParams map[paramKey]*PolicySecretParams
-	authorizations     map[paramKey]*PolicySignedAuthorization
-	tickets            map[paramKey]*PolicyTicket
-}
-
-func newExecutePolicyParams(params *PolicyExecuteParams) *executePolicyParams {
-	out := &executePolicyParams{
-		policySecretParams: make(map[paramKey]*PolicySecretParams),
-		authorizations:     make(map[paramKey]*PolicySignedAuthorization),
-		tickets:            make(map[paramKey]*PolicyTicket),
-	}
-	for _, param := range params.SecretParams {
-		out.policySecretParams[policyParamKey(param.AuthName, param.PolicyRef)] = param
-	}
-	for _, auth := range params.SignedAuthorizations {
-		if auth.Authorization == nil {
-			continue
-		}
-		out.authorizations[policyParamKey(auth.Authorization.AuthKey.Name(), auth.Authorization.PolicyRef)] = auth
-	}
-	for _, ticket := range params.Tickets {
-		out.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
-	}
-
-	return out
-}
-
-func (p *executePolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
-	return p.policySecretParams[policyParamKey(authName, policyRef)]
-}
-
-func (p *executePolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
-	return p.authorizations[policyParamKey(authName, policyRef)]
-}
-
-func (p *executePolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
-	return p.tickets[policyParamKey(authName, policyRef)]
-}
-
-type executePolicyRunnerHelper struct {
-	state     TPMState
-	runner    *policyRunner
-	remaining PolicyBranchPath
-	usage     *PolicySessionUsage
-}
-
-func newExecutePolicyRunnerHelper(state TPMState, runner *policyRunner, params *PolicyExecuteParams) *executePolicyRunnerHelper {
-	return &executePolicyRunnerHelper{
-		state:     state,
-		runner:    runner,
-		remaining: params.Path,
-		usage:     params.Usage,
-	}
-}
-
-func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranches, next PolicyBranchName) error {
-	var selected int
-	switch {
-	case next[0] == '$':
-		// select branch by index
-		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
-			return fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
-		}
-		if selected < 0 || selected >= len(branches) {
-			return fmt.Errorf("cannot select branch: selected path %d out of range", selected)
-		}
-	default:
-		// select branch by name
-		selected = -1
-		for i, branch := range branches {
-			if len(branch.Name) == 0 {
-				continue
-			}
-			if branch.Name == next {
-				selected = i
-				break
-			}
-		}
-		if selected == -1 {
-			return fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
-		}
-	}
-
-	if selected == -1 {
-		// the switch branches should have returned a specific error already
-		panic("not reached")
-	}
-
-	var digests tpm2.DigestList
-	for _, branch := range branches {
-		found := false
-		for _, digest := range branch.PolicyDigests {
-			if digest.HashAlg != h.runner.session().HashAlg() {
-				continue
-			}
-
-			digests = append(digests, digest.Digest)
-			found = true
-			break
-		}
-		if !found {
-			return ErrMissingDigest
-		}
-	}
-
-	tree, err := newPolicyOrTree(h.runner.session().HashAlg(), digests)
-	if err != nil {
-		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
-	}
-
-	h.runner.pushTask("complete branch node", func() error {
-		pHashLists := tree.selectBranch(selected)
-
-		for _, pHashList := range pHashLists {
-			if err := h.runner.session().PolicyOR(pHashList); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	h.runner.pushElements(branches[selected].Policy)
-
-	return nil
-}
-
-func (h *executePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
-	for _, digest := range cpHash.Digests {
-		if digest.HashAlg != h.runner.session().HashAlg() {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return nil, ErrMissingDigest
-}
-
-func (h *executePolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
-	for _, digest := range nameHash.Digests {
-		if digest.HashAlg != h.runner.session().HashAlg() {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return nil, ErrMissingDigest
-}
-
-func (h *executePolicyRunnerHelper) handleBranches(branches policyBranches) error {
-	next, remaining := h.remaining.popNextComponent()
-	if len(next) > 0 {
-		h.remaining = remaining
-		return h.selectAndRunNextBranch(branches, PolicyBranchName(next))
-	}
-
-	autoSelector := newPolicyBranchAutoSelector(h.state, h.runner, h.usage)
-	return autoSelector.selectBranch(branches, func(path PolicyBranchPath) error {
-		h.remaining = path
-		h.runner.pushElements(policyElements{&policyElement{
-			Type: tpm2.CommandPolicyOR,
-			Details: &policyElementDetails{
-				OR: &policyOR{Branches: branches}}}})
-		return nil
-	})
 }
 
 type policySessionTask interface {
@@ -474,21 +315,25 @@ func (e *policyNV) run(context policySessionContext) error {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
 
-	auth := nvIndex
+	var auth ResourceContext = newResourceContextNonFlushable(nvIndex)
+	var policy *Policy
 	switch {
 	default:
 	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
-		auth, err = context.resources().LoadHandle(tpm2.HandleOwner)
+		auth, policy, err = context.resources().LoadName(tpm2.MakeHandleName(tpm2.HandleOwner))
 	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:
-		auth, err = context.resources().LoadHandle(tpm2.HandlePlatform)
+		auth, policy, err = context.resources().LoadName(tpm2.MakeHandleName(tpm2.HandlePlatform))
 	}
 	if err != nil {
 		return fmt.Errorf("cannot create auth context: %w", err)
 	}
+	if policy != nil {
+		return errors.New("unsupported auth method")
+	}
 
-	session, _, err := context.resources().NeedAuthorize(auth)
+	session, err := context.resources().NewSession(auth.Resource().Name().Algorithm(), tpm2.SessionTypeHMAC)
 	if err != nil {
-		return fmt.Errorf("cannot authorize auth object: %w", err)
+		return fmt.Errorf("cannot create session to authorize auth object: %w", err)
 	}
 	defer func() {
 		if session == nil {
@@ -497,12 +342,16 @@ func (e *policyNV) run(context policySessionContext) error {
 		session.Close()
 	}()
 
+	if err := context.resources().Authorize(auth.Resource()); err != nil {
+		return fmt.Errorf("cannot authorize auth object: %w", err)
+	}
+
 	var tpmSession tpm2.SessionContext
 	if session != nil {
 		tpmSession = session.Session()
 	}
 
-	return context.session().PolicyNV(auth, nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession)
+	return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession)
 }
 
 type policySecret struct {
@@ -543,15 +392,26 @@ func (e *policySecret) run(context policySessionContext) error {
 		}
 	}
 
-	authObject, err := context.resources().LoadName(e.AuthObjectName)
+	authObject, policy, err := context.resources().LoadName(e.AuthObjectName)
 	if err != nil {
 		return &ResourceLoadError{Name: e.AuthObjectName, err: err}
 	}
-	defer authObject.Flush()
+	defer func() {
+		if authObject.Resource().Handle().Type() != tpm2.HandleTypeTransient {
+			return
+		}
+		authObject.Flush()
+	}()
+	if policy != nil {
+		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: errors.New("unsupported auth method")}
+	}
 
-	session, _, err := context.resources().NeedAuthorize(authObject.Resource())
+	session, err := context.resources().NewSession(e.AuthObjectName.Algorithm(), tpm2.SessionTypeHMAC)
 	if err != nil {
-		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
+		return &AuthorizationError{
+			AuthName:  e.AuthObjectName,
+			PolicyRef: e.PolicyRef,
+			err:       fmt.Errorf("cannot create session to authorize auth object: %w", err)}
 	}
 	defer func() {
 		if session == nil {
@@ -559,6 +419,13 @@ func (e *policySecret) run(context policySessionContext) error {
 		}
 		session.Close()
 	}()
+
+	if err := context.resources().Authorize(authObject.Resource()); err != nil {
+		return &AuthorizationError{
+			AuthName:  e.AuthObjectName,
+			PolicyRef: e.PolicyRef,
+			err:       fmt.Errorf("cannot authorize auth object: %w", err)}
+	}
 
 	var tpmSession tpm2.SessionContext
 	if session != nil {
@@ -910,7 +777,7 @@ func (p *Policy) Unmarshal(r io.Reader) error {
 type policyRunnerContext struct {
 	policySession      Session
 	policyParams       policyParams
-	policyResources    ResourceLoader
+	policyResources    policyResources
 	policyRunnerHelper policyRunnerHelper
 
 	tickets map[paramKey]*PolicyTicket
@@ -918,7 +785,7 @@ type policyRunnerContext struct {
 	requireAuthValue bool
 }
 
-func newPolicyRunnerContext(session Session, params policyParams, resources ResourceLoader, helper policyRunnerHelper) *policyRunnerContext {
+func newPolicyRunnerContext(session Session, params policyParams, resources policyResources, helper policyRunnerHelper) *policyRunnerContext {
 	return &policyRunnerContext{
 		policySession:      session,
 		policyParams:       params,
@@ -942,7 +809,7 @@ func (r *policyRunner) params() policyParams {
 	return r.policyParams
 }
 
-func (r *policyRunner) resources() ResourceLoader {
+func (r *policyRunner) resources() policyResources {
 	return r.policyResources
 }
 
@@ -1017,6 +884,178 @@ func (r *policyRunner) run(policy policyElements) error {
 	return nil
 }
 
+// executePolicyParams is an implementation of policyParams that provides real
+// parameters.
+type executePolicyParams struct {
+	policySecretParams map[paramKey]*PolicySecretParams
+	authorizations     map[paramKey]*PolicySignedAuthorization
+	tickets            map[paramKey]*PolicyTicket
+}
+
+func newExecutePolicyParams(params *PolicyExecuteParams) *executePolicyParams {
+	out := &executePolicyParams{
+		policySecretParams: make(map[paramKey]*PolicySecretParams),
+		authorizations:     make(map[paramKey]*PolicySignedAuthorization),
+		tickets:            make(map[paramKey]*PolicyTicket),
+	}
+	for _, param := range params.SecretParams {
+		out.policySecretParams[policyParamKey(param.AuthName, param.PolicyRef)] = param
+	}
+	for _, auth := range params.SignedAuthorizations {
+		if auth.Authorization == nil {
+			continue
+		}
+		out.authorizations[policyParamKey(auth.Authorization.AuthKey.Name(), auth.Authorization.PolicyRef)] = auth
+	}
+	for _, ticket := range params.Tickets {
+		out.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+	}
+
+	return out
+}
+
+func (p *executePolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
+	return p.policySecretParams[policyParamKey(authName, policyRef)]
+}
+
+func (p *executePolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
+	return p.authorizations[policyParamKey(authName, policyRef)]
+}
+
+func (p *executePolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+	return p.tickets[policyParamKey(authName, policyRef)]
+}
+
+type tpmState interface {
+	PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
+	NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
+	ReadClock() (*tpm2.TimeInfo, error)
+}
+
+type executePolicyRunnerHelper struct {
+	runner    *policyRunner
+	state     tpmState
+	remaining PolicyBranchPath
+	usage     *PolicySessionUsage
+}
+
+func newExecutePolicyRunnerHelper(runner *policyRunner, state tpmState, params *PolicyExecuteParams) *executePolicyRunnerHelper {
+	return &executePolicyRunnerHelper{
+		runner:    runner,
+		state:     state,
+		remaining: params.Path,
+		usage:     params.Usage,
+	}
+}
+
+func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranches, next PolicyBranchName) error {
+	var selected int
+	switch {
+	case next[0] == '$':
+		// select branch by index
+		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
+			return fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
+		}
+		if selected < 0 || selected >= len(branches) {
+			return fmt.Errorf("cannot select branch: selected path %d out of range", selected)
+		}
+	default:
+		// select branch by name
+		selected = -1
+		for i, branch := range branches {
+			if len(branch.Name) == 0 {
+				continue
+			}
+			if branch.Name == next {
+				selected = i
+				break
+			}
+		}
+		if selected == -1 {
+			return fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
+		}
+	}
+
+	if selected == -1 {
+		// the switch branches should have returned a specific error already
+		panic("not reached")
+	}
+
+	var digests tpm2.DigestList
+	for _, branch := range branches {
+		found := false
+		for _, digest := range branch.PolicyDigests {
+			if digest.HashAlg != h.runner.session().HashAlg() {
+				continue
+			}
+
+			digests = append(digests, digest.Digest)
+			found = true
+			break
+		}
+		if !found {
+			return ErrMissingDigest
+		}
+	}
+
+	tree, err := newPolicyOrTree(h.runner.session().HashAlg(), digests)
+	if err != nil {
+		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
+	}
+
+	h.runner.pushTask("complete branch node", func() error {
+		pHashLists := tree.selectBranch(selected)
+
+		for _, pHashList := range pHashLists {
+			if err := h.runner.session().PolicyOR(pHashList); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	h.runner.pushElements(branches[selected].Policy)
+
+	return nil
+}
+
+func (h *executePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+	for _, digest := range cpHash.Digests {
+		if digest.HashAlg != h.runner.session().HashAlg() {
+			continue
+		}
+		return digest.Digest, nil
+	}
+	return nil, ErrMissingDigest
+}
+
+func (h *executePolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+	for _, digest := range nameHash.Digests {
+		if digest.HashAlg != h.runner.session().HashAlg() {
+			continue
+		}
+		return digest.Digest, nil
+	}
+	return nil, ErrMissingDigest
+}
+
+func (h *executePolicyRunnerHelper) handleBranches(branches policyBranches) error {
+	next, remaining := h.remaining.popNextComponent()
+	if len(next) > 0 {
+		h.remaining = remaining
+		return h.selectAndRunNextBranch(branches, PolicyBranchName(next))
+	}
+
+	autoSelector := newPolicyBranchAutoSelector(h.runner, h.state, h.usage)
+	return autoSelector.selectBranch(branches, func(path PolicyBranchPath) error {
+		h.remaining = path
+		h.runner.pushElements(policyElements{&policyElement{
+			Type: tpm2.CommandPolicyOR,
+			Details: &policyElementDetails{
+				OR: &policyOR{Branches: branches}}}})
+		return nil
+	})
+}
+
 // Execute runs this policy using the supplied TPM context and on the supplied policy session.
 //
 // The caller may supply additional parameters via the PolicyExecuteParams struct, which is an
@@ -1025,18 +1064,17 @@ func (r *policyRunner) run(policy policyElements) error {
 // TPM2_PolicySigned assertions. Each of these parameters are associated with a policy assertion
 // by a name and policy reference.
 //
-// Resources required by a policy are obtained from the supplied ResourceLoader, which is optional
-// but must be supplied for any policy that executes TPM2_PolicyNV, TPM2_PolicySecret or
+// Resources required by a policy are obtained from the supplied PolicyExecuteHelper, which is
+// optional but must be supplied for any policy that executes TPM2_PolicyNV, TPM2_PolicySecret or
 // TPM2_PolicySigned assertions.
 //
-// A way to obtain the current TPM state can be supplied via the TPMState argument. This is used
-// for decisions in automatic branch selection.
-//
 // The caller may explicitly select branches to execute via the Path argument of
-// [PolicyExecuteParams]. Alternatively, if branches are not specified explicitly, appropriate
-// branches are selected automatically where possible. This works by selecting the first
-// appropriate branch from all of the candidate branches. Inappropriate branches are filtered out
-// from all of the candidate branches if any of the following conditions are true:
+// [PolicyExecuteParams]. Alternatively, if branches are not specified explicitly, an
+// appropriate branch is selected automatically where possible. This works by selecting the
+// first branch from all of the candidate branches, with a preference for branches that
+// don't include TPM2_PolicySecret, TPM2_PolicyAuthValue and TPM2_PolicyPassword assertions.
+// Branches are omitted from the set of candidate branches if any of the following conditions are
+// true:
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
 //     the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicyNvWritten with a value that doesn't match the public area of the NV index
@@ -1049,29 +1087,30 @@ func (r *policyRunner) run(policy policyElements) error {
 // Note that when automatically selecting branches, it is assumed that any TPM2_PolicySecret or
 // TPM2_PolicyNV assertions will succeed.
 //
+// The supplied PolicyExecuteHelper is used to obtain current TPM state when determining which
+// branches to execute. This is required for policies that include TPM2_PolicyPCR,
+// TPM2_PolicyCounterTimer or TPM2_PolicyNvWritten assertions.
+//
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied. It will also return a list of tickets generated by any assertions,
 // and indicate whether the authorization value must be supplied for the resource being authorized.
-func (p *Policy) Execute(session Session, params *PolicyExecuteParams, resources ResourceLoader, state TPMState) (tickets []*PolicyTicket, requireAuthValue bool, err error) {
+func (p *Policy) Execute(session Session, helper PolicyExecuteHelper, params *PolicyExecuteParams) (tickets []*PolicyTicket, requireAuthValue bool, err error) {
 	if session == nil {
 		return nil, false, errors.New("no session")
 	}
+	if helper == nil {
+		helper = new(nullPolicyExecuteHelper)
+	}
 	if params == nil {
 		params = new(PolicyExecuteParams)
-	}
-	if resources == nil {
-		resources = new(nullResourceLoader)
-	}
-	if state == nil {
-		state = new(nullTpmState)
 	}
 
 	runner := new(policyRunner)
 	runner.policyRunnerContext = newPolicyRunnerContext(
 		session,
 		newExecutePolicyParams(params),
-		resources,
-		newExecutePolicyRunnerHelper(state, runner, params))
+		helper,
+		newExecutePolicyRunnerHelper(runner, helper, params))
 
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, false, err

@@ -242,8 +242,8 @@ func (a *policyAssertions) nvWritten() (bool, bool) {
 }
 
 type policyBranchAutoSelector struct {
-	state      TPMState
 	runner     *policyRunner
+	state      tpmState
 	params     policyParams
 	usage      *PolicySessionUsage
 	sessionAlg tpm2.HashAlgorithmId
@@ -258,10 +258,10 @@ type policyBranchAutoSelector struct {
 	beginBranchQueue []func() error
 }
 
-func newPolicyBranchAutoSelector(state TPMState, runner *policyRunner, usage *PolicySessionUsage) *policyBranchAutoSelector {
+func newPolicyBranchAutoSelector(runner *policyRunner, state tpmState, usage *PolicySessionUsage) *policyBranchAutoSelector {
 	return &policyBranchAutoSelector{
-		state:      state,
 		runner:     runner,
+		state:      state,
 		params:     runner.params(),
 		usage:      usage,
 		sessionAlg: runner.session().HashAlg(),
