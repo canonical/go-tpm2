@@ -39,8 +39,8 @@ func (p PolicyBranchPath) PopNextComponent() (next PolicyBranchPath, remaining P
 	return p.popNextComponent()
 }
 
-func ComputePolicyWithDigests(digests TaggedHashList) *PolicyComputer {
-	return computePolicy(digests)
+func (p *Policy) ComputeForDigest(digest *TaggedHash) error {
+	return p.computeForDigest(digest)
 }
 
 func NewMockPolicyNVElement(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
@@ -95,28 +95,34 @@ func NewMockPolicyCounterTimerElement(operandB tpm2.Operand, offset uint16, oper
 				Operation: operation}}}
 }
 
-func NewMockPolicyCpHashElement(digests taggedHashList) *policyElement {
+func NewMockPolicyCpHashElement(code tpm2.CommandCode, handles []tpm2.Name, cpBytes []byte, digests taggedHashList) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
-			CpHash: &policyCpHash{Digests: digests}}}
+			CpHash: &policyCpHash{
+				CommandCode: code,
+				Handles:     handles,
+				CpBytes:     cpBytes,
+				Digests:     digests}}}
 }
 
-func NewMockPolicyNameHashElement(digests taggedHashList) *policyElement {
+func NewMockPolicyNameHashElement(handles []tpm2.Name, digests taggedHashList) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
-			NameHash: &policyNameHash{Digests: digests}}}
+			NameHash: &policyNameHash{
+				Handles: handles,
+				Digests: digests}}}
 }
 
-func NewMockPolicyBranch(name PolicyBranchName, digests taggedHashList, elements ...*policyElement) policyBranch {
-	return policyBranch{
+func NewMockPolicyBranch(name PolicyBranchName, digests taggedHashList, elements ...*policyElement) *policyBranch {
+	return &policyBranch{
 		Name:          name,
 		PolicyDigests: digests,
 		Policy:        elements}
 }
 
-func NewMockPolicyORElement(branches ...policyBranch) *policyElement {
+func NewMockPolicyORElement(branches ...*policyBranch) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyOR,
 		Details: &policyElementDetails{

@@ -308,8 +308,7 @@ func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
 
 		cpHash, set := v.cpHash()
 		if set {
-			params := CommandParameters(s.usage.commandCode, s.usage.handles, s.usage.params...)
-			d, err := params.Digest(s.sessionAlg)
+			d, err := ComputeCpHash(s.sessionAlg, s.usage.commandCode, s.usage.handles, s.usage.params...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
 			}
@@ -321,8 +320,7 @@ func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
 
 		nameHash, set := v.nameHash()
 		if set {
-			handles := CommandHandles(s.usage.handles...)
-			d, err := handles.Digest(s.sessionAlg)
+			d, err := ComputeNameHash(s.sessionAlg, s.usage.handles...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
 			}
@@ -550,13 +548,13 @@ func (s *policyBranchAutoSelector) collectBranchInfo(path PolicyBranchPath, asse
 	s.path = PolicyBranchPath(strings.Join(pathElements, "/"))
 	s.assertions = *assertions
 
-	s.runner.runElementsNext(branch.Policy, nil)
+	s.runner.pushElements(branch.Policy, nil)
 }
 
 func (s *policyBranchAutoSelector) runBeginCollectNextBranchInfo() {
 	fn := s.beginBranchQueue[0]
 	s.beginBranchQueue = s.beginBranchQueue[1:]
-	s.runner.runNext("begin collect branch information for branch auto selection", fn)
+	s.runner.pushTask("begin collect branch information for branch auto selection", fn)
 }
 
 func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, done func(PolicyBranchPath) error) error {
@@ -591,7 +589,7 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, done fu
 				s.runner.next = next
 				s.runner.tasks = tasks
 
-				s.runner.runNext("auto select branch", func() error {
+				s.runner.pushTask("auto select branch", func() error {
 					path, err := s.filterAndChooseBranch()
 					if err != nil {
 						return fmt.Errorf("cannot select branch: %w", err)
@@ -697,12 +695,11 @@ func (s *policyBranchAutoSelector) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PC
 }
 
 func (s *policyBranchAutoSelector) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	nameHash := CommandHandles(objectName, newParentName)
-	digest, err := nameHash.Digest(s.sessionAlg)
+	nameHash, err := ComputeNameHash(s.sessionAlg, objectName, newParentName)
 	if err != nil {
 		return err
 	}
-	s.assertions.policyNameHash = append(s.assertions.policyNameHash, digest)
+	s.assertions.policyNameHash = append(s.assertions.policyNameHash, nameHash)
 	s.assertions.policyCommandCode = append(s.assertions.policyCommandCode, tpm2.CommandPolicyDuplicationSelect)
 	return nil
 }
@@ -743,6 +740,26 @@ func (s *policyBranchAutoSelector) ticket(authName tpm2.Name, policyRef tpm2.Non
 	return nil
 }
 
+func (s *policyBranchAutoSelector) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+	for _, digest := range cpHash.Digests {
+		if digest.HashAlg != s.sessionAlg {
+			continue
+		}
+		return digest.Digest, nil
+	}
+	return make(tpm2.Digest, s.sessionAlg.Size()), nil
+}
+
+func (s *policyBranchAutoSelector) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+	for _, digest := range nameHash.Digests {
+		if digest.HashAlg != s.sessionAlg {
+			continue
+		}
+		return digest.Digest, nil
+	}
+	return make(tpm2.Digest, s.sessionAlg.Size()), nil
+}
+
 func (s *policyBranchAutoSelector) handleBranches(branches policyBranches) error {
 	// callers to this shouldn't have used policyRunnerDispatcher
 	if len(s.runner.next) > 0 {
@@ -763,7 +780,7 @@ func (s *policyBranchAutoSelector) handleBranches(branches policyBranches) error
 		branch := branch
 		task := func() error {
 			s.runner.tasks = remaining
-			s.collectBranchInfo(path, &assertions, i, &branch)
+			s.collectBranchInfo(path, &assertions, i, branch)
 			return nil
 		}
 		tasks = append(tasks, task)

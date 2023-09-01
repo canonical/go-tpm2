@@ -19,6 +19,22 @@ type CpHash interface {
 	Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error)
 }
 
+func computeCpHash(alg tpm2.HashAlgorithmId, command tpm2.CommandCode, handles []tpm2.Name, cpBytes []byte) (tpm2.Digest, error) {
+	if !alg.Available() {
+		return nil, errors.New("algorithm is not available")
+	}
+
+	h := alg.NewHash()
+
+	binary.Write(h, binary.BigEndian, command)
+	for _, handle := range handles {
+		h.Write(handle.Name())
+	}
+	h.Write(cpBytes)
+
+	return h.Sum(nil), nil
+}
+
 type commandParams struct {
 	command tpm2.CommandCode
 	handles []Named
@@ -26,27 +42,19 @@ type commandParams struct {
 }
 
 func (c *commandParams) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
-	if !alg.Available() {
-		return nil, errors.New("algorithm is not available")
-	}
-
 	cpBytes, err := mu.MarshalToBytes(c.params...)
 	if err != nil {
 		return nil, err
 	}
-
-	h := alg.NewHash()
-
-	binary.Write(h, binary.BigEndian, c.command)
+	var handles []tpm2.Name
 	for i, handle := range c.handles {
-		if !handle.Name().IsValid() {
+		name := handle.Name()
+		if !name.IsValid() {
 			return nil, fmt.Errorf("invalid name for handle %d", i)
 		}
-		h.Write(handle.Name())
+		handles = append(handles, name)
 	}
-	h.Write(cpBytes)
-
-	return h.Sum(nil), nil
+	return computeCpHash(alg, c.command, handles, cpBytes)
 }
 
 // CommandParameters returns a CpHash implementation for the specified command code, handles and
