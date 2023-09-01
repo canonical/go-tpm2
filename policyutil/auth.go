@@ -15,11 +15,69 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+// ComputePolicyAuthorizationTBSDigest computes the TBS digest for a policy authorization from the
+// supplied message and policy reference. For a TPM2_PolicyAuthorize assertion, message is the
+// approved policy digest.
+//
+// This will panic if the specified digest algorithm is not available.
+func ComputePolicyAuthorizationTBSDigest(alg crypto.Hash, message []byte, policyRef tpm2.Nonce) []byte {
+	h := alg.New()
+	h.Write(message)
+	h.Write(policyRef)
+	return h.Sum(nil)
+}
+
 // PolicyAuthorization corresponds to a signed authorization.
 type PolicyAuthorization struct {
 	AuthKey   *tpm2.Public    // The public key of the signer, associated with the corresponding assertion.
 	PolicyRef tpm2.Nonce      // The policy ref of the corresponding assertion
 	Signature *tpm2.Signature // The actual signature
+}
+
+// SignPolicyAuthorization signs a new policy authorization using the supplied signer and
+// options. Note that only RSA-SSA, RSA-PSS, ECDSA and HMAC signatures can be created.
+//
+// The authKey argument is the corresponding public key. Both the authKey and policyRef arguments
+// bind the authorization to a specific assertion in a policy.
+//
+// If the authorization is for use with TPM2_PolicyAuthorize then the supplied message is the
+// approved policy digest. This can sign authorizations for TPM2_PolicySigned as well, but
+// [PolicySignedAuthorization.Sign] is preferred for that because it constructs the message
+// appropriately.
+//
+// This will panic if the specified digest algorithm is not available.
+func SignPolicyAuthorization(rand io.Reader, message []byte, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) (*PolicyAuthorization, error) {
+	digest := ComputePolicyAuthorizationTBSDigest(opts.HashFunc(), message, policyRef)
+	sig, err := cryptutil.Sign(rand, signer, digest, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &PolicyAuthorization{
+		AuthKey:   authKey,
+		PolicyRef: policyRef,
+		Signature: sig,
+	}, nil
+}
+
+// Verify verifies the signature of this authorization. If the authorization is for
+// use with TPM2_PolicyAuthorize then the supplied message is the approved policy digest.
+// This can verify authorizations for TPM2_PolicySigned as well, but
+// [PolicySignedAuthorization.Verify] is preferred for that because it constructs the
+// message appropriately.
+func (a *PolicyAuthorization) Verify(message []byte) (ok bool, err error) {
+	if a.AuthKey == nil || a.Signature == nil {
+		return false, errors.New("invalid authorization")
+	}
+	if !a.Signature.SigAlg.IsValid() {
+		return false, errors.New("invalid signature algorithm")
+	}
+	hashAlg := a.Signature.HashAlg().GetHash()
+	if !hashAlg.Available() {
+		return false, errors.New("digest algorithm is not available")
+	}
+
+	digest := ComputePolicyAuthorizationTBSDigest(hashAlg, message, a.PolicyRef)
+	return cryptutil.VerifySignature(a.AuthKey.Public(), digest, a.Signature)
 }
 
 // PolicySignedAuthorization represents a signed authorization for a TPM2_PolicySigned assertion.
@@ -73,25 +131,19 @@ func NewPolicySignedAuthorization(sessionAlg tpm2.HashAlgorithmId, nonceTPM tpm2
 }
 
 // Sign signs this authorization using the supplied signer and options. Note that only RSA-SSA,
-// RSA-PSS, ECDSA and HMAC signatures can be created. The signer must be the owner of the key
-// associated with the AuthName field.
+// RSA-PSS, ECDSA and HMAC signatures can be created.
 //
 // The authKey argument is the corresponding public key. Both the authKey and policyRef arguments
 // bind the authorization to a specific assertion in a policy.
 //
 // This will panic if the requested digest algorithm is not available.
 func (a *PolicySignedAuthorization) Sign(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
-	h := opts.HashFunc().New()
-	mu.MustMarshalToWriter(h, mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash), mu.Raw(policyRef))
-	sig, err := cryptutil.Sign(rand, signer, h.Sum(nil), opts)
+	msg := mu.MustMarshalToBytes(mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash))
+	auth, err := SignPolicyAuthorization(rand, msg, authKey, policyRef, signer, opts)
 	if err != nil {
 		return err
 	}
-	a.Authorization = &PolicyAuthorization{
-		AuthKey:   authKey,
-		PolicyRef: policyRef,
-		Signature: sig,
-	}
+	a.Authorization = auth
 	return nil
 }
 
@@ -100,18 +152,8 @@ func (a *PolicySignedAuthorization) Verify() (ok bool, err error) {
 	if a.Authorization == nil {
 		return false, errors.New("authorization is not signed")
 	}
-	if !a.Authorization.Signature.SigAlg.IsValid() {
-		return false, errors.New("invalid signature algorithm")
-	}
-
-	hashAlg := a.Authorization.Signature.HashAlg()
-	if !hashAlg.Available() {
-		return false, errors.New("digest algorithm is not available")
-	}
-
-	h := hashAlg.NewHash()
-	mu.MustMarshalToWriter(h, mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash), mu.Raw(a.Authorization.PolicyRef))
-	return cryptutil.VerifySignature(a.Authorization.AuthKey.Public(), h.Sum(nil), a.Authorization.Signature)
+	msg := mu.MustMarshalToBytes(mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash))
+	return a.Authorization.Verify(msg)
 }
 
 // SignPolicySignedAuthorization creates a signed authorization that can be used in a TPM2_PolicySigned
