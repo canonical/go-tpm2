@@ -13,8 +13,8 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// Session corresponds to a policy session
-type Session interface {
+// PolicySession corresponds to a policy session
+type PolicySession interface {
 	HashAlg() tpm2.HashAlgorithmId
 
 	PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error
@@ -36,86 +36,86 @@ type Session interface {
 	PolicyGetDigest() (tpm2.Digest, error)
 }
 
-type tpmSession struct {
+type tpmPolicySession struct {
 	tpm           *tpm2.TPMContext
 	policySession tpm2.SessionContext
 	sessions      []tpm2.SessionContext
 }
 
-// NewTPMSession creates a new Session for the supplied TPM context and TPM session.
-func NewTPMSession(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, sessions ...tpm2.SessionContext) Session {
-	return &tpmSession{
+// NewTPMPolicySession creates a new Session for the supplied TPM context and TPM session.
+func NewTPMPolicySession(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, sessions ...tpm2.SessionContext) PolicySession {
+	return &tpmPolicySession{
 		tpm:           tpm,
 		policySession: policySession,
 		sessions:      sessions,
 	}
 }
 
-func (c *tpmSession) HashAlg() tpm2.HashAlgorithmId {
+func (c *tpmPolicySession) HashAlg() tpm2.HashAlgorithmId {
 	return c.policySession.HashAlg()
 }
 
-func (c *tpmSession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
+func (c *tpmPolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
 	return c.tpm.PolicyNV(auth, index, c.policySession, operandB, offset, operation, authAuthSession, c.sessions...)
 }
 
-func (c *tpmSession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
+func (c *tpmPolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
 	return c.tpm.PolicySecret(authObject, c.policySession, cpHashA, policyRef, expiration, authObjectAuthSession, c.sessions...)
 }
 
-func (c *tpmSession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+func (c *tpmPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
 	return c.tpm.PolicySigned(authKey, c.policySession, includeNonceTPM, cpHashA, policyRef, expiration, auth, c.sessions...)
 }
 
-func (c *tpmSession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+func (c *tpmPolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
 	return c.tpm.PolicyAuthorize(c.policySession, approvedPolicy, policyRef, keySign, verified, c.sessions...)
 }
 
-func (c *tpmSession) PolicyAuthValue() error {
+func (c *tpmPolicySession) PolicyAuthValue() error {
 	return c.tpm.PolicyAuthValue(c.policySession, c.sessions...)
 }
 
-func (c *tpmSession) PolicyCommandCode(code tpm2.CommandCode) error {
+func (c *tpmPolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
 	return c.tpm.PolicyCommandCode(c.policySession, code, c.sessions...)
 }
 
-func (c *tpmSession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+func (c *tpmPolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
 	return c.tpm.PolicyCounterTimer(c.policySession, operandB, offset, operation, c.sessions...)
 }
 
-func (c *tpmSession) PolicyCpHash(cpHashA tpm2.Digest) error {
+func (c *tpmPolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
 	return c.tpm.PolicyCpHash(c.policySession, cpHashA, c.sessions...)
 }
 
-func (c *tpmSession) PolicyNameHash(nameHash tpm2.Digest) error {
+func (c *tpmPolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
 	return c.tpm.PolicyNameHash(c.policySession, nameHash, c.sessions...)
 }
 
-func (c *tpmSession) PolicyOR(pHashList tpm2.DigestList) error {
+func (c *tpmPolicySession) PolicyOR(pHashList tpm2.DigestList) error {
 	return c.tpm.PolicyOR(c.policySession, pHashList, c.sessions...)
 }
 
-func (c *tpmSession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
+func (c *tpmPolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
 	return c.tpm.PolicyTicket(c.policySession, timeout, cpHashA, policyRef, authName, ticket, c.sessions...)
 }
 
-func (c *tpmSession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+func (c *tpmPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
 	return c.tpm.PolicyPCR(c.policySession, pcrDigest, pcrs, c.sessions...)
 }
 
-func (c *tpmSession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
+func (c *tpmPolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
 	return c.tpm.PolicyDuplicationSelect(c.policySession, objectName, newParentName, includeObject, c.sessions...)
 }
 
-func (c *tpmSession) PolicyPassword() error {
+func (c *tpmPolicySession) PolicyPassword() error {
 	return c.tpm.PolicyPassword(c.policySession, c.sessions...)
 }
 
-func (c *tpmSession) PolicyNvWritten(writtenSet bool) error {
+func (c *tpmPolicySession) PolicyNvWritten(writtenSet bool) error {
 	return c.tpm.PolicyNvWritten(c.policySession, writtenSet, c.sessions...)
 }
 
-func (c *tpmSession) PolicyGetDigest() (tpm2.Digest, error) {
+func (c *tpmPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 	return c.tpm.PolicyGetDigest(c.policySession, c.sessions...)
 }
 
