@@ -185,12 +185,8 @@ func (u *PolicySessionUsage) WithNVHandle(handle tpm2.Handle) *PolicySessionUsag
 	return u
 }
 
-// PolicyExecuteParams contains parameters that are useful for executing a policy.
-type PolicyExecuteParams struct {
-	SecretParams         []*PolicySecretParams        // Parameters for TPM2_PolicySecret assertions
-	SignedAuthorizations []*PolicySignedAuthorization // Authorizations for TPM2_PolicySigned assertions
-	Tickets              []*PolicyTicket              // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
-
+// PolicyBranchSelectParams contains parameters for selecting branches in a policy.
+type PolicyBranchSelectParams struct {
 	// Usage describes how the executed policy will be used, and assists with
 	// automatically selecting branches where a policy has command context-specific
 	// branches.
@@ -206,6 +202,14 @@ type PolicyExecuteParams struct {
 	// profile, the profile execution will attempt to select an appropriate branch
 	// automatically.
 	Path string
+}
+
+// PolicyExecuteParams contains parameters that are useful for executing a policy.
+type PolicyExecuteParams struct {
+	SecretParams         []*PolicySecretParams        // Parameters for TPM2_PolicySecret assertions
+	SignedAuthorizations []*PolicySignedAuthorization // Authorizations for TPM2_PolicySigned assertions
+	Tickets              []*PolicyTicket              // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
+	PolicyBranchSelectParams
 }
 
 // policyBranchPath uniquely identifies an execution path through the branches in a
