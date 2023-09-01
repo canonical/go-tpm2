@@ -548,13 +548,13 @@ func (s *policyBranchAutoSelector) collectBranchInfo(path PolicyBranchPath, asse
 	s.path = PolicyBranchPath(strings.Join(pathElements, "/"))
 	s.assertions = *assertions
 
-	s.runner.pushElements(branch.Policy, nil)
+	s.runner.pushElements(branch.Policy)
 }
 
 func (s *policyBranchAutoSelector) runBeginCollectNextBranchInfo() {
 	fn := s.beginBranchQueue[0]
 	s.beginBranchQueue = s.beginBranchQueue[1:]
-	s.runner.pushTask("begin collect branch information for branch auto selection", fn)
+	s.runner.pushTask("collect branch information for branch auto selection", fn)
 }
 
 func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, done func(PolicyBranchPath) error) error {
@@ -589,7 +589,7 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, done fu
 				s.runner.next = next
 				s.runner.tasks = tasks
 
-				s.runner.pushTask("auto select branch", func() error {
+				s.runner.pushTask("complete branch auto selection", func() error {
 					path, err := s.filterAndChooseBranch()
 					if err != nil {
 						return fmt.Errorf("cannot select branch: %w", err)

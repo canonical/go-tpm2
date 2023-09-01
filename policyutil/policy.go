@@ -260,9 +260,9 @@ type policySessionContext interface {
 }
 
 type policyRunnerTaskStack interface {
-	pushTaskBatch(tasks []policySessionTask)
+	pushTasks(tasks []policySessionTask)
 	pushTask(name string, fn func() error)
-	pushElements(elements policyElements, done func() error)
+	pushElements(elements policyElements)
 }
 
 // executePolicyParams is an implementation of policyParams that provides real
@@ -378,7 +378,7 @@ func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranch
 		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
 	}
 
-	h.runner.pushElements(branches[selected].Policy, func() error {
+	h.runner.pushTask("complete branch node", func() error {
 		pHashLists := tree.selectBranch(selected)
 
 		for _, pHashList := range pHashLists {
@@ -388,6 +388,7 @@ func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranch
 		}
 		return nil
 	})
+	h.runner.pushElements(branches[selected].Policy)
 
 	return nil
 }
@@ -422,7 +423,11 @@ func (h *executePolicyRunnerHelper) handleBranches(branches policyBranches) erro
 	autoSelector := newPolicyBranchAutoSelector(h.state, h.runner, h.usage)
 	return autoSelector.selectBranch(branches, func(path PolicyBranchPath) error {
 		h.remaining = path
-		return h.handleBranches(branches)
+		h.runner.pushElements(policyElements{&policyElement{
+			Type: tpm2.CommandPolicyOR,
+			Details: &policyElementDetails{
+				OR: &policyOR{Branches: branches}}}})
+		return nil
 	})
 }
 
@@ -962,7 +967,7 @@ func (r *policyRunner) addTicket(ticket *PolicyTicket) {
 	r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 }
 
-func (r *policyRunner) pushTaskBatch(tasks []policySessionTask) {
+func (r *policyRunner) pushTasks(tasks []policySessionTask) {
 	r.next = append(tasks, r.next...)
 }
 
@@ -970,15 +975,12 @@ func (r *policyRunner) pushTask(name string, fn func() error) {
 	r.next = append([]policySessionTask{newDeferredTask(name, fn)}, r.next...)
 }
 
-func (r *policyRunner) pushElements(elements policyElements, done func() error) {
+func (r *policyRunner) pushElements(elements policyElements) {
 	var tasks []policySessionTask
 	for _, element := range elements {
 		tasks = append(tasks, element)
 	}
-	if done != nil {
-		tasks = append(tasks, newDeferredTask("callback", done))
-	}
-	r.pushTaskBatch(tasks)
+	r.pushTasks(tasks)
 }
 
 func (r *policyRunner) commitNext() {
@@ -1001,12 +1003,12 @@ func (r *policyRunner) popTask() policySessionTask {
 }
 
 func (r *policyRunner) run(policy policyElements) error {
-	r.pushElements(policy, nil)
+	r.pushElements(policy)
 
 	for r.more() {
 		task := r.popTask()
 		if err := task.run(r); err != nil {
-			return fmt.Errorf("cannot process %s: %w", task.name(), err)
+			return fmt.Errorf("cannot run %s: %w", task.name(), err)
 		}
 	}
 
@@ -1141,7 +1143,7 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 				oldContext.policyRunnerHelper,
 			)
 
-			runner.pushElements(branch.Policy, func() error {
+			runner.pushTask("complete compute branch digests", func() error {
 				runner.policyRunnerContext = oldContext
 				digests = append(digests, digest.Digest)
 				if len(digests) != len(branches) {
@@ -1150,12 +1152,13 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 
 				return done(digests)
 			})
+			runner.pushElements(branch.Policy)
 
 			return nil
 		})
 		tasks = append(tasks, task)
 	}
-	runner.pushTaskBatch(tasks)
+	runner.pushTasks(tasks)
 
 	return nil
 }
