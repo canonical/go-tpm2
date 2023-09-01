@@ -330,11 +330,6 @@ func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
 			}
 		}
 
-		if v.policyAuthValueNeeded && !s.usage.canUseAuthValue {
-			delete(s.assertionsMap, k)
-			continue
-		}
-
 		nvWritten, set := v.nvWritten()
 		if set && s.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
 			pub, err := s.state.NVPublic(s.usage.nvHandle)
@@ -525,13 +520,25 @@ func (s *policyBranchAutoSelector) filterAndChooseBranch() (PolicyBranchPath, er
 		return "", fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyCounterTimer assertions: %w", err)
 	}
 
+	// return the first branch that doesn't use TPM2_PolicyPassword, TPM2_PolicyAuthValue,
+	// or TPM2_PolicySecret, else just return the first good branch.
+	var first PolicyBranchPath
+
 	for _, path := range s.paths {
-		if _, exists := s.assertionsMap[path]; exists {
-			return path, nil
+		if assertions, exists := s.assertionsMap[path]; exists {
+			if first == "" {
+				first = path
+			}
+			if !assertions.policyAuthValueNeeded && len(assertions.policySecret) < 0 {
+				return path, nil
+			}
 		}
 	}
 
-	return "", errors.New("no appropriate branches")
+	if first == "" {
+		return "", errors.New("no appropriate branches")
+	}
+	return first, nil
 }
 
 func (s *policyBranchAutoSelector) collectBranchInfo(path PolicyBranchPath, assertions *policyAssertions, index int, branch *policyBranch) {
