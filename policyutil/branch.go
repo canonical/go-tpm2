@@ -250,10 +250,10 @@ type policyBranchAutoSelector struct {
 
 	external map[*tpm2.Public]tpm2.Name
 
-	paths         []PolicyBranchPath
-	assertionsMap map[PolicyBranchPath]*policyAssertions
+	paths         []policyBranchPath
+	assertionsMap map[policyBranchPath]*policyAssertions
 
-	path       PolicyBranchPath
+	path       policyBranchPath
 	assertions policyAssertions
 }
 
@@ -506,7 +506,7 @@ func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() erro
 	return nil
 }
 
-func (s *policyBranchAutoSelector) filterAndChooseBranch() (PolicyBranchPath, error) {
+func (s *policyBranchAutoSelector) filterAndChooseBranch() (policyBranchPath, error) {
 	s.filterInvalidBranches()
 	s.filterMissingAuthBranches()
 	if err := s.filterUsageIncompatibleBranches(); err != nil {
@@ -521,7 +521,7 @@ func (s *policyBranchAutoSelector) filterAndChooseBranch() (PolicyBranchPath, er
 
 	// return the first branch that doesn't use TPM2_PolicyPassword, TPM2_PolicyAuthValue,
 	// or TPM2_PolicySecret, else just return the first good branch.
-	var first PolicyBranchPath
+	var first policyBranchPath
 
 	for _, path := range s.paths {
 		if assertions, exists := s.assertionsMap[path]; exists {
@@ -540,12 +540,12 @@ func (s *policyBranchAutoSelector) filterAndChooseBranch() (PolicyBranchPath, er
 	return first, nil
 }
 
-func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callback func(PolicyBranchPath) error) error {
+func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callback func(policyBranchPath) error) error {
 	// reset state
 	s.external = make(map[*tpm2.Public]tpm2.Name)
 
 	s.paths = nil
-	s.assertionsMap = make(map[PolicyBranchPath]*policyAssertions)
+	s.assertionsMap = make(map[policyBranchPath]*policyAssertions)
 
 	s.path = ""
 	s.assertions = policyAssertions{}
@@ -718,7 +718,7 @@ func (s *policyBranchAutoSelector) ticket(authName tpm2.Name, policyRef tpm2.Non
 func (s *policyBranchAutoSelector) beginBranchNode() (treeWalkerBeginBranchFn, error) {
 	assertions := s.assertions
 
-	return func(path PolicyBranchPath) error {
+	return func(path policyBranchPath) error {
 		s.path = path
 		s.assertions = assertions
 		return nil
@@ -733,7 +733,7 @@ func (s *policyBranchAutoSelector) completeBranch() {
 
 type (
 	treeWalkerBeginBranchNodeFn func() (treeWalkerBeginBranchFn, error)
-	treeWalkerBeginBranchFn     func(PolicyBranchPath) error
+	treeWalkerBeginBranchFn     func(policyBranchPath) error
 	treeWalkerCompleteBranchFn  func(bool) error
 )
 
@@ -746,7 +746,7 @@ type treeWalkerPolicyRunnerHelper struct {
 	beginBranchFn     treeWalkerBeginBranchFn
 	completeBranchFn  treeWalkerCompleteBranchFn
 
-	path             PolicyBranchPath
+	path             policyBranchPath
 	started          bool
 	beginBranchQueue []*policyDeferredTask
 }
@@ -767,7 +767,7 @@ func (h *treeWalkerPolicyRunnerHelper) pushNextBranchWalk() {
 	h.runner.pushTask(task.name(), task.fn)
 }
 
-func (h *treeWalkerPolicyRunnerHelper) walkBranch(parentPath PolicyBranchPath, index int, branch *policyBranch, isRootBranch bool) error {
+func (h *treeWalkerPolicyRunnerHelper) walkBranch(parentPath policyBranchPath, index int, branch *policyBranch, isRootBranch bool) error {
 	if !isRootBranch {
 		var pathElements []string
 		if len(parentPath) > 0 {
@@ -775,11 +775,11 @@ func (h *treeWalkerPolicyRunnerHelper) walkBranch(parentPath PolicyBranchPath, i
 		}
 		name := branch.Name
 		if len(name) == 0 {
-			name = PolicyBranchName(fmt.Sprintf("$[%d]", index))
+			name = policyBranchName(fmt.Sprintf("$[%d]", index))
 		}
 		pathElements = append(pathElements, string(name))
 
-		h.path = PolicyBranchPath(strings.Join(pathElements, "/"))
+		h.path = policyBranchPath(strings.Join(pathElements, "/"))
 	}
 
 	if h.beginBranchFn != nil {

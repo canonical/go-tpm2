@@ -13,6 +13,8 @@ var (
 
 type PcrValue = pcrValue
 type PcrValueList = pcrValueList
+type PolicyBranchName = policyBranchName
+type PolicyBranchPath = policyBranchPath
 type PolicyOR = policyOR
 type PolicyOrTree = policyOrTree
 type PolicySessionTask = policySessionTask
@@ -33,10 +35,6 @@ func (t *PolicyOrTree) LeafNodes() []*policyOrNode {
 
 func (t *PolicyOrTree) SelectBranch(i int) []tpm2.DigestList {
 	return t.selectBranch(i)
-}
-
-func (p PolicyBranchPath) PopNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath) {
-	return p.popNextComponent()
 }
 
 func (p *Policy) ComputeForDigest(digest *TaggedHash) error {
@@ -115,7 +113,7 @@ func NewMockPolicyNameHashElement(handles []tpm2.Name, digests taggedHashList) *
 				Digests: digests}}}
 }
 
-func NewMockPolicyBranch(name PolicyBranchName, digests taggedHashList, elements ...*policyElement) *policyBranch {
+func NewMockPolicyBranch(name policyBranchName, digests taggedHashList, elements ...*policyElement) *policyBranch {
 	return &policyBranch{
 		Name:          name,
 		PolicyDigests: digests,

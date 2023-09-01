@@ -65,17 +65,19 @@ func (n *PolicyBuilderBranchNode) commitBranchNode() error {
 //
 // The returned branch will be locked from further modifications when the branches associated
 // with this node are committed to the parent branch (see [PolicyBuilderBranch.AddBranchNode]).
-func (n *PolicyBuilderBranchNode) AddBranch(name PolicyBranchName) *PolicyBuilderBranch {
+func (n *PolicyBuilderBranchNode) AddBranch(name string) *PolicyBuilderBranch {
 	if n.committed {
 		n.policy().fail("AddBranch", errors.New("cannot add branch to committed node"))
 	}
 	if len(n.childBranches) >= policyOrMaxDigests {
 		n.policy().fail("AddBranch", fmt.Errorf("cannot add more than %d branches", policyOrMaxDigests))
 	}
-	if !name.isValid() {
+
+	pbn := policyBranchName(name)
+	if !pbn.isValid() {
 		n.policy().fail("AddBranch", errors.New("invalid branch name"))
 	}
-	b := newPolicyBuilderBranch(n.policy(), name)
+	b := newPolicyBuilderBranch(n.policy(), pbn)
 	n.childBranches = append(n.childBranches, b)
 	return b
 }
@@ -89,10 +91,10 @@ type PolicyBuilderBranch struct {
 	locked            bool
 }
 
-func newPolicyBuilderBranch(policy *PolicyBuilder, name PolicyBranchName) *PolicyBuilderBranch {
+func newPolicyBuilderBranch(policy *PolicyBuilder, name policyBranchName) *PolicyBuilderBranch {
 	return &PolicyBuilderBranch{
 		policy:       policy,
-		policyBranch: &policyBranch{Name: name},
+		policyBranch: &policyBranch{Name: policyBranchName(name)},
 	}
 }
 

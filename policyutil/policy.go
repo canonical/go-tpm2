@@ -105,12 +105,9 @@ func (e *ResourceLoadError) Unwrap() error {
 	return e.err
 }
 
-// PolicyBranchName corresponds to the name of a branch. Valid names are UTF-8
-// strings that start with characters other than '$'. A branch doesn't have to have
-// a name, in which case it can be selected by its index.
-type PolicyBranchName string
+type policyBranchName string
 
-func (n PolicyBranchName) isValid() bool {
+func (n policyBranchName) isValid() bool {
 	if !utf8.ValidString(string(n)) {
 		return false
 	}
@@ -120,7 +117,7 @@ func (n PolicyBranchName) isValid() bool {
 	return true
 }
 
-func (n PolicyBranchName) Marshal(w io.Writer) error {
+func (n policyBranchName) Marshal(w io.Writer) error {
 	if !n.isValid() {
 		return errors.New("invalid name")
 	}
@@ -128,12 +125,12 @@ func (n PolicyBranchName) Marshal(w io.Writer) error {
 	return err
 }
 
-func (n *PolicyBranchName) Unmarshal(r io.Reader) error {
+func (n *policyBranchName) Unmarshal(r io.Reader) error {
 	var b []byte
 	if _, err := mu.UnmarshalFromReader(r, &b); err != nil {
 		return err
 	}
-	name := PolicyBranchName(b)
+	name := policyBranchName(b)
 	if !name.isValid() {
 		return errors.New("invalid name")
 	}
@@ -141,26 +138,17 @@ func (n *PolicyBranchName) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-// PolicyBranchPath uniquely identifies an execution path through the branches in a
-// profile, with each branch selector component being separated by a '/' character. A
-// branch selector selects a branch at a node, and a branch can either be selected by
-// its name (if it has one), or a numeric identifier of the form "$[n]" which selects
-// a branch at a node using its index.
-//
-// The component "$auto" enables autoselection for a node, where a branch will be selected
-// automatically. This only works for branches containing TPM2_PolicyPCR assertions
-// where the assertion parameters match the current PCR values.
-type PolicyBranchPath string
+type policyBranchPath string
 
-func (p PolicyBranchPath) popNextComponent() (next PolicyBranchPath, remaining PolicyBranchPath) {
+func (p policyBranchPath) PopNextComponent() (next policyBranchPath, remaining policyBranchPath) {
 	remaining = p
 	for len(remaining) > 0 {
 		s := strings.SplitN(string(remaining), "/", 2)
 		remaining = ""
 		if len(s) == 2 {
-			remaining = PolicyBranchPath(s[1])
+			remaining = policyBranchPath(s[1])
 		}
-		component := PolicyBranchPath(s[0])
+		component := policyBranchPath(s[0])
 		if len(component) > 0 {
 			return component, remaining
 		}
@@ -208,10 +196,27 @@ type PolicyExecuteParams struct {
 	// branches.
 	Usage *PolicySessionUsage
 
-	// Path provides a way to explicitly select branches to execute.
-	Path PolicyBranchPath
+	// Path provides a way to explicitly select branches to execute. A path consists
+	// of zero or more components separated by a '/' character, with each component
+	// identifying a branch to select when a branch node is encountered. A component
+	// can either identify a branch by its name (if it has one), or it can be a numeric
+	// identifier of the form "$[n]" which selects the branch at index n.
+	//
+	// If the path has insufficent components for the branch nodes encountered in a
+	// profile, the profile execution will attempt to select an appropriate branch
+	// automatically.
+	Path string
 }
 
+// policyBranchPath uniquely identifies an execution path through the branches in a
+// profile, with each branch selector component being separated by a '/' character. A
+// branch selector selects a branch at a node, and a branch can either be selected by
+// its name (if it has one), or a numeric identifier of the form "$[n]" which selects
+// a branch at a node using its index.
+//
+// The component "$auto" enables autoselection for a node, where a branch will be selected
+// automatically. This only works for branches containing TPM2_PolicyPCR assertions
+// where the assertion parameters match the current PCR values.
 type policyParams interface {
 	secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams
 	signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization
@@ -572,7 +577,7 @@ func (e *policyNameHash) run(context policySessionContext) error {
 }
 
 type policyBranch struct {
-	Name          PolicyBranchName
+	Name          policyBranchName
 	PolicyDigests taggedHashList
 	Policy        policyElements
 }
@@ -928,7 +933,7 @@ type tpmState interface {
 type executePolicyRunnerHelper struct {
 	runner    *policyRunner
 	state     tpmState
-	remaining PolicyBranchPath
+	remaining policyBranchPath
 	usage     *PolicySessionUsage
 }
 
@@ -936,12 +941,12 @@ func newExecutePolicyRunnerHelper(runner *policyRunner, state tpmState, params *
 	return &executePolicyRunnerHelper{
 		runner:    runner,
 		state:     state,
-		remaining: params.Path,
+		remaining: policyBranchPath(params.Path),
 		usage:     params.Usage,
 	}
 }
 
-func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranches, next PolicyBranchName) error {
+func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranches, next policyBranchPath) error {
 	var selected int
 	switch {
 	case next[0] == '$':
@@ -959,7 +964,7 @@ func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranch
 			if len(branch.Name) == 0 {
 				continue
 			}
-			if branch.Name == next {
+			if policyBranchPath(branch.Name) == next {
 				selected = i
 				break
 			}
@@ -1032,14 +1037,14 @@ func (h *executePolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Dig
 }
 
 func (h *executePolicyRunnerHelper) handleBranches(branches policyBranches) error {
-	next, remaining := h.remaining.popNextComponent()
+	next, remaining := h.remaining.PopNextComponent()
 	if len(next) > 0 {
 		h.remaining = remaining
-		return h.selectAndRunNextBranch(branches, PolicyBranchName(next))
+		return h.selectAndRunNextBranch(branches, next)
 	}
 
 	autoSelector := newPolicyBranchAutoSelector(h.runner, h.state, h.usage)
-	return autoSelector.selectBranch(branches, func(path PolicyBranchPath) error {
+	return autoSelector.selectBranch(branches, func(path policyBranchPath) error {
 		h.remaining = path
 		h.runner.pushElements(policyElements{&policyElement{
 			Type: tpm2.CommandPolicyOR,
@@ -1429,21 +1434,21 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 }
 
 type listBranchesContext struct {
-	branches []PolicyBranchPath
-	current  PolicyBranchPath
+	branches []string
+	current  policyBranchPath
 }
 
 func (c *listBranchesContext) beginBranchNode() (treeWalkerBeginBranchFn, error) {
 	return c.beginBranch, nil
 }
 
-func (c *listBranchesContext) beginBranch(path PolicyBranchPath) error {
+func (c *listBranchesContext) beginBranch(path policyBranchPath) error {
 	c.current = path
 	return nil
 }
 
 func (c *listBranchesContext) completeBranch(done bool) error {
-	c.branches = append(c.branches, c.current)
+	c.branches = append(c.branches, string(c.current))
 	return nil
 }
 
@@ -1458,7 +1463,7 @@ func newListBranchesPolicyRunnerContext(runner *policyRunner, context *listBranc
 }
 
 // Branches returns a list of every branch in this policy.
-func (p *Policy) Branches() ([]PolicyBranchPath, error) {
+func (p *Policy) Branches() ([]string, error) {
 	context := new(listBranchesContext)
 
 	runner := new(policyRunner)

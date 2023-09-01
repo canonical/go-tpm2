@@ -1208,13 +1208,13 @@ func (s *policySuiteNoTPM) TestMarshalUnmarshalPolicyBranchName2(c *C) {
 
 func (s *policySuiteNoTPM) TestMarshalInvalidPolicyBranchName(c *C) {
 	_, err := mu.MarshalToBytes(PolicyBranchName("$foo"))
-	c.Check(err, ErrorMatches, `cannot marshal argument 0 whilst processing element of type policyutil.PolicyBranchName: invalid name`)
+	c.Check(err, ErrorMatches, `cannot marshal argument 0 whilst processing element of type policyutil.policyBranchName: invalid name`)
 }
 
 func (s *policySuiteNoTPM) TestUnmarshalInvalidPolicyBranchName(c *C) {
 	var name PolicyBranchName
 	_, err := mu.UnmarshalFromBytes([]byte{0x00, 0x04, 0x24, 0x66, 0x6f, 0x6f}, &name)
-	c.Check(err, ErrorMatches, `cannot unmarshal argument 0 whilst processing element of type policyutil.PolicyBranchName: invalid name`)
+	c.Check(err, ErrorMatches, `cannot unmarshal argument 0 whilst processing element of type policyutil.policyBranchName: invalid name`)
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponent(c *C) {
@@ -1390,7 +1390,7 @@ func (s *policySuiteNoTPM) TestPolicyBranches(c *C) {
 
 	branches, err := policy.Branches()
 	c.Check(err, IsNil)
-	c.Check(branches, DeepEquals, []PolicyBranchPath{""})
+	c.Check(branches, DeepEquals, []string{""})
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchesWithBranches(c *C) {
@@ -1412,7 +1412,7 @@ func (s *policySuiteNoTPM) TestPolicyBranchesWithBranches(c *C) {
 
 	branches, err := policy.Branches()
 	c.Check(err, IsNil)
-	c.Check(branches, DeepEquals, []PolicyBranchPath{"branch1", "branch2"})
+	c.Check(branches, DeepEquals, []string{"branch1", "branch2"})
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchesWithMultipleBranchNodes(c *C) {
@@ -1440,7 +1440,7 @@ func (s *policySuiteNoTPM) TestPolicyBranchesWithMultipleBranchNodes(c *C) {
 
 	branches, err := policy.Branches()
 	c.Check(err, IsNil)
-	c.Check(branches, DeepEquals, []PolicyBranchPath{"branch1/branch3", "branch1/$[1]", "branch2/branch3", "branch2/$[1]"})
+	c.Check(branches, DeepEquals, []string{"branch1/branch3", "branch1/$[1]", "branch2/branch3", "branch2/$[1]"})
 }
 
 type policySuite struct {
@@ -2508,7 +2508,7 @@ func (s *policySuite) TestPolicyNameHashMissingDigest(c *C) {
 
 type testExecutePolicyBranchesData struct {
 	usage *PolicySessionUsage
-	path  PolicyBranchPath
+	path  string
 	cmd   tpm2.CommandCode
 }
 
@@ -2640,7 +2640,7 @@ func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
 
 type testExecutePolicyBranchesMultipleNodesData struct {
 	usage *PolicySessionUsage
-	path  PolicyBranchPath
+	path  string
 	cmd1  tpm2.CommandCode
 	cmd2  tpm2.CommandCode
 }
@@ -2777,7 +2777,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C
 
 type testExecutePolicyBranchesEmbeddedNodesData struct {
 	usage *PolicySessionUsage
-	path  PolicyBranchPath
+	path  string
 	cmd1  tpm2.CommandCode
 	cmd2  tpm2.CommandCode
 }
