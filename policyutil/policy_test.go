@@ -1323,6 +1323,57 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithMultipleBranchNodes(c *C) {
 	c.Check(digest, DeepEquals, expectedDigest)
 }
 
+func (s *policySuiteNoTPM) TestPolicyValidateWithBranchesMissingDigest(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := builder.RootBranch().AddBranchNode()
+
+	b1 := node.AddBranch("")
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("")
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	c.Check(err, IsNil)
+
+	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches, `cannot process callback: missing digest for session algorithm`)
+	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+}
+
+func (s *policySuiteNoTPM) TestPolicyValidateWithCpHashMissingDigest(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	c.Check(err, IsNil)
+
+	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches, `cannot process TPM2_PolicyCpHash assertion: missing digest for session algorithm`)
+	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+}
+
+func (s *policySuiteNoTPM) TestPolicyValidateWithNameHashMissingDigest(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyNameHash(tpm2.Name{0x40, 0x00, 0x00, 0x01}), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	c.Check(err, IsNil)
+
+	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches, `cannot process TPM2_PolicyNameHash assertion: missing digest for session algorithm`)
+	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+}
+
 type policySuite struct {
 	testutil.TPMTest
 }
@@ -2885,7 +2936,8 @@ func (s *policySuite) TestPolicyBranchesComputeMissingBranchDigests(c *C) {
 	}
 
 	_, err = policy.Execute(NewTPMSession(s.TPM, session), params, nil, nil)
-	c.Check(err, IsNil)
+	c.Check(err, ErrorMatches, `cannot process branch node: missing digest for session algorithm`)
+	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 }
 
 func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
