@@ -581,8 +581,6 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, done fu
 	s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s)
 
 	// switch out all of the pending tasks
-	next := s.runner.next
-	s.runner.next = nil
 	tasks := s.runner.tasks
 	s.runner.tasks = []policySessionTask{
 		newDeferredTask("commit branch information for branch auto selection", func() error {
@@ -593,7 +591,6 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, done fu
 			if len(s.beginBranchQueue) == 0 {
 				// we've committed the last branch, so restore the state
 				s.runner.policyRunnerContext = oldContext
-				s.runner.next = next
 				s.runner.tasks = tasks
 
 				s.runner.pushTask("complete branch auto selection", func() error {
@@ -768,11 +765,6 @@ func (s *policyBranchAutoSelector) nameHash(nameHash *policyNameHash) (tpm2.Dige
 }
 
 func (s *policyBranchAutoSelector) handleBranches(branches policyBranches) error {
-	// callers to this shouldn't have used policyRunnerDispatcher
-	if len(s.runner.next) > 0 {
-		return errors.New("internal error: caller to handleBranches used policyRunnerDispatcher")
-	}
-
 	path := s.path
 	assertions := s.assertions
 

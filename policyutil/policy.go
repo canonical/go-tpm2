@@ -798,7 +798,6 @@ func newPolicyRunnerContext(session Session, params policyParams, resources poli
 type policyRunner struct {
 	*policyRunnerContext
 	tasks []policySessionTask
-	next  []policySessionTask
 }
 
 func (r *policyRunner) session() Session {
@@ -837,11 +836,11 @@ func (r *policyRunner) setRequireAuthValue() {
 }
 
 func (r *policyRunner) pushTasks(tasks []policySessionTask) {
-	r.next = append(tasks, r.next...)
+	r.tasks = append(tasks, r.tasks...)
 }
 
 func (r *policyRunner) pushTask(name string, fn func() error) {
-	r.next = append([]policySessionTask{newDeferredTask(name, fn)}, r.next...)
+	r.tasks = append([]policySessionTask{newDeferredTask(name, fn)}, r.tasks...)
 }
 
 func (r *policyRunner) pushElements(elements policyElements) {
@@ -852,20 +851,11 @@ func (r *policyRunner) pushElements(elements policyElements) {
 	r.pushTasks(tasks)
 }
 
-func (r *policyRunner) commitNext() {
-	if len(r.next) == 0 {
-		return
-	}
-	r.tasks = append(r.next, r.tasks...)
-	r.next = nil
-}
-
 func (r *policyRunner) more() bool {
-	return len(r.next) > 0 || len(r.tasks) > 0
+	return len(r.tasks) > 0
 }
 
 func (r *policyRunner) popTask() policySessionTask {
-	r.commitNext()
 	task := r.tasks[0]
 	r.tasks = r.tasks[1:]
 	return task
