@@ -25,7 +25,10 @@ var (
 	ErrMissingDigest = errors.New("missing digest for session algorithm")
 )
 
-type paramKey [sha256.Size]byte
+type (
+	taskFn   func() error
+	paramKey [sha256.Size]byte
+)
 
 func policyParamKey(authName tpm2.Name, policyRef tpm2.Nonce) paramKey {
 	h := crypto.SHA256.New()
@@ -240,29 +243,29 @@ type policySessionContext interface {
 	setRequireAuthValue()
 }
 
-type policyDeferredTaskElement struct {
+type policyDeferredTask struct {
 	taskName string
-	fn       func() error
+	fn       taskFn
 }
 
-func newDeferredTask(name string, fn func() error) *policyDeferredTaskElement {
-	return &policyDeferredTaskElement{
+func newDeferredTask(name string, fn taskFn) *policyDeferredTask {
+	return &policyDeferredTask{
 		taskName: name,
 		fn:       fn,
 	}
 }
 
-func (e *policyDeferredTaskElement) name() string {
+func (e *policyDeferredTask) name() string {
 	return e.taskName
 }
 
-func (e *policyDeferredTaskElement) run(context policySessionContext) error {
+func (e *policyDeferredTask) run(context policySessionContext) error {
 	return e.fn()
 }
 
 type policyRunnerTaskStack interface {
 	pushTasks(tasks []policySessionTask)
-	pushTask(name string, fn func() error)
+	pushTask(name string, fn taskFn)
 	pushElements(elements policyElements)
 }
 
@@ -839,7 +842,7 @@ func (r *policyRunner) pushTasks(tasks []policySessionTask) {
 	r.tasks = append(tasks, r.tasks...)
 }
 
-func (r *policyRunner) pushTask(name string, fn func() error) {
+func (r *policyRunner) pushTask(name string, fn taskFn) {
 	r.tasks = append([]policySessionTask{newDeferredTask(name, fn)}, r.tasks...)
 }
 

@@ -116,12 +116,12 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 	return out
 }
 
-func newPolicyBranchAutoSelectorContext(s *policyBranchAutoSelector) *policyRunnerContext {
+func newPolicyBranchAutoSelectorContext(s *policyBranchAutoSelector, completeBranch treeWalkerCompleteBranchFn) *policyRunnerContext {
 	return newPolicyRunnerContext(
 		s,
 		s,
 		newMockResourceLoader(s.external),
-		s,
+		newTreeWalkerPolicyRunnerHelper(s.runner, s.sessionAlg, false, s.beginBranchNode, completeBranch),
 	)
 }
 
@@ -252,10 +252,9 @@ type policyBranchAutoSelector struct {
 
 	paths         []PolicyBranchPath
 	assertionsMap map[PolicyBranchPath]*policyAssertions
-	assertions    policyAssertions
-	path          PolicyBranchPath
 
-	beginBranchQueue []func() error
+	path       PolicyBranchPath
+	assertions policyAssertions
 }
 
 func newPolicyBranchAutoSelector(runner *policyRunner, state tpmState, usage *PolicySessionUsage) *policyBranchAutoSelector {
@@ -541,75 +540,47 @@ func (s *policyBranchAutoSelector) filterAndChooseBranch() (PolicyBranchPath, er
 	return first, nil
 }
 
-func (s *policyBranchAutoSelector) collectBranchInfo(path PolicyBranchPath, assertions *policyAssertions, index int, branch *policyBranch) {
-	var pathElements []string
-	if len(path) > 0 {
-		pathElements = append(pathElements, string(path))
-	}
-	name := branch.Name
-	if len(name) == 0 {
-		name = PolicyBranchName(fmt.Sprintf("$[%d]", index))
-	}
-	pathElements = append(pathElements, string(name))
-
-	s.path = PolicyBranchPath(strings.Join(pathElements, "/"))
-	s.assertions = *assertions
-
-	s.runner.pushElements(branch.Policy)
-}
-
-func (s *policyBranchAutoSelector) runBeginCollectNextBranchInfo() {
-	fn := s.beginBranchQueue[0]
-	s.beginBranchQueue = s.beginBranchQueue[1:]
-	s.runner.pushTask("collect branch information for branch auto selection", fn)
-}
-
-func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, done func(PolicyBranchPath) error) error {
-	if len(s.beginBranchQueue) > 0 {
-		return errors.New("internal error: unexpected state")
-	}
-
+func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callback func(PolicyBranchPath) error) error {
 	// reset state
 	s.external = make(map[*tpm2.Public]tpm2.Name)
 
+	s.paths = nil
 	s.assertionsMap = make(map[PolicyBranchPath]*policyAssertions)
-	s.assertions = policyAssertions{}
+
 	s.path = ""
+	s.assertions = policyAssertions{}
 
 	// switch the context
 	oldContext := s.runner.policyRunnerContext
-	s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s)
-
-	// switch out all of the pending tasks
-	tasks := s.runner.tasks
-	s.runner.tasks = []policySessionTask{
-		newDeferredTask("commit branch information for branch auto selection", func() error {
-			assertions := s.assertions
-			s.assertionsMap[s.path] = &assertions
-			s.paths = append(s.paths, s.path)
-
-			if len(s.beginBranchQueue) == 0 {
-				// we've committed the last branch, so restore the state
-				s.runner.policyRunnerContext = oldContext
-				s.runner.tasks = tasks
-
-				s.runner.pushTask("complete branch auto selection", func() error {
-					path, err := s.filterAndChooseBranch()
-					if err != nil {
-						return fmt.Errorf("cannot select branch: %w", err)
-					}
-					return done(path)
-				})
-
-				return nil
-			}
-
-			s.runBeginCollectNextBranchInfo()
+	s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s, func(done bool) error {
+		s.completeBranch()
+		if !done {
 			return nil
-		}),
-	}
+		}
 
-	return s.handleBranches(branches)
+		// we've committed the last branch, so restore the state
+		s.runner.policyRunnerContext = oldContext
+
+		s.runner.pushTask("complete branch auto selection", func() error {
+			path, err := s.filterAndChooseBranch()
+			if err != nil {
+				return fmt.Errorf("cannot select branch: %w", err)
+			}
+			return callback(path)
+		})
+
+		return nil
+	})
+
+	s.runner.pushElements(policyElements{
+		&policyElement{
+			Type: tpm2.CommandPolicyOR,
+			Details: &policyElementDetails{
+				OR: &policyOR{Branches: branches},
+			},
+		},
+	})
+	return nil
 }
 
 func (s *policyBranchAutoSelector) HashAlg() tpm2.HashAlgorithmId {
@@ -744,54 +715,174 @@ func (s *policyBranchAutoSelector) ticket(authName tpm2.Name, policyRef tpm2.Non
 	return nil
 }
 
-func (s *policyBranchAutoSelector) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
-	for _, digest := range cpHash.Digests {
-		if digest.HashAlg != s.sessionAlg {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return make(tpm2.Digest, s.sessionAlg.Size()), nil
-}
-
-func (s *policyBranchAutoSelector) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
-	for _, digest := range nameHash.Digests {
-		if digest.HashAlg != s.sessionAlg {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return make(tpm2.Digest, s.sessionAlg.Size()), nil
-}
-
-func (s *policyBranchAutoSelector) handleBranches(branches policyBranches) error {
-	path := s.path
+func (s *policyBranchAutoSelector) beginBranchNode() (treeWalkerBeginBranchFn, error) {
 	assertions := s.assertions
 
-	// capture the pending running tasks so that each branch begins with
-	// the same state
-	remaining := s.runner.tasks
+	return func(path PolicyBranchPath) error {
+		s.path = path
+		s.assertions = assertions
+		return nil
+	}, nil
+}
 
-	// queue tasks for processing each branch at this node
-	var tasks []func() error
+func (s *policyBranchAutoSelector) completeBranch() {
+	assertions := s.assertions
+	s.assertionsMap[s.path] = &assertions
+	s.paths = append(s.paths, s.path)
+}
+
+type (
+	treeWalkerBeginBranchNodeFn func() (treeWalkerBeginBranchFn, error)
+	treeWalkerBeginBranchFn     func(PolicyBranchPath) error
+	treeWalkerCompleteBranchFn  func(bool) error
+)
+
+type treeWalkerPolicyRunnerHelper struct {
+	runner     *policyRunner
+	sessionAlg tpm2.HashAlgorithmId
+	fullTree   bool
+
+	beginBranchNodeFn treeWalkerBeginBranchNodeFn
+	beginBranchFn     treeWalkerBeginBranchFn
+	completeBranchFn  treeWalkerCompleteBranchFn
+
+	path             PolicyBranchPath
+	started          bool
+	beginBranchQueue []*policyDeferredTask
+}
+
+func newTreeWalkerPolicyRunnerHelper(runner *policyRunner, sessionAlg tpm2.HashAlgorithmId, fullTree bool, beginBranchNode treeWalkerBeginBranchNodeFn, completeBranch treeWalkerCompleteBranchFn) *treeWalkerPolicyRunnerHelper {
+	return &treeWalkerPolicyRunnerHelper{
+		runner:            runner,
+		sessionAlg:        sessionAlg,
+		fullTree:          fullTree,
+		beginBranchNodeFn: beginBranchNode,
+		completeBranchFn:  completeBranch,
+	}
+}
+
+func (h *treeWalkerPolicyRunnerHelper) pushNextBranchWalk() {
+	task := h.beginBranchQueue[0]
+	h.beginBranchQueue = h.beginBranchQueue[1:]
+	h.runner.pushTask(task.name(), task.fn)
+}
+
+func (h *treeWalkerPolicyRunnerHelper) walkBranch(parentPath PolicyBranchPath, index int, branch *policyBranch, isRootBranch bool) error {
+	if !isRootBranch {
+		var pathElements []string
+		if len(parentPath) > 0 {
+			pathElements = append(pathElements, string(parentPath))
+		}
+		name := branch.Name
+		if len(name) == 0 {
+			name = PolicyBranchName(fmt.Sprintf("$[%d]", index))
+		}
+		pathElements = append(pathElements, string(name))
+
+		h.path = PolicyBranchPath(strings.Join(pathElements, "/"))
+	}
+
+	if h.beginBranchFn != nil {
+		if err := h.beginBranchFn(h.path); err != nil {
+			return err
+		}
+	}
+
+	h.runner.pushElements(branch.Policy)
+	return nil
+}
+
+func (h *treeWalkerPolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+	if h.sessionAlg == tpm2.HashAlgorithmNull {
+		return nil, nil
+	}
+	for _, digest := range cpHash.Digests {
+		if digest.HashAlg != h.sessionAlg {
+			continue
+		}
+		return digest.Digest, nil
+	}
+	return make(tpm2.Digest, h.sessionAlg.Size()), nil
+}
+
+func (h *treeWalkerPolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+	if h.sessionAlg == tpm2.HashAlgorithmNull {
+		return nil, nil
+	}
+	for _, digest := range nameHash.Digests {
+		if digest.HashAlg != h.sessionAlg {
+			continue
+		}
+		return digest.Digest, nil
+	}
+	return make(tpm2.Digest, h.sessionAlg.Size()), nil
+}
+
+func (h *treeWalkerPolicyRunnerHelper) handleBranches(branches policyBranches) error {
+	if len(branches) == 0 {
+		return nil
+	}
+
+	remaining := h.runner.tasks
+
+	if !h.started {
+		if (h.fullTree && len(branches) != 1) || len(h.beginBranchQueue) != 0 {
+			return errors.New("internal error: unexpected state")
+		}
+
+		remaining = append([]policySessionTask{newDeferredTask("tree walk complete branch", func() error {
+			if h.completeBranchFn != nil {
+				done := len(h.beginBranchQueue) == 0
+				if err := h.completeBranchFn(done); err != nil {
+					return err
+				}
+				switch done {
+				case false:
+					h.pushNextBranchWalk()
+				case true:
+					h.started = false
+				}
+				return nil
+			}
+			return nil
+		})}, remaining...)
+
+		h.path = ""
+	}
+
+	isRootBranch := !h.started && h.fullTree
+	path := h.path
+
+	var tasks []*policyDeferredTask
 	for i, branch := range branches {
 		i := i
 		branch := branch
-		task := func() error {
-			s.runner.tasks = remaining
-			s.collectBranchInfo(path, &assertions, i, branch)
-			return nil
+		task := newDeferredTask("tree walk begin branch", func() error {
+			h.runner.tasks = remaining
+			return h.walkBranch(path, i, branch, isRootBranch)
+		})
+		if i == 0 {
+			innerTask := task
+			task = newDeferredTask("tree walk begin branch node", func() error {
+				if h.beginBranchNodeFn != nil {
+					beginBranchFn, err := h.beginBranchNodeFn()
+					if err != nil {
+						return err
+					}
+					h.beginBranchFn = beginBranchFn
+				}
+				h.runner.pushTask(innerTask.name(), innerTask.fn)
+				return nil
+			})
 		}
 		tasks = append(tasks, task)
 	}
 
-	s.beginBranchQueue = append(tasks, s.beginBranchQueue...)
+	h.beginBranchQueue = append(tasks, h.beginBranchQueue...)
 
 	// run the first branch
-	s.runBeginCollectNextBranchInfo()
-	return nil
-}
+	h.pushNextBranchWalk()
 
-func (s *policyBranchAutoSelector) pushComputeContext(digest *taggedHash) (restore func()) {
+	h.started = true
 	return nil
 }
