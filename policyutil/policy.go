@@ -248,8 +248,6 @@ type policySessionContext interface {
 
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 	addTicket(ticket *PolicyTicket)
-
-	setRequireAuthValue()
 }
 
 type policyDeferredTask struct {
@@ -520,7 +518,6 @@ type policyAuthValue struct{}
 func (*policyAuthValue) name() string { return "TPM2_PolicyAuthValue assertion" }
 
 func (*policyAuthValue) run(context policySessionContext) error {
-	context.setRequireAuthValue()
 	return context.session().PolicyAuthValue()
 }
 
@@ -653,7 +650,6 @@ type policyPassword struct{}
 func (*policyPassword) name() string { return "TPM2_PolicyPassword assertion" }
 
 func (*policyPassword) run(context policySessionContext) error {
-	context.setRequireAuthValue()
 	return context.session().PolicyPassword()
 }
 
@@ -793,8 +789,6 @@ type policyRunnerContext struct {
 	policyRunnerHelper policyRunnerHelper
 
 	tickets map[paramKey]*PolicyTicket
-
-	requireAuthValue bool
 }
 
 func newPolicyRunnerContext(session PolicySession, params policyParams, resources policyResources, helper policyRunnerHelper) *policyRunnerContext {
@@ -841,10 +835,6 @@ func (r *policyRunner) addTicket(ticket *PolicyTicket) {
 		return
 	}
 	r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
-}
-
-func (r *policyRunner) setRequireAuthValue() {
-	r.requireAuthValue = true
 }
 
 func (r *policyRunner) pushTasks(tasks []policySessionTask) {
@@ -1107,9 +1097,11 @@ func (p *Policy) Execute(session PolicySession, helper PolicyExecuteHelper, para
 		params = new(PolicyExecuteParams)
 	}
 
+	var report policySessionReport
+
 	runner := new(policyRunner)
 	runner.policyRunnerContext = newPolicyRunnerContext(
-		session,
+		&observingPolicySession{session: session, report: &report},
 		newExecutePolicyParams(params),
 		helper,
 		newExecutePolicyRunnerHelper(runner, helper, params))
@@ -1122,7 +1114,7 @@ func (p *Policy) Execute(session PolicySession, helper PolicyExecuteHelper, para
 		tickets = append(tickets, ticket)
 	}
 
-	return tickets, runner.requireAuthValue, nil
+	return tickets, report.authValueNeeded, nil
 }
 
 // mockPolicyParams is an implementation of policyParams that provides mock parameters
@@ -1459,7 +1451,7 @@ func (c *listBranchesContext) completeBranch(done bool) error {
 func newListBranchesPolicyRunnerContext(runner *policyRunner, context *listBranchesContext) *policyRunnerContext {
 	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
-		new(nullPolicySession),
+		newNullPolicySession(tpm2.HashAlgorithmSHA256),
 		newMockPolicyParams(external),
 		newMockResourceLoader(external),
 		newTreeWalkerPolicyRunnerHelper(runner, tpm2.HashAlgorithmNull, true, context.beginBranchNode, context.completeBranch),

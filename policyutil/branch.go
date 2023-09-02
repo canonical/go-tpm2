@@ -116,129 +116,13 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 	return out
 }
 
-func newPolicyBranchAutoSelectorContext(s *policyBranchAutoSelector, completeBranch treeWalkerCompleteBranchFn) *policyRunnerContext {
+func newPolicyBranchAutoSelectorContext(s *policyBranchAutoSelector) *policyRunnerContext {
 	return newPolicyRunnerContext(
-		s,
+		&observingPolicySession{session: newNullPolicySession(s.sessionAlg), report: &s.report},
 		s,
 		newMockResourceLoader(s.external),
-		newTreeWalkerPolicyRunnerHelper(s.runner, s.sessionAlg, false, s.beginBranchNode, completeBranch),
+		s.treeWalker,
 	)
-}
-
-type policyNVAssertion struct {
-	auth      tpm2.Handle
-	index     NVIndex
-	operandB  tpm2.Operand
-	offset    uint16
-	operation tpm2.ArithmeticOp
-}
-
-type policySecretAssertion struct {
-	authObject Named
-	policyRef  tpm2.Nonce
-}
-
-type policySignedAssertion struct {
-	authKey   Named
-	policyRef tpm2.Nonce
-}
-
-type policyCounterTimerAssertion struct {
-	operandB  tpm2.Operand
-	offset    uint16
-	operation tpm2.ArithmeticOp
-}
-
-type policyPCRAssertion struct {
-	pcrDigest tpm2.Digest
-	pcrs      tpm2.PCRSelectionList
-}
-
-type policyAssertions struct {
-	policyNv              []policyNVAssertion
-	policySecret          []policySecretAssertion
-	policySigned          []policySignedAssertion
-	policyAuthValueNeeded bool
-	policyCommandCode     []tpm2.CommandCode
-	policyCounterTimer    []policyCounterTimerAssertion
-	policyCpHash          tpm2.DigestList
-	policyNameHash        tpm2.DigestList
-	policyPcr             []policyPCRAssertion
-	policyNvWritten       []bool
-}
-
-func (a *policyAssertions) checkValid(alg tpm2.HashAlgorithmId) bool {
-	if len(a.policyCommandCode) > 1 {
-		for _, code := range a.policyCommandCode[1:] {
-			if code != a.policyCommandCode[0] {
-				return false
-			}
-		}
-	}
-
-	cpHashNum := 0
-	if len(a.policyCpHash) > 0 {
-		if len(a.policyCpHash[0]) != alg.Size() {
-			return false
-		}
-		if len(a.policyCpHash) > 1 {
-			for _, cpHash := range a.policyCpHash[1:] {
-				if !bytes.Equal(cpHash, a.policyCpHash[0]) {
-					return false
-				}
-			}
-		}
-		cpHashNum += 1
-	}
-	if len(a.policyNameHash) > 0 {
-		if len(a.policyNameHash[0]) != alg.Size() {
-			return false
-		}
-		if len(a.policyNameHash) > 1 {
-			return false
-		}
-		cpHashNum += 1
-	}
-	if cpHashNum > 1 {
-		return false
-	}
-	if len(a.policyNvWritten) > 1 {
-		for _, nvWritten := range a.policyNvWritten[1:] {
-			if nvWritten != a.policyNvWritten[0] {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
-func (a *policyAssertions) commandCode() (tpm2.CommandCode, bool) {
-	if len(a.policyCommandCode) == 0 {
-		return 0, false
-	}
-	return a.policyCommandCode[0], true
-}
-
-func (a *policyAssertions) cpHash() (tpm2.Digest, bool) {
-	if len(a.policyCpHash) == 0 {
-		return nil, false
-	}
-	return a.policyCpHash[0], true
-}
-
-func (a *policyAssertions) nameHash() (tpm2.Digest, bool) {
-	if len(a.policyNameHash) == 0 {
-		return nil, false
-	}
-	return a.policyNameHash[0], true
-}
-
-func (a *policyAssertions) nvWritten() (bool, bool) {
-	if len(a.policyNvWritten) == 0 {
-		return false, false
-	}
-	return a.policyNvWritten[0], true
 }
 
 type policyBranchAutoSelector struct {
@@ -248,13 +132,14 @@ type policyBranchAutoSelector struct {
 	usage      *PolicySessionUsage
 	sessionAlg tpm2.HashAlgorithmId
 
-	external map[*tpm2.Public]tpm2.Name
+	external   map[*tpm2.Public]tpm2.Name
+	treeWalker *treeWalkerPolicyRunnerHelper
 
-	paths         []policyBranchPath
-	assertionsMap map[policyBranchPath]*policyAssertions
+	paths     []policyBranchPath
+	reportMap map[policyBranchPath]*policySessionReport
 
-	path       policyBranchPath
-	assertions policyAssertions
+	path   policyBranchPath
+	report policySessionReport
 }
 
 func newPolicyBranchAutoSelector(runner *policyRunner, state tpmState, usage *PolicySessionUsage) *policyBranchAutoSelector {
@@ -268,18 +153,18 @@ func newPolicyBranchAutoSelector(runner *policyRunner, state tpmState, usage *Po
 }
 
 func (s *policyBranchAutoSelector) filterInvalidBranches() {
-	for k, v := range s.assertionsMap {
-		if v.checkValid(s.sessionAlg) {
+	for p, r := range s.reportMap {
+		if r.checkValid(s.sessionAlg) {
 			continue
 		}
-		delete(s.assertionsMap, k)
+		delete(s.reportMap, p)
 	}
 }
 
 func (s *policyBranchAutoSelector) filterMissingAuthBranches() {
-	for k, v := range s.assertionsMap {
+	for p, r := range s.reportMap {
 		missing := false
-		for _, signed := range v.policySigned {
+		for _, signed := range r.signed {
 			auth := s.params.signedAuthorization(signed.authKey.Name(), signed.policyRef)
 			ticket := s.params.ticket(signed.authKey.Name(), signed.policyRef)
 			if auth == nil && ticket == nil {
@@ -288,7 +173,7 @@ func (s *policyBranchAutoSelector) filterMissingAuthBranches() {
 			}
 		}
 		if missing {
-			delete(s.assertionsMap, k)
+			delete(s.reportMap, p)
 		}
 	}
 }
@@ -298,38 +183,38 @@ func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
 		return nil
 	}
 
-	for k, v := range s.assertionsMap {
-		code, set := v.commandCode()
+	for p, r := range s.reportMap {
+		code, set := r.commandCode()
 		if set && code != s.usage.commandCode {
-			delete(s.assertionsMap, k)
+			delete(s.reportMap, p)
 			continue
 		}
 
-		cpHash, set := v.cpHash()
+		cpHash, set := r.cpHash()
 		if set {
 			d, err := ComputeCpHash(s.sessionAlg, s.usage.commandCode, s.usage.handles, s.usage.params...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
 			}
 			if !bytes.Equal(d, cpHash) {
-				delete(s.assertionsMap, k)
+				delete(s.reportMap, p)
 				continue
 			}
 		}
 
-		nameHash, set := v.nameHash()
+		nameHash, set := r.nameHash()
 		if set {
 			d, err := ComputeNameHash(s.sessionAlg, s.usage.handles...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
 			}
 			if !bytes.Equal(d, nameHash) {
-				delete(s.assertionsMap, k)
+				delete(s.reportMap, p)
 				continue
 			}
 		}
 
-		nvWritten, set := v.nvWritten()
+		nvWritten, set := r.nvWritten()
 		if set && s.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
 			pub, err := s.state.NVPublic(s.usage.nvHandle)
 			if err != nil {
@@ -337,7 +222,7 @@ func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
 			}
 			written := pub.Attrs&tpm2.AttrNVWritten != 0
 			if nvWritten != written {
-				delete(s.assertionsMap, k)
+				delete(s.reportMap, p)
 				continue
 			}
 		}
@@ -348,18 +233,18 @@ func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
 
 func (s *policyBranchAutoSelector) filterPcrIncompatibleBranches() error {
 	var pcrs tpm2.PCRSelectionList
-	for k, v := range s.assertionsMap {
+	for p, r := range s.reportMap {
 		var err error
-		for _, assertion := range v.policyPcr {
+		for _, item := range r.pcr {
 			var tmpPcrs tpm2.PCRSelectionList
-			tmpPcrs, err = pcrs.Merge(assertion.pcrs)
+			tmpPcrs, err = pcrs.Merge(item.pcrs)
 			if err != nil {
 				break
 			}
 			pcrs = tmpPcrs
 		}
 		if err != nil {
-			delete(s.assertionsMap, k)
+			delete(s.reportMap, p)
 		}
 	}
 
@@ -372,20 +257,20 @@ func (s *policyBranchAutoSelector) filterPcrIncompatibleBranches() error {
 		return fmt.Errorf("cannot obtain PCR values: %w", err)
 	}
 
-	for k, v := range s.assertionsMap {
+	for p, r := range s.reportMap {
 		incompatible := false
-		for _, assertion := range v.policyPcr {
-			pcrDigest, err := ComputePCRDigest(s.sessionAlg, assertion.pcrs, pcrValues)
+		for _, item := range r.pcr {
+			pcrDigest, err := ComputePCRDigest(s.sessionAlg, item.pcrs, pcrValues)
 			if err != nil {
 				return fmt.Errorf("cannot compute PCR digest: %w", err)
 			}
-			if !bytes.Equal(pcrDigest, assertion.pcrDigest) {
+			if !bytes.Equal(pcrDigest, item.pcrDigest) {
 				incompatible = true
 				break
 			}
 		}
 		if incompatible {
-			delete(s.assertionsMap, k)
+			delete(s.reportMap, p)
 		}
 	}
 
@@ -394,8 +279,8 @@ func (s *policyBranchAutoSelector) filterPcrIncompatibleBranches() error {
 
 func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() error {
 	hasCounterTimerAssertions := false
-	for _, v := range s.assertionsMap {
-		if len(v.policyCounterTimer) > 0 {
+	for _, r := range s.reportMap {
+		if len(r.counterTimer) > 0 {
 			hasCounterTimerAssertions = true
 			break
 		}
@@ -415,22 +300,22 @@ func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() erro
 		return fmt.Errorf("cannot marshal time info: %w", err)
 	}
 
-	for k, v := range s.assertionsMap {
+	for p, r := range s.reportMap {
 		incompatible := false
-		for _, assertion := range v.policyCounterTimer {
-			if int(assertion.offset) > len(timeInfoData) {
+		for _, item := range r.counterTimer {
+			if int(item.offset) > len(timeInfoData) {
 				incompatible = true
 				break
 			}
-			if int(assertion.offset)+len(assertion.operandB) > len(timeInfoData) {
+			if int(item.offset)+len(item.operandB) > len(timeInfoData) {
 				incompatible = true
 				break
 			}
 
-			operandA := timeInfoData[int(assertion.offset) : int(assertion.offset)+len(assertion.operandB)]
-			operandB := assertion.operandB
+			operandA := timeInfoData[int(item.offset) : int(item.offset)+len(item.operandB)]
+			operandB := item.operandB
 
-			switch assertion.operation {
+			switch item.operation {
 			case tpm2.OpEq:
 				incompatible = !bytes.Equal(operandA, operandB)
 			case tpm2.OpNeq:
@@ -499,7 +384,7 @@ func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() erro
 		}
 
 		if incompatible {
-			delete(s.assertionsMap, k)
+			delete(s.reportMap, p)
 		}
 	}
 
@@ -524,11 +409,11 @@ func (s *policyBranchAutoSelector) filterAndChooseBranch() (policyBranchPath, er
 	var first policyBranchPath
 
 	for _, path := range s.paths {
-		if assertions, exists := s.assertionsMap[path]; exists {
+		if report, exists := s.reportMap[path]; exists {
 			if first == "" {
 				first = path
 			}
-			if !assertions.policyAuthValueNeeded && len(assertions.policySecret) < 0 {
+			if !report.authValueNeeded && len(report.secret) == 0 {
 				return path, nil
 			}
 		}
@@ -545,14 +430,14 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callbac
 	s.external = make(map[*tpm2.Public]tpm2.Name)
 
 	s.paths = nil
-	s.assertionsMap = make(map[policyBranchPath]*policyAssertions)
+	s.reportMap = make(map[policyBranchPath]*policySessionReport)
 
 	s.path = ""
-	s.assertions = policyAssertions{}
+	s.report = policySessionReport{}
 
 	// switch the context
 	oldContext := s.runner.policyRunnerContext
-	s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s, func(done bool) error {
+	s.treeWalker = newTreeWalkerPolicyRunnerHelper(s.runner, s.sessionAlg, false, s.beginBranchNode, func(done bool) error {
 		s.completeBranch()
 		if !done {
 			return nil
@@ -570,7 +455,9 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callbac
 		})
 
 		return nil
+
 	})
+	s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s)
 
 	s.runner.pushElements(policyElements{
 		&policyElement{
@@ -581,116 +468,6 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callbac
 		},
 	})
 	return nil
-}
-
-func (s *policyBranchAutoSelector) HashAlg() tpm2.HashAlgorithmId {
-	return s.sessionAlg
-}
-
-func (s *policyBranchAutoSelector) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
-	s.assertions.policyNv = append(s.assertions.policyNv, policyNVAssertion{
-		auth:      auth.Handle(),
-		index:     index,
-		operandB:  operandB,
-		offset:    offset,
-		operation: operation,
-	})
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	s.assertions.policySecret = append(s.assertions.policySecret, policySecretAssertion{
-		authObject: authObject,
-		policyRef:  policyRef,
-	})
-	if len(cpHashA) > 0 {
-		s.assertions.policyCpHash = append(s.assertions.policyCpHash, cpHashA)
-	}
-	return nil, nil, nil
-}
-
-func (s *policyBranchAutoSelector) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	s.assertions.policySigned = append(s.assertions.policySigned, policySignedAssertion{
-		authKey:   authKey,
-		policyRef: policyRef,
-	})
-	if len(cpHashA) > 0 {
-		s.assertions.policyCpHash = append(s.assertions.policyCpHash, cpHashA)
-	}
-	return nil, nil, nil
-}
-
-func (s *policyBranchAutoSelector) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
-	return errors.New("not implemented")
-}
-
-func (s *policyBranchAutoSelector) PolicyAuthValue() error {
-	s.assertions.policyAuthValueNeeded = true
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyCommandCode(code tpm2.CommandCode) error {
-	s.assertions.policyCommandCode = append(s.assertions.policyCommandCode, code)
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
-	s.assertions.policyCounterTimer = append(s.assertions.policyCounterTimer, policyCounterTimerAssertion{
-		operandB:  operandB,
-		offset:    offset,
-		operation: operation,
-	})
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyCpHash(cpHashA tpm2.Digest) error {
-	s.assertions.policyCpHash = append(s.assertions.policyCpHash, cpHashA)
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyNameHash(nameHash tpm2.Digest) error {
-	s.assertions.policyNameHash = append(s.assertions.policyNameHash, nameHash)
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyOR(pHashList tpm2.DigestList) error {
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
-	panic("not reached")
-}
-
-func (s *policyBranchAutoSelector) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
-	s.assertions.policyPcr = append(s.assertions.policyPcr, policyPCRAssertion{
-		pcrDigest: pcrDigest,
-		pcrs:      pcrs,
-	})
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	nameHash, err := ComputeNameHash(s.sessionAlg, objectName, newParentName)
-	if err != nil {
-		return err
-	}
-	s.assertions.policyNameHash = append(s.assertions.policyNameHash, nameHash)
-	s.assertions.policyCommandCode = append(s.assertions.policyCommandCode, tpm2.CommandPolicyDuplicationSelect)
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyPassword() error {
-	s.assertions.policyAuthValueNeeded = true
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyNvWritten(writtenSet bool) error {
-	s.assertions.policyNvWritten = append(s.assertions.policyNvWritten, writtenSet)
-	return nil
-}
-
-func (s *policyBranchAutoSelector) PolicyGetDigest() (tpm2.Digest, error) {
-	return make(tpm2.Digest, s.sessionAlg.Size()), nil
 }
 
 func (s *policyBranchAutoSelector) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
@@ -716,18 +493,19 @@ func (s *policyBranchAutoSelector) ticket(authName tpm2.Name, policyRef tpm2.Non
 }
 
 func (s *policyBranchAutoSelector) beginBranchNode() (treeWalkerBeginBranchFn, error) {
-	assertions := s.assertions
+	report := s.report
 
 	return func(path policyBranchPath) error {
 		s.path = path
-		s.assertions = assertions
+		s.report = report
+		s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s)
 		return nil
 	}, nil
 }
 
 func (s *policyBranchAutoSelector) completeBranch() {
-	assertions := s.assertions
-	s.assertionsMap[s.path] = &assertions
+	report := s.report
+	s.reportMap[s.path] = &report
 	s.paths = append(s.paths, s.path)
 }
 
