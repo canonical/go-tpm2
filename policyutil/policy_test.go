@@ -1641,9 +1641,6 @@ type testExecutePolicySecretData struct {
 	params     *PolicyExecuteParams
 	resources  *Resources
 
-	expectedCpHash     tpm2.Digest
-	expectedExpiration int32
-
 	expectedFlush bool
 
 	authSession tpm2.SessionContext
@@ -1683,16 +1680,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 	if err != nil {
 		return err
 	}
-	if data.expectedExpiration < 0 {
-		c.Assert(tickets, internal_testutil.LenEquals, 1)
-		c.Check(tickets[0].AuthName, DeepEquals, data.authObject.Name())
-		c.Check(tickets[0].PolicyRef, DeepEquals, data.policyRef)
-		c.Check(tickets[0].CpHash, DeepEquals, data.expectedCpHash)
-		c.Check(tickets[0].Ticket.Tag, Equals, tpm2.TagAuthSecret)
-		c.Check(tickets[0].Ticket.Hierarchy, Equals, tpm2.HandleOwner)
-	} else {
-		c.Check(tickets, internal_testutil.LenEquals, 0)
-	}
+	c.Check(tickets, internal_testutil.LenEquals, 0)
 	c.Check(requireAuthValue, internal_testutil.IsFalse)
 
 	commands := s.CommandLog()
@@ -1720,8 +1708,8 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 	var expiration int32
 	_, err = mu.UnmarshalFromBytes(cpBytes, &nonceTPM, &cpHashA, &policyRef, &expiration)
 	c.Check(err, IsNil)
-	c.Check(cpHashA, DeepEquals, data.expectedCpHash)
-	c.Check(expiration, Equals, data.expectedExpiration)
+	c.Check(cpHashA, DeepEquals, tpm2.Digest(nil))
+	c.Check(expiration, Equals, int32(0))
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -1740,75 +1728,6 @@ func (s *policySuite) TestPolicySecret(c *C) {
 func (s *policySuite) TestPolicySecretNoPolicyRef(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: s.TPM.OwnerHandleContext()})
-	c.Check(err, IsNil)
-}
-
-func (s *policySuite) TestPolicySecretWithParams(c *C) {
-	h := crypto.SHA256.New()
-	io.WriteString(h, "bar")
-	cpHash := h.Sum(nil)
-
-	params := &PolicySecretParams{
-		AuthName:   s.TPM.OwnerHandleContext().Name(),
-		PolicyRef:  []byte("foo"),
-		CpHash:     CommandParameterDigest(tpm2.HashAlgorithmSHA256, cpHash),
-		Expiration: 100}
-	err := s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject:         s.TPM.OwnerHandleContext(),
-		policyRef:          params.PolicyRef,
-		params:             &PolicyExecuteParams{SecretParams: []*PolicySecretParams{params}},
-		expectedCpHash:     cpHash,
-		expectedExpiration: params.Expiration})
-	c.Check(err, IsNil)
-}
-
-func (s *policySuite) TestPolicySecretWithNonMatchingParams1(c *C) {
-	h := crypto.SHA256.New()
-	io.WriteString(h, "bar")
-
-	params := &PolicySecretParams{
-		AuthName:   s.TPM.OwnerHandleContext().Name(),
-		CpHash:     CommandParameterDigest(tpm2.HashAlgorithmSHA256, h.Sum(nil)),
-		Expiration: 100}
-	err := s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject: s.TPM.OwnerHandleContext(),
-		policyRef:  []byte("foo"),
-		params:     &PolicyExecuteParams{SecretParams: []*PolicySecretParams{params}}})
-	c.Check(err, IsNil)
-}
-
-func (s *policySuite) TestPolicySecretWithNonMatchingParams2(c *C) {
-	h := crypto.SHA256.New()
-	io.WriteString(h, "bar")
-
-	params := &PolicySecretParams{
-		AuthName:   s.TPM.EndorsementHandleContext().Name(),
-		PolicyRef:  []byte("foo"),
-		CpHash:     CommandParameterDigest(tpm2.HashAlgorithmSHA256, h.Sum(nil)),
-		Expiration: 100}
-	err := s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject: s.TPM.OwnerHandleContext(),
-		policyRef:  params.PolicyRef,
-		params:     &PolicyExecuteParams{SecretParams: []*PolicySecretParams{params}}})
-	c.Check(err, IsNil)
-}
-
-func (s *policySuite) TestPolicySecretWithRequestedTicket(c *C) {
-	h := crypto.SHA256.New()
-	io.WriteString(h, "bar")
-	cpHash := h.Sum(nil)
-
-	params := &PolicySecretParams{
-		AuthName:   s.TPM.OwnerHandleContext().Name(),
-		PolicyRef:  []byte("foo"),
-		CpHash:     CommandParameterDigest(tpm2.HashAlgorithmSHA256, cpHash),
-		Expiration: -200}
-	err := s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject:         s.TPM.OwnerHandleContext(),
-		policyRef:          params.PolicyRef,
-		params:             &PolicyExecuteParams{SecretParams: []*PolicySecretParams{params}},
-		expectedCpHash:     cpHash,
-		expectedExpiration: params.Expiration})
 	c.Check(err, IsNil)
 }
 
@@ -1932,51 +1851,6 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	var rle *ResourceLoadError
 	c.Check(err, internal_testutil.ErrorAs, &rle)
 	c.Check(rle.Name, DeepEquals, saved.Name)
-}
-
-func (s *policySuite) TestPolicySecretTicket(c *C) {
-	authObject := s.TPM.OwnerHandleContext()
-	policyRef := tpm2.Nonce("foo")
-
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySecret(authObject, policyRef), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	authorizer := &mockPolicyResourceAuthorizer{
-		authorizeFn: func(resource tpm2.ResourceContext) error {
-			c.Check(resource.Name(), DeepEquals, authObject.Name())
-			return nil
-		},
-	}
-
-	params := &PolicyExecuteParams{
-		SecretParams: []*PolicySecretParams{{
-			AuthName:   authObject.Name(),
-			PolicyRef:  policyRef,
-			Expiration: -1000}}}
-
-	tickets, requireAuthValue, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyExecuteHelper(s.TPM, nil, authorizer), params)
-	c.Check(err, IsNil)
-	c.Check(tickets, internal_testutil.LenEquals, 1)
-	c.Check(requireAuthValue, internal_testutil.IsFalse)
-
-	c.Check(s.TPM.PolicyRestart(session), IsNil)
-
-	params = &PolicyExecuteParams{Tickets: tickets}
-
-	tickets, requireAuthValue, err = policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyExecuteHelper(s.TPM, nil, authorizer), params)
-	c.Check(err, IsNil)
-	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(requireAuthValue, internal_testutil.IsFalse)
-
-	digest, err := s.TPM.PolicyGetDigest(session)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigest)
 }
 
 type testExecutePolicySignedData struct {

@@ -55,24 +55,6 @@ type PolicyTicket struct {
 	Ticket *tpm2.TkAuth
 }
 
-// PolicySecretParams provides a way for an application to customize the cpHash and expiration
-// arguments of a TPM2_PolicySecret assertion with the specified reference and for a resource
-// with the specified name. These parameters aren't part of the policy because they aren't
-// cryptographically bound to the policy digest and can be modified.
-type PolicySecretParams struct {
-	AuthName  tpm2.Name  // The name of the auth object associated with the corresponding TPM2_PolicySecret assertion
-	PolicyRef tpm2.Nonce // The policy ref of the corresponding assertion
-	CpHash    CpHash     // The command parameters to restrict the session usage to
-
-	// Expiration specifies a timeout based on the absolute value of this field in seconds, after
-	// which the authorization will expire. The timeout is measured from the time that the most
-	// recent TPM nonce was generated for the session. This can be used to request a ticket that
-	// can be used in a subsequent policy execution by specifying a negative value, in which case
-	// this field and the CpHash field restrict the validity period and scope of the returned
-	// ticket.
-	Expiration int32
-}
-
 // AuthorizationError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
 // and the associated object could not be authorized, or if the policy uses TPM2_PolicySigned
 // and no or an invalid signed authorization was supplied.
@@ -206,7 +188,6 @@ type PolicyBranchSelectParams struct {
 
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
 type PolicyExecuteParams struct {
-	SecretParams         []*PolicySecretParams        // Parameters for TPM2_PolicySecret assertions
 	SignedAuthorizations []*PolicySignedAuthorization // Authorizations for TPM2_PolicySigned assertions
 	Tickets              []*PolicyTicket              // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
 	PolicyBranchSelectParams
@@ -222,7 +203,6 @@ type PolicyExecuteParams struct {
 // automatically. This only works for branches containing TPM2_PolicyPCR assertions
 // where the assertion parameters match the current PCR values.
 type policyParams interface {
-	secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams
 	signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 }
@@ -387,21 +367,6 @@ func (e *policySecret) run(context policySessionContext) error {
 		}
 	}
 
-	params := context.params().secretParams(e.AuthObjectName, e.PolicyRef)
-	if params == nil {
-		var nilParams PolicySecretParams
-		params = &nilParams
-	}
-
-	var cpHashA tpm2.Digest
-	if params.CpHash != nil {
-		var err error
-		cpHashA, err = params.CpHash.Digest(context.session().HashAlg())
-		if err != nil {
-			return fmt.Errorf("cannot obtain cpHashA: %w", err)
-		}
-	}
-
 	authObject, policy, err := context.resources().LoadName(e.AuthObjectName)
 	if err != nil {
 		return &ResourceLoadError{Name: e.AuthObjectName, err: err}
@@ -442,7 +407,7 @@ func (e *policySecret) run(context policySessionContext) error {
 		tpmSession = session.Session()
 	}
 
-	timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), cpHashA, e.PolicyRef, params.Expiration, tpmSession)
+	timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, tpmSession)
 	if err != nil {
 		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
@@ -450,7 +415,7 @@ func (e *policySecret) run(context policySessionContext) error {
 	context.addTicket(&PolicyTicket{
 		AuthName:  e.AuthObjectName,
 		PolicyRef: e.PolicyRef,
-		CpHash:    cpHashA,
+		CpHash:    nil,
 		Timeout:   timeout,
 		Ticket:    ticket})
 	return nil
@@ -879,19 +844,14 @@ func (r *policyRunner) run(policy policyElements) error {
 // executePolicyParams is an implementation of policyParams that provides real
 // parameters.
 type executePolicyParams struct {
-	policySecretParams map[paramKey]*PolicySecretParams
-	authorizations     map[paramKey]*PolicySignedAuthorization
-	tickets            map[paramKey]*PolicyTicket
+	authorizations map[paramKey]*PolicySignedAuthorization
+	tickets        map[paramKey]*PolicyTicket
 }
 
 func newExecutePolicyParams(params *PolicyExecuteParams) *executePolicyParams {
 	out := &executePolicyParams{
-		policySecretParams: make(map[paramKey]*PolicySecretParams),
-		authorizations:     make(map[paramKey]*PolicySignedAuthorization),
-		tickets:            make(map[paramKey]*PolicyTicket),
-	}
-	for _, param := range params.SecretParams {
-		out.policySecretParams[policyParamKey(param.AuthName, param.PolicyRef)] = param
+		authorizations: make(map[paramKey]*PolicySignedAuthorization),
+		tickets:        make(map[paramKey]*PolicyTicket),
 	}
 	for _, auth := range params.SignedAuthorizations {
 		if auth.Authorization == nil {
@@ -904,10 +864,6 @@ func newExecutePolicyParams(params *PolicyExecuteParams) *executePolicyParams {
 	}
 
 	return out
-}
-
-func (p *executePolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
-	return p.policySecretParams[policyParamKey(authName, policyRef)]
 }
 
 func (p *executePolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
@@ -1129,10 +1085,6 @@ func newMockPolicyParams(external map[*tpm2.Public]tpm2.Name) *mockPolicyParams 
 		signers:  make(map[paramKey]*tpm2.Public),
 		external: external,
 	}
-}
-
-func (p *mockPolicyParams) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
-	return nil
 }
 
 func (p *mockPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {

@@ -470,10 +470,6 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callbac
 	return nil
 }
 
-func (s *policyBranchAutoSelector) secretParams(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySecretParams {
-	return s.params.secretParams(authName, policyRef)
-}
-
 func (s *policyBranchAutoSelector) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
 	auth := s.params.signedAuthorization(authName, policyRef)
 	if auth == nil {
