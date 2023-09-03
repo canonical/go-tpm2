@@ -138,15 +138,7 @@ func (s *sessionContextFlushable) Flush() error {
 
 // mockResources is an implementation of policyResources that doesn't require
 // access to a TPM.
-type mockResources struct {
-	external map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
-}
-
-func newMockResourceLoader(external map[*tpm2.Public]tpm2.Name) *mockResources {
-	return &mockResources{
-		external: external,
-	}
-}
+type mockResources struct{}
 
 func (*mockResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
 	// the handle is not relevant here
@@ -154,12 +146,8 @@ func (*mockResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
 }
 
 func (r *mockResources) LoadExternal(public *tpm2.Public) (ResourceContext, error) {
-	name, exists := r.external[public]
-	if !exists {
-		return nil, errors.New("unrecognized external object")
-	}
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, name)
+	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
 	return newResourceContextNonFlushable(resource), nil
 }
 

@@ -152,6 +152,10 @@ func (b *PolicyBuilderBranch) PolicyNV(nvIndex *tpm2.NVPublic, operandB tpm2.Ope
 		return b.policy.fail("PolicyNV", err)
 	}
 
+	if !nvIndex.Name().IsValid() {
+		return b.policy.fail("PolicyNV", errors.New("invalid nvIndex"))
+	}
+
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNV,
 		Details: &policyElementDetails{
@@ -190,22 +194,22 @@ func (b *PolicyBuilderBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 
 // PolicySigned adds a TPM2_PolicySigned assertion to this branch so that the policy requires
 // an assertion signed by the owner of the supplied key.
-func (b *PolicyBuilderBranch) PolicySigned(authKey Named, policyRef tpm2.Nonce) error {
+func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.Nonce) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicySigned", err)
 	}
 
 	authKeyName := authKey.Name()
 	if !authKeyName.IsValid() {
-		return b.policy.fail("PolicySigned", errors.New("invalid authKey name"))
+		return b.policy.fail("PolicySigned", errors.New("invalid authKey"))
 	}
 
 	element := &policyElement{
 		Type: tpm2.CommandPolicySigned,
 		Details: &policyElementDetails{
 			Signed: &policySigned{
-				AuthKeyName: authKeyName,
-				PolicyRef:   policyRef}}}
+				AuthKey:   authKey,
+				PolicyRef: policyRef}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil

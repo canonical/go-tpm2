@@ -120,7 +120,7 @@ func newPolicyBranchAutoSelectorContext(s *policyBranchAutoSelector) *policyRunn
 	return newPolicyRunnerContext(
 		&observingPolicySession{session: newNullPolicySession(s.sessionAlg), report: &s.report},
 		s,
-		newMockResourceLoader(s.external),
+		new(mockResources),
 		s.treeWalker,
 	)
 }

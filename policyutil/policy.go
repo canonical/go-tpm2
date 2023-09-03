@@ -422,14 +422,19 @@ func (e *policySecret) run(context policySessionContext) error {
 }
 
 type policySigned struct {
-	AuthKeyName tpm2.Name
-	PolicyRef   tpm2.Nonce
+	AuthKey   *tpm2.Public
+	PolicyRef tpm2.Nonce
 }
 
 func (*policySigned) name() string { return "TPM2_PolicySigned assertion" }
 
 func (e *policySigned) run(context policySessionContext) error {
-	if ticket := context.ticket(e.AuthKeyName, e.PolicyRef); ticket != nil {
+	authKeyName := e.AuthKey.Name()
+	if !authKeyName.IsValid() {
+		return errors.New("invalid auth key name")
+	}
+
+	if ticket := context.ticket(authKeyName, e.PolicyRef); ticket != nil {
 		err := context.session().PolicyTicket(ticket.Timeout, ticket.CpHash, ticket.PolicyRef, ticket.AuthName, ticket.Ticket)
 		switch {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorExpired, tpm2.CommandPolicyTicket, 1):
@@ -437,23 +442,23 @@ func (e *policySigned) run(context policySessionContext) error {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySigned
 		case err != nil:
-			return &AuthorizationError{AuthName: e.AuthKeyName, PolicyRef: e.PolicyRef, err: err}
+			return &AuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 		default:
 			// The ticket was accepted
 			return nil
 		}
 	}
 
-	auth := context.params().signedAuthorization(e.AuthKeyName, e.PolicyRef)
+	auth := context.params().signedAuthorization(authKeyName, e.PolicyRef)
 	if auth == nil {
 		return &AuthorizationError{
-			AuthName:  e.AuthKeyName,
+			AuthName:  authKeyName,
 			PolicyRef: e.PolicyRef,
 			err:       errors.New("missing signed authorization"),
 		}
 	}
 
-	authKey, err := context.resources().LoadExternal(auth.Authorization.AuthKey)
+	authKey, err := context.resources().LoadExternal(e.AuthKey)
 	if err != nil {
 		return fmt.Errorf("cannot create authKey context: %w", err)
 	}
@@ -466,11 +471,11 @@ func (e *policySigned) run(context policySessionContext) error {
 
 	timeout, ticket, err := context.session().PolicySigned(authKey.Resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.Authorization.Signature)
 	if err != nil {
-		return &AuthorizationError{AuthName: e.AuthKeyName, PolicyRef: e.PolicyRef, err: err}
+		return &AuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 	}
 
 	context.addTicket(&PolicyTicket{
-		AuthName:  authKey.Resource().Name(),
+		AuthName:  authKeyName,
 		PolicyRef: e.PolicyRef,
 		CpHash:    auth.CpHash,
 		Timeout:   timeout,
@@ -1075,31 +1080,10 @@ func (p *Policy) Execute(session PolicySession, helper PolicyExecuteHelper, para
 
 // mockPolicyParams is an implementation of policyParams that provides mock parameters
 // to compute a policy.
-type mockPolicyParams struct {
-	signers  map[paramKey]*tpm2.Public  // maps a signed authorization to a dummy public key
-	external map[*tpm2.Public]tpm2.Name // maps a dummy public key to a real name
-}
-
-func newMockPolicyParams(external map[*tpm2.Public]tpm2.Name) *mockPolicyParams {
-	return &mockPolicyParams{
-		signers:  make(map[paramKey]*tpm2.Public),
-		external: external,
-	}
-}
+type mockPolicyParams struct{}
 
 func (p *mockPolicyParams) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
-	key, exists := p.signers[policyParamKey(authName, policyRef)]
-	if !exists {
-		key = new(tpm2.Public)
-		p.signers[policyParamKey(authName, policyRef)] = key
-		p.external[key] = authName
-	}
-	return &PolicySignedAuthorization{
-		Authorization: &PolicyAuthorization{
-			AuthKey:   key,
-			PolicyRef: policyRef,
-		},
-	}
+	return &PolicySignedAuthorization{Authorization: new(PolicyAuthorization)}
 }
 
 func (p *mockPolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
@@ -1224,11 +1208,10 @@ func (h *computePolicyRunnerHelper) handleBranches(branches policyBranches) erro
 }
 
 func newComputePolicyRunnerContext(runner *policyRunner, digest *taggedHash) *policyRunnerContext {
-	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
 		newComputePolicySession(digest),
-		newMockPolicyParams(external),
-		newMockResourceLoader(external),
+		new(mockPolicyParams),
+		new(mockResources),
 		newComputePolicyRunnerHelper(runner),
 	)
 }
@@ -1346,11 +1329,10 @@ func (h *validatePolicyRunnerHelper) handleBranches(branches policyBranches) err
 }
 
 func newValidatePolicyRunnerContext(runner *policyRunner, digest *taggedHash) *policyRunnerContext {
-	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
 		newComputePolicySession(digest),
-		newMockPolicyParams(external),
-		newMockResourceLoader(external),
+		new(mockPolicyParams),
+		new(mockResources),
 		newValidatePolicyRunnerHelper(runner),
 	)
 }
@@ -1401,11 +1383,10 @@ func (c *listBranchesContext) completeBranch(done bool) error {
 }
 
 func newListBranchesPolicyRunnerContext(runner *policyRunner, context *listBranchesContext) *policyRunnerContext {
-	external := make(map[*tpm2.Public]tpm2.Name)
 	return newPolicyRunnerContext(
 		newNullPolicySession(tpm2.HashAlgorithmSHA256),
-		newMockPolicyParams(external),
-		newMockResourceLoader(external),
+		new(mockPolicyParams),
+		new(mockResources),
 		newTreeWalkerPolicyRunnerHelper(runner, tpm2.HashAlgorithmNull, true, context.beginBranchNode, context.completeBranch),
 	)
 }

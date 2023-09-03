@@ -61,13 +61,13 @@ func NewMockPolicySecretElement(authObjectName tpm2.Name, policyRef tpm2.Nonce) 
 				PolicyRef:      policyRef}}}
 }
 
-func NewMockPolicySignedElement(authKeyName tpm2.Name, policyRef tpm2.Nonce) *policyElement {
+func NewMockPolicySignedElement(authKey *tpm2.Public, policyRef tpm2.Nonce) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicySigned,
 		Details: &policyElementDetails{
 			Signed: &policySigned{
-				AuthKeyName: authKeyName,
-				PolicyRef:   policyRef}}}
+				AuthKey:   authKey,
+				PolicyRef: policyRef}}}
 }
 
 func NewMockPolicyAuthValueElement() *policyElement {

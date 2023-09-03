@@ -160,7 +160,7 @@ func (s *builderSuite) testPolicySigned(c *C, data *testBuildPolicySignedData) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicySigned(data.authKey, data.policyRef), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicySignedElement(data.authKey.Name(), data.policyRef))
+	expectedPolicy := NewMockPolicy(NewMockPolicySignedElement(data.authKey, data.policyRef))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -228,10 +228,10 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 
 func (s *builderSuite) TestPolicySignedInvalidName(c *C) {
 	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySigned(tpm2.Name{0, 0}, nil), ErrorMatches, `invalid authKey name`)
+	c.Check(builder.RootBranch().PolicySigned(new(tpm2.Public), nil), ErrorMatches, `invalid authKey`)
 	_, err := builder.Policy()
 	c.Check(err, ErrorMatches,
-		`could not build policy: encountered an error when calling PolicySigned: invalid authKey name`)
+		`could not build policy: encountered an error when calling PolicySigned: invalid authKey`)
 }
 
 func (s *builderSuite) TestPolicyAuthValue(c *C) {
