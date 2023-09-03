@@ -397,6 +397,21 @@ type policySessionReport struct {
 	policyNvWritten   []bool
 }
 
+func (r *policySessionReport) append(r2 *policySessionReport) *policySessionReport {
+	return &policySessionReport{
+		nv:                append(r.nv, r2.nv...),
+		secret:            append(r.secret, r2.secret...),
+		signed:            append(r.signed, r2.signed...),
+		authValueNeeded:   r.authValueNeeded || r2.authValueNeeded,
+		policyCommandCode: append(r.policyCommandCode, r2.policyCommandCode...),
+		counterTimer:      append(r.counterTimer, r2.counterTimer...),
+		policyCpHash:      append(r.policyCpHash, r2.policyCpHash...),
+		policyNameHash:    append(r.policyNameHash, r2.policyNameHash...),
+		pcr:               append(r.pcr, r2.pcr...),
+		policyNvWritten:   append(r.policyNvWritten, r2.policyNvWritten...),
+	}
+}
+
 func (r *policySessionReport) checkValid(alg tpm2.HashAlgorithmId) bool {
 	if len(r.policyCommandCode) > 1 {
 		for _, code := range r.policyCommandCode[1:] {

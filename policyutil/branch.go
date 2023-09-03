@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
@@ -116,34 +115,73 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 	return out
 }
 
-func newPolicyBranchAutoSelectorContext(s *policyBranchAutoSelector) *policyRunnerContext {
+type policyBranchSelectMixin struct{}
+
+func (*policyBranchSelectMixin) selectBranch(branches policyBranches, next policyBranchPath) (int, error) {
+	switch {
+	case next[0] == '$':
+		// select branch by index
+		var selected int
+		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
+			return 0, fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
+		}
+		if selected < 0 || selected >= len(branches) {
+			return 0, fmt.Errorf("cannot select branch: selected path %d out of range", selected)
+		}
+		return selected, nil
+	default:
+		// select branch by name
+		for i, branch := range branches {
+			if len(branch.Name) == 0 {
+				continue
+			}
+			if policyBranchPath(branch.Name) == next {
+				return i, nil
+			}
+		}
+		return 0, fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
+	}
+}
+
+func newPolicyBranchFilterContext(f *policyBranchFilter) *policyRunnerContext {
 	return newPolicyRunnerContext(
-		&observingPolicySession{session: newNullPolicySession(s.sessionAlg), report: &s.report},
-		s,
+		&observingPolicySession{session: newNullPolicySession(f.sessionAlg), report: &f.report},
+		f,
 		new(mockResources),
-		s.treeWalker,
+		f.treeWalker,
 	)
 }
 
-type policyBranchAutoSelector struct {
+type candidateBranch struct {
+	path   policyBranchPath
+	report policySessionReport
+}
+
+type policyBranchFilterMode int
+
+const (
+	policyBranchFilterModeSubtreeOnly policyBranchFilterMode = iota
+	policyBranchFilterModeGreedy
+)
+
+type policyBranchFilter struct {
 	runner     *policyRunner
 	state      tpmState
 	params     policyParams
 	usage      *PolicySessionUsage
 	sessionAlg tpm2.HashAlgorithmId
 
-	external   map[*tpm2.Public]tpm2.Name
 	treeWalker *treeWalkerPolicyRunnerHelper
 
 	paths     []policyBranchPath
-	reportMap map[policyBranchPath]*policySessionReport
+	reportMap map[policyBranchPath]policySessionReport
 
 	path   policyBranchPath
 	report policySessionReport
 }
 
-func newPolicyBranchAutoSelector(runner *policyRunner, state tpmState, usage *PolicySessionUsage) *policyBranchAutoSelector {
-	return &policyBranchAutoSelector{
+func newPolicyBranchFilter(runner *policyRunner, state tpmState, usage *PolicySessionUsage) *policyBranchFilter {
+	return &policyBranchFilter{
 		runner:     runner,
 		state:      state,
 		params:     runner.params(),
@@ -152,77 +190,77 @@ func newPolicyBranchAutoSelector(runner *policyRunner, state tpmState, usage *Po
 	}
 }
 
-func (s *policyBranchAutoSelector) filterInvalidBranches() {
-	for p, r := range s.reportMap {
-		if r.checkValid(s.sessionAlg) {
+func (f *policyBranchFilter) filterInvalidBranches() {
+	for p, r := range f.reportMap {
+		if r.checkValid(f.sessionAlg) {
 			continue
 		}
-		delete(s.reportMap, p)
+		delete(f.reportMap, p)
 	}
 }
 
-func (s *policyBranchAutoSelector) filterMissingAuthBranches() {
-	for p, r := range s.reportMap {
+func (f *policyBranchFilter) filterMissingAuthBranches() {
+	for p, r := range f.reportMap {
 		missing := false
 		for _, signed := range r.signed {
-			auth := s.params.signedAuthorization(signed.authKey.Name(), signed.policyRef)
-			ticket := s.params.ticket(signed.authKey.Name(), signed.policyRef)
+			auth := f.params.signedAuthorization(signed.authKey.Name(), signed.policyRef)
+			ticket := f.params.ticket(signed.authKey.Name(), signed.policyRef)
 			if auth == nil && ticket == nil {
 				missing = true
 				break
 			}
 		}
 		if missing {
-			delete(s.reportMap, p)
+			delete(f.reportMap, p)
 		}
 	}
 }
 
-func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
-	if s.usage == nil {
+func (f *policyBranchFilter) filterUsageIncompatibleBranches() error {
+	if f.usage == nil {
 		return nil
 	}
 
-	for p, r := range s.reportMap {
+	for p, r := range f.reportMap {
 		code, set := r.commandCode()
-		if set && code != s.usage.commandCode {
-			delete(s.reportMap, p)
+		if set && code != f.usage.commandCode {
+			delete(f.reportMap, p)
 			continue
 		}
 
 		cpHash, set := r.cpHash()
 		if set {
-			d, err := ComputeCpHash(s.sessionAlg, s.usage.commandCode, s.usage.handles, s.usage.params...)
+			d, err := ComputeCpHash(f.sessionAlg, f.usage.commandCode, f.usage.handles, f.usage.params...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
 			}
 			if !bytes.Equal(d, cpHash) {
-				delete(s.reportMap, p)
+				delete(f.reportMap, p)
 				continue
 			}
 		}
 
 		nameHash, set := r.nameHash()
 		if set {
-			d, err := ComputeNameHash(s.sessionAlg, s.usage.handles...)
+			d, err := ComputeNameHash(f.sessionAlg, f.usage.handles...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
 			}
 			if !bytes.Equal(d, nameHash) {
-				delete(s.reportMap, p)
+				delete(f.reportMap, p)
 				continue
 			}
 		}
 
 		nvWritten, set := r.nvWritten()
-		if set && s.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
-			pub, err := s.state.NVPublic(s.usage.nvHandle)
+		if set && f.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
+			pub, err := f.state.NVPublic(f.usage.nvHandle)
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
 			written := pub.Attrs&tpm2.AttrNVWritten != 0
 			if nvWritten != written {
-				delete(s.reportMap, p)
+				delete(f.reportMap, p)
 				continue
 			}
 		}
@@ -231,9 +269,9 @@ func (s *policyBranchAutoSelector) filterUsageIncompatibleBranches() error {
 	return nil
 }
 
-func (s *policyBranchAutoSelector) filterPcrIncompatibleBranches() error {
+func (f *policyBranchFilter) filterPcrIncompatibleBranches() error {
 	var pcrs tpm2.PCRSelectionList
-	for p, r := range s.reportMap {
+	for p, r := range f.reportMap {
 		var err error
 		for _, item := range r.pcr {
 			var tmpPcrs tpm2.PCRSelectionList
@@ -244,7 +282,7 @@ func (s *policyBranchAutoSelector) filterPcrIncompatibleBranches() error {
 			pcrs = tmpPcrs
 		}
 		if err != nil {
-			delete(s.reportMap, p)
+			delete(f.reportMap, p)
 		}
 	}
 
@@ -252,15 +290,15 @@ func (s *policyBranchAutoSelector) filterPcrIncompatibleBranches() error {
 		return nil
 	}
 
-	pcrValues, err := s.state.PCRValues(pcrs)
+	pcrValues, err := f.state.PCRValues(pcrs)
 	if err != nil {
 		return fmt.Errorf("cannot obtain PCR values: %w", err)
 	}
 
-	for p, r := range s.reportMap {
+	for p, r := range f.reportMap {
 		incompatible := false
 		for _, item := range r.pcr {
-			pcrDigest, err := ComputePCRDigest(s.sessionAlg, item.pcrs, pcrValues)
+			pcrDigest, err := ComputePCRDigest(f.sessionAlg, item.pcrs, pcrValues)
 			if err != nil {
 				return fmt.Errorf("cannot compute PCR digest: %w", err)
 			}
@@ -270,16 +308,16 @@ func (s *policyBranchAutoSelector) filterPcrIncompatibleBranches() error {
 			}
 		}
 		if incompatible {
-			delete(s.reportMap, p)
+			delete(f.reportMap, p)
 		}
 	}
 
 	return nil
 }
 
-func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() error {
+func (f *policyBranchFilter) filterCounterTimerIncompatibleBranches() error {
 	hasCounterTimerAssertions := false
-	for _, r := range s.reportMap {
+	for _, r := range f.reportMap {
 		if len(r.counterTimer) > 0 {
 			hasCounterTimerAssertions = true
 			break
@@ -290,7 +328,7 @@ func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() erro
 		return nil
 	}
 
-	timeInfo, err := s.state.ReadClock()
+	timeInfo, err := f.state.ReadClock()
 	if err != nil {
 		return fmt.Errorf("cannot obtain time info: %w", err)
 	}
@@ -300,7 +338,7 @@ func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() erro
 		return fmt.Errorf("cannot marshal time info: %w", err)
 	}
 
-	for p, r := range s.reportMap {
+	for p, r := range f.reportMap {
 		incompatible := false
 		for _, item := range r.counterTimer {
 			if int(item.offset) > len(timeInfoData) {
@@ -384,82 +422,69 @@ func (s *policyBranchAutoSelector) filterCounterTimerIncompatibleBranches() erro
 		}
 
 		if incompatible {
-			delete(s.reportMap, p)
+			delete(f.reportMap, p)
 		}
 	}
 
 	return nil
 }
 
-func (s *policyBranchAutoSelector) filterAndChooseBranch() (policyBranchPath, error) {
-	s.filterInvalidBranches()
-	s.filterMissingAuthBranches()
-	if err := s.filterUsageIncompatibleBranches(); err != nil {
-		return "", fmt.Errorf("cannot filter branches incompatible with usage: %w", err)
-	}
-	if err := s.filterPcrIncompatibleBranches(); err != nil {
-		return "", fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyPCR assertions: %w", err)
-	}
-	if err := s.filterCounterTimerIncompatibleBranches(); err != nil {
-		return "", fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyCounterTimer assertions: %w", err)
-	}
-
-	// return the first branch that doesn't use TPM2_PolicyPassword, TPM2_PolicyAuthValue,
-	// or TPM2_PolicySecret, else just return the first good branch.
-	var first policyBranchPath
-
-	for _, path := range s.paths {
-		if report, exists := s.reportMap[path]; exists {
-			if first == "" {
-				first = path
-			}
-			if !report.authValueNeeded && len(report.secret) == 0 {
-				return path, nil
-			}
-		}
-	}
-
-	if first == "" {
-		return "", errors.New("no appropriate branches")
-	}
-	return first, nil
-}
-
-func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callback func(policyBranchPath) error) error {
+func (f *policyBranchFilter) filterBranches(branches policyBranches, mode policyBranchFilterMode, callback func([]candidateBranch) error) error {
 	// reset state
-	s.external = make(map[*tpm2.Public]tpm2.Name)
+	f.paths = nil
+	f.reportMap = make(map[policyBranchPath]policySessionReport)
 
-	s.paths = nil
-	s.reportMap = make(map[policyBranchPath]*policySessionReport)
+	f.path = ""
+	f.report = policySessionReport{}
 
-	s.path = ""
-	s.report = policySessionReport{}
+	var twMode treeWalkerMode
+	switch mode {
+	case policyBranchFilterModeSubtreeOnly:
+		twMode = treeWalkerModeSubtreeOnly
+	case policyBranchFilterModeGreedy:
+		twMode = treeWalkerModeGreedy
+	}
 
 	// switch the context
-	oldContext := s.runner.policyRunnerContext
-	s.treeWalker = newTreeWalkerPolicyRunnerHelper(s.runner, s.sessionAlg, false, s.beginBranchNode, func(done bool) error {
-		s.completeBranch()
+	oldContext := f.runner.policyRunnerContext
+	f.treeWalker = newTreeWalkerPolicyRunnerHelper(f.runner, f.sessionAlg, twMode, f.beginBranchNode, func(done bool) error {
+		f.completeBranch()
 		if !done {
 			return nil
 		}
 
 		// we've committed the last branch, so restore the state
-		s.runner.policyRunnerContext = oldContext
+		f.runner.policyRunnerContext = oldContext
 
-		s.runner.pushTask("complete branch auto selection", func() error {
-			path, err := s.filterAndChooseBranch()
-			if err != nil {
-				return fmt.Errorf("cannot select branch: %w", err)
+		f.runner.pushTask("filter branches", func() error {
+			f.filterInvalidBranches()
+			f.filterMissingAuthBranches()
+			if err := f.filterUsageIncompatibleBranches(); err != nil {
+				return fmt.Errorf("cannot filter branches incompatible with usage: %w", err)
 			}
-			return callback(path)
+			if err := f.filterPcrIncompatibleBranches(); err != nil {
+				return fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyPCR assertions: %w", err)
+			}
+			if err := f.filterCounterTimerIncompatibleBranches(); err != nil {
+				return fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyCounterTimer assertions: %w", err)
+			}
+
+			var result []candidateBranch
+			for _, path := range f.paths {
+				report, exists := f.reportMap[path]
+				if !exists {
+					continue
+				}
+				result = append(result, candidateBranch{path: path, report: report})
+			}
+			return callback(result)
 		})
 
 		return nil
-
 	})
-	s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s)
+	f.runner.policyRunnerContext = newPolicyBranchFilterContext(f)
 
-	s.runner.pushElements(policyElements{
+	f.runner.pushElements(policyElements{
 		&policyElement{
 			Type: tpm2.CommandPolicyOR,
 			Details: &policyElementDetails{
@@ -470,8 +495,8 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callbac
 	return nil
 }
 
-func (s *policyBranchAutoSelector) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
-	auth := s.params.signedAuthorization(authName, policyRef)
+func (f *policyBranchFilter) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
+	auth := f.params.signedAuthorization(authName, policyRef)
 	if auth == nil {
 		auth = &PolicySignedAuthorization{
 			Authorization: &PolicyAuthorization{
@@ -479,30 +504,52 @@ func (s *policyBranchAutoSelector) signedAuthorization(authName tpm2.Name, polic
 				PolicyRef: policyRef,
 			},
 		}
-		s.external[auth.Authorization.AuthKey] = authName
 	}
 	return auth
 }
 
-func (s *policyBranchAutoSelector) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+func (f *policyBranchFilter) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
 	return nil
 }
 
-func (s *policyBranchAutoSelector) beginBranchNode() (treeWalkerBeginBranchFn, error) {
-	report := s.report
+func (f *policyBranchFilter) beginBranchNode() (treeWalkerBeginBranchFn, error) {
+	report := f.report
 
 	return func(path policyBranchPath) error {
-		s.path = path
-		s.report = report
-		s.runner.policyRunnerContext = newPolicyBranchAutoSelectorContext(s)
+		f.path = path
+		f.report = report
+		f.runner.policyRunnerContext = newPolicyBranchFilterContext(f)
 		return nil
 	}, nil
 }
 
-func (s *policyBranchAutoSelector) completeBranch() {
-	report := s.report
-	s.reportMap[s.path] = &report
-	s.paths = append(s.paths, s.path)
+func (f *policyBranchFilter) completeBranch() {
+	f.reportMap[f.path] = f.report
+	f.paths = append(f.paths, f.path)
+}
+
+type policyBranchAutoSelector struct {
+	filter *policyBranchFilter
+}
+
+func newPolicyBranchAutoSelector(runner *policyRunner, state tpmState, usage *PolicySessionUsage) *policyBranchAutoSelector {
+	return &policyBranchAutoSelector{
+		filter: newPolicyBranchFilter(runner, state, usage),
+	}
+}
+
+func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callback func(policyBranchPath) error) error {
+	return s.filter.filterBranches(branches, policyBranchFilterModeSubtreeOnly, func(candidates []candidateBranch) error {
+		for _, candidate := range candidates {
+			if !candidate.report.authValueNeeded && len(candidate.report.secret) == 0 {
+				return callback(candidate.path)
+			}
+		}
+		if len(candidates) == 0 {
+			return errors.New("cannot select branch: no appropriate branches")
+		}
+		return callback(candidates[0].path)
+	})
 }
 
 type (
@@ -511,10 +558,18 @@ type (
 	treeWalkerCompleteBranchFn  func(bool) error
 )
 
+type treeWalkerMode int
+
+const (
+	treeWalkerModeSubtreeOnly treeWalkerMode = iota
+	treeWalkerModeGreedy
+	treeWalkerModeRootTree
+)
+
 type treeWalkerPolicyRunnerHelper struct {
 	runner     *policyRunner
 	sessionAlg tpm2.HashAlgorithmId
-	fullTree   bool
+	mode       treeWalkerMode
 
 	beginBranchNodeFn treeWalkerBeginBranchNodeFn
 	beginBranchFn     treeWalkerBeginBranchFn
@@ -525,11 +580,11 @@ type treeWalkerPolicyRunnerHelper struct {
 	beginBranchQueue []*policyDeferredTask
 }
 
-func newTreeWalkerPolicyRunnerHelper(runner *policyRunner, sessionAlg tpm2.HashAlgorithmId, fullTree bool, beginBranchNode treeWalkerBeginBranchNodeFn, completeBranch treeWalkerCompleteBranchFn) *treeWalkerPolicyRunnerHelper {
+func newTreeWalkerPolicyRunnerHelper(runner *policyRunner, sessionAlg tpm2.HashAlgorithmId, mode treeWalkerMode, beginBranchNode treeWalkerBeginBranchNodeFn, completeBranch treeWalkerCompleteBranchFn) *treeWalkerPolicyRunnerHelper {
 	return &treeWalkerPolicyRunnerHelper{
 		runner:            runner,
 		sessionAlg:        sessionAlg,
-		fullTree:          fullTree,
+		mode:              mode,
 		beginBranchNodeFn: beginBranchNode,
 		completeBranchFn:  completeBranch,
 	}
@@ -543,17 +598,11 @@ func (h *treeWalkerPolicyRunnerHelper) pushNextBranchWalk() {
 
 func (h *treeWalkerPolicyRunnerHelper) walkBranch(parentPath policyBranchPath, index int, branch *policyBranch, isRootBranch bool) error {
 	if !isRootBranch {
-		var pathElements []string
-		if len(parentPath) > 0 {
-			pathElements = append(pathElements, string(parentPath))
-		}
-		name := branch.Name
+		name := policyBranchPath(branch.Name)
 		if len(name) == 0 {
-			name = policyBranchName(fmt.Sprintf("$[%d]", index))
+			name = policyBranchPath(fmt.Sprintf("$[%d]", index))
 		}
-		pathElements = append(pathElements, string(name))
-
-		h.path = policyBranchPath(strings.Join(pathElements, "/"))
+		h.path = parentPath.Concat(name)
 	}
 
 	if h.beginBranchFn != nil {
@@ -600,11 +649,14 @@ func (h *treeWalkerPolicyRunnerHelper) handleBranches(branches policyBranches) e
 	remaining := h.runner.tasks
 
 	if !h.started {
-		if (h.fullTree && len(branches) != 1) || len(h.beginBranchQueue) != 0 {
+		if h.mode == treeWalkerModeRootTree && (len(branches) != 1 || len(remaining) != 0) {
+			return errors.New("mode inconsistent with runner state or branch node")
+		}
+		if len(h.beginBranchQueue) != 0 {
 			return errors.New("internal error: unexpected state")
 		}
 
-		remaining = append([]policySessionTask{newDeferredTask("tree walk complete branch", func() error {
+		task := newDeferredTask("tree walk complete branch", func() error {
 			if h.completeBranchFn != nil {
 				done := len(h.beginBranchQueue) == 0
 				if err := h.completeBranchFn(done); err != nil {
@@ -619,12 +671,18 @@ func (h *treeWalkerPolicyRunnerHelper) handleBranches(branches policyBranches) e
 				return nil
 			}
 			return nil
-		})}, remaining...)
+		})
+		switch h.mode {
+		case treeWalkerModeGreedy:
+			remaining = append(remaining, task)
+		case treeWalkerModeRootTree, treeWalkerModeSubtreeOnly:
+			remaining = append([]policySessionTask{task}, remaining...)
+		}
 
 		h.path = ""
 	}
 
-	isRootBranch := !h.started && h.fullTree
+	isRootBranch := !h.started && h.mode == treeWalkerModeRootTree
 	path := h.path
 
 	var tasks []*policyDeferredTask

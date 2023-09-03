@@ -931,7 +931,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	pHashList2 = append(pHashList2, initialDigest.Digest)
 
 	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	initialDigest = TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)}
@@ -962,7 +962,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(b3.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	b4 := node2.AddBranch("branch4")
-	c.Check(b4.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(b4.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
@@ -994,7 +994,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 				"branch4", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[1]},
 				},
-				NewMockPolicyCommandCodeElement(tpm2.CommandHierarchyChangeAuth),
+				NewMockPolicyCommandCodeElement(tpm2.CommandNVWriteLock),
 			),
 		),
 	)
@@ -1022,7 +1022,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	builder = NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
@@ -1042,7 +1042,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	builder = NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
 	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
@@ -1079,7 +1079,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(b2.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	b3 := node2.AddBranch("branch3")
-	c.Check(b3.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(b3.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 
 	b4 := node1.AddBranch("branch4")
 	c.Check(b4.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
@@ -1090,7 +1090,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(b5.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	b6 := node3.AddBranch("branch6")
-	c.Check(b6.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(b6.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
@@ -1114,7 +1114,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 						"branch3", TaggedHashList{
 							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[1]},
 						},
-						NewMockPolicyCommandCodeElement(tpm2.CommandHierarchyChangeAuth),
+						NewMockPolicyCommandCodeElement(tpm2.CommandNVWriteLock),
 					),
 				),
 			),
@@ -1134,7 +1134,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 						"branch6", TaggedHashList{
 							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList3[1]},
 						},
-						NewMockPolicyCommandCodeElement(tpm2.CommandHierarchyChangeAuth),
+						NewMockPolicyCommandCodeElement(tpm2.CommandNVWriteLock),
 					),
 				),
 			),
@@ -2473,7 +2473,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectNoUsage(c *C) {
 
 func (s *policySuite) TestPolicyBranchAutoSelectWithUsage(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		usage: NewPolicySessionUsage(tpm2.CommandHierarchyChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
 		cmd:   tpm2.CommandPolicyAuthValue})
 }
 
@@ -2541,7 +2541,7 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 	c.Check(b3.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	b4 := node2.AddBranch("branch4")
-	c.Check(b4.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(b4.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -2610,14 +2610,14 @@ func (s *policySuite) TestPolicyBranchesMultipleNodes2(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path: "branch1/branch4",
 		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandHierarchyChangeAuth})
+		cmd2: tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodes3(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path: "branch2/branch4",
 		cmd1: tpm2.CommandPolicySecret,
-		cmd2: tpm2.CommandHierarchyChangeAuth})
+		cmd2: tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectNoUsage(c *C) {
@@ -2642,17 +2642,17 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage1(c *C) 
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandHierarchyChangeAuth, []Named{tpm2.MakeHandleName(tpm2.HandleOwner)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
 		cmd1:  tpm2.CommandPolicyAuthValue,
-		cmd2:  tpm2.CommandHierarchyChangeAuth})
+		cmd2:  tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path:  "branch2",
-		usage: NewPolicySessionUsage(tpm2.CommandHierarchyChangeAuth, []Named{tpm2.MakeHandleName(tpm2.HandleOwner)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
 		cmd1:  tpm2.CommandPolicySecret,
-		cmd2:  tpm2.CommandHierarchyChangeAuth})
+		cmd2:  tpm2.CommandNVWriteLock})
 }
 
 type testExecutePolicyBranchesEmbeddedNodesData struct {
@@ -2677,7 +2677,7 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 	c.Check(b2.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	b3 := node2.AddBranch("branch3")
-	c.Check(b3.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(b3.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 
 	b4 := node1.AddBranch("branch4")
 	c.Check(b4.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
@@ -2688,7 +2688,7 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 	c.Check(b5.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	b6 := node3.AddBranch("branch6")
-	c.Check(b6.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
+	c.Check(b6.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -2757,7 +2757,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodes2(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "branch1/branch3",
 		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandHierarchyChangeAuth})
+		cmd2: tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodes3(c *C) {
@@ -2771,7 +2771,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodes4(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "branch4/branch6",
 		cmd1: tpm2.CommandPolicySecret,
-		cmd2: tpm2.CommandHierarchyChangeAuth})
+		cmd2: tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectNoUsage(c *C) {
@@ -2790,9 +2790,9 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneNoUsage(c *C) 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneWithUsage(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path:  "branch4",
-		usage: NewPolicySessionUsage(tpm2.CommandHierarchyChangeAuth, []Named{tpm2.MakeHandleName(tpm2.HandleOwner)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
 		cmd1:  tpm2.CommandPolicySecret,
-		cmd2:  tpm2.CommandHierarchyChangeAuth})
+		cmd2:  tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage1(c *C) {
@@ -2804,9 +2804,9 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage1(c *C) 
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandHierarchyChangeAuth, []Named{tpm2.MakeHandleName(tpm2.HandleOwner)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
 		cmd1:  tpm2.CommandPolicyAuthValue,
-		cmd2:  tpm2.CommandHierarchyChangeAuth})
+		cmd2:  tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
@@ -3108,6 +3108,185 @@ func (s *policySuite) TestPolicyNvWrittenTrue(c *C) {
 	s.testPolicyNvWritten(c, true)
 }
 
+type testPolicyBranchRequirementsData struct {
+	pub       *tpm2.Public
+	nvPub     *tpm2.NVPublic
+	operandB  tpm2.Operand
+	offset    uint16
+	operation tpm2.ArithmeticOp
+	usage     *PolicySessionUsage
+	path      string
+	expected  map[string]PolicyBranchRequirements
+}
+
+func (s *policySuite) testPolicyBranchRequirements(c *C, data *testPolicyBranchRequirementsData) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := builder.RootBranch().AddBranchNode()
+
+	b1 := node.AddBranch("branch1")
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Check(b2.PolicySigned(data.pub, []byte("foo")), IsNil)
+	c.Check(b2.PolicyNV(data.nvPub, data.operandB, data.offset, data.operation), IsNil)
+
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	params := &PolicyBranchSelectParams{
+		Usage: data.usage,
+		Path:  data.path,
+	}
+
+	req, err := policy.BranchRequirements(NewTPMPolicyExecuteHelper(s.TPM, nil, nil), params)
+	c.Check(err, IsNil)
+	c.Check(req, DeepEquals, data.expected)
+}
+
+func (s *policySuite) TestPolicyBrancheRequirementsExplicit(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
+		pub: pub,
+		nvPub: &tpm2.NVPublic{
+			Index:   0x0181f000,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
+			Size:    8},
+		path: "branch1",
+		expected: map[string]PolicyBranchRequirements{
+			"branch1": PolicyBranchRequirements{AuthValue: true},
+		}})
+}
+
+func (s *policySuite) TestPolicyBrancheRequirementsNumericSelectorExplicit(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
+		pub: pub,
+		nvPub: &tpm2.NVPublic{
+			Index:   0x0181f000,
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
+			Size:    8},
+		path: "$[0]",
+		expected: map[string]PolicyBranchRequirements{
+			"branch1": PolicyBranchRequirements{AuthValue: true},
+		}})
+}
+
+func (s *policySuite) TestPolicyBranchRequirementsExplicitDifferentBranchIndex(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	nvPub := &tpm2.NVPublic{
+		Index:   0x0181f000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
+		Size:    8}
+	index, err := tpm2.NewNVIndexResourceContextFromPub(nvPub)
+	c.Check(err, IsNil)
+
+	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
+		pub:       pub,
+		nvPub:     nvPub,
+		operandB:  []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10},
+		offset:    0,
+		operation: tpm2.OpUnsignedLT,
+		path:      "branch2",
+		expected: map[string]PolicyBranchRequirements{
+			"branch2": PolicyBranchRequirements{
+				NV: []PolicyNVRequirement{
+					{Auth: index.Handle(), Index: index, OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, Offset: 0, Operation: tpm2.OpUnsignedLT},
+				},
+				Signed: []PolicyAuthorizationID{
+					{AuthName: pub.Name(), PolicyRef: []byte("foo")},
+				},
+			},
+		}})
+}
+
+func (s *policySuite) TestPolicyBranchRequirements(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	nvPub := &tpm2.NVPublic{
+		Index:   0x0181f000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
+		Size:    8}
+	index, err := tpm2.NewNVIndexResourceContextFromPub(nvPub)
+	c.Check(err, IsNil)
+
+	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
+		pub:       pub,
+		nvPub:     nvPub,
+		operandB:  []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10},
+		offset:    0,
+		operation: tpm2.OpUnsignedLT,
+		expected: map[string]PolicyBranchRequirements{
+			"branch1": PolicyBranchRequirements{AuthValue: true},
+			"branch2": PolicyBranchRequirements{
+				NV: []PolicyNVRequirement{
+					{Auth: index.Handle(), Index: index, OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, Offset: 0, Operation: tpm2.OpUnsignedLT},
+				},
+				Signed: []PolicyAuthorizationID{
+					{AuthName: pub.Name(), PolicyRef: []byte("foo")},
+				},
+			},
+		}})
+}
+
 type policySuitePCR struct {
 	testutil.TPMTest
 }
@@ -3180,5 +3359,5 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyExecuteHelper(s.TPM, nil, nil), nil)
-	c.Check(err, ErrorMatches, `cannot run complete branch auto selection: cannot select branch: no appropriate branches`)
+	c.Check(err, ErrorMatches, `cannot run filter branches: cannot select branch: no appropriate branches`)
 }
