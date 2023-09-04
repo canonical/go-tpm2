@@ -111,7 +111,7 @@ func (b *PolicyBuilderBranch) commitBranches(branches []*policyBranch) error {
 		element := &policyElement{
 			Type: tpm2.CommandPolicyOR,
 			Details: &policyElementDetails{
-				OR: &policyOR{Branches: branches}}}
+				OR: &policyORElement{Branches: branches}}}
 		b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 	}
 
@@ -159,7 +159,7 @@ func (b *PolicyBuilderBranch) PolicyNV(nvIndex *tpm2.NVPublic, operandB tpm2.Ope
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNV,
 		Details: &policyElementDetails{
-			NV: &policyNV{
+			NV: &policyNVElement{
 				NvIndex:   nvIndex,
 				OperandB:  operandB,
 				Offset:    offset,
@@ -184,7 +184,7 @@ func (b *PolicyBuilderBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 	element := &policyElement{
 		Type: tpm2.CommandPolicySecret,
 		Details: &policyElementDetails{
-			Secret: &policySecret{
+			Secret: &policySecretElement{
 				AuthObjectName: authObjectName,
 				PolicyRef:      policyRef}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
@@ -207,7 +207,7 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 	element := &policyElement{
 		Type: tpm2.CommandPolicySigned,
 		Details: &policyElementDetails{
-			Signed: &policySigned{
+			Signed: &policySignedElement{
 				AuthKey:   authKey,
 				PolicyRef: policyRef}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
@@ -225,7 +225,7 @@ func (b *PolicyBuilderBranch) PolicyAuthValue() error {
 
 	element := &policyElement{
 		Type:    tpm2.CommandPolicyAuthValue,
-		Details: &policyElementDetails{AuthValue: new(policyAuthValue)}}
+		Details: &policyElementDetails{AuthValue: new(policyAuthValueElement)}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -241,7 +241,7 @@ func (b *PolicyBuilderBranch) PolicyCommandCode(code tpm2.CommandCode) error {
 	element := &policyElement{
 		Type: tpm2.CommandPolicyCommandCode,
 		Details: &policyElementDetails{
-			CommandCode: &policyCommandCode{CommandCode: code}}}
+			CommandCode: &policyCommandCodeElement{CommandCode: code}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -257,7 +257,7 @@ func (b *PolicyBuilderBranch) PolicyCounterTimer(operandB tpm2.Operand, offset u
 	element := &policyElement{
 		Type: tpm2.CommandPolicyCounterTimer,
 		Details: &policyElementDetails{
-			CounterTimer: &policyCounterTimer{
+			CounterTimer: &policyCounterTimerElement{
 				OperandB:  operandB,
 				Offset:    offset,
 				Operation: operation}}}
@@ -290,7 +290,7 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 	element := &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
-			CpHash: &policyCpHash{
+			CpHash: &policyCpHashElement{
 				CommandCode: code,
 				Handles:     handleNames,
 				CpBytes:     cpBytes}}}
@@ -318,7 +318,7 @@ func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) error {
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
-			NameHash: &policyNameHash{Handles: handleNames}}}
+			NameHash: &policyNameHashElement{Handles: handleNames}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -357,7 +357,7 @@ func (b *PolicyBuilderBranch) PolicyPCR(values tpm2.PCRValues) error {
 	element := &policyElement{
 		Type: tpm2.CommandPolicyPCR,
 		Details: &policyElementDetails{
-			PCR: &policyPCR{PCRs: pcrs}}}
+			PCR: &policyPCRElement{PCRs: pcrs}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -390,7 +390,7 @@ func (b *PolicyBuilderBranch) PolicyDuplicationSelect(object, newParent Named, i
 	element := &policyElement{
 		Type: tpm2.CommandPolicyDuplicationSelect,
 		Details: &policyElementDetails{
-			DuplicationSelect: &policyDuplicationSelect{
+			DuplicationSelect: &policyDuplicationSelectElement{
 				Object:        objectName,
 				NewParent:     newParentName,
 				IncludeObject: includeObject}}}
@@ -410,7 +410,7 @@ func (b *PolicyBuilderBranch) PolicyPassword() error {
 	element := &policyElement{
 		Type: tpm2.CommandPolicyPassword,
 		Details: &policyElementDetails{
-			Password: new(policyPassword)}}
+			Password: new(policyPasswordElement)}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -427,7 +427,7 @@ func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) error {
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNvWritten,
 		Details: &policyElementDetails{
-			NvWritten: &policyNvWritten{WrittenSet: writtenSet}}}
+			NvWritten: &policyNvWrittenElement{WrittenSet: writtenSet}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil

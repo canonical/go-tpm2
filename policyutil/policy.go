@@ -226,8 +226,8 @@ type policyResources interface {
 }
 
 type policyRunnerHelper interface {
-	cpHash(cpHash *policyCpHash) (tpm2.Digest, error)
-	nameHash(nameHash *policyNameHash) (tpm2.Digest, error)
+	cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error)
+	nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error)
 	handleBranches(branches policyBranches) error
 }
 
@@ -301,16 +301,16 @@ func (h *taggedHash) Unmarshal(r io.Reader) error {
 
 type taggedHashList []taggedHash
 
-type policyNV struct {
+type policyNVElement struct {
 	NvIndex   *tpm2.NVPublic
 	OperandB  tpm2.Operand
 	Offset    uint16
 	Operation tpm2.ArithmeticOp
 }
 
-func (*policyNV) name() string { return "TPM2_PolicyNV assertion" }
+func (*policyNVElement) name() string { return "TPM2_PolicyNV assertion" }
 
-func (e *policyNV) run(context policySessionContext) error {
+func (e *policyNVElement) run(context policySessionContext) error {
 	nvIndex, err := tpm2.NewNVIndexResourceContextFromPub(e.NvIndex)
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
@@ -355,14 +355,14 @@ func (e *policyNV) run(context policySessionContext) error {
 	return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession)
 }
 
-type policySecret struct {
+type policySecretElement struct {
 	AuthObjectName tpm2.Name
 	PolicyRef      tpm2.Nonce
 }
 
-func (*policySecret) name() string { return "TPM2_PolicySecret assertion" }
+func (*policySecretElement) name() string { return "TPM2_PolicySecret assertion" }
 
-func (e *policySecret) run(context policySessionContext) error {
+func (e *policySecretElement) run(context policySessionContext) error {
 	if ticket := context.ticket(e.AuthObjectName, e.PolicyRef); ticket != nil {
 		err := context.session().PolicyTicket(ticket.Timeout, ticket.CpHash, ticket.PolicyRef, ticket.AuthName, ticket.Ticket)
 		switch {
@@ -432,14 +432,14 @@ func (e *policySecret) run(context policySessionContext) error {
 	return nil
 }
 
-type policySigned struct {
+type policySignedElement struct {
 	AuthKey   *tpm2.Public
 	PolicyRef tpm2.Nonce
 }
 
-func (*policySigned) name() string { return "TPM2_PolicySigned assertion" }
+func (*policySignedElement) name() string { return "TPM2_PolicySigned assertion" }
 
-func (e *policySigned) run(context policySessionContext) error {
+func (e *policySignedElement) run(context policySessionContext) error {
 	authKeyName := e.AuthKey.Name()
 	if !authKeyName.IsValid() {
 		return errors.New("invalid auth key name")
@@ -494,37 +494,37 @@ func (e *policySigned) run(context policySessionContext) error {
 	return nil
 }
 
-type policyAuthValue struct{}
+type policyAuthValueElement struct{}
 
-func (*policyAuthValue) name() string { return "TPM2_PolicyAuthValue assertion" }
+func (*policyAuthValueElement) name() string { return "TPM2_PolicyAuthValue assertion" }
 
-func (*policyAuthValue) run(context policySessionContext) error {
+func (*policyAuthValueElement) run(context policySessionContext) error {
 	return context.session().PolicyAuthValue()
 }
 
-type policyCommandCode struct {
+type policyCommandCodeElement struct {
 	CommandCode tpm2.CommandCode
 }
 
-func (*policyCommandCode) name() string { return "TPM2_PolicyCommandCode assertion" }
+func (*policyCommandCodeElement) name() string { return "TPM2_PolicyCommandCode assertion" }
 
-func (e *policyCommandCode) run(context policySessionContext) error {
+func (e *policyCommandCodeElement) run(context policySessionContext) error {
 	return context.session().PolicyCommandCode(e.CommandCode)
 }
 
-type policyCounterTimer struct {
+type policyCounterTimerElement struct {
 	OperandB  tpm2.Operand
 	Offset    uint16
 	Operation tpm2.ArithmeticOp
 }
 
-func (*policyCounterTimer) name() string { return "TPM2_PolicyCounterTimer assertion" }
+func (*policyCounterTimerElement) name() string { return "TPM2_PolicyCounterTimer assertion" }
 
-func (e *policyCounterTimer) run(context policySessionContext) error {
+func (e *policyCounterTimerElement) run(context policySessionContext) error {
 	return context.session().PolicyCounterTimer(e.OperandB, e.Offset, e.Operation)
 }
 
-type policyCpHash struct {
+type policyCpHashElement struct {
 	CommandCode tpm2.CommandCode
 	Handles     []tpm2.Name
 	CpBytes     []byte
@@ -532,9 +532,9 @@ type policyCpHash struct {
 	Digests taggedHashList
 }
 
-func (*policyCpHash) name() string { return "TPM2_PolicyCpHash assertion" }
+func (*policyCpHashElement) name() string { return "TPM2_PolicyCpHash assertion" }
 
-func (e *policyCpHash) run(context policySessionContext) error {
+func (e *policyCpHashElement) run(context policySessionContext) error {
 	cpHashA, err := context.helper().cpHash(e)
 	if err != nil {
 		return err
@@ -542,15 +542,15 @@ func (e *policyCpHash) run(context policySessionContext) error {
 	return context.session().PolicyCpHash(cpHashA)
 }
 
-type policyNameHash struct {
+type policyNameHashElement struct {
 	Handles []tpm2.Name
 
 	Digests taggedHashList
 }
 
-func (*policyNameHash) name() string { return "TPM2_PolicyNameHash assertion" }
+func (*policyNameHashElement) name() string { return "TPM2_PolicyNameHash assertion" }
 
-func (e *policyNameHash) run(context policySessionContext) error {
+func (e *policyNameHashElement) run(context policySessionContext) error {
 	nameHash, err := context.helper().nameHash(e)
 	if err != nil {
 		return err
@@ -566,13 +566,13 @@ type policyBranch struct {
 
 type policyBranches []*policyBranch
 
-type policyOR struct {
+type policyORElement struct {
 	Branches policyBranches
 }
 
-func (*policyOR) name() string { return "branch node" }
+func (*policyORElement) name() string { return "branch node" }
 
-func (e *policyOR) run(context policySessionContext) error {
+func (e *policyORElement) run(context policySessionContext) error {
 	return context.helper().handleBranches(e.Branches)
 }
 
@@ -583,13 +583,13 @@ type pcrValue struct {
 
 type pcrValueList []pcrValue
 
-type policyPCR struct {
+type policyPCRElement struct {
 	PCRs pcrValueList
 }
 
-func (*policyPCR) name() string { return "TPM2_PolicyPCR assertion" }
+func (*policyPCRElement) name() string { return "TPM2_PolicyPCR assertion" }
 
-func (e *policyPCR) run(context policySessionContext) error {
+func (e *policyPCRElement) run(context policySessionContext) error {
 	values, err := e.pcrValues()
 	if err != nil {
 		return err
@@ -601,7 +601,7 @@ func (e *policyPCR) run(context policySessionContext) error {
 	return context.session().PolicyPCR(pcrDigest, pcrs)
 }
 
-func (e *policyPCR) pcrValues() (tpm2.PCRValues, error) {
+func (e *policyPCRElement) pcrValues() (tpm2.PCRValues, error) {
 	values := make(tpm2.PCRValues)
 	for i, value := range e.PCRs {
 		if value.PCR.Type() != tpm2.HandleTypePCR {
@@ -614,50 +614,50 @@ func (e *policyPCR) pcrValues() (tpm2.PCRValues, error) {
 	return values, nil
 }
 
-type policyDuplicationSelect struct {
+type policyDuplicationSelectElement struct {
 	Object        tpm2.Name
 	NewParent     tpm2.Name
 	IncludeObject bool
 }
 
-func (*policyDuplicationSelect) name() string { return "TPM2_PolicyDuplicationSelect assertion" }
+func (*policyDuplicationSelectElement) name() string { return "TPM2_PolicyDuplicationSelect assertion" }
 
-func (e *policyDuplicationSelect) run(context policySessionContext) error {
+func (e *policyDuplicationSelectElement) run(context policySessionContext) error {
 	return context.session().PolicyDuplicationSelect(e.Object, e.NewParent, e.IncludeObject)
 }
 
-type policyPassword struct{}
+type policyPasswordElement struct{}
 
-func (*policyPassword) name() string { return "TPM2_PolicyPassword assertion" }
+func (*policyPasswordElement) name() string { return "TPM2_PolicyPassword assertion" }
 
-func (*policyPassword) run(context policySessionContext) error {
+func (*policyPasswordElement) run(context policySessionContext) error {
 	return context.session().PolicyPassword()
 }
 
-type policyNvWritten struct {
+type policyNvWrittenElement struct {
 	WrittenSet bool
 }
 
-func (*policyNvWritten) name() string { return "TPM2_PolicyNvWritten assertion" }
+func (*policyNvWrittenElement) name() string { return "TPM2_PolicyNvWritten assertion" }
 
-func (e *policyNvWritten) run(context policySessionContext) error {
+func (e *policyNvWrittenElement) run(context policySessionContext) error {
 	return context.session().PolicyNvWritten(e.WrittenSet)
 }
 
 type policyElementDetails struct {
-	NV                *policyNV
-	Secret            *policySecret
-	Signed            *policySigned
-	AuthValue         *policyAuthValue
-	CommandCode       *policyCommandCode
-	CounterTimer      *policyCounterTimer
-	CpHash            *policyCpHash
-	NameHash          *policyNameHash
-	OR                *policyOR
-	PCR               *policyPCR
-	DuplicationSelect *policyDuplicationSelect
-	Password          *policyPassword
-	NvWritten         *policyNvWritten
+	NV                *policyNVElement
+	Secret            *policySecretElement
+	Signed            *policySignedElement
+	AuthValue         *policyAuthValueElement
+	CommandCode       *policyCommandCodeElement
+	CounterTimer      *policyCounterTimerElement
+	CpHash            *policyCpHashElement
+	NameHash          *policyNameHashElement
+	OR                *policyORElement
+	PCR               *policyPCRElement
+	DuplicationSelect *policyDuplicationSelectElement
+	Password          *policyPasswordElement
+	NvWritten         *policyNvWrittenElement
 }
 
 func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
@@ -949,7 +949,7 @@ func (h *executePolicyRunnerHelper) selectAndRunNextBranch(branches policyBranch
 	return nil
 }
 
-func (h *executePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+func (h *executePolicyRunnerHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
 	for _, digest := range cpHash.Digests {
 		if digest.HashAlg != h.runner.session().HashAlg() {
 			continue
@@ -959,7 +959,7 @@ func (h *executePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, e
 	return nil, ErrMissingDigest
 }
 
-func (h *executePolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+func (h *executePolicyRunnerHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
 	for _, digest := range nameHash.Digests {
 		if digest.HashAlg != h.runner.session().HashAlg() {
 			continue
@@ -978,7 +978,7 @@ func (h *executePolicyRunnerHelper) handleBranches(branches policyBranches) erro
 			h.runner.pushElements(policyElements{&policyElement{
 				Type: tpm2.CommandPolicyOR,
 				Details: &policyElementDetails{
-					OR: &policyOR{Branches: branches}}}})
+					OR: &policyORElement{Branches: branches}}}})
 			return nil
 		})
 	}
@@ -1157,7 +1157,7 @@ func newComputePolicyRunnerHelper(runner *policyRunner) *computePolicyRunnerHelp
 	return &computePolicyRunnerHelper{runner: runner}
 }
 
-func (h *computePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+func (h *computePolicyRunnerHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
 	cpHashA, err := computeCpHash(h.runner.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute cpHashA: %w", err)
@@ -1174,7 +1174,7 @@ func (h *computePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, e
 	return cpHashA, nil
 }
 
-func (h *computePolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+func (h *computePolicyRunnerHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
 	digest, err := computeNameHash(h.runner.session().HashAlg(), nameHash.Handles)
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute nameHash: %w", err)
@@ -1260,7 +1260,7 @@ func newValidatePolicyRunnerHelper(runner *policyRunner) *validatePolicyRunnerHe
 	return &validatePolicyRunnerHelper{runner: runner}
 }
 
-func (h *validatePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+func (h *validatePolicyRunnerHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
 	cpHashA, err := computeCpHash(h.runner.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute cpHashA: %w", err)
@@ -1283,7 +1283,7 @@ func (h *validatePolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, 
 	return cpHashA, nil
 }
 
-func (h *validatePolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+func (h *validatePolicyRunnerHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
 	digest, err := computeNameHash(h.runner.session().HashAlg(), nameHash.Handles)
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute nameHash: %w", err)
@@ -1418,7 +1418,7 @@ func (p *Policy) Branches() ([]string, error) {
 	element := &policyElement{
 		Type: tpm2.CommandPolicyOR,
 		Details: &policyElementDetails{
-			OR: &policyOR{
+			OR: &policyORElement{
 				Branches: policyBranches{{Policy: p.policy.Policy}},
 			},
 		},
@@ -1503,11 +1503,11 @@ func newBranchRequirementsPolicyRunnerHelper(runner *policyRunner, state tpmStat
 	}
 }
 
-func (h *branchRequirementsPolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+func (h *branchRequirementsPolicyRunnerHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
 	return make(tpm2.Digest, h.runner.session().HashAlg()), nil
 }
 
-func (h *branchRequirementsPolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+func (h *branchRequirementsPolicyRunnerHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
 	return make(tpm2.Digest, h.runner.session().HashAlg()), nil
 }
 

@@ -488,7 +488,7 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches, mode policy
 		&policyElement{
 			Type: tpm2.CommandPolicyOR,
 			Details: &policyElementDetails{
-				OR: &policyOR{Branches: branches},
+				OR: &policyORElement{Branches: branches},
 			},
 		},
 	})
@@ -615,7 +615,7 @@ func (h *treeWalkerPolicyRunnerHelper) walkBranch(parentPath policyBranchPath, i
 	return nil
 }
 
-func (h *treeWalkerPolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest, error) {
+func (h *treeWalkerPolicyRunnerHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
 	if h.sessionAlg == tpm2.HashAlgorithmNull {
 		return nil, nil
 	}
@@ -628,7 +628,7 @@ func (h *treeWalkerPolicyRunnerHelper) cpHash(cpHash *policyCpHash) (tpm2.Digest
 	return make(tpm2.Digest, h.sessionAlg.Size()), nil
 }
 
-func (h *treeWalkerPolicyRunnerHelper) nameHash(nameHash *policyNameHash) (tpm2.Digest, error) {
+func (h *treeWalkerPolicyRunnerHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
 	if h.sessionAlg == tpm2.HashAlgorithmNull {
 		return nil, nil
 	}

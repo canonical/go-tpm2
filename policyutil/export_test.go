@@ -15,7 +15,6 @@ type PcrValue = pcrValue
 type PcrValueList = pcrValueList
 type PolicyBranchName = policyBranchName
 type PolicyBranchPath = policyBranchPath
-type PolicyOR = policyOR
 type PolicyOrTree = policyOrTree
 type PolicySessionTask = policySessionTask
 type TaggedHash = taggedHash
@@ -45,7 +44,7 @@ func NewMockPolicyNVElement(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offse
 	return &policyElement{
 		Type: tpm2.CommandPolicyNV,
 		Details: &policyElementDetails{
-			NV: &policyNV{
+			NV: &policyNVElement{
 				NvIndex:   nvIndex,
 				OperandB:  operandB,
 				Offset:    offset,
@@ -56,7 +55,7 @@ func NewMockPolicySecretElement(authObjectName tpm2.Name, policyRef tpm2.Nonce) 
 	return &policyElement{
 		Type: tpm2.CommandPolicySecret,
 		Details: &policyElementDetails{
-			Secret: &policySecret{
+			Secret: &policySecretElement{
 				AuthObjectName: authObjectName,
 				PolicyRef:      policyRef}}}
 }
@@ -65,7 +64,7 @@ func NewMockPolicySignedElement(authKey *tpm2.Public, policyRef tpm2.Nonce) *pol
 	return &policyElement{
 		Type: tpm2.CommandPolicySigned,
 		Details: &policyElementDetails{
-			Signed: &policySigned{
+			Signed: &policySignedElement{
 				AuthKey:   authKey,
 				PolicyRef: policyRef}}}
 }
@@ -73,21 +72,21 @@ func NewMockPolicySignedElement(authKey *tpm2.Public, policyRef tpm2.Nonce) *pol
 func NewMockPolicyAuthValueElement() *policyElement {
 	return &policyElement{
 		Type:    tpm2.CommandPolicyAuthValue,
-		Details: &policyElementDetails{AuthValue: new(policyAuthValue)}}
+		Details: &policyElementDetails{AuthValue: new(policyAuthValueElement)}}
 }
 
 func NewMockPolicyCommandCodeElement(code tpm2.CommandCode) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCommandCode,
 		Details: &policyElementDetails{
-			CommandCode: &policyCommandCode{CommandCode: code}}}
+			CommandCode: &policyCommandCodeElement{CommandCode: code}}}
 }
 
 func NewMockPolicyCounterTimerElement(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCounterTimer,
 		Details: &policyElementDetails{
-			CounterTimer: &policyCounterTimer{
+			CounterTimer: &policyCounterTimerElement{
 				OperandB:  operandB,
 				Offset:    offset,
 				Operation: operation}}}
@@ -97,7 +96,7 @@ func NewMockPolicyCpHashElement(code tpm2.CommandCode, handles []tpm2.Name, cpBy
 	return &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
-			CpHash: &policyCpHash{
+			CpHash: &policyCpHashElement{
 				CommandCode: code,
 				Handles:     handles,
 				CpBytes:     cpBytes,
@@ -108,7 +107,7 @@ func NewMockPolicyNameHashElement(handles []tpm2.Name, digests taggedHashList) *
 	return &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
-			NameHash: &policyNameHash{
+			NameHash: &policyNameHashElement{
 				Handles: handles,
 				Digests: digests}}}
 }
@@ -124,21 +123,21 @@ func NewMockPolicyORElement(branches ...*policyBranch) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyOR,
 		Details: &policyElementDetails{
-			OR: &policyOR{Branches: branches}}}
+			OR: &policyORElement{Branches: branches}}}
 }
 
 func NewMockPolicyPCRElement(pcrs PcrValueList) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyPCR,
 		Details: &policyElementDetails{
-			PCR: &policyPCR{PCRs: pcrs}}}
+			PCR: &policyPCRElement{PCRs: pcrs}}}
 }
 
 func NewMockPolicyDuplicationSelectElement(objectName, newParentName tpm2.Name, includeObject bool) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyDuplicationSelect,
 		Details: &policyElementDetails{
-			DuplicationSelect: &policyDuplicationSelect{
+			DuplicationSelect: &policyDuplicationSelectElement{
 				Object:        objectName,
 				NewParent:     newParentName,
 				IncludeObject: includeObject}}}
@@ -147,14 +146,14 @@ func NewMockPolicyDuplicationSelectElement(objectName, newParentName tpm2.Name, 
 func NewMockPolicyPasswordElement() *policyElement {
 	return &policyElement{
 		Type:    tpm2.CommandPolicyPassword,
-		Details: &policyElementDetails{Password: new(policyPassword)}}
+		Details: &policyElementDetails{Password: new(policyPasswordElement)}}
 }
 
 func NewMockPolicyNvWrittenElement(writtenSet bool) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNvWritten,
 		Details: &policyElementDetails{
-			NvWritten: &policyNvWritten{WrittenSet: writtenSet}}}
+			NvWritten: &policyNvWrittenElement{WrittenSet: writtenSet}}}
 }
 
 func NewMockPolicy(elements ...*policyElement) *Policy {
