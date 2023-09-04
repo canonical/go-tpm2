@@ -55,20 +55,38 @@ type PolicyTicket struct {
 	Ticket *tpm2.TkAuth
 }
 
-// AuthorizationError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
+// PolicyAuthorizationError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
 // and the associated object could not be authorized, or if the policy uses TPM2_PolicySigned
 // and no or an invalid signed authorization was supplied.
-type AuthorizationError struct {
+type PolicyAuthorizationError struct {
 	AuthName  tpm2.Name
 	PolicyRef tpm2.Nonce
 	err       error
 }
 
-func (e *AuthorizationError) Error() string {
-	return fmt.Sprintf("authorization failed for assertion with authName=%#x, policyRef=%#x: %v", e.AuthName, e.PolicyRef, e.err)
+func (e *PolicyAuthorizationError) Error() string {
+	return fmt.Sprintf("cannot complete authorization with authName=%#x, policyRef=%#x: %v", e.AuthName, e.PolicyRef, e.err)
 }
 
-func (e *AuthorizationError) Unwrap() error {
+func (e *PolicyAuthorizationError) Unwrap() error {
+	return e.err
+}
+
+// PolicyNVError is returned from [Policy.Execute] if the policy uses TPM2_PolicyNV and the assertion
+// cannot be completed with the specified parameters.
+type PolicyNVError struct {
+	NvIndex   tpm2.Handle
+	OperandB  tpm2.Operand
+	Offset    uint16
+	Operation tpm2.ArithmeticOp
+	err       error
+}
+
+func (e *PolicyNVError) Error() string {
+	return fmt.Sprintf("cannot complete PolicyNV assertion for index %v (operandB: %x, offset: %d, operation: %v): %v", e.NvIndex, e.OperandB, e.Offset, e.Operation, e.err)
+}
+
+func (e *PolicyNVError) Unwrap() error {
 	return e.err
 }
 
@@ -344,7 +362,13 @@ func (e *policyNVElement) run(context policySessionContext) error {
 	}()
 
 	if err := context.resources().Authorize(auth.Resource()); err != nil {
-		return fmt.Errorf("cannot authorize auth object: %w", err)
+		return &PolicyNVError{
+			NvIndex:   e.NvIndex.Index,
+			OperandB:  e.OperandB,
+			Offset:    e.Offset,
+			Operation: e.Operation,
+			err:       fmt.Errorf("cannot authorize auth object: %w", err),
+		}
 	}
 
 	var tpmSession tpm2.SessionContext
@@ -352,7 +376,17 @@ func (e *policyNVElement) run(context policySessionContext) error {
 		tpmSession = session.Session()
 	}
 
-	return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession)
+	if err := context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession); err != nil {
+		return &PolicyNVError{
+			NvIndex:   e.NvIndex.Index,
+			OperandB:  e.OperandB,
+			Offset:    e.Offset,
+			Operation: e.Operation,
+			err:       err,
+		}
+	}
+
+	return nil
 }
 
 type policySecretElement struct {
@@ -371,7 +405,7 @@ func (e *policySecretElement) run(context policySessionContext) error {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySecret
 		case err != nil:
-			return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
+			return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 		default:
 			// The ticket was accepted
 			return nil
@@ -389,12 +423,12 @@ func (e *policySecretElement) run(context policySessionContext) error {
 		authObject.Flush()
 	}()
 	if policy != nil {
-		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: errors.New("unsupported auth method")}
+		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: errors.New("unsupported auth method")}
 	}
 
 	session, err := context.resources().NewSession(e.AuthObjectName.Algorithm(), tpm2.SessionTypeHMAC)
 	if err != nil {
-		return &AuthorizationError{
+		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,
 			PolicyRef: e.PolicyRef,
 			err:       fmt.Errorf("cannot create session to authorize auth object: %w", err)}
@@ -407,7 +441,7 @@ func (e *policySecretElement) run(context policySessionContext) error {
 	}()
 
 	if err := context.resources().Authorize(authObject.Resource()); err != nil {
-		return &AuthorizationError{
+		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,
 			PolicyRef: e.PolicyRef,
 			err:       fmt.Errorf("cannot authorize auth object: %w", err)}
@@ -420,7 +454,7 @@ func (e *policySecretElement) run(context policySessionContext) error {
 
 	timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, tpmSession)
 	if err != nil {
-		return &AuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
+		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
 
 	context.addTicket(&PolicyTicket{
@@ -453,7 +487,7 @@ func (e *policySignedElement) run(context policySessionContext) error {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySigned
 		case err != nil:
-			return &AuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
+			return &PolicyAuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 		default:
 			// The ticket was accepted
 			return nil
@@ -462,7 +496,7 @@ func (e *policySignedElement) run(context policySessionContext) error {
 
 	auth := context.params().signedAuthorization(authKeyName, e.PolicyRef)
 	if auth == nil {
-		return &AuthorizationError{
+		return &PolicyAuthorizationError{
 			AuthName:  authKeyName,
 			PolicyRef: e.PolicyRef,
 			err:       errors.New("missing signed authorization"),
@@ -482,7 +516,7 @@ func (e *policySignedElement) run(context policySessionContext) error {
 
 	timeout, ticket, err := context.session().PolicySigned(authKey.Resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.Authorization.Signature)
 	if err != nil {
-		return &AuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
+		return &PolicyAuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 	}
 
 	context.addTicket(&PolicyTicket{

@@ -1583,20 +1583,28 @@ func (s *policySuite) TestPolicyNVDifferentOperation(c *C) {
 }
 
 func (s *policySuite) TestPolicyNVFails(c *C) {
+	nvPub := &tpm2.NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
 	err := s.testPolicyNV(c, &testExecutePolicyNVData{
-		nvPub: &tpm2.NVPublic{
-			Index:   s.NextAvailableHandle(c, 0x0181f000),
-			NameAlg: tpm2.HashAlgorithmSHA256,
-			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
-			Size:    8},
+		nvPub:     nvPub,
 		contents:  internal_testutil.DecodeHexString(c, "0000000000001001"),
 		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
 		offset:    4,
 		operation: tpm2.OpEq})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNV assertion: TPM returned an error whilst executing command TPM_CC_PolicyNV: TPM_RC_POLICY \(policy failure in math operation or an invalid authPolicy value\)`)
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNV assertion: cannot complete PolicyNV assertion for index 0x0181f000 \(operandB: 00001000, offset: 4, operation: 0\): `+
+		`TPM returned an error whilst executing command TPM_CC_PolicyNV: TPM_RC_POLICY \(policy failure in math operation or an invalid authPolicy value\)`)
 	var e *tpm2.TPMError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicyNV, Code: tpm2.ErrorPolicy})
+	var nve *PolicyNVError
+	c.Assert(err, internal_testutil.ErrorAs, &nve)
+	c.Check(nve.NvIndex, Equals, nvPub.Index)
+	c.Check(nve.OperandB, DeepEquals, tpm2.Operand(internal_testutil.DecodeHexString(c, "00001000")))
+	c.Check(nve.Offset, Equals, uint16(4))
+	c.Check(nve.Operation, Equals, tpm2.OpEq)
 }
 
 func (s *policySuite) TestPolicyNVDifferentAuth(c *C) {
@@ -1821,9 +1829,9 @@ func (s *policySuite) TestPolicySecretFail(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: s.TPM.OwnerHandleContext(),
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySecret assertion: authorization failed for assertion with authName=0x40000001, policyRef=0x666f6f: `+
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySecret assertion: cannot complete authorization with authName=0x40000001, policyRef=0x666f6f: `+
 		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
-	var ae *AuthorizationError
+	var ae *PolicyAuthorizationError
 	c.Assert(err, internal_testutil.ErrorAs, &ae)
 	c.Check(ae.AuthName, DeepEquals, s.TPM.OwnerHandleContext().Name())
 	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
@@ -2027,9 +2035,9 @@ func (s *policySuite) TestPolicySignedWithInvalidSignature(c *C) {
 		signer:     key,
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySigned assertion: `+
-		`authorization failed for assertion with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
+		`cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
 		`TPM returned an error for parameter 5 whilst executing command TPM_CC_PolicySigned: TPM_RC_SIGNATURE \(the signature is not valid\)`)
-	var ae *AuthorizationError
+	var ae *PolicyAuthorizationError
 	c.Assert(err, internal_testutil.ErrorAs, &ae)
 	c.Check(ae.AuthName, DeepEquals, pubKey.Name())
 	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
