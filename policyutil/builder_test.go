@@ -689,8 +689,7 @@ func (s *builderSuite) TestPolicyBranches(c *C) {
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
 func (s *builderSuite) TestLockBranchCommitCurrentBranchNode(c *C) {
@@ -726,8 +725,7 @@ func (s *builderSuite) TestLockBranchCommitCurrentBranchNode(c *C) {
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
 func (s *builderSuite) TestEmptyBranchNodeIsElided(c *C) {
@@ -799,8 +797,7 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
 func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
@@ -876,6 +873,5 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }

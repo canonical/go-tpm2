@@ -1453,21 +1453,31 @@ func (s *muSuite) TestDetectRecursion(c *C) {
 }
 
 func (s *muSuite) TestDetectRecursion2(c *C) {
-	a := &testRecursiveStruct2{A: []*testRecursiveStruct3{&testRecursiveStruct3{A: &testRecursiveStruct2{A: []*testRecursiveStruct3{new(testRecursiveStruct3)}}}}}
+	a := new(testRecursiveStruct2)
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "infinite recursion detected when processing type mu_test.testRecursiveStruct2\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testRecursiveStruct3 field A\n"+
-		"... \\[\\]\\*mu_test.testRecursiveStruct3 index 0\n"+
 		"... mu_test.testRecursiveStruct2 field A\n"+
 		"=== END STACK ===\n")
 }
 
 func (s *muSuite) TestDetectRecursion3(c *C) {
-	a := &testRecursiveStruct4{A: testRecursiveCustom{A: []*testRecursiveStruct4{new(testRecursiveStruct4)}}}
+	a := new(testRecursiveStruct4)
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "infinite recursion detected when processing type mu_test.testRecursiveStruct4\n\n"+
 		"=== BEGIN STACK ===\n"+
-		"... \\[\\]\\*mu_test.testRecursiveStruct4 index 0\n"+
 		"... mu_test.testRecursiveCustom location foo.go:750, argument 0\n"+
 		"... mu_test.testRecursiveStruct4 field A\n"+
 		"=== END STACK ===\n")
+}
+
+func (s *muSuite) TestDetectRecursionIgnoresSized(c *C) {
+	a := &testNonRecursiveStruct{A: new(testNonRecursiveStruct)}
+	_, err := MarshalToBytes(a)
+	c.Check(err, IsNil)
+}
+
+func (s *muSuite) TestDetectRecursionIgnoresSlice(c *C) {
+	a := &testNonRecursiveStruct2{A: &testNonRecursiveStruct3{A: []*testNonRecursiveStruct2{new(testNonRecursiveStruct2)}}}
+	_, err := MarshalToBytes(a)
+	c.Check(err, IsNil)
 }

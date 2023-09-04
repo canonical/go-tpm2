@@ -211,7 +211,7 @@ type testRecursiveStruct struct {
 }
 
 type testRecursiveStruct2 struct {
-	A []*testRecursiveStruct3
+	A *testRecursiveStruct3
 }
 
 type testRecursiveStruct3 struct {
@@ -219,11 +219,23 @@ type testRecursiveStruct3 struct {
 }
 
 type testRecursiveStruct4 struct {
-	A testRecursiveCustom
+	A *testRecursiveCustom
 }
 
 type testRecursiveCustom struct {
-	A []*testRecursiveStruct4
+	A *testRecursiveStruct4
+}
+
+type testNonRecursiveStruct struct {
+	A *testNonRecursiveStruct `tpm2:"sized"`
+}
+
+type testNonRecursiveStruct2 struct {
+	A *testNonRecursiveStruct3
+}
+
+type testNonRecursiveStruct3 struct {
+	A []*testNonRecursiveStruct2
 }
 
 type testStructWithIgnoredField struct {

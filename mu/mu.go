@@ -143,6 +143,7 @@ type containerNode struct {
 	value  reflect.Value
 	custom bool
 	index  int
+	sized  bool
 	entry  [1]uintptr
 }
 
@@ -518,7 +519,11 @@ type context struct {
 func (c *context) checkInfiniteRecursion(v reflect.Value) {
 	ctx := c
 	for ctx != nil {
-		for _, n := range ctx.stack {
+		for i := len(ctx.stack) - 1; i >= 0; i-- {
+			n := ctx.stack[i]
+			if n.value.Kind() == reflect.Slice || (n.value.Kind() == reflect.Struct && (n.sized || isUnion(n.value.Type()))) {
+				return
+			}
 			if n.value.Type() == v.Type() {
 				panic(fmt.Sprintf("infinite recursion detected when processing type %s", v.Type()))
 			}
@@ -527,9 +532,9 @@ func (c *context) checkInfiniteRecursion(v reflect.Value) {
 	}
 }
 
-func (c *context) enterStructField(s reflect.Value, i int) (exit func()) {
+func (c *context) enterStructField(s reflect.Value, i int, opts *options) (exit func()) {
 	c.checkInfiniteRecursion(s)
-	c.stack = c.stack.push(containerNode{value: s, index: i})
+	c.stack = c.stack.push(containerNode{value: s, index: i, sized: opts != nil && opts.sized})
 
 	return func() {
 		c.stack = c.stack.pop()
@@ -591,7 +596,7 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 			u.Type()))
 	}
 
-	return pv.Elem(), c.enterStructField(u, index), nil
+	return pv.Elem(), c.enterStructField(u, index, nil), nil
 }
 
 func (c *context) enterCustomType(v reflect.Value) (exit func()) {
@@ -790,8 +795,9 @@ func (m *marshaller) marshalList(v reflect.Value) error {
 
 func (m *marshaller) marshalStruct(v reflect.Value) error {
 	for i := 0; i < v.NumField(); i++ {
-		exit := m.enterStructField(v, i)
-		if err := m.marshalValue(v.Field(i), parseStructFieldMuOptions(v.Type().Field(i))); err != nil {
+		opts := parseStructFieldMuOptions(v.Type().Field(i))
+		exit := m.enterStructField(v, i, opts)
+		if err := m.marshalValue(v.Field(i), opts); err != nil {
 			exit()
 			return err
 		}
@@ -1053,8 +1059,9 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 
 func (u *unmarshaller) unmarshalStruct(v reflect.Value) error {
 	for i := 0; i < v.NumField(); i++ {
-		exit := u.enterStructField(v, i)
-		if err := u.unmarshalValue(v.Field(i), parseStructFieldMuOptions(v.Type().Field(i))); err != nil {
+		opts := parseStructFieldMuOptions(v.Type().Field(i))
+		exit := u.enterStructField(v, i, opts)
+		if err := u.unmarshalValue(v.Field(i), opts); err != nil {
 			exit()
 			return err
 		}

@@ -802,8 +802,7 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
 func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
@@ -894,8 +893,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigests[1].Digest)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
 func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
@@ -1002,8 +1000,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest.Digest)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
 func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
@@ -1144,8 +1141,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest.Digest)
-	//	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy, DeepEquals, expectedPolicy)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
 type mockSessionContext struct {
