@@ -3112,18 +3112,101 @@ func (s *policySuite) TestPolicyNvWrittenTrue(c *C) {
 	s.testPolicyNvWritten(c, true)
 }
 
-type testPolicyBranchRequirementsData struct {
-	pub       *tpm2.Public
-	nvPub     *tpm2.NVPublic
-	operandB  tpm2.Operand
-	offset    uint16
-	operation tpm2.ArithmeticOp
-	usage     *PolicySessionUsage
-	path      string
-	expected  map[string]PolicyBranchRequirements
+func (s *policySuiteNoTPM) TestPolicyDetails(c *C) {
+	builder := NewPolicyBuilder()
+
+	nvPub := &tpm2.NVPublic{
+		Index:   0x0181f000,
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
+		Size:    8}
+	c.Check(builder.RootBranch().PolicyNV(nvPub, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, 0, tpm2.OpUnsignedLT), IsNil)
+
+	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+	c.Check(builder.RootBranch().PolicySigned(pub, []byte("bar")), IsNil)
+
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandUnseal), IsNil)
+	c.Check(builder.RootBranch().PolicyCounterTimer([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff}, 0, tpm2.OpUnsignedLT), IsNil)
+	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandUnseal, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}), IsNil)
+
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	foo := h.Sum(nil)
+
+	h = crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	bar := h.Sum(nil)
+
+	pcrValues := tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: foo, 7: bar}}
+	c.Check(builder.RootBranch().PolicyPCR(pcrValues), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	details, err := policy.Details(tpm2.HashAlgorithmSHA256, "")
+	c.Assert(err, IsNil)
+	c.Check(details, internal_testutil.LenEquals, 1)
+
+	bd, exists := details[""]
+	c.Assert(exists, internal_testutil.IsTrue)
+
+	c.Check(bd.IsValid(), internal_testutil.IsTrue)
+	c.Check(bd.NV, DeepEquals, []PolicyNVDetails{
+		{Auth: nvPub.Index, Index: tpm2.NewNVIndexResourceContext(nvPub, nvPub.Name()), OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, Offset: 0, Operation: tpm2.OpUnsignedLT},
+	})
+	c.Check(bd.Secret, DeepEquals, []PolicyAuthorizationDetails{
+		{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
+	})
+	c.Check(bd.Signed, DeepEquals, []PolicyAuthorizationDetails{
+		{AuthName: pub.Name(), PolicyRef: []byte("bar")},
+	})
+	c.Check(bd.AuthValueNeeded, internal_testutil.IsTrue)
+
+	code, set := bd.CommandCode()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(code, Equals, tpm2.CommandUnseal)
+
+	c.Check(bd.CounterTimer, DeepEquals, []PolicyCounterTimerDetails{
+		{OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff}, Offset: 0, Operation: tpm2.OpUnsignedLT},
+	})
+
+	cpHash, set := bd.CpHash()
+	c.Check(set, internal_testutil.IsTrue)
+	expectedCpHash, err := ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandUnseal, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)})
+	c.Check(err, IsNil)
+	c.Check(cpHash, DeepEquals, expectedCpHash)
+
+	_, set = bd.NameHash()
+	c.Check(set, internal_testutil.IsFalse)
+
+	expectedPcrs, expectedPcrDigest, err := ComputePCRDigestFromAllValues(tpm2.HashAlgorithmSHA256, pcrValues)
+	c.Check(err, IsNil)
+	c.Check(bd.PCR, DeepEquals, []PolicyPCRDetails{{PCRDigest: expectedPcrDigest, PCRs: expectedPcrs}})
+
+	_, set = bd.NvWritten()
+	c.Check(set, internal_testutil.IsFalse)
+
 }
 
-func (s *policySuite) testPolicyBranchRequirements(c *C, data *testPolicyBranchRequirementsData) {
+func (s *policySuiteNoTPM) testPolicyDetailsWithBranches(c *C, path string) map[string]PolicyBranchDetails {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
 
@@ -3133,162 +3216,74 @@ func (s *policySuite) testPolicyBranchRequirements(c *C, data *testPolicyBranchR
 	c.Check(b1.PolicyAuthValue(), IsNil)
 
 	b2 := node.AddBranch("branch2")
-	c.Check(b2.PolicySigned(data.pub, []byte("foo")), IsNil)
-	c.Check(b2.PolicyNV(data.nvPub, data.operandB, data.offset, data.operation), IsNil)
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
 
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-
-	params := &PolicyBranchSelectParams{
-		Usage: data.usage,
-		Path:  data.path,
-	}
-
-	req, err := policy.BranchRequirements(NewTPMPolicyExecuteHelper(s.TPM, nil, nil), params)
-	c.Check(err, IsNil)
-	c.Check(req, DeepEquals, data.expected)
-}
-
-func (s *policySuite) TestPolicyBrancheRequirementsExplicit(c *C) {
-	pubKeyPEM := `
------BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
-EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
------END PUBLIC KEY-----`
-
-	b, _ := pem.Decode([]byte(pubKeyPEM))
-	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
-	c.Assert(err, IsNil)
-	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
-
-	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
-	c.Assert(err, IsNil)
-
-	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
-		pub: pub,
-		nvPub: &tpm2.NVPublic{
-			Index:   0x0181f000,
-			NameAlg: tpm2.HashAlgorithmSHA256,
-			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
-			Size:    8},
-		path: "branch1",
-		expected: map[string]PolicyBranchRequirements{
-			"branch1": PolicyBranchRequirements{AuthValue: true},
-		}})
-}
-
-func (s *policySuite) TestPolicyBrancheRequirementsNumericSelectorExplicit(c *C) {
-	pubKeyPEM := `
------BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
-EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
------END PUBLIC KEY-----`
-
-	b, _ := pem.Decode([]byte(pubKeyPEM))
-	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
-	c.Assert(err, IsNil)
-	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
-
-	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
-	c.Assert(err, IsNil)
-
-	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
-		pub: pub,
-		nvPub: &tpm2.NVPublic{
-			Index:   0x0181f000,
-			NameAlg: tpm2.HashAlgorithmSHA256,
-			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
-			Size:    8},
-		path: "$[0]",
-		expected: map[string]PolicyBranchRequirements{
-			"branch1": PolicyBranchRequirements{AuthValue: true},
-		}})
-}
-
-func (s *policySuite) TestPolicyBranchRequirementsExplicitDifferentBranchIndex(c *C) {
-	pubKeyPEM := `
------BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
-EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
------END PUBLIC KEY-----`
-
-	b, _ := pem.Decode([]byte(pubKeyPEM))
-	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
-	c.Assert(err, IsNil)
-	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
-
-	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
-	c.Assert(err, IsNil)
-
-	nvPub := &tpm2.NVPublic{
-		Index:   0x0181f000,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
-		Size:    8}
-	index, err := tpm2.NewNVIndexResourceContextFromPub(nvPub)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
-	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
-		pub:       pub,
-		nvPub:     nvPub,
-		operandB:  []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10},
-		offset:    0,
-		operation: tpm2.OpUnsignedLT,
-		path:      "branch2",
-		expected: map[string]PolicyBranchRequirements{
-			"branch2": PolicyBranchRequirements{
-				NV: []PolicyNVRequirement{
-					{Auth: index.Handle(), Index: index, OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, Offset: 0, Operation: tpm2.OpUnsignedLT},
-				},
-				Signed: []PolicyAuthorizationID{
-					{AuthName: pub.Name(), PolicyRef: []byte("foo")},
-				},
-			},
-		}})
+	details, err := policy.Details(tpm2.HashAlgorithmSHA256, path)
+	c.Assert(err, IsNil)
+	return details
 }
 
-func (s *policySuite) TestPolicyBranchRequirements(c *C) {
-	pubKeyPEM := `
------BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
-EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
------END PUBLIC KEY-----`
+func (s *policySuiteNoTPM) TestPolicyDetailsWithBranches(c *C) {
+	details := s.testPolicyDetailsWithBranches(c, "")
+	c.Check(details, internal_testutil.LenEquals, 2)
 
-	b, _ := pem.Decode([]byte(pubKeyPEM))
-	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
-	c.Assert(err, IsNil)
-	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+	bd, exists := details["branch1"]
+	c.Assert(exists, internal_testutil.IsTrue)
 
-	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
-	c.Assert(err, IsNil)
+	nvWrittenSet, set := bd.NvWritten()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(nvWrittenSet, internal_testutil.IsTrue)
 
-	nvPub := &tpm2.NVPublic{
-		Index:   0x0181f000,
-		NameAlg: tpm2.HashAlgorithmSHA256,
-		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVWritten),
-		Size:    8}
-	index, err := tpm2.NewNVIndexResourceContextFromPub(nvPub)
-	c.Check(err, IsNil)
+	c.Check(bd.AuthValueNeeded, internal_testutil.IsTrue)
+	c.Check(bd.Secret, internal_testutil.LenEquals, 0)
 
-	s.testPolicyBranchRequirements(c, &testPolicyBranchRequirementsData{
-		pub:       pub,
-		nvPub:     nvPub,
-		operandB:  []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10},
-		offset:    0,
-		operation: tpm2.OpUnsignedLT,
-		expected: map[string]PolicyBranchRequirements{
-			"branch1": PolicyBranchRequirements{AuthValue: true},
-			"branch2": PolicyBranchRequirements{
-				NV: []PolicyNVRequirement{
-					{Auth: index.Handle(), Index: index, OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, Offset: 0, Operation: tpm2.OpUnsignedLT},
-				},
-				Signed: []PolicyAuthorizationID{
-					{AuthName: pub.Name(), PolicyRef: []byte("foo")},
-				},
-			},
-		}})
+	code, set := bd.CommandCode()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(code, Equals, tpm2.CommandNVChangeAuth)
+
+	bd, exists = details["branch2"]
+	c.Assert(exists, internal_testutil.IsTrue)
+
+	nvWrittenSet, set = bd.NvWritten()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(nvWrittenSet, internal_testutil.IsTrue)
+
+	c.Check(bd.AuthValueNeeded, internal_testutil.IsFalse)
+	c.Check(bd.Secret, DeepEquals, []PolicyAuthorizationDetails{
+		{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
+	})
+
+	code, set = bd.CommandCode()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(code, Equals, tpm2.CommandNVChangeAuth)
+}
+
+func (s *policySuiteNoTPM) TestPolicyDetailsWithBranches2(c *C) {
+	details := s.testPolicyDetailsWithBranches(c, "branch2")
+	c.Check(details, internal_testutil.LenEquals, 1)
+
+	bd, exists := details["branch2"]
+	c.Assert(exists, internal_testutil.IsTrue)
+
+	nvWrittenSet, set := bd.NvWritten()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(nvWrittenSet, internal_testutil.IsTrue)
+
+	c.Check(bd.AuthValueNeeded, internal_testutil.IsFalse)
+	c.Check(bd.Secret, DeepEquals, []PolicyAuthorizationDetails{
+		{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
+	})
+
+	code, set := bd.CommandCode()
+	c.Check(set, internal_testutil.IsTrue)
+	c.Check(code, Equals, tpm2.CommandNVChangeAuth)
 }
 
 type policySuitePCR struct {
