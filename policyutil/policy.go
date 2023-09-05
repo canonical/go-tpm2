@@ -55,6 +55,27 @@ type PolicyTicket struct {
 	Ticket *tpm2.TkAuth
 }
 
+// PolicyError is returned from [Policy.Execute] and other methods when an error
+// is encountered during some processing of a policy. It provides an indication of
+// where an error occurred.
+type PolicyError struct {
+	Path string // the path of the branch at which the error occurred
+	task string
+	err  error
+}
+
+func (e *PolicyError) Error() string {
+	branch := "root branch"
+	if len(e.Path) > 0 {
+		branch = "branch " + e.Path
+	}
+	return fmt.Sprintf("cannot run %s in %s: %v", e.task, branch, e.err)
+}
+
+func (e *PolicyError) Unwrap() error {
+	return e.err
+}
+
 // PolicyAuthorizationError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
 // and the associated object could not be authorized, or if the policy uses TPM2_PolicySigned
 // and no or an invalid signed authorization was supplied.
@@ -769,7 +790,8 @@ type policyRunnerContext struct {
 	policyResources    policyResources
 	policyRunnerHelper policyRunnerHelper
 
-	tickets map[paramKey]*PolicyTicket
+	tickets       map[paramKey]*PolicyTicket
+	currentBranch policyBranchPath
 }
 
 func newPolicyRunnerContext(session PolicySession, params policyParams, resources policyResources, helper policyRunnerHelper) *policyRunnerContext {
@@ -850,7 +872,7 @@ func (r *policyRunner) run(policy policyElements) error {
 	for r.more() {
 		task := r.popTask()
 		if err := task.run(r); err != nil {
-			return fmt.Errorf("cannot run %s: %w", task.name(), err)
+			return &PolicyError{Path: string(r.currentBranch), task: task.name(), err: err}
 		}
 	}
 
@@ -1022,6 +1044,7 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches) error {
 		return nil
 	})
 	h.runner.pushElements(branches[selected].Policy)
+	h.runner.currentBranch = h.runner.currentBranch.Concat(next)
 
 	return nil
 }
@@ -1116,7 +1139,8 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 	var digests tpm2.DigestList
 
 	var tasks []policySessionTask
-	for _, branch := range branches {
+	for i, branch := range branches {
+		i := i
 		branch := branch
 		task := newDeferredTask("compute branch digest", func() error {
 			digest := taggedHash{HashAlg: runner.session().HashAlg(), Digest: currentDigest}
@@ -1128,6 +1152,12 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 				oldContext.policyResources,
 				oldContext.policyRunnerHelper,
 			)
+
+			name := policyBranchPath(branch.Name)
+			if len(name) == 0 {
+				name = policyBranchPath(fmt.Sprintf("$[%d]", i))
+			}
+			runner.currentBranch = oldContext.currentBranch.Concat(name)
 
 			runner.pushTask("complete compute branch digests", func() error {
 				runner.policyRunnerContext = oldContext

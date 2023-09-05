@@ -1347,8 +1347,12 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithBranchesMissingDigest(c *C) {
 	c.Check(err, IsNil)
 
 	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
-	c.Check(err, ErrorMatches, `cannot run complete compute branch digests: missing digest for session algorithm`)
+	c.Check(err, ErrorMatches, `cannot run complete compute branch digests in root branch: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuiteNoTPM) TestPolicyValidateWithCpHashMissingDigest(c *C) {
@@ -1360,8 +1364,12 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithCpHashMissingDigest(c *C) {
 	c.Check(err, IsNil)
 
 	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyCpHash assertion: missing digest for session algorithm`)
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyCpHash assertion in root branch: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuiteNoTPM) TestPolicyValidateWithNameHashMissingDigest(c *C) {
@@ -1373,8 +1381,12 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithNameHashMissingDigest(c *C) {
 	c.Check(err, IsNil)
 
 	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNameHash assertion: missing digest for session algorithm`)
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNameHash assertion in root branch: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranches(c *C) {
@@ -1594,11 +1606,15 @@ func (s *policySuite) TestPolicyNVFails(c *C) {
 		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
 		offset:    4,
 		operation: tpm2.OpEq})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNV assertion: `+
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNV assertion in root branch: `+
 		`TPM returned an error whilst executing command TPM_CC_PolicyNV: TPM_RC_POLICY \(policy failure in math operation or an invalid authPolicy value\)`)
 	var e *tpm2.TPMError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicyNV, Code: tpm2.ErrorPolicy})
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuite) TestPolicyNVDifferentAuth(c *C) {
@@ -1823,8 +1839,12 @@ func (s *policySuite) TestPolicySecretFail(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: s.TPM.OwnerHandleContext(),
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySecret assertion: cannot complete authorization with authName=0x40000001, policyRef=0x666f6f: `+
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySecret assertion in root branch: cannot complete authorization with authName=0x40000001, policyRef=0x666f6f: `+
 		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+
 	var ae *PolicyAuthorizationError
 	c.Assert(err, internal_testutil.ErrorAs, &ae)
 	c.Check(ae.AuthName, DeepEquals, s.TPM.OwnerHandleContext().Name())
@@ -1844,7 +1864,11 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	err = s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: saved.Name,
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySecret assertion: cannot load resource with name 0x([[:xdigit:]]{68}): cannot identify resource`)
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySecret assertion in root branch: cannot load resource with name 0x([[:xdigit:]]{68}): cannot identify resource`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 
 	var rle *ResourceLoadError
 	c.Check(err, internal_testutil.ErrorAs, &rle)
@@ -2028,9 +2052,13 @@ func (s *policySuite) TestPolicySignedWithInvalidSignature(c *C) {
 		policyRef:  []byte("foo"),
 		signer:     key,
 		signerOpts: tpm2.HashAlgorithmSHA256})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySigned assertion: `+
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicySigned assertion in root branch: `+
 		`cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
 		`TPM returned an error for parameter 5 whilst executing command TPM_CC_PolicySigned: TPM_RC_SIGNATURE \(the signature is not valid\)`)
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+
 	var ae *PolicyAuthorizationError
 	c.Assert(err, internal_testutil.ErrorAs, &ae)
 	c.Check(ae.AuthName, DeepEquals, pubKey.Name())
@@ -2230,10 +2258,14 @@ func (s *policySuite) TestPolicyCounterTimerFails(c *C) {
 		operandB:  operandB,
 		offset:    8,
 		operation: tpm2.OpUnsignedLT})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyCounterTimer assertion: TPM returned an error whilst executing command TPM_CC_PolicyCounterTimer: TPM_RC_POLICY \(policy failure in math operation or an invalid authPolicy value\)`)
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyCounterTimer assertion in root branch: TPM returned an error whilst executing command TPM_CC_PolicyCounterTimer: TPM_RC_POLICY \(policy failure in math operation or an invalid authPolicy value\)`)
 	var e *tpm2.TPMError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicyCounterTimer, Code: tpm2.ErrorPolicy})
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 type testExecutePolicyCpHashData struct {
@@ -2309,8 +2341,12 @@ func (s *policySuite) TestPolicyCpHashMissingDigest(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil)
-	c.Check(err, ErrorMatches, "cannot run TPM2_PolicyCpHash assertion: missing digest for session algorithm")
+	c.Check(err, ErrorMatches, "cannot run TPM2_PolicyCpHash assertion in root branch: missing digest for session algorithm")
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuite) testPolicyNameHash(c *C, handles ...Named) {
@@ -2374,8 +2410,12 @@ func (s *policySuite) TestPolicyNameHashMissingDigest(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil)
-	c.Check(err, ErrorMatches, "cannot run TPM2_PolicyNameHash assertion: missing digest for session algorithm")
+	c.Check(err, ErrorMatches, "cannot run TPM2_PolicyNameHash assertion in root branch: missing digest for session algorithm")
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 type testExecutePolicyBranchesData struct {
@@ -2835,7 +2875,11 @@ func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
-	c.Check(err, ErrorMatches, `cannot run branch node: cannot select branch: selected path 2 out of range`)
+	c.Check(err, ErrorMatches, `cannot run branch node in root branch: cannot select branch: selected path 2 out of range`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
@@ -2866,7 +2910,11 @@ func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
-	c.Check(err, ErrorMatches, `cannot run branch node: cannot select branch: badly formatted path component "\$foo": input does not match format`)
+	c.Check(err, ErrorMatches, `cannot run branch node in root branch: cannot select branch: badly formatted path component "\$foo": input does not match format`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
@@ -2897,7 +2945,11 @@ func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
-	c.Check(err, ErrorMatches, `cannot run branch node: cannot select branch: no branch with name "foo"`)
+	c.Check(err, ErrorMatches, `cannot run branch node in root branch: cannot select branch: no branch with name "foo"`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuite) TestPolicyBranchesComputeMissingBranchDigests(c *C) {
@@ -2928,8 +2980,12 @@ func (s *policySuite) TestPolicyBranchesComputeMissingBranchDigests(c *C) {
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
-	c.Check(err, ErrorMatches, `cannot run branch node: missing digest for session algorithm`)
+	c.Check(err, ErrorMatches, `cannot run branch node in root branch: missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
@@ -2977,10 +3033,14 @@ func (s *policySuite) TestPolicyPCRFails(c *C) {
 		tpm2.HashAlgorithmSHA256: {
 			0: internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}}
 	err := s.testPolicyPCR(c, values)
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyPCR assertion: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyPCR assertion in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
 	var e *tpm2.TPMParameterError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicyPCR, Code: tpm2.ErrorValue}, Index: 1})
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
 
 type testExecutePolicyDuplicationSelectData struct {
@@ -3352,5 +3412,9 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyExecuteHelper(s.TPM, nil, nil), nil)
-	c.Check(err, ErrorMatches, `cannot run filter branches: cannot select branch: no appropriate branches`)
+	c.Check(err, ErrorMatches, `cannot run filter branches in root branch: cannot select branch: no appropriate branches`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
 }
