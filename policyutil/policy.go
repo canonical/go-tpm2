@@ -784,29 +784,27 @@ func (p *Policy) Unmarshal(r io.Reader) error {
 	return err
 }
 
-type policyRunnerContext struct {
+type policyRunner struct {
 	policySession      PolicySession
 	policyParams       policyParams
 	policyResources    policyResources
 	policyRunnerHelper policyRunnerHelper
 
-	tickets       map[paramKey]*PolicyTicket
-	currentBranch policyBranchPath
-}
+	tickets     map[paramKey]*PolicyTicket
+	currentPath policyBranchPath
 
-func newPolicyRunnerContext(session PolicySession, params policyParams, resources policyResources, helper policyRunnerHelper) *policyRunnerContext {
-	return &policyRunnerContext{
-		policySession:      session,
-		policyParams:       params,
-		policyResources:    resources,
-		policyRunnerHelper: helper,
-		tickets:            make(map[paramKey]*PolicyTicket),
-	}
-}
-
-type policyRunner struct {
-	*policyRunnerContext
 	tasks []policySessionTask
+}
+
+func newPolicyRunner(session PolicySession, params policyParams, resources policyResources, newHelperFn func(*policyRunner) policyRunnerHelper) *policyRunner {
+	out := &policyRunner{
+		policySession:   session,
+		policyParams:    params,
+		policyResources: resources,
+		tickets:         make(map[paramKey]*PolicyTicket),
+	}
+	out.policyRunnerHelper = newHelperFn(out)
+	return out
 }
 
 func (r *policyRunner) session() PolicySession {
@@ -856,6 +854,38 @@ func (r *policyRunner) pushElements(elements policyElements) {
 	r.pushTasks(tasks)
 }
 
+func (r *policyRunner) overrideSession(session PolicySession) (restore func()) {
+	orig := r.policySession
+	r.policySession = session
+	return func() {
+		r.policySession = orig
+	}
+}
+
+func (r *policyRunner) overrideParams(params policyParams) (restore func()) {
+	orig := r.policyParams
+	r.policyParams = params
+	return func() {
+		r.policyParams = orig
+	}
+}
+
+func (r *policyRunner) overrideResources(resources policyResources) (restore func()) {
+	orig := r.policyResources
+	r.policyResources = resources
+	return func() {
+		r.policyResources = orig
+	}
+}
+
+func (r *policyRunner) overrideHelper(helper policyRunnerHelper) (restore func()) {
+	orig := r.policyRunnerHelper
+	r.policyRunnerHelper = helper
+	return func() {
+		r.policyRunnerHelper = orig
+	}
+}
+
 func (r *policyRunner) more() bool {
 	return len(r.tasks) > 0
 }
@@ -872,7 +902,7 @@ func (r *policyRunner) run(policy policyElements) error {
 	for r.more() {
 		task := r.popTask()
 		if err := task.run(r); err != nil {
-			return &PolicyError{Path: string(r.currentBranch), task: task.name(), err: err}
+			return &PolicyError{Path: string(r.currentPath), task: task.name(), err: err}
 		}
 	}
 
@@ -1044,7 +1074,7 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches) error {
 		return nil
 	})
 	h.runner.pushElements(branches[selected].Policy)
-	h.runner.currentBranch = h.runner.currentBranch.Concat(next)
+	h.runner.currentPath = h.runner.currentPath.Concat(next)
 
 	return nil
 }
@@ -1100,12 +1130,12 @@ func (p *Policy) Execute(session PolicySession, helper PolicyExecuteHelper, para
 
 	var details PolicyBranchDetails
 
-	runner := new(policyRunner)
-	runner.policyRunnerContext = newPolicyRunnerContext(
+	runner := newPolicyRunner(
 		&observingPolicySession{session: session, details: &details},
 		newExecutePolicyParams(params),
 		helper,
-		newExecutePolicyHelper(runner, helper, params))
+		func(runner *policyRunner) policyRunnerHelper { return newExecutePolicyHelper(runner, helper, params) },
+	)
 
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, false, err
@@ -1136,6 +1166,8 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 		return err
 	}
 
+	currentPath := runner.currentPath
+
 	var digests tpm2.DigestList
 
 	var tasks []policySessionTask
@@ -1145,22 +1177,17 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 		task := newDeferredTask("compute branch digest", func() error {
 			digest := taggedHash{HashAlg: runner.session().HashAlg(), Digest: currentDigest}
 
-			oldContext := runner.policyRunnerContext
-			runner.policyRunnerContext = newPolicyRunnerContext(
-				newComputePolicySession(&digest),
-				oldContext.policyParams,
-				oldContext.policyResources,
-				oldContext.policyRunnerHelper,
-			)
+			restoreSession := runner.overrideSession(newComputePolicySession(&digest))
 
 			name := policyBranchPath(branch.Name)
 			if len(name) == 0 {
 				name = policyBranchPath(fmt.Sprintf("$[%d]", i))
 			}
-			runner.currentBranch = oldContext.currentBranch.Concat(name)
+			runner.currentPath = currentPath.Concat(name)
 
 			runner.pushTask("complete compute branch digests", func() error {
-				runner.policyRunnerContext = oldContext
+				runner.currentPath = currentPath
+				restoreSession()
 				digests = append(digests, digest.Digest)
 				if len(digests) != len(branches) {
 					return nil
@@ -1255,12 +1282,11 @@ func (h *computePolicyHelper) handleBranches(branches policyBranches) error {
 }
 
 func (p *Policy) computeForDigest(digest *taggedHash) error {
-	runner := new(policyRunner)
-	runner.policyRunnerContext = newPolicyRunnerContext(
+	runner := newPolicyRunner(
 		newComputePolicySession(digest),
 		new(mockPolicyParams),
 		new(mockResources),
-		newComputePolicyHelper(runner),
+		func(runner *policyRunner) policyRunnerHelper { return newComputePolicyHelper(runner) },
 	)
 	return runner.run(p.policy.Policy)
 }
@@ -1378,12 +1404,11 @@ func (h *validatePolicyHelper) handleBranches(branches policyBranches) error {
 func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
 
-	runner := new(policyRunner)
-	runner.policyRunnerContext = newPolicyRunnerContext(
+	runner := newPolicyRunner(
 		newComputePolicySession(digest),
 		new(mockPolicyParams),
 		new(mockResources),
-		newValidatePolicyHelper(runner),
+		func(runner *policyRunner) policyRunnerHelper { return newValidatePolicyHelper(runner) },
 	)
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, err
@@ -1402,21 +1427,19 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	return digest.Digest, nil
 }
 
-type listBranchesContext struct {
+type listBranchesResult struct {
 	branches []string
 }
 
 type listBranchesHelper struct {
-	runner  *policyRunner
-	context *listBranchesContext
-
-	current policyBranchPath
+	runner *policyRunner
+	result *listBranchesResult
 }
 
-func newListBranchesHelper(runner *policyRunner, context *listBranchesContext) *listBranchesHelper {
+func newListBranchesHelper(runner *policyRunner, result *listBranchesResult) *listBranchesHelper {
 	return &listBranchesHelper{
-		runner:  runner,
-		context: context,
+		runner: runner,
+		result: result,
 	}
 }
 
@@ -1429,7 +1452,19 @@ func (h *listBranchesHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Dig
 }
 
 func (h *listBranchesHelper) handleBranches(branches policyBranches) error {
-	panic("not reached")
+	// we should only hit this once
+	h.runner.overrideHelper(newTreeWalkerHelper(h.runner, treeWalkerModeRootTree, h.beginBranchNode, h.completeBranch))
+
+	// re-run branch node
+	h.runner.pushElements(policyElements{
+		&policyElement{
+			Type: tpm2.CommandPolicyOR,
+			Details: &policyElementDetails{
+				OR: &policyORElement{Branches: branches},
+			},
+		},
+	})
+	return nil
 }
 
 func (h *listBranchesHelper) beginBranchNode() (treeWalkerBeginBranchFn, error) {
@@ -1437,28 +1472,25 @@ func (h *listBranchesHelper) beginBranchNode() (treeWalkerBeginBranchFn, error) 
 }
 
 func (h *listBranchesHelper) beginBranch(path policyBranchPath) error {
-	h.current = path
+	h.runner.currentPath = path
 	return nil
 }
 
 func (h *listBranchesHelper) completeBranch(done bool) error {
-	h.context.branches = append(h.context.branches, string(h.current))
+	h.result.branches = append(h.result.branches, string(h.runner.currentPath))
 	return nil
 }
 
 // Branches returns a list of every branch in this policy.
 func (p *Policy) Branches() ([]string, error) {
-	context := new(listBranchesContext)
+	result := new(listBranchesResult)
 
-	runner := new(policyRunner)
-	helper := newListBranchesHelper(runner, context)
-	runner.policyRunnerContext = newPolicyRunnerContext(
+	runner := newPolicyRunner(
 		newNullPolicySession(tpm2.HashAlgorithmSHA256),
 		new(mockPolicyParams),
 		new(mockResources),
-		helper,
+		func(runner *policyRunner) policyRunnerHelper { return newListBranchesHelper(runner, result) },
 	)
-	runner.policyRunnerHelper = newTreeWalkerHelper(runner, treeWalkerModeRootTree, helper.beginBranchNode, helper.completeBranch)
 
 	element := &policyElement{
 		Type: tpm2.CommandPolicyOR,
@@ -1472,7 +1504,7 @@ func (p *Policy) Branches() ([]string, error) {
 		return nil, err
 	}
 
-	return context.branches, nil
+	return result.branches, nil
 }
 
 // PolicyNVDetails contains the properties of a TPM2_PolicyNV assertion.
@@ -1595,43 +1627,32 @@ func (r *PolicyBranchDetails) NvWritten() (nvWrittenSet bool, set bool) {
 	return r.policyNvWritten[0], true
 }
 
-func newPolicyDetailsRunnerContext(h *policyDetailsHelper) *policyRunnerContext {
-	return newPolicyRunnerContext(
-		&observingPolicySession{session: newNullPolicySession(tpm2.HashAlgorithmSHA256), details: &h.context.details},
-		new(mockPolicyParams),
-		new(mockResources),
-		h.treeWalker,
-	)
-}
-
-type policyDetailsContext struct {
+type policyDetailsResult struct {
 	paths      []string
 	detailsMap map[string]PolicyBranchDetails
-
-	path    policyBranchPath
-	details PolicyBranchDetails
 }
 
-func newPolicyDetailsContext() *policyDetailsContext {
-	return &policyDetailsContext{
+func newPolicyDetailsResult() *policyDetailsResult {
+	return &policyDetailsResult{
 		detailsMap: make(map[string]PolicyBranchDetails),
 	}
 }
 
 type policyDetailsHelper struct {
 	policyBranchSelectMixin
-	runner  *policyRunner
-	context *policyDetailsContext
+	runner *policyRunner
+	result *policyDetailsResult
 
-	remaining policyBranchPath
+	remaining    policyBranchPath
+	explicitPath policyBranchPath
 
-	treeWalker *treeWalkerHelper
+	details PolicyBranchDetails
 }
 
-func newPolicyDetailsHelper(runner *policyRunner, context *policyDetailsContext, path string) *policyDetailsHelper {
+func newPolicyDetailsHelper(runner *policyRunner, result *policyDetailsResult, path string) *policyDetailsHelper {
 	return &policyDetailsHelper{
 		runner:    runner,
-		context:   context,
+		result:    result,
 		remaining: policyBranchPath(path),
 	}
 }
@@ -1659,16 +1680,26 @@ func (h *policyDetailsHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Di
 func (h *policyDetailsHelper) handleBranches(branches policyBranches) error {
 	next, remaining := h.remaining.PopNextComponent()
 	if len(next) == 0 {
-		oldContext := h.runner.policyRunnerContext
-		h.treeWalker = newTreeWalkerHelper(h.runner, treeWalkerModeGreedy, h.beginBranchNode, func(done bool) error {
+		// we're going to walk all of the remaining branches in the policy
+		var (
+			restoreHelper  func()
+			restoreSession func()
+		)
+
+		restoreHelper = h.runner.overrideHelper(newTreeWalkerHelper(h.runner, treeWalkerModeGreedy, h.beginBranchNode, func(done bool) error {
 			h.completeBranch()
 			if done {
-				h.runner.policyRunnerContext = oldContext
+				restoreHelper()
+				restoreSession()
 			}
 			return nil
+		}))
+		restoreSession = h.runner.overrideSession(&observingPolicySession{
+			session: newNullPolicySession(h.runner.session().HashAlg()),
+			details: &h.details,
 		})
-		h.runner.policyRunnerContext = newPolicyDetailsRunnerContext(h)
 
+		h.explicitPath = h.runner.currentPath
 		h.runner.pushElements(policyElements{
 			&policyElement{
 				Type: tpm2.CommandPolicyOR,
@@ -1690,7 +1721,7 @@ func (h *policyDetailsHelper) handleBranches(branches policyBranches) error {
 	if len(name) == 0 {
 		name = policyBranchPath(fmt.Sprintf("$[%d]", selected))
 	}
-	h.context.path = h.context.path.Concat(name)
+	h.runner.currentPath = h.runner.currentPath.Concat(name)
 
 	h.runner.pushElements(branches[selected].Policy)
 
@@ -1698,44 +1729,50 @@ func (h *policyDetailsHelper) handleBranches(branches policyBranches) error {
 }
 
 func (h *policyDetailsHelper) beginBranchNode() (treeWalkerBeginBranchFn, error) {
-	details := h.context.details
-	parentPath := h.context.path
+	details := h.details
 
 	return func(path policyBranchPath) error {
-		h.context.path = parentPath.Concat(path)
-		h.context.details = details
-		h.runner.policyRunnerContext = newPolicyDetailsRunnerContext(h)
+		h.runner.currentPath = h.explicitPath.Concat(path)
+		h.details = details
+		h.runner.overrideSession(&observingPolicySession{
+			session: newNullPolicySession(h.runner.session().HashAlg()),
+			details: &h.details,
+		})
 		return nil
 	}, nil
 }
 
 func (h *policyDetailsHelper) completeBranch() {
-	h.context.detailsMap[string(h.context.path)] = h.context.details
-	h.context.paths = append(h.context.paths, string(h.context.path))
+	h.result.detailsMap[string(h.runner.currentPath)] = h.details
+	h.result.paths = append(h.result.paths, string(h.runner.currentPath))
 }
 
 // Details returns details of all branches with the supplied path prefix, for
 // the specified algorithm.
 func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]PolicyBranchDetails, error) {
-	context := newPolicyDetailsContext()
+	result := newPolicyDetailsResult()
 
-	runner := new(policyRunner)
-	runner.policyRunnerContext = newPolicyRunnerContext(
-		&observingPolicySession{session: newNullPolicySession(alg), details: &context.details},
+	session := &observingPolicySession{session: newNullPolicySession(alg)}
+	runner := newPolicyRunner(
+		session,
 		new(mockPolicyParams),
 		new(mockResources),
-		newPolicyDetailsHelper(runner, context, path),
+		func(runner *policyRunner) policyRunnerHelper {
+			helper := newPolicyDetailsHelper(runner, result, path)
+			session.details = &helper.details
+			return helper
+		},
 	)
 
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, err
 	}
 
-	if len(context.detailsMap) > 0 {
-		return context.detailsMap, nil
+	if len(result.detailsMap) > 0 {
+		return result.detailsMap, nil
 	}
 
 	out := make(map[string]PolicyBranchDetails)
-	out[string(context.path)] = context.details
+	out[string(runner.currentPath)] = *session.details
 	return out, nil
 }

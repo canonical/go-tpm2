@@ -143,15 +143,6 @@ func (*policyBranchSelectMixin) selectBranch(branches policyBranches, next polic
 	}
 }
 
-func newPolicyBranchFilterContext(f *policyBranchFilter) *policyRunnerContext {
-	return newPolicyRunnerContext(
-		&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &f.details},
-		f,
-		new(mockResources),
-		f.treeWalker,
-	)
-}
-
 type candidateBranch struct {
 	path    policyBranchPath
 	details PolicyBranchDetails
@@ -437,16 +428,24 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches, callback fu
 	f.path = ""
 	f.details = PolicyBranchDetails{}
 
-	// switch the context
-	oldContext := f.runner.policyRunnerContext
-	f.treeWalker = newTreeWalkerHelper(f.runner, treeWalkerModeSubtreeOnly, f.beginBranchNode, func(done bool) error {
+	// override the helper, params, resources and session
+	var (
+		restoreHelper    func()
+		restoreParams    func()
+		restoreResources func()
+		restoreSession   func()
+	)
+	restoreHelper = f.runner.overrideHelper(newTreeWalkerHelper(f.runner, treeWalkerModeSubtreeOnly, f.beginBranchNode, func(done bool) error {
 		f.completeBranch()
 		if !done {
 			return nil
 		}
 
 		// we've committed the last branch, so restore the state
-		f.runner.policyRunnerContext = oldContext
+		restoreHelper()
+		restoreParams()
+		restoreResources()
+		restoreSession()
 
 		f.runner.pushTask("filter branches", func() error {
 			f.filterInvalidBranches()
@@ -473,9 +472,12 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches, callback fu
 		})
 
 		return nil
-	})
-	f.runner.policyRunnerContext = newPolicyBranchFilterContext(f)
+	}))
+	restoreParams = f.runner.overrideParams(f)
+	restoreResources = f.runner.overrideResources(new(mockResources))
+	restoreSession = f.runner.overrideSession(&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &f.details})
 
+	// re-run branch node
 	f.runner.pushElements(policyElements{
 		&policyElement{
 			Type: tpm2.CommandPolicyOR,
@@ -510,7 +512,7 @@ func (f *policyBranchFilter) beginBranchNode() (treeWalkerBeginBranchFn, error) 
 	return func(path policyBranchPath) error {
 		f.path = path
 		f.details = details
-		f.runner.policyRunnerContext = newPolicyBranchFilterContext(f)
+		f.runner.overrideSession(&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &f.details})
 		return nil
 	}, nil
 }
