@@ -72,24 +72,6 @@ func (e *PolicyAuthorizationError) Unwrap() error {
 	return e.err
 }
 
-// PolicyNVError is returned from [Policy.Execute] if the policy uses TPM2_PolicyNV and the assertion
-// cannot be completed with the specified parameters.
-type PolicyNVError struct {
-	NvIndex   tpm2.Handle
-	OperandB  tpm2.Operand
-	Offset    uint16
-	Operation tpm2.ArithmeticOp
-	err       error
-}
-
-func (e *PolicyNVError) Error() string {
-	return fmt.Sprintf("cannot complete PolicyNV assertion for index %v (operandB: %x, offset: %d, operation: %v): %v", e.NvIndex, e.OperandB, e.Offset, e.Operation, e.err)
-}
-
-func (e *PolicyNVError) Unwrap() error {
-	return e.err
-}
-
 // ResourceLoadError is returned from [Policy.Execute] if the policy required a resource that
 // could not be loaded.
 type ResourceLoadError struct {
@@ -362,13 +344,7 @@ func (e *policyNVElement) run(context policySessionContext) error {
 	}()
 
 	if err := context.resources().Authorize(auth.Resource()); err != nil {
-		return &PolicyNVError{
-			NvIndex:   e.NvIndex.Index,
-			OperandB:  e.OperandB,
-			Offset:    e.Offset,
-			Operation: e.Operation,
-			err:       fmt.Errorf("cannot authorize auth object: %w", err),
-		}
+		return fmt.Errorf("cannot authorize auth object: %w", err)
 	}
 
 	var tpmSession tpm2.SessionContext
@@ -376,17 +352,7 @@ func (e *policyNVElement) run(context policySessionContext) error {
 		tpmSession = session.Session()
 	}
 
-	if err := context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession); err != nil {
-		return &PolicyNVError{
-			NvIndex:   e.NvIndex.Index,
-			OperandB:  e.OperandB,
-			Offset:    e.Offset,
-			Operation: e.Operation,
-			err:       err,
-		}
-	}
-
-	return nil
+	return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession)
 }
 
 type policySecretElement struct {

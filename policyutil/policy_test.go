@@ -1594,17 +1594,11 @@ func (s *policySuite) TestPolicyNVFails(c *C) {
 		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
 		offset:    4,
 		operation: tpm2.OpEq})
-	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNV assertion: cannot complete PolicyNV assertion for index 0x0181f000 \(operandB: 00001000, offset: 4, operation: 0\): `+
+	c.Check(err, ErrorMatches, `cannot run TPM2_PolicyNV assertion: `+
 		`TPM returned an error whilst executing command TPM_CC_PolicyNV: TPM_RC_POLICY \(policy failure in math operation or an invalid authPolicy value\)`)
 	var e *tpm2.TPMError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicyNV, Code: tpm2.ErrorPolicy})
-	var nve *PolicyNVError
-	c.Assert(err, internal_testutil.ErrorAs, &nve)
-	c.Check(nve.NvIndex, Equals, nvPub.Index)
-	c.Check(nve.OperandB, DeepEquals, tpm2.Operand(internal_testutil.DecodeHexString(c, "00001000")))
-	c.Check(nve.Offset, Equals, uint16(4))
-	c.Check(nve.Operation, Equals, tpm2.OpEq)
 }
 
 func (s *policySuite) TestPolicyNVDifferentAuth(c *C) {
