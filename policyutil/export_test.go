@@ -92,7 +92,7 @@ func NewMockPolicyCounterTimerElement(operandB tpm2.Operand, offset uint16, oper
 				Operation: operation}}}
 }
 
-func NewMockPolicyCpHashElement(code tpm2.CommandCode, handles []tpm2.Name, cpBytes []byte, digests taggedHashList) *policyElement {
+func NewMockPolicyCpHashElement(code tpm2.CommandCode, handles []tpm2.Name, cpBytes []byte, digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
@@ -100,16 +100,16 @@ func NewMockPolicyCpHashElement(code tpm2.CommandCode, handles []tpm2.Name, cpBy
 				CommandCode: code,
 				Handles:     handles,
 				CpBytes:     cpBytes,
-				Digests:     digests}}}
+				Digest:      digest}}}
 }
 
-func NewMockPolicyNameHashElement(handles []tpm2.Name, digests taggedHashList) *policyElement {
+func NewMockPolicyNameHashElement(handles []tpm2.Name, digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
 			NameHash: &policyNameHashElement{
 				Handles: handles,
-				Digests: digests}}}
+				Digest:  digest}}}
 }
 
 func NewMockPolicyBranch(name policyBranchName, digests taggedHashList, elements ...*policyElement) *policyBranch {
@@ -156,6 +156,11 @@ func NewMockPolicyNvWrittenElement(writtenSet bool) *policyElement {
 			NvWritten: &policyNvWrittenElement{WrittenSet: writtenSet}}}
 }
 
-func NewMockPolicy(elements ...*policyElement) *Policy {
-	return &Policy{policy: policy{Policy: elements}}
+func NewMockPolicy(digests taggedHashList, elements ...*policyElement) *Policy {
+	return &Policy{
+		policy: policy{
+			PolicyDigests: digests,
+			Policy:        elements,
+		},
+	}
 }

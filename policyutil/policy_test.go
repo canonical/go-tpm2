@@ -361,11 +361,14 @@ func (s *computeSuite) testPolicyCpHash(c *C, data *testComputePolicyCpHashData)
 	cpBytes, err := mu.MarshalToBytes(data.params...)
 	c.Check(err, IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyCpHashElement(data.code, handles, cpBytes, TaggedHashList{{HashAlg: data.alg, Digest: expectedCpHashA}}))
-
 	digest, err := policy.ComputeFor(data.alg)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
+
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
+		NewMockPolicyCpHashElement(data.code, handles, cpBytes, expectedCpHashA),
+	)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
@@ -406,31 +409,16 @@ func (s *computeSuite) TestPolicyCpHashSHA1(c *C) {
 }
 
 func (s *computeSuite) TestPolicyCpHashMultipleDigests(c *C) {
-	expectedCpHashASHA1, err := ComputeCpHash(tpm2.HashAlgorithmSHA1, tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))
-	c.Check(err, IsNil)
-	expectedCpHashASHA256, err := ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))
-	c.Check(err, IsNil)
-
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())), IsNil)
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyCpHashElement(tpm2.CommandLoad, []tpm2.Name{{0x40, 0x00, 0x00, 0x01}}, mu.MustMarshalToBytes(tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
-		TaggedHashList{
-			{HashAlg: tpm2.HashAlgorithmSHA1, Digest: expectedCpHashASHA1},
-			{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedCpHashASHA256},
-		}))
-
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "a59f3e6a358dee7edfd733373d7c8a9851296d26")))
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "79cefecd804486b13ac906b061a6d0faffacb46d7f387d91771b9455242de694")))
-
-	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches, `policies that use TPM2_PolicyCpHash and TPM2_PolicyNameHash can't be computed for more than one digest algorithm`)
 }
 
 type testComputePolicyNameHashData struct {
@@ -455,11 +443,15 @@ func (s *computeSuite) testPolicyNameHash(c *C, data *testComputePolicyNameHashD
 	for _, handle := range data.handles {
 		handles = append(handles, handle.Name())
 	}
-	expectedPolicy := NewMockPolicy(NewMockPolicyNameHashElement(handles, TaggedHashList{{HashAlg: data.alg, Digest: expectedNameHash}}))
 
 	digest, err := policy.ComputeFor(data.alg)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
+
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
+		NewMockPolicyNameHashElement(handles, expectedNameHash),
+	)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
@@ -485,31 +477,16 @@ func (s *computeSuite) TestPolicyNameHashSHA1(c *C) {
 }
 
 func (s *computeSuite) TestPolicyNameHashMultipleDigests(c *C) {
-	expectedNameHashSHA1, err := ComputeNameHash(tpm2.HashAlgorithmSHA1, tpm2.MakeHandleName(tpm2.HandleOwner))
-	c.Check(err, IsNil)
-	expectedNameHashSHA256, err := ComputeNameHash(tpm2.HashAlgorithmSHA256, tpm2.MakeHandleName(tpm2.HandleOwner))
-	c.Check(err, IsNil)
-
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyNameHash(tpm2.MakeHandleName(tpm2.HandleOwner)), IsNil)
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyNameHashElement([]tpm2.Name{tpm2.MakeHandleName(tpm2.HandleOwner)},
-		TaggedHashList{
-			{HashAlg: tpm2.HashAlgorithmSHA1, Digest: expectedNameHashSHA1},
-			{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedNameHashSHA256},
-		}))
-
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "022794dd35419f458603c2c11808dced821078d2")))
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "f46ca197c159be2500db41866e2713bd5e25cda9bbd46e2a398550010d7e5e5b")))
-
-	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches, `policies that use TPM2_PolicyCpHash and TPM2_PolicyNameHash can't be computed for more than one digest algorithm`)
 }
 
 type testComputePolicyPCRData struct {
@@ -784,7 +761,12 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
+	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+
 	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -799,9 +781,6 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 	)
 
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
@@ -866,7 +845,18 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
+	digestSHA1, err := policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	c.Check(err, IsNil)
+	c.Check(digestSHA1, DeepEquals, expectedDigests[0].Digest)
+	digestSHA256, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digestSHA256, DeepEquals, expectedDigests[1].Digest)
+
 	expectedPolicy := NewMockPolicy(
+		TaggedHashList{
+			{HashAlg: tpm2.HashAlgorithmSHA1, Digest: digestSHA1},
+			{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digestSHA256},
+		},
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -886,13 +876,6 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 		),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 	)
-
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigests[0].Digest)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigests[1].Digest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
@@ -965,7 +948,12 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
+	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest.Digest)
+
 	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -996,10 +984,6 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 			),
 		),
 	)
-
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigest.Digest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
@@ -1092,7 +1076,12 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
+	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest.Digest)
+
 	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -1137,10 +1126,6 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 			),
 		),
 	)
-
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigest.Digest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
@@ -1326,67 +1311,18 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithMultipleBranchNodes(c *C) {
 	c.Check(digest, DeepEquals, expectedDigest)
 }
 
-func (s *policySuiteNoTPM) TestPolicyValidateWithBranchesMissingDigest(c *C) {
+func (s *policySuiteNoTPM) TestPolicyValidateMissingBranches(c *C) {
 	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-
-	node := builder.RootBranch().AddBranchNode()
-
-	b1 := node.AddBranch("")
-	c.Check(b1.PolicyAuthValue(), IsNil)
-
-	b2 := node.AddBranch("")
-	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
-	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
-	c.Check(err, ErrorMatches, `cannot run 'complete compute branch digests' task in root branch: missing digest for session algorithm`)
-	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
-
-	var pe *PolicyError
-	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "")
-}
-
-func (s *policySuiteNoTPM) TestPolicyValidateWithCpHashMissingDigest(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-
-	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyCpHash assertion' task in root branch: missing digest for session algorithm`)
-	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
-
-	var pe *PolicyError
-	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "")
-}
-
-func (s *policySuiteNoTPM) TestPolicyValidateWithNameHashMissingDigest(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNameHash(tpm2.Name{0x40, 0x00, 0x00, 0x01}), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-
-	_, err = policy.Validate(tpm2.HashAlgorithmSHA256)
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyNameHash assertion' task in root branch: missing digest for session algorithm`)
-	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
-
-	var pe *PolicyError
-	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "")
+	_, err = policy.Validate(tpm2.HashAlgorithmSHA1)
+	c.Check(err, Equals, ErrMissingDigest)
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranches(c *C) {
@@ -2308,47 +2244,6 @@ func (s *policySuite) TestPolicyCpHash2(c *C) {
 		params:  []interface{}{tpm2.Private{1, 2, 3, 4, 5}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())}})
 }
 
-func (s *policySuite) TestPolicyCpHashMultipleDigests(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	tickets, requireAuthValue, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil)
-	c.Check(err, IsNil)
-	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(requireAuthValue, internal_testutil.IsFalse)
-
-	digest, err := s.TPM.PolicyGetDigest(session)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigest)
-}
-
-func (s *policySuite) TestPolicyCpHashMissingDigest(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil)
-	c.Check(err, ErrorMatches, "cannot run 'TPM2_PolicyCpHash assertion' task in root branch: missing digest for session algorithm")
-	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
-
-	var pe *PolicyError
-	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "")
-}
-
 func (s *policySuite) testPolicyNameHash(c *C, handles ...Named) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyNameHash(handles...), IsNil)
@@ -2375,47 +2270,6 @@ func (s *policySuite) TestPolicyNameHash1(c *C) {
 
 func (s *policySuite) TestPolicyNameHash2(c *C) {
 	s.testPolicyNameHash(c, tpm2.Name{0x40, 0x00, 0x00, 0x0b})
-}
-
-func (s *policySuite) TestPolicyNameHashMultipleDigests(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNameHash(tpm2.Name{0x40, 0x00, 0x00, 0x01}), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	tickets, requireAuthValue, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil)
-	c.Check(err, IsNil)
-	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(requireAuthValue, internal_testutil.IsFalse)
-
-	digest, err := s.TPM.PolicyGetDigest(session)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigest)
-}
-
-func (s *policySuite) TestPolicyNameHashMissingDigest(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNameHash(tpm2.Name{0x40, 0x00, 0x00, 0x01}), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil)
-	c.Check(err, ErrorMatches, "cannot run 'TPM2_PolicyNameHash assertion' task in root branch: missing digest for session algorithm")
-	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
-
-	var pe *PolicyError
-	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "")
 }
 
 type testExecutePolicyBranchesData struct {

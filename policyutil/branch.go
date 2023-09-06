@@ -615,11 +615,11 @@ func (h *treeWalkerHelper) walkBranch(parentPath policyBranchPath, index int, br
 	return nil
 }
 
-func (h *treeWalkerHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
+func (h *treeWalkerHelper) cpHash(cpHash *policyCpHashElement) error {
 	return h.origHelper.cpHash(cpHash)
 }
 
-func (h *treeWalkerHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
+func (h *treeWalkerHelper) nameHash(nameHash *policyNameHashElement) error {
 	return h.origHelper.nameHash(nameHash)
 }
 

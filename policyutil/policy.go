@@ -247,8 +247,8 @@ type policyResources interface {
 }
 
 type policyRunnerHelper interface {
-	cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error)
-	nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error)
+	cpHash(cpHash *policyCpHashElement) error
+	nameHash(nameHash *policyNameHashElement) error
 	handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error
 }
 
@@ -550,33 +550,31 @@ type policyCpHashElement struct {
 	Handles     []tpm2.Name
 	CpBytes     []byte
 
-	Digests taggedHashList
+	Digest tpm2.Digest
 }
 
 func (*policyCpHashElement) name() string { return "TPM2_PolicyCpHash assertion" }
 
 func (e *policyCpHashElement) run(context policySessionContext) error {
-	cpHashA, err := context.helper().cpHash(e)
-	if err != nil {
+	if err := context.helper().cpHash(e); err != nil {
 		return err
 	}
-	return context.session().PolicyCpHash(cpHashA)
+	return context.session().PolicyCpHash(e.Digest)
 }
 
 type policyNameHashElement struct {
 	Handles []tpm2.Name
 
-	Digests taggedHashList
+	Digest tpm2.Digest
 }
 
 func (*policyNameHashElement) name() string { return "TPM2_PolicyNameHash assertion" }
 
 func (e *policyNameHashElement) run(context policySessionContext) error {
-	nameHash, err := context.helper().nameHash(e)
-	if err != nil {
+	if err := context.helper().nameHash(e); err != nil {
 		return err
 	}
-	return context.session().PolicyNameHash(nameHash)
+	return context.session().PolicyNameHash(e.Digest)
 }
 
 type policyBranch struct {
@@ -777,7 +775,8 @@ func (e *policyElement) run(context policySessionContext) error {
 type policyElements []*policyElement
 
 type policy struct {
-	Policy policyElements
+	PolicyDigests taggedHashList
+	Policy        policyElements
 }
 
 // Policy corresponds to an authorization policy. It can be serialized with
@@ -1015,24 +1014,12 @@ func (h *executePolicyHelper) selectAndRunNextBranch(branches policyBranches, ne
 	return nil
 }
 
-func (h *executePolicyHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
-	for _, digest := range cpHash.Digests {
-		if digest.HashAlg != h.runner.session().HashAlg() {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return nil, ErrMissingDigest
+func (h *executePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
+	return nil
 }
 
-func (h *executePolicyHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
-	for _, digest := range nameHash.Digests {
-		if digest.HashAlg != h.runner.session().HashAlg() {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return nil, ErrMissingDigest
+func (h *executePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
+	return nil
 }
 
 func (h *executePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
@@ -1212,45 +1199,39 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 }
 
 type computePolicyHelper struct {
-	runner *policyRunner
+	runner    *policyRunner
+	hasCpHash *bool
 }
 
-func newComputePolicyHelper(runner *policyRunner) *computePolicyHelper {
-	return &computePolicyHelper{runner: runner}
+func newComputePolicyHelper(runner *policyRunner, hasCpHash *bool) *computePolicyHelper {
+	return &computePolicyHelper{
+		runner:    runner,
+		hasCpHash: hasCpHash,
+	}
 }
 
-func (h *computePolicyHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
-	cpHashA, err := computeCpHash(h.runner.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
+func (h *computePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
+	if h.hasCpHash != nil {
+		*h.hasCpHash = true
+	}
+	digest, err := computeCpHash(h.runner.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
 	if err != nil {
-		return nil, fmt.Errorf("cannot compute cpHashA: %w", err)
+		return fmt.Errorf("cannot compute cpHashA: %w", err)
 	}
-
-	for i, digest := range cpHash.Digests {
-		if digest.HashAlg == h.runner.session().HashAlg() {
-			cpHash.Digests[i] = taggedHash{HashAlg: h.runner.session().HashAlg(), Digest: cpHashA}
-			return cpHashA, nil
-		}
-	}
-
-	cpHash.Digests = append(cpHash.Digests, taggedHash{HashAlg: h.runner.session().HashAlg(), Digest: cpHashA})
-	return cpHashA, nil
+	cpHash.Digest = digest
+	return nil
 }
 
-func (h *computePolicyHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
+func (h *computePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
+	if h.hasCpHash != nil {
+		*h.hasCpHash = true
+	}
 	digest, err := computeNameHash(h.runner.session().HashAlg(), nameHash.Handles)
 	if err != nil {
-		return nil, fmt.Errorf("cannot compute nameHash: %w", err)
+		return fmt.Errorf("cannot compute nameHash: %w", err)
 	}
-
-	for i, d := range nameHash.Digests {
-		if d.HashAlg == h.runner.session().HashAlg() {
-			nameHash.Digests[i] = taggedHash{HashAlg: h.runner.session().HashAlg(), Digest: digest}
-			return digest, nil
-		}
-	}
-
-	nameHash.Digests = append(nameHash.Digests, taggedHash{HashAlg: h.runner.session().HashAlg(), Digest: digest})
-	return digest, nil
+	nameHash.Digest = digest
+	return nil
 }
 
 func (h *computePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
@@ -1284,21 +1265,59 @@ func (h *computePolicyHelper) handleBranches(branches policyBranches, complete f
 }
 
 func (p *Policy) computeForDigest(digest *taggedHash) error {
+	var policy *policy
+	if err := mu.CopyValue(&policy, p.policy); err != nil {
+		return fmt.Errorf("cannot make temporary copy of policy: %w", err)
+	}
+
+	var hasCpHash bool
+
 	runner := newPolicyRunner(
 		newComputePolicySession(digest),
 		new(mockPolicyParams),
 		new(mockResources),
-		func(runner *policyRunner) policyRunnerHelper { return newComputePolicyHelper(runner) },
+		func(runner *policyRunner) policyRunnerHelper { return newComputePolicyHelper(runner, &hasCpHash) },
 	)
-	return runner.run(p.policy.Policy)
+
+	if err := runner.run(policy.Policy); err != nil {
+		return err
+	}
+
+	addedDigest := false
+	for i, d := range policy.PolicyDigests {
+		if d.HashAlg == digest.HashAlg {
+			policy.PolicyDigests[i] = *digest
+			addedDigest = true
+			break
+		}
+	}
+	if !addedDigest {
+		policy.PolicyDigests = append(policy.PolicyDigests, *digest)
+	}
+
+	if hasCpHash && len(policy.PolicyDigests) > 1 {
+		return errors.New("policies that use TPM2_PolicyCpHash and TPM2_PolicyNameHash can't be computed for more than one digest algorithm")
+	}
+
+	p.policy = *policy
+	return nil
 }
 
 // ComputeFor computes the digest for this policy for the specified algorithm. This also
 // updates stored digests within the policy, so the policy should be persisted after
 // calling this. On success, it returns the computed digest.
 func (p *Policy) ComputeFor(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
-	digest := taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
+	if !alg.IsValid() {
+		return nil, errors.New("invalid algorithm")
+	}
 
+	for _, digest := range p.policy.PolicyDigests {
+		if digest.HashAlg == alg {
+			return digest.Digest, nil
+		}
+	}
+
+	digest := taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
 	if err := p.computeForDigest(&digest); err != nil {
 		return nil, err
 	}
@@ -1314,50 +1333,26 @@ func newValidatePolicyHelper(runner *policyRunner) *validatePolicyHelper {
 	return &validatePolicyHelper{runner: runner}
 }
 
-func (h *validatePolicyHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
-	cpHashA, err := computeCpHash(h.runner.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
+func (h *validatePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
+	digest, err := computeCpHash(h.runner.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
 	if err != nil {
-		return nil, fmt.Errorf("cannot compute cpHashA: %w", err)
+		return fmt.Errorf("cannot compute cpHashA: %w", err)
 	}
-
-	found := false
-	for _, digest := range cpHash.Digests {
-		if digest.HashAlg == h.runner.session().HashAlg() {
-			if !bytes.Equal(digest.Digest, cpHashA) {
-				return nil, fmt.Errorf("stored and computed cpHashA mismatch (computed: %x, stored: %x)", cpHashA, digest.Digest)
-			}
-			found = true
-			break
-		}
+	if !bytes.Equal(digest, cpHash.Digest) {
+		return fmt.Errorf("stored and computed cpHashA mismatch (computed: %x, stored: %x)", digest, cpHash.Digest)
 	}
-	if !found {
-		return nil, ErrMissingDigest
-	}
-
-	return cpHashA, nil
+	return nil
 }
 
-func (h *validatePolicyHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
+func (h *validatePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 	digest, err := computeNameHash(h.runner.session().HashAlg(), nameHash.Handles)
 	if err != nil {
-		return nil, fmt.Errorf("cannot compute nameHash: %w", err)
+		return fmt.Errorf("cannot compute nameHash: %w", err)
 	}
-
-	found := false
-	for _, d := range nameHash.Digests {
-		if d.HashAlg == h.runner.session().HashAlg() {
-			if !bytes.Equal(d.Digest, digest) {
-				return nil, fmt.Errorf("stored and computed nameHash mismatch (computed: %x, stored: %x)", digest, d.Digest)
-			}
-			found = true
-			break
-		}
+	if !bytes.Equal(digest, nameHash.Digest) {
+		return fmt.Errorf("stored and computed nameHash mismatch (computed: %x, stored: %x)", digest, nameHash.Digest)
 	}
-	if !found {
-		return nil, ErrMissingDigest
-	}
-
-	return digest, nil
+	return nil
 }
 
 func (h *validatePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
@@ -1396,6 +1391,19 @@ func (h *validatePolicyHelper) handleBranches(branches policyBranches, complete 
 // success, it returns the digest correpsonding to this policy for the
 // specified digest algorithm.
 func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	var expectedDigest tpm2.Digest
+	for _, digest := range p.policy.PolicyDigests {
+		if digest.HashAlg != alg {
+			continue
+		}
+
+		expectedDigest = digest.Digest
+		break
+	}
+	if expectedDigest == nil {
+		return nil, ErrMissingDigest
+	}
+
 	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
 
 	runner := newPolicyRunner(
@@ -1408,17 +1416,11 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 		return nil, err
 	}
 
-	//for _, d := range p.policy.PolicyDigests {
-	//	if d.HashAlg != alg {
-	//		continue
-	//	}
-	//
-	//	if !bytes.Equal(d.Digest, digest.Digest) {
-	//		return nil, fmt.Errorf("stored and computed policy digest mismatch (computed: %x, stored: %x)", digest.Digest, d.Digest)
-	//	}
-	//}
+	if !bytes.Equal(digest.Digest, expectedDigest) {
+		return nil, fmt.Errorf("stored and computed policy digest mismatch (computed: %x, stored: %x)", digest.Digest, expectedDigest)
+	}
 
-	return digest.Digest, nil
+	return expectedDigest, nil
 }
 
 type listBranchesResult struct {
@@ -1437,12 +1439,12 @@ func newListBranchesHelper(runner *policyRunner, result *listBranchesResult) *li
 	}
 }
 
-func (h *listBranchesHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
-	return make(tpm2.Digest, h.runner.session().HashAlg()), nil
+func (h *listBranchesHelper) cpHash(cpHash *policyCpHashElement) error {
+	return nil
 }
 
-func (h *listBranchesHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
-	return make(tpm2.Digest, h.runner.session().HashAlg()), nil
+func (h *listBranchesHelper) nameHash(nameHash *policyNameHashElement) error {
+	return nil
 }
 
 func (h *listBranchesHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
@@ -1651,24 +1653,12 @@ func newPolicyDetailsHelper(runner *policyRunner, result *policyDetailsResult, p
 	}
 }
 
-func (h *policyDetailsHelper) cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error) {
-	for _, digest := range cpHash.Digests {
-		if digest.HashAlg != h.runner.session().HashAlg() {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return nil, ErrMissingDigest
+func (h *policyDetailsHelper) cpHash(cpHash *policyCpHashElement) error {
+	return nil
 }
 
-func (h *policyDetailsHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error) {
-	for _, digest := range nameHash.Digests {
-		if digest.HashAlg != h.runner.session().HashAlg() {
-			continue
-		}
-		return digest.Digest, nil
-	}
-	return nil, ErrMissingDigest
+func (h *policyDetailsHelper) nameHash(nameHash *policyNameHashElement) error {
+	return nil
 }
 
 func (h *policyDetailsHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {

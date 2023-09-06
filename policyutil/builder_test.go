@@ -38,7 +38,7 @@ func (s *builderSuite) testPolicyNV(c *C, data *testBuildPolicyNVData) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyNV(data.nvPub, data.operandB, data.offset, data.operation), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyNVElement(data.nvPub, data.operandB, data.offset, data.operation))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyNVElement(data.nvPub, data.operandB, data.offset, data.operation))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -114,7 +114,7 @@ func (s *builderSuite) testPolicySecret(c *C, data *testBuildPolicySecretData) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicySecret(data.authObjectName, data.policyRef), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicySecretElement(data.authObjectName, data.policyRef))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicySecretElement(data.authObjectName, data.policyRef))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -160,7 +160,7 @@ func (s *builderSuite) testPolicySigned(c *C, data *testBuildPolicySignedData) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicySigned(data.authKey, data.policyRef), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicySignedElement(data.authKey, data.policyRef))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicySignedElement(data.authKey, data.policyRef))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -238,7 +238,7 @@ func (s *builderSuite) TestPolicyAuthValue(c *C) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyAuthValueElement())
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyAuthValueElement())
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -249,7 +249,7 @@ func (s *builderSuite) testPolicyCommandCode(c *C, code tpm2.CommandCode) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyCommandCode(code), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyCommandCodeElement(code))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyCommandCodeElement(code))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -275,7 +275,7 @@ func (s *builderSuite) testPolicyCounterTimer(c *C, data *testBuildPolicyCounter
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyCounterTimer(data.operandB, data.offset, data.operation), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyCounterTimerElement(data.operandB, data.offset, data.operation))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyCounterTimerElement(data.operandB, data.offset, data.operation))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -328,7 +328,7 @@ func (s *builderSuite) testPolicyCpHash(c *C, data *testBuildPolicyCpHashData) {
 	cpBytes, err := mu.MarshalToBytes(data.params...)
 	c.Check(err, IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyCpHashElement(data.code, handles, cpBytes, nil))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyCpHashElement(data.code, handles, cpBytes, nil))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -379,7 +379,7 @@ func (s *builderSuite) testPolicyNameHash(c *C, handles ...Named) {
 	for _, handle := range handles {
 		handleNames = append(handleNames, handle.Name())
 	}
-	expectedPolicy := NewMockPolicy(NewMockPolicyNameHashElement(handleNames, nil))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyNameHashElement(handleNames, nil))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -411,7 +411,7 @@ func (s *builderSuite) testPolicyPCR(c *C, data *testBuildPolicyPCRData) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyPCR(data.values), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyPCRElement(data.expectedPcrs))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyPCRElement(data.expectedPcrs))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -528,7 +528,7 @@ func (s *builderSuite) testPolicyDuplicationSelect(c *C, data *testBuildPolicyDu
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyDuplicationSelect(data.object, data.newParent, data.includeObject), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyDuplicationSelectElement(data.object.Name(), data.newParent.Name(), data.includeObject))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyDuplicationSelectElement(data.object.Name(), data.newParent.Name(), data.includeObject))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -598,7 +598,7 @@ func (s *builderSuite) TestPolicyPassword(c *C) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyPassword(), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyPasswordElement())
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyPasswordElement())
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -609,7 +609,7 @@ func (s *builderSuite) testPolicyNvWritten(c *C, writtenSet bool) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyNvWritten(writtenSet), IsNil)
 
-	expectedPolicy := NewMockPolicy(NewMockPolicyNvWrittenElement(writtenSet))
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicyNvWrittenElement(writtenSet))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -646,6 +646,7 @@ func (s *builderSuite) TestPolicyMixed(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	expectedPolicy := NewMockPolicy(
+		nil,
 		NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")),
 		NewMockPolicyAuthValueElement(),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth))
@@ -673,6 +674,7 @@ func (s *builderSuite) TestPolicyBranches(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	expectedPolicy := NewMockPolicy(
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -709,6 +711,7 @@ func (s *builderSuite) TestLockBranchCommitCurrentBranchNode(c *C) {
 	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
 
 	expectedPolicy := NewMockPolicy(
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 		NewMockPolicyORElement(
@@ -738,6 +741,7 @@ func (s *builderSuite) TestEmptyBranchNodeIsElided(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	expectedPolicy := NewMockPolicy(
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 	)
@@ -772,6 +776,7 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(b4.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
 
 	expectedPolicy := NewMockPolicy(
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -838,6 +843,7 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(b6.PolicyCommandCode(tpm2.CommandHierarchyChangeAuth), IsNil)
 
 	expectedPolicy := NewMockPolicy(
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
