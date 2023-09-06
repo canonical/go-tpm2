@@ -468,7 +468,10 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches, callback fu
 				}
 				result = append(result, candidateBranch{path: path, details: details})
 			}
-			return callback(result)
+			f.runner.pushTask("complete filter branches", func() error {
+				return callback(result)
+			})
+			return nil
 		})
 
 		return nil
@@ -542,7 +545,10 @@ func (s *policyBranchAutoSelector) selectBranch(branches policyBranches, callbac
 		if len(candidates) == 0 {
 			return errors.New("cannot select branch: no appropriate branches")
 		}
-		return callback(candidates[0].path)
+		s.filter.runner.pushTask("complete auto select branch", func() error {
+			return callback(candidates[0].path)
+		})
+		return nil
 	})
 }
 
@@ -617,7 +623,7 @@ func (h *treeWalkerHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Diges
 	return h.origHelper.nameHash(nameHash)
 }
 
-func (h *treeWalkerHelper) handleBranches(branches policyBranches) error {
+func (h *treeWalkerHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	if len(branches) == 0 {
 		return nil
 	}

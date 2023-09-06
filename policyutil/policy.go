@@ -69,7 +69,7 @@ func (e *PolicyError) Error() string {
 	if len(e.Path) > 0 {
 		branch = "branch " + e.Path
 	}
-	return fmt.Sprintf("cannot run %s in %s: %v", e.task, branch, e.err)
+	return fmt.Sprintf("cannot run '%s' task in %s: %v", e.task, branch, e.err)
 }
 
 func (e *PolicyError) Unwrap() error {
@@ -249,7 +249,7 @@ type policyResources interface {
 type policyRunnerHelper interface {
 	cpHash(cpHash *policyCpHashElement) (tpm2.Digest, error)
 	nameHash(nameHash *policyNameHashElement) (tpm2.Digest, error)
-	handleBranches(branches policyBranches) error
+	handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error
 }
 
 type policySessionContext interface {
@@ -594,7 +594,21 @@ type policyORElement struct {
 func (*policyORElement) name() string { return "branch node" }
 
 func (e *policyORElement) run(context policySessionContext) error {
-	return context.helper().handleBranches(e.Branches)
+	return context.helper().handleBranches(e.Branches, func(digests tpm2.DigestList, selected int) error {
+		tree, err := newPolicyOrTree(context.session().HashAlg(), digests)
+		if err != nil {
+			return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
+		}
+
+		pHashLists := tree.selectBranch(selected)
+
+		for _, pHashList := range pHashLists {
+			if err := context.session().PolicyOR(pHashList); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 type pcrValue struct {
@@ -1021,7 +1035,7 @@ func (h *executePolicyHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Di
 	return nil, ErrMissingDigest
 }
 
-func (h *executePolicyHelper) handleBranches(branches policyBranches) error {
+func (h *executePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	next, remaining := h.remaining.PopNextComponent()
 	if len(next) == 0 {
 		autoSelector := newPolicyBranchAutoSelector(h.runner, h.state, h.usage)
@@ -1058,20 +1072,8 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches) error {
 		}
 	}
 
-	tree, err := newPolicyOrTree(h.runner.session().HashAlg(), digests)
-	if err != nil {
-		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
-	}
-
 	h.runner.pushTask("complete branch node", func() error {
-		pHashLists := tree.selectBranch(selected)
-
-		for _, pHashList := range pHashLists {
-			if err := h.runner.session().PolicyOR(pHashList); err != nil {
-				return err
-			}
-		}
-		return nil
+		return complete(digests, selected)
 	})
 	h.runner.pushElements(branches[selected].Policy)
 	h.runner.currentPath = h.runner.currentPath.Concat(next)
@@ -1185,7 +1187,7 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 			}
 			runner.currentPath = currentPath.Concat(name)
 
-			runner.pushTask("complete compute branch digests", func() error {
+			runner.pushTask("complete compute branch digest", func() error {
 				runner.currentPath = currentPath
 				restoreSession()
 				digests = append(digests, digest.Digest)
@@ -1193,7 +1195,10 @@ func computeBranchDigests(runner *policyRunner, branches policyBranches, done fu
 					return nil
 				}
 
-				return done(digests)
+				runner.pushTask("complete compute branch digests", func() error {
+					return done(digests)
+				})
+				return nil
 			})
 			runner.pushElements(branch.Policy)
 
@@ -1248,7 +1253,7 @@ func (h *computePolicyHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Di
 	return digest, nil
 }
 
-func (h *computePolicyHelper) handleBranches(branches policyBranches) error {
+func (h *computePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	if err := computeBranchDigests(h.runner, branches, func(digests tpm2.DigestList) error {
 		for i, branch := range branches {
 			found := false
@@ -1267,13 +1272,10 @@ func (h *computePolicyHelper) handleBranches(branches policyBranches) error {
 			}
 		}
 
-		tree, err := newPolicyOrTree(h.runner.session().HashAlg(), digests)
-		if err != nil {
-			return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
-		}
-		pHashLists := tree.selectBranch(0)
-
-		return h.runner.session().PolicyOR(pHashLists[len(pHashLists)-1])
+		h.runner.pushTask("complete branch node", func() error {
+			return complete(digests, 0)
+		})
+		return nil
 	}); err != nil {
 		return fmt.Errorf("cannot compute branch digests: %w", err)
 	}
@@ -1358,7 +1360,7 @@ func (h *validatePolicyHelper) nameHash(nameHash *policyNameHashElement) (tpm2.D
 	return digest, nil
 }
 
-func (h *validatePolicyHelper) handleBranches(branches policyBranches) error {
+func (h *validatePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	if err := computeBranchDigests(h.runner, branches, func(digests tpm2.DigestList) error {
 		for i, branch := range branches {
 			found := false
@@ -1377,18 +1379,10 @@ func (h *validatePolicyHelper) handleBranches(branches policyBranches) error {
 				return ErrMissingDigest
 			}
 		}
-		tree, err := newPolicyOrTree(h.runner.session().HashAlg(), digests)
-		if err != nil {
-			return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
-		}
-		pHashLists := tree.selectBranch(0)
 
-		for _, pHashList := range pHashLists {
-			if err := h.runner.session().PolicyOR(pHashList); err != nil {
-				return err
-			}
-		}
-
+		h.runner.pushTask("complete branch node", func() error {
+			return complete(digests, 0)
+		})
 		return nil
 	}); err != nil {
 		return fmt.Errorf("cannot compute branch digests: %w", err)
@@ -1451,7 +1445,7 @@ func (h *listBranchesHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Dig
 	return make(tpm2.Digest, h.runner.session().HashAlg()), nil
 }
 
-func (h *listBranchesHelper) handleBranches(branches policyBranches) error {
+func (h *listBranchesHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	// we should only hit this once
 	h.runner.overrideHelper(newTreeWalkerHelper(h.runner, treeWalkerModeRootTree, h.beginBranchNode, h.completeBranch))
 
@@ -1677,7 +1671,7 @@ func (h *policyDetailsHelper) nameHash(nameHash *policyNameHashElement) (tpm2.Di
 	return nil, ErrMissingDigest
 }
 
-func (h *policyDetailsHelper) handleBranches(branches policyBranches) error {
+func (h *policyDetailsHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	next, remaining := h.remaining.PopNextComponent()
 	if len(next) == 0 {
 		// we're going to walk all of the remaining branches in the policy
