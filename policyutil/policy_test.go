@@ -45,7 +45,7 @@ func (s *computeSuite) testPolicyNV(c *C, data *testComputePolicyNVData) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -129,7 +129,7 @@ func (s *computeSuite) testPolicySecret(c *C, data *testComputePolicySecretData)
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -173,7 +173,7 @@ func (s *computeSuite) testPolicySigned(c *C, data *testComputePolicySignedData)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -247,7 +247,7 @@ func (s *computeSuite) TestPolicyAuthValue(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e")))
 }
@@ -264,7 +264,7 @@ func (s *computeSuite) testPolicyCommandCode(c *C, data *testComputePolicyComman
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -296,7 +296,7 @@ func (s *computeSuite) testPolicyCounterTimer(c *C, data *testComputePolicyCount
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -361,7 +361,7 @@ func (s *computeSuite) testPolicyCpHash(c *C, data *testComputePolicyCpHashData)
 	cpBytes, err := mu.MarshalToBytes(data.params...)
 	c.Check(err, IsNil)
 
-	digest, err := policy.ComputeFor(data.alg)
+	digest, err := policy.Compute(data.alg)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
@@ -415,9 +415,9 @@ func (s *computeSuite) TestPolicyCpHashMultipleDigests(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, ErrorMatches, `policies that use TPM2_PolicyCpHash and TPM2_PolicyNameHash can't be computed for more than one digest algorithm`)
 }
 
@@ -444,7 +444,7 @@ func (s *computeSuite) testPolicyNameHash(c *C, data *testComputePolicyNameHashD
 		handles = append(handles, handle.Name())
 	}
 
-	digest, err := policy.ComputeFor(data.alg)
+	digest, err := policy.Compute(data.alg)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
@@ -483,9 +483,9 @@ func (s *computeSuite) TestPolicyNameHashMultipleDigests(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, ErrorMatches, `policies that use TPM2_PolicyCpHash and TPM2_PolicyNameHash can't be computed for more than one digest algorithm`)
 }
 
@@ -501,7 +501,7 @@ func (s *computeSuite) testPolicyPCR(c *C, data *testComputePolicyPCRData) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -592,7 +592,7 @@ func (s *computeSuite) testPolicyDuplicationSelect(c *C, data *testComputePolicy
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -652,7 +652,7 @@ func (s *computeSuite) TestPolicyPassword(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e")))
 }
@@ -669,7 +669,7 @@ func (s *computeSuite) testPolicyNvWritten(c *C, data *testComputePolicyNvWritte
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -695,7 +695,7 @@ func (s *computeSuite) TestPolicyMixed(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "426df7ddd07dbfaa400237f773da801e464ef2766084966b04d8b4dfc0feeee5")))
 }
@@ -709,7 +709,7 @@ func (s *computeSuite) TestPolicyMixedSHA1(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "abdce83ab50f4d5fd378181e21de9486559612d3")))
 }
@@ -723,7 +723,7 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList = append(pHashList, digest)
 
 	builder = NewPolicyBuilder()
@@ -731,7 +731,7 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList = append(pHashList, digest)
 
 	builder = NewPolicyBuilder()
@@ -761,7 +761,7 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 
@@ -794,10 +794,10 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
 	pHashListSHA1 = append(pHashListSHA1, digest)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	pHashListSHA256 = append(pHashListSHA256, digest)
 
@@ -806,10 +806,10 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
 	pHashListSHA1 = append(pHashListSHA1, digest)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	pHashListSHA256 = append(pHashListSHA256, digest)
 
@@ -845,10 +845,10 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
-	digestSHA1, err := policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	digestSHA1, err := policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
 	c.Check(digestSHA1, DeepEquals, expectedDigests[0].Digest)
-	digestSHA256, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digestSHA256, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digestSHA256, DeepEquals, expectedDigests[1].Digest)
 
@@ -888,7 +888,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList1 = append(pHashList1, digest)
 
 	builder = NewPolicyBuilder()
@@ -896,7 +896,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList1 = append(pHashList1, digest)
 
 	var pHashList2 tpm2.DigestList
@@ -948,7 +948,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest.Digest)
 
@@ -997,7 +997,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList2 = append(pHashList2, digest)
 
 	builder = NewPolicyBuilder()
@@ -1006,7 +1006,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList2 = append(pHashList2, digest)
 
 	var pHashList3 tpm2.DigestList
@@ -1017,7 +1017,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList3 = append(pHashList3, digest)
 
 	builder = NewPolicyBuilder()
@@ -1026,7 +1026,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	pHashList3 = append(pHashList3, digest)
 
 	var pHashList1 tpm2.DigestList
@@ -1076,7 +1076,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 
-	digest, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	digest, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest.Digest)
 
@@ -1247,7 +1247,7 @@ func (s *policySuiteNoTPM) TestPolicyValidate(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	digest, err := policy.Validate(tpm2.HashAlgorithmSHA256)
@@ -1272,7 +1272,7 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithBranches(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	digest, err := policy.Validate(tpm2.HashAlgorithmSHA256)
@@ -1303,7 +1303,7 @@ func (s *policySuiteNoTPM) TestPolicyValidateWithMultipleBranchNodes(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	digest, err := policy.Validate(tpm2.HashAlgorithmSHA256)
@@ -1318,7 +1318,7 @@ func (s *policySuiteNoTPM) TestPolicyValidateMissingBranches(c *C) {
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	_, err = policy.Validate(tpm2.HashAlgorithmSHA1)
@@ -1425,7 +1425,7 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 	c.Check(builder.RootBranch().PolicyNV(nvPub, data.operandB, data.offset, data.operation), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	sessionHandle := authSessionHandle(data.authSession)
@@ -1601,7 +1601,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 	c.Check(builder.RootBranch().PolicySecret(data.authObject, data.policyRef), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	sessionHandle := authSessionHandle(data.authSession)
@@ -1721,7 +1721,7 @@ func (s *policySuite) TestPolicySecretWithWithTransientLoadable(c *C) {
 	c.Check(builder.RootBranch().PolicySecret(pub, []byte("foo")), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -1829,7 +1829,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 	c.Check(builder.RootBranch().PolicySigned(data.authKey, data.policyRef), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2041,7 +2041,7 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 	c.Check(builder.RootBranch().PolicySigned(authKey, nil), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2076,7 +2076,7 @@ func (s *policySuite) TestPolicyAuthValue(c *C) {
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2100,7 +2100,7 @@ func (s *policySuite) testPolicyCommandCode(c *C, code tpm2.CommandCode) {
 	c.Check(builder.RootBranch().PolicyCommandCode(code), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2134,7 +2134,7 @@ func (s *policySuite) testPolicyCounterTimer(c *C, data *testExecutePolicyCounte
 	c.Check(builder.RootBranch().PolicyCounterTimer(data.operandB, data.offset, data.operation), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2215,7 +2215,7 @@ func (s *policySuite) testPolicyCpHash(c *C, data *testExecutePolicyCpHashData) 
 	c.Check(builder.RootBranch().PolicyCpHash(data.code, data.handles, data.params...), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2249,7 +2249,7 @@ func (s *policySuite) testPolicyNameHash(c *C, handles ...Named) {
 	c.Check(builder.RootBranch().PolicyNameHash(handles...), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2294,7 +2294,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	expectedRequireAuthValue := data.cmd == tpm2.CommandPolicyAuthValue
@@ -2385,9 +2385,9 @@ func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2437,7 +2437,7 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	expectedRequireAuthValue := data.cmd1 == tpm2.CommandPolicyAuthValue
@@ -2584,7 +2584,7 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	expectedRequireAuthValue := data.cmd1 == tpm2.CommandPolicyAuthValue
@@ -2717,7 +2717,7 @@ func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2752,7 +2752,7 @@ func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2787,7 +2787,7 @@ func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2822,7 +2822,7 @@ func (s *policySuite) TestPolicyBranchesComputeMissingBranchDigests(c *C) {
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA1)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA1)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2847,7 +2847,7 @@ func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
 	c.Check(builder.RootBranch().PolicyPCR(values), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2908,7 +2908,7 @@ func (s *policySuite) testPolicyDuplicationSelect(c *C, data *testExecutePolicyD
 	c.Check(builder.RootBranch().PolicyDuplicationSelect(data.object, data.newParent, data.includeObject), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2973,7 +2973,7 @@ func (s *policySuite) TestPolicyPassword(c *C) {
 	c.Check(builder.RootBranch().PolicyPassword(), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -2997,7 +2997,7 @@ func (s *policySuite) testPolicyNvWritten(c *C, writtenSet bool) {
 	c.Check(builder.RootBranch().PolicyNvWritten(writtenSet), IsNil)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -3066,7 +3066,7 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	details, err := policy.Details(tpm2.HashAlgorithmSHA256, "")
@@ -3130,7 +3130,7 @@ func (s *policySuiteNoTPM) testPolicyDetailsWithBranches(c *C, path string) map[
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	details, err := policy.Details(tpm2.HashAlgorithmSHA256, path)
@@ -3223,7 +3223,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelected(c *C) {
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigest, err := policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
@@ -3257,7 +3257,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
-	_, err = policy.ComputeFor(tpm2.HashAlgorithmSHA256)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
 	_, err = s.TPM.PCREvent(s.TPM.PCRHandleContext(23), []byte("foo"), nil)

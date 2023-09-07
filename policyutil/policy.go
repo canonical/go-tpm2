@@ -1303,10 +1303,10 @@ func (p *Policy) computeForDigest(digest *taggedHash) error {
 	return nil
 }
 
-// ComputeFor computes the digest for this policy for the specified algorithm. This also
+// Compute computes the digest for this policy for the specified algorithm. This also
 // updates stored digests within the policy, so the policy should be persisted after
 // calling this. On success, it returns the computed digest.
-func (p *Policy) ComputeFor(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+func (p *Policy) Compute(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	if !alg.IsValid() {
 		return nil, errors.New("invalid algorithm")
 	}
