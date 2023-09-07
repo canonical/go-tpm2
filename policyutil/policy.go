@@ -114,7 +114,7 @@ func (n policyBranchName) isValid() bool {
 	if !utf8.ValidString(string(n)) {
 		return false
 	}
-	if len(n) > 0 && n[0] == '$' {
+	if (len(n) > 0 && n[0] == '$') || n == "*" {
 		return false
 	}
 	return true
@@ -208,12 +208,23 @@ type PolicyBranchSelectParams struct {
 
 	// Path provides a way to explicitly select branches to execute. A path consists
 	// of zero or more components separated by a '/' character, with each component
-	// identifying a branch to select when a branch node is encountered. A component
-	// can either identify a branch by its name (if it has one), or it can be a numeric
-	// identifier of the form "$[n]" which selects the branch at index n.
+	// identifying a branch to select when a branch node is encountered during
+	// execution. When a branch node is encountered, the selected sub-branch is
+	// executed, before resuming execution in the original branch immediately after
+	// the branch node.
+	//
+	// A component can either identify a branch by its name (if it has one), or it
+	// can be a numeric identifier of the form "$[n]" which selects the branch at
+	// index n.
+	//
+	// If a component is "*", then the policy execution will attempt to automatically
+	// select an execution path for the sub-tree associated with the current branch
+	// node, which includes choosing the immediate sub-branch and any additional
+	// sub-branches for branch nodes encountered during its execution. Remaining path
+	// components will be consumed for additional branch nodes in the current branch.
 	//
 	// If the path has insufficent components for the branch nodes encountered in a
-	// profile, the profile execution will attempt to select an appropriate branch
+	// policy, the policy execution will attempt to select an appropriate branch
 	// automatically.
 	Path string
 }
@@ -1024,10 +1035,10 @@ func (h *executePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 
 func (h *executePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	next, remaining := h.remaining.PopNextComponent()
-	if len(next) == 0 {
+	if len(next) == 0 || next == "*" {
 		autoSelector := newPolicyBranchAutoSelector(h.runner, h.state, h.usage)
 		return autoSelector.selectBranch(branches, func(path policyBranchPath) error {
-			h.remaining = path
+			h.remaining = path.Concat(remaining)
 			h.runner.pushElements(policyElements{&policyElement{
 				Type: tpm2.CommandPolicyOR,
 				Details: &policyElementDetails{

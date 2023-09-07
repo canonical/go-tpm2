@@ -451,7 +451,14 @@ func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
 	return n
 }
 
-// PolicyBuilder provides a way to compute an authorization policy.
+// PolicyBuilder provides a way to compute an authorization policy. A policy consists
+// of a sequence of assertions, and may contain sub-branches in order to create a policy
+// that can satisfy multiple conditions. A policy can be arbitrarily complex.
+//
+// All policies have a root branch and execution starts with this branch. Whenever a branch
+// node is encountered, a sub-branch is chosen. Execution then continues with the chosen
+// sub-branch until all assertions in it have been executed. Execution then resumes in the
+// parent branch, with the assertion immediately following the branch node.
 type PolicyBuilder struct {
 	root *PolicyBuilderBranch
 	err  error
