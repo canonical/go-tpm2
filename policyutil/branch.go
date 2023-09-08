@@ -619,18 +619,17 @@ func (h *treeWalkerHelper) handleBranches(branches policyBranches, complete func
 		}
 
 		task := newDeferredTask("tree walk complete branch", func() error {
+			done := len(h.beginBranchQueue) == 0
 			if h.completeBranchFn != nil {
-				done := len(h.beginBranchQueue) == 0
 				if err := h.completeBranchFn(done); err != nil {
 					return err
 				}
-				switch done {
-				case false:
-					h.pushNextBranchWalk()
-				case true:
-					h.started = false
-				}
-				return nil
+			}
+			switch done {
+			case false:
+				h.pushNextBranchWalk()
+			case true:
+				h.started = false
 			}
 			return nil
 		})
