@@ -217,11 +217,13 @@ type PolicyBranchSelectParams struct {
 	// can be a numeric identifier of the form "$[n]" which selects the branch at
 	// index n.
 	//
-	// If a component is "*", then the policy execution will attempt to automatically
+	// If a component is "**", then the policy execution will attempt to automatically
 	// select an execution path for the sub-tree associated with the current branch
 	// node, which includes choosing the immediate sub-branch and any additional
 	// sub-branches for branch nodes encountered during its execution. Remaining path
 	// components will be consumed for additional branch nodes in the current branch.
+	// If a component is "*", then the policy execution will attempt to automatically
+	// select an immediate sub-branch.
 	//
 	// If the path has insufficent components for the branch nodes encountered in a
 	// policy, the policy execution will attempt to select an appropriate branch
@@ -999,10 +1001,40 @@ func (h *executePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 
 func (h *executePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	next, remaining := h.remaining.PopNextComponent()
-	if len(next) == 0 || next == "*" {
-		autoSelector := newPolicyBranchAutoSelector(h.runner, h.state, h.usage)
-		return autoSelector.selectBranch(branches, func(path policyBranchPath) error {
-			h.remaining = path.Concat(remaining)
+	if len(next) == 0 || next[0] == '*' {
+		// There are no more components or the next component is a wildcard match - build a
+		// list of candidate paths for this subtree
+		filter := newPolicyBranchFilter(h.runner, h.state, h.usage)
+		return filter.filterBranches(branches, func(candidates []candidateBranch) error {
+			if len(candidates) == 0 {
+				return errors.New("cannot select branch: no appropriate branches")
+			}
+
+			// Prefer paths without TPM2_PolicyAuthValue, TPM2_PolicyPassword, TPM2_PolicySecret
+			// and TPM2_PolicyNV assertions.
+			path := candidates[0].path
+			for _, candidate := range candidates {
+				if !candidate.details.AuthValueNeeded && len(candidate.details.Secret) == 0 && len(candidate.details.NV) == 0 {
+					path = candidate.path
+					break
+				}
+			}
+			switch next {
+			case "":
+				// We have a path for this whole subtree
+				h.remaining = path
+			case "**":
+				// Prepend the path for this whole subtree to the remaining components
+				h.remaining = path.Concat(remaining)
+			case "*":
+				// Prepend the first component of the path for this subtree to the remaining components
+				component, _ := path.PopNextComponent()
+				h.remaining = component.Concat(remaining)
+			default:
+				panic("not reached")
+			}
+
+			// rerun branch node
 			h.runner.pushElements(policyElements{&policyElement{
 				Type: tpm2.CommandPolicyOR,
 				Details: &policyElementDetails{
@@ -1011,12 +1043,14 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches, complete f
 		})
 	}
 
+	// We have a branch selector
 	h.remaining = remaining
 	selected, err := h.selectBranch(branches, next)
 	if err != nil {
 		return err
 	}
 
+	// Obtain the branch digests
 	var digests tpm2.DigestList
 	for _, branch := range branches {
 		found := false
@@ -1034,6 +1068,7 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches, complete f
 		}
 	}
 
+	// Run it!
 	h.runner.pushTask("complete branch node", func() error {
 		return complete(digests, selected)
 	})
