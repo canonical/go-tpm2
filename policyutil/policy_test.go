@@ -2302,10 +2302,8 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Usage: data.usage,
-			Path:  data.path,
-		},
+		Usage: data.usage,
+		Path:  data.path,
 	}
 	authorizer := &mockPolicyResourceAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
@@ -2393,9 +2391,7 @@ func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Path: "branch1",
-		},
+		Path: "branch1",
 	}
 
 	tickets, requireAuthValue, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
@@ -2445,10 +2441,8 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Usage: data.usage,
-			Path:  data.path,
-		},
+		Usage: data.usage,
+		Path:  data.path,
 	}
 
 	authorizer := &mockPolicyResourceAuthorizer{
@@ -2592,10 +2586,8 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Usage: data.usage,
-			Path:  data.path,
-		},
+		Usage: data.usage,
+		Path:  data.path,
 	}
 
 	authorizer := &mockPolicyResourceAuthorizer{
@@ -2723,9 +2715,7 @@ func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Path: "$[2]",
-		},
+		Path: "$[2]",
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
@@ -2758,9 +2748,7 @@ func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Path: "$foo",
-		},
+		Path: "$foo",
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
@@ -2793,9 +2781,7 @@ func (s *policySuite) TestPolicyBranchesBranchNotFound(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Path: "foo",
-		},
+		Path: "foo",
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
@@ -2828,9 +2814,7 @@ func (s *policySuite) TestPolicyBranchesComputeMissingBranchDigests(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		PolicyBranchSelectParams: PolicyBranchSelectParams{
-			Path: "branch1",
-		},
+		Path: "branch1",
 	}
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, params)
