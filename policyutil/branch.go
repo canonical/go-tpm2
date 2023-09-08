@@ -492,9 +492,10 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches, callback fu
 
 func (f *policyBranchFilter) beginBranchNode() (treeWalkerBeginBranchFn, error) {
 	details := f.details
+	path := f.path
 
-	return func(path policyBranchPath) error {
-		f.path = path
+	return func(name policyBranchPath) error {
+		f.path = path.Concat(name)
 		f.details = details
 		f.runner.overrideSession(&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &f.details})
 		return nil
@@ -553,12 +554,10 @@ type treeWalkerHelper struct {
 	origHelper policyRunnerHelper
 
 	beginBranchNodeFn treeWalkerBeginBranchNodeFn
-	beginBranchFn     treeWalkerBeginBranchFn
 	completeBranchFn  treeWalkerCompleteBranchFn
 
-	path             policyBranchPath
 	started          bool
-	beginBranchQueue []*policyDeferredTask
+	beginBranchQueue []taskFn
 }
 
 func newTreeWalkerHelper(runner *policyRunner, mode treeWalkerMode, beginBranchNode treeWalkerBeginBranchNodeFn, completeBranch treeWalkerCompleteBranchFn) *treeWalkerHelper {
@@ -574,20 +573,20 @@ func newTreeWalkerHelper(runner *policyRunner, mode treeWalkerMode, beginBranchN
 func (h *treeWalkerHelper) pushNextBranchWalk() {
 	task := h.beginBranchQueue[0]
 	h.beginBranchQueue = h.beginBranchQueue[1:]
-	h.runner.pushTask(task.name(), task.fn)
+	h.runner.pushTask("tree walk begin branch", task)
 }
 
-func (h *treeWalkerHelper) walkBranch(parentPath policyBranchPath, index int, branch *policyBranch, isRootBranch bool) error {
+func (h *treeWalkerHelper) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int, branch *policyBranch, isRootBranch bool) error {
+	var name policyBranchPath
 	if !isRootBranch {
-		name := policyBranchPath(branch.Name)
+		name = policyBranchPath(branch.Name)
 		if len(name) == 0 {
 			name = policyBranchPath(fmt.Sprintf("$[%d]", index))
 		}
-		h.path = parentPath.Concat(name)
 	}
 
-	if h.beginBranchFn != nil {
-		if err := h.beginBranchFn(h.path); err != nil {
+	if beginBranchFn != nil {
+		if err := beginBranchFn(name); err != nil {
 			return err
 		}
 	}
@@ -641,34 +640,26 @@ func (h *treeWalkerHelper) handleBranches(branches policyBranches, complete func
 		case treeWalkerModeRootTree, treeWalkerModeSubtreeOnly:
 			remaining = append([]policySessionTask{task}, remaining...)
 		}
-
-		h.path = ""
 	}
 
 	isRootBranch := !h.started && h.mode == treeWalkerModeRootTree
-	path := h.path
 
-	var tasks []*policyDeferredTask
+	var beginBranchFn treeWalkerBeginBranchFn
+	if h.beginBranchNodeFn != nil {
+		var err error
+		beginBranchFn, err = h.beginBranchNodeFn()
+		if err != nil {
+			return err
+		}
+	}
+
+	var tasks []taskFn
 	for i, branch := range branches {
 		i := i
 		branch := branch
-		task := newDeferredTask("tree walk begin branch", func() error {
+		task := func() error {
 			h.runner.tasks = remaining
-			return h.walkBranch(path, i, branch, isRootBranch)
-		})
-		if i == 0 {
-			innerTask := task
-			task = newDeferredTask("tree walk begin branch node", func() error {
-				if h.beginBranchNodeFn != nil {
-					beginBranchFn, err := h.beginBranchNodeFn()
-					if err != nil {
-						return err
-					}
-					h.beginBranchFn = beginBranchFn
-				}
-				h.runner.pushTask(innerTask.name(), innerTask.fn)
-				return nil
-			})
+			return h.walkBranch(beginBranchFn, i, branch, isRootBranch)
 		}
 		tasks = append(tasks, task)
 	}

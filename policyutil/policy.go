@@ -1475,12 +1475,12 @@ func (h *listBranchesHelper) handleBranches(branches policyBranches, complete fu
 }
 
 func (h *listBranchesHelper) beginBranchNode() (treeWalkerBeginBranchFn, error) {
-	return h.beginBranch, nil
-}
+	path := h.runner.currentPath
 
-func (h *listBranchesHelper) beginBranch(path policyBranchPath) error {
-	h.runner.currentPath = path
-	return nil
+	return func(name policyBranchPath) error {
+		h.runner.currentPath = path.Concat(name)
+		return nil
+	}, nil
 }
 
 func (h *listBranchesHelper) completeBranch(done bool) error {
@@ -1650,8 +1650,7 @@ type policyDetailsHelper struct {
 	runner *policyRunner
 	result *policyDetailsResult
 
-	remaining    policyBranchPath
-	explicitPath policyBranchPath
+	remaining policyBranchPath
 
 	details PolicyBranchDetails
 }
@@ -1694,7 +1693,6 @@ func (h *policyDetailsHelper) handleBranches(branches policyBranches, complete f
 			details: &h.details,
 		})
 
-		h.explicitPath = h.runner.currentPath
 		h.runner.pushElements(policyElements{
 			&policyElement{
 				Type: tpm2.CommandPolicyOR,
@@ -1725,9 +1723,10 @@ func (h *policyDetailsHelper) handleBranches(branches policyBranches, complete f
 
 func (h *policyDetailsHelper) beginBranchNode() (treeWalkerBeginBranchFn, error) {
 	details := h.details
+	path := h.runner.currentPath
 
-	return func(path policyBranchPath) error {
-		h.runner.currentPath = h.explicitPath.Concat(path)
+	return func(name policyBranchPath) error {
+		h.runner.currentPath = path.Concat(name)
 		h.details = details
 		h.runner.overrideSession(&observingPolicySession{
 			session: newNullPolicySession(h.runner.session().HashAlg()),
