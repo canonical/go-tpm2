@@ -989,42 +989,6 @@ func newExecutePolicyHelper(runner *policyRunner, state tpmState, params *Policy
 	}
 }
 
-func (h *executePolicyHelper) selectAndRunNextBranch(branches policyBranches, next policyBranchPath) error {
-	var selected int
-	switch {
-	case next[0] == '$':
-		// select branch by index
-		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
-			return fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
-		}
-		if selected < 0 || selected >= len(branches) {
-			return fmt.Errorf("cannot select branch: selected path %d out of range", selected)
-		}
-	default:
-		// select branch by name
-		selected = -1
-		for i, branch := range branches {
-			if len(branch.Name) == 0 {
-				continue
-			}
-			if policyBranchPath(branch.Name) == next {
-				selected = i
-				break
-			}
-		}
-		if selected == -1 {
-			return fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
-		}
-	}
-
-	if selected == -1 {
-		// the switch branches should have returned a specific error already
-		panic("not reached")
-	}
-
-	return nil
-}
-
 func (h *executePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
 	return nil
 }
