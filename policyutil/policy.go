@@ -251,6 +251,7 @@ type policyParams interface {
 type policyResources interface {
 	LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
 	LoadExternal(public *tpm2.Public) (ResourceContext, error)
+	LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error)
 	NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error)
 	Authorize(resource tpm2.ResourceContext) error
 }
@@ -341,15 +342,16 @@ type policyNVElement struct {
 func (*policyNVElement) name() string { return "TPM2_PolicyNV assertion" }
 
 func (e *policyNVElement) run(context policySessionContext) error {
-	nvIndex, err := tpm2.NewNVIndexResourceContextFromPub(e.NvIndex)
+	nvIndex, policy, err := context.resources().LoadNV(e.NvIndex)
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
 
 	var auth ResourceContext = newResourceContextNonFlushable(nvIndex)
-	var policy *Policy
 	switch {
 	default:
+	case e.NvIndex.Attrs&tpm2.AttrNVAuthRead != 0:
+		policy = nil
 	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
 		auth, policy, err = context.resources().LoadName(tpm2.MakeHandleName(tpm2.HandleOwner))
 	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:

@@ -26,6 +26,9 @@ type PolicyExecuteHelper interface {
 	// longer needed.
 	LoadExternal(public *tpm2.Public) (ResourceContext, error)
 
+	// LoadNV returns a context for the supplied NV index
+	LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error)
+
 	// NewSession should return a session of the specified type to use for authorization
 	// of a resource with the specified name algorithm. If sessionType is [tpm2.SessionTypeHMAC]
 	// then it is optional whether to return a session or not.
@@ -205,6 +208,11 @@ func (h *tpmPolicyExecuteHelper) LoadExternal(public *tpm2.Public) (ResourceCont
 	return newResourceContextFlushable(h.tpm, rc), nil
 }
 
+func (h *tpmPolicyExecuteHelper) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
+	rc, err := tpm2.NewNVIndexResourceContextFromPub(public)
+	return rc, nil, err
+}
+
 func (h *tpmPolicyExecuteHelper) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {
 	if sessionType != tpm2.SessionTypeHMAC {
 		return nil, errors.New("unsupported session type")
@@ -239,6 +247,10 @@ func (*nullPolicyExecuteHelper) LoadName(name tpm2.Name) (ResourceContext, *Poli
 
 func (*nullPolicyExecuteHelper) LoadExternal(public *tpm2.Public) (ResourceContext, error) {
 	return nil, errors.New("no PolicyExecuteHelper")
+}
+
+func (*nullPolicyExecuteHelper) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
+	return nil, nil, errors.New("no PolicyExecuteHelper")
 }
 
 func (*nullPolicyExecuteHelper) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {

@@ -151,6 +151,11 @@ func (r *mockResources) LoadExternal(public *tpm2.Public) (ResourceContext, erro
 	return newResourceContextNonFlushable(resource), nil
 }
 
+func (r *mockResources) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
+	rc, err := tpm2.NewNVIndexResourceContextFromPub(public)
+	return rc, nil, err
+}
+
 func (*mockResources) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {
 	if sessionType != tpm2.SessionTypeHMAC {
 		panic("unexpected session type")
