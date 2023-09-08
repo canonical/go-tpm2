@@ -152,15 +152,23 @@ func (s *builderSuite) TestPolicySecretInvalidName(c *C) {
 }
 
 type testBuildPolicySignedData struct {
-	authKey   *tpm2.Public
+	pubKeyPEM string
 	policyRef tpm2.Nonce
 }
 
 func (s *builderSuite) testPolicySigned(c *C, data *testBuildPolicySignedData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySigned(data.authKey, data.policyRef), IsNil)
+	b, _ := pem.Decode([]byte(data.pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
 
-	expectedPolicy := NewMockPolicy(nil, NewMockPolicySignedElement(data.authKey, data.policyRef))
+	authKey, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicySigned(authKey, data.policyRef), IsNil)
+
+	expectedPolicy := NewMockPolicy(nil, NewMockPolicySignedElement(authKey, data.policyRef))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -174,16 +182,8 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
 EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 -----END PUBLIC KEY-----`
 
-	b, _ := pem.Decode([]byte(pubKeyPEM))
-	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
-	c.Assert(err, IsNil)
-	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
-
-	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
-	c.Assert(err, IsNil)
-
 	s.testPolicySigned(c, &testBuildPolicySignedData{
-		authKey:   pub,
+		pubKeyPEM: pubKeyPEM,
 		policyRef: []byte("bar")})
 }
 
@@ -194,16 +194,8 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEr9MP/Y5/bMFGJBcSKMJsSTzgZvCi
 E8A+q89Clanh7nR5sP0IfBXN1gMsamxgdnklZ7FXEr1c1cZkFhTA9URaTQ==
 -----END PUBLIC KEY-----`
 
-	b, _ := pem.Decode([]byte(pubKeyPEM))
-	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
-	c.Assert(err, IsNil)
-	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
-
-	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
-	c.Assert(err, IsNil)
-
 	s.testPolicySigned(c, &testBuildPolicySignedData{
-		authKey:   pub,
+		pubKeyPEM: pubKeyPEM,
 		policyRef: []byte("bar")})
 }
 
@@ -214,16 +206,8 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
 EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 -----END PUBLIC KEY-----`
 
-	b, _ := pem.Decode([]byte(pubKeyPEM))
-	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
-	c.Assert(err, IsNil)
-	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
-
-	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
-	c.Assert(err, IsNil)
-
 	s.testPolicySigned(c, &testBuildPolicySignedData{
-		authKey: pub})
+		pubKeyPEM: pubKeyPEM})
 }
 
 func (s *builderSuite) TestPolicySignedInvalidName(c *C) {
