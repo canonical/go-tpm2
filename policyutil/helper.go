@@ -29,6 +29,11 @@ type PolicyExecuteHelper interface {
 	// LoadNV returns a context for the supplied NV index
 	LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error)
 
+	// LookupAuthorized policies returns a set of policies that are signed by the key with
+	// the specified name, appropriate for a TPM2_PolicyAuthorize assertion with the
+	// specified reference.
+	LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
+
 	// NewSession should return a session of the specified type to use for authorization
 	// of a resource with the specified name algorithm. If sessionType is [tpm2.SessionTypeHMAC]
 	// then it is optional whether to return a session or not.
@@ -50,6 +55,8 @@ type PolicyExecuteHelper interface {
 
 	// ReadClock obtains the current TimeInfo.
 	ReadClock() (*tpm2.TimeInfo, error)
+
+	VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
 }
 
 type tpmPolicyExecuteHelper struct {
@@ -197,7 +204,7 @@ func (h *tpmPolicyExecuteHelper) LoadName(name tpm2.Name) (ResourceContext, *Pol
 		return newResourceContextNonFlushable(resource), nil, nil
 	}
 
-	return nil, nil, errors.New("cannot identify resource")
+	return nil, nil, errors.New("cannot find resource")
 }
 
 func (h *tpmPolicyExecuteHelper) LoadExternal(public *tpm2.Public) (ResourceContext, error) {
@@ -211,6 +218,24 @@ func (h *tpmPolicyExecuteHelper) LoadExternal(public *tpm2.Public) (ResourceCont
 func (h *tpmPolicyExecuteHelper) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
 	rc, err := tpm2.NewNVIndexResourceContextFromPub(public)
 	return rc, nil, err
+}
+
+func (h *tpmPolicyExecuteHelper) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	var out []*Policy
+	for _, policy := range h.resources.AuthorizedPolicies {
+		for _, auth := range policy.policy.PolicyAuthorizations {
+			if !bytes.Equal(auth.AuthKey.Name(), keySign) {
+				continue
+			}
+			if !bytes.Equal(auth.PolicyRef, policyRef) {
+				continue
+			}
+			out = append(out, policy)
+			break
+		}
+	}
+
+	return out, nil
 }
 
 func (h *tpmPolicyExecuteHelper) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {
@@ -239,7 +264,13 @@ func (h *tpmPolicyExecuteHelper) ReadClock() (*tpm2.TimeInfo, error) {
 	return h.tpm.ReadClock(h.sessions...)
 }
 
-type nullPolicyExecuteHelper struct{}
+func (h *tpmPolicyExecuteHelper) VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
+	return h.tpm.VerifySignature(key, digest, signature, h.sessions...)
+}
+
+type nullPolicyExecuteHelper struct {
+	nullTpmConnection
+}
 
 func (*nullPolicyExecuteHelper) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
 	return nil, nil, errors.New("no PolicyExecuteHelper")
@@ -253,22 +284,14 @@ func (*nullPolicyExecuteHelper) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceCont
 	return nil, nil, errors.New("no PolicyExecuteHelper")
 }
 
+func (*nullPolicyExecuteHelper) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	return nil, errors.New("no PolicyExecuteHelper")
+}
+
 func (*nullPolicyExecuteHelper) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {
 	return nil, errors.New("no PolicyExecuteHelper")
 }
 
 func (*nullPolicyExecuteHelper) Authorize(resource tpm2.ResourceContext) error {
 	return errors.New("no PolicyExecuteHelper")
-}
-
-func (*nullPolicyExecuteHelper) PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
-	return nil, errors.New("no PolicyExecuteHelper")
-}
-
-func (*nullPolicyExecuteHelper) NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
-	return nil, errors.New("no PolicyExecuteHelper")
-}
-
-func (*nullPolicyExecuteHelper) ReadClock() (*tpm2.TimeInfo, error) {
-	return nil, errors.New("no PolicyExecuteHelper")
 }

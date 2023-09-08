@@ -392,6 +392,10 @@ func (s *observingPolicySession) PolicySigned(authKey tpm2.ResourceContext, incl
 }
 
 func (s *observingPolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+	s.details.Authorize = append(s.details.Authorize, PolicyAuthorizationDetails{
+		AuthName:  keySign,
+		PolicyRef: policyRef,
+	})
 	return s.session.PolicyAuthorize(approvedPolicy, policyRef, keySign, verified)
 }
 

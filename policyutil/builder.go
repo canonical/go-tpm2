@@ -215,6 +215,35 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 	return nil
 }
 
+// PolicyAuthorize adds a TPM2_PolicyAuthorize assertion to this branch so that the policy
+// can be changed by allowing the authorizing entity to sign new policies. The name algorithm
+// of the public key should match the name algorithm of the resource that this policy is being
+// created for. Whilst this isn't required by the TPM, the [Policy.Authorize] API enforces this
+// by only signing policy digests for the key's name algorithm.
+//
+// When [Policy.Execute] runs this assertion, it will select an execute an appropriate
+// authorized policy.
+func (b *PolicyBuilderBranch) PolicyAuthorize(policyRef tpm2.Nonce, keySign *tpm2.Public) error {
+	if err := b.prepareToModifyBranch(); err != nil {
+		return b.policy.fail("PolicyAuthorize", err)
+	}
+
+	keySignName := keySign.Name()
+	if !keySignName.IsValid() {
+		return b.policy.fail("PolicyAuthorize", errors.New("invalid keySign"))
+	}
+
+	element := &policyElement{
+		Type: tpm2.CommandPolicyAuthorize,
+		Details: &policyElementDetails{
+			Authorize: &policyAuthorizeElement{
+				PolicyRef: policyRef,
+				KeySign:   keySign}}}
+	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
+
+	return nil
+}
+
 // PolicyAuthValue adds a TPM2_PolicyAuthValue assertion to this branch so that the policy
 // requires knowledge of the authorization value of the resource on which the policy session
 // is used.
@@ -461,10 +490,11 @@ func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
 // of a sequence of assertions, and may contain sub-branches in order to create a policy
 // that can satisfy multiple conditions. A policy can be arbitrarily complex.
 //
-// All policies have a root branch and execution starts with this branch. Whenever a branch
-// node is encountered, a sub-branch is chosen. Execution then continues with the chosen
-// sub-branch until all assertions in it have been executed. Execution then resumes in the
-// parent branch, with the assertion immediately following the branch node.
+// All policies have a root branch and execution with [Policy.Execute] starts with this
+// branch. Whenever a branch node is encountered, a sub-branch is chosen. Execution then
+// continues with the chosen sub-branch until all assertions in it have been executed.
+// Execution then resumes in the parent branch, with the assertion immediately following
+// the branch node.
 type PolicyBuilder struct {
 	root *PolicyBuilderBranch
 	err  error

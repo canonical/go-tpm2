@@ -69,6 +69,15 @@ func NewMockPolicySignedElement(authKey *tpm2.Public, policyRef tpm2.Nonce) *pol
 				PolicyRef: policyRef}}}
 }
 
+func NewMockPolicyAuthorizeElement(policyRef tpm2.Nonce, keySign *tpm2.Public) *policyElement {
+	return &policyElement{
+		Type: tpm2.CommandPolicyAuthorize,
+		Details: &policyElementDetails{
+			Authorize: &policyAuthorizeElement{
+				PolicyRef: policyRef,
+				KeySign:   keySign}}}
+}
+
 func NewMockPolicyAuthValueElement() *policyElement {
 	return &policyElement{
 		Type:    tpm2.CommandPolicyAuthValue,
@@ -156,11 +165,12 @@ func NewMockPolicyNvWrittenElement(writtenSet bool) *policyElement {
 			NvWritten: &policyNvWrittenElement{WrittenSet: writtenSet}}}
 }
 
-func NewMockPolicy(digests taggedHashList, elements ...*policyElement) *Policy {
+func NewMockPolicy(digests taggedHashList, authorizations []PolicyAuthorization, elements ...*policyElement) *Policy {
 	return &Policy{
 		policy: policy{
-			PolicyDigests: digests,
-			Policy:        elements,
+			PolicyDigests:        digests,
+			PolicyAuthorizations: authorizations,
+			Policy:               elements,
 		},
 	}
 }

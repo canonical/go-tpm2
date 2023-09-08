@@ -5,6 +5,7 @@
 package policyutil_test
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -240,6 +241,88 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 		expectedDigest: internal_testutil.DecodeHexString(c, "f6b5bdee979628699a12ebba3a7befbae9d5f1f69fed98db1a957c6ab3e8bf33")})
 }
 
+type testComputePolicyAuthorizeData struct {
+	policyRef tpm2.Nonce
+	keySign   *tpm2.Public
+
+	expectedDigest tpm2.Digest
+}
+
+func (s *computeSuite) testPolicyAuthorize(c *C, data *testComputePolicyAuthorizeData) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthorize(data.policyRef, data.keySign), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
+	c.Logf("%x", digest)
+}
+
+func (s *computeSuite) TestPolicyAuthorize(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	s.testPolicyAuthorize(c, &testComputePolicyAuthorizeData{
+		keySign:        pub,
+		policyRef:      []byte("bar"),
+		expectedDigest: internal_testutil.DecodeHexString(c, "3e95800218d3f20c23f130503cd8c991dc662bd104ba85ab31519815f33fdc15")})
+}
+
+func (s *computeSuite) TestPolicyAuthorizeDifferentKey(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEr9MP/Y5/bMFGJBcSKMJsSTzgZvCi
+E8A+q89Clanh7nR5sP0IfBXN1gMsamxgdnklZ7FXEr1c1cZkFhTA9URaTQ==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	s.testPolicyAuthorize(c, &testComputePolicyAuthorizeData{
+		keySign:        pub,
+		policyRef:      []byte("bar"),
+		expectedDigest: internal_testutil.DecodeHexString(c, "903f9c07e5244f29fec17d24e266012ad41c509de509c39d5d953bccdb52f20e")})
+}
+
+func (s *computeSuite) TestPolicyAuthorizeNoPolicyRef(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	pub, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	s.testPolicyAuthorize(c, &testComputePolicyAuthorizeData{
+		keySign:        pub,
+		expectedDigest: internal_testutil.DecodeHexString(c, "79eb5a0b041d2174a08c34c9207ae675aa7fdee856722e9eb85c885c09f0f959")})
+}
+
 func (s *computeSuite) TestPolicyAuthValue(c *C) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
@@ -367,6 +450,7 @@ func (s *computeSuite) testPolicyCpHash(c *C, data *testComputePolicyCpHashData)
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
+		nil,
 		NewMockPolicyCpHashElement(data.code, handles, cpBytes, expectedCpHashA),
 	)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -450,6 +534,7 @@ func (s *computeSuite) testPolicyNameHash(c *C, data *testComputePolicyNameHashD
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
+		nil,
 		NewMockPolicyNameHashElement(handles, expectedNameHash),
 	)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -767,6 +852,7 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -857,6 +943,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 			{HashAlg: tpm2.HashAlgorithmSHA1, Digest: digestSHA1},
 			{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digestSHA256},
 		},
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -954,6 +1041,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -1082,6 +1170,7 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
+		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
@@ -1238,6 +1327,180 @@ func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleIntermedi
 	next, remaining := path.PopNextComponent()
 	c.Check(next, Equals, PolicyBranchPath("foo"))
 	c.Check(remaining, Equals, PolicyBranchPath("///bar"))
+}
+
+type testAuthorizePolicyData struct {
+	keyPEM            string
+	nameAlg           tpm2.HashAlgorithmId
+	policyRef         tpm2.Nonce
+	opts              crypto.SignerOpts
+	expectedDigest    tpm2.Digest
+	expectedSignature *tpm2.Signature
+}
+
+func (s *policySuiteNoTPM) testAuthorizePolicy(c *C, data *testAuthorizePolicyData) error {
+	b, _ := pem.Decode([]byte(data.keyPEM))
+	key, err := x509.ParsePKCS8PrivateKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(key, internal_testutil.ConvertibleTo, &ecdsa.PrivateKey{})
+
+	keySign, err := objectutil.NewECCPublicKey(&key.(*ecdsa.PrivateKey).PublicKey, objectutil.WithNameAlg(data.nameAlg))
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	err = policy.Authorize(bytes.NewReader(make([]byte, 33)), keySign, data.policyRef, key.(crypto.Signer), data.opts)
+	if err != nil {
+		return err
+	}
+
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: data.nameAlg, Digest: data.expectedDigest}},
+		[]PolicyAuthorization{{AuthKey: keySign, PolicyRef: data.policyRef, Signature: data.expectedSignature}},
+		NewMockPolicyAuthValueElement(),
+	)
+	c.Check(policy, DeepEquals, expectedPolicy)
+
+	digest, err := policy.Compute(data.nameAlg)
+	c.Logf("%x", digest)
+
+	auth, err := SignPolicyAuthorization(bytes.NewReader(make([]byte, 33)), data.expectedDigest, keySign, data.policyRef, key.(crypto.Signer), data.opts)
+	c.Logf("%x", auth.Signature.Signature.ECDSA.SignatureR)
+	c.Logf("%x", auth.Signature.Signature.ECDSA.SignatureS)
+
+	return nil
+}
+
+func (s *policySuiteNoTPM) TestAuthorizePolicy(c *C) {
+	keyPEM := `
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQghoJh0RNpHMdQGWw1
+c4iu0s8/VoGE1Xx5ds7Zvpne/BOhRANCAAS9VCRI2K86GPrzKRZ92uhtpM8o+m/5
+Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
+-----END PRIVATE KEY-----`
+
+	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		keyPEM:         keyPEM,
+		nameAlg:        tpm2.HashAlgorithmSHA256,
+		policyRef:      []byte("foo"),
+		opts:           crypto.SHA256,
+		expectedDigest: internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
+		expectedSignature: &tpm2.Signature{
+			SigAlg: tpm2.SigSchemeAlgECDSA,
+			Signature: &tpm2.SignatureU{
+				ECDSA: &tpm2.SignatureECDSA{
+					Hash:       tpm2.HashAlgorithmSHA256,
+					SignatureR: internal_testutil.DecodeHexString(c, "fef27905ea5b0265ed72649b518c9dc34d9d729214fb65106b25188acdb0aa09"),
+					SignatureS: internal_testutil.DecodeHexString(c, "55e8e6eb6bc688e16225539019ae82d6eba0ac9db61974d366f72a4d4c125ae4"),
+				},
+			},
+		},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuiteNoTPM) TestAuthorizePolicyDifferentKey(c *C) {
+	keyPEM := `
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgt7gAWQPrRPLVAexX
+QO8Bog5Fu2sw+s+CVU1V41vVj4mhRANCAARij+FNq0+rxvdl+gIJPxY4nqMezDdo
+c7C9ElAfzkjURTxVWrFldXF9M8kCdot7wNuLeWnIJL7p5y2A43mu4mOb
+-----END PRIVATE KEY-----`
+
+	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		keyPEM:         keyPEM,
+		nameAlg:        tpm2.HashAlgorithmSHA256,
+		policyRef:      []byte("foo"),
+		opts:           crypto.SHA256,
+		expectedDigest: internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
+		expectedSignature: &tpm2.Signature{
+			SigAlg: tpm2.SigSchemeAlgECDSA,
+			Signature: &tpm2.SignatureU{
+				ECDSA: &tpm2.SignatureECDSA{
+					Hash:       tpm2.HashAlgorithmSHA256,
+					SignatureR: internal_testutil.DecodeHexString(c, "4ac10b34ab032a57fd2e430eadc31dedde61462cc8fa40ff6b13515abdb2b416"),
+					SignatureS: internal_testutil.DecodeHexString(c, "3dbd37dbcb7b731c21505e919c003d23c8084e6c6ec0dfaa7b2a3341ec920514"),
+				},
+			},
+		},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuiteNoTPM) TestAuthorizePolicyNoPolicyRef(c *C) {
+	keyPEM := `
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQghoJh0RNpHMdQGWw1
+c4iu0s8/VoGE1Xx5ds7Zvpne/BOhRANCAAS9VCRI2K86GPrzKRZ92uhtpM8o+m/5
+Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
+-----END PRIVATE KEY-----`
+
+	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		keyPEM:         keyPEM,
+		nameAlg:        tpm2.HashAlgorithmSHA256,
+		opts:           crypto.SHA256,
+		expectedDigest: internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
+		expectedSignature: &tpm2.Signature{
+			SigAlg: tpm2.SigSchemeAlgECDSA,
+			Signature: &tpm2.SignatureU{
+				ECDSA: &tpm2.SignatureECDSA{
+					Hash:       tpm2.HashAlgorithmSHA256,
+					SignatureR: internal_testutil.DecodeHexString(c, "5743fafc980e7dead11954e19ba3a0440f06fa0cd6eb2fbebc24a136834d392f"),
+					SignatureS: internal_testutil.DecodeHexString(c, "8a0da89b7e1bd9cc56b21cb4b686b54d102d319186eeb819e2d70f80cf14d115"),
+				},
+			},
+		},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuiteNoTPM) TestAuthorizePolicyDifferentAlgorithm(c *C) {
+	keyPEM := `
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQghoJh0RNpHMdQGWw1
+c4iu0s8/VoGE1Xx5ds7Zvpne/BOhRANCAAS9VCRI2K86GPrzKRZ92uhtpM8o+m/5
+Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
+-----END PRIVATE KEY-----`
+
+	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		keyPEM:         keyPEM,
+		nameAlg:        tpm2.HashAlgorithmSHA1,
+		policyRef:      []byte("foo"),
+		opts:           crypto.SHA1,
+		expectedDigest: internal_testutil.DecodeHexString(c, "af6038c78c5c962d37127e319124e3a8dc582e9b"),
+		expectedSignature: &tpm2.Signature{
+			SigAlg: tpm2.SigSchemeAlgECDSA,
+			Signature: &tpm2.SignatureU{
+				ECDSA: &tpm2.SignatureECDSA{
+					Hash:       tpm2.HashAlgorithmSHA1,
+					SignatureR: internal_testutil.DecodeHexString(c, "039dfb9e7b2ab5546fe8c47c8ddfc20a966fae87397bfdb1f7007e2db971f603"),
+					SignatureS: internal_testutil.DecodeHexString(c, "cf61bdfff0ddf9edce5a2ebb53f3910b88c9406cb35bb5a117fb149b2550250c"),
+				},
+			},
+		},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuiteNoTPM) TestAuthorizePolicyInvalidParams(c *C) {
+	keyPEM := `
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQghoJh0RNpHMdQGWw1
+c4iu0s8/VoGE1Xx5ds7Zvpne/BOhRANCAAS9VCRI2K86GPrzKRZ92uhtpM8o+m/5
+Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
+-----END PRIVATE KEY-----`
+
+	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		keyPEM:    keyPEM,
+		nameAlg:   tpm2.HashAlgorithmSHA256,
+		policyRef: []byte("foo"),
+		opts:      crypto.SHA1,
+	})
+	c.Check(err, ErrorMatches, `mismatched authKey name and opts`)
 }
 
 func (s *policySuiteNoTPM) TestPolicyValidate(c *C) {
@@ -1800,7 +2063,7 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	err = s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: saved.Name,
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot load resource with name 0x([[:xdigit:]]{68}): cannot identify resource`)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot load resource with name 0x([[:xdigit:]]{68}): cannot find resource`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -2069,6 +2332,235 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+type testExecutePolicyAuthorizeData struct {
+	keySign                  *tpm2.Public
+	policyRef                tpm2.Nonce
+	authorizedPolicies       []*Policy
+	path                     string
+	expectedRequireAuthValue bool
+}
+
+func (s *policySuite) testPolicyAuthorize(c *C, data *testExecutePolicyAuthorizeData) error {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthorize(data.policyRef, data.keySign), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	expectedDigest, err := policy.Compute(data.keySign.Name().Algorithm())
+	c.Check(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	params := &PolicyExecuteParams{
+		Path: data.path,
+	}
+	resources := &Resources{
+		AuthorizedPolicies: data.authorizedPolicies,
+	}
+
+	s.ForgetCommands()
+
+	tickets, requireAuthValue, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyExecuteHelper(s.TPM, resources, new(mockPolicyResourceAuthorizer)), params)
+	if err != nil {
+		return err
+	}
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+	c.Check(requireAuthValue, Equals, data.expectedRequireAuthValue)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+
+	return nil
+}
+
+func (s *policySuite) TestPolicyAuthorize(c *C) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+
+	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
+		keySign:                  pubKey,
+		policyRef:                []byte("foo"),
+		authorizedPolicies:       []*Policy{policy},
+		expectedRequireAuthValue: true})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicyAuthorizeWithNoPolicyRef(c *C) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.Authorize(rand.Reader, pubKey, nil, key, crypto.SHA256), IsNil)
+
+	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
+		keySign:                  pubKey,
+		authorizedPolicies:       []*Policy{policy},
+		expectedRequireAuthValue: true})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicyAuthorizePolicyNotFound(c *C) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+
+	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
+		keySign:                  pubKey,
+		policyRef:                []byte("bar"),
+		authorizedPolicies:       []*Policy{policy},
+		expectedRequireAuthValue: true})
+	c.Check(err, ErrorMatches, `cannot run 'authorized policy' task in root branch: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x626172: no valid candidate policies`)
+
+	var ae *PolicyAuthorizationError
+	c.Assert(err, internal_testutil.ErrorAs, &ae)
+	c.Check(ae.AuthName, DeepEquals, pubKey.Name())
+	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("bar"))
+}
+
+func (s *policySuite) TestPolicyAuthorizeInvalidSignature(c *C) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+
+	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
+		keySign:                  pubKey,
+		policyRef:                []byte("foo"),
+		authorizedPolicies:       []*Policy{policy},
+		expectedRequireAuthValue: true})
+	c.Check(err, ErrorMatches, `cannot run 'authorized policy' task in branch 8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
+		`TPM returned an error for parameter 2 whilst executing command TPM_CC_VerifySignature: TPM_RC_SIGNATURE \(the signature is not valid\)`)
+
+	var e *tpm2.TPMParameterError
+	c.Assert(err, internal_testutil.ErrorAs, &e)
+	c.Check(e, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandVerifySignature, Code: tpm2.ErrorSignature}, Index: 2})
+
+	var ae *PolicyAuthorizationError
+	c.Assert(err, internal_testutil.ErrorAs, &ae)
+	c.Check(ae.AuthName, DeepEquals, pubKey.Name())
+	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e")
+}
+
+func (s *policySuite) testPolicyAuthorizeWithSubPolicyBranches(c *C, path string, expectedRequireAuthValue bool) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := builder.RootBranch().AddBranchNode()
+
+	b1 := node.AddBranch("branch1")
+	c.Check(b1.PolicyAuthValue(), IsNil)
+
+	b2 := node.AddBranch("branch2")
+	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+
+	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
+		keySign:                  pubKey,
+		policyRef:                []byte("foo"),
+		authorizedPolicies:       []*Policy{policy},
+		expectedRequireAuthValue: true})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicyAuthorizeWithSubPolicyBranches(c *C) {
+	s.testPolicyAuthorizeWithSubPolicyBranches(c, "", true)
+}
+
+func (s *policySuite) TestPolicyAuthorizeWithSubPolicyBranchesExplicitPath(c *C) {
+	s.testPolicyAuthorizeWithSubPolicyBranches(c, "*/branch2", false)
+}
+
+func (s *policySuite) TestPolicyAuthorizeWithMultiplePolicies(c *C) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	values := tpm2.PCRValues{
+		tpm2.HashAlgorithmSHA256: {
+			0: internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}}
+	c.Check(builder.RootBranch().PolicyPCR(values), IsNil)
+	policy1, err := builder.Policy()
+	c.Assert(err, IsNil)
+	c.Check(policy1.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+
+	_, values, err = s.TPM.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0}}})
+	c.Assert(err, IsNil)
+
+	builder = NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyPCR(values), IsNil)
+	policy2, err := builder.Policy()
+	c.Assert(err, IsNil)
+	c.Check(policy2.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+
+	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
+		keySign:            pubKey,
+		policyRef:          []byte("foo"),
+		authorizedPolicies: []*Policy{policy1, policy2}})
+	c.Check(err, IsNil)
 }
 
 func (s *policySuite) TestPolicyAuthValue(c *C) {

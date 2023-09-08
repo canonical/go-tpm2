@@ -84,6 +84,8 @@ type Resources struct {
 	// Unloaded resources are transient objects that need to be loaded with
 	// TPM2_Load in order to use. These will be flushed after use.
 	Unloaded []*LoadableResource
+
+	AuthorizedPolicies []*Policy
 }
 
 type resourceContextFlushable struct {
@@ -136,6 +138,15 @@ func (s *sessionContextFlushable) Flush() error {
 	return s.tpm.FlushContext(s.session)
 }
 
+type policyResources interface {
+	LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
+	LoadExternal(public *tpm2.Public) (ResourceContext, error)
+	LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error)
+	LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
+	NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error)
+	Authorize(resource tpm2.ResourceContext) error
+}
+
 // mockResources is an implementation of policyResources that doesn't require
 // access to a TPM.
 type mockResources struct{}
@@ -154,6 +165,10 @@ func (r *mockResources) LoadExternal(public *tpm2.Public) (ResourceContext, erro
 func (r *mockResources) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
 	rc, err := tpm2.NewNVIndexResourceContextFromPub(public)
 	return rc, nil, err
+}
+
+func (r *mockResources) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	return nil, nil
 }
 
 func (*mockResources) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {
