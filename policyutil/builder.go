@@ -268,6 +268,9 @@ func (b *PolicyBuilderBranch) PolicyCounterTimer(operandB tpm2.Operand, offset u
 
 // PolicyCpHash adds a TPM2_PolicyCpHash assertion to this branch in order to bind the policy to
 // the supplied command parameters.
+//
+// As this binds the authorization to an object and and a policy has to have the same algorithm as
+// this, policies with this assertion can only be computed for a single digest algorithm.
 func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Named, params ...interface{}) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicyCpHash", err)
@@ -301,6 +304,9 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 
 // PolicyNameHash adds a TPM2_PolicyNameHash assertion to this branch in order to bind the policy to
 // the supplied command handles.
+//
+// As this binds the authorization to an object and and a policy has to have the same algorithm as
+// this, policies with this assertion can only be computed for a single digest algorithm.
 func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicyNameHash", err)

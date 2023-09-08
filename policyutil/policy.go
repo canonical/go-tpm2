@@ -1312,6 +1312,10 @@ func (p *Policy) computeForDigest(digest *taggedHash) error {
 // Compute computes the digest for this policy for the specified algorithm. This also
 // updates stored digests within the policy, so the policy should be persisted after
 // calling this. On success, it returns the computed digest.
+//
+// Policies that contain TPM2_PolicyCpHash or TPM2_PolicyNameHash assertions can only
+// be computed for a single digest algorithm. An error will be returned if the policy has
+// already been computed for another algorithm.
 func (p *Policy) Compute(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	if !alg.IsValid() {
 		return nil, errors.New("invalid algorithm")
