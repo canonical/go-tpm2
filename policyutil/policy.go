@@ -967,8 +967,8 @@ func (p *executePolicyParams) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *
 }
 
 type tpmState interface {
-	PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
-	NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
+	PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
+	NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
 	ReadClock() (*tpm2.TimeInfo, error)
 }
 

@@ -243,7 +243,7 @@ func (f *policyBranchFilter) filterUsageIncompatibleBranches() error {
 
 		nvWritten, set := r.NvWritten()
 		if set && f.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
-			pub, err := f.state.NVPublic(f.usage.nvHandle)
+			pub, err := f.state.NVReadPublic(f.usage.nvHandle)
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
@@ -279,7 +279,7 @@ func (f *policyBranchFilter) filterPcrIncompatibleBranches() error {
 		return nil
 	}
 
-	pcrValues, err := f.state.PCRValues(pcrs)
+	pcrValues, err := f.state.PCRRead(pcrs)
 	if err != nil {
 		return fmt.Errorf("cannot obtain PCR values: %w", err)
 	}

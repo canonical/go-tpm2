@@ -40,13 +40,13 @@ type PolicyExecuteHelper interface {
 	// Authorize sets the authorization value of the specified resource context.
 	Authorize(resource tpm2.ResourceContext) error
 
-	// PCRValues returns the values of the PCRs associated with
+	// PCRRead returns the values of the PCRs associated with
 	// the specified selection.
-	PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
+	PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
 
-	// NVPublic returns the public area of the NV index with the supplied
+	// NVReadPublic returns the public area of the NV index with the supplied
 	// handle.
-	NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
+	NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
 
 	// ReadClock obtains the current TimeInfo.
 	ReadClock() (*tpm2.TimeInfo, error)
@@ -224,12 +224,12 @@ func (h *tpmPolicyExecuteHelper) Authorize(resource tpm2.ResourceContext) error 
 	return h.authorizer.Authorize(resource)
 }
 
-func (h *tpmPolicyExecuteHelper) PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
+func (h *tpmPolicyExecuteHelper) PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
 	_, values, err := h.tpm.PCRRead(pcrs, h.sessions...)
 	return values, err
 }
 
-func (h *tpmPolicyExecuteHelper) NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
+func (h *tpmPolicyExecuteHelper) NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
 	index := tpm2.NewLimitedHandleContext(handle)
 	pub, _, err := h.tpm.NVReadPublic(index, h.sessions...)
 	return pub, err
@@ -261,11 +261,11 @@ func (*nullPolicyExecuteHelper) Authorize(resource tpm2.ResourceContext) error {
 	return errors.New("no PolicyExecuteHelper")
 }
 
-func (*nullPolicyExecuteHelper) PCRValues(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
+func (*nullPolicyExecuteHelper) PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
 	return nil, errors.New("no PolicyExecuteHelper")
 }
 
-func (*nullPolicyExecuteHelper) NVPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
+func (*nullPolicyExecuteHelper) NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
 	return nil, errors.New("no PolicyExecuteHelper")
 }
 
