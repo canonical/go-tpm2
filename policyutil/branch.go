@@ -158,7 +158,6 @@ const (
 type policyBranchFilter struct {
 	runner     *policyRunner
 	state      tpmState
-	params     policyParams
 	usage      *PolicySessionUsage
 	sessionAlg tpm2.HashAlgorithmId
 
@@ -175,7 +174,6 @@ func newPolicyBranchFilter(runner *policyRunner, state tpmState, usage *PolicySe
 	return &policyBranchFilter{
 		runner:     runner,
 		state:      state,
-		params:     runner.params(),
 		usage:      usage,
 		sessionAlg: runner.session().HashAlg(),
 	}
@@ -194,8 +192,8 @@ func (f *policyBranchFilter) filterMissingAuthBranches() {
 	for p, r := range f.detailsMap {
 		missing := false
 		for _, signed := range r.Signed {
-			auth := f.params.signedAuthorization(signed.AuthName, signed.PolicyRef)
-			ticket := f.params.ticket(signed.AuthName, signed.PolicyRef)
+			auth := f.runner.params().signedAuthorization(signed.AuthName, signed.PolicyRef)
+			ticket := f.runner.params().ticket(signed.AuthName, signed.PolicyRef)
 			if auth == nil && ticket == nil {
 				missing = true
 				break
@@ -476,7 +474,7 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches, callback fu
 
 		return nil
 	}))
-	restoreParams = f.runner.overrideParams(f)
+	restoreParams = f.runner.overrideParams(new(mockPolicyParams))
 	restoreResources = f.runner.overrideResources(new(mockResources))
 	restoreSession = f.runner.overrideSession(&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &f.details})
 
@@ -489,23 +487,6 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches, callback fu
 			},
 		},
 	})
-	return nil
-}
-
-func (f *policyBranchFilter) signedAuthorization(authName tpm2.Name, policyRef tpm2.Nonce) *PolicySignedAuthorization {
-	auth := f.params.signedAuthorization(authName, policyRef)
-	if auth == nil {
-		auth = &PolicySignedAuthorization{
-			Authorization: &PolicyAuthorization{
-				AuthKey:   new(tpm2.Public),
-				PolicyRef: policyRef,
-			},
-		}
-	}
-	return auth
-}
-
-func (f *policyBranchFilter) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
 	return nil
 }
 
