@@ -3742,7 +3742,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, _, err = policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyExecuteHelper(s.TPM, nil, nil), nil)
-	c.Check(err, ErrorMatches, `cannot run 'complete filter branches' task in root branch: cannot select branch: no appropriate branches`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select branch: no appropriate branches`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
