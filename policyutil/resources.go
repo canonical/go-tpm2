@@ -36,33 +36,15 @@ type ResourceAuthorizer interface {
 	Authorize(resource tpm2.ResourceContext) error
 }
 
-// SavedResource contains the context of a saved transient object and its name, and
-// can be used to supply transient resources to [Policy.Execute].
-type SavedResource struct {
-	Name    tpm2.Name
-	Context *tpm2.Context
+// PersistentResource contains details associated with a persistent object or
+// NV index.
+type PersistentResource struct {
+	Name   tpm2.Name
+	Handle tpm2.Handle
 }
 
-// SaveAndFlushResource saves the context of the supplied transient resource, flushes it and
-// returns a *SavedResource instance that can be supplied to [Policy.Execute].
-func SaveAndFlushResource(tpm *tpm2.TPMContext, resource tpm2.ResourceContext) (*SavedResource, error) {
-	name := resource.Name()
-	context, err := tpm.ContextSave(resource)
-	if err != nil {
-		return nil, err
-	}
-	if err := tpm.FlushContext(resource); err != nil {
-		return nil, err
-	}
-	return &SavedResource{
-		Name:    name,
-		Context: context,
-	}, nil
-}
-
-// LoadableResource contains the data associated with an unloaded transient object, and
-// can be used to supply transient resources to [Policy.Execute].
-type LoadableResource struct {
+// TransientResource contains details associated with a transient object.
+type TransientResource struct {
 	ParentName tpm2.Name
 	Public     *tpm2.Public
 	Private    tpm2.Private
@@ -70,21 +52,14 @@ type LoadableResource struct {
 
 // Resources contains the resources that are required by [NewTPMPolicyExecuteHelper].
 type Resources struct {
-	// Loaded resources are resources that are already loaded in the TPM, such
-	// as NV indices, persistent resources, or transient resources that have
-	// already been loaded. Note that permanent or PCR resources do not need
-	// to be explicitly supplied.
-	Loaded []tpm2.ResourceContext
+	// Persistent contains the details associated with persistent objects and
+	// NV indexes.
+	Persistent []PersistentResource
 
-	// Saved resources are transient objects that have been previously loaded,
-	// context saved and then flushed, and need to be context loaded with
-	// TPM2_ContextLoad in order to use. These will be flushed after use.
-	Saved []*SavedResource
+	// Transient contains the details associated with loadable transient objects.
+	Transient []TransientResource
 
-	// Unloaded resources are transient objects that need to be loaded with
-	// TPM2_Load in order to use. These will be flushed after use.
-	Unloaded []*LoadableResource
-
+	// AuthorizedPolicies contain authorized sub-policies
 	AuthorizedPolicies []*Policy
 }
 

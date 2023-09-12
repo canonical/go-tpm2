@@ -1953,30 +1953,10 @@ func (s *policySuite) TestPolicySecretWithSession(c *C) {
 }
 
 func (s *policySuite) TestPolicySecretWithWithTransient(c *C) {
-	object := s.CreateStoragePrimaryKeyRSA(c)
-	err := s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject: object,
-		policyRef:  []byte("foo"),
-		resources:  &Resources{Loaded: []tpm2.ResourceContext{object}}})
-	c.Check(err, IsNil)
-}
-
-func (s *policySuite) TestPolicySecretWithWithTransientSaved(c *C) {
-	object := s.CreateStoragePrimaryKeyRSA(c)
-
-	saved, err := SaveAndFlushResource(s.TPM, object)
-	c.Assert(err, IsNil)
-
-	err = s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject:    saved.Name,
-		policyRef:     []byte("foo"),
-		resources:     &Resources{Saved: []*SavedResource{saved}},
-		expectedFlush: true})
-	c.Check(err, IsNil)
-}
-
-func (s *policySuite) TestPolicySecretWithWithTransientLoadable(c *C) {
 	parent := s.CreateStoragePrimaryKeyRSA(c)
+	persistent := s.NextAvailableHandle(c, 0x81000008)
+	s.EvictControl(c, tpm2.HandleOwner, parent, persistent)
+
 	priv, pub, _, _, _, err := s.TPM.Create(parent, nil, testutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -2010,8 +1990,13 @@ func (s *policySuite) TestPolicySecretWithWithTransientLoadable(c *C) {
 	}
 
 	resources := &Resources{
-		Loaded: []tpm2.ResourceContext{parent},
-		Unloaded: []*LoadableResource{
+		Persistent: []PersistentResource{
+			{
+				Name:   parent.Name(),
+				Handle: persistent,
+			},
+		},
+		Transient: []TransientResource{
 			{
 				ParentName: parent.Name(),
 				Private:    priv,
@@ -2057,11 +2042,8 @@ func (s *policySuite) TestPolicySecretFail(c *C) {
 func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	object := s.CreateStoragePrimaryKeyRSA(c)
 
-	saved, err := SaveAndFlushResource(s.TPM, object)
-	c.Assert(err, IsNil)
-
-	err = s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject: saved.Name,
+	err := s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject: object.Name(),
 		policyRef:  []byte("foo")})
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot load resource with name 0x([[:xdigit:]]{68}): cannot find resource`)
 
@@ -2071,7 +2053,7 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 
 	var rle *ResourceLoadError
 	c.Check(err, internal_testutil.ErrorAs, &rle)
-	c.Check(rle.Name, DeepEquals, saved.Name)
+	c.Check(rle.Name, DeepEquals, object.Name())
 }
 
 type testExecutePolicySignedData struct {

@@ -59,12 +59,17 @@ type PolicyExecuteHelper interface {
 	VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
 }
 
+type savedResource struct {
+	name    tpm2.Name
+	context *tpm2.Context
+}
+
 type tpmPolicyExecuteHelper struct {
 	tpm        *tpm2.TPMContext
 	resources  *Resources
 	authorizer ResourceAuthorizer
-	loaded     []tpm2.ResourceContext
-	saved      []*SavedResource
+	persistent []PersistentResource
+	saved      []savedResource
 	sessions   []tpm2.SessionContext
 }
 
@@ -99,22 +104,30 @@ func (h *tpmPolicyExecuteHelper) LoadName(name tpm2.Name) (ResourceContext, *Pol
 		return newResourceContextNonFlushable(h.tpm.GetPermanentContext(name.Handle())), nil, nil
 	}
 
-	// Search already loaded resources
-	for _, resource := range append(h.resources.Loaded, h.loaded...) {
-		if !bytes.Equal(resource.Name(), name) {
+	// Search persistent resources
+	for _, resource := range append(h.persistent, h.resources.Persistent...) {
+		if !bytes.Equal(resource.Name, name) {
 			continue
 		}
 
-		return newResourceContextNonFlushable(resource), nil, nil
+		rc, err := h.tpm.NewResourceContext(resource.Handle, h.sessions...)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !bytes.Equal(rc.Name(), name) {
+			return nil, nil, fmt.Errorf("loaded context has the wrong name (gotr %#x, expected %#x)", rc.Name(), name)
+		}
+
+		return newResourceContextNonFlushable(rc), nil, nil
 	}
 
 	// Search saved contexts
-	for _, context := range append(h.resources.Saved, h.saved...) {
-		if !bytes.Equal(context.Name, name) {
+	for _, context := range h.saved {
+		if !bytes.Equal(context.name, name) {
 			continue
 		}
 
-		hc, err := h.tpm.ContextLoad(context.Context)
+		hc, err := h.tpm.ContextLoad(context.context)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -132,7 +145,7 @@ func (h *tpmPolicyExecuteHelper) LoadName(name tpm2.Name) (ResourceContext, *Pol
 	}
 
 	// Search loadable objects
-	for _, object := range h.resources.Unloaded {
+	for _, object := range h.resources.Transient {
 		if !bytes.Equal(object.Public.Name(), name) {
 			continue
 		}
@@ -172,7 +185,7 @@ func (h *tpmPolicyExecuteHelper) LoadName(name tpm2.Name) (ResourceContext, *Pol
 		}
 
 		if context, err := h.tpm.ContextSave(resource); err == nil {
-			h.saved = append(h.saved, &SavedResource{Name: name, Context: context})
+			h.saved = append(h.saved, savedResource{name: name, context: context})
 		}
 
 		return newResourceContextFlushable(h.tpm, resource), nil, nil
@@ -200,7 +213,7 @@ func (h *tpmPolicyExecuteHelper) LoadName(name tpm2.Name) (ResourceContext, *Pol
 			continue
 		}
 
-		h.loaded = append(h.loaded, resource)
+		h.persistent = append(h.persistent, PersistentResource{Name: name, Handle: handle})
 		return newResourceContextNonFlushable(resource), nil, nil
 	}
 
