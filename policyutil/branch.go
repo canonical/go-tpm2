@@ -447,7 +447,7 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 	walker = newTreeWalker(
 		&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &currentDetails},
 		f,
-		func() (treeWalkerBeginBranchFn, error) {
+		func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error) {
 			details := currentDetails
 			path := currentPath
 
@@ -456,9 +456,8 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 				currentDetails = details
 				walker.runner.setSession(&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &currentDetails})
 				return nil
-			}, nil
+			}, nil, nil
 		},
-		nil,
 		func() error {
 			f.detailsMap[currentPath] = currentDetails
 			f.paths = append(f.paths, currentPath)
@@ -505,33 +504,29 @@ func (r *policyBranchFilter) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef
 var errTreeWalkerSkipBranch = errors.New("")
 
 type (
-	treeWalkerBeginBranchNodeFn func() (treeWalkerBeginBranchFn, error)
-	treeWalkerBeginBranchFn     func(policyBranchPath) error
-	treeWalkerCompleteBranchFn  func() error
+	treeWalkerBeginBranchNodeFn  func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error)
+	treeWalkerBeginBranchFn      func(policyBranchPath) error
+	treeWalkerEndBranchFn        func() error
+	treeWalkerCompleteFullPathFn func() error
 )
 
 type treeWalkerHelper struct {
 	sessionAlg tpm2.HashAlgorithmId
 	controller policyRunnerController
 
-	beginBranchNodeFn treeWalkerBeginBranchNodeFn
-	beginAuthorizedFn treeWalkerBeginBranchNodeFn
-	completeBranchFn  treeWalkerCompleteBranchFn
+	beginBranchNodeFn  treeWalkerBeginBranchNodeFn
+	completeFullPathFn treeWalkerCompleteFullPathFn
 
 	started          bool
 	beginBranchQueue []taskFn
 }
 
-func newTreeWalkerHelper(runner *policyRunner, beginBranchNode, beginAuthorized treeWalkerBeginBranchNodeFn, completeBranch treeWalkerCompleteBranchFn) *treeWalkerHelper {
-	if beginAuthorized == nil {
-		beginAuthorized = beginBranchNode
-	}
+func newTreeWalkerHelper(runner *policyRunner, beginBranchNode treeWalkerBeginBranchNodeFn, completeFullPath treeWalkerCompleteFullPathFn) *treeWalkerHelper {
 	return &treeWalkerHelper{
-		sessionAlg:        runner.session().HashAlg(),
-		controller:        runner,
-		beginBranchNodeFn: beginBranchNode,
-		beginAuthorizedFn: beginAuthorized,
-		completeBranchFn:  completeBranch,
+		sessionAlg:         runner.session().HashAlg(),
+		controller:         runner,
+		beginBranchNodeFn:  beginBranchNode,
+		completeFullPathFn: completeFullPath,
 	}
 }
 
@@ -547,7 +542,7 @@ func (h *treeWalkerHelper) pushNextBranchWalk() {
 	}
 }
 
-func (h *treeWalkerHelper) walkBranch(parentPath policyBranchPath, beginBranchFn treeWalkerBeginBranchFn, index int, branch *policyBranch, restoreTasks func()) error {
+func (h *treeWalkerHelper) walkBranch(parentPath policyBranchPath, beginBranchFn treeWalkerBeginBranchFn, endBranchFn treeWalkerEndBranchFn, index int, branch *policyBranch, restoreTasks func()) error {
 	if beginBranchFn != nil {
 		name := policyBranchPath(branch.Name)
 		if len(name) == 0 {
@@ -564,6 +559,14 @@ func (h *treeWalkerHelper) walkBranch(parentPath policyBranchPath, beginBranchFn
 	}
 
 	restoreTasks()
+	if endBranchFn != nil {
+		h.controller.pushTasks(func() error {
+			if err := endBranchFn(); err != nil {
+				return fmt.Errorf("cannot end walk branch: %w", err)
+			}
+			return nil
+		})
+	}
 	h.controller.pushElements(branch.Policy)
 	return nil
 }
@@ -593,8 +596,8 @@ func (h *treeWalkerHelper) handleBranches(branches policyBranches, complete func
 		}
 
 		h.controller.appendTask(func() error {
-			if err := h.completeBranchFn(); err != nil {
-				return fmt.Errorf("cannot complete walk branch: %w", err)
+			if err := h.completeFullPathFn(); err != nil {
+				return fmt.Errorf("cannot complete walk full path: %w", err)
 			}
 			h.pushNextBranchWalk()
 			return nil
@@ -605,9 +608,10 @@ func (h *treeWalkerHelper) handleBranches(branches policyBranches, complete func
 	h.controller.clearTasks()
 
 	var beginBranchFn treeWalkerBeginBranchFn
+	var endBranchFn treeWalkerEndBranchFn
 	if h.started {
 		var err error
-		beginBranchFn, err = h.beginBranchNodeFn()
+		beginBranchFn, endBranchFn, err = h.beginBranchNodeFn()
 		if err != nil {
 			return fmt.Errorf("cannot begin walk branch node: %w", err)
 		}
@@ -618,7 +622,7 @@ func (h *treeWalkerHelper) handleBranches(branches policyBranches, complete func
 		i := i
 		branch := branch
 		tasks = append(tasks, func() error {
-			return h.walkBranch(currentPath, beginBranchFn, i, branch, restoreTasks)
+			return h.walkBranch(currentPath, beginBranchFn, endBranchFn, i, branch, restoreTasks)
 		})
 	}
 
@@ -643,7 +647,7 @@ func (h *treeWalkerHelper) handleAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	h.controller.clearTasks()
 	currentPath := h.controller.currentPath()
 
-	beginBranchFn, err := h.beginAuthorizedFn()
+	beginBranchFn, endBranchFn, err := h.beginBranchNodeFn()
 	if err != nil {
 		return err
 	}
@@ -669,12 +673,12 @@ func (h *treeWalkerHelper) handleAuthorizedPolicy(keySign *tpm2.Public, policyRe
 		}
 
 		tasks = append(tasks, func() error {
-			return h.walkBranch(currentPath, beginBranchFn, i, branch, restoreTasks)
+			return h.walkBranch(currentPath, beginBranchFn, endBranchFn, i, branch, restoreTasks)
 		})
 	}
 	if len(tasks) == 0 {
 		tasks = append(tasks, func() error {
-			return h.walkBranch(currentPath, beginBranchFn, 0, &policyBranch{Name: "…"}, restoreTasks)
+			return h.walkBranch(currentPath, beginBranchFn, endBranchFn, 0, &policyBranch{Name: "…"}, restoreTasks)
 		})
 	}
 
@@ -690,14 +694,14 @@ type treeWalker struct {
 	runner *policyRunner
 }
 
-func newTreeWalker(session PolicySession, resources policyResources, beginBranchNode, beginAuthorized treeWalkerBeginBranchNodeFn, completeBranch treeWalkerCompleteBranchFn) *treeWalker {
+func newTreeWalker(session PolicySession, resources policyResources, beginBranchNode treeWalkerBeginBranchNodeFn, completeFullPath treeWalkerCompleteFullPathFn) *treeWalker {
 	return &treeWalker{
 		runner: newPolicyRunner(
 			session,
 			new(mockPolicyParams),
 			resources,
 			func(runner *policyRunner) policyRunnerHelper {
-				return newTreeWalkerHelper(runner, beginBranchNode, beginAuthorized, completeBranch)
+				return newTreeWalkerHelper(runner, beginBranchNode, completeFullPath)
 			},
 		),
 	}

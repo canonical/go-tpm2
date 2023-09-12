@@ -1725,15 +1725,14 @@ func (p *Policy) Branches() ([]string, error) {
 	walker := newTreeWalker(
 		newNullPolicySession(tpm2.HashAlgorithmSHA256),
 		new(mockResources),
-		func() (treeWalkerBeginBranchFn, error) {
+		func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error) {
 			path := currentPath
 
 			return func(name policyBranchPath) error {
 				currentPath = path.Concat(name)
 				return nil
-			}, nil
+			}, nil, nil
 		},
-		nil,
 		func() error {
 			result = append(result, string(currentPath))
 			return nil
@@ -1877,32 +1876,43 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 		remainingPath  = policyBranchPath(path)
 		currentDetails PolicyBranchDetails
 		currentPath    policyBranchPath
+		consumeGreedy  bool
 	)
 
 	var walker *treeWalker
 	walker = newTreeWalker(
 		&observingPolicySession{session: newNullPolicySession(alg), details: &currentDetails},
 		new(mockResources),
-		func() (treeWalkerBeginBranchFn, error) {
+		func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error) {
 			details := currentDetails
 			path := currentPath
 
-			next, remaining := remainingPath.PopNextComponent()
-			if len(next) > 0 && next[0] == '*' {
-				return nil, fmt.Errorf("invalid path component \"%s\"", next)
+			var next policyBranchPath
+			thisNodeConsumingGreedy := false
+			if consumeGreedy {
+				next = "*"
+			} else {
+				next, remainingPath = remainingPath.PopNextComponent()
+				if next == "**" {
+					consumeGreedy = true
+					thisNodeConsumingGreedy = true
+				}
 			}
-			remainingPath = remaining
-			handledNode := false
 
-			return func(name policyBranchPath) error {
-				if handledNode {
+			explicitlyHandledNode := false
+
+			beginBranchFn := func(name policyBranchPath) error {
+				if explicitlyHandledNode {
 					return errTreeWalkerSkipBranch
 				}
-				if len(next) > 0 {
-					if next != name {
-						return errTreeWalkerSkipBranch
-					}
-					handledNode = true
+				switch {
+				case len(next) == 0 || next[0] == '*':
+					// ok
+				case next == name:
+					// ok
+					explicitlyHandledNode = true
+				default:
+					return errTreeWalkerSkipBranch
 				}
 
 				currentPath = path.Concat(name)
@@ -1912,24 +1922,16 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 					details: &currentDetails,
 				})
 				return nil
-			}, nil
-		},
-		func() (treeWalkerBeginBranchFn, error) {
-			path := currentPath
-
-			next, remaining := remainingPath.PopNextComponent()
-			if len(next) > 0 && next != "…" {
-				return nil, fmt.Errorf("unexpected path component \"%s\"", next)
 			}
-			remainingPath = remaining
 
-			return func(name policyBranchPath) error {
-				if name != "…" {
-					return fmt.Errorf("unexpected policy name \"%s\"", name)
+			endBranchFn := func() error {
+				if thisNodeConsumingGreedy {
+					consumeGreedy = false
 				}
-				currentPath = path.Concat(name)
 				return nil
-			}, nil
+			}
+
+			return beginBranchFn, endBranchFn, nil
 		},
 		func() error {
 			result[string(currentPath)] = currentDetails
