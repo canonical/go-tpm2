@@ -1251,14 +1251,8 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 	}
 
 	// Verify the signature
-	authKey, err := h.resources.LoadExternal(keySign)
-	if err != nil {
-		return &ResourceLoadError{Name: keySign.Name(), err: err}
-	}
-	defer authKey.Flush()
-
 	tbs := ComputePolicyAuthorizationTBSDigest(keySign.Name().Algorithm().GetHash(), approvedPolicy, policyRef)
-	ticket, err := h.tpm.VerifySignature(authKey.Resource(), tbs, policyAuth.Signature)
+	ticket, err := h.tpm.VerifySignature(keySign, tbs, policyAuth.Signature)
 	if err != nil {
 		return err
 	}

@@ -56,7 +56,9 @@ type PolicyExecuteHelper interface {
 	// ReadClock obtains the current TimeInfo.
 	ReadClock() (*tpm2.TimeInfo, error)
 
-	VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
+	// VerifySignature verifies the supplied signature and digest with the specified public
+	// key object.
+	VerifySignature(key *tpm2.Public, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
 }
 
 type savedResource struct {
@@ -277,8 +279,16 @@ func (h *tpmPolicyExecuteHelper) ReadClock() (*tpm2.TimeInfo, error) {
 	return h.tpm.ReadClock(h.sessions...)
 }
 
-func (h *tpmPolicyExecuteHelper) VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
-	return h.tpm.VerifySignature(key, digest, signature, h.sessions...)
+func (h *tpmPolicyExecuteHelper) VerifySignature(key *tpm2.Public, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
+	authKey, err := h.tpm.LoadExternal(nil, key, tpm2.HandleOwner, h.sessions...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		h.tpm.FlushContext(authKey)
+	}()
+
+	return h.tpm.VerifySignature(authKey, digest, signature, h.sessions...)
 }
 
 type nullPolicyExecuteHelper struct {

@@ -14,7 +14,7 @@ type tpmConnection interface {
 	PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
 	NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
 	ReadClock() (*tpm2.TimeInfo, error)
-	VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
+	VerifySignature(key *tpm2.Public, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
 }
 
 type nullTpmConnection struct{}
@@ -31,6 +31,6 @@ func (*nullTpmConnection) ReadClock() (*tpm2.TimeInfo, error) {
 	return nil, errors.New("no TPM connection")
 }
 
-func (*nullTpmConnection) VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
+func (*nullTpmConnection) VerifySignature(key *tpm2.Public, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
 	return nil, errors.New("no TPM connection")
 }
