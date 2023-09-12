@@ -5,8 +5,6 @@
 package policyutil
 
 import (
-	"errors"
-
 	"github.com/canonical/go-tpm2"
 )
 
@@ -19,21 +17,6 @@ type ResourceContext interface {
 type SessionContext interface {
 	Session() tpm2.SessionContext // The actual session
 	Close() error                 // Save or flush the session for future use
-}
-
-// ResourceAuthorizer provides a way for an implementation to authorize a resource when
-// using [NewTPMRPolicyExecuteHelper].
-type ResourceAuthorizer interface {
-	// NewSession should return a session of the specified type to use for authorization
-	// of a resource with the specified name algorithm. If sessionType is [tpm2.SessionTypeHMAC]
-	// then it is optional whether to return a session or not.
-	//
-	// The Close method of the returned session context will be called once the session has
-	// been used.
-	NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error)
-
-	// Authorize sets the authorization value of the specified resource context.
-	Authorize(resource tpm2.ResourceContext) error
 }
 
 // PersistentResource contains details associated with a persistent object or
@@ -120,6 +103,7 @@ type policyResources interface {
 	LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
 	NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error)
 	Authorize(resource tpm2.ResourceContext) error
+	SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
 // mockResources is an implementation of policyResources that doesn't require
@@ -157,12 +141,6 @@ func (*mockResources) Authorize(resource tpm2.ResourceContext) error {
 	return nil
 }
 
-type nullResourceAuthorizer struct{}
-
-func (*nullResourceAuthorizer) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {
-	return nil, errors.New("no ResourceAuthorizer")
-}
-
-func (*nullResourceAuthorizer) Authorize(resource tpm2.ResourceContext) error {
-	return errors.New("no ResourceAuthorizer")
+func (*mockResources) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return &PolicySignedAuthorization{Authorization: new(PolicyAuthorization)}, nil
 }

@@ -45,6 +45,10 @@ type PolicyExecuteHelper interface {
 	// Authorize sets the authorization value of the specified resource context.
 	Authorize(resource tpm2.ResourceContext) error
 
+	// SignAuthorization signs a TPM2_PolicySigned authorization for the specified key, policy ref
+	// and session nonce.
+	SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
+
 	// PCRRead returns the values of the PCRs associated with
 	// the specified selection.
 	PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error)
@@ -66,10 +70,29 @@ type savedResource struct {
 	context *tpm2.Context
 }
 
+// Authorizer provides a way for an implementation to provide authorizations
+// using [NewTPMRPolicyExecuteHelper].
+type Authorizer interface {
+	// NewSession should return a session of the specified type to use for authorization
+	// of a resource with the specified name algorithm. If sessionType is [tpm2.SessionTypeHMAC]
+	// then it is optional whether to return a session or not.
+	//
+	// The Close method of the returned session context will be called once the session has
+	// been used.
+	NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error)
+
+	// Authorize sets the authorization value of the specified resource context.
+	Authorize(resource tpm2.ResourceContext) error
+
+	// SignAuthorization signs a TPM2_PolicySigned authorization for the specified key, policy ref
+	// and session nonce.
+	SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
+}
+
 type tpmPolicyExecuteHelper struct {
 	tpm        *tpm2.TPMContext
 	resources  *Resources
-	authorizer ResourceAuthorizer
+	authorizer Authorizer
 	persistent []PersistentResource
 	saved      []savedResource
 	sessions   []tpm2.SessionContext
@@ -82,12 +105,12 @@ type tpmPolicyExecuteHelper struct {
 // execution. Some resources require authorization, which is performed via the authorizer
 // argument. The authorizer argument is required when a policy contains TPM2_PolicyNV or
 // TPM2_PolicySecret assertions.
-func NewTPMPolicyExecuteHelper(tpm *tpm2.TPMContext, resources *Resources, authorizer ResourceAuthorizer, sessions ...tpm2.SessionContext) PolicyExecuteHelper {
+func NewTPMPolicyExecuteHelper(tpm *tpm2.TPMContext, resources *Resources, authorizer Authorizer, sessions ...tpm2.SessionContext) PolicyExecuteHelper {
 	if resources == nil {
 		resources = new(Resources)
 	}
 	if authorizer == nil {
-		authorizer = new(nullResourceAuthorizer)
+		authorizer = new(nullAuthorizer)
 	}
 
 	return &tpmPolicyExecuteHelper{
@@ -264,6 +287,10 @@ func (h *tpmPolicyExecuteHelper) Authorize(resource tpm2.ResourceContext) error 
 	return h.authorizer.Authorize(resource)
 }
 
+func (h *tpmPolicyExecuteHelper) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return h.authorizer.SignAuthorization(sessionNonce, authKey, policyRef)
+}
+
 func (h *tpmPolicyExecuteHelper) PCRRead(pcrs tpm2.PCRSelectionList) (tpm2.PCRValues, error) {
 	_, values, err := h.tpm.PCRRead(pcrs, h.sessions...)
 	return values, err
@@ -317,4 +344,22 @@ func (*nullPolicyExecuteHelper) NewSession(nameAlg tpm2.HashAlgorithmId, session
 
 func (*nullPolicyExecuteHelper) Authorize(resource tpm2.ResourceContext) error {
 	return errors.New("no PolicyExecuteHelper")
+}
+
+func (*nullPolicyExecuteHelper) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return nil, errors.New("no PolicyExecuteHelper")
+}
+
+type nullAuthorizer struct{}
+
+func (*nullAuthorizer) NewSession(nameAlg tpm2.HashAlgorithmId, sessionType tpm2.SessionType) (SessionContext, error) {
+	return nil, errors.New("no Authorizer")
+}
+
+func (*nullAuthorizer) Authorize(resource tpm2.ResourceContext) error {
+	return errors.New("no Authorizer")
+}
+
+func (*nullAuthorizer) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return nil, errors.New("no Authorizer")
 }

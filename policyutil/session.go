@@ -34,6 +34,8 @@ type PolicySession interface {
 	PolicyNvWritten(writtenSet bool) error
 
 	PolicyGetDigest() (tpm2.Digest, error)
+
+	NonceTPM() tpm2.Nonce
 }
 
 type tpmPolicySession struct {
@@ -117,6 +119,10 @@ func (c *tpmPolicySession) PolicyNvWritten(writtenSet bool) error {
 
 func (c *tpmPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 	return c.tpm.PolicyGetDigest(c.policySession, c.sessions...)
+}
+
+func (c *tpmPolicySession) NonceTPM() tpm2.Nonce {
+	return c.policySession.NonceTPM()
 }
 
 // computePolicySession is an implementation of Session that computes a
@@ -279,6 +285,10 @@ func (s *computePolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 	return s.digest.Digest, nil
 }
 
+func (*computePolicySession) NonceTPM() tpm2.Nonce {
+	return nil
+}
+
 type nullPolicySession struct {
 	alg tpm2.HashAlgorithmId
 }
@@ -353,6 +363,10 @@ func (*nullPolicySession) PolicyNvWritten(writtenSet bool) error {
 
 func (s *nullPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 	return make(tpm2.Digest, s.alg.Size()), nil
+}
+
+func (*nullPolicySession) NonceTPM() tpm2.Nonce {
+	return nil
 }
 
 type observingPolicySession struct {
@@ -475,4 +489,8 @@ func (s *observingPolicySession) PolicyNvWritten(writtenSet bool) error {
 
 func (s *observingPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 	return s.session.PolicyGetDigest()
+}
+
+func (s *observingPolicySession) NonceTPM() tpm2.Nonce {
+	return s.session.NonceTPM()
 }

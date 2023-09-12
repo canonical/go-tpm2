@@ -155,7 +155,6 @@ type policyBranchFilter struct {
 	mockResources
 
 	sessionAlg tpm2.HashAlgorithmId
-	params     policyParams
 	resources  policyResources
 	tpm        tpmConnection
 	usage      *PolicySessionUsage
@@ -164,10 +163,9 @@ type policyBranchFilter struct {
 	detailsMap map[policyBranchPath]PolicyBranchDetails
 }
 
-func newPolicyBranchFilter(sessionAlg tpm2.HashAlgorithmId, params policyParams, resources policyResources, tpm tpmConnection, usage *PolicySessionUsage) *policyBranchFilter {
+func newPolicyBranchFilter(sessionAlg tpm2.HashAlgorithmId, resources policyResources, tpm tpmConnection, usage *PolicySessionUsage) *policyBranchFilter {
 	return &policyBranchFilter{
 		sessionAlg: sessionAlg,
-		params:     params,
 		resources:  resources,
 		tpm:        tpm,
 		usage:      usage,
@@ -186,21 +184,11 @@ func (f *policyBranchFilter) filterInvalidBranches() {
 func (f *policyBranchFilter) filterMissingAuthBranches() {
 	for p, r := range f.detailsMap {
 		missing := false
-		for _, signed := range r.Signed {
-			auth := f.params.signedAuthorization(signed.AuthName, signed.PolicyRef)
-			ticket := f.params.ticket(signed.AuthName, signed.PolicyRef)
-			if auth == nil && ticket == nil {
+		for _, auth := range r.Authorize {
+			policies, err := f.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
+			if err != nil || len(policies) == 0 {
 				missing = true
 				break
-			}
-		}
-		if !missing {
-			for _, auth := range r.Authorize {
-				policies, err := f.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
-				if err != nil || len(policies) == 0 {
-					missing = true
-					break
-				}
 			}
 		}
 		if missing {
@@ -698,7 +686,6 @@ func newTreeWalker(session PolicySession, resources policyResources, beginBranch
 	return &treeWalker{
 		runner: newPolicyRunner(
 			session,
-			new(mockPolicyParams),
 			resources,
 			func(runner *policyRunner) policyRunnerHelper {
 				return newTreeWalkerHelper(runner, beginBranchNode, completeFullPath)
