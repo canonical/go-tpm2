@@ -241,6 +241,8 @@ func (u *PolicySessionUsage) NoAuthValue() *PolicySessionUsage {
 	return u
 }
 
+type PolicyAuthorizationID = PolicyAuthorizationDetails
+
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
 type PolicyExecuteParams struct {
 	Tickets []*PolicyTicket // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
@@ -282,6 +284,18 @@ type PolicyExecuteParams struct {
 	// encountered in a policy, Policy.Execute will attempt to select an appropriate
 	// execution path automatically.
 	Path string
+
+	// IgnoreAuthorizations can be used to indicate that branches containing TPM2_PolicySigned,
+	// TPM2_PolicySecret or TPM2_PolicyAuthorize assertions matching the specified ID should
+	// be ignored. This can be used where these assertions have failed on previous runs.
+	// This propagates to sub-policies.
+	IgnoreAuthorizations []PolicyAuthorizationID
+
+	// IgnoreNV can be used to indicate that branches containing TPM2_PolicyNV assertions
+	// with an NV index matching the specified name should be ignored. This can be used where
+	// these assertions have failed due to an authorization issue on previous runs. This
+	// propagates to sub-policies.
+	IgnoreNV []Named
 }
 
 type policyTickets interface {
@@ -1128,26 +1142,30 @@ type subPolicyRunner interface {
 
 type executePolicyHelper struct {
 	policyBranchSelectMixin
-	sessionAlg      tpm2.HashAlgorithmId
-	tickets         policyTickets
-	resources       PolicyResourceLoader
-	controller      policyRunnerController
-	tpm             TPMConnection
-	remaining       policyBranchPath
-	usage           *PolicySessionUsage
-	subPolicyRunner subPolicyRunner
+	sessionAlg           tpm2.HashAlgorithmId
+	tickets              policyTickets
+	resources            PolicyResourceLoader
+	controller           policyRunnerController
+	tpm                  TPMConnection
+	remaining            policyBranchPath
+	usage                *PolicySessionUsage
+	ignoreAuthorizations []PolicyAuthorizationID
+	ignoreNV             []Named
+	subPolicyRunner      subPolicyRunner
 }
 
 func newExecutePolicyHelper(runner *policyRunner, tpm TPMConnection, params *PolicyExecuteParams, subPolicyRunner subPolicyRunner) *executePolicyHelper {
 	return &executePolicyHelper{
-		sessionAlg:      runner.session().HashAlg(),
-		tickets:         runner.tickets(),
-		resources:       runner.resources(),
-		controller:      runner,
-		tpm:             tpm,
-		remaining:       policyBranchPath(params.Path),
-		usage:           params.Usage,
-		subPolicyRunner: subPolicyRunner,
+		sessionAlg:           runner.session().HashAlg(),
+		tickets:              runner.tickets(),
+		resources:            runner.resources(),
+		controller:           runner,
+		tpm:                  tpm,
+		remaining:            policyBranchPath(params.Path),
+		usage:                params.Usage,
+		ignoreAuthorizations: params.IgnoreAuthorizations,
+		ignoreNV:             params.IgnoreNV,
+		subPolicyRunner:      subPolicyRunner,
 	}
 }
 
@@ -1220,7 +1238,11 @@ func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Polic
 		}
 
 		var details PolicyBranchDetails
-		params := &PolicyExecuteParams{Usage: usage}
+		params := &PolicyExecuteParams{
+			Usage:                usage,
+			IgnoreAuthorizations: h.ignoreAuthorizations,
+			IgnoreNV:             h.ignoreNV,
+		}
 
 		runner := newPolicyRunner(
 			newProxyPolicySession(newTpmPolicySession(h.tpm, session), &details),
@@ -1270,7 +1292,7 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches, complete f
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		filter := newPolicyBranchFilter(h.sessionAlg, h.resources, h.tpm, h.usage)
+		filter := newPolicyBranchFilter(h.sessionAlg, h.resources, h.tpm, h.usage, h.ignoreAuthorizations, h.ignoreNV)
 		candidates, err := filter.filterBranches(branches)
 		if err != nil {
 			return fmt.Errorf("cannot filter inappropriate branches: %w", err)
@@ -1379,7 +1401,7 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 	case len(next) == 0 || next[0] == '*':
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		filter := newPolicyBranchFilter(h.sessionAlg, h.resources, h.tpm, h.usage)
+		filter := newPolicyBranchFilter(h.sessionAlg, h.resources, h.tpm, h.usage, h.ignoreAuthorizations, h.ignoreNV)
 		candidates, err := filter.filterBranches(branches)
 		if err != nil {
 			return fmt.Errorf("cannot filter inappropriate policies: %w", err)

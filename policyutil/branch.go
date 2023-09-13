@@ -154,21 +154,25 @@ type candidateBranch struct {
 type policyBranchFilter struct {
 	mockPolicyResourceLoader
 
-	sessionAlg tpm2.HashAlgorithmId
-	resources  PolicyResourceLoader
-	tpm        TPMConnection
-	usage      *PolicySessionUsage
+	sessionAlg           tpm2.HashAlgorithmId
+	resources            PolicyResourceLoader
+	tpm                  TPMConnection
+	usage                *PolicySessionUsage
+	ignoreAuthorizations []PolicyAuthorizationID
+	ignoreNV             []Named
 
 	paths      []policyBranchPath
 	detailsMap map[policyBranchPath]PolicyBranchDetails
 }
 
-func newPolicyBranchFilter(sessionAlg tpm2.HashAlgorithmId, resources PolicyResourceLoader, tpm TPMConnection, usage *PolicySessionUsage) *policyBranchFilter {
+func newPolicyBranchFilter(sessionAlg tpm2.HashAlgorithmId, resources PolicyResourceLoader, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyBranchFilter {
 	return &policyBranchFilter{
-		sessionAlg: sessionAlg,
-		resources:  resources,
-		tpm:        tpm,
-		usage:      usage,
+		sessionAlg:           sessionAlg,
+		resources:            resources,
+		tpm:                  tpm,
+		usage:                usage,
+		ignoreAuthorizations: ignoreAuthorizations,
+		ignoreNV:             ignoreNV,
 	}
 }
 
@@ -193,6 +197,47 @@ func (f *policyBranchFilter) filterMissingAuthBranches() {
 		}
 		if missing {
 			delete(f.detailsMap, p)
+		}
+	}
+}
+
+func (f *policyBranchFilter) filterIgnoredResources() {
+	for _, ignore := range f.ignoreAuthorizations {
+		for p, r := range f.detailsMap {
+			found := false
+
+			var auths []PolicyAuthorizationID
+			auths = append(auths, r.Secret...)
+			auths = append(auths, r.Signed...)
+			auths = append(auths, r.Authorize...)
+
+			for _, auth := range auths {
+				if bytes.Equal(auth.AuthName, ignore.AuthName) && bytes.Equal(auth.PolicyRef, ignore.PolicyRef) {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				delete(f.detailsMap, p)
+			}
+		}
+	}
+
+	for _, ignore := range f.ignoreNV {
+		for p, r := range f.detailsMap {
+			found := false
+
+			for _, nv := range r.NV {
+				if bytes.Equal(nv.Index.Name(), ignore.Name()) {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				delete(f.detailsMap, p)
+			}
 		}
 	}
 }
@@ -469,6 +514,7 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 
 	f.filterInvalidBranches()
 	f.filterMissingAuthBranches()
+	f.filterIgnoredResources()
 	if err := f.filterUsageIncompatibleBranches(); err != nil {
 		return nil, fmt.Errorf("cannot filter branches incompatible with usage: %w", err)
 	}

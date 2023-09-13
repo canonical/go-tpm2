@@ -2995,6 +2995,7 @@ func (s *policySuite) TestPolicyNameHash2(c *C) {
 type testExecutePolicyBranchesData struct {
 	usage                    *PolicySessionUsage
 	path                     string
+	ignoreAuthorizations     []PolicyAuthorizationID
 	expectedCommands         tpm2.CommandCodeList
 	expectedRequireAuthValue bool
 }
@@ -3011,6 +3012,15 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	b2 := node.AddBranch("branch2")
 	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
 
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
+
+	b3 := node.AddBranch("branch3")
+	c.Check(b3.PolicySigned(pubKey, []byte("bar")), IsNil)
+
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 
 	policy, err := builder.Policy()
@@ -3021,13 +3031,21 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		Usage: data.usage,
-		Path:  data.path,
+		Usage:                data.usage,
+		Path:                 data.path,
+		IgnoreAuthorizations: data.ignoreAuthorizations,
 	}
 	authorizer := &mockAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
 			c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 			return nil
+		},
+		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+			auth, err := NewPolicySignedAuthorization(session.HashAlg(), nil, nil, 0)
+			c.Assert(err, IsNil)
+			c.Check(auth.Sign(rand.Reader, pubKey, policyRef, key, crypto.SHA256), IsNil)
+
+			return auth, nil
 		},
 	}
 
@@ -3039,6 +3057,10 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	c.Check(requireAuthValue, Equals, data.expectedRequireAuthValue)
 
 	log := s.CommandLog()
+	for _, command := range log {
+		c.Logf("%v", command.GetCommandCode(c))
+	}
+
 	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
 	for i := range log {
 		c.Check(log[i].GetCommandCode(c), Equals, data.expectedCommands[i])
@@ -3137,6 +3159,23 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
 			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: false})
+}
+
+func (s *policySuite) TestPolicyBranchAutoSelectWithUsageAndIgnore(c *C) {
+	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		ignoreAuthorizations: []PolicyAuthorizationID{
+			{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
+		},
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandLoadExternal,
+			tpm2.CommandPolicySigned,
 			tpm2.CommandFlushContext,
 			tpm2.CommandPolicyOR,
 			tpm2.CommandPolicyCommandCode,
