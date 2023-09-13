@@ -152,18 +152,18 @@ type candidateBranch struct {
 }
 
 type policyBranchFilter struct {
-	mockResources
+	mockPolicyResourceLoader
 
 	sessionAlg tpm2.HashAlgorithmId
-	resources  policyResources
-	tpm        tpmConnection
+	resources  PolicyResourceLoader
+	tpm        TPMConnection
 	usage      *PolicySessionUsage
 
 	paths      []policyBranchPath
 	detailsMap map[policyBranchPath]PolicyBranchDetails
 }
 
-func newPolicyBranchFilter(sessionAlg tpm2.HashAlgorithmId, resources policyResources, tpm tpmConnection, usage *PolicySessionUsage) *policyBranchFilter {
+func newPolicyBranchFilter(sessionAlg tpm2.HashAlgorithmId, resources PolicyResourceLoader, tpm TPMConnection, usage *PolicySessionUsage) *policyBranchFilter {
 	return &policyBranchFilter{
 		sessionAlg: sessionAlg,
 		resources:  resources,
@@ -433,7 +433,7 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 
 	var walker *treeWalker
 	walker = newTreeWalker(
-		&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &currentDetails},
+		newProxyPolicySession(newNullPolicySession(f.sessionAlg), &currentDetails),
 		f,
 		func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error) {
 			details := currentDetails
@@ -442,7 +442,7 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 			return func(name policyBranchPath) error {
 				currentPath = path.Concat(name)
 				currentDetails = details
-				walker.runner.setSession(&observingPolicySession{session: newNullPolicySession(f.sessionAlg), details: &currentDetails})
+				walker.runner.setSession(newProxyPolicySession(newNullPolicySession(f.sessionAlg), &currentDetails))
 				return nil
 			}, nil, nil
 		},
@@ -557,6 +557,12 @@ func (h *treeWalkerHelper) walkBranch(parentPath policyBranchPath, beginBranchFn
 	}
 	h.controller.pushElements(branch.Policy)
 	return nil
+}
+
+func (h *treeWalkerHelper) loadExternal(public *tpm2.Public) (ResourceContext, error) {
+	// the handle is not relevant here
+	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	return newResourceContextFlushable(resource, nil), nil
 }
 
 func (h *treeWalkerHelper) cpHash(cpHash *policyCpHashElement) error {
@@ -682,7 +688,7 @@ type treeWalker struct {
 	runner *policyRunner
 }
 
-func newTreeWalker(session PolicySession, resources policyResources, beginBranchNode treeWalkerBeginBranchNodeFn, completeFullPath treeWalkerCompleteFullPathFn) *treeWalker {
+func newTreeWalker(session policySession, resources PolicyResourceLoader, beginBranchNode treeWalkerBeginBranchNodeFn, completeFullPath treeWalkerCompleteFullPathFn) *treeWalker {
 	return &treeWalker{
 		runner: newPolicyRunner(
 			session,

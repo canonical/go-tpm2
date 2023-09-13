@@ -248,6 +248,7 @@ type policyParams interface {
 }
 
 type policyRunnerHelper interface {
+	loadExternal(public *tpm2.Public) (ResourceContext, error)
 	cpHash(cpHash *policyCpHashElement) error
 	nameHash(nameHash *policyNameHashElement) error
 	handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error
@@ -255,8 +256,8 @@ type policyRunnerHelper interface {
 }
 
 type policySessionContext interface {
-	session() PolicySession
-	resources() policyResources
+	session() policySession
+	resources() PolicyResourceLoader
 	helper() policyRunnerHelper
 
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
@@ -277,8 +278,8 @@ type policyRunnerController interface {
 	snapshotTasks() (restore func(), n int)
 	clearTasks()
 
-	session() PolicySession
-	setSession(session PolicySession) (restore func())
+	session() policySession
+	setSession(session policySession) (restore func())
 }
 
 type taggedHash struct {
@@ -325,7 +326,7 @@ func (e *policyNVElement) run(context policySessionContext) error {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
 
-	var auth ResourceContext = newResourceContextNonFlushable(nvIndex)
+	var auth ResourceContext = newResourceContextFlushable(nvIndex, nil)
 	switch {
 	case e.NvIndex.Attrs&tpm2.AttrNVAuthRead != 0:
 		policy = nil
@@ -341,27 +342,11 @@ func (e *policyNVElement) run(context policySessionContext) error {
 		return errors.New("unsupported auth method")
 	}
 
-	session, err := context.resources().NewSession(auth.Resource().Name().Algorithm(), tpm2.SessionTypeHMAC)
-	if err != nil {
-		return fmt.Errorf("cannot create session to authorize auth object: %w", err)
-	}
-	defer func() {
-		if session == nil {
-			return
-		}
-		session.Close()
-	}()
-
 	if err := context.resources().Authorize(auth.Resource()); err != nil {
 		return fmt.Errorf("cannot authorize auth object: %w", err)
 	}
 
-	var tpmSession tpm2.SessionContext
-	if session != nil {
-		tpmSession = session.Session()
-	}
-
-	return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, tpmSession)
+	return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, nil)
 }
 
 type policySecretElement struct {
@@ -403,20 +388,6 @@ func (e *policySecretElement) run(context policySessionContext) error {
 		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: errors.New("unsupported auth method")}
 	}
 
-	session, err := context.resources().NewSession(e.AuthObjectName.Algorithm(), tpm2.SessionTypeHMAC)
-	if err != nil {
-		return &PolicyAuthorizationError{
-			AuthName:  e.AuthObjectName,
-			PolicyRef: e.PolicyRef,
-			err:       fmt.Errorf("cannot create session to authorize auth object: %w", err)}
-	}
-	defer func() {
-		if session == nil {
-			return
-		}
-		session.Close()
-	}()
-
 	if err := context.resources().Authorize(authObject.Resource()); err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,
@@ -424,12 +395,7 @@ func (e *policySecretElement) run(context policySessionContext) error {
 			err:       fmt.Errorf("cannot authorize auth object: %w", err)}
 	}
 
-	var tpmSession tpm2.SessionContext
-	if session != nil {
-		tpmSession = session.Session()
-	}
-
-	timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, tpmSession)
+	timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, nil)
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
@@ -482,7 +448,7 @@ func (e *policySignedElement) run(context policySessionContext) error {
 		}
 	}
 
-	authKey, err := context.resources().LoadExternal(e.AuthKey)
+	authKey, err := context.helper().loadExternal(e.AuthKey)
 	if err != nil {
 		return fmt.Errorf("cannot create authKey context: %w", err)
 	}
@@ -842,8 +808,8 @@ func newDeferredPolicyTask(controller policyRunnerController, fn taskFn) *policy
 }
 
 type policyRunner struct {
-	policySession      PolicySession
-	policyResources    policyResources
+	policySession      policySession
+	policyResources    PolicyResourceLoader
 	policyRunnerHelper policyRunnerHelper
 
 	tickets map[paramKey]*PolicyTicket
@@ -854,7 +820,7 @@ type policyRunner struct {
 	tasks []*policyTask
 }
 
-func newPolicyRunner(session PolicySession, resources policyResources, newHelperFn func(*policyRunner) policyRunnerHelper) *policyRunner {
+func newPolicyRunner(session policySession, resources PolicyResourceLoader, newHelperFn func(*policyRunner) policyRunnerHelper) *policyRunner {
 	out := &policyRunner{
 		policySession:   session,
 		policyResources: resources,
@@ -864,11 +830,11 @@ func newPolicyRunner(session PolicySession, resources policyResources, newHelper
 	return out
 }
 
-func (r *policyRunner) session() PolicySession {
+func (r *policyRunner) session() policySession {
 	return r.policySession
 }
 
-func (r *policyRunner) resources() policyResources {
+func (r *policyRunner) resources() PolicyResourceLoader {
 	return r.policyResources
 }
 
@@ -939,7 +905,7 @@ func (r *policyRunner) clearTasks() {
 	r.tasks = nil
 }
 
-func (r *policyRunner) setSession(session PolicySession) (restore func()) {
+func (r *policyRunner) setSession(session policySession) (restore func()) {
 	orig := r.policySession
 	r.policySession = session
 	return func() {
@@ -973,14 +939,14 @@ func (r *policyRunner) run(policy policyElements) error {
 type executePolicyHelper struct {
 	policyBranchSelectMixin
 	sessionAlg tpm2.HashAlgorithmId
-	resources  policyResources
+	resources  PolicyResourceLoader
 	controller policyRunnerController
-	tpm        tpmConnection
+	tpm        TPMConnection
 	remaining  policyBranchPath
 	usage      *PolicySessionUsage
 }
 
-func newExecutePolicyHelper(runner *policyRunner, tpm tpmConnection, params *PolicyExecuteParams) *executePolicyHelper {
+func newExecutePolicyHelper(runner *policyRunner, tpm TPMConnection, params *PolicyExecuteParams) *executePolicyHelper {
 	return &executePolicyHelper{
 		sessionAlg: runner.session().HashAlg(),
 		resources:  runner.resources(),
@@ -989,6 +955,14 @@ func newExecutePolicyHelper(runner *policyRunner, tpm tpmConnection, params *Pol
 		remaining:  policyBranchPath(params.Path),
 		usage:      params.Usage,
 	}
+}
+
+func (h *executePolicyHelper) loadExternal(public *tpm2.Public) (ResourceContext, error) {
+	resource, err := h.tpm.LoadExternal(nil, public, tpm2.HandleOwner)
+	if err != nil {
+		return nil, err
+	}
+	return newResourceContextFlushable(resource, h.tpm.FlushContext), nil
 }
 
 func (h *executePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
@@ -1204,8 +1178,16 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 	}
 
 	// Verify the signature
+	authKey, err := h.tpm.LoadExternal(nil, keySign, tpm2.HandleOwner)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		h.tpm.FlushContext(authKey)
+	}()
+
 	tbs := ComputePolicyAuthorizationTBSDigest(keySign.Name().Algorithm().GetHash(), approvedPolicy, policyRef)
-	ticket, err := h.tpm.VerifySignature(keySign, tbs, policyAuth.Signature)
+	ticket, err := h.tpm.VerifySignature(authKey, tbs, policyAuth.Signature)
 	if err != nil {
 		return err
 	}
@@ -1225,14 +1207,11 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 // Execute runs this policy using the supplied TPM context and on the supplied policy session.
 //
 // The caller may supply additional parameters via the PolicyExecuteParams struct, which is an
-// optional argument. This can contain parameters for TPM2_PolicySecret assertions, signed
-// authorizations for TPM2_PolicySigned assertions, or tickets to satisfy TPM2_PolicySecret or
-// TPM2_PolicySigned assertions. Each of these parameters are associated with a policy assertion
-// by a name and policy reference.
+// optional argument.
 //
-// Resources required by a policy are obtained from the supplied PolicyExecuteHelper, which is
-// optional but must be supplied for any policy that executes TPM2_PolicyNV, TPM2_PolicySecret or
-// TPM2_PolicySigned assertions.
+// Resources required by a policy are obtained from the supplied PolicyResourceLoader, which is
+// optional but must be supplied for any policy that executes TPM2_PolicyNV, TPM2_PolicySecret,
+// TPM2_PolicySigned or TPM2_PolicyAuthorize assertions.
 //
 // The caller may explicitly select branches to execute via the Path argument of
 // [PolicyExecuteParams]. Alternatively, if branches are not specified explicitly, an
@@ -1253,20 +1232,19 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 // Note that when automatically selecting branches, it is assumed that any TPM2_PolicySecret or
 // TPM2_PolicyNV assertions will succeed.
 //
-// The supplied PolicyExecuteHelper is used to obtain current TPM state when determining which
-// branches to execute. This is required for policies that include TPM2_PolicyPCR,
-// TPM2_PolicyCounterTimer or TPM2_PolicyNvWritten assertions.
-//
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied. It will also return a list of tickets generated by any assertions -
 // this may include supplied tickets if they are still valid or weren't used. It will indicate whether
 // the authorization value must be supplied for the resource being authorized.
-func (p *Policy) Execute(session PolicySession, helper PolicyExecuteHelper, params *PolicyExecuteParams) (tickets []*PolicyTicket, requireAuthValue bool, err error) {
+func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resources PolicyResourceLoader, params *PolicyExecuteParams) (tickets []*PolicyTicket, requireAuthValue bool, err error) {
+	if tpm == nil {
+		return nil, false, errors.New("no TPM")
+	}
 	if session == nil {
 		return nil, false, errors.New("no session")
 	}
-	if helper == nil {
-		helper = new(nullPolicyExecuteHelper)
+	if resources == nil {
+		resources = new(nullPolicyResourceLoader)
 	}
 	if params == nil {
 		params = new(PolicyExecuteParams)
@@ -1275,9 +1253,9 @@ func (p *Policy) Execute(session PolicySession, helper PolicyExecuteHelper, para
 	var details PolicyBranchDetails
 
 	runner := newPolicyRunner(
-		&observingPolicySession{session: session, details: &details},
-		helper,
-		func(runner *policyRunner) policyRunnerHelper { return newExecutePolicyHelper(runner, helper, params) },
+		newProxyPolicySession(newTpmPolicySession(tpm, session), &details),
+		resources,
+		func(runner *policyRunner) policyRunnerHelper { return newExecutePolicyHelper(runner, tpm, params) },
 	)
 	for _, ticket := range params.Tickets {
 		runner.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
@@ -1350,6 +1328,12 @@ func newComputePolicyHelper(runner *policyRunner, hasCpHash *bool) *computePolic
 		controller: runner,
 		hasCpHash:  hasCpHash,
 	}
+}
+
+func (h *computePolicyHelper) loadExternal(public *tpm2.Public) (ResourceContext, error) {
+	// the handle is not relevant here
+	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	return newResourceContextFlushable(resource, nil), nil
 }
 
 func (h *computePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
@@ -1429,7 +1413,7 @@ func (p *Policy) computeForDigest(digest *taggedHash) error {
 
 	runner := newPolicyRunner(
 		newComputePolicySession(digest),
-		new(mockResources),
+		new(mockPolicyResourceLoader),
 		func(runner *policyRunner) policyRunnerHelper { return newComputePolicyHelper(runner, &hasCpHash) },
 	)
 
@@ -1535,6 +1519,12 @@ func newValidatePolicyHelper(runner *policyRunner) *validatePolicyHelper {
 	return &validatePolicyHelper{controller: runner}
 }
 
+func (h *validatePolicyHelper) loadExternal(public *tpm2.Public) (ResourceContext, error) {
+	// the handle is not relevant here
+	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	return newResourceContextFlushable(resource, nil), nil
+}
+
 func (h *validatePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
 	digest, err := computeCpHash(h.controller.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
 	if err != nil {
@@ -1623,7 +1613,7 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 
 	runner := newPolicyRunner(
 		newComputePolicySession(digest),
-		new(mockResources),
+		new(mockPolicyResourceLoader),
 		func(runner *policyRunner) policyRunnerHelper { return newValidatePolicyHelper(runner) },
 	)
 	if err := runner.run(p.policy.Policy); err != nil {
@@ -1660,7 +1650,7 @@ func (p *Policy) Branches() ([]string, error) {
 
 	walker := newTreeWalker(
 		newNullPolicySession(tpm2.HashAlgorithmSHA256),
-		new(mockResources),
+		new(mockPolicyResourceLoader),
 		func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error) {
 			path := currentPath
 
@@ -1817,8 +1807,8 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 
 	var walker *treeWalker
 	walker = newTreeWalker(
-		&observingPolicySession{session: newNullPolicySession(alg), details: &currentDetails},
-		new(mockResources),
+		newProxyPolicySession(newNullPolicySession(alg), &currentDetails),
+		new(mockPolicyResourceLoader),
 		func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error) {
 			details := currentDetails
 			path := currentPath
@@ -1853,10 +1843,10 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 
 				currentPath = path.Concat(name)
 				currentDetails = details
-				walker.runner.setSession(&observingPolicySession{
-					session: newNullPolicySession(alg),
-					details: &currentDetails,
-				})
+				walker.runner.setSession(newProxyPolicySession(
+					newNullPolicySession(alg),
+					&currentDetails,
+				))
 				return nil
 			}
 
