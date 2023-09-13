@@ -60,6 +60,7 @@ type PolicyTicket struct {
 // where an error occurred.
 type PolicyError struct {
 	Path string // the path of the branch at which the error occurred
+
 	task string
 	err  error
 }
@@ -73,6 +74,22 @@ func (e *PolicyError) Error() string {
 }
 
 func (e *PolicyError) Unwrap() error {
+	return e.err
+}
+
+// SubPolicyError is returned from [Policy.Execute] if an error is encountered during
+// the execution of a sub-policy.
+type SubPolicyError struct {
+	Name tpm2.Name // the name of the resource being authorized
+
+	err error
+}
+
+func (e *SubPolicyError) Error() string {
+	return fmt.Sprintf("encountered an error when running sub-policy for resource %#x: %v", e.Name, e.err)
+}
+
+func (e *SubPolicyError) Unwrap() error {
 	return e.err
 }
 
@@ -874,6 +891,8 @@ type policyRunner struct {
 	policyCurrentPath     policyBranchPath
 
 	tasks []*policyTask
+
+	err error
 }
 
 func newPolicyRunner(session policySession, tickets policyTickets, resources PolicyResourceLoader, newHelperFn func(*policyRunner) policyRunnerHelper) *policyRunner {
@@ -961,65 +980,93 @@ func (r *policyRunner) more() bool {
 	return len(r.tasks) > 0
 }
 
-func (r *policyRunner) runNextTask() error {
+func (r *policyRunner) runNextTask() {
 	task := r.tasks[0]
 	r.tasks = r.tasks[1:]
 	r.policyCurrentTaskName = task.name
-	return task.fn()
+	if err := task.fn(); err != nil {
+		r.err = &PolicyError{Path: string(r.policyCurrentPath), task: r.policyCurrentTaskName, err: err}
+	}
 }
 
 func (r *policyRunner) run(policy policyElements) error {
 	r.pushElements(policy)
 
 	for r.more() {
-		if err := r.runNextTask(); err != nil {
-			return &PolicyError{Path: string(r.policyCurrentPath), task: r.policyCurrentTaskName, err: err}
+		r.runNextTask()
+		if r.err != nil {
+			return r.err
 		}
 	}
 
 	return nil
 }
 
-type policyExecutor struct {
-	runners []*policyRunner
+type subPolicyContext struct {
+	runner     *policyRunner
+	notifyDone func()
 }
 
-func (r *policyExecutor) pushRunner(runner *policyRunner, callback taskFn) {
+type policyExecutor struct {
+	runners []*subPolicyContext
+	err     error
+}
+
+func (r *policyExecutor) pushRunner(runner *policyRunner, callback func(error) error) {
 	// push a task to the original runner to run the callback
-	r.top().pushTasks(callback)
+	r.top().runner.pushTasks(func() error {
+		return callback(runner.err)
+	})
+
+	context := &subPolicyContext{
+		runner: runner,
+		notifyDone: func() {
+			if runner != r.top().runner {
+				panic("unexpected top")
+			}
+			r.runners = r.runners[1:]
+		},
+	}
 
 	// ensure the sub-policy runs next
-	r.runners = append([]*policyRunner{runner}, r.runners...)
+	r.runners = append([]*subPolicyContext{context}, r.runners...)
 
 	// append a task that pops this runner once the policy has completed
 	runner.appendTask(func() error {
-		if runner != r.top() {
-			return errors.New("internal error: unexpected top")
-		}
-		r.runners = r.runners[1:]
+		context.notifyDone()
 		return nil
 	})
 }
 
-func (r *policyExecutor) top() *policyRunner {
+func (r *policyExecutor) top() *subPolicyContext {
 	return r.runners[0]
 }
 
 func (r *policyExecutor) more() bool {
-	return r.top().more()
+	return r.top().runner.more()
 }
 
-func (r *policyExecutor) runNextTask() error {
-	return r.top().runNextTask()
+func (r *policyExecutor) runNextTask() {
+	top := r.top()
+	top.runner.runNextTask()
+	if top.runner.err != nil {
+		top.notifyDone()
+	}
 }
 
 func (r *policyExecutor) run(runner *policyRunner, policy policyElements) error {
 	runner.pushElements(policy)
-	r.runners = []*policyRunner{runner}
+	r.runners = []*subPolicyContext{
+		{
+			runner:     runner,
+			notifyDone: func() { r.err = runner.err },
+		},
+	}
 
 	for r.more() {
-		if err := r.runNextTask(); err != nil {
-			return &PolicyError{Path: string(r.top().policyCurrentPath), task: r.top().policyCurrentTaskName, err: err}
+		r.runNextTask()
+		if r.err != nil {
+			return r.err
 		}
 	}
 
@@ -1049,7 +1096,7 @@ func (t executePolicyTickets) removeTicket(ticket *PolicyTicket) {
 }
 
 type subPolicyRunner interface {
-	pushRunner(runner *policyRunner, callback taskFn)
+	pushRunner(runner *policyRunner, callback func(error) error)
 }
 
 type executePolicyHelper struct {
@@ -1159,8 +1206,11 @@ func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Polic
 
 		h.subPolicyRunner.pushRunner(
 			runner,
-			func() error {
+			func(err error) error {
 				defer h.tpm.FlushContext(session)
+				if err != nil {
+					return &SubPolicyError{Name: auth.Name(), err: err}
+				}
 
 				if details.AuthValueNeeded {
 					if err := h.resources.Authorize(auth); err != nil {

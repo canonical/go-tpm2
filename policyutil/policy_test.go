@@ -1698,7 +1698,11 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 	authorizer := &mockAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
 			authorized = true
-			c.Check(resource.Name(), DeepEquals, readAuth.Name())
+			if !data.expectedAuthorize {
+				resource.SetAuthValue([]byte("1234"))
+			} else {
+				c.Check(resource.Name(), DeepEquals, readAuth.Name())
+			}
 			return nil
 		},
 	}
@@ -1807,11 +1811,13 @@ func (s *policySuite) TestPolicyNVFails(c *C) {
 		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
 		Size:    8}
 	err := s.testPolicyNV(c, &testExecutePolicyNVData{
-		nvPub:     nvPub,
-		contents:  internal_testutil.DecodeHexString(c, "0000000000001001"),
-		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
-		offset:    4,
-		operation: tpm2.OpEq})
+		nvPub:             nvPub,
+		contents:          internal_testutil.DecodeHexString(c, "0000000000001001"),
+		operandB:          internal_testutil.DecodeHexString(c, "00001000"),
+		offset:            4,
+		operation:         tpm2.OpEq,
+		expectedAuthorize: true,
+	})
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyNV assertion' task in root branch: `+
 		`TPM returned an error whilst executing command TPM_CC_PolicyNV: TPM_RC_POLICY \(policy failure in math operation or an invalid authPolicy value\)`)
 	var e *tpm2.TPMError
@@ -1941,6 +1947,51 @@ func (s *policySuite) TestPolicyNVPrefersPolicySession(c *C) {
 		expectedAuthorize:   false,
 		expectedSessionType: tpm2.HandleTypePolicySession})
 	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicyNVWithSubPolicyError(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), nil), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	err = s.testPolicyNV(c, &testExecutePolicyNVData{
+		nvPub: &tpm2.NVPublic{
+			Index:      s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg:    tpm2.HashAlgorithmSHA256,
+			Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+			AuthPolicy: policyDigest,
+			Size:       8},
+		readPolicy:          policy,
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001000"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              4,
+		operation:           tpm2.OpEq,
+		expectedCommands:    7,
+		expectedAuthorize:   false,
+		expectedSessionType: tpm2.HandleTypePolicySession})
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyNV assertion' task in root branch: `+
+		`encountered an error when running sub-policy for resource 0x000b9616f49c9da5b5074fcad42d471541d1e82c41f4dfcfbc610e08fc395e924e82: `+
+		`cannot run 'TPM2_PolicySecret assertion' task in root branch: `+
+		`cannot complete authorization with authName=0x40000001, policyRef=: `+
+		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+
+	var spe *SubPolicyError
+	c.Assert(pe, internal_testutil.ErrorAs, &spe)
+	c.Check(spe.Name, DeepEquals, tpm2.Name(internal_testutil.DecodeHexString(c, "000b9616f49c9da5b5074fcad42d471541d1e82c41f4dfcfbc610e08fc395e924e82")))
+
+	c.Assert(spe, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+
+	var se *tpm2.TPMSessionError
+	c.Assert(pe, internal_testutil.ErrorAs, &se)
+	c.Check(se, DeepEquals, &tpm2.TPMSessionError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicySecret, Code: tpm2.ErrorBadAuth}, Index: 1})
 }
 
 type testExecutePolicySecretData struct {
