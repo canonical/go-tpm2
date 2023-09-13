@@ -243,26 +243,26 @@ type PolicyExecuteParams struct {
 	Path string
 }
 
-type policyParams interface {
+type policyTickets interface {
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
+	addTicket(ticket *PolicyTicket)
+	removeTicket(ticket *PolicyTicket)
 }
 
 type policyRunnerHelper interface {
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
 	cpHash(cpHash *policyCpHashElement) error
 	nameHash(nameHash *policyNameHashElement) error
+	authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error
 	handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error
 	handleAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy, complete func(tpm2.Digest, *tpm2.TkVerified) error) error
 }
 
 type policySessionContext interface {
 	session() policySession
+	tickets() policyTickets
 	resources() PolicyResourceLoader
 	helper() policyRunnerHelper
-
-	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
-	addTicket(ticket *PolicyTicket)
-	removeTicket(ticket *PolicyTicket)
 }
 
 type policyRunnerController interface {
@@ -320,7 +320,7 @@ type policyNVElement struct {
 
 func (*policyNVElement) name() string { return "TPM2_PolicyNV assertion" }
 
-func (e *policyNVElement) run(context policySessionContext) error {
+func (e *policyNVElement) run(context policySessionContext) (err error) {
 	nvIndex, policy, err := context.resources().LoadNV(e.NvIndex)
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
@@ -328,25 +328,48 @@ func (e *policyNVElement) run(context policySessionContext) error {
 
 	var auth ResourceContext = newResourceContextFlushable(nvIndex, nil)
 	switch {
+	case e.NvIndex.Attrs&tpm2.AttrNVPolicyRead != 0:
+		// use NV index for auth
 	case e.NvIndex.Attrs&tpm2.AttrNVAuthRead != 0:
-		policy = nil
+		// use NV index for auth
 	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
 		auth, policy, err = context.resources().LoadName(tpm2.MakeHandleName(tpm2.HandleOwner))
 	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:
 		auth, policy, err = context.resources().LoadName(tpm2.MakeHandleName(tpm2.HandlePlatform))
+	default:
+		return errors.New("invalid nvIndex read auth mode")
 	}
 	if err != nil {
 		return fmt.Errorf("cannot create auth context: %w", err)
 	}
-	if policy != nil {
-		return errors.New("unsupported auth method")
+
+	usage := NewPolicySessionUsage(
+		tpm2.CommandPolicyNV,
+		[]Named{auth.Resource(), nvIndex, context.session().Name()},
+		e.OperandB, e.Offset, e.Operation,
+	)
+
+	restore, err := context.session().Save()
+	if err != nil {
+		return fmt.Errorf("cannot save session: %w", err)
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		restore()
+	}()
+
+	if err := context.helper().authorize(auth.Resource(), policy, usage, tpm2.SessionTypePolicy, func(session tpm2.SessionContext) error {
+		if err := restore(); err != nil {
+			return fmt.Errorf("cannot restore session: %w", err)
+		}
+		return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, session)
+	}); err != nil {
+		return err
 	}
 
-	if err := context.resources().Authorize(auth.Resource()); err != nil {
-		return fmt.Errorf("cannot authorize auth object: %w", err)
-	}
-
-	return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, nil)
+	return nil
 }
 
 type policySecretElement struct {
@@ -356,16 +379,16 @@ type policySecretElement struct {
 
 func (*policySecretElement) name() string { return "TPM2_PolicySecret assertion" }
 
-func (e *policySecretElement) run(context policySessionContext) error {
-	if ticket := context.ticket(e.AuthObjectName, e.PolicyRef); ticket != nil {
+func (e *policySecretElement) run(context policySessionContext) (err error) {
+	if ticket := context.tickets().ticket(e.AuthObjectName, e.PolicyRef); ticket != nil {
 		err := context.session().PolicyTicket(ticket.Timeout, ticket.CpHash, ticket.PolicyRef, ticket.AuthName, ticket.Ticket)
 		switch {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorExpired, tpm2.CommandPolicyTicket, 1):
 			// The ticket has expired - ignore this and fall through to PolicySecret
-			context.removeTicket(ticket)
+			context.tickets().removeTicket(ticket)
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySecret
-			context.removeTicket(ticket)
+			context.tickets().removeTicket(ticket)
 		case err != nil:
 			return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 		default:
@@ -374,38 +397,64 @@ func (e *policySecretElement) run(context policySessionContext) error {
 		}
 	}
 
+	// LoadName can create additional sessions, so save the current one now.
+	restore, err := context.session().Save()
+	if err != nil {
+		return fmt.Errorf("cannot save session: %w", err)
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		restore()
+	}()
+
 	authObject, policy, err := context.resources().LoadName(e.AuthObjectName)
 	if err != nil {
 		return &ResourceLoadError{Name: e.AuthObjectName, err: err}
 	}
-	defer func() {
+
+	flushAuthObject := func() {
 		if authObject.Resource().Handle().Type() != tpm2.HandleTypeTransient {
 			return
 		}
 		authObject.Flush()
-	}()
-	if policy != nil {
-		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: errors.New("unsupported auth method")}
 	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		flushAuthObject()
+	}()
 
-	if err := context.resources().Authorize(authObject.Resource()); err != nil {
-		return &PolicyAuthorizationError{
+	usage := NewPolicySessionUsage(
+		tpm2.CommandPolicySecret,
+		[]Named{authObject.Resource(), context.session().Name()},
+		tpm2.Digest{}, e.PolicyRef, int32(0),
+	)
+
+	if err := context.helper().authorize(authObject.Resource(), policy, usage, tpm2.SessionTypeHMAC, func(session tpm2.SessionContext) error {
+		defer flushAuthObject()
+
+		if err := restore(); err != nil {
+			return fmt.Errorf("cannot restore session: %w", err)
+		}
+		timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, session)
+		if err != nil {
+			return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
+		}
+
+		context.tickets().addTicket(&PolicyTicket{
 			AuthName:  e.AuthObjectName,
 			PolicyRef: e.PolicyRef,
-			err:       fmt.Errorf("cannot authorize auth object: %w", err)}
-	}
-
-	timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, nil)
-	if err != nil {
+			CpHash:    nil,
+			Timeout:   timeout,
+			Ticket:    ticket})
+		return nil
+	}); err != nil {
 		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
 
-	context.addTicket(&PolicyTicket{
-		AuthName:  e.AuthObjectName,
-		PolicyRef: e.PolicyRef,
-		CpHash:    nil,
-		Timeout:   timeout,
-		Ticket:    ticket})
 	return nil
 }
 
@@ -422,15 +471,15 @@ func (e *policySignedElement) run(context policySessionContext) error {
 		return errors.New("invalid auth key name")
 	}
 
-	if ticket := context.ticket(authKeyName, e.PolicyRef); ticket != nil {
+	if ticket := context.tickets().ticket(authKeyName, e.PolicyRef); ticket != nil {
 		err := context.session().PolicyTicket(ticket.Timeout, ticket.CpHash, ticket.PolicyRef, ticket.AuthName, ticket.Ticket)
 		switch {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorExpired, tpm2.CommandPolicyTicket, 1):
 			// The ticket has expired - ignore this and fall through to PolicySigned
-			context.removeTicket(ticket)
+			context.tickets().removeTicket(ticket)
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySigned
-			context.removeTicket(ticket)
+			context.tickets().removeTicket(ticket)
 		case err != nil:
 			return &PolicyAuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 		default:
@@ -464,7 +513,7 @@ func (e *policySignedElement) run(context policySessionContext) error {
 		return &PolicyAuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 	}
 
-	context.addTicket(&PolicyTicket{
+	context.tickets().addTicket(&PolicyTicket{
 		AuthName:  authKeyName,
 		PolicyRef: e.PolicyRef,
 		CpHash:    auth.CpHash,
@@ -809,10 +858,9 @@ func newDeferredPolicyTask(controller policyRunnerController, fn taskFn) *policy
 
 type policyRunner struct {
 	policySession      policySession
+	policyTickets      policyTickets
 	policyResources    PolicyResourceLoader
 	policyRunnerHelper policyRunnerHelper
-
-	tickets map[paramKey]*PolicyTicket
 
 	policyCurrentTaskName string
 	policyCurrentPath     policyBranchPath
@@ -820,11 +868,11 @@ type policyRunner struct {
 	tasks []*policyTask
 }
 
-func newPolicyRunner(session policySession, resources PolicyResourceLoader, newHelperFn func(*policyRunner) policyRunnerHelper) *policyRunner {
+func newPolicyRunner(session policySession, tickets policyTickets, resources PolicyResourceLoader, newHelperFn func(*policyRunner) policyRunnerHelper) *policyRunner {
 	out := &policyRunner{
 		policySession:   session,
+		policyTickets:   tickets,
 		policyResources: resources,
-		tickets:         make(map[paramKey]*PolicyTicket),
 	}
 	out.policyRunnerHelper = newHelperFn(out)
 	return out
@@ -834,28 +882,16 @@ func (r *policyRunner) session() policySession {
 	return r.policySession
 }
 
+func (r *policyRunner) tickets() policyTickets {
+	return r.policyTickets
+}
+
 func (r *policyRunner) resources() PolicyResourceLoader {
 	return r.policyResources
 }
 
 func (r *policyRunner) helper() policyRunnerHelper {
 	return r.policyRunnerHelper
-}
-
-func (r *policyRunner) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
-	return r.tickets[policyParamKey(authName, policyRef)]
-}
-
-func (r *policyRunner) addTicket(ticket *PolicyTicket) {
-	if ticket.Ticket == nil || (ticket.Ticket.Hierarchy == tpm2.HandleNull && len(ticket.Ticket.Digest) == 0) {
-		// skip null tickets
-		return
-	}
-	r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
-}
-
-func (r *policyRunner) removeTicket(ticket *PolicyTicket) {
-	delete(r.tickets, policyParamKey(ticket.AuthName, ticket.PolicyRef))
 }
 
 func (r *policyRunner) currentTaskName() string {
@@ -936,24 +972,100 @@ func (r *policyRunner) run(policy policyElements) error {
 	return nil
 }
 
-type executePolicyHelper struct {
-	policyBranchSelectMixin
-	sessionAlg tpm2.HashAlgorithmId
-	resources  PolicyResourceLoader
-	controller policyRunnerController
-	tpm        TPMConnection
-	remaining  policyBranchPath
-	usage      *PolicySessionUsage
+type policyExecutor struct {
+	runners []*policyRunner
 }
 
-func newExecutePolicyHelper(runner *policyRunner, tpm TPMConnection, params *PolicyExecuteParams) *executePolicyHelper {
+func (r *policyExecutor) pushRunner(runner *policyRunner, callback taskFn) {
+	// push a task to the original runner to run the callback
+	r.top().pushTasks(callback)
+
+	// ensure the sub-policy runs next
+	r.runners = append([]*policyRunner{runner}, r.runners...)
+
+	// append a task that pops this runner once the policy has completed
+	runner.appendTask(func() error {
+		if runner != r.top() {
+			return errors.New("internal error: unexpected top")
+		}
+		r.runners = r.runners[1:]
+		return nil
+	})
+}
+
+func (r *policyExecutor) top() *policyRunner {
+	return r.runners[0]
+}
+
+func (r *policyExecutor) more() bool {
+	return r.top().more()
+}
+
+func (r *policyExecutor) runNextTask() error {
+	return r.top().runNextTask()
+}
+
+func (r *policyExecutor) run(runner *policyRunner, policy policyElements) error {
+	runner.pushElements(policy)
+	r.runners = []*policyRunner{runner}
+
+	for r.more() {
+		if err := r.runNextTask(); err != nil {
+			return &PolicyError{Path: string(r.top().policyCurrentPath), task: r.top().policyCurrentTaskName, err: err}
+		}
+	}
+
+	return nil
+}
+
+type executePolicyTickets map[paramKey]*PolicyTicket
+
+func makeExecutePolicyTickets() executePolicyTickets {
+	return make(executePolicyTickets)
+}
+
+func (t executePolicyTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+	return t[policyParamKey(authName, policyRef)]
+}
+
+func (t executePolicyTickets) addTicket(ticket *PolicyTicket) {
+	if ticket.Ticket == nil || (ticket.Ticket.Hierarchy == tpm2.HandleNull && len(ticket.Ticket.Digest) == 0) {
+		// skip null tickets
+		return
+	}
+	t[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+}
+
+func (t executePolicyTickets) removeTicket(ticket *PolicyTicket) {
+	delete(t, policyParamKey(ticket.AuthName, ticket.PolicyRef))
+}
+
+type subPolicyRunner interface {
+	pushRunner(runner *policyRunner, callback taskFn)
+}
+
+type executePolicyHelper struct {
+	policyBranchSelectMixin
+	sessionAlg      tpm2.HashAlgorithmId
+	tickets         policyTickets
+	resources       PolicyResourceLoader
+	controller      policyRunnerController
+	tpm             TPMConnection
+	remaining       policyBranchPath
+	usage           *PolicySessionUsage
+	subPolicyRunner subPolicyRunner
+}
+
+func newExecutePolicyHelper(runner *policyRunner, tpm TPMConnection, params *PolicyExecuteParams, subPolicyRunner subPolicyRunner) *executePolicyHelper {
 	return &executePolicyHelper{
-		sessionAlg: runner.session().HashAlg(),
-		resources:  runner.resources(),
-		controller: runner,
-		tpm:        tpm,
-		remaining:  policyBranchPath(params.Path),
-		usage:      params.Usage,
+		sessionAlg:      runner.session().HashAlg(),
+		tickets:         runner.tickets(),
+		resources:       runner.resources(),
+		controller:      runner,
+		tpm:             tpm,
+		remaining:       policyBranchPath(params.Path),
+		usage:           params.Usage,
+		subPolicyRunner: subPolicyRunner,
 	}
 }
 
@@ -970,6 +1082,97 @@ func (h *executePolicyHelper) cpHash(cpHash *policyCpHashElement) error {
 }
 
 func (h *executePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
+	return nil
+}
+
+func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) (err error) {
+	sessionType := prefer
+	alg := auth.Name().Algorithm()
+
+	switch auth.Handle().Type() {
+	case tpm2.HandleTypeNVIndex:
+		pub, err := h.tpm.NVReadPublic(auth)
+		if err != nil {
+			return fmt.Errorf("cannot obtain NVPublic: %w", err)
+		}
+		switch {
+		case pub.Attrs&(tpm2.AttrNVAuthRead|tpm2.AttrNVPolicyRead) == tpm2.AttrNVAuthRead:
+			sessionType = tpm2.SessionTypeHMAC
+		case pub.Attrs&(tpm2.AttrNVAuthRead|tpm2.AttrNVPolicyRead) == tpm2.AttrNVPolicyRead:
+			sessionType = tpm2.SessionTypePolicy
+		}
+	case tpm2.HandleTypePermanent:
+		// auth value is always available
+		sessionType = tpm2.SessionTypeHMAC
+		alg = h.sessionAlg
+	case tpm2.HandleTypeTransient, tpm2.HandleTypePersistent:
+		pub, err := h.tpm.ReadPublic(auth)
+		if err != nil {
+			return fmt.Errorf("cannot obtain Public: %w", err)
+		}
+		if pub.Attrs&tpm2.AttrUserWithAuth == 0 {
+			sessionType = tpm2.SessionTypePolicy
+		}
+	default:
+		return errors.New("unexpected handle type")
+	}
+
+	if policy == nil {
+		sessionType = tpm2.SessionTypeHMAC
+	}
+
+	session, err := h.tpm.StartAuthSession(sessionType, alg)
+	if err != nil {
+		return fmt.Errorf("cannot create session to authorize auth object: %w", err)
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		h.tpm.FlushContext(session)
+	}()
+
+	if sessionType == tpm2.SessionTypePolicy {
+		if policy == nil {
+			return errors.New("no policy")
+		}
+
+		var details PolicyBranchDetails
+		params := &PolicyExecuteParams{Usage: usage}
+
+		runner := newPolicyRunner(
+			newProxyPolicySession(newTpmPolicySession(h.tpm, session), &details),
+			h.tickets,
+			h.resources,
+			func(runner *policyRunner) policyRunnerHelper {
+				return newExecutePolicyHelper(runner, h.tpm, params, h.subPolicyRunner)
+			})
+		runner.pushElements(policy.policy.Policy)
+
+		h.subPolicyRunner.pushRunner(
+			runner,
+			func() error {
+				defer h.tpm.FlushContext(session)
+
+				if details.AuthValueNeeded {
+					if err := h.resources.Authorize(auth); err != nil {
+						return fmt.Errorf("cannot authorize resource: %w", err)
+					}
+				}
+				return complete(session)
+			},
+		)
+		return nil
+	}
+
+	if err := h.resources.Authorize(auth); err != nil {
+		return fmt.Errorf("cannot authorize resource: %w", err)
+	}
+
+	h.controller.pushTasks(func() error {
+		defer h.tpm.FlushContext(session)
+		return complete(session)
+	})
 	return nil
 }
 
@@ -1250,27 +1453,42 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		params = new(PolicyExecuteParams)
 	}
 
+	executor := new(policyExecutor)
+
 	var details PolicyBranchDetails
+	ticketMap := makeExecutePolicyTickets()
 
 	runner := newPolicyRunner(
 		newProxyPolicySession(newTpmPolicySession(tpm, session), &details),
+		ticketMap,
 		resources,
-		func(runner *policyRunner) policyRunnerHelper { return newExecutePolicyHelper(runner, tpm, params) },
+		func(runner *policyRunner) policyRunnerHelper {
+			return newExecutePolicyHelper(runner, tpm, params, executor)
+		},
 	)
 	for _, ticket := range params.Tickets {
-		runner.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+		ticketMap[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 	}
 
-	if err := runner.run(p.policy.Policy); err != nil {
+	if err := executor.run(runner, p.policy.Policy); err != nil {
 		return nil, false, err
 	}
 
-	for _, ticket := range runner.tickets {
+	for _, ticket := range ticketMap {
 		tickets = append(tickets, ticket)
 	}
 
 	return tickets, details.AuthValueNeeded, nil
 }
+
+type nullTickets struct{}
+
+func (*nullTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+	return nil
+}
+
+func (*nullTickets) addTicket(ticket *PolicyTicket)    {}
+func (*nullTickets) removeTicket(ticket *PolicyTicket) {}
 
 func computeBranchDigests(controller policyRunnerController, branches policyBranches, done func(tpm2.DigestList) error) error {
 	currentDigest, err := controller.session().PolicyGetDigest()
@@ -1360,6 +1578,13 @@ func (h *computePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
+func (h *computePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error {
+	h.controller.pushTasks(func() error {
+		return complete(nil)
+	})
+	return nil
+}
+
 func (h *computePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	if err := computeBranchDigests(h.controller, branches, func(digests tpm2.DigestList) error {
 		for i, branch := range branches {
@@ -1413,6 +1638,7 @@ func (p *Policy) computeForDigest(digest *taggedHash) error {
 
 	runner := newPolicyRunner(
 		newComputePolicySession(digest),
+		new(nullTickets),
 		new(mockPolicyResourceLoader),
 		func(runner *policyRunner) policyRunnerHelper { return newComputePolicyHelper(runner, &hasCpHash) },
 	)
@@ -1547,6 +1773,13 @@ func (h *validatePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
+func (h *validatePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error {
+	h.controller.pushTasks(func() error {
+		return complete(nil)
+	})
+	return nil
+}
+
 func (h *validatePolicyHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	if err := computeBranchDigests(h.controller, branches, func(digests tpm2.DigestList) error {
 		for i, branch := range branches {
@@ -1613,6 +1846,7 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 
 	runner := newPolicyRunner(
 		newComputePolicySession(digest),
+		new(nullTickets),
 		new(mockPolicyResourceLoader),
 		func(runner *policyRunner) policyRunnerHelper { return newValidatePolicyHelper(runner) },
 	)

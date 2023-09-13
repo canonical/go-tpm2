@@ -15,6 +15,7 @@ import (
 
 // policySession corresponds to a policy session
 type policySession interface {
+	Name() tpm2.Name
 	HashAlg() tpm2.HashAlgorithmId
 	NonceTPM() tpm2.Nonce
 
@@ -34,6 +35,8 @@ type policySession interface {
 	PolicyPassword() error
 	PolicyGetDigest() (tpm2.Digest, error)
 	PolicyNvWritten(writtenSet bool) error
+
+	Save() (restore func() error, err error)
 }
 
 // tpmPolicySession is an implementation of policySession that runs on a TPM
@@ -47,6 +50,10 @@ func newTpmPolicySession(tpm TPMConnection, session tpm2.SessionContext) policyS
 		tpm:     tpm,
 		session: session,
 	}
+}
+
+func (s *tpmPolicySession) Name() tpm2.Name {
+	return s.session.Name()
 }
 
 func (s *tpmPolicySession) HashAlg() tpm2.HashAlgorithmId {
@@ -121,6 +128,33 @@ func (s *tpmPolicySession) PolicyNvWritten(writtenSet bool) error {
 	return s.tpm.PolicyNvWritten(s.session, writtenSet)
 }
 
+func (c *tpmPolicySession) Save() (restore func() error, err error) {
+	context, err := c.tpm.ContextSave(c.session)
+	if err != nil {
+		return nil, err
+	}
+	return func() error {
+		if context == nil {
+			// already restored
+			return nil
+		}
+
+		hc, err := c.tpm.ContextLoad(context)
+		if err != nil {
+			return err
+		}
+
+		context = nil
+
+		sc, ok := hc.(tpm2.SessionContext)
+		if !ok {
+			return errors.New("internal error: invalid context type")
+		}
+		c.session = sc
+		return nil
+	}, nil
+}
+
 // computePolicySession is an implementation of Session that computes a
 // digest from a sequence of assertions.
 type computePolicySession struct {
@@ -159,6 +193,10 @@ func (s *computePolicySession) policyUpdate(command tpm2.CommandCode, name tpm2.
 	h.Write(s.digest.Digest)
 	mu.MustMarshalToWriter(h, mu.Raw(policyRef))
 	s.digest.Digest = h.Sum(nil)
+}
+
+func (*computePolicySession) Name() tpm2.Name {
+	return nil
 }
 
 func (s *computePolicySession) HashAlg() tpm2.HashAlgorithmId {
@@ -285,12 +323,20 @@ func (s *computePolicySession) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
+func (*computePolicySession) Save() (restore func() error, err error) {
+	return func() error { return nil }, nil
+}
+
 type nullPolicySession struct {
 	alg tpm2.HashAlgorithmId
 }
 
 func newNullPolicySession(alg tpm2.HashAlgorithmId) *nullPolicySession {
 	return &nullPolicySession{alg: alg}
+}
+
+func (*nullPolicySession) Name() tpm2.Name {
+	return nil
 }
 
 func (s *nullPolicySession) HashAlg() tpm2.HashAlgorithmId {
@@ -365,6 +411,10 @@ func (*nullPolicySession) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
+func (*nullPolicySession) Save() (restore func() error, err error) {
+	return func() error { return nil }, nil
+}
+
 type proxyPolicySession struct {
 	session policySession
 	details *PolicyBranchDetails
@@ -375,6 +425,10 @@ func newProxyPolicySession(session policySession, details *PolicyBranchDetails) 
 		session: session,
 		details: details,
 	}
+}
+
+func (s *proxyPolicySession) Name() tpm2.Name {
+	return s.session.Name()
 }
 
 func (s *proxyPolicySession) HashAlg() tpm2.HashAlgorithmId {
@@ -496,4 +550,8 @@ func (s *proxyPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 func (s *proxyPolicySession) PolicyNvWritten(writtenSet bool) error {
 	s.details.policyNvWritten = append(s.details.policyNvWritten, writtenSet)
 	return s.session.PolicyNvWritten(writtenSet)
+}
+
+func (s *proxyPolicySession) Save() (restore func() error, err error) {
+	return s.session.Save()
 }

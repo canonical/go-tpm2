@@ -235,7 +235,7 @@ func (f *policyBranchFilter) filterUsageIncompatibleBranches() error {
 
 		nvWritten, set := r.NvWritten()
 		if set && f.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
-			pub, err := f.tpm.NVReadPublic(f.usage.nvHandle)
+			pub, err := f.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(f.usage.nvHandle))
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
@@ -573,6 +573,13 @@ func (h *treeWalkerHelper) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
+func (h *treeWalkerHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error {
+	h.controller.pushTasks(func() error {
+		return complete(nil)
+	})
+	return nil
+}
+
 func (h *treeWalkerHelper) handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error {
 	if len(branches) == 0 {
 		return errors.New("branch node with no branches")
@@ -692,6 +699,7 @@ func newTreeWalker(session policySession, resources PolicyResourceLoader, beginB
 	return &treeWalker{
 		runner: newPolicyRunner(
 			session,
+			new(nullTickets),
 			resources,
 			func(runner *policyRunner) policyRunnerHelper {
 				return newTreeWalkerHelper(runner, beginBranchNode, completeFullPath)

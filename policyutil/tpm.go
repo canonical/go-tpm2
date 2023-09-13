@@ -13,6 +13,7 @@ type TPMConnection interface {
 	StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (tpm2.SessionContext, error)
 
 	LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2.Public, hierarchy tpm2.Handle) (tpm2.ResourceContext, error)
+	ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, error)
 
 	VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
 
@@ -35,11 +36,13 @@ type TPMConnection interface {
 	PolicyGetDigest(policySession tpm2.SessionContext) (tpm2.Digest, error)
 	PolicyNvWritten(policySession tpm2.SessionContext, writtenSet bool) error
 
+	ContextSave(handle tpm2.HandleContext) (*tpm2.Context, error)
+	ContextLoad(context *tpm2.Context) (tpm2.HandleContext, error)
 	FlushContext(handle tpm2.HandleContext) error
 
 	ReadClock() (*tpm2.TimeInfo, error)
 
-	NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error)
+	NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error)
 }
 
 type onlineTpmConnection struct {
@@ -60,6 +63,11 @@ func (c *onlineTpmConnection) StartAuthSession(sessionType tpm2.SessionType, alg
 
 func (c *onlineTpmConnection) LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2.Public, hierarchy tpm2.Handle) (tpm2.ResourceContext, error) {
 	return c.tpm.LoadExternal(inPrivate, inPublic, hierarchy, c.sessions...)
+}
+
+func (c *onlineTpmConnection) ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, error) {
+	pub, _, _, err := c.tpm.ReadPublic(handle, c.sessions...)
+	return pub, err
 }
 
 func (c *onlineTpmConnection) VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
@@ -135,6 +143,14 @@ func (c *onlineTpmConnection) PolicyNvWritten(policySession tpm2.SessionContext,
 	return c.tpm.PolicyNvWritten(policySession, writtenSet, c.sessions...)
 }
 
+func (c *onlineTpmConnection) ContextSave(handle tpm2.HandleContext) (*tpm2.Context, error) {
+	return c.tpm.ContextSave(handle)
+}
+
+func (c *onlineTpmConnection) ContextLoad(context *tpm2.Context) (tpm2.HandleContext, error) {
+	return c.tpm.ContextLoad(context)
+}
+
 func (c *onlineTpmConnection) FlushContext(handle tpm2.HandleContext) error {
 	return c.tpm.FlushContext(handle)
 }
@@ -143,7 +159,7 @@ func (c *onlineTpmConnection) ReadClock() (*tpm2.TimeInfo, error) {
 	return c.tpm.ReadClock(c.sessions...)
 }
 
-func (c *onlineTpmConnection) NVReadPublic(handle tpm2.Handle) (*tpm2.NVPublic, error) {
-	pub, _, err := c.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(handle), c.sessions...)
+func (c *onlineTpmConnection) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error) {
+	pub, _, err := c.tpm.NVReadPublic(handle, c.sessions...)
 	return pub, err
 }

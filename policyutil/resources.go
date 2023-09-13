@@ -69,6 +69,8 @@ func (*nullAuthorizer) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.N
 type PersistentResource struct {
 	Name   tpm2.Name
 	Handle tpm2.Handle
+
+	Policy *Policy
 }
 
 // TransientResource contains details associated with a transient object.
@@ -76,6 +78,8 @@ type TransientResource struct {
 	ParentName tpm2.Name
 	Public     *tpm2.Public
 	Private    tpm2.Private
+
+	Policy *Policy
 }
 
 // PolicyResources contains the resources that are required by [NewTPMPolicyResourceLoader].
@@ -119,6 +123,7 @@ func (r *resourceContextFlushable) Flush() error {
 type savedResource struct {
 	name    tpm2.Name
 	context *tpm2.Context
+	policy  *Policy
 }
 
 type tpmPolicyResourceLoader struct {
@@ -168,7 +173,7 @@ func (l *tpmPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Po
 			return nil, nil, fmt.Errorf("loaded context has the wrong name (gotr %#x, expected %#x)", rc.Name(), name)
 		}
 
-		return newResourceContextFlushable(rc, nil), nil, nil
+		return newResourceContextFlushable(rc, nil), resource.Policy, nil
 	}
 
 	// Search saved contexts
@@ -191,7 +196,7 @@ func (l *tpmPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Po
 			return nil, nil, fmt.Errorf("name %#x associated with a context of the wrong type", name)
 		}
 
-		return newResourceContextFlushable(resource, l.tpm.FlushContext), nil, nil
+		return newResourceContextFlushable(resource, l.tpm.FlushContext), context.policy, nil
 	}
 
 	// Search loadable objects
@@ -205,15 +210,36 @@ func (l *tpmPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Po
 			return nil, nil, fmt.Errorf("cannot load parent for object with name %#x: %w", name, err)
 		}
 		defer parent.Flush()
+
+		sessionType := tpm2.SessionTypeHMAC
 		if policy != nil {
-			return nil, nil, errors.New("unsupported auth method")
+			sessionType = tpm2.SessionTypePolicy
 		}
 
-		if err := l.Authorize(parent.Resource()); err != nil {
-			return nil, nil, fmt.Errorf("cannot authorize parent with name %#x: %w", parent.Resource().Name(), err)
+		session, err := l.tpm.StartAuthSession(nil, nil, sessionType, nil, parent.Resource().Name().Algorithm(), l.sessions...)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot start session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
+		}
+		defer l.tpm.FlushContext(session)
+
+		requireAuthValue := true
+		if policy != nil {
+			params := &PolicyExecuteParams{
+				Usage: NewPolicySessionUsage(tpm2.CommandLoad, []Named{parent.Resource()}, object.Private, object.Public),
+			}
+			_, requireAuthValue, err = policy.Execute(NewTPMConnection(l.tpm, l.sessions...), session, l, params)
+			if err != nil {
+				return nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
+			}
 		}
 
-		resource, err := l.tpm.Load(parent.Resource(), object.Private, object.Public, nil, l.sessions...)
+		if requireAuthValue {
+			if err := l.Authorize(parent.Resource()); err != nil {
+				return nil, nil, fmt.Errorf("cannot authorize parent with name %#x: %w", parent.Resource().Name(), err)
+			}
+		}
+
+		resource, err := l.tpm.Load(parent.Resource(), object.Private, object.Public, session, l.sessions...)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -222,7 +248,7 @@ func (l *tpmPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Po
 			l.saved = append(l.saved, savedResource{name: name, context: context})
 		}
 
-		return newResourceContextFlushable(resource, l.tpm.FlushContext), nil, nil
+		return newResourceContextFlushable(resource, l.tpm.FlushContext), object.Policy, nil
 	}
 
 	// Search persistent and NV index handles
@@ -256,7 +282,22 @@ func (l *tpmPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Po
 
 func (l *tpmPolicyResourceLoader) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
 	rc, err := tpm2.NewNVIndexResourceContextFromPub(public)
-	return rc, nil, err
+
+	var policy *Policy
+	for _, resource := range l.resources.Persistent {
+		if !bytes.Equal(resource.Name, public.Name()) {
+			continue
+		}
+
+		if resource.Handle != public.Index {
+			return nil, nil, fmt.Errorf("NV resource handle lookup mismatch (got: %v, expected: %v)", resource.Handle, public.Index)
+		}
+
+		policy = resource.Policy
+		break
+	}
+
+	return rc, policy, err
 }
 
 func (l *tpmPolicyResourceLoader) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
@@ -277,30 +318,6 @@ func (l *tpmPolicyResourceLoader) LoadAuthorizedPolicies(keySign tpm2.Name, poli
 	return out, nil
 }
 
-type SessionContext interface {
-	Session() tpm2.SessionContext // The actual session
-	Close() error                 // Save or flush the session for future use
-}
-
-type sessionContextFlushable struct {
-	session tpm2.SessionContext
-	tpm     *tpm2.TPMContext
-}
-
-func newSessionContextFlushable(tpm *tpm2.TPMContext, context tpm2.SessionContext) *sessionContextFlushable {
-	return &sessionContextFlushable{session: context, tpm: tpm}
-}
-
-func (s *sessionContextFlushable) Session() tpm2.SessionContext {
-	return s.session
-}
-
-func (s *sessionContextFlushable) Flush() error {
-	return s.tpm.FlushContext(s.session)
-}
-
-// mockPolicyResourceLoader is an implementation of policyResources that doesn't require
-// access to a TPM.
 type mockPolicyResourceLoader struct{}
 
 func (*mockPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {

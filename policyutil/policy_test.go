@@ -258,7 +258,6 @@ func (s *computeSuite) testPolicyAuthorize(c *C, data *testComputePolicyAuthoriz
 	digest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
-	c.Logf("%x", digest)
 }
 
 func (s *computeSuite) TestPolicyAuthorize(c *C) {
@@ -1227,7 +1226,7 @@ func (c *mockSessionContext) Session() tpm2.SessionContext {
 	return c.session
 }
 
-func (c *mockSessionContext) Close() error {
+func (c *mockSessionContext) Flush() error {
 	c.closed = true
 	return nil
 }
@@ -1361,13 +1360,6 @@ func (s *policySuiteNoTPM) testAuthorizePolicy(c *C, data *testAuthorizePolicyDa
 		NewMockPolicyAuthValueElement(),
 	)
 	c.Check(policy, DeepEquals, expectedPolicy)
-
-	digest, err := policy.Compute(data.nameAlg)
-	c.Logf("%x", digest)
-
-	auth, err := SignPolicyAuthorization(bytes.NewReader(make([]byte, 33)), data.expectedDigest, keySign, data.policyRef, key.(crypto.Signer), data.opts)
-	c.Logf("%x", auth.Signature.Signature.ECDSA.SignatureR)
-	c.Logf("%x", auth.Signature.Signature.ECDSA.SignatureS)
 
 	return nil
 }
@@ -1658,13 +1650,18 @@ func (s *policySuite) SetUpSuite(c *C) {
 var _ = Suite(&policySuite{})
 
 type testExecutePolicyNVData struct {
-	nvPub    *tpm2.NVPublic
-	readAuth tpm2.ResourceContext
-	contents []byte
+	nvPub      *tpm2.NVPublic
+	readAuth   tpm2.ResourceContext
+	readPolicy *Policy
+	contents   []byte
 
 	operandB  tpm2.Operand
 	offset    uint16
 	operation tpm2.ArithmeticOp
+
+	expectedCommands    int
+	expectedAuthorize   bool
+	expectedSessionType tpm2.HandleType
 }
 
 func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
@@ -1688,28 +1685,45 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
+	var resources *PolicyResources
+	if data.readPolicy != nil {
+		resources = &PolicyResources{
+			Persistent: []PersistentResource{
+				{Name: readAuth.Name(), Handle: readAuth.Handle(), Policy: data.readPolicy},
+			},
+		}
+	}
+
+	authorized := false
 	authorizer := &mockAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
+			authorized = true
 			c.Check(resource.Name(), DeepEquals, readAuth.Name())
 			return nil
 		},
 	}
 
-	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), nil)
+	s.ForgetCommands()
+
+	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, authorizer), nil)
 	if err != nil {
 		return err
 	}
 	c.Check(tickets, internal_testutil.LenEquals, 0)
 	c.Check(requireAuthValue, internal_testutil.IsFalse)
 
+	c.Check(authorized, Equals, data.expectedAuthorize)
+
 	commands := s.CommandLog()
 
-	c.Assert(commands, internal_testutil.LenGreaterEquals, 1)
-	policyCommand := commands[len(commands)-1]
+	c.Assert(commands, internal_testutil.LenEquals, data.expectedCommands)
+	policyCommand := commands[len(commands)-2]
 	c.Check(policyCommand.GetCommandCode(c), Equals, tpm2.CommandPolicyNV)
 	_, authArea, _ := policyCommand.UnmarshalCommand(c)
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	//c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	c.Check(authArea[0].SessionHandle.Type(), Equals, data.expectedSessionType)
+	c.Check(s.TPM.DoesHandleExist(authArea[0].SessionHandle), internal_testutil.IsFalse)
+	c.Check(s.TPM.DoesSavedSessionExist(authArea[0].SessionHandle), internal_testutil.IsFalse)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -1725,10 +1739,13 @@ func (s *policySuite) TestPolicyNV(c *C) {
 			NameAlg: tpm2.HashAlgorithmSHA256,
 			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
 			Size:    8},
-		contents:  internal_testutil.DecodeHexString(c, "0000000000001000"),
-		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
-		offset:    4,
-		operation: tpm2.OpEq})
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001000"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              4,
+		operation:           tpm2.OpEq,
+		expectedCommands:    6,
+		expectedAuthorize:   true,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
 
@@ -1739,10 +1756,13 @@ func (s *policySuite) TestPolicyNVDifferentOperand(c *C) {
 			NameAlg: tpm2.HashAlgorithmSHA256,
 			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
 			Size:    8},
-		contents:  internal_testutil.DecodeHexString(c, "0000000000001001"),
-		operandB:  internal_testutil.DecodeHexString(c, "00001001"),
-		offset:    4,
-		operation: tpm2.OpEq})
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001001"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001001"),
+		offset:              4,
+		operation:           tpm2.OpEq,
+		expectedCommands:    6,
+		expectedAuthorize:   true,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
 
@@ -1753,10 +1773,13 @@ func (s *policySuite) TestPolicyNVDifferentOffset(c *C) {
 			NameAlg: tpm2.HashAlgorithmSHA256,
 			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
 			Size:    8},
-		contents:  internal_testutil.DecodeHexString(c, "0000000010000000"),
-		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
-		offset:    2,
-		operation: tpm2.OpEq})
+		contents:            internal_testutil.DecodeHexString(c, "0000000010000000"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              2,
+		operation:           tpm2.OpEq,
+		expectedCommands:    6,
+		expectedAuthorize:   true,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
 
@@ -1767,10 +1790,13 @@ func (s *policySuite) TestPolicyNVDifferentOperation(c *C) {
 			NameAlg: tpm2.HashAlgorithmSHA256,
 			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
 			Size:    8},
-		contents:  internal_testutil.DecodeHexString(c, "0000000000001001"),
-		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
-		offset:    4,
-		operation: tpm2.OpUnsignedGT})
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001001"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              4,
+		operation:           tpm2.OpUnsignedGT,
+		expectedCommands:    6,
+		expectedAuthorize:   true,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
 
@@ -1804,21 +1830,127 @@ func (s *policySuite) TestPolicyNVDifferentAuth(c *C) {
 			NameAlg: tpm2.HashAlgorithmSHA256,
 			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVOwnerRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
 			Size:    8},
-		readAuth:  s.TPM.OwnerHandleContext(),
+		readAuth:            s.TPM.OwnerHandleContext(),
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001000"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              4,
+		operation:           tpm2.OpEq,
+		expectedCommands:    5,
+		expectedAuthorize:   true,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicyNVWithPolicySession(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandPolicyNV), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	err = s.testPolicyNV(c, &testExecutePolicyNVData{
+		nvPub: &tpm2.NVPublic{
+			Index:      s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg:    tpm2.HashAlgorithmSHA256,
+			Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+			AuthPolicy: policyDigest,
+			Size:       8},
+		readPolicy:          policy,
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001000"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              4,
+		operation:           tpm2.OpEq,
+		expectedCommands:    7,
+		expectedAuthorize:   false,
+		expectedSessionType: tpm2.HandleTypePolicySession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicyNVWithPolicySessionRequiresAuth(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandPolicyNV), IsNil)
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	err = s.testPolicyNV(c, &testExecutePolicyNVData{
+		nvPub: &tpm2.NVPublic{
+			Index:      s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg:    tpm2.HashAlgorithmSHA256,
+			Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+			AuthPolicy: policyDigest,
+			Size:       8},
+		readPolicy:          policy,
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001000"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              4,
+		operation:           tpm2.OpEq,
+		expectedCommands:    8,
+		expectedAuthorize:   true,
+		expectedSessionType: tpm2.HandleTypePolicySession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicyNVMissingPolicy(c *C) {
+	err := s.testPolicyNV(c, &testExecutePolicyNVData{
+		nvPub: &tpm2.NVPublic{
+			Index:   s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg: tpm2.HashAlgorithmSHA256,
+			Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+			Size:    8},
 		contents:  internal_testutil.DecodeHexString(c, "0000000000001000"),
 		operandB:  internal_testutil.DecodeHexString(c, "00001000"),
 		offset:    4,
 		operation: tpm2.OpEq})
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyNV assertion' task in root branch: `+
+		`TPM returned an error whilst executing command TPM_CC_PolicyNV: TPM_RC_AUTH_UNAVAILABLE \(authValue or authPolicy is not available for selected entity\)`)
+
+	var e *tpm2.TPMError
+	c.Assert(err, internal_testutil.ErrorAs, &e)
+	c.Check(e, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicyNV, Code: tpm2.ErrorAuthUnavailable})
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+}
+
+func (s *policySuite) TestPolicyNVPrefersPolicySession(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandPolicyNV), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	err = s.testPolicyNV(c, &testExecutePolicyNVData{
+		nvPub: &tpm2.NVPublic{
+			Index:      s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg:    tpm2.HashAlgorithmSHA256,
+			Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+			AuthPolicy: policyDigest,
+			Size:       8},
+		readPolicy:          policy,
+		contents:            internal_testutil.DecodeHexString(c, "0000000000001000"),
+		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
+		offset:              4,
+		operation:           tpm2.OpEq,
+		expectedCommands:    7,
+		expectedAuthorize:   false,
+		expectedSessionType: tpm2.HandleTypePolicySession})
 	c.Check(err, IsNil)
 }
 
 type testExecutePolicySecretData struct {
 	authObject Named
 	policyRef  tpm2.Nonce
-	params     *PolicyExecuteParams
 	resources  *PolicyResources
 
-	expectedFlush bool
+	expectedFlush       bool
+	expectedCommands    int
+	expectedSessionType tpm2.HandleType
 }
 
 func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) error {
@@ -1840,28 +1972,32 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 		},
 	}
 
-	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, data.resources, authorizer), data.params)
+	s.ForgetCommands()
+
+	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, data.resources, authorizer), nil)
 	if err != nil {
 		return err
 	}
 	c.Check(tickets, internal_testutil.LenEquals, 0)
 	c.Check(requireAuthValue, internal_testutil.IsFalse)
 
-	commands := s.CommandLog()
-	numCommands := 1
+	c.Check(authObjectHandle, Not(Equals), tpm2.Handle(0))
+
+	offsetEnd := 2
 	if data.expectedFlush {
-		numCommands += 1
-		c.Check(s.TPM.DoesHandleExist(authObjectHandle), internal_testutil.IsFalse)
-	} else {
-		c.Check(s.TPM.DoesHandleExist(authObjectHandle), internal_testutil.IsTrue)
+		offsetEnd++
 	}
 
-	c.Assert(commands, internal_testutil.LenGreaterEquals, numCommands)
-	policyCommand := commands[len(commands)-numCommands]
+	commands := s.CommandLog()
+
+	c.Assert(commands, internal_testutil.LenEquals, data.expectedCommands)
+	policyCommand := commands[len(commands)-offsetEnd]
 	c.Check(policyCommand.GetCommandCode(c), Equals, tpm2.CommandPolicySecret)
 	_, authArea, cpBytes := policyCommand.UnmarshalCommand(c)
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	//c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	c.Check(authArea[0].SessionHandle.Type(), Equals, data.expectedSessionType)
+	c.Check(s.TPM.DoesHandleExist(authArea[0].SessionHandle), internal_testutil.IsFalse)
+	c.Check(s.TPM.DoesSavedSessionExist(authArea[0].SessionHandle), internal_testutil.IsFalse)
 
 	var nonceTPM tpm2.Nonce
 	var cpHashA tpm2.Digest
@@ -1872,6 +2008,12 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 	c.Check(cpHashA, DeepEquals, tpm2.Digest(nil))
 	c.Check(expiration, Equals, int32(0))
 
+	if data.expectedFlush {
+		c.Check(s.TPM.DoesHandleExist(authObjectHandle), internal_testutil.IsFalse)
+	} else {
+		c.Check(s.TPM.DoesHandleExist(authObjectHandle), internal_testutil.IsTrue)
+	}
+
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
@@ -1881,80 +2023,61 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 
 func (s *policySuite) TestPolicySecret(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject: s.TPM.OwnerHandleContext(),
-		policyRef:  []byte("foo")})
+		authObject:          s.TPM.OwnerHandleContext(),
+		policyRef:           []byte("foo"),
+		expectedCommands:    5,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
 
 func (s *policySuite) TestPolicySecretNoPolicyRef(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
-		authObject: s.TPM.OwnerHandleContext()})
+		authObject:          s.TPM.OwnerHandleContext(),
+		expectedCommands:    5,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
 
 func (s *policySuite) TestPolicySecretWithWithTransient(c *C) {
-	parent := s.CreateStoragePrimaryKeyRSA(c)
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandLoad), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+
+	template := testutil.NewRSAStorageKeyTemplate()
+	template.AuthPolicy = policyDigest
+
+	parent := s.CreatePrimary(c, tpm2.HandleOwner, template)
 	persistent := s.NextAvailableHandle(c, 0x81000008)
 	s.EvictControl(c, tpm2.HandleOwner, parent, persistent)
 
 	priv, pub, _, _, _, err := s.TPM.Create(parent, nil, testutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
 
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySecret(pub, []byte("foo")), IsNil)
-	policy, err := builder.Policy()
-	c.Assert(err, IsNil)
-	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-
-	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
-
-	parentHandle := parent.Handle()
-
-	authorizations := 0
-	var authObjectHandle tpm2.Handle
-	authorizer := &mockAuthorizer{
-		authorizeFn: func(resource tpm2.ResourceContext) error {
-			switch authorizations {
-			case 0:
-				c.Check(resource.Name(), DeepEquals, parent.Name())
-			case 1:
-				c.Check(resource.Name(), DeepEquals, pub.Name())
-				authObjectHandle = resource.Handle()
-			default:
-				return errors.New("unexpected")
-			}
-			authorizations += 1
-			return nil
-		},
-	}
-
-	resources := &PolicyResources{
-		Persistent: []PersistentResource{
-			{
-				Name:   parent.Name(),
-				Handle: persistent,
+	err = s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject: pub,
+		policyRef:  []byte("foo"),
+		resources: &PolicyResources{
+			Persistent: []PersistentResource{
+				{
+					Name:   parent.Name(),
+					Handle: persistent,
+					Policy: policy,
+				},
+			},
+			Transient: []TransientResource{
+				{
+					ParentName: parent.Name(),
+					Private:    priv,
+					Public:     pub,
+				},
 			},
 		},
-		Transient: []TransientResource{
-			{
-				ParentName: parent.Name(),
-				Private:    priv,
-				Public:     pub,
-			},
-		},
-	}
-	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, authorizer), nil)
+		expectedFlush:       true,
+		expectedCommands:    13,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
-	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(requireAuthValue, internal_testutil.IsFalse)
-
-	c.Check(s.TPM.DoesHandleExist(authObjectHandle), internal_testutil.IsFalse)
-	c.Check(s.TPM.DoesHandleExist(parentHandle), internal_testutil.IsTrue)
-
-	digest, err := s.TPM.PolicyGetDigest(session)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigest)
 }
 
 func (s *policySuite) TestPolicySecretFail(c *C) {
@@ -1994,6 +2117,141 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	var rle *ResourceLoadError
 	c.Check(err, internal_testutil.ErrorAs, &rle)
 	c.Check(rle.Name, DeepEquals, object.Name())
+}
+
+func (s *policySuite) TestPolicySecretWithNV(c *C) {
+	nvPub := &tpm2.NVPublic{
+		Index:   s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg: tpm2.HashAlgorithmSHA256,
+		Attrs:   tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		Size:    8}
+	index := s.NVDefineSpace(c, tpm2.HandleOwner, nil, nvPub)
+	c.Assert(s.TPM.NVWrite(index, index, []byte{0}, 0, nil), IsNil)
+
+	nvPub, _, err := s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+
+	err = s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject:          nvPub,
+		policyRef:           []byte("foo"),
+		expectedCommands:    9,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicySecretWithNVPolicySession(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	nvPub := &tpm2.NVPublic{
+		Index:      s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg:    tpm2.HashAlgorithmSHA256,
+		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		AuthPolicy: policyDigest,
+		Size:       8}
+	index := s.NVDefineSpace(c, tpm2.HandleOwner, nil, nvPub)
+	c.Assert(s.TPM.NVWrite(index, index, []byte{0}, 0, nil), IsNil)
+
+	nvPub, _, err = s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+
+	err = s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject: nvPub,
+		policyRef:  []byte("foo"),
+		resources: &PolicyResources{
+			Persistent: []PersistentResource{
+				{
+					Name:   nvPub.Name(),
+					Handle: nvPub.Index,
+					Policy: policy,
+				},
+			},
+		},
+		expectedCommands:    8,
+		expectedSessionType: tpm2.HandleTypePolicySession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicySecretWithNVPreferHMACSession(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	nvPub := &tpm2.NVPublic{
+		Index:      s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg:    tpm2.HashAlgorithmSHA256,
+		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		AuthPolicy: policyDigest,
+		Size:       8}
+	index := s.NVDefineSpace(c, tpm2.HandleOwner, nil, nvPub)
+	c.Assert(s.TPM.NVWrite(index, index, []byte{0}, 0, nil), IsNil)
+
+	nvPub, _, err = s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+
+	err = s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject: nvPub,
+		policyRef:  []byte("foo"),
+		resources: &PolicyResources{
+			Persistent: []PersistentResource{
+				{
+					Name:   nvPub.Name(),
+					Handle: nvPub.Index,
+					Policy: policy,
+				},
+			},
+		},
+		expectedCommands:    7,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicySecretWithNVMissingPolicySession(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	nvPub := &tpm2.NVPublic{
+		Index:      s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg:    tpm2.HashAlgorithmSHA256,
+		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		AuthPolicy: policyDigest,
+		Size:       8}
+	index := s.NVDefineSpace(c, tpm2.HandleOwner, nil, nvPub)
+	c.Assert(s.TPM.NVWrite(index, index, []byte{0}, 0, nil), IsNil)
+
+	nvPub, _, err = s.TPM.NVReadPublic(index)
+	c.Assert(err, IsNil)
+
+	err = s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject: nvPub,
+		policyRef:  []byte("foo")})
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: `+
+		`cannot complete authorization with authName=0x000b2ce1bec1b93901ee1e39517612a216fe496c26fa595fd5cf4149ff8f225e6aa9, policyRef=0x666f6f: `+
+		`TPM returned an error whilst executing command TPM_CC_PolicySecret: TPM_RC_AUTH_UNAVAILABLE \(authValue or authPolicy is not available for selected entity\)`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+
+	var ae *PolicyAuthorizationError
+	c.Assert(err, internal_testutil.ErrorAs, &ae)
+	c.Check(ae.AuthName, DeepEquals, nvPub.Name())
+	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
+
+	var te *tpm2.TPMError
+	c.Assert(err, internal_testutil.ErrorAs, &te)
+	c.Check(te, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicySecret, Code: tpm2.ErrorAuthUnavailable})
 }
 
 type testExecutePolicySignedData struct {
@@ -2663,9 +2921,10 @@ func (s *policySuite) TestPolicyNameHash2(c *C) {
 }
 
 type testExecutePolicyBranchesData struct {
-	usage *PolicySessionUsage
-	path  string
-	cmd   tpm2.CommandCode
+	usage                    *PolicySessionUsage
+	path                     string
+	expectedCommands         tpm2.CommandCodeList
+	expectedRequireAuthValue bool
 }
 
 func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesData) {
@@ -2687,8 +2946,6 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
-	expectedRequireAuthValue := data.cmd == tpm2.CommandPolicyAuthValue
-
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
@@ -2697,7 +2954,6 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	}
 	authorizer := &mockAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
-			c.Check(data.cmd, Equals, tpm2.CommandPolicySecret)
 			c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 			return nil
 		},
@@ -2708,14 +2964,13 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), params)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(requireAuthValue, Equals, expectedRequireAuthValue)
+	c.Check(requireAuthValue, Equals, data.expectedRequireAuthValue)
 
 	log := s.CommandLog()
-	c.Assert(log, internal_testutil.LenEquals, 4)
-	c.Check(log[0].GetCommandCode(c), Equals, tpm2.CommandPolicyNvWritten)
-	c.Check(log[1].GetCommandCode(c), Equals, data.cmd)
-	c.Check(log[2].GetCommandCode(c), Equals, tpm2.CommandPolicyOR)
-	c.Check(log[3].GetCommandCode(c), Equals, tpm2.CommandPolicyCommandCode)
+	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
+	for i := range log {
+		c.Check(log[i].GetCommandCode(c), Equals, data.expectedCommands[i])
+	}
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -2725,36 +2980,80 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 func (s *policySuite) TestPolicyBranches(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
 		path: "branch1",
-		cmd:  tpm2.CommandPolicyAuthValue})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: true})
 }
 
 func (s *policySuite) TestPolicyBranchesNumericSelector(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
 		path: "$[0]",
-		cmd:  tpm2.CommandPolicyAuthValue})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: true})
 }
 
 func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
 		path: "branch2",
-		cmd:  tpm2.CommandPolicySecret})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: false})
 }
 
 func (s *policySuite) TestPolicyBranchesNumericSelectorDifferentBranchIndex(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
 		path: "$[1]",
-		cmd:  tpm2.CommandPolicySecret})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: false})
 }
 
 func (s *policySuite) TestPolicyBranchAutoSelectNoUsage(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		cmd: tpm2.CommandPolicyAuthValue})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: true})
 }
 
 func (s *policySuite) TestPolicyBranchAutoSelectWithUsage(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
 		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
-		cmd:   tpm2.CommandPolicyAuthValue})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: true})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
@@ -2795,10 +3094,11 @@ func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
 }
 
 type testExecutePolicyBranchesMultipleNodesData struct {
-	usage *PolicySessionUsage
-	path  string
-	cmd1  tpm2.CommandCode
-	cmd2  tpm2.CommandCode
+	usage                    *PolicySessionUsage
+	path                     string
+	expectedCommands         tpm2.CommandCodeList
+	expectedRequireAuthValue bool
+	expectedCommandCode      tpm2.CommandCode
 }
 
 func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePolicyBranchesMultipleNodesData) {
@@ -2826,8 +3126,6 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
-	expectedRequireAuthValue := data.cmd1 == tpm2.CommandPolicyAuthValue
-
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
@@ -2837,7 +3135,6 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 
 	authorizer := &mockAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
-			c.Check(data.cmd1, Equals, tpm2.CommandPolicySecret)
 			c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 			return nil
 		},
@@ -2846,22 +3143,26 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), params)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(requireAuthValue, Equals, expectedRequireAuthValue)
+	c.Check(requireAuthValue, Equals, data.expectedRequireAuthValue)
 
 	log := s.CommandLog()
-	c.Assert(log, internal_testutil.LenEquals, 5)
-	c.Check(log[0].GetCommandCode(c), Equals, tpm2.CommandPolicyNvWritten)
-	c.Check(log[1].GetCommandCode(c), Equals, data.cmd1)
-	c.Check(log[2].GetCommandCode(c), Equals, tpm2.CommandPolicyOR)
-	c.Check(log[3].GetCommandCode(c), Equals, tpm2.CommandPolicyCommandCode)
-	c.Check(log[4].GetCommandCode(c), Equals, tpm2.CommandPolicyOR)
+	for _, command := range log {
+		c.Logf("%v", command.GetCommandCode(c))
+	}
 
-	_, _, cpBytes := log[3].UnmarshalCommand(c)
+	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
+	for i := range log {
+		code := log[i].GetCommandCode(c)
+		c.Check(code, Equals, data.expectedCommands[i])
+		if code == tpm2.CommandPolicyCommandCode {
+			_, _, cpBytes := log[i].UnmarshalCommand(c)
 
-	var commandCode tpm2.CommandCode
-	_, err = mu.UnmarshalFromBytes(cpBytes, &commandCode)
-	c.Check(err, IsNil)
-	c.Check(commandCode, Equals, data.cmd2)
+			var commandCode tpm2.CommandCode
+			_, err = mu.UnmarshalFromBytes(cpBytes, &commandCode)
+			c.Check(err, IsNil)
+			c.Check(commandCode, Equals, data.expectedCommandCode)
+		}
+	}
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -2871,71 +3172,143 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 func (s *policySuite) TestPolicyBranchesMultipleNodes1(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path: "branch1/branch3",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesNumericSelectors(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path: "$[0]/$[0]",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodes2(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path: "branch1/branch4",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodes3(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path: "branch2/branch4",
-		cmd1: tpm2.CommandPolicySecret,
-		cmd2: tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectNoUsage(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneNoUsage(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path: "branch1",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage1(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
-		cmd1:  tpm2.CommandPolicyAuthValue,
-		cmd2:  tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
-		cmd1:  tpm2.CommandPolicyAuthValue,
-		cmd2:  tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path:  "branch2",
 		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
-		cmd1:  tpm2.CommandPolicySecret,
-		cmd2:  tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 type testExecutePolicyBranchesEmbeddedNodesData struct {
-	usage *PolicySessionUsage
-	path  string
-	cmd1  tpm2.CommandCode
-	cmd2  tpm2.CommandCode
+	usage                    *PolicySessionUsage
+	path                     string
+	expectedCommands         tpm2.CommandCodeList
+	expectedRequireAuthValue bool
+	expectedCommandCode      tpm2.CommandCode
 }
 
 func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePolicyBranchesEmbeddedNodesData) {
@@ -2971,8 +3344,6 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
 	c.Check(err, IsNil)
 
-	expectedRequireAuthValue := data.cmd1 == tpm2.CommandPolicyAuthValue
-
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
@@ -2982,7 +3353,6 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 
 	authorizer := &mockAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
-			c.Check(data.cmd1, Equals, tpm2.CommandPolicySecret)
 			c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 			return nil
 		},
@@ -2991,22 +3361,22 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), params)
 	c.Check(err, IsNil)
 	c.Check(tickets, internal_testutil.LenEquals, 0)
-	c.Check(requireAuthValue, Equals, expectedRequireAuthValue)
+	c.Check(requireAuthValue, Equals, data.expectedRequireAuthValue)
 
 	log := s.CommandLog()
-	c.Assert(log, internal_testutil.LenEquals, 5)
-	c.Check(log[0].GetCommandCode(c), Equals, tpm2.CommandPolicyNvWritten)
-	c.Check(log[1].GetCommandCode(c), Equals, data.cmd1)
-	c.Check(log[2].GetCommandCode(c), Equals, tpm2.CommandPolicyCommandCode)
-	c.Check(log[3].GetCommandCode(c), Equals, tpm2.CommandPolicyOR)
-	c.Check(log[4].GetCommandCode(c), Equals, tpm2.CommandPolicyOR)
+	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
+	for i := range log {
+		code := log[i].GetCommandCode(c)
+		c.Check(code, Equals, data.expectedCommands[i])
+		if code == tpm2.CommandPolicyCommandCode {
+			_, _, cpBytes := log[i].UnmarshalCommand(c)
 
-	_, _, cpBytes := log[2].UnmarshalCommand(c)
-
-	var commandCode tpm2.CommandCode
-	_, err = mu.UnmarshalFromBytes(cpBytes, &commandCode)
-	c.Check(err, IsNil)
-	c.Check(commandCode, Equals, data.cmd2)
+			var commandCode tpm2.CommandCode
+			_, err = mu.UnmarshalFromBytes(cpBytes, &commandCode)
+			c.Check(err, IsNil)
+			c.Check(commandCode, Equals, data.expectedCommandCode)
+		}
+	}
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -3016,71 +3386,153 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 func (s *policySuite) TestPolicyBranchesEmbeddedNodes1(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "branch1/branch2",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesNumericSelectors(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "$[0]/$[0]",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodes2(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "branch1/branch3",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodes3(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "branch4/branch5",
-		cmd1: tpm2.CommandPolicySecret,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodes4(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "branch4/branch6",
-		cmd1: tpm2.CommandPolicySecret,
-		cmd2: tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectNoUsage(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneNoUsage(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path: "branch1",
-		cmd1: tpm2.CommandPolicyAuthValue,
-		cmd2: tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneWithUsage(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path:  "branch4",
 		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
-		cmd1:  tpm2.CommandPolicySecret,
-		cmd2:  tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage1(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
-		cmd1:  tpm2.CommandPolicyAuthValue,
-		cmd2:  tpm2.CommandNVChangeAuth})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
-		cmd1:  tpm2.CommandPolicyAuthValue,
-		cmd2:  tpm2.CommandNVWriteLock})
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
