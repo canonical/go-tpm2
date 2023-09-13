@@ -578,9 +578,9 @@ func (h *treeWalkerHelper) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (h *treeWalkerHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error {
+func (h *treeWalkerHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(error, tpm2.SessionContext) error) error {
 	h.controller.pushTasks(func() error {
-		return complete(nil)
+		return complete(nil, nil)
 	})
 	return nil
 }

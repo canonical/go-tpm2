@@ -78,18 +78,34 @@ func (e *PolicyError) Unwrap() error {
 }
 
 // SubPolicyError is returned from [Policy.Execute] if an error is encountered during
-// the execution of a sub-policy.
+// the execution of a sub-policy. This should be wrapped in either a [PolicyNVError]
+// or [PolicyAuthorizationError] which indicates the resource that the error occurred for.
 type SubPolicyError struct {
-	Name tpm2.Name // the name of the resource being authorized
-
 	err error
 }
 
 func (e *SubPolicyError) Error() string {
-	return fmt.Sprintf("encountered an error when running sub-policy for resource %#x: %v", e.Name, e.err)
+	return fmt.Sprintf("encountered an error when running sub-policy for resource: %v", e.err)
 }
 
 func (e *SubPolicyError) Unwrap() error {
+	return e.err
+}
+
+// PolicyNVError is returned from [Policy.Execute] and other methods when an error
+// is encountered with a NV index.
+type PolicyNVError struct {
+	Index tpm2.Handle // The NV index handle
+	Name  tpm2.Name   // The NV index name
+
+	err error
+}
+
+func (e *PolicyNVError) Error() string {
+	return fmt.Sprintf("cannot complete assertion with NV index %v (name: %#x): %v", e.Index, e.Name, e.err)
+}
+
+func (e *PolicyNVError) Unwrap() error {
 	return e.err
 }
 
@@ -278,7 +294,7 @@ type policyRunnerHelper interface {
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
 	cpHash(cpHash *policyCpHashElement) error
 	nameHash(nameHash *policyNameHashElement) error
-	authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error
+	authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(error, tpm2.SessionContext) error) error
 	handleBranches(branches policyBranches, complete func(tpm2.DigestList, int) error) error
 	handleAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy, complete func(tpm2.Digest, *tpm2.TkVerified) error) error
 }
@@ -385,13 +401,19 @@ func (e *policyNVElement) run(context policySessionContext) (err error) {
 		restore()
 	}()
 
-	if err := context.helper().authorize(auth.Resource(), policy, usage, tpm2.SessionTypePolicy, func(session tpm2.SessionContext) error {
+	if err := context.helper().authorize(auth.Resource(), policy, usage, tpm2.SessionTypePolicy, func(sessionErr error, session tpm2.SessionContext) error {
 		if err := restore(); err != nil {
 			return fmt.Errorf("cannot restore session: %w", err)
 		}
-		return context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, session)
+		if sessionErr != nil {
+			return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: sessionErr}
+		}
+		if err := context.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, session); err != nil {
+			return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: err}
+		}
+		return nil
 	}); err != nil {
-		return err
+		return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: err}
 	}
 
 	return nil
@@ -458,12 +480,17 @@ func (e *policySecretElement) run(context policySessionContext) (err error) {
 		tpm2.Digest{}, e.PolicyRef, int32(0),
 	)
 
-	if err := context.helper().authorize(authObject.Resource(), policy, usage, tpm2.SessionTypeHMAC, func(session tpm2.SessionContext) error {
+	if err := context.helper().authorize(authObject.Resource(), policy, usage, tpm2.SessionTypeHMAC, func(sessionErr error, session tpm2.SessionContext) error {
 		defer flushAuthObject()
 
 		if err := restore(); err != nil {
 			return fmt.Errorf("cannot restore session: %w", err)
 		}
+
+		if sessionErr != nil {
+			return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: sessionErr}
+		}
+
 		timeout, ticket, err := context.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, session)
 		if err != nil {
 			return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
@@ -1140,7 +1167,7 @@ func (h *executePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) (err error) {
+func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(error, tpm2.SessionContext) error) (err error) {
 	sessionType := prefer
 	alg := auth.Name().Algorithm()
 
@@ -1209,7 +1236,7 @@ func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Polic
 			func(err error) error {
 				defer h.tpm.FlushContext(session)
 				if err != nil {
-					return &SubPolicyError{Name: auth.Name(), err: err}
+					return complete(&SubPolicyError{err: err}, nil)
 				}
 
 				if details.AuthValueNeeded {
@@ -1217,7 +1244,7 @@ func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Polic
 						return fmt.Errorf("cannot authorize resource: %w", err)
 					}
 				}
-				return complete(session)
+				return complete(nil, session)
 			},
 		)
 		return nil
@@ -1229,7 +1256,7 @@ func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Polic
 
 	h.controller.pushTasks(func() error {
 		defer h.tpm.FlushContext(session)
-		return complete(session)
+		return complete(nil, session)
 	})
 	return nil
 }
@@ -1636,9 +1663,9 @@ func (h *computePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (h *computePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error {
+func (h *computePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(error, tpm2.SessionContext) error) error {
 	h.controller.pushTasks(func() error {
-		return complete(nil)
+		return complete(nil, nil)
 	})
 	return nil
 }
@@ -1831,9 +1858,9 @@ func (h *validatePolicyHelper) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (h *validatePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(tpm2.SessionContext) error) error {
+func (h *validatePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType, complete func(error, tpm2.SessionContext) error) error {
 	h.controller.pushTasks(func() error {
-		return complete(nil)
+		return complete(nil, nil)
 	})
 	return nil
 }
