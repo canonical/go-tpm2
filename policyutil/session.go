@@ -486,7 +486,8 @@ func (s *proxyPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelec
 func (s *proxyPolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
 	s.details.NV = append(s.details.NV, PolicyNVDetails{
 		Auth:      auth.Handle(),
-		Index:     index,
+		Index:     index.Handle(),
+		Name:      index.Name(),
 		OperandB:  operandB,
 		Offset:    offset,
 		Operation: operation,

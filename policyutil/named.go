@@ -12,8 +12,3 @@ import (
 type Named interface {
 	Name() tpm2.Name
 }
-
-type NVIndex interface {
-	Handle() tpm2.Handle
-	Name() tpm2.Name
-}

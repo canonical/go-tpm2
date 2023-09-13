@@ -229,7 +229,7 @@ func (f *policyBranchFilter) filterIgnoredResources() {
 			found := false
 
 			for _, nv := range r.NV {
-				if bytes.Equal(nv.Index.Name(), ignore.Name()) {
+				if bytes.Equal(nv.Name, ignore.Name()) {
 					found = true
 					break
 				}

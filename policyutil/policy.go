@@ -2016,7 +2016,8 @@ func (p *Policy) Branches() ([]string, error) {
 // PolicyNVDetails contains the properties of a TPM2_PolicyNV assertion.
 type PolicyNVDetails struct {
 	Auth      tpm2.Handle
-	Index     NVIndex
+	Index     tpm2.Handle
+	Name      tpm2.Name
 	OperandB  tpm2.Operand
 	Offset    uint16
 	Operation tpm2.ArithmeticOp

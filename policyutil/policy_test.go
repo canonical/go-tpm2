@@ -4067,7 +4067,7 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 
 	c.Check(bd.IsValid(), internal_testutil.IsTrue)
 	c.Check(bd.NV, DeepEquals, []PolicyNVDetails{
-		{Auth: nvPub.Index, Index: tpm2.NewNVIndexResourceContext(nvPub, nvPub.Name()), OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, Offset: 0, Operation: tpm2.OpUnsignedLT},
+		{Auth: nvPub.Index, Index: nvPub.Index, Name: nvPub.Name(), OperandB: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, Offset: 0, Operation: tpm2.OpUnsignedLT},
 	})
 	c.Check(bd.Secret, DeepEquals, []PolicyAuthorizationDetails{
 		{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
