@@ -179,6 +179,7 @@ type PolicySessionUsage struct {
 	handles     []Named
 	params      []interface{}
 	nvHandle    tpm2.Handle
+	noAuthValue bool
 }
 
 // NewPolicySessionUsage creates a new PolicySessionUsage.
@@ -197,6 +198,13 @@ func (u *PolicySessionUsage) WithNVHandle(handle tpm2.Handle) *PolicySessionUsag
 		panic("invalid handle")
 	}
 	u.nvHandle = handle
+	return u
+}
+
+// NoAuthValue indicates that the policy session is being used to authorize a
+// resource that the authorization value cannot be determined for.
+func (u *PolicySessionUsage) NoAuthValue() *PolicySessionUsage {
+	u.noAuthValue = true
 	return u
 }
 

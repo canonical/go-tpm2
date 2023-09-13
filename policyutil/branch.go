@@ -233,6 +233,11 @@ func (f *policyBranchFilter) filterUsageIncompatibleBranches() error {
 			}
 		}
 
+		if r.AuthValueNeeded && f.usage.noAuthValue {
+			delete(f.detailsMap, p)
+			continue
+		}
+
 		nvWritten, set := r.NvWritten()
 		if set && f.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
 			pub, err := f.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(f.usage.nvHandle))

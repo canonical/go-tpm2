@@ -3044,7 +3044,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectNoUsage(c *C) {
 		expectedRequireAuthValue: true})
 }
 
-func (s *policySuite) TestPolicyBranchAutoSelectWithUsage(c *C) {
+func (s *policySuite) TestPolicyBranchAutoSelectWithUsage1(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
 		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
 		expectedCommands: tpm2.CommandCodeList{
@@ -3054,6 +3054,22 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage(c *C) {
 			tpm2.CommandPolicyCommandCode,
 		},
 		expectedRequireAuthValue: true})
+}
+
+func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
+	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+		},
+		expectedRequireAuthValue: false})
 }
 
 func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
@@ -3281,6 +3297,24 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage2(c *C) 
 			tpm2.CommandPolicyOR,
 		},
 		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
+func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage3(c *C) {
+	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}).NoAuthValue(),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
 		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
@@ -3533,6 +3567,24 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage2(c *C) 
 		},
 		expectedRequireAuthValue: true,
 		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
+func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3(c *C) {
+	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVChangeAuth})
 }
 
 func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
