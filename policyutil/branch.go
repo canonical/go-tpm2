@@ -6,6 +6,7 @@ package policyutil
 
 import (
 	"bytes"
+	"crypto"
 	"errors"
 	"fmt"
 	"strings"
@@ -146,70 +147,78 @@ func (*policyBranchSelectMixin) selectBranch(branches policyBranches, next polic
 	}
 }
 
-type candidateBranch struct {
-	path    policyBranchPath
-	details PolicyBranchDetails
-}
-
-type policyBranchFilter struct {
+type policyBranchSelector struct {
 	mockPolicyResourceLoader
 
 	sessionAlg           tpm2.HashAlgorithmId
 	resources            PolicyResourceLoader
+	controller           policyRunnerController
 	tpm                  TPMConnection
+	subPolicyRunner      subPolicyRunner
 	usage                *PolicySessionUsage
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
 	paths      []policyBranchPath
 	detailsMap map[policyBranchPath]PolicyBranchDetails
+	nvOk       map[paramKey]struct{}
 }
 
-func newPolicyBranchFilter(sessionAlg tpm2.HashAlgorithmId, resources PolicyResourceLoader, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyBranchFilter {
-	return &policyBranchFilter{
+func newPolicyBranchSelector(sessionAlg tpm2.HashAlgorithmId, resources PolicyResourceLoader, controller policyRunnerController, subPolicyRunner subPolicyRunner, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyBranchSelector {
+	return &policyBranchSelector{
 		sessionAlg:           sessionAlg,
 		resources:            resources,
+		controller:           controller,
 		tpm:                  tpm,
+		subPolicyRunner:      subPolicyRunner,
 		usage:                usage,
 		ignoreAuthorizations: ignoreAuthorizations,
 		ignoreNV:             ignoreNV,
 	}
 }
 
-func (f *policyBranchFilter) filterInvalidBranches() {
-	for p, r := range f.detailsMap {
-		if r.IsValid() {
+func (s *policyBranchSelector) filterInvalidBranches() {
+	for p, d := range s.detailsMap {
+		if d.IsValid() {
 			continue
 		}
-		delete(f.detailsMap, p)
+		delete(s.detailsMap, p)
 	}
 }
 
-func (f *policyBranchFilter) filterMissingAuthBranches() {
-	for p, r := range f.detailsMap {
-		missing := false
-		for _, auth := range r.Authorize {
-			policies, err := f.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
+func (s *policyBranchSelector) filterMissingResourceBranches() {
+	if s.resources != nil {
+		return
+	}
+
+	for p, d := range s.detailsMap {
+		if len(d.NV) > 0 || len(d.Secret) > 0 || len(d.Signed) > 0 || len(d.Authorize) > 0 {
+			delete(s.detailsMap, p)
+		}
+	}
+}
+
+func (s *policyBranchSelector) filterMissingAuthBranches() {
+	for p, d := range s.detailsMap {
+		for _, auth := range d.Authorize {
+			policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
 			if err != nil || len(policies) == 0 {
-				missing = true
+				delete(s.detailsMap, p)
 				break
 			}
 		}
-		if missing {
-			delete(f.detailsMap, p)
-		}
 	}
 }
 
-func (f *policyBranchFilter) filterIgnoredResources() {
-	for _, ignore := range f.ignoreAuthorizations {
-		for p, r := range f.detailsMap {
+func (s *policyBranchSelector) filterIgnoredResources() {
+	for _, ignore := range s.ignoreAuthorizations {
+		for p, d := range s.detailsMap {
 			found := false
 
 			var auths []PolicyAuthorizationID
-			auths = append(auths, r.Secret...)
-			auths = append(auths, r.Signed...)
-			auths = append(auths, r.Authorize...)
+			auths = append(auths, d.Secret...)
+			auths = append(auths, d.Signed...)
+			auths = append(auths, d.Authorize...)
 
 			for _, auth := range auths {
 				if bytes.Equal(auth.AuthName, ignore.AuthName) && bytes.Equal(auth.PolicyRef, ignore.PolicyRef) {
@@ -219,79 +228,73 @@ func (f *policyBranchFilter) filterIgnoredResources() {
 			}
 
 			if found {
-				delete(f.detailsMap, p)
+				delete(s.detailsMap, p)
 			}
 		}
 	}
 
-	for _, ignore := range f.ignoreNV {
-		for p, r := range f.detailsMap {
-			found := false
-
-			for _, nv := range r.NV {
+	for _, ignore := range s.ignoreNV {
+		for p, d := range s.detailsMap {
+			for _, nv := range d.NV {
 				if bytes.Equal(nv.Name, ignore.Name()) {
-					found = true
+					delete(s.detailsMap, p)
 					break
 				}
-			}
-
-			if found {
-				delete(f.detailsMap, p)
 			}
 		}
 	}
 }
 
-func (f *policyBranchFilter) filterUsageIncompatibleBranches() error {
-	if f.usage == nil {
+func (s *policyBranchSelector) filterUsageIncompatibleBranches() error {
+	if s.usage == nil {
 		return nil
 	}
 
-	for p, r := range f.detailsMap {
-		code, set := r.CommandCode()
-		if set && code != f.usage.commandCode {
-			delete(f.detailsMap, p)
+	for p, d := range s.detailsMap {
+		code, set := d.CommandCode()
+		if set && code != s.usage.commandCode {
+			delete(s.detailsMap, p)
 			continue
 		}
 
-		cpHash, set := r.CpHash()
+		cpHash, set := d.CpHash()
 		if set {
-			d, err := ComputeCpHash(f.sessionAlg, f.usage.commandCode, f.usage.handles, f.usage.params...)
+			usageCpHash, err := ComputeCpHash(s.sessionAlg, s.usage.commandCode, s.usage.handles, s.usage.params...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
 			}
-			if !bytes.Equal(d, cpHash) {
-				delete(f.detailsMap, p)
+			if !bytes.Equal(usageCpHash, cpHash) {
+				delete(s.detailsMap, p)
 				continue
 			}
 		}
 
-		nameHash, set := r.NameHash()
+		nameHash, set := d.NameHash()
 		if set {
-			d, err := ComputeNameHash(f.sessionAlg, f.usage.handles...)
+			usageNameHash, err := ComputeNameHash(s.sessionAlg, s.usage.handles...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
 			}
-			if !bytes.Equal(d, nameHash) {
-				delete(f.detailsMap, p)
+			if !bytes.Equal(usageNameHash, nameHash) {
+				delete(s.detailsMap, p)
 				continue
 			}
 		}
 
-		if r.AuthValueNeeded && f.usage.noAuthValue {
-			delete(f.detailsMap, p)
+		if d.AuthValueNeeded && s.usage.noAuthValue {
+			delete(s.detailsMap, p)
 			continue
 		}
 
-		nvWritten, set := r.NvWritten()
-		if set && f.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
-			pub, err := f.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(f.usage.nvHandle))
+		nvWritten, set := d.NvWritten()
+		if set && s.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
+			pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(s.usage.nvHandle))
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
 			written := pub.Attrs&tpm2.AttrNVWritten != 0
 			if nvWritten != written {
-				delete(f.detailsMap, p)
+				delete(s.detailsMap, p)
 				continue
 			}
 		}
@@ -300,20 +303,16 @@ func (f *policyBranchFilter) filterUsageIncompatibleBranches() error {
 	return nil
 }
 
-func (f *policyBranchFilter) filterPcrIncompatibleBranches() error {
+func (s *policyBranchSelector) filterPcrIncompatibleBranches() error {
 	var pcrs tpm2.PCRSelectionList
-	for p, r := range f.detailsMap {
-		var err error
-		for _, item := range r.PCR {
-			var tmpPcrs tpm2.PCRSelectionList
-			tmpPcrs, err = pcrs.Merge(item.PCRs)
+	for p, d := range s.detailsMap {
+		for _, item := range d.PCR {
+			tmpPcrs, err := pcrs.Merge(item.PCRs)
 			if err != nil {
+				delete(s.detailsMap, p)
 				break
 			}
 			pcrs = tmpPcrs
-		}
-		if err != nil {
-			delete(f.detailsMap, p)
 		}
 	}
 
@@ -321,32 +320,28 @@ func (f *policyBranchFilter) filterPcrIncompatibleBranches() error {
 		return nil
 	}
 
-	pcrValues, err := f.tpm.PCRRead(pcrs)
+	pcrValues, err := s.tpm.PCRRead(pcrs)
 	if err != nil {
 		return fmt.Errorf("cannot obtain PCR values: %w", err)
 	}
 
-	for p, r := range f.detailsMap {
-		incompatible := false
-		for _, item := range r.PCR {
-			pcrDigest, err := ComputePCRDigest(f.sessionAlg, item.PCRs, pcrValues)
+	for p, d := range s.detailsMap {
+		for _, item := range d.PCR {
+			pcrDigest, err := ComputePCRDigest(s.sessionAlg, item.PCRs, pcrValues)
 			if err != nil {
 				return fmt.Errorf("cannot compute PCR digest: %w", err)
 			}
 			if !bytes.Equal(pcrDigest, item.PCRDigest) {
-				incompatible = true
+				delete(s.detailsMap, p)
 				break
 			}
-		}
-		if incompatible {
-			delete(f.detailsMap, p)
 		}
 	}
 
 	return nil
 }
 
-func (r *policyBranchFilter) bufferMatch(operandA, operandB tpm2.Operand, operation tpm2.ArithmeticOp) bool {
+func (s *policyBranchSelector) bufferMatch(operandA, operandB tpm2.Operand, operation tpm2.ArithmeticOp) bool {
 	if len(operandA) != len(operandB) {
 		panic("mismatched operand sizes")
 	}
@@ -419,10 +414,211 @@ func (r *policyBranchFilter) bufferMatch(operandA, operandB tpm2.Operand, operat
 	}
 }
 
-func (f *policyBranchFilter) filterCounterTimerIncompatibleBranches() error {
+func (s *policyBranchSelector) canAuthNV(pub *tpm2.NVPublic, policy *Policy, command tpm2.CommandCode) bool {
+	if pub.Attrs&tpm2.AttrNVPolicyRead == 0 {
+		return false
+	}
+	if policy == nil {
+		return false
+	}
+
+	details, err := policy.Details(pub.Name().Algorithm(), "")
+	if err != nil {
+		return false
+	}
+
+	for _, d := range details {
+		if len(d.NV) > 0 {
+			continue
+		}
+		if len(d.Secret) > 0 {
+			continue
+		}
+		if len(d.Signed) > 0 {
+			continue
+		}
+		if len(d.Authorize) > 0 {
+			continue
+		}
+		if d.AuthValueNeeded {
+			continue
+		}
+		code, set := d.CommandCode()
+		if set && code != command {
+			continue
+		}
+		if len(d.CounterTimer) > 0 {
+			continue
+		}
+		if _, set := d.CpHash(); set {
+			continue
+		}
+		if _, set := d.NameHash(); set {
+			continue
+		}
+		if len(d.PCR) > 0 {
+			continue
+		}
+		nvWritten, set := d.NvWritten()
+		if set && !nvWritten {
+			continue
+		}
+		return true
+	}
+
+	return false
+}
+
+func nvAssertionKey(nv *PolicyNVDetails) paramKey {
+	h := crypto.SHA256.New()
+	mu.MustMarshalToWriter(h, nv)
+
+	var key paramKey
+	copy(key[:], h.Sum(nil))
+	return key
+}
+
+type nvIndexInfo struct {
+	resource tpm2.ResourceContext
+	pub      *tpm2.NVPublic
+	policy   *Policy
+}
+
+func (s *policyBranchSelector) filterNVIncompatibleBranches(complete taskFn) error {
+	nvData := make(map[paramKey][]byte)
+	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)
+
+	s.nvOk = make(map[paramKey]struct{})
+
+	var tasks []taskFn
+	for p, d := range s.detailsMap {
+		incompatible := false
+		for _, nv := range d.NV {
+			nv := nv
+
+			key := nvAssertionKey(&nv)
+			if _, exists := nvData[key]; exists {
+				continue
+			}
+
+			info, exists := nvInfo[nv.Index]
+			if !exists {
+				resource, policy, err := s.resources.LoadName(nv.Name)
+				if err != nil {
+					// If this NV index doesn't exist with the specified name, then
+					// this branch is never going to work
+					incompatible = true
+					break
+				}
+				pub, err := s.tpm.NVReadPublic(resource.Resource())
+				if err != nil {
+					return err
+				}
+
+				info = &nvIndexInfo{resource: resource.Resource(), pub: pub, policy: policy}
+				nvInfo[nv.Index] = info
+			}
+
+			if !s.canAuthNV(info.pub, info.policy, tpm2.CommandNVRead) {
+				continue
+			}
+
+			if int(nv.Offset) > int(info.pub.Size) {
+				incompatible = true
+				break
+			}
+			if int(nv.Offset)+len(nv.OperandB) > int(info.pub.Size) {
+				incompatible = true
+				break
+			}
+
+			nvData[key] = nil
+
+			// create a task to run the policy session and read the NV index
+			task := func() error {
+				session, err := s.tpm.StartAuthSession(tpm2.SessionTypePolicy, nv.Name.Algorithm())
+				if err != nil {
+					return err
+				}
+
+				params := &PolicyExecuteParams{
+					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []Named{nv.Name, nv.Name}, uint16(len(nv.OperandB)), nv.Offset).NoAuthValue(),
+				}
+
+				runner := newPolicyRunner(
+					newTpmPolicySession(s.tpm, session),
+					new(nullTickets),
+					new(nullPolicyResourceLoader),
+					func(runner *policyRunner) policyRunnerHelper {
+						return newExecutePolicyHelper(runner, s.tpm, params, s.subPolicyRunner, false)
+					},
+				)
+				runner.pushElements(info.policy.policy.Policy)
+				s.subPolicyRunner.pushRunner(
+					runner,
+					func(err error) error {
+						defer s.tpm.FlushContext(session)
+						if err != nil {
+							// ignore policy execution error
+							delete(nvData, key)
+							return nil
+						}
+
+						data, err := s.tpm.NVRead(info.resource, info.resource, uint16(len(nv.OperandB)), nv.Offset, session)
+						if err != nil {
+							// ignore NVRead error
+							delete(nvData, key)
+							return nil
+						}
+
+						nvData[key] = data
+						return nil
+					},
+				)
+				return nil
+			}
+			tasks = append(tasks, task)
+		}
+		if incompatible {
+			delete(s.detailsMap, p)
+		}
+	}
+
+	s.controller.pushTasks(func() error {
+		for p, d := range s.detailsMap {
+			for _, nv := range d.NV {
+				key := nvAssertionKey(&nv)
+				data, exists := nvData[key]
+				if !exists {
+					// we can't check this assertion
+					continue
+				}
+
+				operandA := data
+				operandB := nv.OperandB
+
+				if !s.bufferMatch(operandA, operandB, nv.Operation) {
+					delete(s.detailsMap, p)
+					break
+				}
+
+				info := nvInfo[nv.Index]
+				if s.canAuthNV(info.pub, info.policy, tpm2.CommandPolicyNV) {
+					s.nvOk[key] = struct{}{}
+				}
+			}
+		}
+		return complete()
+	})
+	s.controller.pushTasks(tasks...)
+
+	return nil
+}
+
+func (s *policyBranchSelector) filterCounterTimerIncompatibleBranches() error {
 	hasCounterTimerAssertions := false
-	for _, r := range f.detailsMap {
-		if len(r.CounterTimer) > 0 {
+	for _, d := range s.detailsMap {
+		if len(d.CounterTimer) > 0 {
 			hasCounterTimerAssertions = true
 			break
 		}
@@ -432,7 +628,7 @@ func (f *policyBranchFilter) filterCounterTimerIncompatibleBranches() error {
 		return nil
 	}
 
-	timeInfo, err := f.tpm.ReadClock()
+	timeInfo, err := s.tpm.ReadClock()
 	if err != nil {
 		return fmt.Errorf("cannot obtain time info: %w", err)
 	}
@@ -442,9 +638,9 @@ func (f *policyBranchFilter) filterCounterTimerIncompatibleBranches() error {
 		return fmt.Errorf("cannot marshal time info: %w", err)
 	}
 
-	for p, r := range f.detailsMap {
+	for p, d := range s.detailsMap {
 		incompatible := false
-		for _, item := range r.CounterTimer {
+		for _, item := range d.CounterTimer {
 			if int(item.Offset) > len(timeInfoData) {
 				incompatible = true
 				break
@@ -457,24 +653,24 @@ func (f *policyBranchFilter) filterCounterTimerIncompatibleBranches() error {
 			operandA := timeInfoData[int(item.Offset) : int(item.Offset)+len(item.OperandB)]
 			operandB := item.OperandB
 
-			if !f.bufferMatch(operandA, operandB, item.Operation) {
+			if !s.bufferMatch(operandA, operandB, item.Operation) {
 				incompatible = true
 				break
 			}
 		}
 
 		if incompatible {
-			delete(f.detailsMap, p)
+			delete(s.detailsMap, p)
 		}
 	}
 
 	return nil
 }
 
-func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidateBranch, error) {
+func (s *policyBranchSelector) selectPath(branches policyBranches, complete func(policyBranchPath) error) error {
 	// reset state
-	f.paths = nil
-	f.detailsMap = make(map[policyBranchPath]PolicyBranchDetails)
+	s.paths = nil
+	s.detailsMap = make(map[policyBranchPath]PolicyBranchDetails)
 
 	var (
 		currentPath    policyBranchPath
@@ -483,8 +679,8 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 
 	var walker *treeWalker
 	walker = newTreeWalker(
-		newProxyPolicySession(newNullPolicySession(f.sessionAlg), &currentDetails),
-		f,
+		newProxyPolicySession(newNullPolicySession(s.sessionAlg), &currentDetails),
+		s,
 		func() (treeWalkerBeginBranchFn, treeWalkerEndBranchFn, error) {
 			details := currentDetails
 			path := currentPath
@@ -492,13 +688,13 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 			return func(name policyBranchPath) error {
 				currentPath = path.Concat(name)
 				currentDetails = details
-				walker.runner.setSession(newProxyPolicySession(newNullPolicySession(f.sessionAlg), &currentDetails))
+				walker.runner.setSession(newProxyPolicySession(newNullPolicySession(s.sessionAlg), &currentDetails))
 				return nil
 			}, nil, nil
 		},
 		func() error {
-			f.detailsMap[currentPath] = currentDetails
-			f.paths = append(f.paths, currentPath)
+			s.detailsMap[currentPath] = currentDetails
+			s.paths = append(s.paths, currentPath)
 			return nil
 		})
 	if err := walker.run(policyElements{
@@ -509,35 +705,73 @@ func (f *policyBranchFilter) filterBranches(branches policyBranches) ([]candidat
 			},
 		},
 	}); err != nil {
-		return nil, fmt.Errorf("cannot perform tree walk: %w", err)
+		return fmt.Errorf("cannot perform tree walk: %w", err)
 	}
 
-	f.filterInvalidBranches()
-	f.filterMissingAuthBranches()
-	f.filterIgnoredResources()
-	if err := f.filterUsageIncompatibleBranches(); err != nil {
-		return nil, fmt.Errorf("cannot filter branches incompatible with usage: %w", err)
+	s.filterInvalidBranches()
+	s.filterMissingResourceBranches()
+	s.filterMissingAuthBranches()
+	s.filterIgnoredResources()
+	if err := s.filterUsageIncompatibleBranches(); err != nil {
+		return fmt.Errorf("cannot filter branches incompatible with usage: %w", err)
 	}
-	if err := f.filterPcrIncompatibleBranches(); err != nil {
-		return nil, fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyPCR assertions: %w", err)
+	if err := s.filterPcrIncompatibleBranches(); err != nil {
+		return fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyPCR assertions: %w", err)
 	}
-	if err := f.filterCounterTimerIncompatibleBranches(); err != nil {
-		return nil, fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyCounterTimer assertions: %w", err)
+	if err := s.filterCounterTimerIncompatibleBranches(); err != nil {
+		return fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyCounterTimer assertions: %w", err)
 	}
-
-	var result []candidateBranch
-	for _, path := range f.paths {
-		details, exists := f.detailsMap[path]
-		if !exists {
-			continue
+	if err := s.filterNVIncompatibleBranches(func() error {
+		var candidates []policyBranchPath
+		for _, path := range s.paths {
+			if _, exists := s.detailsMap[path]; !exists {
+				continue
+			}
+			candidates = append(candidates, path)
 		}
-		result = append(result, candidateBranch{path: path, details: details})
+
+		if len(candidates) == 0 {
+			return errors.New("cannot select execution path: no appropriate paths found")
+		}
+
+		path := candidates[0]
+		for _, candidate := range candidates {
+			details := s.detailsMap[candidate]
+			if details.AuthValueNeeded {
+				continue
+			}
+			if len(details.Secret) > 0 {
+				continue
+			}
+			if len(details.Signed) > 0 {
+				continue
+			}
+
+			foundNV := false
+			for _, nv := range details.NV {
+				if _, ok := s.nvOk[nvAssertionKey(&nv)]; !ok {
+					foundNV = true
+					break
+				}
+			}
+			if foundNV {
+				continue
+			}
+
+			path = candidate
+			break
+		}
+
+		return complete(path)
+	}); err != nil {
+		return fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyNV assertions: %w", err)
 	}
-	return result, nil
+
+	return nil
 }
 
-func (r *policyBranchFilter) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	return r.resources.LoadAuthorizedPolicies(keySign, policyRef)
+func (s *policyBranchSelector) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	return s.resources.LoadAuthorizedPolicies(keySign, policyRef)
 }
 
 var errTreeWalkerSkipBranch = errors.New("")

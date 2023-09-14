@@ -147,6 +147,13 @@ func (b *PolicyBuilderBranch) lockBranch() error {
 // contents of the specified index. The caller specifies a value to be used for the comparison
 // via the operandB argument, an offset from the start of the NV index data from which to start
 // the comparison via the offset argument, and a comparison operator via the operation argument.
+//
+// When using this assertion, it is generally good practise for the NV index to have an
+// authorization policy that permits the use of TPM2_PolicyNV and TPM2_NV_Read without any
+// conditions (ie, a policy with branches for those commands without any additional assertions).
+// Where this assertion appears in a policy with multiple branches or a policy that is authorized,
+// the contents of the NV index will be tested in the process of automatic branch selection if
+// the index has a policy that permits the use of TPM2_NV_Read without any other conditions.
 func (b *PolicyBuilderBranch) PolicyNV(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicyNV", err)

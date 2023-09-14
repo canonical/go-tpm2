@@ -3057,10 +3057,6 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	c.Check(requireAuthValue, Equals, data.expectedRequireAuthValue)
 
 	log := s.CommandLog()
-	for _, command := range log {
-		c.Logf("%v", command.GetCommandCode(c))
-	}
-
 	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
 	for i := range log {
 		c.Check(log[i].GetCommandCode(c), Equals, data.expectedCommands[i])
@@ -3273,10 +3269,6 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 	c.Check(requireAuthValue, Equals, data.expectedRequireAuthValue)
 
 	log := s.CommandLog()
-	for _, command := range log {
-		c.Logf("%v", command.GetCommandCode(c))
-	}
-
 	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
 	for i := range log {
 		code := log[i].GetCommandCode(c)
@@ -3445,6 +3437,55 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C
 			tpm2.CommandPolicyOR,
 		},
 		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
+func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard1(c *C) {
+	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
+		path:  "*/branch4",
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
+func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard2(c *C) {
+	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
+		path:  "*/branch4",
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
+func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard3(c *C) {
+	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
+		path:  "**/branch4",
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
 		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
@@ -3696,6 +3737,40 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3(c *C) 
 		},
 		expectedRequireAuthValue: false,
 		expectedCommandCode:      tpm2.CommandNVChangeAuth})
+}
+
+func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard1(c *C) {
+	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
+		path:  "*/branch3",
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandPolicyAuthValue,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: true,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
+}
+
+func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard2(c *C) {
+	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
+		path:  "*/branch6",
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		expectedCommands: tpm2.CommandCodeList{
+			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandStartAuthSession,
+			tpm2.CommandContextLoad,
+			tpm2.CommandPolicySecret,
+			tpm2.CommandFlushContext,
+			tpm2.CommandPolicyCommandCode,
+			tpm2.CommandPolicyOR,
+			tpm2.CommandPolicyOR,
+		},
+		expectedRequireAuthValue: false,
+		expectedCommandCode:      tpm2.CommandNVWriteLock})
 }
 
 func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
@@ -4183,6 +4258,116 @@ func (s *policySuiteNoTPM) TestPolicyDetailsWithBranches2(c *C) {
 	c.Check(code, Equals, tpm2.CommandNVChangeAuth)
 }
 
+func (s *policySuite) TestPolicyBranchesNVAutoSelected(c *C) {
+	builder := NewPolicyBuilder()
+	node := builder.RootBranch().AddBranchNode()
+	b1 := node.AddBranch("")
+	c.Check(b1.PolicyCommandCode(tpm2.CommandNVRead), IsNil)
+	b2 := node.AddBranch("")
+	c.Check(b2.PolicyCommandCode(tpm2.CommandPolicyNV), IsNil)
+	nvPolicy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	digest, err := nvPolicy.Compute(tpm2.HashAlgorithmSHA256)
+
+	nvPub := &tpm2.NVPublic{
+		Index:      s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg:    tpm2.HashAlgorithmSHA256,
+		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		AuthPolicy: digest,
+		Size:       8}
+	index := s.NVDefineSpace(c, tpm2.HandleOwner, nil, nvPub)
+	c.Assert(s.TPM.NVWrite(index, index, []byte{0, 0, 0, 0, 0, 0, 0, 0}, 0, nil), IsNil)
+
+	nvPub.Attrs |= tpm2.AttrNVWritten
+
+	builder = NewPolicyBuilder()
+	node = builder.RootBranch().AddBranchNode()
+	b1 = node.AddBranch("")
+	c.Check(b1.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpNeq), IsNil)
+	b2 = node.AddBranch("")
+	c.Check(b2.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpEq), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	resources := &PolicyResources{
+		Persistent: []PersistentResource{
+			{
+				Name:   nvPub.Name(),
+				Handle: nvPub.Index,
+				Policy: nvPolicy,
+			},
+		},
+	}
+
+	tickets, requireAuthValue, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, nil), nil)
+	c.Check(err, IsNil)
+	c.Check(tickets, internal_testutil.LenEquals, 0)
+	c.Check(requireAuthValue, internal_testutil.IsFalse)
+
+	digest, err = s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *policySuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
+	builder := NewPolicyBuilder()
+	node := builder.RootBranch().AddBranchNode()
+	b1 := node.AddBranch("")
+	c.Check(b1.PolicyCommandCode(tpm2.CommandNVRead), IsNil)
+	b2 := node.AddBranch("")
+	c.Check(b2.PolicyCommandCode(tpm2.CommandPolicyNV), IsNil)
+	nvPolicy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	digest, err := nvPolicy.Compute(tpm2.HashAlgorithmSHA256)
+
+	nvPub := &tpm2.NVPublic{
+		Index:      s.NextAvailableHandle(c, 0x0181f000),
+		NameAlg:    tpm2.HashAlgorithmSHA256,
+		Attrs:      tpm2.NVTypeOrdinary.WithAttrs(tpm2.AttrNVPolicyRead | tpm2.AttrNVAuthWrite | tpm2.AttrNVNoDA),
+		AuthPolicy: digest,
+		Size:       8}
+	index := s.NVDefineSpace(c, tpm2.HandleOwner, nil, nvPub)
+	c.Assert(s.TPM.NVWrite(index, index, []byte{0, 0, 0, 0, 0, 0, 0, 0}, 0, nil), IsNil)
+
+	nvPub.Attrs |= tpm2.AttrNVWritten
+
+	builder = NewPolicyBuilder()
+	node = builder.RootBranch().AddBranchNode()
+	b1 = node.AddBranch("")
+	c.Check(b1.PolicyNV(nvPub, []byte{0}, 0, tpm2.OpNeq), IsNil)
+	b2 = node.AddBranch("")
+	c.Check(b2.PolicyNV(nvPub, []byte{0}, 10, tpm2.OpEq), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	_, err = policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	resources := &PolicyResources{
+		Persistent: []PersistentResource{
+			{
+				Name:   nvPub.Name(),
+				Handle: nvPub.Index,
+				Policy: nvPolicy,
+			},
+		},
+	}
+
+	_, _, err = policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, nil), nil)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select execution path: no appropriate paths found`)
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+}
+
 type policySuitePCR struct {
 	testutil.TPMTest
 }
@@ -4255,7 +4440,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, _, err = policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select branch: no appropriate branches`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select execution path: no appropriate paths found`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)

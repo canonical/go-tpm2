@@ -32,8 +32,7 @@ type (
 
 func policyParamKey(authName tpm2.Name, policyRef tpm2.Nonce) paramKey {
 	h := crypto.SHA256.New()
-	h.Write(authName)
-	h.Write(policyRef)
+	mu.MustMarshalToWriter(h, authName, policyRef)
 
 	var key paramKey
 	copy(key[:], h.Sum(nil))
@@ -252,37 +251,36 @@ type PolicyExecuteParams struct {
 	// branches.
 	Usage *PolicySessionUsage
 
-	// Path provides a way to explicitly select branches to execute. A path consists
-	// of zero or more components separated by a '/' character, with each component
-	// identifying a branch to select when a branch node is encountered during
-	// execution. When a branch node is encountered, the selected sub-branch is
-	// executed, before resuming execution in the original branch immediately after
-	// the branch node.
+	// Path provides a way to explicitly select branches or authorized policies to
+	// execute. A path consists of zero or more components separated by a '/'
+	// character, with each component identifying a branch to select when a branch
+	// node is encountered (or a policy to select when an authorized policy is
+	// required) during execution. When a branch node or authorized policy is
+	// encountered, the selected sub-branch or policy is executed before resuming
+	// execution in the original branch.
 	//
-	// A component can either identify a branch by its name (if it has one), or it
-	// can be a numeric identifier of the form "$[n]" which selects the branch at
-	// index n.
+	// When selecting a branch, a component can either identify a branch by its
+	// name (if it has one), or it can be a numeric identifier of the form "$[n]"
+	// which selects the branch at index n.
+	//
+	// When selecting an authorized policy, a component identifies the policy by
+	// specifying the digest of the policy for the current session algorithm.
 	//
 	// If a component is "**", then Policy.Execute will attempt to automatically
-	// select an execution path for the sub-tree associated with the current branch
-	// node, which includes choosing the immediate sub-branch and any additional
-	// sub-branches for branch nodes encountered during its execution. Remaining path
-	// components will be consumed for additional branch nodes in the current branch.
-	// If a component is "*", then Policy.Execute will attempt to automatically
-	// select an immediate sub-branch.
+	// select an execution path for the entire sub-tree associated with the current
+	// branch node or authorized policy. This includes choosing additional
+	// branches and authorized policies encountered during the execution of the
+	// selected sub-tree. Remaining path components will be consumed when resuming
+	// execution in the original branch
 	//
-	// Path components are also used to select an authorized policy. In this case,
-	// the policy is selected by a component that matches the digest of the policy
-	// for the current session algorithm. If the component is "*", then Policy.Execute
-	// will attempt to automatically select an appropriate policy. The component will
-	// only be consumed to select the policy - branches within the selected authorized
-	// policy will be selected by subsequent components. If the component is "**" then
-	// Policy.Execute will attempt to automatically select an appropriate policy and
-	// the entire execution path for the sub-policy.
+	// If a component is "*", then Policy.Execute will attempt to automatically
+	// select an immediate sub-branch or authorized policy, but additional branches
+	// and authorized policies encountered during the execution of the selected
+	// sub-tree will consume additional path components.
 	//
 	// If the path has insufficent components for the branch nodes or authorized policies
 	// encountered in a policy, Policy.Execute will attempt to select an appropriate
-	// execution path automatically.
+	// execution path for the remainder of the policy automatically.
 	Path string
 
 	// IgnoreAuthorizations can be used to indicate that branches containing TPM2_PolicySigned,
@@ -1152,9 +1150,10 @@ type executePolicyHelper struct {
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 	subPolicyRunner      subPolicyRunner
+	hasResources         bool
 }
 
-func newExecutePolicyHelper(runner *policyRunner, tpm TPMConnection, params *PolicyExecuteParams, subPolicyRunner subPolicyRunner) *executePolicyHelper {
+func newExecutePolicyHelper(runner *policyRunner, tpm TPMConnection, params *PolicyExecuteParams, subPolicyRunner subPolicyRunner, hasResources bool) *executePolicyHelper {
 	return &executePolicyHelper{
 		sessionAlg:           runner.session().HashAlg(),
 		tickets:              runner.tickets(),
@@ -1166,6 +1165,7 @@ func newExecutePolicyHelper(runner *policyRunner, tpm TPMConnection, params *Pol
 		ignoreAuthorizations: params.IgnoreAuthorizations,
 		ignoreNV:             params.IgnoreNV,
 		subPolicyRunner:      subPolicyRunner,
+		hasResources:         hasResources,
 	}
 }
 
@@ -1249,7 +1249,7 @@ func (h *executePolicyHelper) authorize(auth tpm2.ResourceContext, policy *Polic
 			h.tickets,
 			h.resources,
 			func(runner *policyRunner) policyRunnerHelper {
-				return newExecutePolicyHelper(runner, h.tpm, params, h.subPolicyRunner)
+				return newExecutePolicyHelper(runner, h.tpm, params, h.subPolicyRunner, h.hasResources)
 			})
 		runner.pushElements(policy.policy.Policy)
 
@@ -1292,44 +1292,36 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches, complete f
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		filter := newPolicyBranchFilter(h.sessionAlg, h.resources, h.tpm, h.usage, h.ignoreAuthorizations, h.ignoreNV)
-		candidates, err := filter.filterBranches(branches)
-		if err != nil {
+		resources := h.resources
+		if !h.hasResources {
+			resources = nil
+		}
+		selector := newPolicyBranchSelector(h.sessionAlg, resources, h.controller, h.subPolicyRunner, h.tpm, h.usage, h.ignoreAuthorizations, h.ignoreNV)
+		if err := selector.selectPath(branches, func(path policyBranchPath) error {
+			switch next {
+			case "":
+				// We have a path for this whole subtree
+				h.remaining = path
+			case "**":
+				// Prepend the path for this whole subtree to the remaining components
+				h.remaining = path.Concat(remaining)
+			case "*":
+				// Prepend the first component of the path for this subtree to the remaining components
+				component, _ := path.PopNextComponent()
+				h.remaining = component.Concat(remaining)
+			default:
+				panic("not reached")
+			}
+
+			// rerun branch node
+			h.controller.pushElements(policyElements{&policyElement{
+				Type: tpm2.CommandPolicyOR,
+				Details: &policyElementDetails{
+					OR: &policyORElement{Branches: branches}}}})
+			return nil
+		}); err != nil {
 			return fmt.Errorf("cannot filter inappropriate branches: %w", err)
 		}
-		if len(candidates) == 0 {
-			return errors.New("cannot select branch: no appropriate branches")
-		}
-
-		// Prefer paths without TPM2_PolicyAuthValue, TPM2_PolicyPassword, TPM2_PolicySigned,
-		// TPM2_PolicySecret and TPM2_PolicyNV assertions.
-		path := candidates[0].path
-		for _, candidate := range candidates {
-			if !candidate.details.AuthValueNeeded && len(candidate.details.Signed) == 0 && len(candidate.details.Secret) == 0 && len(candidate.details.NV) == 0 {
-				path = candidate.path
-				break
-			}
-		}
-		switch next {
-		case "":
-			// We have a path for this whole subtree
-			h.remaining = path
-		case "**":
-			// Prepend the path for this whole subtree to the remaining components
-			h.remaining = path.Concat(remaining)
-		case "*":
-			// Prepend the first component of the path for this subtree to the remaining components
-			component, _ := path.PopNextComponent()
-			h.remaining = component.Concat(remaining)
-		default:
-			panic("not reached")
-		}
-
-		// rerun branch node
-		h.controller.pushElements(policyElements{&policyElement{
-			Type: tpm2.CommandPolicyOR,
-			Details: &policyElementDetails{
-				OR: &policyORElement{Branches: branches}}}})
 		return nil
 	}
 
@@ -1401,46 +1393,38 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 	case len(next) == 0 || next[0] == '*':
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		filter := newPolicyBranchFilter(h.sessionAlg, h.resources, h.tpm, h.usage, h.ignoreAuthorizations, h.ignoreNV)
-		candidates, err := filter.filterBranches(branches)
-		if err != nil {
+		resources := h.resources
+		if !h.hasResources {
+			resources = nil
+		}
+		selector := newPolicyBranchSelector(h.sessionAlg, resources, h.controller, h.subPolicyRunner, h.tpm, h.usage, h.ignoreAuthorizations, h.ignoreNV)
+		if err := selector.selectPath(branches, func(path policyBranchPath) error {
+			switch next {
+			case "":
+				// We have a path for this whole subtree
+				h.remaining = path
+			case "**":
+				// Prepend the path for this whole subtree to the remaining components
+				h.remaining = path.Concat(remaining)
+			case "*":
+				// Prepend the first component of the path for this subtree to the remaining components
+				component, _ := path.PopNextComponent()
+				h.remaining = component.Concat(remaining)
+			default:
+				panic("not reached")
+			}
+
+			// rerun
+			h.controller.pushTasks(func() error {
+				if err := h.handleAuthorizedPolicy(keySign, policyRef, policies, complete); err != nil {
+					return &PolicyAuthorizationError{AuthName: keySign.Name(), PolicyRef: policyRef, err: err}
+				}
+				return nil
+			})
+			return nil
+		}); err != nil {
 			return fmt.Errorf("cannot filter inappropriate policies: %w", err)
 		}
-		if len(candidates) == 0 {
-			return errors.New("cannot select authorized policy: no appropriate policy")
-		}
-
-		// Prefer paths without TPM2_PolicyAuthValue, TPM2_PolicyPassword, TPM2_PolicySigned,
-		// TPM2_PolicySecret and TPM2_PolicyNV assertions.
-		path := candidates[0].path
-		for _, candidate := range candidates {
-			if !candidate.details.AuthValueNeeded && len(candidate.details.Signed) == 0 && len(candidate.details.Secret) == 0 && len(candidate.details.NV) == 0 {
-				path = candidate.path
-				break
-			}
-		}
-		switch next {
-		case "":
-			// We have a path for this whole subtree
-			h.remaining = path
-		case "**":
-			// Prepend the path for this whole subtree to the remaining components
-			h.remaining = path.Concat(remaining)
-		case "*":
-			// Prepend the first component of the path for this subtree to the remaining components
-			component, _ := path.PopNextComponent()
-			h.remaining = component.Concat(remaining)
-		default:
-			panic("not reached")
-		}
-
-		// rerun
-		h.controller.pushTasks(func() error {
-			if err := h.handleAuthorizedPolicy(keySign, policyRef, policies, complete); err != nil {
-				return &PolicyAuthorizationError{AuthName: keySign.Name(), PolicyRef: policyRef, err: err}
-			}
-			return nil
-		})
 		return nil
 	}
 
@@ -1523,24 +1507,30 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 // optional but must be supplied for any policy that executes TPM2_PolicyNV, TPM2_PolicySecret,
 // TPM2_PolicySigned or TPM2_PolicyAuthorize assertions.
 //
-// The caller may explicitly select branches to execute via the Path argument of
-// [PolicyExecuteParams]. Alternatively, if branches are not specified explicitly, an
-// appropriate branch is selected automatically where possible. This works by selecting the
-// first branch from all of the candidate branches, with a preference for branches that
-// don't include TPM2_PolicySecret, TPM2_PolicyAuthValue and TPM2_PolicyPassword assertions.
-// Branches are omitted from the set of candidate branches if any of the following conditions are
-// true:
+// The caller may explicitly select branches and authorized policies to execute via the Path
+// argument of [PolicyExecuteParams]. Alternatively, if a path os not specified explicitly,
+// or a component contains a wildcard match, an appropriate execution path is selected
+// automatically where possible. This works by selecting the first path from all of the
+// candidate paths, with a preference for paths that don't include TPM2_PolicySecret,
+// TPM2_PolicySigned, TPM2_PolicyAuthValue, and TPM2_PolicyPassword assertions. It also has a
+// preference for paths that don't include TPM2_PolicyNV assertions that require authorization
+// to use or read. A path is omitted from the set of candidate paths if any of the following
+// conditions are true:
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
 //     the supplied [PolicySessionUsage].
+//   - It contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion and this isn't permitted
+//     bt the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicyNvWritten with a value that doesn't match the public area of the NV index
 //     provided via the supplied [PolicySessionUsage].
-//   - It uses TPM2_PolicySigned and there is no [PolicySignedAuthorization] or [PolicyTicket]
-//     supplied. Note that if either of these are supplied, it is assumed that they will succeed.
+//   - It uses TPM2_PolicySigned, TPM2_PolicySecret or TPM2_PolicyAuthorize and the specific
+//     authorization is included in the IgnoreAuthorizations field of [PolicyExecuteParams].
+//   - It uses TPM2_PolicyNV and the NV index is included in the IgnoreNV field of
+//     [PolicyExecuteParams]
+//   - It uses TPM2_PolicyNV with conditions that will fail against the current NV index contents,
+//     if the index has an authorization policy that permits the use of TPM2_NV_Read without any
+//     other conditions, else the condition isn't checked.
 //   - It uses TPM2_PolicyPCR with values that don't match the current PCR values.
 //   - It uses TPM2_PolicyCounterTimer with conditions that will fail.
-//
-// Note that when automatically selecting branches, it is assumed that any TPM2_PolicySecret or
-// TPM2_PolicyNV assertions will succeed.
 //
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied. It will also return a list of tickets generated by any assertions -
@@ -1553,6 +1543,7 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 	if session == nil {
 		return nil, false, errors.New("no session")
 	}
+	hasResources := resources != nil
 	if resources == nil {
 		resources = new(nullPolicyResourceLoader)
 	}
@@ -1570,7 +1561,7 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		ticketMap,
 		resources,
 		func(runner *policyRunner) policyRunnerHelper {
-			return newExecutePolicyHelper(runner, tpm, params, executor)
+			return newExecutePolicyHelper(runner, tpm, params, executor, hasResources)
 		},
 	)
 	for _, ticket := range params.Tickets {

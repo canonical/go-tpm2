@@ -42,6 +42,7 @@ type TPMConnection interface {
 
 	ReadClock() (*tpm2.TimeInfo, error)
 
+	NVRead(auth, index tpm2.ResourceContext, size, offset uint16, authAuthSession tpm2.SessionContext) (tpm2.MaxNVBuffer, error)
 	NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error)
 }
 
@@ -157,6 +158,10 @@ func (c *onlineTpmConnection) FlushContext(handle tpm2.HandleContext) error {
 
 func (c *onlineTpmConnection) ReadClock() (*tpm2.TimeInfo, error) {
 	return c.tpm.ReadClock(c.sessions...)
+}
+
+func (c *onlineTpmConnection) NVRead(auth, index tpm2.ResourceContext, size, offset uint16, authAuthSession tpm2.SessionContext) (tpm2.MaxNVBuffer, error) {
+	return c.tpm.NVReadRaw(auth, index, size, offset, authAuthSession, c.sessions...)
 }
 
 func (c *onlineTpmConnection) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error) {
