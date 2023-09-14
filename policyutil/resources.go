@@ -28,7 +28,7 @@ type PolicyResourceLoader interface {
 	LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
 
 	// LoadNV returns a context for the supplied NV index
-	LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error)
+	LoadNVPolicy(name tpm2.Name) (*Policy, error)
 
 	// LookupAuthorized policies returns a set of policies that are signed by the key with
 	// the specified name, appropriate for a TPM2_PolicyAuthorize assertion with the
@@ -280,24 +280,16 @@ func (l *tpmPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Po
 	return nil, nil, errors.New("cannot find resource")
 }
 
-func (l *tpmPolicyResourceLoader) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
-	rc, err := tpm2.NewNVIndexResourceContextFromPub(public)
-
-	var policy *Policy
+func (l *tpmPolicyResourceLoader) LoadNVPolicy(name tpm2.Name) (*Policy, error) {
 	for _, resource := range l.resources.Persistent {
-		if !bytes.Equal(resource.Name, public.Name()) {
+		if !bytes.Equal(resource.Name, name) {
 			continue
 		}
 
-		if resource.Handle != public.Index {
-			return nil, nil, fmt.Errorf("NV resource handle lookup mismatch (got: %v, expected: %v)", resource.Handle, public.Index)
-		}
-
-		policy = resource.Policy
-		break
+		return resource.Policy, nil
 	}
 
-	return rc, policy, err
+	return nil, nil
 }
 
 func (l *tpmPolicyResourceLoader) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
@@ -325,9 +317,8 @@ func (*mockPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Pol
 	return newResourceContextFlushable(tpm2.NewLimitedResourceContext(0x80000000, name), nil), nil, nil
 }
 
-func (r *mockPolicyResourceLoader) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
-	rc, err := tpm2.NewNVIndexResourceContextFromPub(public)
-	return rc, nil, err
+func (r *mockPolicyResourceLoader) LoadNVPolicy(name tpm2.Name) (*Policy, error) {
+	return nil, nil
 }
 
 func (r *mockPolicyResourceLoader) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
@@ -352,8 +343,8 @@ func (*nullPolicyResourceLoader) LoadExternal(public *tpm2.Public) (ResourceCont
 	return nil, errors.New("no PolicyResourceLoader")
 }
 
-func (*nullPolicyResourceLoader) LoadNV(public *tpm2.NVPublic) (tpm2.ResourceContext, *Policy, error) {
-	return nil, nil, errors.New("no PolicyResourceLoader")
+func (*nullPolicyResourceLoader) LoadNVPolicy(name tpm2.Name) (*Policy, error) {
+	return nil, errors.New("no PolicyResourceLoader")
 }
 
 func (*nullPolicyResourceLoader) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {

@@ -374,9 +374,13 @@ type policyNVElement struct {
 func (*policyNVElement) name() string { return "TPM2_PolicyNV assertion" }
 
 func (e *policyNVElement) run(context policySessionContext) (err error) {
-	nvIndex, policy, err := context.resources().LoadNV(e.NvIndex)
+	nvIndex, err := tpm2.NewNVIndexResourceContextFromPub(e.NvIndex)
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
+	}
+	policy, err := context.resources().LoadNVPolicy(nvIndex.Name())
+	if err != nil {
+		return fmt.Errorf("cannot load nvIndex policy: %w", err)
 	}
 
 	var auth ResourceContext = newResourceContextFlushable(nvIndex, nil)
