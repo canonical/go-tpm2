@@ -486,6 +486,7 @@ type nvIndexInfo struct {
 
 func (s *policyBranchSelector) filterNVIncompatibleBranches(complete taskFn) error {
 	nvData := make(map[paramKey][]byte)
+	nvSeen := make(map[paramKey]struct{})
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)
 
 	s.nvOk = make(map[paramKey]struct{})
@@ -497,9 +498,10 @@ func (s *policyBranchSelector) filterNVIncompatibleBranches(complete taskFn) err
 			nv := nv
 
 			key := nvAssertionKey(&nv)
-			if _, exists := nvData[key]; exists {
+			if _, exists := nvSeen[key]; exists {
 				continue
 			}
+			nvSeen[key] = struct{}{}
 
 			info, exists := nvInfo[nv.Index]
 			if !exists {
@@ -532,8 +534,6 @@ func (s *policyBranchSelector) filterNVIncompatibleBranches(complete taskFn) err
 				break
 			}
 
-			nvData[key] = nil
-
 			// create a task to run the policy session and read the NV index
 			task := func() error {
 				session, err := s.tpm.StartAuthSession(tpm2.SessionTypePolicy, nv.Name.Algorithm())
@@ -560,14 +560,12 @@ func (s *policyBranchSelector) filterNVIncompatibleBranches(complete taskFn) err
 						defer s.tpm.FlushContext(session)
 						if err != nil {
 							// ignore policy execution error
-							delete(nvData, key)
 							return nil
 						}
 
 						data, err := s.tpm.NVRead(info.resource, info.resource, uint16(len(nv.OperandB)), nv.Offset, session)
 						if err != nil {
 							// ignore NVRead error
-							delete(nvData, key)
 							return nil
 						}
 
