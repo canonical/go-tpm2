@@ -227,10 +227,11 @@ func (l *tpmPolicyResourceLoader) LoadName(name tpm2.Name) (ResourceContext, *Po
 			params := &PolicyExecuteParams{
 				Usage: NewPolicySessionUsage(tpm2.CommandLoad, []Named{parent.Resource()}, object.Private, object.Public),
 			}
-			_, requireAuthValue, err = policy.Execute(NewTPMConnection(l.tpm, l.sessions...), session, l, params)
+			result, err := policy.Execute(NewTPMConnection(l.tpm, l.sessions...), session, l, params)
 			if err != nil {
 				return nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
 			}
+			requireAuthValue = result.AuthValueNeeded
 		}
 
 		if requireAuthValue {

@@ -204,98 +204,6 @@ func (p policyBranchPath) Concat(path policyBranchPath) policyBranchPath {
 	return policyBranchPath(strings.Join(pathElements, "/"))
 }
 
-// PolicySessionUsage describes how a policy session will be used, and assists with
-// automatically selecting branches where a policy has command context-specific branches.
-type PolicySessionUsage struct {
-	commandCode tpm2.CommandCode
-	handles     []Named
-	params      []interface{}
-	nvHandle    tpm2.Handle
-	noAuthValue bool
-}
-
-// NewPolicySessionUsage creates a new PolicySessionUsage.
-func NewPolicySessionUsage(command tpm2.CommandCode, handles []Named, params ...interface{}) *PolicySessionUsage {
-	return &PolicySessionUsage{
-		commandCode: command,
-		handles:     handles,
-		params:      params,
-	}
-}
-
-// WithNVHandle indicates that the policy session is being used to authorize a NV
-// index with the specified handle. This will panic if handle is not a NV index.
-func (u *PolicySessionUsage) WithNVHandle(handle tpm2.Handle) *PolicySessionUsage {
-	if handle.Type() != tpm2.HandleTypeNVIndex {
-		panic("invalid handle")
-	}
-	u.nvHandle = handle
-	return u
-}
-
-// NoAuthValue indicates that the policy session is being used to authorize a
-// resource that the authorization value cannot be determined for.
-func (u *PolicySessionUsage) NoAuthValue() *PolicySessionUsage {
-	u.noAuthValue = true
-	return u
-}
-
-type PolicyAuthorizationID = PolicyAuthorizationDetails
-
-// PolicyExecuteParams contains parameters that are useful for executing a policy.
-type PolicyExecuteParams struct {
-	Tickets []*PolicyTicket // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
-
-	// Usage describes how the executed policy will be used, and assists with
-	// automatically selecting branches where a policy has command context-specific
-	// branches.
-	Usage *PolicySessionUsage
-
-	// Path provides a way to explicitly select branches or authorized policies to
-	// execute. A path consists of zero or more components separated by a '/'
-	// character, with each component identifying a branch to select when a branch
-	// node is encountered (or a policy to select when an authorized policy is
-	// required) during execution. When a branch node or authorized policy is
-	// encountered, the selected sub-branch or policy is executed before resuming
-	// execution in the original branch.
-	//
-	// When selecting a branch, a component can either identify a branch by its
-	// name (if it has one), or it can be a numeric identifier of the form "$[n]"
-	// which selects the branch at index n.
-	//
-	// When selecting an authorized policy, a component identifies the policy by
-	// specifying the digest of the policy for the current session algorithm.
-	//
-	// If a component is "**", then Policy.Execute will attempt to automatically
-	// select an execution path for the entire sub-tree associated with the current
-	// branch node or authorized policy. This includes choosing additional
-	// branches and authorized policies encountered during the execution of the
-	// selected sub-tree. Remaining path components will be consumed when resuming
-	// execution in the original branch
-	//
-	// If a component is "*", then Policy.Execute will attempt to automatically
-	// select an immediate sub-branch or authorized policy, but additional branches
-	// and authorized policies encountered during the execution of the selected
-	// sub-tree will consume additional path components.
-	//
-	// If the path has insufficent components for the branch nodes or authorized policies
-	// encountered in a policy, Policy.Execute will attempt to select an appropriate
-	// execution path for the remainder of the policy automatically.
-	Path string
-
-	// IgnoreAuthorizations can be used to indicate that branches containing TPM2_PolicySigned,
-	// TPM2_PolicySecret or TPM2_PolicyAuthorize assertions matching the specified ID should
-	// be ignored. This can be used where these assertions have failed on previous runs.
-	// This propagates to sub-policies.
-	IgnoreAuthorizations []PolicyAuthorizationID
-
-	// IgnoreNV can be used to indicate that branches containing TPM2_PolicyNV assertions
-	// with an NV index matching the specified name should be ignored. This can be used where
-	// these assertions have failed due to an authorization issue on previous runs. This
-	// propagates to sub-policies.
-	IgnoreNV []Named
-}
-
 type policyTickets interface {
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 	addTicket(ticket *PolicyTicket)
@@ -1362,7 +1270,12 @@ func (h *executePolicyHelper) handleBranches(branches policyBranches, complete f
 		return nil
 	})
 	h.controller.pushElements(branches[selected].Policy)
-	h.controller.setCurrentPath(h.controller.currentPath().Concat(next))
+
+	name := policyBranchPath(branches[selected].Name)
+	if len(name) == 0 {
+		name = next
+	}
+	h.controller.setCurrentPath(h.controller.currentPath().Concat(name))
 
 	return nil
 }
@@ -1502,6 +1415,113 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 	return nil
 }
 
+// PolicySessionUsage describes how a policy session will be used, and assists with
+// automatically selecting branches where a policy has command context-specific branches.
+type PolicySessionUsage struct {
+	commandCode tpm2.CommandCode
+	handles     []Named
+	params      []interface{}
+	nvHandle    tpm2.Handle
+	noAuthValue bool
+}
+
+// NewPolicySessionUsage creates a new PolicySessionUsage.
+func NewPolicySessionUsage(command tpm2.CommandCode, handles []Named, params ...interface{}) *PolicySessionUsage {
+	return &PolicySessionUsage{
+		commandCode: command,
+		handles:     handles,
+		params:      params,
+	}
+}
+
+// WithNVHandle indicates that the policy session is being used to authorize a NV
+// index with the specified handle. This will panic if handle is not a NV index.
+func (u *PolicySessionUsage) WithNVHandle(handle tpm2.Handle) *PolicySessionUsage {
+	if handle.Type() != tpm2.HandleTypeNVIndex {
+		panic("invalid handle")
+	}
+	u.nvHandle = handle
+	return u
+}
+
+// NoAuthValue indicates that the policy session is being used to authorize a
+// resource that the authorization value cannot be determined for.
+func (u *PolicySessionUsage) NoAuthValue() *PolicySessionUsage {
+	u.noAuthValue = true
+	return u
+}
+
+type PolicyAuthorizationID = PolicyAuthorizationDetails
+
+// PolicyExecuteParams contains parameters that are useful for executing a policy.
+type PolicyExecuteParams struct {
+	Tickets []*PolicyTicket // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
+
+	// Usage describes how the executed policy will be used, and assists with
+	// automatically selecting branches where a policy has command context-specific
+	// branches.
+	Usage *PolicySessionUsage
+
+	// Path provides a way to explicitly select branches or authorized policies to
+	// execute. A path consists of zero or more components separated by a '/'
+	// character, with each component identifying a branch to select when a branch
+	// node is encountered (or a policy to select when an authorized policy is
+	// required) during execution. When a branch node or authorized policy is
+	// encountered, the selected sub-branch or policy is executed before resuming
+	// execution in the original branch.
+	//
+	// When selecting a branch, a component can either identify a branch by its
+	// name (if it has one), or it can be a numeric identifier of the form "$[n]"
+	// which selects the branch at index n.
+	//
+	// When selecting an authorized policy, a component identifies the policy by
+	// specifying the digest of the policy for the current session algorithm.
+	//
+	// If a component is "**", then Policy.Execute will attempt to automatically
+	// select an execution path for the entire sub-tree associated with the current
+	// branch node or authorized policy. This includes choosing additional
+	// branches and authorized policies encountered during the execution of the
+	// selected sub-tree. Remaining path components will be consumed when resuming
+	// execution in the original branch
+	//
+	// If a component is "*", then Policy.Execute will attempt to automatically
+	// select an immediate sub-branch or authorized policy, but additional branches
+	// and authorized policies encountered during the execution of the selected
+	// sub-tree will consume additional path components.
+	//
+	// If the path has insufficent components for the branch nodes or authorized policies
+	// encountered in a policy, Policy.Execute will attempt to select an appropriate
+	// execution path for the remainder of the policy automatically.
+	Path string
+
+	// IgnoreAuthorizations can be used to indicate that branches containing TPM2_PolicySigned,
+	// TPM2_PolicySecret or TPM2_PolicyAuthorize assertions matching the specified ID should
+	// be ignored. This can be used where these assertions have failed on previous runs.
+	// This propagates to sub-policies.
+	IgnoreAuthorizations []PolicyAuthorizationID
+
+	// IgnoreNV can be used to indicate that branches containing TPM2_PolicyNV assertions
+	// with an NV index matching the specified name should be ignored. This can be used where
+	// these assertions have failed due to an authorization issue on previous runs. This
+	// propagates to sub-policies.
+	IgnoreNV []Named
+}
+
+// PolicyExecuteResult is returned from [Policy.Execute].
+type PolicyExecuteResult struct {
+	// Tickets contains tickets used by the policy. This will include some tickets
+	// supplied to Policy.Execute if they were used successfully, or if they weren't
+	// used at all.
+	Tickets []*PolicyTicket
+
+	// AuthValueNeeded indicates that the policy executed the TPM2_PolicyAuthValue or
+	// TPM2_PolicyPassword assertion.
+	AuthValueNeeded bool
+
+	// Path indicates the executed path.
+	Path string
+}
+
 // Execute runs this policy using the supplied TPM context and on the supplied policy session.
 //
 // The caller may supply additional parameters via the PolicyExecuteParams struct, which is an
@@ -1537,15 +1557,13 @@ func (h *executePolicyHelper) handleAuthorizedPolicy(keySign *tpm2.Public, polic
 //   - It uses TPM2_PolicyCounterTimer with conditions that will fail.
 //
 // On success, the supplied policy session may be used for authorization in a context that requires
-// that this policy is satisfied. It will also return a list of tickets generated by any assertions -
-// this may include supplied tickets if they are still valid or weren't used. It will indicate whether
-// the authorization value must be supplied for the resource being authorized.
-func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resources PolicyResourceLoader, params *PolicyExecuteParams) (tickets []*PolicyTicket, requireAuthValue bool, err error) {
+// that this policy is satisfied.
+func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resources PolicyResourceLoader, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
 	if tpm == nil {
-		return nil, false, errors.New("no TPM")
+		return nil, errors.New("no TPM")
 	}
 	if session == nil {
-		return nil, false, errors.New("no session")
+		return nil, errors.New("no session")
 	}
 	hasResources := resources != nil
 	if resources == nil {
@@ -1573,14 +1591,19 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 	}
 
 	if err := executor.run(runner, p.policy.Policy); err != nil {
-		return nil, false, err
+		return nil, err
+	}
+
+	result = &PolicyExecuteResult{
+		AuthValueNeeded: details.AuthValueNeeded,
+		Path:            string(runner.policyCurrentPath),
 	}
 
 	for _, ticket := range ticketMap {
-		tickets = append(tickets, ticket)
+		result.Tickets = append(result.Tickets, ticket)
 	}
 
-	return tickets, details.AuthValueNeeded, nil
+	return result, nil
 }
 
 type nullTickets struct{}
