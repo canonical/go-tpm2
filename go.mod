@@ -7,7 +7,7 @@ require (
 	github.com/canonical/go-sp800.108-kdf v0.0.0-20210314145419-a3359f2d21b9
 	github.com/canonical/go-sp800.90a-drbg v0.0.0-20210314144037-6eeb1040d6c3 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
-	github.com/godbus/dbus v4.1.0+incompatible // indirect
+	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/mvo5/goconfigparser v0.0.0-20221018104758-434073381f37 // indirect
 	github.com/snapcore/go-gettext v0.0.0-20191107141714-82bbea49e785 // indirect
