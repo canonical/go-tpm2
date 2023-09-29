@@ -9,10 +9,14 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        goversion: [1.16, 1.15, 1.14, 1.13]
+        goversion:
+          - 1.18
+          # TODO: enable stable, right now tests fails there, see
+          # https://github.com/snapcore/secboot/pull/259
+          # - stable
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4
       with:
         go-version: ${{ matrix.goversion }}
     - name: Install dependencies
@@ -20,7 +24,7 @@ jobs:
           sudo snap install core core18
           sudo snap install --edge tpm2-simulator-chrisccoulson
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Cache Go dependencies
       id: cache-go-modules
       uses: actions/cache@v2
