@@ -2686,7 +2686,7 @@ func (s *policySuite) TestPolicyAuthorizePolicyNotFound(c *C) {
 		keySign:            pubKey,
 		policyRef:          []byte("bar"),
 		authorizedPolicies: []*Policy{policy}})
-	c.Check(err, ErrorMatches, `cannot run 'authorized policy' task in root branch: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x626172: no valid candidate policies`)
+	c.Check(err, ErrorMatches, `cannot run 'authorized policy' task in root branch: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x626172: no policies`)
 
 	var ae *PolicyAuthorizationError
 	c.Assert(err, internal_testutil.ErrorAs, &ae)
@@ -2716,7 +2716,7 @@ func (s *policySuite) TestPolicyAuthorizeInvalidSignature(c *C) {
 		keySign:            pubKey,
 		policyRef:          []byte("foo"),
 		authorizedPolicies: []*Policy{policy}})
-	c.Check(err, ErrorMatches, `cannot run 'authorized policy' task in branch 8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
+	c.Check(err, ErrorMatches, `cannot run 'authorized policy' task in root branch: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: `+
 		`TPM returned an error for parameter 2 whilst executing command TPM_CC_VerifySignature: TPM_RC_SIGNATURE \(the signature is not valid\)`)
 
 	var e *tpm2.TPMParameterError
@@ -2730,7 +2730,7 @@ func (s *policySuite) TestPolicyAuthorizeInvalidSignature(c *C) {
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e")
+	c.Check(pe.Path, Equals, "")
 }
 
 func (s *policySuite) testPolicyAuthorizeWithSubPolicyBranches(c *C, path string, expectedRequireAuthValue bool, expectedPath string) {
@@ -4438,7 +4438,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 	}
 
 	_, err = policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, nil), nil)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select execution path: no appropriate paths found`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -4518,7 +4518,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	_, err = policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select execution path: no appropriate paths found`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)

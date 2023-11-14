@@ -16,7 +16,6 @@ type PcrValueList = pcrValueList
 type PolicyBranchName = policyBranchName
 type PolicyBranchPath = policyBranchPath
 type PolicyOrTree = policyOrTree
-type PolicyTask = policyTask
 type TaggedHash = taggedHash
 type TaggedHashList = taggedHashList
 
