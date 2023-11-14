@@ -540,13 +540,14 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []Named{nv.Name, nv.Name}, uint16(len(nv.OperandB)), nv.Offset).NoAuthValue(),
 				}
 
-				runner := newPolicyRunnerImpl(
-					newTpmPolicySession(s.tpm, session),
+				runner := newPolicyExecuteRunner(
+					s.tpm,
+					session,
 					new(nullTickets),
 					new(nullPolicyResourceLoader),
-					func(runner policyRunner) policyRunnerHelper {
-						return newExecutePolicyHelper(runner, s.tpm, params, false)
-					},
+					params,
+					false,
+					new(PolicyBranchDetails),
 				)
 				if err := runner.run(info.policy.policy.Policy); err != nil {
 					// ignore policy execution error
@@ -833,10 +834,6 @@ func (w *treeWalker) resources() PolicyResourceLoader {
 	return w.policyResources
 }
 
-func (w *treeWalker) helper() policyRunnerHelper {
-	return w
-}
-
 func (w *treeWalker) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
@@ -855,7 +852,7 @@ func (w *treeWalker) authorize(auth tpm2.ResourceContext, policy *Policy, usage 
 	return nil, func() {}, nil
 }
 
-func (w *treeWalker) handleBranches(branches policyBranches) (int, error) {
+func (w *treeWalker) runBranch(branches policyBranches) (int, error) {
 	if len(branches) == 0 {
 		return 0, errors.New("branch node with no branches")
 	}
@@ -877,7 +874,7 @@ func (w *treeWalker) handleBranches(branches policyBranches) (int, error) {
 	return 0, nil
 }
 
-func (w *treeWalker) handleAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (tpm2.Digest, *tpm2.TkVerified, error) {
+func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (tpm2.Digest, *tpm2.TkVerified, error) {
 	remaining := w.remaining
 	w.remaining = nil
 
