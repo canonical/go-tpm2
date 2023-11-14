@@ -9,7 +9,6 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
@@ -115,36 +114,6 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 	}
 
 	return out
-}
-
-type policyBranchSelectMixin struct{}
-
-func (*policyBranchSelectMixin) selectBranch(branches policyBranches, next policyBranchPath) (int, error) {
-	switch {
-	case strings.HasPrefix(string(next), "…"):
-		return 0, fmt.Errorf("cannot select branch: invalid component \"%s\"", next)
-	case next[0] == '$':
-		// select branch by index
-		var selected int
-		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
-			return 0, fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
-		}
-		if selected < 0 || selected >= len(branches) {
-			return 0, fmt.Errorf("cannot select branch: selected path %d out of range", selected)
-		}
-		return selected, nil
-	default:
-		// select branch by name
-		for i, branch := range branches {
-			if len(branch.Name) == 0 {
-				continue
-			}
-			if policyBranchPath(branch.Name) == next {
-				return i, nil
-			}
-		}
-		return 0, fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
-	}
 }
 
 type policyPathSelector struct {

@@ -602,6 +602,34 @@ type policyBranch struct {
 
 type policyBranches []*policyBranch
 
+func (b policyBranches) selectBranch(next policyBranchPath) (int, error) {
+	switch {
+	case strings.HasPrefix(string(next), "…"):
+		return 0, fmt.Errorf("cannot select branch: invalid component \"%s\"", next)
+	case next[0] == '$':
+		// select branch by index
+		var selected int
+		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
+			return 0, fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
+		}
+		if selected < 0 || selected >= len(b) {
+			return 0, fmt.Errorf("cannot select branch: selected path %d out of range", selected)
+		}
+		return selected, nil
+	default:
+		// select branch by name
+		for i, branch := range b {
+			if len(branch.Name) == 0 {
+				continue
+			}
+			if policyBranchPath(branch.Name) == next {
+				return i, nil
+			}
+		}
+		return 0, fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
+	}
+}
+
 type policyORElement struct {
 	Branches policyBranches
 }
@@ -861,7 +889,6 @@ func (t executePolicyTickets) removeTicket(ticket *PolicyTicket) {
 }
 
 type policyExecuteRunner struct {
-	policyBranchSelectMixin
 	tpm        TPMConnection
 	sessionAlg tpm2.HashAlgorithmId
 
@@ -1060,7 +1087,7 @@ func (r *policyExecuteRunner) runBranch(branches policyBranches) (selected int, 
 
 	// We have a branch selector
 	r.remaining = remaining
-	selected, err = r.selectBranch(branches, next)
+	selected, err = branches.selectBranch(next)
 	if err != nil {
 		return 0, err
 	}
@@ -1137,7 +1164,7 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 
 	// We have a policy selector
 	r.remaining = remaining
-	selected, err := r.selectBranch(branches, next)
+	selected, err := branches.selectBranch(next)
 	if err != nil {
 		return nil, nil, err
 	}
