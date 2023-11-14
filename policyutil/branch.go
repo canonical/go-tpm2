@@ -164,13 +164,22 @@ func (s *policyPathSelector) filterMissingResourceBranches() {
 }
 
 func (s *policyPathSelector) filterMissingAuthBranches() {
-	for p, d := range s.detailsMap {
-		for _, auth := range d.Authorize {
-			policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
-			if err != nil || len(policies) == 0 {
-				delete(s.detailsMap, p)
-				break
+	if s.resources != nil {
+		for p, d := range s.detailsMap {
+			for _, auth := range d.Authorize {
+				policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
+				if err != nil || len(policies) == 0 {
+					delete(s.detailsMap, p)
+					break
+				}
 			}
+		}
+		return
+	}
+
+	for p, d := range s.detailsMap {
+		if len(d.Authorize) > 0 {
+			delete(s.detailsMap, p)
 		}
 	}
 }
@@ -450,6 +459,10 @@ type nvIndexInfo struct {
 }
 
 func (s *policyPathSelector) filterNVIncompatibleBranches() error {
+	if s.resources == nil {
+		return nil
+	}
+
 	nvSeen := make(map[paramKey]struct{})
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)
 
