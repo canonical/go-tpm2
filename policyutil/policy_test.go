@@ -1687,9 +1687,9 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	var resources *PolicyResources
+	var resources *PolicyResourcesData
 	if data.readPolicy != nil {
-		resources = &PolicyResources{
+		resources = &PolicyResourcesData{
 			Persistent: []PersistentResource{
 				{Name: readAuth.Name(), Handle: readAuth.Handle(), Policy: data.readPolicy},
 			},
@@ -1711,7 +1711,7 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, authorizer), nil)
 	if err != nil {
 		return err
 	}
@@ -2021,7 +2021,7 @@ func (s *policySuite) TestPolicyNVWithSubPolicyError(c *C) {
 type testExecutePolicySecretData struct {
 	authObject Named
 	policyRef  tpm2.Nonce
-	resources  *PolicyResources
+	resources  *PolicyResourcesData
 
 	expectedFlush       bool
 	expectedCommands    int
@@ -2049,7 +2049,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, data.resources, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, data.resources, authorizer), nil)
 	if err != nil {
 		return err
 	}
@@ -2134,7 +2134,7 @@ func (s *policySuite) TestPolicySecretWithWithTransient(c *C) {
 	err = s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: pub,
 		policyRef:  []byte("foo"),
-		resources: &PolicyResources{
+		resources: &PolicyResourcesData{
 			Persistent: []PersistentResource{
 				{
 					Name:   parent.Name(),
@@ -2184,11 +2184,16 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: object.Name(),
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot load resource with name 0x([[:xdigit:]]{68}): cannot find resource`)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: cannot load resource with name 0x([[:xdigit:]]{68}): cannot find resource`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
+
+	var ae *PolicyAuthorizationError
+	c.Assert(err, internal_testutil.ErrorAs, &ae)
+	c.Check(ae.AuthName, DeepEquals, object.Name())
+	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
 
 	var rle *ResourceLoadError
 	c.Check(err, internal_testutil.ErrorAs, &rle)
@@ -2238,7 +2243,7 @@ func (s *policySuite) TestPolicySecretWithNVPolicySession(c *C) {
 	err = s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: nvPub,
 		policyRef:  []byte("foo"),
-		resources: &PolicyResources{
+		resources: &PolicyResourcesData{
 			Persistent: []PersistentResource{
 				{
 					Name:   nvPub.Name(),
@@ -2275,7 +2280,7 @@ func (s *policySuite) TestPolicySecretWithNVPreferHMACSession(c *C) {
 	err = s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: nvPub,
 		policyRef:  []byte("foo"),
-		resources: &PolicyResources{
+		resources: &PolicyResourcesData{
 			Persistent: []PersistentResource{
 				{
 					Name:   nvPub.Name(),
@@ -2365,7 +2370,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), nil)
 	if err != nil {
 		return err
 	}
@@ -2548,7 +2553,7 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), nil)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 1)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
@@ -2593,13 +2598,13 @@ func (s *policySuite) testPolicyAuthorize(c *C, data *testExecutePolicyAuthorize
 	params := &PolicyExecuteParams{
 		Path: data.path,
 	}
-	resources := &PolicyResources{
+	resources := &PolicyResourcesData{
 		AuthorizedPolicies: data.authorizedPolicies,
 	}
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, new(mockAuthorizer)), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, new(mockAuthorizer)), params)
 	if err != nil {
 		return err
 	}
@@ -3083,7 +3088,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), params)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
@@ -3306,7 +3311,7 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), params)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
@@ -3602,7 +3607,7 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, nil, authorizer), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), params)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
@@ -4370,7 +4375,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelected(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	resources := &PolicyResources{
+	resources := &PolicyResourcesData{
 		Persistent: []PersistentResource{
 			{
 				Name:   nvPub.Name(),
@@ -4380,7 +4385,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelected(c *C) {
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, nil), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, nil), nil)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
@@ -4427,7 +4432,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	resources := &PolicyResources{
+	resources := &PolicyResourcesData{
 		Persistent: []PersistentResource{
 			{
 				Name:   nvPub.Name(),
@@ -4437,7 +4442,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 		},
 	}
 
-	_, err = policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResourceLoader(s.TPM, resources, nil), nil)
+	_, err = policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, nil), nil)
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
 
 	var pe *PolicyError

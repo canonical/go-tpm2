@@ -247,7 +247,7 @@ type policyTickets interface {
 type policyRunner interface {
 	session() policySession
 	tickets() policyTickets
-	resources() PolicyResourceLoader
+	resources() PolicyResources
 
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
 	cpHash(cpHash *policyCpHashElement) error
@@ -385,7 +385,11 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 
 	authObject, policy, err := runner.resources().LoadName(e.AuthObjectName)
 	if err != nil {
-		return &ResourceLoadError{Name: e.AuthObjectName, err: err}
+		return &PolicyAuthorizationError{
+			AuthName:  e.AuthObjectName,
+			PolicyRef: e.PolicyRef,
+			err:       &ResourceLoadError{Name: e.AuthObjectName, err: err},
+		}
 	}
 	defer func() {
 		if authObject.Resource().Handle().Type() != tpm2.HandleTypeTransient {
@@ -894,7 +898,7 @@ type policyExecuteRunner struct {
 
 	policySession   *teePolicySession
 	policyTickets   policyTickets
-	policyResources PolicyResourceLoader
+	policyResources PolicyResources
 
 	usage                *PolicySessionUsage
 	ignoreAuthorizations []PolicyAuthorizationID
@@ -905,7 +909,7 @@ type policyExecuteRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets policyTickets, resources PolicyResourceLoader, params *PolicyExecuteParams, allowResources bool, details *PolicyBranchDetails) *policyExecuteRunner {
+func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets policyTickets, resources PolicyResources, params *PolicyExecuteParams, allowResources bool, details *PolicyBranchDetails) *policyExecuteRunner {
 	return &policyExecuteRunner{
 		tpm:        tpm,
 		sessionAlg: session.HashAlg(),
@@ -931,7 +935,7 @@ func (r *policyExecuteRunner) tickets() policyTickets {
 	return r.policyTickets
 }
 
-func (r *policyExecuteRunner) resources() PolicyResourceLoader {
+func (r *policyExecuteRunner) resources() PolicyResources {
 	return r.policyResources
 }
 
@@ -1348,7 +1352,7 @@ type PolicyExecuteResult struct {
 // The caller may supply additional parameters via the PolicyExecuteParams struct, which is an
 // optional argument.
 //
-// Resources required by a policy are obtained from the supplied PolicyResourceLoader, which is
+// Resources required by a policy are obtained from the supplied PolicyResources, which is
 // optional but must be supplied for any policy that executes TPM2_PolicyNV, TPM2_PolicySecret,
 // TPM2_PolicySigned or TPM2_PolicyAuthorize assertions.
 //
@@ -1379,7 +1383,7 @@ type PolicyExecuteResult struct {
 //
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied.
-func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resources PolicyResourceLoader, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
+func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resources PolicyResources, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
 	if tpm == nil {
 		return nil, errors.New("no TPM")
 	}
@@ -1387,7 +1391,7 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		return nil, errors.New("no session")
 	}
 	if resources == nil {
-		resources = new(nullPolicyResourceLoader)
+		resources = new(nullPolicyResources)
 	}
 	if params == nil {
 		params = new(PolicyExecuteParams)
@@ -1428,7 +1432,7 @@ func (*nullTickets) removeTicket(ticket *PolicyTicket) {}
 type policyComputeRunner struct {
 	policySession   *computePolicySession
 	policyTickets   nullTickets
-	policyResources mockPolicyResourceLoader
+	policyResources mockPolicyResources
 
 	currentPath policyBranchPath
 	hasCpHash   bool
@@ -1448,7 +1452,7 @@ func (r *policyComputeRunner) tickets() policyTickets {
 	return &r.policyTickets
 }
 
-func (r *policyComputeRunner) resources() PolicyResourceLoader {
+func (r *policyComputeRunner) resources() PolicyResources {
 	return &r.policyResources
 }
 
@@ -1655,7 +1659,7 @@ func (p *Policy) Authorize(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.
 type policyValidateRunner struct {
 	policySession   *computePolicySession
 	policyTickets   nullTickets
-	policyResources mockPolicyResourceLoader
+	policyResources mockPolicyResources
 
 	currentPath policyBranchPath
 }
@@ -1674,7 +1678,7 @@ func (r *policyValidateRunner) tickets() policyTickets {
 	return &r.policyTickets
 }
 
-func (r *policyValidateRunner) resources() PolicyResourceLoader {
+func (r *policyValidateRunner) resources() PolicyResources {
 	return &r.policyResources
 }
 
@@ -1846,7 +1850,7 @@ func (p *Policy) Branches() ([]string, error) {
 		}
 	}
 
-	walker := newTreeWalker(new(mockPolicyResourceLoader), makeBeginBranchFn(""))
+	walker := newTreeWalker(new(mockPolicyResources), makeBeginBranchFn(""))
 	if err := walker.run(p.policy.Policy); err != nil {
 		return nil, err
 	}
@@ -2031,7 +2035,7 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 	}
 
 	walker := newTreeWalker(
-		new(mockPolicyResourceLoader),
+		new(mockPolicyResources),
 		makeBeginBranchFn("", policyBranchPath(path), "*", false, new(PolicyBranchDetails)),
 	)
 	if err := walker.run(p.policy.Policy); err != nil {

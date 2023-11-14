@@ -117,10 +117,10 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 }
 
 type policyPathSelector struct {
-	mockPolicyResourceLoader
+	mockPolicyResources
 
 	sessionAlg           tpm2.HashAlgorithmId
-	resources            PolicyResourceLoader
+	resources            PolicyResources
 	tpm                  TPMConnection
 	usage                *PolicySessionUsage
 	ignoreAuthorizations []PolicyAuthorizationID
@@ -131,7 +131,7 @@ type policyPathSelector struct {
 	nvOk       map[paramKey]struct{}
 }
 
-func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources PolicyResourceLoader, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
+func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources PolicyResources, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
 	return &policyPathSelector{
 		sessionAlg:           sessionAlg,
 		resources:            resources,
@@ -526,7 +526,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 					s.tpm,
 					session,
 					new(nullTickets),
-					new(nullPolicyResourceLoader),
+					new(nullPolicyResources),
 					params,
 					false,
 					new(PolicyBranchDetails),
@@ -752,7 +752,7 @@ type (
 
 type treeWalker struct {
 	policyTickets     nullTickets
-	policyResources   PolicyResourceLoader
+	policyResources   PolicyResources
 	beginRootBranchFn treeWalkerBeginBranchFn
 
 	policySession       policySession
@@ -763,7 +763,7 @@ type treeWalker struct {
 	remaining           policyElements
 }
 
-func newTreeWalker(resources PolicyResourceLoader, beginRootBranchFn treeWalkerBeginBranchFn) *treeWalker {
+func newTreeWalker(resources PolicyResources, beginRootBranchFn treeWalkerBeginBranchFn) *treeWalker {
 	return &treeWalker{
 		policyResources:   resources,
 		beginRootBranchFn: beginRootBranchFn,
@@ -812,7 +812,7 @@ func (w *treeWalker) tickets() policyTickets {
 	return &w.policyTickets
 }
 
-func (w *treeWalker) resources() PolicyResourceLoader {
+func (w *treeWalker) resources() PolicyResources {
 	return w.policyResources
 }
 
