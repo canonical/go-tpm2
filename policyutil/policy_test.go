@@ -2184,7 +2184,7 @@ func (s *policySuite) TestPolicySecretMissingResource(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject: object.Name(),
 		policyRef:  []byte("foo")})
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: cannot load resource with name 0x([[:xdigit:]]{68}): unknown resource`)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: cannot complete authorization with authName=0x([[:xdigit:]]{68}), policyRef=0x666f6f: cannot load resource with name 0x([[:xdigit:]]{68}): resource not found`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)

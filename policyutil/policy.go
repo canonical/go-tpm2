@@ -109,8 +109,9 @@ func (e *PolicyError) Unwrap() error {
 }
 
 // SubPolicyError is returned from [Policy.Execute] if an error is encountered during
-// the execution of a sub-policy. This should be wrapped in either a [PolicyNVError]
-// or [PolicyAuthorizationError] which indicates the resource that the error occurred for.
+// the execution of a sub-policy. This should be wrapped in either a *[PolicyNVError]
+// or *[PolicyAuthorizationError] which indicates the resource that the error occurred for.
+// This will wrap another *[PolicyError].
 type SubPolicyError struct {
 	err error
 }
@@ -126,7 +127,9 @@ func (e *SubPolicyError) Unwrap() error {
 func (*SubPolicyError) isPolicyDelimiterError() {}
 
 // PolicyNVError is returned from [Policy.Execute] and other methods when an error
-// is encountered with a NV index.
+// is encountered when executing a TPM2_PolicyNV assertion. If there was an error
+// authorizing use of the NV index with a policy session, this will wrap a
+// *[SubPolicyError].
 type PolicyNVError struct {
 	Index tpm2.Handle // The NV index handle
 	Name  tpm2.Name   // The NV index name
@@ -143,7 +146,10 @@ func (e *PolicyNVError) Unwrap() error {
 }
 
 // PolicyAuthorizationError is returned from [Policy.Execute] if:
-//   - the policy uses TPM2_PolicySecret and the associated object could not be authorized.
+//   - the policy uses TPM2_PolicySecret and the associated resource could not be authorized. When
+//     this occurs because there was an error loading the associated resource, this will wrap a
+//     *[ResourceLoadError]. If there was an error authorizing use of the resource with a policy
+//     session, this will wrap a *[SubPolicyError].
 //   - the policy uses TPM2_PolicySigned and no or an invalid signed authorization was supplied.
 //   - the policy uses TPM2_PolicyAuthorize and no or an invalid authorized policy was supplied.
 type PolicyAuthorizationError struct {
@@ -160,8 +166,9 @@ func (e *PolicyAuthorizationError) Unwrap() error {
 	return e.err
 }
 
-// ResourceLoadError is returned from [Policy.Execute] if the policy required a resource that
-// could not be loaded.
+// ResourceLoadError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
+// and the associated resource could not be loaded. If loading the resource required
+// authorization with a policy session and that failed, this may wrap another *[PolicyError].
 type ResourceLoadError struct {
 	Name tpm2.Name
 	err  error
@@ -174,6 +181,8 @@ func (e *ResourceLoadError) Error() string {
 func (e *ResourceLoadError) Unwrap() error {
 	return e.err
 }
+
+func (*ResourceLoadError) isPolicyDelimiterError() {}
 
 type policyBranchName string
 

@@ -149,9 +149,6 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, auth
 }
 
 func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
-	if !name.IsValid() {
-		return nil, nil, errors.New("invalid name")
-	}
 	if name.Type() == tpm2.NameTypeHandle && (name.Handle().Type() == tpm2.HandleTypePCR || name.Handle().Type() == tpm2.HandleTypePermanent) {
 		return newResourceContextFlushable(r.tpm.GetPermanentContext(name.Handle()), nil), nil, nil
 	}
@@ -167,7 +164,7 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 			return nil, nil, err
 		}
 		if !bytes.Equal(rc.Name(), name) {
-			return nil, nil, fmt.Errorf("loaded context has the wrong name (got %#x, expected %#x)", rc.Name(), name)
+			return nil, nil, fmt.Errorf("persistent TPM resource has the wrong name (%#x)", rc.Name())
 		}
 
 		return newResourceContextFlushable(rc, nil), resource.Policy, nil
@@ -181,7 +178,7 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 
 		parent, policy, err := r.LoadName(object.ParentName)
 		if err != nil {
-			return nil, nil, fmt.Errorf("cannot load parent for object with name %#x: %w", name, err)
+			return nil, nil, fmt.Errorf("cannot load parent with name %#x: %w", object.ParentName, err)
 		}
 		defer parent.Flush()
 
@@ -247,7 +244,7 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 		return newResourceContextFlushable(resource, nil), nil, nil
 	}
 
-	return nil, nil, errors.New("unknown resource")
+	return nil, nil, errors.New("resource not found")
 }
 
 func (r *tpmPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
@@ -313,7 +310,7 @@ func (*mockPolicyResources) SignAuthorization(sessionNonce tpm2.Nonce, authKey t
 type nullPolicyResources struct{}
 
 func (*nullPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
-	return nil, nil, errors.New("unknown resource")
+	return nil, nil, errors.New("no PolicyResources")
 }
 
 func (*nullPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
