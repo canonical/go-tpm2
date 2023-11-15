@@ -152,20 +152,6 @@ func (s *policyPathSelector) filterInvalidBranches() {
 	}
 }
 
-// filterMissingAuthBranches removes branches that contain TPM2_PolicyAuthorize
-// assertions which require authorized policies that can't be loaded.
-func (s *policyPathSelector) filterMissingAuthBranches() {
-	for p, d := range s.detailsMap {
-		for _, auth := range d.Authorize {
-			policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
-			if err != nil || len(policies) == 0 {
-				delete(s.detailsMap, p)
-				break
-			}
-		}
-	}
-}
-
 // filterIgnoredResources removes branches that require resources that the caller
 // requested to not be used.
 func (s *policyPathSelector) filterIgnoredResources() {
@@ -256,6 +242,37 @@ func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 			if nvWritten != written {
 				delete(s.detailsMap, p)
 				continue
+			}
+		}
+	}
+
+	return nil
+}
+
+// filterAuthorizeIncompatibleBranches removes branches that contain TPM2_PolicyAuthorize
+// assertions which require authorized policies that can't be loaded.
+func (s *policyPathSelector) filterAuthorizeIncompatibleBranches() error {
+	for p, d := range s.detailsMap {
+		for _, auth := range d.Authorize {
+			policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
+			if err != nil {
+				return err
+			}
+
+			var candidatePolicies []*Policy
+			for _, policy := range policies {
+				for _, digest := range policy.policy.PolicyDigests {
+					if digest.HashAlg != s.sessionAlg {
+						continue
+					}
+
+					candidatePolicies = append(candidatePolicies, policy)
+					break
+				}
+			}
+			if len(candidatePolicies) == 0 {
+				delete(s.detailsMap, p)
+				break
 			}
 		}
 	}
@@ -675,19 +692,21 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	}
 
 	s.filterInvalidBranches()
-	s.filterMissingAuthBranches()
 	s.filterIgnoredResources()
 	if err := s.filterUsageIncompatibleBranches(); err != nil {
 		return "", fmt.Errorf("cannot filter branches incompatible with usage: %w", err)
 	}
+	if err := s.filterAuthorizeIncompatibleBranches(); err != nil {
+		return "", fmt.Errorf("cannot filter branches with TPM2_PolicyAuthorize assertions that will fail: %w", err)
+	}
 	if err := s.filterPcrIncompatibleBranches(); err != nil {
-		return "", fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyPCR assertions: %w", err)
+		return "", fmt.Errorf("cannot filter branches with TPM2_PolicyPCR assertions that will fail: %w", err)
 	}
 	if err := s.filterCounterTimerIncompatibleBranches(); err != nil {
-		return "", fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyCounterTimer assertions: %w", err)
+		return "", fmt.Errorf("cannot filter branches with TPM2_PolicyCounterTimer assertions that will fail: %w", err)
 	}
 	if err := s.filterNVIncompatibleBranches(); err != nil {
-		return "", fmt.Errorf("cannot filter branches incompatible with TPM2_PolicyNV assertions: %w", err)
+		return "", fmt.Errorf("cannot filter branches with TPM2_PolicyNV assertions that will fail: %w", err)
 	}
 
 	var candidates []policyBranchPath
