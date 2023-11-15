@@ -300,7 +300,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
-	policy, err := runner.resources().LoadNVPolicy(nvIndex.Name())
+	policy, err := runner.resources().LoadPolicy(nvIndex.Name())
 	if err != nil {
 		return fmt.Errorf("cannot load nvIndex policy: %w", err)
 	}
@@ -961,7 +961,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 
 	switch auth.Handle().Type() {
 	case tpm2.HandleTypeNVIndex:
-		pub, err := r.tpm.NVReadPublic(auth)
+		pub, _, err := r.tpm.NVReadPublic(auth)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot obtain NVPublic: %w", err)
 		}
@@ -976,7 +976,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 		sessionType = tpm2.SessionTypeHMAC
 		alg = r.sessionAlg
 	case tpm2.HandleTypeTransient, tpm2.HandleTypePersistent:
-		pub, err := r.tpm.ReadPublic(auth)
+		pub, _, _, err := r.tpm.ReadPublic(auth)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot obtain Public: %w", err)
 		}

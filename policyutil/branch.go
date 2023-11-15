@@ -142,6 +142,7 @@ func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources PolicyReso
 	}
 }
 
+// filterInvalidBranches removes branches that are definitely invalid.
 func (s *policyPathSelector) filterInvalidBranches() {
 	for p, d := range s.detailsMap {
 		if d.IsValid() {
@@ -151,6 +152,8 @@ func (s *policyPathSelector) filterInvalidBranches() {
 	}
 }
 
+// filterMissingResourceBranches removes branches that require resources that
+// can't be loaded.
 func (s *policyPathSelector) filterMissingResourceBranches() {
 	if s.resources != nil {
 		return
@@ -163,6 +166,8 @@ func (s *policyPathSelector) filterMissingResourceBranches() {
 	}
 }
 
+// filterMissingAuthBranches removes branches that require authorized policies that
+// can't be loaded.
 func (s *policyPathSelector) filterMissingAuthBranches() {
 	if s.resources != nil {
 		for p, d := range s.detailsMap {
@@ -184,6 +189,8 @@ func (s *policyPathSelector) filterMissingAuthBranches() {
 	}
 }
 
+// filterIgnoredResources removes branches that require resources that the caller
+// requested to not be used.
 func (s *policyPathSelector) filterIgnoredResources() {
 	for _, ignore := range s.ignoreAuthorizations {
 		for p, d := range s.detailsMap {
@@ -219,6 +226,8 @@ func (s *policyPathSelector) filterIgnoredResources() {
 	}
 }
 
+// filterUsageIncompatibleBranches removes branches that are not compatible with
+// the specified session usage.
 func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 	if s.usage == nil {
 		return nil
@@ -262,7 +271,7 @@ func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 
 		nvWritten, set := d.NvWritten()
 		if set && s.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
-			pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(s.usage.nvHandle))
+			pub, _, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(s.usage.nvHandle))
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
@@ -277,6 +286,8 @@ func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 	return nil
 }
 
+// filterPcrIncompatibleBranches removes branches that contain TPM2_PolicyPCR
+// assertions with values which don't match the current PCR values.
 func (s *policyPathSelector) filterPcrIncompatibleBranches() error {
 	var pcrs tpm2.PCRSelectionList
 	for p, d := range s.detailsMap {
@@ -458,6 +469,9 @@ type nvIndexInfo struct {
 	policy   *Policy
 }
 
+// filterNVIncompatibleBranches removes branches that contain TPM2_PolicyNV assertions
+// that will fail. This ignores assertions where it's not possible to determine the current
+// NV index contents.
 func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 	if s.resources == nil {
 		return nil
@@ -481,19 +495,27 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 
 			info, exists := nvInfo[nv.Index]
 			if !exists {
-				resource, policy, err := s.resources.LoadName(nv.Name)
-				if err != nil {
-					// If this NV index doesn't exist with the specified name, then
-					// this branch is never going to work
+				pub, name, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(nv.Index))
+				if tpm2.IsTPMHandleError(err, tpm2.ErrorHandle, tpm2.AnyCommandCode, tpm2.AnyHandleIndex) {
+					// if no NV index exists, then this branch won't work.
 					incompatible = true
 					break
 				}
-				pub, err := s.tpm.NVReadPublic(resource.Resource())
+				if err != nil {
+					return err
+				}
+				if !bytes.Equal(name, nv.Name) {
+					// if the NV index doesn't have the expected name, then this
+					// branch won't work.
+					incompatible = true
+					break
+				}
+				policy, err := s.resources.LoadPolicy(nv.Name)
 				if err != nil {
 					return err
 				}
 
-				info = &nvIndexInfo{resource: resource.Resource(), pub: pub, policy: policy}
+				info = &nvIndexInfo{resource: tpm2.NewNVIndexResourceContext(pub, name), pub: pub, policy: policy}
 				nvInfo[nv.Index] = info
 			}
 
@@ -571,6 +593,8 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 	return nil
 }
 
+// filterCounterTimerIncompatibleBranches removes branches that contain TPM2_PolicyCounterTimer
+// assertions that will fail.
 func (s *policyPathSelector) filterCounterTimerIncompatibleBranches() error {
 	hasCounterTimerAssertions := false
 	for _, d := range s.detailsMap {

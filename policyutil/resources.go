@@ -28,7 +28,7 @@ type PolicyResources interface {
 	LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
 
 	// LoadNV returns a context for the supplied NV index
-	LoadNVPolicy(name tpm2.Name) (*Policy, error)
+	LoadPolicy(name tpm2.Name) (*Policy, error)
 
 	// LookupAuthorized policies returns a set of policies that are signed by the key with
 	// the specified name, appropriate for a TPM2_PolicyAuthorize assertion with the
@@ -170,7 +170,7 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 			return nil, nil, err
 		}
 		if !bytes.Equal(rc.Name(), name) {
-			return nil, nil, fmt.Errorf("loaded context has the wrong name (gotr %#x, expected %#x)", rc.Name(), name)
+			return nil, nil, fmt.Errorf("loaded context has the wrong name (got %#x, expected %#x)", rc.Name(), name)
 		}
 
 		return newResourceContextFlushable(rc, nil), resource.Policy, nil
@@ -188,12 +188,12 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 		}
 		if !bytes.Equal(hc.Name(), name) {
 			r.tpm.FlushContext(hc)
-			return nil, nil, fmt.Errorf("loaded context has the wrong name (got %#x, expected %#x)", hc.Name(), name)
+			return nil, nil, fmt.Errorf("internal error: loaded context has the wrong name (got %#x, expected %#x)", hc.Name(), name)
 		}
 		resource, ok := hc.(tpm2.ResourceContext)
 		if !ok {
 			r.tpm.FlushContext(hc)
-			return nil, nil, fmt.Errorf("name %#x associated with a context of the wrong type", name)
+			return nil, nil, fmt.Errorf("internal error: name %#x associated with a context of the wrong type", name)
 		}
 
 		return newResourceContextFlushable(resource, r.tpm.FlushContext), context.policy, nil
@@ -278,16 +278,23 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 		return newResourceContextFlushable(resource, nil), nil, nil
 	}
 
-	return nil, nil, errors.New("cannot find resource")
+	return nil, nil, errors.New("unknown resource")
 }
 
-func (r *tpmPolicyResources) LoadNVPolicy(name tpm2.Name) (*Policy, error) {
+func (r *tpmPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
 	for _, resource := range r.data.Persistent {
 		if !bytes.Equal(resource.Name, name) {
 			continue
 		}
 
 		return resource.Policy, nil
+	}
+	for _, object := range r.data.Transient {
+		if !bytes.Equal(object.Public.Name(), name) {
+			continue
+		}
+
+		return object.Policy, nil
 	}
 
 	return nil, nil
@@ -318,7 +325,7 @@ func (*mockPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, 
 	return newResourceContextFlushable(tpm2.NewLimitedResourceContext(0x80000000, name), nil), nil, nil
 }
 
-func (r *mockPolicyResources) LoadNVPolicy(name tpm2.Name) (*Policy, error) {
+func (r *mockPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
 	return nil, nil
 }
 
@@ -344,7 +351,7 @@ func (*nullPolicyResources) LoadExternal(public *tpm2.Public) (ResourceContext, 
 	return nil, errors.New("no PolicyResources")
 }
 
-func (*nullPolicyResources) LoadNVPolicy(name tpm2.Name) (*Policy, error) {
+func (*nullPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
 	return nil, errors.New("no PolicyResources")
 }
 

@@ -13,7 +13,7 @@ type TPMConnection interface {
 	StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (tpm2.SessionContext, error)
 
 	LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2.Public, hierarchy tpm2.Handle) (tpm2.ResourceContext, error)
-	ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, error)
+	ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, tpm2.Name, tpm2.Name, error)
 
 	VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error)
 
@@ -43,7 +43,7 @@ type TPMConnection interface {
 	ReadClock() (*tpm2.TimeInfo, error)
 
 	NVRead(auth, index tpm2.ResourceContext, size, offset uint16, authAuthSession tpm2.SessionContext) (tpm2.MaxNVBuffer, error)
-	NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error)
+	NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, tpm2.Name, error)
 }
 
 type onlineTpmConnection struct {
@@ -66,9 +66,8 @@ func (c *onlineTpmConnection) LoadExternal(inPrivate *tpm2.Sensitive, inPublic *
 	return c.tpm.LoadExternal(inPrivate, inPublic, hierarchy, c.sessions...)
 }
 
-func (c *onlineTpmConnection) ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, error) {
-	pub, _, _, err := c.tpm.ReadPublic(handle, c.sessions...)
-	return pub, err
+func (c *onlineTpmConnection) ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, tpm2.Name, tpm2.Name, error) {
+	return c.tpm.ReadPublic(handle, c.sessions...)
 }
 
 func (c *onlineTpmConnection) VerifySignature(key tpm2.ResourceContext, digest tpm2.Digest, signature *tpm2.Signature) (*tpm2.TkVerified, error) {
@@ -164,7 +163,6 @@ func (c *onlineTpmConnection) NVRead(auth, index tpm2.ResourceContext, size, off
 	return c.tpm.NVReadRaw(auth, index, size, offset, authAuthSession, c.sessions...)
 }
 
-func (c *onlineTpmConnection) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error) {
-	pub, _, err := c.tpm.NVReadPublic(handle, c.sessions...)
-	return pub, err
+func (c *onlineTpmConnection) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, tpm2.Name, error) {
+	return c.tpm.NVReadPublic(handle, c.sessions...)
 }
