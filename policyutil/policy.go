@@ -168,7 +168,7 @@ func (e *PolicyAuthorizationError) Unwrap() error {
 
 // ResourceLoadError is returned from [Policy.Execute] if the policy uses TPM2_PolicySecret
 // and the associated resource could not be loaded. If loading the resource required
-// authorization with a policy session and that failed, this may wrap another *[PolicyError].
+// authorization with a policy session and that failed, this will wrap another *[PolicyError].
 type ResourceLoadError struct {
 	Name tpm2.Name
 	err  error
@@ -912,13 +912,12 @@ type policyExecuteRunner struct {
 	usage                *PolicySessionUsage
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
-	allowResources       bool
 
 	remaining   policyBranchPath
 	currentPath policyBranchPath
 }
 
-func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets policyTickets, resources PolicyResources, params *PolicyExecuteParams, allowResources bool, details *PolicyBranchDetails) *policyExecuteRunner {
+func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets policyTickets, resources PolicyResources, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
 	return &policyExecuteRunner{
 		tpm:        tpm,
 		sessionAlg: session.HashAlg(),
@@ -931,7 +930,6 @@ func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tick
 		usage:                params.Usage,
 		ignoreAuthorizations: params.IgnoreAuthorizations,
 		ignoreNV:             params.IgnoreNV,
-		allowResources:       allowResources,
 		remaining:            policyBranchPath(params.Path),
 	}
 }
@@ -1027,7 +1025,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 		}
 
 		var details PolicyBranchDetails
-		runner := newPolicyExecuteRunner(r.tpm, session, r.policyTickets, r.resources(), params, r.allowResources, &details)
+		runner := newPolicyExecuteRunner(r.tpm, session, r.policyTickets, r.resources(), params, &details)
 		if err := runner.run(policy.policy.Policy); err != nil {
 			return nil, nil, &SubPolicyError{err: err}
 		}
@@ -1069,11 +1067,7 @@ func (r *policyExecuteRunner) runBranch(branches policyBranches) (selected int, 
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		resources := r.resources()
-		if !r.allowResources {
-			resources = nil
-		}
-		selector := newPolicyPathSelector(r.sessionAlg, resources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
+		selector := newPolicyPathSelector(r.sessionAlg, r.resources(), r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
 		path, err := selector.selectPath(branches)
 		if err != nil {
 			return 0, fmt.Errorf("cannot automatically select branch: %w", err)
@@ -1146,11 +1140,7 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	case len(next) == 0 || next[0] == '*':
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		resources := r.resources()
-		if !r.allowResources {
-			resources = nil
-		}
-		selector := newPolicyPathSelector(r.sessionAlg, resources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
+		selector := newPolicyPathSelector(r.sessionAlg, r.resources(), r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
 		path, err := selector.selectPath(branches)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot automatically select policy: %w", err)
@@ -1366,14 +1356,13 @@ type PolicyExecuteResult struct {
 // TPM2_PolicySigned or TPM2_PolicyAuthorize assertions.
 //
 // The caller may explicitly select branches and authorized policies to execute via the Path
-// argument of [PolicyExecuteParams]. Alternatively, if a path os not specified explicitly,
+// argument of [PolicyExecuteParams]. Alternatively, if a path is not specified explicitly,
 // or a component contains a wildcard match, an appropriate execution path is selected
-// automatically where possible. This works by selecting the first path from all of the
-// candidate paths, with a preference for paths that don't include TPM2_PolicySecret,
-// TPM2_PolicySigned, TPM2_PolicyAuthValue, and TPM2_PolicyPassword assertions. It also has a
-// preference for paths that don't include TPM2_PolicyNV assertions that require authorization
-// to use or read. A path is omitted from the set of candidate paths if any of the following
-// conditions are true:
+// automatically where possible. This works by selecting the first suitable path, with a
+// preference for paths that don't include TPM2_PolicySecret, TPM2_PolicySigned,
+// TPM2_PolicyAuthValue, and TPM2_PolicyPassword assertions. It also has a preference for paths
+// that don't include TPM2_PolicyNV assertions that require authorization to use or read. A path
+// is omitted from the set of suitable paths if any of the following conditions are true:
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
 //     the supplied [PolicySessionUsage].
 //   - It contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion and this isn't permitted
@@ -1389,6 +1378,21 @@ type PolicyExecuteResult struct {
 //     other conditions, else the condition isn't checked.
 //   - It uses TPM2_PolicyPCR with values that don't match the current PCR values.
 //   - It uses TPM2_PolicyCounterTimer with conditions that will fail.
+//
+// Note that this automatic selection makes the following assumptions:
+//   - TPM2_PolicySecret assertions always succeed. Where they are known to not succeed because
+//     the authorization value isn't known or the resource can't be loaded, add the assertion
+//     details to the IgnoreAuthorizations field of [PolicyExecuteParams].
+//   - TPM2_PolicySigned assertions always succeed. Where they are known to not succeed because
+//     an assertion can't be provided or it is invalid, add the assertion details to the
+//     IgnoreAuthorizations field of [PolicyExecuteParams].
+//   - TPM2_PolicyAuthorize assertions always succeed if policies are returned from the
+//     implementation of [PolicyResourceLoader.LoadAuthorizedPolicies]. Where these are known
+//     to not succeed, add the assertion details to the IgnoreAuthorizations field of
+//     [PolicyExecuteParams].
+//   - TPM2_PolicyNV assertions on NV indexes that require authorization to read will always
+//     succeed. Where these are known to not suceed, add the assertion details to the IgnoreNV
+//     field of [PolicyExecuteParams].
 //
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied.
@@ -1418,7 +1422,6 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		tickets,
 		newCachedPolicyResources(tpm, resources),
 		params,
-		true,
 		&details,
 	)
 	if err := runner.run(p.policy.Policy); err != nil {

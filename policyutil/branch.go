@@ -152,39 +152,16 @@ func (s *policyPathSelector) filterInvalidBranches() {
 	}
 }
 
-// filterMissingResourceBranches removes branches that require resources that
-// can't be loaded.
-func (s *policyPathSelector) filterMissingResourceBranches() {
-	if s.resources != nil {
-		return
-	}
-
-	for p, d := range s.detailsMap {
-		if len(d.NV) > 0 || len(d.Secret) > 0 || len(d.Signed) > 0 || len(d.Authorize) > 0 {
-			delete(s.detailsMap, p)
-		}
-	}
-}
-
-// filterMissingAuthBranches removes branches that require authorized policies that
-// can't be loaded.
+// filterMissingAuthBranches removes branches that contain TPM2_PolicyAuthorize
+// assertions which require authorized policies that can't be loaded.
 func (s *policyPathSelector) filterMissingAuthBranches() {
-	if s.resources != nil {
-		for p, d := range s.detailsMap {
-			for _, auth := range d.Authorize {
-				policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
-				if err != nil || len(policies) == 0 {
-					delete(s.detailsMap, p)
-					break
-				}
-			}
-		}
-		return
-	}
-
 	for p, d := range s.detailsMap {
-		if len(d.Authorize) > 0 {
-			delete(s.detailsMap, p)
+		for _, auth := range d.Authorize {
+			policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
+			if err != nil || len(policies) == 0 {
+				delete(s.detailsMap, p)
+				break
+			}
 		}
 	}
 }
@@ -473,10 +450,6 @@ type nvIndexInfo struct {
 // that will fail. This ignores assertions where it's not possible to determine the current
 // NV index contents.
 func (s *policyPathSelector) filterNVIncompatibleBranches() error {
-	if s.resources == nil {
-		return nil
-	}
-
 	nvSeen := make(map[paramKey]struct{})
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)
 
@@ -550,7 +523,6 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 					new(nullTickets),
 					new(nullPolicyResources),
 					params,
-					false,
 					new(PolicyBranchDetails),
 				)
 				if err := runner.run(info.policy.policy.Policy); err != nil {
@@ -703,7 +675,6 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	}
 
 	s.filterInvalidBranches()
-	s.filterMissingResourceBranches()
 	s.filterMissingAuthBranches()
 	s.filterIgnoredResources()
 	if err := s.filterUsageIncompatibleBranches(); err != nil {
