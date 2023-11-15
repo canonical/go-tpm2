@@ -25,12 +25,15 @@ type PolicyResources interface {
 	// LoadName loads the resource with the specified name if required, and returns
 	// a context. If the name corresponds to a transient object, the Flush method of the
 	// returned context will be called once the resource is no longer needed.
+	//
+	// This should return an error if no resource can be returned.
 	LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
 
-	// LoadNV returns a context for the supplied NV index
+	// LoadPolicy returns a policy for the resource with the specified name if there
+	// is one. As a policy is optional, returning a nil policy isn't an error.
 	LoadPolicy(name tpm2.Name) (*Policy, error)
 
-	// LookupAuthorized policies returns a set of policies that are signed by the key with
+	// LoadAuthorizedPolicies returns a set of policies that are signed by the key with
 	// the specified name, appropriate for a TPM2_PolicyAuthorize assertion with the
 	// specified reference.
 	LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
