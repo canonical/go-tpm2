@@ -157,8 +157,6 @@ func (s *policyPathSelector) filterInvalidBranches() {
 func (s *policyPathSelector) filterIgnoredResources() {
 	for _, ignore := range s.ignoreAuthorizations {
 		for p, d := range s.detailsMap {
-			found := false
-
 			var auths []PolicyAuthorizationID
 			auths = append(auths, d.Secret...)
 			auths = append(auths, d.Signed...)
@@ -166,13 +164,9 @@ func (s *policyPathSelector) filterIgnoredResources() {
 
 			for _, auth := range auths {
 				if bytes.Equal(auth.AuthName, ignore.AuthName) && bytes.Equal(auth.PolicyRef, ignore.PolicyRef) {
-					found = true
+					delete(s.detailsMap, p)
 					break
 				}
-			}
-
-			if found {
-				delete(s.detailsMap, p)
 			}
 		}
 	}
