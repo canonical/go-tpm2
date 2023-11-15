@@ -1403,7 +1403,15 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 	}
 
 	var details PolicyBranchDetails
-	runner := newPolicyExecuteRunner(tpm, session, tickets, resources, params, true, &details)
+	runner := newPolicyExecuteRunner(
+		tpm,
+		session,
+		tickets,
+		newCachedPolicyResources(tpm, resources),
+		params,
+		true,
+		&details,
+	)
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, err
 	}
