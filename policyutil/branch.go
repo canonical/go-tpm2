@@ -120,7 +120,7 @@ type policyPathSelector struct {
 	mockPolicyResources
 
 	sessionAlg           tpm2.HashAlgorithmId
-	resources            PolicyResources
+	resources            *executePolicyResources
 	tpm                  TPMConnection
 	usage                *PolicySessionUsage
 	ignoreAuthorizations []PolicyAuthorizationID
@@ -131,7 +131,7 @@ type policyPathSelector struct {
 	nvOk       map[paramKey]struct{}
 }
 
-func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources PolicyResources, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
+func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
 	return &policyPathSelector{
 		sessionAlg:           sessionAlg,
 		resources:            resources,
@@ -248,7 +248,7 @@ func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 func (s *policyPathSelector) filterAuthorizeIncompatibleBranches() error {
 	for p, d := range s.detailsMap {
 		for _, auth := range d.Authorize {
-			policies, err := s.resources.LoadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
+			policies, err := s.resources.loadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
 			if err != nil {
 				return err
 			}
@@ -494,7 +494,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 					incompatible = true
 					break
 				}
-				policy, err := s.resources.LoadPolicy(nv.Name)
+				policy, err := s.resources.loadPolicy(nv.Name)
 				if err != nil {
 					return err
 				}
@@ -528,11 +528,14 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []Named{nv.Name, nv.Name}, uint16(len(nv.OperandB)), nv.Offset).NoAuthValue(),
 				}
 
+				resources := new(nullPolicyResources)
+				tickets := makeExecutePolicyTickets()
 				runner := newPolicyExecuteRunner(
 					s.tpm,
 					session,
-					new(nullTickets),
-					new(nullPolicyResources),
+					tickets,
+					newExecutePolicyResources(s.tpm, resources, tickets, nil, nil),
+					resources,
 					params,
 					new(PolicyBranchDetails),
 				)
@@ -746,8 +749,8 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	return path, nil
 }
 
-func (s *policyPathSelector) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	return s.resources.LoadAuthorizedPolicies(keySign, policyRef)
+func (s *policyPathSelector) loadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	return s.resources.loadAuthorizedPolicies(keySign, policyRef)
 }
 
 var errTreeWalkerSkipBranch = errors.New("")
@@ -760,7 +763,7 @@ type (
 
 type treeWalker struct {
 	policyTickets     nullTickets
-	policyResources   PolicyResources
+	policyResources   policyResources
 	beginRootBranchFn treeWalkerBeginBranchFn
 
 	policySession       policySession
@@ -771,7 +774,7 @@ type treeWalker struct {
 	remaining           policyElements
 }
 
-func newTreeWalker(resources PolicyResources, beginRootBranchFn treeWalkerBeginBranchFn) *treeWalker {
+func newTreeWalker(resources policyResources, beginRootBranchFn treeWalkerBeginBranchFn) *treeWalker {
 	return &treeWalker{
 		policyResources:   resources,
 		beginRootBranchFn: beginRootBranchFn,
@@ -820,7 +823,7 @@ func (w *treeWalker) tickets() policyTickets {
 	return &w.policyTickets
 }
 
-func (w *treeWalker) resources() PolicyResources {
+func (w *treeWalker) resources() policyResources {
 	return w.policyResources
 }
 

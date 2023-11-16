@@ -256,7 +256,7 @@ type policyTickets interface {
 type policyRunner interface {
 	session() policySession
 	tickets() policyTickets
-	resources() PolicyResources
+	resources() policyResources
 
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
 	cpHash(cpHash *policyCpHashElement) error
@@ -309,7 +309,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
-	policy, err := runner.resources().LoadPolicy(nvIndex.Name())
+	policy, err := runner.resources().loadPolicy(nvIndex.Name())
 	if err != nil {
 		return fmt.Errorf("cannot load nvIndex policy: %w", err)
 	}
@@ -321,9 +321,9 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	case e.NvIndex.Attrs&tpm2.AttrNVAuthRead != 0:
 		// use NV index for auth
 	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
-		auth, policy, err = runner.resources().LoadName(tpm2.MakeHandleName(tpm2.HandleOwner))
+		auth, policy, err = runner.resources().loadName(tpm2.MakeHandleName(tpm2.HandleOwner))
 	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:
-		auth, policy, err = runner.resources().LoadName(tpm2.MakeHandleName(tpm2.HandlePlatform))
+		auth, policy, err = runner.resources().loadName(tpm2.MakeHandleName(tpm2.HandlePlatform))
 	default:
 		return errors.New("invalid nvIndex read auth mode")
 	}
@@ -392,7 +392,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 	}
 	defer restoreSession()
 
-	authObject, policy, err := runner.resources().LoadName(e.AuthObjectName)
+	authObject, policy, err := runner.resources().loadName(e.AuthObjectName)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,
@@ -467,7 +467,7 @@ func (e *policySignedElement) run(runner policyRunner) error {
 		}
 	}
 
-	auth, err := runner.resources().SignAuthorization(runner.session().NonceTPM(), authKeyName, e.PolicyRef)
+	auth, err := runner.resources().signAuthorization(runner.session().NonceTPM(), authKeyName, e.PolicyRef)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  authKeyName,
@@ -516,7 +516,7 @@ func (e *policyAuthorizeElement) run(runner policyRunner) error {
 		return errors.New("invalid keySign")
 	}
 
-	policies, err := runner.resources().LoadAuthorizedPolicies(keySignName, e.PolicyRef)
+	policies, err := runner.resources().loadAuthorizedPolicies(keySignName, e.PolicyRef)
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: keySignName, PolicyRef: e.PolicyRef, err: err}
 	}
@@ -906,8 +906,10 @@ type policyExecuteRunner struct {
 	sessionAlg tpm2.HashAlgorithmId
 
 	policySession   *teePolicySession
-	policyTickets   policyTickets
-	policyResources PolicyResources
+	policyTickets   executePolicyTickets
+	policyResources *executePolicyResources
+
+	authorizer Authorizer
 
 	usage                *PolicySessionUsage
 	ignoreAuthorizations []PolicyAuthorizationID
@@ -917,7 +919,7 @@ type policyExecuteRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets policyTickets, resources PolicyResources, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
+func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
 	return &policyExecuteRunner{
 		tpm:        tpm,
 		sessionAlg: session.HashAlg(),
@@ -927,6 +929,7 @@ func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tick
 		),
 		policyTickets:        tickets,
 		policyResources:      resources,
+		authorizer:           authorizer,
 		usage:                params.Usage,
 		ignoreAuthorizations: params.IgnoreAuthorizations,
 		ignoreNV:             params.IgnoreNV,
@@ -942,7 +945,7 @@ func (r *policyExecuteRunner) tickets() policyTickets {
 	return r.policyTickets
 }
 
-func (r *policyExecuteRunner) resources() PolicyResources {
+func (r *policyExecuteRunner) resources() policyResources {
 	return r.policyResources
 }
 
@@ -1025,7 +1028,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 		}
 
 		var details PolicyBranchDetails
-		runner := newPolicyExecuteRunner(r.tpm, session, r.policyTickets, r.resources(), params, &details)
+		runner := newPolicyExecuteRunner(r.tpm, session, r.policyTickets, r.policyResources, r.authorizer, params, &details)
 		if err := runner.run(policy.policy.Policy); err != nil {
 			return nil, nil, &SubPolicyError{err: err}
 		}
@@ -1036,7 +1039,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 	}
 
 	if authValueNeeded {
-		if err := r.resources().Authorize(auth); err != nil {
+		if err := r.authorizer.Authorize(auth); err != nil {
 			return nil, nil, fmt.Errorf("cannot authorize resource: %w", err)
 		}
 	}
@@ -1067,7 +1070,7 @@ func (r *policyExecuteRunner) runBranch(branches policyBranches) (selected int, 
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		selector := newPolicyPathSelector(r.sessionAlg, r.resources(), r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
+		selector := newPolicyPathSelector(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
 		path, err := selector.selectPath(branches)
 		if err != nil {
 			return 0, fmt.Errorf("cannot automatically select branch: %w", err)
@@ -1140,7 +1143,7 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	case len(next) == 0 || next[0] == '*':
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		selector := newPolicyPathSelector(r.sessionAlg, r.resources(), r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
+		selector := newPolicyPathSelector(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
 		path, err := selector.selectPath(branches)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot automatically select policy: %w", err)
@@ -1279,7 +1282,9 @@ type PolicyAuthorizationID = PolicyAuthorizationDetails
 
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
 type PolicyExecuteParams struct {
-	Tickets []*PolicyTicket // Tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions
+	// Tickets supplies tickets for TPM2_PolicySecret and TPM2_PolicySigned assertions.
+	// These are also passed to sub-policies.
+	Tickets []*PolicyTicket
 
 	// Usage describes how the executed policy will be used, and assists with
 	// automatically selecting branches where a policy has command context-specific
@@ -1333,9 +1338,10 @@ type PolicyExecuteParams struct {
 
 // PolicyExecuteResult is returned from [Policy.Execute].
 type PolicyExecuteResult struct {
-	// Tickets contains tickets used by the policy. This will include some tickets
-	// supplied to Policy.Execute if they were used successfully, or if they weren't
-	// used at all.
+	// Tickets contains tickets that can be supplied again to Policy.Execute. This contains
+	// the tickets originally supplied to Policy.Execute, with the addition of any newly
+	// generated tickets and the omission of any tickets that were used but found to be
+	// invalid.
 	Tickets []*PolicyTicket
 
 	// AuthValueNeeded indicates that the policy executed the TPM2_PolicyAuthValue or
@@ -1395,7 +1401,8 @@ type PolicyExecuteResult struct {
 //     field of [PolicyExecuteParams].
 //
 // On success, the supplied policy session may be used for authorization in a context that requires
-// that this policy is satisfied.
+// that this policy is satisfied. Information about the result of executing the session is also
+// returned.
 func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resources PolicyResources, params *PolicyExecuteParams) (result *PolicyExecuteResult, err error) {
 	if tpm == nil {
 		return nil, errors.New("no TPM")
@@ -1420,7 +1427,8 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		tpm,
 		session,
 		tickets,
-		newCachedPolicyResources(tpm, resources),
+		newExecutePolicyResources(tpm, resources, tickets, params.IgnoreAuthorizations, params.IgnoreNV),
+		resources,
 		params,
 		&details,
 	)
@@ -1472,7 +1480,7 @@ func (r *policyComputeRunner) tickets() policyTickets {
 	return &r.policyTickets
 }
 
-func (r *policyComputeRunner) resources() PolicyResources {
+func (r *policyComputeRunner) resources() policyResources {
 	return &r.policyResources
 }
 
@@ -1698,7 +1706,7 @@ func (r *policyValidateRunner) tickets() policyTickets {
 	return &r.policyTickets
 }
 
-func (r *policyValidateRunner) resources() PolicyResources {
+func (r *policyValidateRunner) resources() policyResources {
 	return &r.policyResources
 }
 

@@ -21,6 +21,14 @@ type ResourceContext interface {
 	Flush() error                   // Flush the resource once it's no longer needed
 }
 
+// LoadPolicyParams contains parameters for policy sessions that are required to execute
+// TPM2_Load commands via [PolicyResources.LoadName].
+type LoadPolicyParams struct {
+	Tickets              []*PolicyTicket         // See [PolicyExecuteParams.Tickets]
+	IgnoreAuthorizations []PolicyAuthorizationID // See [PolicyExecuteParams.IgnoreAuthorizations]
+	IgnoreNV             []Named                 // See [PolicyExecuteParams.IgnoreNV]
+}
+
 // PolicyResources provides a way for [Policy.Execute] to access resources that
 // are required by a policy.
 type PolicyResources interface {
@@ -29,7 +37,7 @@ type PolicyResources interface {
 	// returned context will be called once the resource is no longer needed.
 	//
 	// This should return an error if no resource can be returned.
-	LoadName(name tpm2.Name) (ResourceContext, *Policy, error)
+	LoadName(name tpm2.Name, policyParams *LoadPolicyParams) (ResourceContext, *Policy, []*PolicyTicket, error)
 
 	// LoadPolicy returns a policy for the resource with the specified name if there
 	// is one. As a policy is optional, returning a nil policy isn't an error.
@@ -148,9 +156,9 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, auth
 	}
 }
 
-func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
+func (r *tpmPolicyResources) LoadName(name tpm2.Name, policyParams *LoadPolicyParams) (ResourceContext, *Policy, []*PolicyTicket, error) {
 	if name.Type() == tpm2.NameTypeHandle && (name.Handle().Type() == tpm2.HandleTypePCR || name.Handle().Type() == tpm2.HandleTypePermanent) {
-		return newResourceContextFlushable(r.tpm.GetPermanentContext(name.Handle()), nil), nil, nil
+		return newResourceContextFlushable(r.tpm.GetPermanentContext(name.Handle()), nil), nil, policyParams.Tickets, nil
 	}
 
 	// Search persistent resources
@@ -161,13 +169,13 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 
 		rc, err := r.tpm.NewResourceContext(resource.Handle, r.sessions...)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if !bytes.Equal(rc.Name(), name) {
-			return nil, nil, fmt.Errorf("persistent TPM resource has the wrong name (%#x)", rc.Name())
+			return nil, nil, nil, fmt.Errorf("persistent TPM resource has the wrong name (%#x)", rc.Name())
 		}
 
-		return newResourceContextFlushable(rc, nil), resource.Policy, nil
+		return newResourceContextFlushable(rc, nil), resource.Policy, policyParams.Tickets, nil
 	}
 
 	// Search loadable objects
@@ -176,9 +184,9 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 			continue
 		}
 
-		parent, policy, err := r.LoadName(object.ParentName)
+		parent, policy, tickets, err := r.LoadName(object.ParentName, policyParams)
 		if err != nil {
-			return nil, nil, fmt.Errorf("cannot load parent with name %#x: %w", object.ParentName, err)
+			return nil, nil, nil, fmt.Errorf("cannot load parent with name %#x: %w", object.ParentName, err)
 		}
 		defer parent.Flush()
 
@@ -189,44 +197,48 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 
 		session, err := r.tpm.StartAuthSession(nil, nil, sessionType, nil, parent.Resource().Name().Algorithm(), r.sessions...)
 		if err != nil {
-			return nil, nil, fmt.Errorf("cannot start session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
+			return nil, nil, nil, fmt.Errorf("cannot start session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
 		}
 		defer r.tpm.FlushContext(session)
 
 		requireAuthValue := true
 		if policy != nil {
 			params := &PolicyExecuteParams{
-				Usage: NewPolicySessionUsage(tpm2.CommandLoad, []Named{parent.Resource()}, object.Private, object.Public),
+				Tickets:              tickets,
+				Usage:                NewPolicySessionUsage(tpm2.CommandLoad, []Named{parent.Resource()}, object.Private, object.Public),
+				IgnoreAuthorizations: policyParams.IgnoreAuthorizations,
+				IgnoreNV:             policyParams.IgnoreNV,
 			}
 			result, err := policy.Execute(NewTPMConnection(r.tpm, r.sessions...), session, r, params)
 			if err != nil {
-				return nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
+				return nil, nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
 			}
 			requireAuthValue = result.AuthValueNeeded
+			tickets = result.Tickets
 		}
 
 		if requireAuthValue {
 			if err := r.Authorize(parent.Resource()); err != nil {
-				return nil, nil, fmt.Errorf("cannot authorize parent with name %#x: %w", parent.Resource().Name(), err)
+				return nil, nil, nil, fmt.Errorf("cannot authorize parent with name %#x: %w", parent.Resource().Name(), err)
 			}
 		}
 
 		resource, err := r.tpm.Load(parent.Resource(), object.Private, object.Public, session, r.sessions...)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
-		return newResourceContextFlushable(resource, r.tpm.FlushContext), object.Policy, nil
+		return newResourceContextFlushable(resource, r.tpm.FlushContext), object.Policy, tickets, nil
 	}
 
 	// Search persistent and NV index handles
 	handles, err := r.tpm.GetCapabilityHandles(tpm2.HandleTypePersistent.BaseHandle(), math.MaxUint32, r.sessions...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	nvHandles, err := r.tpm.GetCapabilityHandles(tpm2.HandleTypeNVIndex.BaseHandle(), math.MaxUint32, r.sessions...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	handles = append(handles, nvHandles...)
 	for _, handle := range handles {
@@ -235,16 +247,16 @@ func (r *tpmPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy,
 			continue
 		}
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if !bytes.Equal(resource.Name(), name) {
 			continue
 		}
 
-		return newResourceContextFlushable(resource, nil), nil, nil
+		return newResourceContextFlushable(resource, nil), nil, policyParams.Tickets, nil
 	}
 
-	return nil, nil, errors.New("resource not found")
+	return nil, nil, nil, errors.New("resource not found")
 }
 
 func (r *tpmPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
@@ -284,33 +296,10 @@ func (r *tpmPolicyResources) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef
 	return out, nil
 }
 
-type mockPolicyResources struct{}
-
-func (*mockPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
-	// the handle is not relevant here
-	return newResourceContextFlushable(tpm2.NewLimitedResourceContext(0x80000000, name), nil), nil, nil
-}
-
-func (r *mockPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
-	return nil, nil
-}
-
-func (r *mockPolicyResources) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	return nil, nil
-}
-
-func (*mockPolicyResources) Authorize(resource tpm2.ResourceContext) error {
-	return nil
-}
-
-func (*mockPolicyResources) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return &PolicySignedAuthorization{Authorization: new(PolicyAuthorization)}, nil
-}
-
 type nullPolicyResources struct{}
 
-func (*nullPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
-	return nil, nil, errors.New("no PolicyResources")
+func (*nullPolicyResources) LoadName(name tpm2.Name, policyParams *LoadPolicyParams) (ResourceContext, *Policy, []*PolicyTicket, error) {
+	return nil, nil, nil, errors.New("no PolicyResources")
 }
 
 func (*nullPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
@@ -327,6 +316,13 @@ func (*nullPolicyResources) Authorize(resource tpm2.ResourceContext) error {
 
 func (*nullPolicyResources) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	return nil, errors.New("no PolicyResources")
+}
+
+type policyResources interface {
+	loadName(name tpm2.Name) (ResourceContext, *Policy, error)
+	loadPolicy(name tpm2.Name) (*Policy, error)
+	loadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
+	signAuthorization(nonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
 type cachedResourceType int
@@ -352,25 +348,31 @@ func nameKey(name tpm2.Name) paramKey {
 	return key
 }
 
-type cachedPolicyResources struct {
-	PolicyResources
+type executePolicyResources struct {
+	tpm       TPMConnection
+	resources PolicyResources
+	tickets   executePolicyTickets
 
-	tpm TPMConnection
+	ignoreAuthorizations []PolicyAuthorizationID
+	ignoreNV             []Named
 
 	cached             map[paramKey]cachedResource
 	authorizedPolicies map[paramKey][]*Policy
 }
 
-func newCachedPolicyResources(tpm TPMConnection, resources PolicyResources) *cachedPolicyResources {
-	return &cachedPolicyResources{
-		PolicyResources:    resources,
-		tpm:                tpm,
-		cached:             make(map[paramKey]cachedResource),
-		authorizedPolicies: make(map[paramKey][]*Policy),
+func newExecutePolicyResources(tpm TPMConnection, resources PolicyResources, tickets executePolicyTickets, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *executePolicyResources {
+	return &executePolicyResources{
+		tpm:                  tpm,
+		resources:            resources,
+		tickets:              tickets,
+		ignoreAuthorizations: ignoreAuthorizations,
+		ignoreNV:             ignoreNV,
+		cached:               make(map[paramKey]cachedResource),
+		authorizedPolicies:   make(map[paramKey][]*Policy),
 	}
 }
 
-func (r *cachedPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Policy, error) {
+func (r *executePolicyResources) loadName(name tpm2.Name) (ResourceContext, *Policy, error) {
 	if cached, exists := r.cached[nameKey(name)]; exists {
 		switch cached.typ {
 		case cachedResourceTypeResource:
@@ -396,7 +398,16 @@ func (r *cachedPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Poli
 		}
 	}
 
-	resource, policy, err := r.PolicyResources.LoadName(name)
+	var tickets []*PolicyTicket
+	for _, ticket := range r.tickets {
+		tickets = append(tickets, ticket)
+	}
+	params := &LoadPolicyParams{
+		Tickets:              tickets,
+		IgnoreAuthorizations: r.ignoreAuthorizations,
+		IgnoreNV:             r.ignoreNV,
+	}
+	resource, policy, tickets, err := r.resources.LoadName(name, params)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -418,15 +429,22 @@ func (r *cachedPolicyResources) LoadName(name tpm2.Name) (ResourceContext, *Poli
 		}
 	}
 
+	for k := range r.tickets {
+		delete(r.tickets, k)
+	}
+	for _, ticket := range tickets {
+		r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+	}
+
 	return resource, policy, nil
 }
 
-func (r *cachedPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
+func (r *executePolicyResources) loadPolicy(name tpm2.Name) (*Policy, error) {
 	if cached, exists := r.cached[nameKey(name)]; exists {
 		return cached.policy, nil
 	}
 
-	policy, err := r.PolicyResources.LoadPolicy(name)
+	policy, err := r.resources.LoadPolicy(name)
 	if err != nil {
 		return nil, err
 	}
@@ -438,16 +456,39 @@ func (r *cachedPolicyResources) LoadPolicy(name tpm2.Name) (*Policy, error) {
 	return policy, nil
 }
 
-func (r *cachedPolicyResources) LoadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+func (r *executePolicyResources) loadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
 	if policies, exists := r.authorizedPolicies[policyParamKey(keySign, policyRef)]; exists {
 		return policies, nil
 	}
 
-	policies, err := r.PolicyResources.LoadAuthorizedPolicies(keySign, policyRef)
+	policies, err := r.resources.LoadAuthorizedPolicies(keySign, policyRef)
 	if err != nil {
 		return nil, err
 	}
 
 	r.authorizedPolicies[policyParamKey(keySign, policyRef)] = policies
 	return policies, nil
+}
+
+func (r *executePolicyResources) signAuthorization(nonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return r.resources.SignAuthorization(nonce, authKey, policyRef)
+}
+
+type mockPolicyResources struct{}
+
+func (*mockPolicyResources) loadName(name tpm2.Name) (ResourceContext, *Policy, error) {
+	// the handle is not relevant here
+	return newResourceContextFlushable(tpm2.NewLimitedResourceContext(0x80000000, name), nil), nil, nil
+}
+
+func (r *mockPolicyResources) loadPolicy(name tpm2.Name) (*Policy, error) {
+	return nil, nil
+}
+
+func (r *mockPolicyResources) loadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	return nil, nil
+}
+
+func (*mockPolicyResources) signAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return &PolicySignedAuthorization{Authorization: new(PolicyAuthorization)}, nil
 }
