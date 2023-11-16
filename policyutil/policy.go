@@ -1372,7 +1372,7 @@ type PolicyExecuteResult struct {
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
 //     the supplied [PolicySessionUsage].
 //   - It contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion and this isn't permitted
-//     bt the supplied [PolicySessionUsage].
+//     by the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicyNvWritten with a value that doesn't match the public area of the NV index
 //     provided via the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicySigned, TPM2_PolicySecret or TPM2_PolicyAuthorize and the specific

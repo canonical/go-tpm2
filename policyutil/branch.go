@@ -116,6 +116,11 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 	return out
 }
 
+type pathSelectorBranchDetails struct {
+	PolicyBranchDetails
+	missingAuthorized bool
+}
+
 type policyPathSelector struct {
 	mockPolicyResources
 
@@ -127,7 +132,7 @@ type policyPathSelector struct {
 	ignoreNV             []Named
 
 	paths      []policyBranchPath
-	detailsMap map[policyBranchPath]PolicyBranchDetails
+	detailsMap map[policyBranchPath]pathSelectorBranchDetails
 	nvOk       map[paramKey]struct{}
 }
 
@@ -179,6 +184,16 @@ func (s *policyPathSelector) filterIgnoredResources() {
 					break
 				}
 			}
+		}
+	}
+}
+
+// filterMissingAuthorizedBranches removes branches that contain TPM2_PolicyAuthorize
+// assertions with no candidate authorized policies.
+func (s *policyPathSelector) filterMissingAuthorizedBranches() {
+	for p, d := range s.detailsMap {
+		if d.missingAuthorized {
+			delete(s.detailsMap, p)
 		}
 	}
 }
@@ -236,37 +251,6 @@ func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 			if nvWritten != written {
 				delete(s.detailsMap, p)
 				continue
-			}
-		}
-	}
-
-	return nil
-}
-
-// filterAuthorizeIncompatibleBranches removes branches that contain TPM2_PolicyAuthorize
-// assertions which require authorized policies that can't be loaded.
-func (s *policyPathSelector) filterAuthorizeIncompatibleBranches() error {
-	for p, d := range s.detailsMap {
-		for _, auth := range d.Authorize {
-			policies, err := s.resources.authorizedPolicies(auth.AuthName, auth.PolicyRef)
-			if err != nil {
-				return err
-			}
-
-			var candidatePolicies []*Policy
-			for _, policy := range policies {
-				for _, digest := range policy.policy.PolicyDigests {
-					if digest.HashAlg != s.sessionAlg {
-						continue
-					}
-
-					candidatePolicies = append(candidatePolicies, policy)
-					break
-				}
-			}
-			if len(candidatePolicies) == 0 {
-				delete(s.detailsMap, p)
-				break
 			}
 		}
 	}
@@ -650,17 +634,21 @@ func (*policyPathSelectorTreeWalkError) isPolicyDelimiterError() {}
 func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPath, error) {
 	// reset state
 	s.paths = nil
-	s.detailsMap = make(map[policyBranchPath]PolicyBranchDetails)
+	s.detailsMap = make(map[policyBranchPath]pathSelectorBranchDetails)
 
-	var makeBeginBranchFn func(policyBranchPath, *PolicyBranchDetails) treeWalkerBeginBranchFn
-	makeBeginBranchFn = func(parentPath policyBranchPath, details *PolicyBranchDetails) treeWalkerBeginBranchFn {
+	var makeBeginBranchFn func(policyBranchPath, *pathSelectorBranchDetails) treeWalkerBeginBranchFn
+	makeBeginBranchFn = func(parentPath policyBranchPath, details *pathSelectorBranchDetails) treeWalkerBeginBranchFn {
 		nodeDetails := *details
 
 		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			branchPath := parentPath.Concat(name)
 			branchDetails := nodeDetails
 
-			session := newBranchDetailsCollector(s.sessionAlg, &branchDetails)
+			if name == "…" {
+				branchDetails.missingAuthorized = true
+			}
+
+			session := newBranchDetailsCollector(s.sessionAlg, &branchDetails.PolicyBranchDetails)
 
 			beginBranchNodeFn := func() (treeWalkerBeginBranchFn, error) {
 				return makeBeginBranchFn(branchPath, &branchDetails), nil
@@ -676,7 +664,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 		}
 	}
 
-	walker := newTreeWalker(s, makeBeginBranchFn("", new(PolicyBranchDetails)))
+	walker := newTreeWalker(s, makeBeginBranchFn("", new(pathSelectorBranchDetails)))
 	if err := walker.run(policyElements{
 		&policyElement{
 			Type: tpm2.CommandPolicyOR,
@@ -690,11 +678,9 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 
 	s.filterInvalidBranches()
 	s.filterIgnoredResources()
+	s.filterMissingAuthorizedBranches()
 	if err := s.filterUsageIncompatibleBranches(); err != nil {
 		return "", fmt.Errorf("cannot filter branches incompatible with usage: %w", err)
-	}
-	if err := s.filterAuthorizeIncompatibleBranches(); err != nil {
-		return "", fmt.Errorf("cannot filter branches with TPM2_PolicyAuthorize assertions that will fail: %w", err)
 	}
 	if err := s.filterPcrIncompatibleBranches(); err != nil {
 		return "", fmt.Errorf("cannot filter branches with TPM2_PolicyPCR assertions that will fail: %w", err)
