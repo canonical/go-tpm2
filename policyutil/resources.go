@@ -61,7 +61,11 @@ type PolicyResources interface {
 type Authorizer interface {
 	// Authorize sets the authorization value of the specified resource context.
 	Authorize(resource tpm2.ResourceContext) error
+}
 
+// SignedAuthorizer provides a way for an implementation to provide signed
+// authorizations using [NewTPMPolicyResources].
+type SignedAuthorizer interface {
 	// SignedAuthorization signs a TPM2_PolicySigned authorization for the specified key, policy ref
 	// and session nonce.
 	SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
@@ -73,8 +77,10 @@ func (*nullAuthorizer) Authorize(resource tpm2.ResourceContext) error {
 	return errors.New("no Authorizer")
 }
 
-func (*nullAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return nil, errors.New("no Authorizer")
+type nullSignedAuthorizer struct{}
+
+func (*nullSignedAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return nil, errors.New("no SignedAuthorizer")
 }
 
 // PersistentResource contains details associated with a persistent object or
@@ -135,6 +141,7 @@ func (r *resourceContextFlushable) Flush() error {
 
 type tpmPolicyResources struct {
 	Authorizer
+	SignedAuthorizer
 	tpm      *tpm2.TPMContext
 	data     *PolicyResourcesData
 	sessions []tpm2.SessionContext
@@ -142,19 +149,23 @@ type tpmPolicyResources struct {
 
 // NewTPMPolicyResources returns a PolicyResources implementation that uses
 // the supplied data.
-func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, authorizer Authorizer, sessions ...tpm2.SessionContext) PolicyResources {
+func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, authorizer Authorizer, signedAuthorizer SignedAuthorizer, sessions ...tpm2.SessionContext) PolicyResources {
 	if data == nil {
 		data = new(PolicyResourcesData)
 	}
 	if authorizer == nil {
 		authorizer = new(nullAuthorizer)
 	}
+	if signedAuthorizer == nil {
+		signedAuthorizer = new(nullSignedAuthorizer)
+	}
 
 	return &tpmPolicyResources{
-		Authorizer: authorizer,
-		tpm:        tpm,
-		data:       data,
-		sessions:   sessions,
+		Authorizer:       authorizer,
+		SignedAuthorizer: signedAuthorizer,
+		tpm:              tpm,
+		data:             data,
+		sessions:         sessions,
 	}
 }
 

@@ -1234,8 +1234,7 @@ func (c *mockSessionContext) Flush() error {
 }
 
 type mockAuthorizer struct {
-	authorizeFn       func(tpm2.ResourceContext) error
-	signAuthorization func(tpm2.Nonce, tpm2.Name, tpm2.Nonce) (*PolicySignedAuthorization, error)
+	authorizeFn func(tpm2.ResourceContext) error
 }
 
 func (h *mockAuthorizer) Authorize(resource tpm2.ResourceContext) error {
@@ -1245,7 +1244,11 @@ func (h *mockAuthorizer) Authorize(resource tpm2.ResourceContext) error {
 	return h.authorizeFn(resource)
 }
 
-func (h *mockAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+type mockSignedAuthorizer struct {
+	signAuthorization func(tpm2.Nonce, tpm2.Name, tpm2.Nonce) (*PolicySignedAuthorization, error)
+}
+
+func (h *mockSignedAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	if h.signAuthorization == nil {
 		return nil, errors.New("not implemented")
 	}
@@ -1711,7 +1714,7 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, authorizer, nil), nil)
 	if err != nil {
 		return err
 	}
@@ -2049,7 +2052,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, data.resources, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, data.resources, authorizer, nil), nil)
 	if err != nil {
 		return err
 	}
@@ -2356,7 +2359,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	authorizer := &mockAuthorizer{
+	authorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 			c.Check(sessionNonce, DeepEquals, session.NonceTPM())
 			c.Check(authKey, DeepEquals, data.authKey.Name())
@@ -2370,7 +2373,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, nil, authorizer), nil)
 	if err != nil {
 		return err
 	}
@@ -2539,7 +2542,7 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	authorizer := &mockAuthorizer{
+	authorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKeyName tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 			c.Check(sessionNonce, DeepEquals, session.NonceTPM())
 			c.Check(authKeyName, DeepEquals, authKey.Name())
@@ -2553,7 +2556,7 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, nil, authorizer), nil)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 1)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
@@ -2604,7 +2607,7 @@ func (s *policySuite) testPolicyAuthorize(c *C, data *testExecutePolicyAuthorize
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, new(mockAuthorizer)), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, new(mockAuthorizer), nil), params)
 	if err != nil {
 		return err
 	}
@@ -3077,6 +3080,8 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 			c.Check(resource.Name(), DeepEquals, tpm2.MakeHandleName(tpm2.HandleOwner))
 			return nil
 		},
+	}
+	signedAuthorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 			auth, err := NewPolicySignedAuthorization(session.HashAlg(), nil, nil, 0)
 			c.Assert(err, IsNil)
@@ -3088,7 +3093,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer, signedAuthorizer), params)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
@@ -3311,7 +3316,7 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer, nil), params)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
@@ -3607,7 +3612,7 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer), params)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer, nil), params)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
@@ -4385,7 +4390,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelected(c *C) {
 		},
 	}
 
-	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, nil), nil)
+	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, nil, nil), nil)
 	c.Check(err, IsNil)
 	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
@@ -4442,7 +4447,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 		},
 	}
 
-	_, err = policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, nil), nil)
+	_, err = policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, nil, nil), nil)
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
 
 	var pe *PolicyError
