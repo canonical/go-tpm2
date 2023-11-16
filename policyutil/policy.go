@@ -309,7 +309,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
-	policy, err := runner.resources().loadPolicy(nvIndex.Name())
+	policy, err := runner.resources().policy(nvIndex.Name())
 	if err != nil {
 		return fmt.Errorf("cannot load nvIndex policy: %w", err)
 	}
@@ -321,9 +321,9 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	case e.NvIndex.Attrs&tpm2.AttrNVAuthRead != 0:
 		// use NV index for auth
 	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
-		auth, policy, err = runner.resources().loadName(tpm2.MakeHandleName(tpm2.HandleOwner))
+		auth, policy, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandleOwner))
 	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:
-		auth, policy, err = runner.resources().loadName(tpm2.MakeHandleName(tpm2.HandlePlatform))
+		auth, policy, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandlePlatform))
 	default:
 		return errors.New("invalid nvIndex read auth mode")
 	}
@@ -392,7 +392,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 	}
 	defer restoreSession()
 
-	authObject, policy, err := runner.resources().loadName(e.AuthObjectName)
+	authObject, policy, err := runner.resources().loadedResource(e.AuthObjectName)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,
@@ -467,7 +467,7 @@ func (e *policySignedElement) run(runner policyRunner) error {
 		}
 	}
 
-	auth, err := runner.resources().signAuthorization(runner.session().NonceTPM(), authKeyName, e.PolicyRef)
+	auth, err := runner.resources().signedAuthorization(runner.session().NonceTPM(), authKeyName, e.PolicyRef)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  authKeyName,
@@ -516,7 +516,7 @@ func (e *policyAuthorizeElement) run(runner policyRunner) error {
 		return errors.New("invalid keySign")
 	}
 
-	policies, err := runner.resources().loadAuthorizedPolicies(keySignName, e.PolicyRef)
+	policies, err := runner.resources().authorizedPolicies(keySignName, e.PolicyRef)
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: keySignName, PolicyRef: e.PolicyRef, err: err}
 	}

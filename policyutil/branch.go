@@ -248,7 +248,7 @@ func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 func (s *policyPathSelector) filterAuthorizeIncompatibleBranches() error {
 	for p, d := range s.detailsMap {
 		for _, auth := range d.Authorize {
-			policies, err := s.resources.loadAuthorizedPolicies(auth.AuthName, auth.PolicyRef)
+			policies, err := s.resources.authorizedPolicies(auth.AuthName, auth.PolicyRef)
 			if err != nil {
 				return err
 			}
@@ -494,7 +494,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 					incompatible = true
 					break
 				}
-				policy, err := s.resources.loadPolicy(nv.Name)
+				policy, err := s.resources.policy(nv.Name)
 				if err != nil {
 					return err
 				}
@@ -749,8 +749,8 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	return path, nil
 }
 
-func (s *policyPathSelector) loadAuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	return s.resources.loadAuthorizedPolicies(keySign, policyRef)
+func (s *policyPathSelector) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	return s.resources.authorizedPolicies(keySign, policyRef)
 }
 
 var errTreeWalkerSkipBranch = errors.New("")

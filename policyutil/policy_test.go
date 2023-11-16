@@ -1245,7 +1245,7 @@ func (h *mockAuthorizer) Authorize(resource tpm2.ResourceContext) error {
 	return h.authorizeFn(resource)
 }
 
-func (h *mockAuthorizer) SignAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+func (h *mockAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	if h.signAuthorization == nil {
 		return nil, errors.New("not implemented")
 	}
