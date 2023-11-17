@@ -7,9 +7,9 @@ package policyutil
 import (
 	"bytes"
 	"crypto"
-	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"reflect"
 	"strings"
@@ -26,17 +26,18 @@ var (
 )
 
 type (
-	taskFn   func() error
-	paramKey [sha256.Size]byte
+	taskFn     func() error
+	authMapKey uint32
 )
 
-func policyParamKey(authName tpm2.Name, policyRef tpm2.Nonce) paramKey {
-	h := crypto.SHA256.New()
-	mu.MustMarshalToWriter(h, authName, policyRef)
+func mapKey(vals ...interface{}) uint32 {
+	h := fnv.New32()
+	mu.MustMarshalToWriter(h, vals...)
+	return h.Sum32()
+}
 
-	var key paramKey
-	copy(key[:], h.Sum(nil))
-	return key
+func makeAuthMapKey(authName tpm2.Name, policyRef tpm2.Nonce) authMapKey {
+	return authMapKey(mapKey(authName, policyRef))
 }
 
 // PolicyTicket corresponds to a ticket generated from a TPM2_PolicySigned or TPM2_PolicySecret
@@ -879,14 +880,14 @@ func (p *Policy) Unmarshal(r io.Reader) error {
 	return err
 }
 
-type executePolicyTickets map[paramKey]*PolicyTicket
+type executePolicyTickets map[authMapKey]*PolicyTicket
 
 func makeExecutePolicyTickets() executePolicyTickets {
 	return make(executePolicyTickets)
 }
 
 func (t executePolicyTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
-	return t[policyParamKey(authName, policyRef)]
+	return t[makeAuthMapKey(authName, policyRef)]
 }
 
 func (t executePolicyTickets) addTicket(ticket *PolicyTicket) {
@@ -894,11 +895,11 @@ func (t executePolicyTickets) addTicket(ticket *PolicyTicket) {
 		// skip null tickets
 		return
 	}
-	t[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+	t[makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 }
 
 func (t executePolicyTickets) removeTicket(ticket *PolicyTicket) {
-	delete(t, policyParamKey(ticket.AuthName, ticket.PolicyRef))
+	delete(t, makeAuthMapKey(ticket.AuthName, ticket.PolicyRef))
 }
 
 type policyExecuteRunner struct {
@@ -1419,7 +1420,7 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 
 	tickets := makeExecutePolicyTickets()
 	for _, ticket := range params.Tickets {
-		tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+		tickets[makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 	}
 
 	var details PolicyBranchDetails

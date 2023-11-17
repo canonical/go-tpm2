@@ -6,7 +6,6 @@ package policyutil
 
 import (
 	"bytes"
-	"crypto"
 	"errors"
 	"fmt"
 
@@ -133,7 +132,7 @@ type policyPathSelector struct {
 
 	paths      []policyBranchPath
 	detailsMap map[policyBranchPath]pathSelectorBranchDetails
-	nvOk       map[paramKey]struct{}
+	nvOk       map[nvAssertionMapKey]struct{}
 }
 
 func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
@@ -426,13 +425,10 @@ func (s *policyPathSelector) canAuthNV(pub *tpm2.NVPublic, policy *Policy, comma
 	return false
 }
 
-func nvAssertionKey(nv *PolicyNVDetails) paramKey {
-	h := crypto.SHA256.New()
-	mu.MustMarshalToWriter(h, nv)
+type nvAssertionMapKey uint32
 
-	var key paramKey
-	copy(key[:], h.Sum(nil))
-	return key
+func makeNvAssertionMapKey(nv *PolicyNVDetails) nvAssertionMapKey {
+	return nvAssertionMapKey(mapKey(nv))
 }
 
 type nvIndexInfo struct {
@@ -445,17 +441,17 @@ type nvIndexInfo struct {
 // that will fail. This ignores assertions where it's not possible to determine the current
 // NV index contents.
 func (s *policyPathSelector) filterNVIncompatibleBranches() error {
-	nvSeen := make(map[paramKey]struct{})
+	nvSeen := make(map[nvAssertionMapKey]struct{})
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)
 
-	s.nvOk = make(map[paramKey]struct{})
+	s.nvOk = make(map[nvAssertionMapKey]struct{})
 
 	for p, d := range s.detailsMap {
 		incompatible := false
 		for _, nv := range d.NV {
 			nv := nv
 
-			key := nvAssertionKey(&nv)
+			key := makeNvAssertionMapKey(&nv)
 			if _, exists := nvSeen[key]; exists {
 				continue
 			}
@@ -719,7 +715,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 
 		nvOK := true
 		for _, nv := range details.NV {
-			if _, ok := s.nvOk[nvAssertionKey(&nv)]; !ok {
+			if _, ok := s.nvOk[makeNvAssertionMapKey(&nv)]; !ok {
 				nvOK = false
 				break
 			}

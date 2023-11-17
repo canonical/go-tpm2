@@ -6,7 +6,6 @@ package policyutil
 
 import (
 	"bytes"
-	"crypto"
 	"errors"
 	"fmt"
 	"math"
@@ -352,13 +351,10 @@ type cachedResource struct {
 	policy *Policy
 }
 
-func nameKey(name tpm2.Name) paramKey {
-	h := crypto.SHA256.New()
-	mu.MustMarshalToWriter(h, name)
+type nameMapKey uint32
 
-	var key paramKey
-	copy(key[:], h.Sum(nil))
-	return key
+func makeNameMapKey(name tpm2.Name) nameMapKey {
+	return nameMapKey(mapKey(name))
 }
 
 type executePolicyResources struct {
@@ -369,8 +365,8 @@ type executePolicyResources struct {
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
-	cachedResources          map[paramKey]cachedResource
-	cachedAuthorizedPolicies map[paramKey][]*Policy
+	cachedResources          map[nameMapKey]cachedResource
+	cachedAuthorizedPolicies map[authMapKey][]*Policy
 }
 
 func newExecutePolicyResources(tpm TPMConnection, resources PolicyResources, tickets executePolicyTickets, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *executePolicyResources {
@@ -380,13 +376,13 @@ func newExecutePolicyResources(tpm TPMConnection, resources PolicyResources, tic
 		tickets:                  tickets,
 		ignoreAuthorizations:     ignoreAuthorizations,
 		ignoreNV:                 ignoreNV,
-		cachedResources:          make(map[paramKey]cachedResource),
-		cachedAuthorizedPolicies: make(map[paramKey][]*Policy),
+		cachedResources:          make(map[nameMapKey]cachedResource),
+		cachedAuthorizedPolicies: make(map[authMapKey][]*Policy),
 	}
 }
 
 func (r *executePolicyResources) loadedResource(name tpm2.Name) (ResourceContext, *Policy, error) {
-	if cached, exists := r.cachedResources[nameKey(name)]; exists {
+	if cached, exists := r.cachedResources[makeNameMapKey(name)]; exists {
 		switch cached.typ {
 		case cachedResourceTypeResource:
 			if hc, _, err := tpm2.NewHandleContextFromBytes(cached.data); err == nil {
@@ -428,14 +424,14 @@ func (r *executePolicyResources) loadedResource(name tpm2.Name) (ResourceContext
 	switch resource.Resource().Handle().Type() {
 	case tpm2.HandleTypeTransient:
 		if context, err := r.tpm.ContextSave(resource.Resource()); err == nil {
-			r.cachedResources[nameKey(name)] = cachedResource{
+			r.cachedResources[makeNameMapKey(name)] = cachedResource{
 				typ:    cachedResourceTypeContext,
 				data:   mu.MustMarshalToBytes(context),
 				policy: policy,
 			}
 		}
 	default:
-		r.cachedResources[nameKey(name)] = cachedResource{
+		r.cachedResources[makeNameMapKey(name)] = cachedResource{
 			typ:    cachedResourceTypeResource,
 			data:   resource.Resource().SerializeToBytes(),
 			policy: policy,
@@ -446,14 +442,14 @@ func (r *executePolicyResources) loadedResource(name tpm2.Name) (ResourceContext
 		delete(r.tickets, k)
 	}
 	for _, ticket := range tickets {
-		r.tickets[policyParamKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+		r.tickets[makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)] = ticket
 	}
 
 	return resource, policy, nil
 }
 
 func (r *executePolicyResources) policy(name tpm2.Name) (*Policy, error) {
-	if cached, exists := r.cachedResources[nameKey(name)]; exists {
+	if cached, exists := r.cachedResources[makeNameMapKey(name)]; exists {
 		return cached.policy, nil
 	}
 
@@ -462,7 +458,7 @@ func (r *executePolicyResources) policy(name tpm2.Name) (*Policy, error) {
 		return nil, err
 	}
 
-	r.cachedResources[nameKey(name)] = cachedResource{
+	r.cachedResources[makeNameMapKey(name)] = cachedResource{
 		typ:    cachedResourceTypePolicy,
 		policy: policy,
 	}
@@ -470,7 +466,7 @@ func (r *executePolicyResources) policy(name tpm2.Name) (*Policy, error) {
 }
 
 func (r *executePolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	if policies, exists := r.cachedAuthorizedPolicies[policyParamKey(keySign, policyRef)]; exists {
+	if policies, exists := r.cachedAuthorizedPolicies[makeAuthMapKey(keySign, policyRef)]; exists {
 		return policies, nil
 	}
 
@@ -479,7 +475,7 @@ func (r *executePolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef
 		return nil, err
 	}
 
-	r.cachedAuthorizedPolicies[policyParamKey(keySign, policyRef)] = policies
+	r.cachedAuthorizedPolicies[makeAuthMapKey(keySign, policyRef)] = policies
 	return policies, nil
 }
 
