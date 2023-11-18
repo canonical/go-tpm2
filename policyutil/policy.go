@@ -369,6 +369,8 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 type policySecretElement struct {
 	AuthObjectName tpm2.Name
 	PolicyRef      tpm2.Nonce
+	CpHashA        tpm2.Digest
+	Expiration     int32
 }
 
 func (*policySecretElement) name() string { return "TPM2_PolicySecret assertion" }
@@ -416,7 +418,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 	usage := NewPolicySessionUsage(
 		tpm2.CommandPolicySecret,
 		[]Named{authObject.Resource(), runner.session().Name()},
-		tpm2.Digest{}, e.PolicyRef, int32(0),
+		e.CpHashA, e.PolicyRef, e.Expiration,
 	)
 
 	authSession, flushAuthSession, err := runner.authorize(authObject.Resource(), policy, usage, tpm2.SessionTypeHMAC)
@@ -429,7 +431,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 		return fmt.Errorf("cannot restore session: %w", err)
 	}
 
-	timeout, ticket, err := runner.session().PolicySecret(authObject.Resource(), nil, e.PolicyRef, 0, authSession)
+	timeout, ticket, err := runner.session().PolicySecret(authObject.Resource(), e.CpHashA, e.PolicyRef, e.Expiration, authSession)
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 	}
@@ -446,6 +448,8 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 type policySignedElement struct {
 	AuthKey   *tpm2.Public
 	PolicyRef tpm2.Nonce
+	Unused1   tpm2.Digest
+	Unused2   int32
 }
 
 func (*policySignedElement) name() string { return "TPM2_PolicySigned assertion" }
