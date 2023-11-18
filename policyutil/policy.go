@@ -114,28 +114,10 @@ func (e *PolicyError) Unwrap() error {
 	return e.err
 }
 
-// SubPolicyError is returned from [Policy.Execute] if an error is encountered during
-// the execution of a sub-policy. This should be wrapped in either a *[PolicyNVError]
-// or *[PolicyAuthorizationError] which indicates the resource that the error occurred for.
-// This will wrap another *[PolicyError].
-type SubPolicyError struct {
-	err error
-}
-
-func (e *SubPolicyError) Error() string {
-	return fmt.Sprintf("encountered an error when running sub-policy for resource: %v", e.err)
-}
-
-func (e *SubPolicyError) Unwrap() error {
-	return e.err
-}
-
-func (*SubPolicyError) isPolicyDelimiterError() {}
-
 // PolicyNVError is returned from [Policy.Execute] and other methods when an error
 // is encountered when executing a TPM2_PolicyNV assertion. If there was an error
 // authorizing use of the NV index with a policy session, this will wrap a
-// *[SubPolicyError].
+// *[ResourceAuthorizeError].
 type PolicyNVError struct {
 	Index tpm2.Handle // The NV index handle
 	Name  tpm2.Name   // The NV index name
@@ -154,8 +136,8 @@ func (e *PolicyNVError) Unwrap() error {
 // PolicyAuthorizationError is returned from [Policy.Execute] if:
 //   - the policy uses TPM2_PolicySecret and the associated resource could not be authorized. When
 //     this occurs because there was an error loading the associated resource, this will wrap a
-//     *[ResourceLoadError]. If there was an error authorizing use of the resource with a policy
-//     session, this will wrap a *[SubPolicyError].
+//     *[nesourceLoadError]. If there was an error authorizing use of the resource with a policy
+//     session, this will wrap a *[ResourceAuthorizeError].
 //   - the policy uses TPM2_PolicySigned and no or an invalid signed authorization was supplied.
 //   - the policy uses TPM2_PolicyAuthorize and no or an invalid authorized policy was supplied.
 type PolicyAuthorizationError struct {
@@ -189,6 +171,25 @@ func (e *ResourceLoadError) Unwrap() error {
 }
 
 func (*ResourceLoadError) isPolicyDelimiterError() {}
+
+// ResourceAuthorizeError is returned from [Policy.Execute] if an error is encountered
+// when trying to authorize a resource required by a policy. This should be wrappped in
+// either a *[PolicyNVError] or *[PolicyAuthorizationError] which indicates the assertion
+// that the error occurred for. This may wrap another *[PolicySession].
+type ResourceAuthorizeError struct {
+	Name tpm2.Name
+	err  error
+}
+
+func (e *ResourceAuthorizeError) Error() string {
+	return fmt.Sprintf("cannot authorize resource with name %#x: %v", e.Name, e.err)
+}
+
+func (e *ResourceAuthorizeError) Unwrap() error {
+	return e.err
+}
+
+func (*ResourceAuthorizeError) isPolicyDelimiterError() {}
 
 type policyBranchName string
 
@@ -355,7 +356,11 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 
 	authSession, flushAuthSession, err := runner.authorize(auth.Resource(), policy, usage, tpm2.SessionTypePolicy)
 	if err != nil {
-		return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: err}
+		return &PolicyNVError{
+			Index: nvIndex.Handle(),
+			Name:  nvIndex.Name(),
+			err:   &ResourceAuthorizeError{Name: nvIndex.Name(), err: err},
+		}
 	}
 	defer flushAuthSession()
 
@@ -427,7 +432,11 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 
 	authSession, flushAuthSession, err := runner.authorize(authObject.Resource(), policy, usage, tpm2.SessionTypeHMAC)
 	if err != nil {
-		return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
+		return &PolicyAuthorizationError{
+			AuthName:  e.AuthObjectName,
+			PolicyRef: e.PolicyRef,
+			err:       &ResourceAuthorizeError{Name: e.AuthObjectName, err: err},
+		}
 	}
 	defer flushAuthSession()
 
@@ -1124,7 +1133,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 		var details PolicyBranchDetails
 		runner := newPolicyExecuteRunner(r.tpm, session, r.policyTickets, r.policyResources, r.authorizer, params, &details)
 		if err := runner.run(policy.policy.Policy); err != nil {
-			return nil, nil, &SubPolicyError{err: err}
+			return nil, nil, err
 		}
 
 		authValueNeeded = details.AuthValueNeeded

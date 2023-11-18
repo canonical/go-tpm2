@@ -1983,7 +1983,7 @@ func (s *policySuite) TestPolicyNVWithSubPolicyError(c *C) {
 		expectedSessionType: tpm2.HandleTypePolicySession})
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyNV assertion' task in root branch: `+
 		`cannot complete assertion with NV index 0x([[:xdigit:]]{8}) \(name: 0x([[:xdigit:]]{68})\): `+
-		`encountered an error when running sub-policy for resource: `+
+		`cannot authorize resource with name 0x([[:xdigit:]]{68}): `+
 		`cannot run 'TPM2_PolicySecret assertion' task in root branch: `+
 		`cannot complete authorization with authName=0x40000001, policyRef=: `+
 		`TPM returned an error for session 1 whilst executing command TPM_CC_PolicySecret: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)`)
@@ -1998,10 +1998,11 @@ func (s *policySuite) TestPolicyNVWithSubPolicyError(c *C) {
 	nvPub.Attrs |= tpm2.AttrNVWritten
 	c.Check(ne.Name, DeepEquals, nvPub.Name())
 
-	var spe *SubPolicyError
-	c.Assert(ne, internal_testutil.ErrorAs, &spe)
+	var rae *ResourceAuthorizeError
+	c.Assert(ne, internal_testutil.ErrorAs, &rae)
+	c.Check(rae.Name, DeepEquals, nvPub.Name())
 
-	c.Assert(spe, internal_testutil.ErrorAs, &pe)
+	c.Assert(rae, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
 
 	var se *tpm2.TPMSessionError
