@@ -901,14 +901,21 @@ type Policy struct {
 
 // Marshal implements [mu.CustomMarshaller.Marshal].
 func (p Policy) Marshal(w io.Writer) error {
-	_, err := mu.MarshalToWriter(w, p.policy)
+	_, err := mu.MarshalToWriter(w, uint32(0), p.policy)
 	return err
 }
 
 // Unmarshal implements [mu.CustomMarshaller.Unarshal].
 func (p *Policy) Unmarshal(r io.Reader) error {
-	_, err := mu.UnmarshalFromReader(r, &p.policy)
-	return err
+	var version uint32
+	_, err := mu.UnmarshalFromReader(r, &version, &p.policy)
+	if err != nil {
+		return err
+	}
+	if version != 0 {
+		return errors.New("invalid version")
+	}
+	return nil
 }
 
 type executePolicyTickets struct {
