@@ -581,10 +581,14 @@ func (e *policyCounterTimerElement) run(runner policyRunner) error {
 	return runner.session().PolicyCounterTimer(e.OperandB, e.Offset, e.Operation)
 }
 
-type policyCpHashElement struct {
+type cpHashParams struct {
 	CommandCode tpm2.CommandCode
 	Handles     []tpm2.Name
 	CpBytes     []byte
+}
+
+type policyCpHashElement struct {
+	Params *cpHashParams `tpm2:"sized"`
 
 	Digest tpm2.Digest
 }
@@ -598,8 +602,12 @@ func (e *policyCpHashElement) run(runner policyRunner) error {
 	return runner.session().PolicyCpHash(e.Digest)
 }
 
-type policyNameHashElement struct {
+type nameHashParams struct {
 	Handles []tpm2.Name
+}
+
+type policyNameHashElement struct {
+	Params *nameHashParams `tpm2:"sized"`
 
 	Digest tpm2.Digest
 }
@@ -1577,22 +1585,29 @@ func (r *policyComputeRunner) loadExternal(public *tpm2.Public) (ResourceContext
 
 func (r *policyComputeRunner) cpHash(cpHash *policyCpHashElement) error {
 	r.hasCpHash = true
-	digest, err := computeCpHash(r.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
+	if cpHash.Params == nil {
+		return nil
+	}
+	digest, err := computeCpHash(r.session().HashAlg(), cpHash.Params.CommandCode, cpHash.Params.Handles, cpHash.Params.CpBytes)
 	if err != nil {
 		return fmt.Errorf("cannot compute cpHashA: %w", err)
 	}
+	cpHash.Params = nil
 	cpHash.Digest = digest
 	return nil
 }
 
 func (r *policyComputeRunner) nameHash(nameHash *policyNameHashElement) error {
 	r.hasCpHash = true
-	digest, err := computeNameHash(r.session().HashAlg(), nameHash.Handles)
+	if nameHash.Params == nil {
+		return nil
+	}
+	digest, err := computeNameHash(r.session().HashAlg(), nameHash.Params.Handles)
 	if err != nil {
 		return fmt.Errorf("cannot compute nameHash: %w", err)
 	}
 	nameHash.Digest = digest
-	return nil
+	nameHash.Params = nil
 	return nil
 }
 
@@ -1802,23 +1817,15 @@ func (r *policyValidateRunner) loadExternal(public *tpm2.Public) (ResourceContex
 }
 
 func (r *policyValidateRunner) cpHash(cpHash *policyCpHashElement) error {
-	digest, err := computeCpHash(r.session().HashAlg(), cpHash.CommandCode, cpHash.Handles, cpHash.CpBytes)
-	if err != nil {
-		return fmt.Errorf("cannot compute cpHashA: %w", err)
-	}
-	if !bytes.Equal(digest, cpHash.Digest) {
-		return fmt.Errorf("stored and computed cpHashA mismatch (computed: %x, stored: %x)", digest, cpHash.Digest)
+	if len(cpHash.Digest) != r.session().HashAlg().Size() {
+		return errors.New("invalid digest size")
 	}
 	return nil
 }
 
 func (r *policyValidateRunner) nameHash(nameHash *policyNameHashElement) error {
-	digest, err := computeNameHash(r.session().HashAlg(), nameHash.Handles)
-	if err != nil {
-		return fmt.Errorf("cannot compute nameHash: %w", err)
-	}
-	if !bytes.Equal(digest, nameHash.Digest) {
-		return fmt.Errorf("stored and computed nameHash mismatch (computed: %x, stored: %x)", digest, nameHash.Digest)
+	if len(nameHash.Digest) != r.session().HashAlg().Size() {
+		return errors.New("invalid digest size")
 	}
 	return nil
 }

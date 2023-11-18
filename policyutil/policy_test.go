@@ -437,14 +437,6 @@ func (s *computeSuite) testPolicyCpHash(c *C, data *testComputePolicyCpHashData)
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	var handles []tpm2.Name
-	for _, handle := range data.handles {
-		handles = append(handles, handle.Name())
-	}
-
-	cpBytes, err := mu.MarshalToBytes(data.params...)
-	c.Check(err, IsNil)
-
 	digest, err := policy.Compute(data.alg)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
@@ -452,7 +444,7 @@ func (s *computeSuite) testPolicyCpHash(c *C, data *testComputePolicyCpHashData)
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
 		nil,
-		NewMockPolicyCpHashElement(data.code, handles, cpBytes, expectedCpHashA),
+		NewMockPolicyCpHashElement(nil, expectedCpHashA),
 	)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
@@ -524,11 +516,6 @@ func (s *computeSuite) testPolicyNameHash(c *C, data *testComputePolicyNameHashD
 	policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
-	var handles []tpm2.Name
-	for _, handle := range data.handles {
-		handles = append(handles, handle.Name())
-	}
-
 	digest, err := policy.Compute(data.alg)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
@@ -536,7 +523,7 @@ func (s *computeSuite) testPolicyNameHash(c *C, data *testComputePolicyNameHashD
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
 		nil,
-		NewMockPolicyNameHashElement(handles, expectedNameHash),
+		NewMockPolicyNameHashElement(nil, expectedNameHash),
 	)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }

@@ -11,6 +11,8 @@ var (
 	NewComputePolicySession = newComputePolicySession
 )
 
+type CpHashParams = cpHashParams
+type NameHashParams = nameHashParams
 type PcrValue = pcrValue
 type PcrValueList = pcrValueList
 type PolicyBranchName = policyBranchName
@@ -100,24 +102,22 @@ func NewMockPolicyCounterTimerElement(operandB tpm2.Operand, offset uint16, oper
 				Operation: operation}}}
 }
 
-func NewMockPolicyCpHashElement(code tpm2.CommandCode, handles []tpm2.Name, cpBytes []byte, digest tpm2.Digest) *policyElement {
+func NewMockPolicyCpHashElement(params *CpHashParams, digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
 			CpHash: &policyCpHashElement{
-				CommandCode: code,
-				Handles:     handles,
-				CpBytes:     cpBytes,
-				Digest:      digest}}}
+				Params: params,
+				Digest: digest}}}
 }
 
-func NewMockPolicyNameHashElement(handles []tpm2.Name, digest tpm2.Digest) *policyElement {
+func NewMockPolicyNameHashElement(params *NameHashParams, digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
 			NameHash: &policyNameHashElement{
-				Handles: handles,
-				Digest:  digest}}}
+				Params: params,
+				Digest: digest}}}
 }
 
 func NewMockPolicyBranch(name policyBranchName, digests taggedHashList, elements ...*policyElement) *policyBranch {

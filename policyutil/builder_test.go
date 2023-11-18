@@ -379,7 +379,7 @@ func (s *builderSuite) testPolicyCpHash(c *C, data *testBuildPolicyCpHashData) {
 	cpBytes, err := mu.MarshalToBytes(data.params...)
 	c.Check(err, IsNil)
 
-	expectedPolicy := NewMockPolicy(nil, nil, NewMockPolicyCpHashElement(data.code, handles, cpBytes, nil))
+	expectedPolicy := NewMockPolicy(nil, nil, NewMockPolicyCpHashElement(&CpHashParams{CommandCode: data.code, Handles: handles, CpBytes: cpBytes}, nil))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -430,7 +430,7 @@ func (s *builderSuite) testPolicyNameHash(c *C, handles ...Named) {
 	for _, handle := range handles {
 		handleNames = append(handleNames, handle.Name())
 	}
-	expectedPolicy := NewMockPolicy(nil, nil, NewMockPolicyNameHashElement(handleNames, nil))
+	expectedPolicy := NewMockPolicy(nil, nil, NewMockPolicyNameHashElement(&NameHashParams{Handles: handleNames}, nil))
 
 	policy, err := builder.Policy()
 	c.Check(err, IsNil)

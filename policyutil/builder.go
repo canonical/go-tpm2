@@ -330,9 +330,10 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
 			CpHash: &policyCpHashElement{
-				CommandCode: code,
-				Handles:     handleNames,
-				CpBytes:     cpBytes}}}
+				Params: &cpHashParams{
+					CommandCode: code,
+					Handles:     handleNames,
+					CpBytes:     cpBytes}}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -360,7 +361,8 @@ func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) error {
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
-			NameHash: &policyNameHashElement{Handles: handleNames}}}
+			NameHash: &policyNameHashElement{
+				Params: &nameHashParams{Handles: handleNames}}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
