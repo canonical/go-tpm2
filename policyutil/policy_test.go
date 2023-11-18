@@ -1631,6 +1631,60 @@ func (s *policySuiteNoTPM) TestPolicyBranchesWithMultipleBranchNodes(c *C) {
 	c.Check(branches, DeepEquals, []string{"branch1/branch3", "branch1/$[1]", "branch2/branch3", "branch2/$[1]"})
 }
 
+func (s *policySuiteNoTPM) TestPolicyDigest1(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	_, err = policy.Digest(tpm2.HashAlgorithmSHA256)
+	c.Check(err, Equals, ErrMissingDigest)
+
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	digest, err := policy.Digest(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *policySuiteNoTPM) TestPolicyDigest2(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVRead), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	_, err = policy.Digest(tpm2.HashAlgorithmSHA256)
+	c.Check(err, Equals, ErrMissingDigest)
+
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+
+	digest, err := policy.Digest(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *policySuiteNoTPM) TestPolicyDigestSHA1(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	_, err = policy.Digest(tpm2.HashAlgorithmSHA1)
+	c.Check(err, Equals, ErrMissingDigest)
+
+	expectedDigest, err := policy.Compute(tpm2.HashAlgorithmSHA1)
+	c.Check(err, IsNil)
+
+	digest, err := policy.Digest(tpm2.HashAlgorithmSHA1)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
 type policySuite struct {
 	testutil.TPMTest
 }

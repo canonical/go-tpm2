@@ -547,14 +547,15 @@ func (e *policyAuthorizeElement) run(runner policyRunner) error {
 	// Filter out policies that aren't computed for the current session algorithm.
 	var candidatePolicies []*Policy
 	for _, policy := range policies {
-		for _, digest := range policy.policy.PolicyDigests {
-			if digest.HashAlg != runner.session().HashAlg() {
-				continue
-			}
-
-			candidatePolicies = append(candidatePolicies, policy)
-			break
+		_, err := policy.Digest(runner.session().HashAlg())
+		if err == ErrMissingDigest {
+			continue
 		}
+		if err != nil {
+			return err
+		}
+
+		candidatePolicies = append(candidatePolicies, policy)
 	}
 
 	approvedPolicy, checkTicket, err := runner.runAuthorizedPolicy(e.KeySign, e.PolicyRef, candidatePolicies)
@@ -1225,17 +1226,18 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 
 	var branches policyBranches
 	for _, policy := range policies {
-		for _, digest := range policy.policy.PolicyDigests {
-			if digest.HashAlg != r.sessionAlg {
-				continue
-			}
-
-			branches = append(branches, &policyBranch{
-				Name:   policyBranchName(fmt.Sprintf("%x", digest.Digest)),
-				Policy: policy.policy.Policy,
-			})
-			break
+		digest, err := policy.Digest(r.sessionAlg)
+		if err == ErrMissingDigest {
+			continue
 		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		branches = append(branches, &policyBranch{
+			Name:   policyBranchName(fmt.Sprintf("%x", digest)),
+			Policy: policy.policy.Policy,
+		})
 	}
 
 	next, remaining := r.remaining.PopNextComponent()
@@ -1281,16 +1283,9 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	policy := policies[selected]
 
 	// Find the approved digest
-	for _, digest := range policy.policy.PolicyDigests {
-		if digest.HashAlg != r.sessionAlg {
-			continue
-		}
-		approvedPolicy = digest.Digest
-		break
-	}
-	if approvedPolicy == nil {
-		// XXX: this shouldn't happen
-		return nil, nil, ErrMissingDigest
+	approvedPolicy, err = policy.Digest(r.sessionAlg)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Find the signed authorization
@@ -1743,10 +1738,8 @@ func (p *Policy) Compute(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 		return nil, errors.New("invalid algorithm")
 	}
 
-	for _, digest := range p.policy.PolicyDigests {
-		if digest.HashAlg == alg {
-			return digest.Digest, nil
-		}
+	if digest, err := p.Digest(alg); err == nil {
+		return digest, nil
 	}
 
 	digest := taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
@@ -1755,6 +1748,22 @@ func (p *Policy) Compute(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	}
 
 	return digest.Digest, nil
+}
+
+// Digest returns the digest for this policy for the specified algorithm, if it
+// has been computed. If it hasn't been computed, ErrMissingDigest is returned.
+func (p *Policy) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	if !alg.IsValid() {
+		return nil, errors.New("invalid algorithm")
+	}
+
+	for _, digest := range p.policy.PolicyDigests {
+		if digest.HashAlg == alg {
+			return digest.Digest, nil
+		}
+	}
+
+	return nil, ErrMissingDigest
 }
 
 // Authorize signs this policy with the supplied signer so that it can be used as an
@@ -1926,17 +1935,9 @@ func (r *policyValidateRunner) run(elements policyElements) error {
 // success, it returns the digest correpsonding to this policy for the
 // specified digest algorithm.
 func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
-	var expectedDigest tpm2.Digest
-	for _, digest := range p.policy.PolicyDigests {
-		if digest.HashAlg != alg {
-			continue
-		}
-
-		expectedDigest = digest.Digest
-		break
-	}
-	if expectedDigest == nil {
-		return nil, ErrMissingDigest
+	expectedDigest, err := p.Digest(alg)
+	if err != nil {
+		return nil, err
 	}
 
 	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
