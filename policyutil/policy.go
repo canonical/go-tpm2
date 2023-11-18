@@ -1648,17 +1648,17 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 			return 0, err
 		}
 
-		found := false
+		added := false
 		for j, digest := range branch.PolicyDigests {
 			if digest.HashAlg != r.session().HashAlg() {
 				continue
 			}
 
 			branch.PolicyDigests[j] = computedDigest
-			found = true
+			added = true
 			break
 		}
-		if !found {
+		if !added {
 			branch.PolicyDigests = append(branch.PolicyDigests, computedDigest)
 		}
 	}
@@ -1867,6 +1867,7 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 			return 0, err
 		}
 
+		found := false
 		for _, digest := range branch.PolicyDigests {
 			if digest.HashAlg != r.session().HashAlg() {
 				continue
@@ -1875,7 +1876,11 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 			if !bytes.Equal(digest.Digest, computedDigest.Digest) {
 				return 0, fmt.Errorf("stored and computed branch digest mismatch for branch %d (computed: %x, stored: %x)", i, computedDigest.Digest, digest.Digest)
 			}
+			found = true
 			break
+		}
+		if !found {
+			return 0, ErrMissingDigest
 		}
 	}
 
