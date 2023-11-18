@@ -78,7 +78,7 @@ type policyDelimiterError interface {
 // makePolicyError returns a PolicyError in the following way:
 //   - If the supplied error already contains a PolicyError from the current policy,
 //     it is unwrapped to the first error within the current policy and returned.
-//   - If the supplied error does not contain a PolicyError from the current policy,
+//   - If the supplied error does not contain a PolicyError from the current policy
 //     the error is wrapped with a new PolicyError.
 //
 // A policy boundary is indicated by the presence of a policyDelimiterError.
@@ -91,7 +91,7 @@ func makePolicyError(err error, path policyBranchPath, task string) *PolicyError
 	var pErrNext *PolicyError
 	for errors.As(errors.Unwrap(pErr), &pErrNext) {
 		if delim != nil {
-			var delim2 *SubPolicyError
+			var delim2 policyDelimiterError
 			if !errors.As(pErrNext, &delim2) || delim2 != delim {
 				break
 			}
@@ -334,7 +334,11 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 		return errors.New("invalid nvIndex read auth mode")
 	}
 	if err != nil {
-		return fmt.Errorf("cannot create auth context: %w", err)
+		return &PolicyNVError{
+			Index: nvIndex.Handle(),
+			Name:  nvIndex.Name(),
+			err:   fmt.Errorf("cannot create auth context: %w", err),
+		}
 	}
 
 	usage := NewPolicySessionUsage(
