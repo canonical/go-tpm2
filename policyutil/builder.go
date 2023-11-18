@@ -504,6 +504,8 @@ func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
 // continues with the chosen sub-branch until all assertions in it have been executed.
 // Execution then resumes in the parent branch, with the assertion immediately following
 // the branch node.
+//
+// XXX: Note that the PolicyBuilder API may change.
 type PolicyBuilder struct {
 	root *PolicyBuilderBranch
 	err  error
