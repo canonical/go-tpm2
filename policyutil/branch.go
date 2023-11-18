@@ -509,7 +509,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 				}
 
 				resources := new(nullPolicyResources)
-				tickets := makeExecutePolicyTickets()
+				tickets, _ := newExecutePolicyTickets(s.sessionAlg, nil, nil)
 				runner := newPolicyExecuteRunner(
 					s.tpm,
 					session,

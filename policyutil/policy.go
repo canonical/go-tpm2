@@ -26,8 +26,9 @@ var (
 )
 
 type (
-	taskFn     func() error
-	authMapKey uint32
+	taskFn       func() error
+	authMapKey   uint32
+	ticketMapKey uint32
 )
 
 func mapKey(vals ...interface{}) uint32 {
@@ -38,6 +39,10 @@ func mapKey(vals ...interface{}) uint32 {
 
 func makeAuthMapKey(authName tpm2.Name, policyRef tpm2.Nonce) authMapKey {
 	return authMapKey(mapKey(authName, policyRef))
+}
+
+func makeTicketMapKey(ticket *PolicyTicket) ticketMapKey {
+	return ticketMapKey(mapKey(ticket.AuthName, ticket.PolicyRef, ticket.CpHash))
 }
 
 // PolicyTicket corresponds to a ticket generated from a TPM2_PolicySigned or TPM2_PolicySecret
@@ -251,7 +256,7 @@ func (p policyBranchPath) Concat(path policyBranchPath) policyBranchPath {
 type policyTickets interface {
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 	addTicket(ticket *PolicyTicket)
-	removeTicket(ticket *PolicyTicket)
+	invalidTicket(ticket *PolicyTicket)
 }
 
 type policyRunner interface {
@@ -374,10 +379,10 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 		switch {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorExpired, tpm2.CommandPolicyTicket, 1):
 			// The ticket has expired - ignore this and fall through to PolicySecret
-			runner.tickets().removeTicket(ticket)
+			runner.tickets().invalidTicket(ticket)
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySecret
-			runner.tickets().removeTicket(ticket)
+			runner.tickets().invalidTicket(ticket)
 		case err != nil:
 			return &PolicyAuthorizationError{AuthName: e.AuthObjectName, PolicyRef: e.PolicyRef, err: err}
 		default:
@@ -456,10 +461,10 @@ func (e *policySignedElement) run(runner policyRunner) error {
 		switch {
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorExpired, tpm2.CommandPolicyTicket, 1):
 			// The ticket has expired - ignore this and fall through to PolicySigned
-			runner.tickets().removeTicket(ticket)
+			runner.tickets().invalidTicket(ticket)
 		case tpm2.IsTPMParameterError(err, tpm2.ErrorTicket, tpm2.CommandPolicyTicket, 5):
 			// The ticket is invalid - ignore this and fall through to PolicySigned
-			runner.tickets().removeTicket(ticket)
+			runner.tickets().invalidTicket(ticket)
 		case err != nil:
 			return &PolicyAuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 		default:
@@ -880,26 +885,98 @@ func (p *Policy) Unmarshal(r io.Reader) error {
 	return err
 }
 
-type executePolicyTickets map[authMapKey]*PolicyTicket
+type executePolicyTickets struct {
+	usageCpHash tpm2.Digest
 
-func makeExecutePolicyTickets() executePolicyTickets {
-	return make(executePolicyTickets)
+	tickets        map[authMapKey][]*PolicyTicket
+	newTickets     map[ticketMapKey]*PolicyTicket
+	invalidTickets map[ticketMapKey]*PolicyTicket
 }
 
-func (t executePolicyTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
-	return t[makeAuthMapKey(authName, policyRef)]
+func newExecutePolicyTickets(alg tpm2.HashAlgorithmId, tickets []*PolicyTicket, usage *PolicySessionUsage) (*executePolicyTickets, error) {
+	var usageCpHash tpm2.Digest
+	if usage != nil {
+		var err error
+		usageCpHash, err = ComputeCpHash(alg, usage.commandCode, usage.handles, usage.params...)
+		if err != nil {
+			return nil, fmt.Errorf("cannot compute cpHash from usage: %w", err)
+		}
+
+	}
+
+	ticketMap := make(map[authMapKey][]*PolicyTicket)
+	for _, ticket := range tickets {
+		key := makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)
+		if _, exists := ticketMap[key]; !exists {
+			ticketMap[key] = []*PolicyTicket{}
+		}
+		ticketMap[key] = append(ticketMap[key], ticket)
+	}
+
+	return &executePolicyTickets{
+		usageCpHash:    usageCpHash,
+		tickets:        ticketMap,
+		newTickets:     make(map[ticketMapKey]*PolicyTicket),
+		invalidTickets: make(map[ticketMapKey]*PolicyTicket),
+	}, nil
 }
 
-func (t executePolicyTickets) addTicket(ticket *PolicyTicket) {
+func (t *executePolicyTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket {
+	tickets := t.tickets[makeAuthMapKey(authName, policyRef)]
+	if len(tickets) == 0 {
+		return nil
+	}
+	if len(t.usageCpHash) == 0 {
+		return tickets[0]
+	}
+	for _, ticket := range tickets {
+		if len(ticket.CpHash) == 0 {
+			return ticket
+		}
+		if bytes.Equal(ticket.CpHash, t.usageCpHash) {
+			return ticket
+		}
+	}
+	return nil
+}
+
+func (t *executePolicyTickets) addTicket(ticket *PolicyTicket) {
 	if ticket.Ticket == nil || (ticket.Ticket.Hierarchy == tpm2.HandleNull && len(ticket.Ticket.Digest) == 0) {
 		// skip null tickets
 		return
 	}
-	t[makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+
+	key := makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)
+	if _, exists := t.tickets[key]; !exists {
+		t.tickets[key] = []*PolicyTicket{}
+	}
+	t.tickets[key] = append(t.tickets[key], ticket)
+
+	t.newTickets[makeTicketMapKey(ticket)] = ticket
 }
 
-func (t executePolicyTickets) removeTicket(ticket *PolicyTicket) {
-	delete(t, makeAuthMapKey(ticket.AuthName, ticket.PolicyRef))
+func (t *executePolicyTickets) invalidTicket(ticket *PolicyTicket) {
+	key := makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)
+
+	var tickets []*PolicyTicket
+	for _, tk := range t.tickets[key] {
+		if tk == ticket {
+			continue
+		}
+		tickets = append(tickets, tk)
+	}
+	t.tickets[key] = tickets
+
+	t.invalidTickets[makeTicketMapKey(ticket)] = ticket
+}
+
+func (t *executePolicyTickets) currentTickets() (out []*PolicyTicket) {
+	for _, tickets := range t.tickets {
+		for _, ticket := range tickets {
+			out = append(out, ticket)
+		}
+	}
+	return out
 }
 
 type policyExecuteRunner struct {
@@ -907,7 +984,7 @@ type policyExecuteRunner struct {
 	sessionAlg tpm2.HashAlgorithmId
 
 	policySession   *teePolicySession
-	policyTickets   executePolicyTickets
+	policyTickets   *executePolicyTickets
 	policyResources *executePolicyResources
 
 	authorizer Authorizer
@@ -920,7 +997,7 @@ type policyExecuteRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
+func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets *executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
 	return &policyExecuteRunner{
 		tpm:        tpm,
 		sessionAlg: session.HashAlg(),
@@ -1279,6 +1356,8 @@ func (u *PolicySessionUsage) NoAuthValue() *PolicySessionUsage {
 	return u
 }
 
+// PolicyAuthorizationID contains an identifier for a TPM2_PolicySecret,
+// TPM2_PolicySigned or TPM2_PolicyAuthorize assertion.
 type PolicyAuthorizationID = PolicyAuthorizationDetails
 
 // PolicyExecuteParams contains parameters that are useful for executing a policy.
@@ -1339,11 +1418,13 @@ type PolicyExecuteParams struct {
 
 // PolicyExecuteResult is returned from [Policy.Execute].
 type PolicyExecuteResult struct {
-	// Tickets contains tickets that can be supplied again to Policy.Execute. This contains
-	// the tickets originally supplied to Policy.Execute, with the addition of any newly
-	// generated tickets and the omission of any tickets that were used but found to be
-	// invalid.
-	Tickets []*PolicyTicket
+	// NewTickets contains tickets that were created as a result of executing this policy.
+	NewTickets []*PolicyTicket
+
+	// InvalidTickets contains those tickets originally supplied to [Policy.Execute] that
+	// were used but found to be invalid. These tickets shouldn't be supplied to
+	// [Policy.Execute] again.
+	InvalidTickets []*PolicyTicket
 
 	// AuthValueNeeded indicates that the policy executed the TPM2_PolicyAuthValue or
 	// TPM2_PolicyPassword assertion.
@@ -1418,9 +1499,9 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		params = new(PolicyExecuteParams)
 	}
 
-	tickets := makeExecutePolicyTickets()
-	for _, ticket := range params.Tickets {
-		tickets[makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)] = ticket
+	tickets, err := newExecutePolicyTickets(session.HashAlg(), params.Tickets, params.Usage)
+	if err != nil {
+		return nil, err
 	}
 
 	var details PolicyBranchDetails
@@ -1442,8 +1523,11 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		Path:            string(runner.currentPath),
 	}
 
-	for _, ticket := range tickets {
-		result.Tickets = append(result.Tickets, ticket)
+	for _, ticket := range tickets.newTickets {
+		result.NewTickets = append(result.NewTickets, ticket)
+	}
+	for _, ticket := range tickets.invalidTickets {
+		result.InvalidTickets = append(result.InvalidTickets, ticket)
 	}
 
 	return result, nil
@@ -1455,8 +1539,8 @@ func (*nullTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTick
 	return nil
 }
 
-func (*nullTickets) addTicket(ticket *PolicyTicket)    {}
-func (*nullTickets) removeTicket(ticket *PolicyTicket) {}
+func (*nullTickets) addTicket(ticket *PolicyTicket)     {}
+func (*nullTickets) invalidTicket(ticket *PolicyTicket) {}
 
 type policyComputeRunner struct {
 	policySession   *computePolicySession

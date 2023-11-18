@@ -1718,7 +1718,8 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 	if err != nil {
 		return err
 	}
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -2056,7 +2057,8 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 	if err != nil {
 		return err
 	}
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -2381,15 +2383,16 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		expectedCpHash, err := data.cpHashA.Digest(session.HashAlg())
 		c.Check(err, IsNil)
 
-		c.Assert(result.Tickets, internal_testutil.LenEquals, 1)
-		c.Check(result.Tickets[0].AuthName, DeepEquals, data.authKey.Name())
-		c.Check(result.Tickets[0].PolicyRef, DeepEquals, data.policyRef)
-		c.Check(result.Tickets[0].CpHash, DeepEquals, expectedCpHash)
-		c.Check(result.Tickets[0].Ticket.Tag, Equals, tpm2.TagAuthSigned)
-		c.Check(result.Tickets[0].Ticket.Hierarchy, Equals, tpm2.HandleOwner)
+		c.Assert(result.NewTickets, internal_testutil.LenEquals, 1)
+		c.Check(result.NewTickets[0].AuthName, DeepEquals, data.authKey.Name())
+		c.Check(result.NewTickets[0].PolicyRef, DeepEquals, data.policyRef)
+		c.Check(result.NewTickets[0].CpHash, DeepEquals, expectedCpHash)
+		c.Check(result.NewTickets[0].Ticket.Tag, Equals, tpm2.TagAuthSigned)
+		c.Check(result.NewTickets[0].Ticket.Hierarchy, Equals, tpm2.HandleOwner)
 	} else {
-		c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+		c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	}
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -2558,17 +2561,19 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, nil, authorizer), nil)
 	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 1)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 1)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
 	c.Check(s.TPM.PolicyRestart(session), IsNil)
 
-	params := &PolicyExecuteParams{Tickets: result.Tickets}
+	params := &PolicyExecuteParams{Tickets: result.NewTickets}
 
 	result, err = policy.Execute(NewTPMConnection(s.TPM), session, nil, params)
 	c.Check(err, IsNil)
-	c.Check(result.Tickets, DeepEquals, params.Tickets)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -2611,7 +2616,8 @@ func (s *policySuite) testPolicyAuthorize(c *C, data *testExecutePolicyAuthorize
 	if err != nil {
 		return err
 	}
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
 	c.Check(result.Path, Equals, data.expectedPath)
 
@@ -2837,7 +2843,8 @@ func (s *policySuite) TestPolicyAuthValue(c *C) {
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
 	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsTrue)
 	c.Check(result.Path, Equals, "")
 
@@ -2862,7 +2869,8 @@ func (s *policySuite) testPolicyCommandCode(c *C, code tpm2.CommandCode) {
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
 	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -2899,7 +2907,8 @@ func (s *policySuite) testPolicyCounterTimer(c *C, data *testExecutePolicyCounte
 	if err != nil {
 		return err
 	}
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -2979,7 +2988,8 @@ func (s *policySuite) testPolicyCpHash(c *C, data *testExecutePolicyCpHashData) 
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
 	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -3014,7 +3024,8 @@ func (s *policySuite) testPolicyNameHash(c *C, handles ...Named) {
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
 	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -3094,8 +3105,9 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	s.ForgetCommands()
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer, signedAuthorizer), params)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
 	c.Check(result.Path, Equals, data.expectedPath)
 
@@ -3184,7 +3196,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectNoUsage(c *C) {
 
 func (s *policySuite) TestPolicyBranchAutoSelectWithUsage1(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3197,7 +3209,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage1(c *C) {
 
 func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3214,7 +3226,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
 
 func (s *policySuite) TestPolicyBranchAutoSelectWithUsageAndIgnore(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		ignoreAuthorizations: []PolicyAuthorizationID{
 			{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
 		},
@@ -3258,8 +3270,9 @@ func (s *policySuite) TestPolicyBranchesMultipleDigests(c *C) {
 	}
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, params)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsTrue)
 	c.Check(result.Path, Equals, "branch1")
 
@@ -3317,8 +3330,9 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 	}
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer, nil), params)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
 	c.Check(result.Path, Equals, data.expectedPath)
 
@@ -3437,7 +3451,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneNoUsage(c *C) 
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage1(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3452,7 +3466,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage1(c *C) 
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3467,7 +3481,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage2(c *C) 
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage3(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3487,7 +3501,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage3(c *C) 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path:  "branch2",
-		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3507,7 +3521,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard1(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path:  "*/branch4",
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3523,7 +3537,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard1(c *C) {
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard2(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path:  "*/branch4",
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3543,7 +3557,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard2(c *C) {
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard3(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path:  "**/branch4",
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3613,8 +3627,9 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 	}
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, nil, authorizer, nil), params)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, Equals, data.expectedRequireAuthValue)
 	c.Check(result.Path, Equals, data.expectedPath)
 
@@ -3753,7 +3768,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneNoUsage(c *C) 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneWithUsage(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path:  "branch4",
-		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3772,7 +3787,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneWithUsage(c *C
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage1(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3787,7 +3802,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage1(c *C) 
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{make(tpm2.Name, 32), make(tpm2.Name, 32)}),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3802,7 +3817,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage2(c *C) 
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3822,7 +3837,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3(c *C) 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard1(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path:  "*/branch3",
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3838,7 +3853,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard1(c *C) {
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard2(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path:  "*/branch6",
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{make(tpm2.Name, 32)}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -4002,7 +4017,8 @@ func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
 	if err != nil {
 		return err
 	}
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -4061,8 +4077,9 @@ func (s *policySuite) testPolicyDuplicationSelect(c *C, data *testExecutePolicyD
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -4127,8 +4144,9 @@ func (s *policySuite) TestPolicyPassword(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsTrue)
 	c.Check(result.Path, Equals, "")
 
@@ -4152,8 +4170,9 @@ func (s *policySuite) testPolicyNvWritten(c *C, writtenSet bool) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "")
 
@@ -4391,8 +4410,9 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelected(c *C) {
 	}
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, NewTPMPolicyResources(s.TPM, resources, nil, nil), nil)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "$[1]")
 
@@ -4490,8 +4510,9 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelected(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	result, err := policy.Execute(NewTPMConnection(s.TPM), session, nil, nil)
-	c.Check(err, IsNil)
-	c.Check(result.Tickets, internal_testutil.LenEquals, 0)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
 	c.Check(result.Path, Equals, "$[1]")
 
