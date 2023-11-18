@@ -14,7 +14,7 @@ import (
 	"io/ioutil"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/crypto"
+	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -43,7 +43,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 
 	data, _ = ioutil.ReadAll(r)
 
-	hmacKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
+	hmacKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
 	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
 	h.Write(data)
 	h.Write(name)
@@ -66,9 +66,9 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 
 	data, _ = ioutil.ReadAll(r)
 
-	symKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
+	symKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
-	if err := crypto.SymmetricDecrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
+	if err := internal_crypt.SymmetricDecrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
 		return nil, fmt.Errorf("cannot decrypt: %w", err)
 	}
 
@@ -99,9 +99,9 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 		}
 	}
 
-	symKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
+	symKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
 
-	if err := crypto.SymmetricEncrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
+	if err := internal_crypt.SymmetricEncrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
 		return nil, fmt.Errorf("cannot encrypt: %w", err)
 	}
 
@@ -109,7 +109,7 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 		data = mu.MustMarshalToBytes(iv, mu.RawBytes(data))
 	}
 
-	hmacKey := crypto.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
+	hmacKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
 	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
 	h.Write(data)
 	h.Write(name)
