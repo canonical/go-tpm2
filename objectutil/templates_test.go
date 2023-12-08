@@ -147,6 +147,12 @@ func (s *templatesSuite) TestWithDuplicationModeInvalidProtectionGroupMode(c *C)
 	c.Check(func() { WithDuplicationMode(DuplicationRootEncrypted)(pub) }, PanicMatches, "invalid mode for protection group")
 }
 
+func (s *templatesSuite) TestWithAuthPolicy(c *C) {
+	pub := &tpm2.Public{NameAlg: tpm2.HashAlgorithmSHA256}
+	WithAuthPolicy(make([]byte, 32))(pub)
+	c.Check(pub.AuthPolicy, DeepEquals, make(tpm2.Digest, 32))
+}
+
 func (s *templatesSuite) TestWithSymmetricSchemeRSA(c *C) {
 	pub := &tpm2.Public{
 		Type:   tpm2.ObjectTypeRSA,

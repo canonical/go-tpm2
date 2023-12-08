@@ -222,6 +222,13 @@ func WithDuplicationMode(mode DuplicationMode) PublicTemplateOption {
 	}
 }
 
+// WithAuthPolicy returns an option that sets the specified authorization policy digest.
+func WithAuthPolicy(policy tpm2.Digest) PublicTemplateOption {
+	return func(pub *tpm2.Public) {
+		pub.AuthPolicy = policy
+	}
+}
+
 // WithSymmetricScheme returns an option for the specified symmetric mode. This will panic for
 // objects with the type [tpm2.ObjectTypeKeyedHash].
 //
