@@ -58,15 +58,45 @@ func (s *templatesSuite) TestWithProtectionGroupModeNonDuplicable(c *C) {
 	c.Check(pub.Attrs, Equals, tpm2.AttrFixedTPM|tpm2.AttrFixedParent|tpm2.AttrSign)
 }
 
-func (s *templatesSuite) TestWithProtectionGroupModeDuplicable(c *C) {
-	pub := &tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrEncryptedDuplication | tpm2.AttrDecrypt}
+func (s *templatesSuite) TestWithProtectionGroupModeDuplicable1(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrDecrypt}
 	WithProtectionGroupMode(Duplicable)(pub)
 	c.Check(pub.Attrs, Equals, tpm2.AttrFixedParent|tpm2.AttrDecrypt)
 }
 
-func (s *templatesSuite) TestWithProtectionGroupModeDuplicableEncrypted(c *C) {
-	pub := &tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrSign}
+func (s *templatesSuite) TestWithProtectionGroupModeDuplicable2(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrEncryptedDuplication | tpm2.AttrDecrypt}
+	WithProtectionGroupMode(Duplicable)(pub)
+	c.Check(pub.Attrs, Equals, tpm2.AttrDecrypt)
+}
+
+func (s *templatesSuite) TestWithProtectionGroupModeDuplicableEncrypted1(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSign}
 	WithProtectionGroupMode(DuplicableEncrypted)(pub)
+	c.Check(pub.Attrs, Equals, tpm2.AttrFixedParent|tpm2.AttrEncryptedDuplication|tpm2.AttrSign)
+}
+
+func (s *templatesSuite) TestWithProtectionGroupModeDuplicableEncrypted2(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrSign}
+	WithProtectionGroupMode(DuplicableEncrypted)(pub)
+	c.Check(pub.Attrs, Equals, tpm2.AttrEncryptedDuplication|tpm2.AttrSign)
+}
+
+func (s *templatesSuite) TestWithProtectionGroupModeFromParentNonDuplicable(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrEncryptedDuplication | tpm2.AttrSign}
+	WithProtectionGroupModeFromParent(&tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrFixedParent})(pub)
+	c.Check(pub.Attrs, Equals, tpm2.AttrFixedTPM|tpm2.AttrFixedParent|tpm2.AttrSign)
+}
+
+func (s *templatesSuite) TestWithProtectionGroupModeFromParentDuplicable(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrDecrypt}
+	WithProtectionGroupModeFromParent(&tpm2.Public{})(pub)
+	c.Check(pub.Attrs, Equals, tpm2.AttrFixedParent|tpm2.AttrDecrypt)
+}
+
+func (s *templatesSuite) TestWithProtectionGroupModeFromParentDuplicableEncrypted(c *C) {
+	pub := &tpm2.Public{Attrs: tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSign}
+	WithProtectionGroupModeFromParent(&tpm2.Public{Attrs: tpm2.AttrEncryptedDuplication})(pub)
 	c.Check(pub.Attrs, Equals, tpm2.AttrFixedParent|tpm2.AttrEncryptedDuplication|tpm2.AttrSign)
 }
 
@@ -77,7 +107,7 @@ func (s *templatesSuite) TestWithDuplicationModeFixedParent1(c *C) {
 }
 
 func (s *templatesSuite) TestWithDuplicationModeFixedParent2(c *C) {
-	pub := &tpm2.Public{Attrs: tpm2.AttrFixedParent | tpm2.AttrDecrypt}
+	pub := &tpm2.Public{Attrs: tpm2.AttrDecrypt}
 	WithDuplicationMode(FixedParent)(pub)
 	c.Check(pub.Attrs, Equals, tpm2.AttrFixedParent|tpm2.AttrDecrypt)
 }
@@ -110,11 +140,6 @@ func (s *templatesSuite) TestWithDuplicationModeDuplicationRootEncrypted2(c *C) 
 	pub := &tpm2.Public{Attrs: tpm2.AttrFixedParent | tpm2.AttrEncryptedDuplication | tpm2.AttrSign}
 	WithDuplicationMode(DuplicationRootEncrypted)(pub)
 	c.Check(pub.Attrs, Equals, tpm2.AttrEncryptedDuplication|tpm2.AttrSign)
-}
-
-func (s *templatesSuite) TestWithDuplicationModeInvalidHierarchyConfig(c *C) {
-	pub := &tpm2.Public{Attrs: tpm2.AttrSign}
-	c.Check(func() { WithDuplicationMode(FixedParent)(pub) }, PanicMatches, "invalid hierarchy config - use WithProtectionGroupMode first")
 }
 
 func (s *templatesSuite) TestWithDuplicationModeInvalidProtectionGroupMode(c *C) {

@@ -129,17 +129,14 @@ const (
 // describes the hierarchy that an object is created within.
 //
 // If mode is [NonDuplicable], then [tpm2.AttrFixedTPM] will be set and
-// [tpm2.AttrEncryptedDuplication] will be unset.
+// [tpm2.AttrEncryptedDuplication] will be unset. [tpm2.AttrFixedParent] will also be set, which
+// is equivalent to setting [DuplicationMode] to [FixedParent].
 //
 // If mode is [Duplicable], then both [tpm2.AttrFixedTPM] and [tpm2.AttrEncryptedDuplication] will
 // be unset.
 //
 // If mode is [DuplicableEncrypted], then [tpm2.AttrFixedTPM] will be unset and
 // [tpm2.AttrEncryptedDuplication] will be set.
-//
-// That this option always sets [tpm2.AttrFixedParent] attribute. To update this attribute and
-// control whether an object can be duplicated directly, use [WithDuplicationMode] after using
-// this.
 func WithProtectionGroupMode(mode ProtectionGroupMode) PublicTemplateOption {
 	return func(pub *tpm2.Public) {
 		switch mode {
@@ -148,13 +145,27 @@ func WithProtectionGroupMode(mode ProtectionGroupMode) PublicTemplateOption {
 			pub.Attrs |= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
 		case Duplicable:
 			pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrEncryptedDuplication)
-			pub.Attrs |= tpm2.AttrFixedParent
 		case DuplicableEncrypted:
 			pub.Attrs &^= tpm2.AttrFixedTPM
-			pub.Attrs |= tpm2.AttrFixedParent | tpm2.AttrEncryptedDuplication
+			pub.Attrs |= tpm2.AttrEncryptedDuplication
 		default:
 			panic("invalid mode")
 		}
+	}
+}
+
+// WithProtectionGroupModeFromParent returns an option that sets the protection group mode
+// based on the attributes of the supplied parent public area.
+func WithProtectionGroupModeFromParent(parent *tpm2.Public) PublicTemplateOption {
+	switch {
+	case parent.Attrs&(tpm2.AttrFixedTPM|tpm2.AttrFixedParent) == tpm2.AttrFixedTPM|tpm2.AttrFixedParent:
+		return WithProtectionGroupMode(NonDuplicable)
+	case parent.Attrs&(tpm2.AttrFixedTPM|tpm2.AttrEncryptedDuplication) == 0:
+		return WithProtectionGroupMode(Duplicable)
+	case parent.Attrs&(tpm2.AttrFixedTPM|tpm2.AttrEncryptedDuplication) == tpm2.AttrEncryptedDuplication:
+		return WithProtectionGroupMode(DuplicableEncrypted)
+	default:
+		panic("invalid mode")
 	}
 }
 
@@ -177,11 +188,9 @@ const (
 )
 
 // WithDuplicationMode returns an option for the specified duplication mode, which describes
-// whether an object can be duplicated. This option expects [tpm2.AttrFixedParent] to be set, which
-// is set when describing the protection mode of the hierarchy that the object is created within
-// by using [WithProtectionGroupMode] before this.
+// whether an object can be duplicated.
 //
-// If mode is [FixedParent], no further changes are made to the object's attributes.
+// If mode is [FixedParent] then the [tpm2.AttrFixedParent] attribute is set.
 //
 // If mode is [DuplicationRoot], this unsets both [tpm2.AttrFixedTPM] and [tpm2.AttrFixedParent], and
 // doesn't change [tpm2.AttrEncryptedDuplication]. In this case, whether encrypted duplication is
@@ -196,13 +205,9 @@ const (
 // [tpm2.AttrEncryptedDuplication] attribute set).
 func WithDuplicationMode(mode DuplicationMode) PublicTemplateOption {
 	return func(pub *tpm2.Public) {
-		if pub.Attrs&tpm2.AttrFixedParent == 0 {
-			panic("invalid hierarchy config - use WithProtectionGroupMode first")
-		}
-
 		switch mode {
 		case FixedParent:
-			// no changes
+			pub.Attrs |= tpm2.AttrFixedParent
 		case DuplicationRoot:
 			pub.Attrs &^= (tpm2.AttrFixedTPM | tpm2.AttrFixedParent)
 		case DuplicationRootEncrypted:
