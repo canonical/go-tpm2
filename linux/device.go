@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/canonical/go-tpm2"
+	internal_ppi "github.com/canonical/go-tpm2/internal/ppi"
 	"github.com/canonical/go-tpm2/ppi"
 )
 
@@ -104,16 +105,16 @@ func (d *TPMDevice) String() string {
 type TPMDeviceRaw struct {
 	TPMDevice
 	devno int
-	ppi   ppi.PPIBackend
+	ppi   ppi.PPI
 }
 
 // PhysicalPresenceInterface returns the physical presence interface associated
 // with this device.
-func (d *TPMDeviceRaw) PhysicalPresenceInterface() (*ppi.PPI, error) {
+func (d *TPMDeviceRaw) PhysicalPresenceInterface() (ppi.PPI, error) {
 	if d.ppi == nil {
 		return nil, ErrNoPhysicalPresenceInterface
 	}
-	return ppi.NewPPI(d.ppi), nil
+	return d.ppi, nil
 }
 
 // ResourceManagedDevice returns the corresponding resource managed device if one
@@ -258,7 +259,7 @@ func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
 				sysfsPath: sysfsPath,
 				version:   version},
 			devno: devno,
-			ppi:   ppi})
+			ppi:   internal_ppi.New(ppi.version, ppi)})
 	}
 
 	sort.Slice(out, func(i, j int) bool {

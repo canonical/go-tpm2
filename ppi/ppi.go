@@ -46,6 +46,8 @@ func (e OperationError) Error() string {
 type OperationId uint64
 
 const (
+	NoOperation OperationId = 0
+
 	// OperationEnableTPM corresponds to the Enable operation.
 	OperationEnableTPM OperationId = 1
 
@@ -137,6 +139,28 @@ var ppControlMap = map[OperationId]ppControl{
 		enable:  OperationSetPPRequiredForChangeEPS,
 		disable: OperationClearPPRequiredForChangeEPS}}
 
+// ClearPPRequiredOperationId returns the operation ID used to disable the physical presence
+// requirement for this operation. If there isn't a corresponding operation for this,
+// NoOperation will be returned.
+func (op OperationId) ClearPPRequiredOperationId() OperationId {
+	control, exists := ppControlMap[op]
+	if !exists {
+		return NoOperation
+	}
+	return control.disable
+}
+
+// SetPPRequiredOperationId returns the operation ID used to enable the physical presence
+// requirement for this operation. If there isn't a corresponding operation for this,
+// NoOperation will be returned.
+func (op OperationId) SetPPRequiredOperationId() OperationId {
+	control, exists := ppControlMap[op]
+	if !exists {
+		return NoOperation
+	}
+	return control.enable
+}
+
 // OperationStatus indicates the status of a physical presence operation.
 type OperationStatus uint64
 
@@ -216,29 +240,13 @@ const (
 )
 
 // Version indicates the version of the physical presence interface.
-type Version int
-
-func (v Version) String() string {
-	switch v {
-	case Version10:
-		return "1.0"
-	case Version11:
-		return "1.1"
-	case Version12:
-		return "1.2"
-	case Version13:
-		return "1.3"
-	default:
-		return "invalid version"
-	}
-}
+type Version string
 
 const (
-	VersionInvalid Version = iota
-	Version10              // 1.0
-	Version11              // 1.1
-	Version12              // 1.2
-	Version13              // 1.3
+	Version10 Version = "1.0"
+	Version11 Version = "1.1"
+	Version12 Version = "1.2"
+	Version13 Version = "1.3"
 )
 
 // OperationResponse provides the response of the last operation executed by the pre-OS
@@ -248,164 +256,107 @@ type OperationResponse struct {
 	Err       error // Will be set if the operation failed.
 }
 
-type hashAlgorithms uint64
+// HashAlgorithms is a bit field of digest algorithms.
+type HashAlgorithms uint64
 
-const (
-	hashAlgorithmSHA1 hashAlgorithms = 1 << iota
-	hashAlgorithmSHA256
-	hashAlgorithmSHA384
-	hashAlgorithmSHA512
-	hashAlgorithmSM3_256
-	hashAlgorithmSHA3_256
-	hashAlgorithmSHA3_384
-	hashAlgorithmSHA3_512
-)
-
-type PPIBackend interface {
-	Version() string
-	SubmitOperation(op OperationId, arg *uint64) error
-	StateTransitionAction() StateTransitionAction
-	OperationStatus(op OperationId) OperationStatus
-	OperationResponse() (*OperationResponse, error)
-}
-
-// PPI provides a way to interact with the physical presence interface associated with a TPM.
-type PPI struct {
-	functions PPIBackend
-}
-
-func NewPPI(functions PPIBackend) *PPI {
-	return &PPI{functions: functions}
-}
-
-func (p *PPI) submitOperation(op OperationId) error {
-	return p.functions.SubmitOperation(op, nil)
-}
-
-func (p *PPI) Version() Version {
-	version := p.functions.Version()
-	switch version {
-	case "1.0":
-		return Version10
-	case "1.1":
-		return Version11
-	case "1.2":
-		return Version12
-	case "1.3":
-		return Version13
-	default:
-		return VersionInvalid
-	}
-}
-
-// StateTransitionAction returns the action required to transition the device to the pre-OS
-// environment in order to complete the pending physical presence operation request.
-func (p *PPI) StateTransitionAction() StateTransitionAction {
-	return p.functions.StateTransitionAction()
-}
-
-// OperationStatus returns the status of the specified operation.
-func (p *PPI) OperationStatus(op OperationId) OperationStatus {
-	return p.functions.OperationStatus(op)
-}
-
-// EnableTPM requests that the TPM be enabled by the platform firmware.
-// For TPM1.2 devices, the TPM is enabled by executing the TPM_PhysicalEnable command.
-// For TPM2 devices, the TPM is enabled by not disabling the storage and endorsement hierarchies
-// with TPM2_HierarchyControl after TPM2_Startup.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) EnableTPM() error {
-	return p.submitOperation(OperationEnableTPM)
-}
-
-// DisableTPM requests that the TPM be disabled by the platform firmware.
-// For TPM1.2 devices, the TPM is disabled by executing the TPM_PhysicalDisable command.
-// For TPM2 devices, the TPM is disabled by disabling the storage and endorsement hierarchies
-// with TPM2_HierarchyControl after TPM2_Startup.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) DisableTPM() error {
-	return p.submitOperation(OperationDisableTPM)
-}
-
-// ClearTPM requests that the TPM is cleared by the platform firmware.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) ClearTPM() error {
-	return p.submitOperation(OperationClearTPM)
-}
-
-// EnableAndClearTPM requests that the TPM is enabled and cleared by the platform firmware.
-// For TPM1.2 devices, this also activates the device with the TPM_PhysicalSetDeactivated
-// command.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) EnableAndClearTPM() error {
-	return p.submitOperation(OperationEnableAndClearTPM)
-}
-
-// SetPCRBanks requests that the PCR banks associated with the specified algorithms are enabled
-// by the platform firmware.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) SetPCRBanks(algs ...tpm2.HashAlgorithmId) error {
-	var bits hashAlgorithms
+func MakeHashAlgorithms(algs ...tpm2.HashAlgorithmId) HashAlgorithms {
+	var bits HashAlgorithms
 	for _, alg := range algs {
 		switch alg {
 		case tpm2.HashAlgorithmSHA1:
-			bits |= hashAlgorithmSHA1
+			bits |= HashAlgorithmSHA1
 		case tpm2.HashAlgorithmSHA256:
-			bits |= hashAlgorithmSHA256
+			bits |= HashAlgorithmSHA256
 		case tpm2.HashAlgorithmSHA384:
-			bits |= hashAlgorithmSHA384
+			bits |= HashAlgorithmSHA384
 		case tpm2.HashAlgorithmSHA512:
-			bits |= hashAlgorithmSHA512
+			bits |= HashAlgorithmSHA512
 		case tpm2.HashAlgorithmSHA3_256:
-			bits |= hashAlgorithmSHA3_256
+			bits |= HashAlgorithmSHA3_256
 		case tpm2.HashAlgorithmSHA3_384:
-			bits |= hashAlgorithmSHA3_384
+			bits |= HashAlgorithmSHA3_384
 		case tpm2.HashAlgorithmSHA3_512:
-			bits |= hashAlgorithmSHA3_512
+			bits |= HashAlgorithmSHA3_512
 		}
 	}
-	return p.functions.SubmitOperation(OperationSetPCRBanks, (*uint64)(&bits))
+	return bits
 }
 
-// ChangeEPS requests that the TPM's endorsement primary seed is changed by the platform firmware.
-// This is only implemented for TPM2 devices.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) ChangeEPS() error {
-	return p.submitOperation(OperationChangeEPS)
-}
+const (
+	HashAlgorithmSHA1 HashAlgorithms = 1 << iota
+	HashAlgorithmSHA256
+	HashAlgorithmSHA384
+	HashAlgorithmSHA512
+	HashAlgorithmSM3_256
+	HashAlgorithmSHA3_256
+	HashAlgorithmSHA3_384
+	HashAlgorithmSHA3_512
+)
 
-// SetPPRequiredForOperation requests that approval from a physically present user should be
-// required for the specified operation.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) SetPPRequiredForOperation(op OperationId) error {
-	control, exists := ppControlMap[op]
-	if !exists {
-		return errors.New("invalid operation")
-	}
-	return p.submitOperation(control.enable)
-}
+// PPI provides a way to interact with the physical presence interface associated with a TPM.
+type PPI interface {
+	Version() Version
 
-// SetPPRequiredForOperation requests that approval from a physically present user should not be
-// required for the specified operation.
-// The caller needs to perform the action described by [PPI.StateTransitionAction] in
-// order to complete the request.
-func (p *PPI) ClearPPRequiredForOperation(op OperationId) error {
-	control, exists := ppControlMap[op]
-	if !exists {
-		return errors.New("invalid operation")
-	}
-	return p.submitOperation(control.disable)
-}
+	// StateTransitionAction returns the action required to transition the device to the pre-OS
+	// environment in order to complete the pending physical presence operation request.
+	StateTransitionAction() (StateTransitionAction, error)
 
-// OperationResponse returns the response to the previously executed operation from the pre-OS
-// environment.
-func (p *PPI) OperationResponse() (*OperationResponse, error) {
-	return p.functions.OperationResponse()
+	// OperationStatus returns the status of the specified operation.
+	OperationStatus(op OperationId) (OperationStatus, error)
+
+	// EnableTPM requests that the TPM be enabled by the platform firmware.
+	// For TPM1.2 devices, the TPM is enabled by executing the TPM_PhysicalEnable command.
+	// For TPM2 devices, the TPM is enabled by not disabling the storage and endorsement hierarchies
+	// with TPM2_HierarchyControl after TPM2_Startup.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	EnableTPM() error
+
+	// DisableTPM requests that the TPM be disabled by the platform firmware.
+	// For TPM1.2 devices, the TPM is disabled by executing the TPM_PhysicalDisable command.
+	// For TPM2 devices, the TPM is disabled by disabling the storage and endorsement hierarchies
+	// with TPM2_HierarchyControl after TPM2_Startup.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	DisableTPM() error
+
+	// ClearTPM requests that the TPM is cleared by the platform firmware.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	ClearTPM() error
+
+	// EnableAndClearTPM requests that the TPM is enabled and cleared by the platform firmware.
+	// For TPM1.2 devices, this also activates the device with the TPM_PhysicalSetDeactivated
+	// command.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	EnableAndClearTPM() error
+
+	// SetPCRBanks requests that the PCR banks associated with the specified algorithms are enabled
+	// by the platform firmware.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	SetPCRBanks(algs ...tpm2.HashAlgorithmId) error
+
+	// ChangeEPS requests that the TPM's endorsement primary seed is changed by the platform firmware.
+	// This is only implemented for TPM2 devices.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	ChangeEPS() error
+
+	// SetPPRequiredForOperation requests that approval from a physically present user should be
+	// required for the specified operation.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	SetPPRequiredForOperation(op OperationId) error
+
+	// ClearPPRequiredForOperation requests that approval from a physically present user should not be
+	// required for the specified operation.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	ClearPPRequiredForOperation(op OperationId) error
+
+	// OperationResponse returns the response to the previously executed operation from the pre-OS
+	// environment.
+	OperationResponse() (*OperationResponse, error)
 }

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/canonical/go-tpm2/ppi"
@@ -20,13 +21,11 @@ import (
 
 type sysfsPpiImpl struct {
 	sysfsPath string
-	version   string
-	ops       map[ppi.OperationId]ppi.OperationStatus
-	sta       ppi.StateTransitionAction
-}
+	version   ppi.Version
 
-func (p *sysfsPpiImpl) Version() string {
-	return p.version
+	opsOnce  sync.Once
+	ops      map[ppi.OperationId]ppi.OperationStatus
+	opsError error
 }
 
 func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
@@ -52,16 +51,56 @@ func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
 	}
 }
 
-func (p *sysfsPpiImpl) StateTransitionAction() ppi.StateTransitionAction {
-	return p.sta
+func (p *sysfsPpiImpl) StateTransitionAction() (ppi.StateTransitionAction, error) {
+	actionBytes, err := ioutil.ReadFile(filepath.Join(p.sysfsPath, "transition_action"))
+	if err != nil {
+		return 0, err
+	}
+
+	var action ppi.StateTransitionAction
+	var dummy string
+	if _, err := fmt.Sscanf(string(actionBytes), "%d:%s\n", &action, &dummy); err != nil {
+		return 0, fmt.Errorf("cannot scan transition action \"%s\": %w", string(actionBytes), err)
+	}
+
+	return action, nil
 }
 
-func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) ppi.OperationStatus {
+func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus, error) {
+	p.opsOnce.Do(func() {
+		p.ops, p.opsError = func() (map[ppi.OperationId]ppi.OperationStatus, error) {
+			opsFile, err := os.OpenFile(filepath.Join(p.sysfsPath, "tcg_operations"), os.O_RDONLY, 0)
+			if err != nil {
+				return nil, err
+			}
+			defer opsFile.Close()
+
+			ops := make(map[ppi.OperationId]ppi.OperationStatus)
+
+			scanner := bufio.NewScanner(opsFile)
+			for scanner.Scan() {
+				var op ppi.OperationId
+				var status ppi.OperationStatus
+				if _, err := fmt.Sscanf(scanner.Text(), "%d%d", &op, &status); err != nil {
+					return nil, fmt.Errorf("cannot scan operation \"%s\": %w", scanner.Text(), err)
+				}
+
+				ops[op] = status
+			}
+
+			return ops, nil
+		}()
+	})
+
+	if p.opsError != nil {
+		return 0, p.opsError
+	}
+
 	status, implemented := p.ops[op]
 	if !implemented {
-		return ppi.OperationNotImplemented
+		return ppi.OperationNotImplemented, nil
 	}
-	return status
+	return status, nil
 }
 
 func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
@@ -92,36 +131,6 @@ func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 }
 
 func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
-	opsFile, err := os.OpenFile(filepath.Join(path, "tcg_operations"), os.O_RDONLY, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer opsFile.Close()
-
-	ops := make(map[ppi.OperationId]ppi.OperationStatus)
-
-	scanner := bufio.NewScanner(opsFile)
-	for scanner.Scan() {
-		var op ppi.OperationId
-		var status ppi.OperationStatus
-		if _, err := fmt.Sscanf(scanner.Text(), "%d%d", &op, &status); err != nil {
-			return nil, fmt.Errorf("cannot scan operation \"%s\": %w", scanner.Text(), err)
-		}
-
-		ops[op] = status
-	}
-
-	staBytes, err := ioutil.ReadFile(filepath.Join(path, "transition_action"))
-	if err != nil {
-		return nil, err
-	}
-
-	var sta ppi.StateTransitionAction
-	var dummy string
-	if _, err := fmt.Sscanf(string(staBytes), "%d:%s\n", &sta, &dummy); err != nil {
-		return nil, fmt.Errorf("cannot scan transition action \"%s\": %w", string(staBytes), err)
-	}
-
 	versionBytes, err := ioutil.ReadFile(filepath.Join(path, "version"))
 	if err != nil {
 		return nil, err
@@ -129,7 +138,6 @@ func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
 
 	return &sysfsPpiImpl{
 		sysfsPath: path,
-		version:   strings.TrimSpace(string(versionBytes)),
-		ops:       ops,
-		sta:       sta}, nil
+		version:   ppi.Version(strings.TrimSpace(string(versionBytes))),
+	}, nil
 }
