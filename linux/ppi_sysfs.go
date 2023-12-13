@@ -18,18 +18,18 @@ import (
 	"github.com/canonical/go-tpm2/ppi"
 )
 
-type ppiImpl struct {
+type sysfsPpiImpl struct {
 	sysfsPath string
 	version   string
 	ops       map[ppi.OperationId]ppi.OperationStatus
 	sta       ppi.StateTransitionAction
 }
 
-func (p *ppiImpl) Version() string {
+func (p *sysfsPpiImpl) Version() string {
 	return p.version
 }
 
-func (p *ppiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
+func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
 	f, err := os.OpenFile(filepath.Join(p.sysfsPath, "request"), os.O_WRONLY, 0)
 	if err != nil {
 		return err
@@ -52,11 +52,11 @@ func (p *ppiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
 	}
 }
 
-func (p *ppiImpl) StateTransitionAction() ppi.StateTransitionAction {
+func (p *sysfsPpiImpl) StateTransitionAction() ppi.StateTransitionAction {
 	return p.sta
 }
 
-func (p *ppiImpl) OperationStatus(op ppi.OperationId) ppi.OperationStatus {
+func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) ppi.OperationStatus {
 	status, implemented := p.ops[op]
 	if !implemented {
 		return ppi.OperationNotImplemented
@@ -64,7 +64,7 @@ func (p *ppiImpl) OperationStatus(op ppi.OperationId) ppi.OperationStatus {
 	return status
 }
 
-func (p *ppiImpl) OperationResponse() (*ppi.OperationResponse, error) {
+func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 	rspBytes, err := ioutil.ReadFile(filepath.Join(p.sysfsPath, "response"))
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func (p *ppiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 	return r, nil
 }
 
-func newPPI(path string) (*ppiImpl, error) {
+func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
 	opsFile, err := os.OpenFile(filepath.Join(path, "tcg_operations"), os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func newPPI(path string) (*ppiImpl, error) {
 		return nil, err
 	}
 
-	return &ppiImpl{
+	return &sysfsPpiImpl{
 		sysfsPath: path,
 		version:   strings.TrimSpace(string(versionBytes)),
 		ops:       ops,

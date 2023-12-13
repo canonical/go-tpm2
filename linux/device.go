@@ -104,7 +104,7 @@ func (d *TPMDevice) String() string {
 type TPMDeviceRaw struct {
 	TPMDevice
 	devno int
-	ppi   *ppiImpl
+	ppi   ppi.PPIBackend
 }
 
 // PhysicalPresenceInterface returns the physical presence interface associated
@@ -247,7 +247,7 @@ func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
 			return nil, fmt.Errorf("cannot determine version of TPM device at %s: %w", sysfsPath, err)
 		}
 
-		ppi, err := newPPI(filepath.Join(sysfsPath, "ppi"))
+		ppi, err := newSysfsPpi(filepath.Join(sysfsPath, "ppi"))
 		if err != nil && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("cannot initialize PPI for TPM device at %s: %w", sysfsPath, err)
 		}
