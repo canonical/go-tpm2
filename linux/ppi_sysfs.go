@@ -136,8 +136,13 @@ func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
 		return nil, err
 	}
 
+	version, err := ppi.ParseVersion(strings.TrimSpace(string(versionBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse version: %w", err)
+	}
+
 	return &sysfsPpiImpl{
 		sysfsPath: path,
-		Version:   ppi.Version(strings.TrimSpace(string(versionBytes))),
+		Version:   version,
 	}, nil
 }

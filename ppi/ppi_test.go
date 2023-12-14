@@ -5,10 +5,12 @@
 package ppi_test
 
 import (
+	"io"
 	"testing"
 
 	. "gopkg.in/check.v1"
 
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	. "github.com/canonical/go-tpm2/ppi"
 	"github.com/canonical/go-tpm2/testutil"
 )
@@ -61,4 +63,28 @@ func (s *ppiSuite) TestOperationIdClearPPRequiredOperationIdChangeEPS(c *C) {
 
 func (s *ppiSuite) TestOperationIdSetPPRequiredOperationIdChangeEPS(c *C) {
 	c.Check(OperationChangeEPS.SetPPRequiredOperationId(), Equals, OperationSetPPRequiredForChangeEPS)
+}
+
+func (s *ppiSuite) TestParseVersion13(c *C) {
+	version, err := ParseVersion("1.3")
+	c.Check(err, IsNil)
+	c.Check(version.Major, internal_testutil.IntEqual, 1)
+	c.Check(version.Minor, internal_testutil.IntEqual, 3)
+}
+
+func (s *ppiSuite) TestParseVersion12(c *C) {
+	version, err := ParseVersion("1.2")
+	c.Check(err, IsNil)
+	c.Check(version.Major, internal_testutil.IntEqual, 1)
+	c.Check(version.Minor, internal_testutil.IntEqual, 2)
+}
+
+func (s *ppiSuite) TestParseVersionInvalid1(c *C) {
+	_, err := ParseVersion("1.")
+	c.Check(err, Equals, io.EOF)
+}
+
+func (s *ppiSuite) TestParseVersionInvalid2(c *C) {
+	_, err := ParseVersion("-1.3")
+	c.Check(err, ErrorMatches, `expected integer`)
 }

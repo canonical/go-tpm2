@@ -241,13 +241,28 @@ const (
 )
 
 // Version indicates the version of the physical presence interface.
-type Version string
+type Version struct {
+	Major, Minor uint
+}
 
-const (
-	Version10 Version = "1.0"
-	Version11 Version = "1.1"
-	Version12 Version = "1.2"
-	Version13 Version = "1.3"
+// ParseVersion parses the supplied physical presence interface version string.
+func ParseVersion(str string) (Version, error) {
+	var version Version
+	if _, err := fmt.Sscanf(str, "%d.%d", &version.Major, &version.Minor); err != nil {
+		return Version{}, err
+	}
+	return version, nil
+}
+
+func (v *Version) String() string {
+	return fmt.Sprintf("%d.%d", v.Major, v.Minor)
+}
+
+var (
+	Version10 = Version{Major: 1, Minor: 0}
+	Version11 = Version{Major: 1, Minor: 1}
+	Version12 = Version{Major: 1, Minor: 2}
+	Version13 = Version{Major: 1, Minor: 3}
 )
 
 // OperationResponse provides the response of the last operation executed by the pre-OS
@@ -260,6 +275,7 @@ type OperationResponse struct {
 // HashAlgorithms is a bit field of digest algorithms.
 type HashAlgorithms uint64
 
+// MakeHashAlgorithms coverts the supplied list of digest algorithms into a bit field.
 func MakeHashAlgorithms(algs ...tpm2.HashAlgorithmId) HashAlgorithms {
 	var bits HashAlgorithms
 	for _, alg := range algs {
