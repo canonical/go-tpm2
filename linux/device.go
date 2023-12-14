@@ -57,11 +57,19 @@ var devices tpmDevices
 // Deprecated: Use Tcti
 type TctiDevice = Tcti
 
+// TPMMajorVersion describes the major version of a TPM device.
+type TPMMajorVersion int
+
+const (
+	TPMVersion1 TPMMajorVersion = 1
+	TPMVersion2 TPMMajorVersion = 2
+)
+
 // TPMDevice represents a Linux TPM character device.
 type TPMDevice struct {
 	path      string
 	sysfsPath string
-	version   int
+	version   TPMMajorVersion
 }
 
 func (d *TPMDevice) openInternal() (*Tcti, *os.File, error) {
@@ -89,8 +97,8 @@ func (d *TPMDevice) SysfsPath() string {
 	return d.sysfsPath
 }
 
-// MajorVersion indicates the TPM version, either 1 or 2.
-func (d *TPMDevice) MajorVersion() int {
+// MajorVersion indicates the TPM version.
+func (d *TPMDevice) MajorVersion() TPMMajorVersion {
 	return d.version
 }
 
@@ -148,7 +156,7 @@ func (d *TPMDeviceRaw) PhysicalPresenceInterface() (ppi.PPI, error) {
 func (d *TPMDeviceRaw) ResourceManagedDevice() (*TPMDeviceRM, error) {
 	d.rmOnce.Do(func() {
 		d.rm, d.rmErr = func() (*TPMDeviceRM, error) {
-			if d.version != 2 {
+			if d.version != TPMVersion2 {
 				// the kernel resource manager is only available for TPM2 devices.
 				return nil, ErrNoResourceManagedDevice
 			}
@@ -211,7 +219,7 @@ func OpenDevice(path string) (*Tcti, error) {
 	return tcti, nil
 }
 
-func tpmDeviceVersion(path string) (int, error) {
+func tpmDeviceVersion(path string) (TPMMajorVersion, error) {
 	versionPath := filepath.Join(path, "tpm_version_major")
 
 	versionBytes, err := ioutil.ReadFile(versionPath)
@@ -224,11 +232,11 @@ func tpmDeviceVersion(path string) (int, error) {
 		_, err := os.Stat(filepath.Join(path, "pcrs"))
 		switch {
 		case os.IsNotExist(err):
-			return 2, nil
+			return TPMVersion2, nil
 		case err != nil:
 			return 0, err
 		default:
-			return 1, nil
+			return TPMVersion1, nil
 		}
 	case err != nil:
 		return 0, err
@@ -237,10 +245,12 @@ func tpmDeviceVersion(path string) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		if version < 1 || version > 2 {
+		switch version {
+		case 1, 2:
+			return TPMMajorVersion(version), nil
+		default:
 			return 0, fmt.Errorf("unexpected version %d", version)
 		}
-		return version, nil
 	}
 }
 
@@ -308,7 +318,7 @@ func ListTPM2Devices() (out []*TPMDeviceRaw, err error) {
 		return nil, err
 	}
 	for _, device := range candidates {
-		if device.MajorVersion() != 2 {
+		if device.MajorVersion() != TPMVersion2 {
 			continue
 		}
 		out = append(out, device)
@@ -338,7 +348,7 @@ func DefaultTPM2Device() (*TPMDeviceRaw, error) {
 	if err != nil {
 		return nil, err
 	}
-	if device.MajorVersion() != 2 {
+	if device.MajorVersion() != TPMVersion2 {
 		return nil, ErrDefaultNotTPM2Device
 	}
 	return device, nil

@@ -49,7 +49,7 @@ func (s *deviceSuite) TestListTPMDevicesTPM2(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0),
 	})
 }
 
@@ -60,7 +60,7 @@ func (s *deviceSuite) TestListTPMDevicesTPM2OldKernel(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0),
 	})
 }
 
@@ -80,7 +80,7 @@ func (s *deviceSuite) TestListTPMDevicesTPM1(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), TPMVersion1, 0),
 	})
 }
 
@@ -91,8 +91,8 @@ func (s *deviceSuite) TestListTPMDevicesMixedTPM2(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm1"), 1, 1),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm1"), TPMVersion1, 1),
 	})
 }
 
@@ -103,8 +103,8 @@ func (s *deviceSuite) TestListTPMDevicesMixedTPM1(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), TPMVersion1, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), TPMVersion2, 1),
 	})
 }
 
@@ -115,8 +115,8 @@ func (s *deviceSuite) TestListTPMDevicesTPM2Multiple(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), TPMVersion2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), TPMVersion2, 1),
 	})
 }
 
@@ -127,7 +127,7 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2(c *C) {
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0),
 	})
 }
 
@@ -138,7 +138,7 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2OldKernel(c *C) {
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0),
 	})
 }
 
@@ -167,7 +167,7 @@ func (s *deviceSuite) TestListTPM2DevicesMixedTPM2(c *C) {
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0),
 	})
 }
 
@@ -178,7 +178,7 @@ func (s *deviceSuite) TestListTPM2DevicesMixedTPM1(c *C) {
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), TPMVersion2, 1),
 	})
 }
 
@@ -189,8 +189,8 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2Multiple(c *C) {
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), TPMVersion2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), TPMVersion2, 1),
 	})
 }
 
@@ -200,7 +200,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM2(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceTPM2OldKernel(c *C) {
@@ -209,7 +209,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM2OldKernel(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceNoDevices(c *C) {
@@ -226,7 +226,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM1(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), TPMVersion1, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM2(c *C) {
@@ -235,7 +235,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM2(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM1(c *C) {
@@ -244,7 +244,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM1(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), TPMVersion1, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceTPM2Multiple(c *C) {
@@ -253,7 +253,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM2Multiple(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceTPM2(c *C) {
@@ -262,7 +262,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceTPM2(c *C) {
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceTPM2OldKernel(c *C) {
@@ -271,7 +271,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceTPM2OldKernel(c *C) {
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceNoDevices(c *C) {
@@ -296,7 +296,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceMixedTPM2(c *C) {
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceMixedTPM1(c *C) {
@@ -313,7 +313,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceTPM2Multiple(c *C) {
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), TPMVersion2, 0))
 }
 
 func (s *deviceSuite) TestTPMDeviceMethodsTPM2(c *C) {
@@ -324,7 +324,7 @@ func (s *deviceSuite) TestTPMDeviceMethodsTPM2(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(device.Path(), Equals, "/dev/tpm0")
 	c.Check(device.SysfsPath(), Equals, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"))
-	c.Check(device.MajorVersion(), Equals, 2)
+	c.Check(device.MajorVersion(), Equals, TPMVersion2)
 }
 
 func (s *deviceSuite) TestTPMDeviceMethodsTPM1(c *C) {
@@ -335,7 +335,7 @@ func (s *deviceSuite) TestTPMDeviceMethodsTPM1(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(device.Path(), Equals, "/dev/tpm0")
 	c.Check(device.SysfsPath(), Equals, filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"))
-	c.Check(device.MajorVersion(), Equals, 1)
+	c.Check(device.MajorVersion(), Equals, TPMVersion1)
 }
 
 func (s *deviceSuite) TestTPMDeviceRawResourceManagedDeviceTPM2(c *C) {
@@ -347,7 +347,7 @@ func (s *deviceSuite) TestTPMDeviceRawResourceManagedDeviceTPM2(c *C) {
 
 	rm, err := device.ResourceManagedDevice()
 	c.Check(err, IsNil)
-	c.Check(rm, DeepEquals, NewMockTPMDeviceRM("/dev/tpmrm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpmrm/tpmrm0"), 2, device))
+	c.Check(rm, DeepEquals, NewMockTPMDeviceRM("/dev/tpmrm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpmrm/tpmrm0"), TPMVersion2, device))
 	c.Check(rm.RawDevice(), Equals, device)
 }
 

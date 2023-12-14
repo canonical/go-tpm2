@@ -14,7 +14,7 @@ func MockSysfsPath(path string) (restore func()) {
 	}
 }
 
-func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int) *TPMDeviceRaw {
+func NewMockTPMDeviceRaw(path, sysfsPath string, version TPMMajorVersion, devno int) *TPMDeviceRaw {
 	return &TPMDeviceRaw{
 		TPMDevice: TPMDevice{
 			path:      path,
@@ -24,7 +24,7 @@ func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int) *TPMDeviceR
 	}
 }
 
-func NewMockTPMDeviceRM(path, sysfsPath string, version int, raw *TPMDeviceRaw) *TPMDeviceRM {
+func NewMockTPMDeviceRM(path, sysfsPath string, version TPMMajorVersion, raw *TPMDeviceRaw) *TPMDeviceRM {
 	return &TPMDeviceRM{
 		TPMDevice: TPMDevice{
 			path:      path,
