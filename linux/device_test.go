@@ -20,6 +20,11 @@ type deviceSuite struct {
 	testutil.BaseTest
 }
 
+func (s *deviceSuite) SetUpTest(c *C) {
+	s.BaseTest.SetUpTest(c)
+	ResetDevices()
+}
+
 var _ = Suite(&deviceSuite{})
 
 func (s *deviceSuite) newSysfsPPI(c *C, path string) ppi.PPI {
@@ -41,12 +46,10 @@ func (s *deviceSuite) TestListTPMDevicesTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
 	})
 }
 
@@ -54,12 +57,10 @@ func (s *deviceSuite) TestListTPMDevicesTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
 	})
 }
 
@@ -79,7 +80,7 @@ func (s *deviceSuite) TestListTPMDevicesTPM1(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0, nil),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0),
 	})
 }
 
@@ -87,13 +88,11 @@ func (s *deviceSuite) TestListTPMDevicesMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm1"), 1, 1, nil),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm1"), 1, 1),
 	})
 }
 
@@ -104,8 +103,8 @@ func (s *deviceSuite) TestListTPMDevicesMixedTPM1(c *C) {
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0, nil),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1, nil),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
 	})
 }
 
@@ -113,13 +112,11 @@ func (s *deviceSuite) TestListTPMDevicesTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0, pp),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1, nil),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
 	})
 }
 
@@ -127,12 +124,10 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
 	})
 }
 
@@ -140,12 +135,10 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
 	})
 }
 
@@ -171,12 +164,10 @@ func (s *deviceSuite) TestListTPM2DevicesMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0),
 	})
 }
 
@@ -187,7 +178,7 @@ func (s *deviceSuite) TestListTPM2DevicesMixedTPM1(c *C) {
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1, nil),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
 	})
 }
 
@@ -195,13 +186,11 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
-
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
 	c.Check(devices, DeepEquals, []*TPMDeviceRaw{
-		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0, pp),
-		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1, nil),
+		NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0),
+		NewMockTPMDeviceRaw("/dev/tpm1", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm1"), 2, 1),
 	})
 }
 
@@ -209,22 +198,18 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceNoDevices(c *C) {
@@ -241,18 +226,16 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM1(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0, nil))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM1(c *C) {
@@ -261,40 +244,34 @@ func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM1(c *C) {
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0, nil))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/SMO3324:00/tpm/tpm0"), 1, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPMDeviceTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceNoDevices(c *C) {
@@ -317,11 +294,9 @@ func (s *deviceSuite) TestDefaultTPM2DeviceMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestDefaultTPM2DeviceMixedTPM1(c *C) {
@@ -336,11 +311,9 @@ func (s *deviceSuite) TestDefaultTPM2DeviceTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
-
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
-	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0, pp))
+	c.Check(device, DeepEquals, NewMockTPMDeviceRaw("/dev/tpm0", filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0"), 2, 0))
 }
 
 func (s *deviceSuite) TestTPMDeviceMethodsTPM2(c *C) {

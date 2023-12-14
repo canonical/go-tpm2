@@ -4,8 +4,6 @@
 
 package linux
 
-import "github.com/canonical/go-tpm2/ppi"
-
 var NewSysfsPpi = newSysfsPpi
 
 func MockSysfsPath(path string) (restore func()) {
@@ -16,14 +14,14 @@ func MockSysfsPath(path string) (restore func()) {
 	}
 }
 
-func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int, pp ppi.PPI) *TPMDeviceRaw {
+func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int) *TPMDeviceRaw {
 	return &TPMDeviceRaw{
 		TPMDevice: TPMDevice{
 			path:      path,
 			sysfsPath: sysfsPath,
 			version:   version},
 		devno: devno,
-		ppi:   pp}
+	}
 }
 
 func NewMockTPMDeviceRM(path, sysfsPath string, version int, raw *TPMDeviceRaw) *TPMDeviceRM {
@@ -31,6 +29,12 @@ func NewMockTPMDeviceRM(path, sysfsPath string, version int, raw *TPMDeviceRaw) 
 		TPMDevice: TPMDevice{
 			path:      path,
 			sysfsPath: sysfsPath,
-			version:   version},
-		raw: raw}
+			version:   version,
+		},
+		raw: raw,
+	}
+}
+
+func ResetDevices() {
+	devices = tpmDevices{}
 }

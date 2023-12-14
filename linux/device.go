@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/canonical/go-tpm2"
 	internal_ppi "github.com/canonical/go-tpm2/internal/ppi"
@@ -42,6 +43,14 @@ var (
 
 	sysfsPath = "/sys"
 )
+
+type tpmDevices struct {
+	once    sync.Once
+	devices []*TPMDeviceRaw
+	err     error
+}
+
+var devices tpmDevices
 
 // TctiDevice represents a connection to a Linux TPM character device.
 //
@@ -105,42 +114,64 @@ func (d *TPMDevice) String() string {
 type TPMDeviceRaw struct {
 	TPMDevice
 	devno int
-	ppi   ppi.PPI
+
+	ppiOnce sync.Once
+	ppi     ppi.PPI
+	ppiErr  error
+
+	rmOnce sync.Once
+	rm     *TPMDeviceRM
+	rmErr  error
 }
 
 // PhysicalPresenceInterface returns the physical presence interface associated
 // with this device.
 func (d *TPMDeviceRaw) PhysicalPresenceInterface() (ppi.PPI, error) {
-	if d.ppi == nil {
-		return nil, ErrNoPhysicalPresenceInterface
-	}
-	return d.ppi, nil
+	d.ppiOnce.Do(func() {
+		d.ppi, d.ppiErr = func() (ppi.PPI, error) {
+			backend, err := newSysfsPpi(filepath.Join(d.sysfsPath, "ppi"))
+			switch {
+			case os.IsNotExist(err):
+				return nil, ErrNoPhysicalPresenceInterface
+			case err != nil:
+				return nil, fmt.Errorf("cannot initialize PPI backend: %w", err)
+			}
+
+			return internal_ppi.New(backend.Version, backend), nil
+		}()
+	})
+	return d.ppi, d.ppiErr
 }
 
 // ResourceManagedDevice returns the corresponding resource managed device if one
 // is available.
 func (d *TPMDeviceRaw) ResourceManagedDevice() (*TPMDeviceRM, error) {
-	if d.version != 2 {
-		// the kernel resource manager is only available for TPM2 devices.
-		return nil, ErrNoResourceManagedDevice
-	}
+	d.rmOnce.Do(func() {
+		d.rm, d.rmErr = func() (*TPMDeviceRM, error) {
+			if d.version != 2 {
+				// the kernel resource manager is only available for TPM2 devices.
+				return nil, ErrNoResourceManagedDevice
+			}
 
-	base := fmt.Sprintf("tpmrm%d", d.devno)
-	sysfsPath, err := filepath.EvalSymlinks(filepath.Join(d.sysfsPath, "device/tpmrm", base))
-	switch {
-	case os.IsNotExist(err):
-		// the kernel is probably too old
-		return nil, ErrNoResourceManagedDevice
-	case err != nil:
-		return nil, err
-	default:
-		return &TPMDeviceRM{
-			TPMDevice: TPMDevice{
-				path:      filepath.Join(devPath, base),
-				sysfsPath: sysfsPath,
-				version:   d.version},
-			raw: d}, nil
-	}
+			base := fmt.Sprintf("tpmrm%d", d.devno)
+			sysfsPath, err := filepath.EvalSymlinks(filepath.Join(d.sysfsPath, "device/tpmrm", base))
+			switch {
+			case os.IsNotExist(err):
+				// the kernel is probably too old
+				return nil, ErrNoResourceManagedDevice
+			case err != nil:
+				return nil, err
+			default:
+				return &TPMDeviceRM{
+					TPMDevice: TPMDevice{
+						path:      filepath.Join(devPath, base),
+						sysfsPath: sysfsPath,
+						version:   d.version},
+					raw: d}, nil
+			}
+		}()
+	})
+	return d.rm, d.rmErr
 }
 
 // TPMDeviceRM represents a Linux TPM character device that makes use of the kernel
@@ -213,9 +244,7 @@ func tpmDeviceVersion(path string) (int, error) {
 	}
 }
 
-// ListTPMDevices returns a list of all TPM devices. Note that this returns
-// all devices, regardless of version.
-func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
+func probeTpmDevices() (out []*TPMDeviceRaw, err error) {
 	class := filepath.Join(sysfsPath, "class/tpm")
 
 	f, err := os.Open(class)
@@ -248,28 +277,28 @@ func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
 			return nil, fmt.Errorf("cannot determine version of TPM device at %s: %w", sysfsPath, err)
 		}
 
-		ppiBackend, err := newSysfsPpi(filepath.Join(sysfsPath, "ppi"))
-		if err != nil && !os.IsNotExist(err) {
-			return nil, fmt.Errorf("cannot initialize PPI for TPM device at %s: %w", sysfsPath, err)
-		}
-		var pp ppi.PPI
-		if ppiBackend != nil {
-			pp = internal_ppi.New(ppiBackend.Version, ppiBackend)
-		}
-
 		out = append(out, &TPMDeviceRaw{
 			TPMDevice: TPMDevice{
 				path:      filepath.Join(devPath, entry.Name()),
 				sysfsPath: sysfsPath,
 				version:   version},
 			devno: devno,
-			ppi:   pp})
+		})
 	}
 
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].devno < out[j].devno
 	})
 	return out, nil
+}
+
+// ListTPMDevices returns a list of all TPM devices. Note that this returns
+// all devices, regardless of version.
+func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
+	devices.once.Do(func() {
+		devices.devices, devices.err = probeTpmDevices()
+	})
+	return devices.devices, devices.err
 }
 
 // ListTPMDevices returns a list of all TPM2 devices.
