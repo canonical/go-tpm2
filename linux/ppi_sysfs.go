@@ -29,6 +29,10 @@ type sysfsPpiImpl struct {
 }
 
 func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
+	if arg != nil && (p.Version.Major < 1 || p.Version.Minor < 3) {
+		return ppi.ErrOperationUnsupported
+	}
+
 	f, err := os.OpenFile(filepath.Join(p.sysfsPath, "request"), os.O_WRONLY, 0)
 	if err != nil {
 		return err
@@ -70,7 +74,10 @@ func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus,
 	p.opsOnce.Do(func() {
 		p.ops, p.opsError = func() (map[ppi.OperationId]ppi.OperationStatus, error) {
 			opsFile, err := os.OpenFile(filepath.Join(p.sysfsPath, "tcg_operations"), os.O_RDONLY, 0)
-			if err != nil {
+			switch {
+			case os.IsNotExist(err):
+				return nil, ppi.ErrOperationUnsupported
+			case err != nil:
 				return nil, err
 			}
 			defer opsFile.Close()
@@ -86,6 +93,13 @@ func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus,
 				}
 
 				ops[op] = status
+			}
+
+			switch {
+			case errors.Is(scanner.Err(), syscall.EPERM):
+				return nil, ppi.ErrOperationUnsupported
+			case scanner.Err() != nil:
+				return nil, err
 			}
 
 			return ops, nil
@@ -105,7 +119,10 @@ func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus,
 
 func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 	rspBytes, err := ioutil.ReadFile(filepath.Join(p.sysfsPath, "response"))
-	if err != nil {
+	switch {
+	case errors.Is(err, syscall.EFAULT):
+		return nil, ppi.ErrOperationFailed
+	case err != nil:
 		return nil, err
 	}
 
