@@ -248,9 +248,13 @@ func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
 			return nil, fmt.Errorf("cannot determine version of TPM device at %s: %w", sysfsPath, err)
 		}
 
-		ppi, err := newSysfsPpi(filepath.Join(sysfsPath, "ppi"))
+		ppiBackend, err := newSysfsPpi(filepath.Join(sysfsPath, "ppi"))
 		if err != nil && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("cannot initialize PPI for TPM device at %s: %w", sysfsPath, err)
+		}
+		var pp ppi.PPI
+		if ppiBackend != nil {
+			pp = internal_ppi.New(ppiBackend.Version, ppiBackend)
 		}
 
 		out = append(out, &TPMDeviceRaw{
@@ -259,7 +263,7 @@ func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
 				sysfsPath: sysfsPath,
 				version:   version},
 			devno: devno,
-			ppi:   internal_ppi.New(ppi.version, ppi)})
+			ppi:   pp})
 	}
 
 	sort.Slice(out, func(i, j int) bool {

@@ -10,6 +10,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	internal_ppi "github.com/canonical/go-tpm2/internal/ppi"
 	. "github.com/canonical/go-tpm2/linux"
 	"github.com/canonical/go-tpm2/ppi"
 	"github.com/canonical/go-tpm2/testutil"
@@ -21,10 +22,10 @@ type deviceSuite struct {
 
 var _ = Suite(&deviceSuite{})
 
-func (s *deviceSuite) mockPPIBackend(c *C, path string) *PpiImpl {
-	impl, err := NewPPI(path)
+func (s *deviceSuite) newSysfsPPI(c *C, path string) ppi.PPI {
+	impl, err := NewSysfsPpi(path)
 	c.Assert(err, IsNil)
-	return impl
+	return internal_ppi.New(impl.Version, impl)
 }
 
 func (s *deviceSuite) unpackTarball(c *C, path string) string {
@@ -40,7 +41,7 @@ func (s *deviceSuite) TestListTPMDevicesTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
@@ -53,7 +54,7 @@ func (s *deviceSuite) TestListTPMDevicesTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
@@ -86,7 +87,7 @@ func (s *deviceSuite) TestListTPMDevicesMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
@@ -112,7 +113,7 @@ func (s *deviceSuite) TestListTPMDevicesTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPMDevices()
 	c.Check(err, IsNil)
@@ -126,7 +127,7 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
@@ -139,7 +140,7 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
@@ -170,7 +171,7 @@ func (s *deviceSuite) TestListTPM2DevicesMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
@@ -194,7 +195,7 @@ func (s *deviceSuite) TestListTPM2DevicesTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
 
 	devices, err := ListTPM2Devices()
 	c.Check(err, IsNil)
@@ -208,7 +209,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
@@ -219,7 +220,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
@@ -247,7 +248,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
@@ -267,7 +268,7 @@ func (s *deviceSuite) TestDefaultTPMDeviceTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPMDevice()
 	c.Check(err, IsNil)
@@ -278,7 +279,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
@@ -289,7 +290,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceTPM2OldKernel(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-old-kernel-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
@@ -316,7 +317,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceMixedTPM2(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/mixed-devices-tpm2-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
@@ -335,7 +336,7 @@ func (s *deviceSuite) TestDefaultTPM2DeviceTPM2Multiple(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/multiple-tpm2-devices-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	pp := s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
+	pp := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/MSFT0101:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPM2Device()
 	c.Check(err, IsNil)
@@ -403,7 +404,7 @@ func (s *deviceSuite) TestTPMDeviceRawPhysicalPresenceInterface(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	expected := ppi.NewPPI(s.mockPPIBackend(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi")))
+	expected := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
 
 	device, err := DefaultTPMDevice()
 	c.Assert(err, IsNil)

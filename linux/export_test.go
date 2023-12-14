@@ -4,9 +4,9 @@
 
 package linux
 
-type PpiImpl = ppiImpl
+import "github.com/canonical/go-tpm2/ppi"
 
-var NewPPI = newPPI
+var NewSysfsPpi = newSysfsPpi
 
 func MockSysfsPath(path string) (restore func()) {
 	orig := sysfsPath
@@ -16,7 +16,7 @@ func MockSysfsPath(path string) (restore func()) {
 	}
 }
 
-func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int, pp *PpiImpl) *TPMDeviceRaw {
+func NewMockTPMDeviceRaw(path, sysfsPath string, version, devno int, pp ppi.PPI) *TPMDeviceRaw {
 	return &TPMDeviceRaw{
 		TPMDevice: TPMDevice{
 			path:      path,

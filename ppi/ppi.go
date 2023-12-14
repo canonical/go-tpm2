@@ -25,6 +25,7 @@ var (
 	ErrOperationFailed = errors.New("the PPI operation request failed")
 )
 
+// OperationError represents an error associated with a PPI operation.
 type OperationError uint64
 
 func (e OperationError) Error() string {

@@ -21,7 +21,7 @@ import (
 
 type sysfsPpiImpl struct {
 	sysfsPath string
-	version   ppi.Version
+	Version   ppi.Version
 
 	opsOnce  sync.Once
 	ops      map[ppi.OperationId]ppi.OperationStatus
@@ -138,6 +138,6 @@ func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
 
 	return &sysfsPpiImpl{
 		sysfsPath: path,
-		version:   ppi.Version(strings.TrimSpace(string(versionBytes))),
+		Version:   ppi.Version(strings.TrimSpace(string(versionBytes))),
 	}, nil
 }
