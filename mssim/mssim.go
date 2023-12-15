@@ -101,9 +101,9 @@ func (d *Device) Open() (tpm2.TCTI, error) {
 	return d.openInternal()
 }
 
-// ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
-func (d *Device) ShouldRetry() bool {
-	return true
+// Config implements [tpm2.TPMDevice.Config].
+func (d *Device) Config() tpm2.TPMDeviceConfig {
+	return tpm2.TPMDeviceConfig{}
 }
 
 // String implements [fmt.Stringer].
