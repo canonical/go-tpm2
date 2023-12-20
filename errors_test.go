@@ -66,6 +66,19 @@ func (s *errorsSuite) TestDecodeWarning(c *C) {
 	c.Check(err.(*TPMWarning).ResponseCode(), Equals, ResponseCode(0x923))
 }
 
+func (s *errorsSuite) TestDecodeWarningSelfTest(c *C) {
+	err := DecodeResponseCode(CommandGetRandom, 0x90a)
+	c.Check(err, ErrorMatches, "TPM returned a warning whilst executing command TPM_CC_GetRandom: TPM_RC_TESTING \\(TPM is performing self-tests\\)")
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMWarning{})
+	c.Check(err.(*TPMWarning), DeepEquals, &TPMWarning{Command: CommandGetRandom, Code: WarningTesting})
+	c.Check(err.(*TPMWarning).ResponseCode(), Equals, ResponseCode(0x90a))
+}
+
+func (s *errorsSuite) TestDecodeAsyncSelfTest(c *C) {
+	err := DecodeResponseCode(CommandSelfTest, 0x90a)
+	c.Check(err, IsNil)
+}
+
 func (s *errorsSuite) TestDecodeError0(c *C) {
 	err := DecodeResponseCode(CommandUnseal, 0x128)
 	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_Unseal: TPM_RC_PCR_CHANGED \\(PCR have changed since checked\\)")

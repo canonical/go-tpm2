@@ -757,7 +757,13 @@ func DecodeResponseCode(command CommandCode, resp ResponseCode) error {
 			return &TPMVendorError{Command: command, Code: resp}
 		case resp.S():
 			// A warning
-			return &TPMWarning{Command: command, Code: WarningCode(resp.E())}
+			code := WarningCode(resp.E())
+			switch {
+			case code == WarningTesting && command == CommandSelfTest:
+				return nil
+			default:
+				return &TPMWarning{Command: command, Code: code}
+			}
 		default:
 			return &TPMError{Command: command, Code: ErrorCode(resp.E())}
 		}

@@ -196,12 +196,6 @@ func (t *Tcti) platformCommand(cmd uint32) error {
 	return nil
 }
 
-// SetLocality sets the locality to be used for the next command.
-func (t *Tcti) SetLocality(locality uint8) error {
-	t.locality = locality
-	return nil
-}
-
 // Reset submits the reset command on the platform connection, which
 // initiates a reset of the TPM simulator and results in the execution
 // of _TPM_Init().
