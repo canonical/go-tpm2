@@ -415,6 +415,11 @@ func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
 	return ErrTimeoutNotSupported
 }
 
+// TCTI returns the underlying transmission channel for this context.
+func (t *TPMContext) TCTI() TCTI {
+	return t.tcti
+}
+
 // InitProperties executes one or more TPM2_GetCapability commands to initialize properties used
 // internally by TPMContext. This is normally done automatically by functions that require these
 // properties when they are used for the first time, but this function is provided so that the
