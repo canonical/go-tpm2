@@ -364,7 +364,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 			return nil, nil, &InvalidResponseError{commandCode, err}
 		}
 
-		if t.device.Config().TransparentRetry || try >= t.maxSubmissions {
+		if !t.device.ShouldRetry() || try >= t.maxSubmissions {
 			return nil, nil, err
 		}
 		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
@@ -474,21 +474,16 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 	return t.InitProperties()
 }
 
-// TPMDeviceConfig corresponds to the configuration for a TPM device.
-type TPMDeviceConfig struct {
-	// TransparentRetry indicates that the TPM device backend resubmits
-	// commands when the TPM response indicates that a command should
-	// be retried.
-	TransparentRetry bool
-}
-
 // TPMDevice corresponds a TPM device.
 type TPMDevice interface {
 	// Open opens a communication channel with the TPM device.
 	Open() (TCTI, error)
 
-	// Config returns the configuration for the TPM device.
-	Config() TPMDeviceConfig
+	// ShouldRetry indicates whether TPMContext should resubmit commands
+	// when the TPM response indicates that a command should be retried.
+	// Some backends may have already retried, in which case TPMContext
+	// should not retry.
+	ShouldRetry() bool
 
 	fmt.Stringer
 }
@@ -522,10 +517,8 @@ func (d *dummyTPMDevice) Open() (TCTI, error) {
 	return d.tcti, nil
 }
 
-func (d *dummyTPMDevice) Config() TPMDeviceConfig {
-	return TPMDeviceConfig{
-		TransparentRetry: false,
-	}
+func (d *dummyTPMDevice) ShouldRetry() bool {
+	return true
 }
 
 func (d *dummyTPMDevice) String() string {

@@ -108,11 +108,9 @@ func (d *TPMDevice) Open() (tpm2.TCTI, error) {
 	return tcti, err
 }
 
-// Config implements [tpm2.TPMDevice.Config].
-func (d *TPMDevice) Config() tpm2.TPMDeviceConfig {
-	return tpm2.TPMDeviceConfig{
-		TransparentRetry: true,
-	}
+// ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
+func (d *TPMDevice) ShouldRetry() bool {
+	return false
 }
 
 // String implements [fmt.Stringer].
