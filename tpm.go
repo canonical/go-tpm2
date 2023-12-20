@@ -406,8 +406,12 @@ func (t *TPMContext) SetMaxSubmissions(max uint) {
 //
 // Note that there isn't a way to reattempt to the fetch the result of a command that times out.
 // If a command times out, the connection will generally be unusable for future commands.
+//
+// Deprecated: This always returns [ErrTimeoutNotSupported]. Timing out after a command has been
+// submitted doesn't make sense for this API, as there is no mechanism to obtain a response from
+// a command that previously timed out.
 func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
-	return t.tcti.SetTimeout(timeout)
+	return ErrTimeoutNotSupported
 }
 
 // InitProperties executes one or more TPM2_GetCapability commands to initialize properties used
@@ -498,13 +502,6 @@ func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
 
 	tcti, err := device.Open()
 	if err != nil {
-		return nil, err
-	}
-	err = tcti.SetTimeout(InfiniteTimeout)
-	switch {
-	case errors.Is(err, ErrTimeoutNotSupported):
-		// ignore
-	case err != nil:
 		return nil, err
 	}
 

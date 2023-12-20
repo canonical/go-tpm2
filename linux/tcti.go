@@ -7,11 +7,9 @@ package linux
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"syscall"
-	"time"
 
 	"github.com/canonical/go-tpm2"
 	"golang.org/x/sys/unix"
@@ -32,8 +30,6 @@ type Tcti struct {
 	closer io.Closer
 	conn   syscall.RawConn
 	rsp    *bytes.Reader
-
-	timeout time.Duration
 }
 
 func (d *Tcti) wrapErr(op string, err error) error {
@@ -50,27 +46,12 @@ func (d *Tcti) wrapErr(op string, err error) error {
 }
 
 func (d *Tcti) pollReadyToRead() error {
-	var timeout *unix.Timespec
-	if d.timeout != tpm2.InfiniteTimeout {
-		timeout = new(unix.Timespec)
-		*timeout = unix.NsecToTimespec(int64(d.timeout))
-	}
-
 	var pollErr error
 	if err := d.conn.Control(func(fd uintptr) {
 		pollErr = func() error {
 			fds := []unix.PollFd{unix.PollFd{Fd: int32(fd), Events: unix.POLLIN}}
-			n, err := unix.Ppoll(fds, timeout, nil)
-			if err != nil {
-				return err
-			}
-			if n == 0 {
-				return timeoutError{}
-			}
-			if fds[0].Events != fds[0].Revents {
-				return fmt.Errorf("invalid revents: %d", fds[0].Revents)
-			}
-			return nil
+			_, err := unix.Ppoll(fds, nil, nil)
+			return err
 		}()
 	}); err != nil {
 		// The only error that can be returned from this is poll.ErrFileClosing
@@ -176,12 +157,6 @@ func (d *Tcti) Write(data []byte) (int, error) {
 // Close implements [tpm2.TCTI.Close].
 func (d *Tcti) Close() error {
 	return d.closer.Close()
-}
-
-// SetTimeout implements [tpm2.TCTI.SetTimeout].
-func (d *Tcti) SetTimeout(timeout time.Duration) error {
-	d.timeout = timeout
-	return nil
 }
 
 // MakeSticky implements [tpm2.TCTI.MakeSticky].

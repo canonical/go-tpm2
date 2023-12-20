@@ -70,7 +70,6 @@ func (d *Device) openInternal() (*Tcti, error) {
 	platformAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port()+1)
 
 	tcti := new(Tcti)
-	tcti.timeout = tpm2.InfiniteTimeout
 	tcti.locality = 3
 
 	tpm, err := net.Dial("tcp", tpmAddress)
@@ -127,14 +126,6 @@ type Tcti struct {
 // Read implmements [tpm2.TCTI.Read].
 func (t *Tcti) Read(data []byte) (int, error) {
 	if t.r == nil {
-		var deadline time.Time
-		if t.timeout != tpm2.InfiniteTimeout {
-			deadline = time.Now().Add(t.timeout)
-		}
-		if err := t.tpm.SetReadDeadline(deadline); err != nil {
-			return 0, fmt.Errorf("cannot set read deadline: %w", err)
-		}
-
 		var size uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
 			return 0, err
@@ -146,10 +137,6 @@ func (t *Tcti) Read(data []byte) (int, error) {
 
 	n, err := t.r.Read(data)
 	if err == io.EOF {
-		// Clear the deadline because we might have exceeded it by now
-		var noDeadline time.Time
-		t.tpm.SetReadDeadline(noDeadline)
-
 		var trash uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
 			return 0, err
@@ -193,17 +180,11 @@ func (t *Tcti) Close() (err error) {
 	return err
 }
 
-func (t *Tcti) SetTimeout(timeout time.Duration) error {
-	t.timeout = timeout
-	return nil
-}
-
 // MakeSticky implements [tpm2.TCTI.MakeSticky].
 func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
 	return errors.New("not implemented")
 }
 
-// SetTimeout implements [tpm2.TCTI.SetTimeout].
 func (t *Tcti) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
 		return fmt.Errorf("cannot send command: %w", err)

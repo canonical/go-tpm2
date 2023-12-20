@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
@@ -977,10 +976,6 @@ func (t *TCTI) Close() error {
 	}
 
 	return nil
-}
-
-func (t *TCTI) SetTimeout(timeout time.Duration) error {
-	return t.tcti.SetTimeout(timeout)
 }
 
 func (t *TCTI) MakeSticky(handle tpm2.Handle, sticky bool) error {

@@ -20,7 +20,8 @@ var ErrTimeoutNotSupported = errors.New("configurable command timeouts are not s
 // defines the following callbacks:
 // - transmit, which is equivalent to io.Writer.
 // - receive, which is equivalent to io.Reader, although that lacks the ability to specify
-//   a timeout.
+//   a timeout. Timing out after a command is submitted is problematic because our API is
+//   synchronous and there isn't a way to resume a command.
 // - finalize, which is equivalent to io.Closer.
 // - cancel, which we don't implement at the moment, and the Linux character device doesn't
 //   support cancellation anyway.
@@ -45,10 +46,6 @@ type TCTI interface {
 	Write(p []byte) (int, error)
 
 	Close() error
-
-	// SetTimeout sets the amount of time to wait before Read times out. Set to InfiniteTimeout to
-	// never time out.
-	SetTimeout(timeout time.Duration) error
 
 	// MakeSticky requests that the underlying resource manager does not unload the resource
 	// associated with the supplied handle between commands.
