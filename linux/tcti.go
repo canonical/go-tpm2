@@ -11,7 +11,6 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/canonical/go-tpm2"
 	"golang.org/x/sys/unix"
 )
 
@@ -157,9 +156,4 @@ func (d *Tcti) Write(data []byte) (int, error) {
 // Close implements [tpm2.TCTI.Close].
 func (d *Tcti) Close() error {
 	return d.closer.Close()
-}
-
-// MakeSticky implements [tpm2.TCTI.MakeSticky].
-func (d *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
-	return errors.New("not implemented")
 }

@@ -180,11 +180,6 @@ func (t *Tcti) Close() (err error) {
 	return err
 }
 
-// MakeSticky implements [tpm2.TCTI.MakeSticky].
-func (t *Tcti) MakeSticky(handle tpm2.Handle, sticky bool) error {
-	return errors.New("not implemented")
-}
-
 func (t *Tcti) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
 		return fmt.Errorf("cannot send command: %w", err)

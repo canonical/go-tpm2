@@ -646,10 +646,6 @@ func (t *mockTPM12Tcti) Close() error {
 	return nil
 }
 
-func (t *mockTPM12Tcti) MakeSticky(handle Handle, sticky bool) error {
-	return nil
-}
-
 type capabilitiesMockTPM12Suite struct {
 	testutil.BaseTest
 	tpm *TPMContext

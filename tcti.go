@@ -46,8 +46,4 @@ type TCTI interface {
 	Write(p []byte) (int, error)
 
 	Close() error
-
-	// MakeSticky requests that the underlying resource manager does not unload the resource
-	// associated with the supplied handle between commands.
-	MakeSticky(handle Handle, sticky bool) error
 }

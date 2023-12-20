@@ -978,10 +978,6 @@ func (t *TCTI) Close() error {
 	return nil
 }
 
-func (t *TCTI) MakeSticky(handle tpm2.Handle, sticky bool) error {
-	return t.tcti.MakeSticky(handle, sticky)
-}
-
 // Unwrap returns the real interface that this one wraps.
 func (t *TCTI) Unwrap() tpm2.TCTI {
 	return t.tcti
