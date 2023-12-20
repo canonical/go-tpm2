@@ -228,7 +228,7 @@ func (t *TPMContext) PolicyPCR(policySession SessionContext, pcrDigest Digest, p
 
 	return t.StartCommand(CommandPolicyPCR).
 		AddHandles(UseHandleContext(policySession)).
-		AddParams(pcrDigest, pcrs.WithMinSelectSize(t.minPcrSelectSize)).
+		AddParams(pcrDigest, pcrs.WithMinSelectSize(t.properties.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
 		Run(nil)
 }

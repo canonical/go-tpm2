@@ -74,7 +74,7 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 		var values DigestList
 
 		if err := t.StartCommand(CommandPCRRead).
-			AddParams(remaining.WithMinSelectSize(t.minPcrSelectSize)).
+			AddParams(remaining.WithMinSelectSize(t.properties.minPcrSelectSize)).
 			AddExtraSessions(sessions...).
 			Run(nil, &updateCounter, &pcrSelectionOut, &values); err != nil {
 			return 0, nil, err

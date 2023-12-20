@@ -138,7 +138,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 
 	if err := t.StartCommand(CommandQuote).
 		AddHandles(UseResourceContextWithAuth(signContext, signContextAuthSession)).
-		AddParams(qualifyingData, inScheme, pcrs.WithMinSelectSize(t.minPcrSelectSize)).
+		AddParams(qualifyingData, inScheme, pcrs.WithMinSelectSize(t.properties.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
 		Run(nil, mu.Sized(&quoted), &signature); err != nil {
 		return nil, nil, err

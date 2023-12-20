@@ -150,7 +150,7 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 
 	if err := t.StartCommand(CommandCreate).
 		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
-		AddParams(mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR.WithMinSelectSize(t.minPcrSelectSize)).
+		AddParams(mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR.WithMinSelectSize(t.properties.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
 		Run(nil, &outPrivate, mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err

@@ -345,13 +345,13 @@ type nvWriteHelperContext struct {
 }
 
 func (c *nvWriteHelperContext) last() bool {
-	return len(c.data[c.total:]) <= int(c.tpm.maxNVBufferSize)
+	return len(c.data[c.total:]) <= int(c.tpm.properties.maxNVBufferSize)
 }
 
 func (c *nvWriteHelperContext) run(sessions ...SessionContext) error {
 	d := c.data[c.total:]
-	if len(d) > int(c.tpm.maxNVBufferSize) {
-		d = d[:c.tpm.maxNVBufferSize]
+	if len(d) > int(c.tpm.properties.maxNVBufferSize) {
+		d = d[:c.tpm.properties.maxNVBufferSize]
 	}
 
 	if err := c.tpm.NVWriteRaw(c.authContext, c.nvIndex, d, c.offset+c.total, sessions[0], sessions[1:]...); err != nil {
@@ -712,13 +712,13 @@ type nvReadHelperContext struct {
 }
 
 func (c *nvReadHelperContext) last() bool {
-	return c.size <= c.tpm.maxNVBufferSize
+	return c.size <= c.tpm.properties.maxNVBufferSize
 }
 
 func (c *nvReadHelperContext) run(sessions ...SessionContext) error {
 	sz := c.size
-	if c.size > c.tpm.maxNVBufferSize {
-		sz = c.tpm.maxNVBufferSize
+	if c.size > c.tpm.properties.maxNVBufferSize {
+		sz = c.tpm.properties.maxNVBufferSize
 	}
 
 	data, err := c.tpm.NVReadRaw(c.authContext, c.nvIndex, sz, c.offset, sessions[0], sessions[1:]...)

@@ -141,7 +141,7 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 
 	if err := t.StartCommand(CommandCreatePrimary).
 		AddHandles(UseResourceContextWithAuth(primaryObject, primaryObjectAuthSession)).
-		AddParams(mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR.WithMinSelectSize(t.minPcrSelectSize)).
+		AddParams(mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR.WithMinSelectSize(t.properties.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
 		Run(&objectHandle, mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket, &name); err != nil {
 		return nil, nil, nil, nil, nil, err

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"time"
 
 	"github.com/canonical/go-tpm2/mu"
@@ -207,6 +206,12 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 	return r, nil
 }
 
+type tpmDeviceProperties struct {
+	maxBufferSize    uint16
+	minPcrSelectSize uint8
+	maxNVBufferSize  uint16
+}
+
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
 // Section 14 - Asymmetric Primitives
 // Section 15 - Symmetric Primitives
@@ -272,16 +277,12 @@ func (e *execContext) RunCommand(c *cmdContext, responseHandle *Handle) (*rspCon
 // these are for sessions that don't provide authorization for a corresponding TPM resource. These
 // sessions may be used for the purposes of session based parameter encryption or command auditing.
 type TPMContext struct {
-	device                TPMDevice
-	tcti                  TCTI
-	permanentResources    map[Handle]*permanentContext
-	maxSubmissions        uint
-	propertiesInitialized bool
-	maxBufferSize         uint16
-	minPcrSelectSize      uint8
-	maxDigestSize         uint16
-	maxNVBufferSize       uint16
-	execContext           execContext
+	device             TPMDevice
+	tcti               TCTI
+	permanentResources map[Handle]*permanentContext
+	maxSubmissions     uint
+	properties         *tpmDeviceProperties
+	execContext        execContext
 }
 
 // Close calls Close on the transmission interface.
@@ -421,54 +422,28 @@ func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
 //
 // Any sessions supplied should have the [AttrContinueSession] attribute set.
 func (t *TPMContext) InitProperties(sessions ...SessionContext) error {
-	props, err := t.GetCapabilityTPMProperties(PropertyFixed, CapabilityMaxProperties, sessions...)
+	var err error
+	var properties tpmDeviceProperties
+
+	properties.maxBufferSize, err = t.GetMaxBufferSize(sessions...)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot obtain TPM_PT_BUFFER_MAX property: %w", err)
+	}
+	properties.maxNVBufferSize, err = t.GetNVMaxBufferSize(sessions...)
+	if err != nil {
+		return fmt.Errorf("cannot obtain TPM_PT_NV_BUFFER_MAX property: %w", err)
+	}
+	properties.minPcrSelectSize, err = t.GetMinPCRSelectSize(sessions...)
+	if err != nil {
+		return fmt.Errorf("cannot obtain TPM_PT_PCR_SELECT_MIN property: %w", err)
 	}
 
-	for _, prop := range props {
-		switch prop.Property {
-		case PropertyInputBuffer, PropertyMaxDigest, PropertyNVBufferMax:
-			if prop.Value > math.MaxUint16 {
-				return &InvalidResponseError{CommandGetCapability, fmt.Errorf("property %v out of range", prop.Property)}
-			}
-
-			value := uint16(prop.Value)
-
-			switch prop.Property {
-			case PropertyInputBuffer:
-				t.maxBufferSize = value
-			case PropertyMaxDigest:
-				t.maxDigestSize = value
-			case PropertyNVBufferMax:
-				t.maxNVBufferSize = value
-			}
-		case PropertyPCRSelectMin:
-			if prop.Value > math.MaxUint8 {
-				return &InvalidResponseError{CommandGetCapability, errors.New("property TPM_PT_PCR_SELECT_MIN out of range")}
-			}
-			t.minPcrSelectSize = uint8(prop.Value)
-		}
-	}
-
-	if t.maxBufferSize == 0 {
-		t.maxBufferSize = 1024
-	}
-	if t.maxDigestSize == 0 {
-		return &InvalidResponseError{CommandGetCapability, errors.New("missing or invalid TPM_PT_MAX_DIGEST property")}
-	}
-	if t.maxNVBufferSize == 0 {
-		return &InvalidResponseError{CommandGetCapability, errors.New("missing or invalid TPM_PT_NV_BUFFER_MAX property")}
-	}
-	if t.minPcrSelectSize == 0 {
-		return &InvalidResponseError{CommandGetCapability, errors.New("missing or invalid TPM_PT_PCR_SELECT_MIN property")}
-	}
-	t.propertiesInitialized = true
+	t.properties = &properties
 	return nil
 }
 
 func (t *TPMContext) initPropertiesIfNeeded() error {
-	if t.propertiesInitialized {
+	if t.properties != nil {
 		return nil
 	}
 	return t.InitProperties()

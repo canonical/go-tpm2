@@ -172,7 +172,7 @@ type sequenceExecuteContext struct {
 }
 
 func (c *sequenceExecuteContext) last() bool {
-	return len(c.buffer[c.total:]) <= int(c.tpm.maxBufferSize)
+	return len(c.buffer[c.total:]) <= int(c.tpm.properties.maxBufferSize)
 }
 
 func (c *sequenceExecuteContext) run(sessions ...SessionContext) error {
@@ -187,7 +187,7 @@ func (c *sequenceExecuteContext) run(sessions ...SessionContext) error {
 	}
 
 	b := c.buffer[c.total:]
-	b = b[:c.tpm.maxBufferSize]
+	b = b[:c.tpm.properties.maxBufferSize]
 	if err := c.tpm.SequenceUpdate(c.sequenceContext, b, sessions[0], sessions[1:]...); err != nil {
 		return err
 	}
@@ -247,7 +247,7 @@ type eventSequenceExecuteContext struct {
 }
 
 func (c *eventSequenceExecuteContext) last() bool {
-	return len(c.buffer[c.total:]) <= int(c.tpm.maxBufferSize)
+	return len(c.buffer[c.total:]) <= int(c.tpm.properties.maxBufferSize)
 }
 
 func (c *eventSequenceExecuteContext) run(sessions ...SessionContext) error {
@@ -261,7 +261,7 @@ func (c *eventSequenceExecuteContext) run(sessions ...SessionContext) error {
 	}
 
 	b := c.buffer[c.total:]
-	b = b[:c.tpm.maxBufferSize]
+	b = b[:c.tpm.properties.maxBufferSize]
 	if err := c.tpm.SequenceUpdate(c.sequenceContext, b, sessions[1], sessions[2:]...); err != nil {
 		return err
 	}
