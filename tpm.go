@@ -212,6 +212,12 @@ type tpmDeviceProperties struct {
 	maxNVBufferSize  uint16
 }
 
+type tpmRetryParameters struct {
+	maxRetries     uint
+	initialBackoff time.Duration
+	backoffRate    uint
+}
+
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
 // Section 14 - Asymmetric Primitives
 // Section 15 - Symmetric Primitives
@@ -280,7 +286,7 @@ type TPMContext struct {
 	device             TPMDevice
 	tcti               TCTI
 	permanentResources map[Handle]*permanentContext
-	maxSubmissions     uint
+	retryParams        tpmRetryParameters
 	properties         *tpmDeviceProperties
 	execContext        execContext
 }
@@ -341,10 +347,9 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 		return nil, nil, fmt.Errorf("cannot serialize command packet: %w", err)
 	}
 
-	try := uint(1)
-	retryDelay := 20 * time.Millisecond
+	retryDelay := t.retryParams.initialBackoff
 
-	for {
+	for retries := t.retryParams.maxRetries; ; retries-- {
 		var err error
 		resp, err := t.RunCommandBytes(cmd)
 		if err != nil {
@@ -365,7 +370,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 			return nil, nil, &InvalidResponseError{commandCode, err}
 		}
 
-		if !t.device.ShouldRetry() || try >= t.maxSubmissions {
+		if !t.device.ShouldRetry() || retries == 0 {
 			return nil, nil, err
 		}
 		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
@@ -374,8 +379,7 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 
 		time.Sleep(retryDelay)
 
-		try++
-		retryDelay *= 2
+		retryDelay *= time.Duration(t.retryParams.backoffRate)
 	}
 }
 
@@ -397,8 +401,25 @@ func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
 //
 // Each submission is performed after an incremental delay. The first submission is delayed for
 // 20ms, with the delay time doubling for each subsequent submission.
+//
+// Deprecated: use [SetRetryParameters].
 func (t *TPMContext) SetMaxSubmissions(max uint) {
-	t.maxSubmissions = max
+	if max > 0 {
+		max -= 1
+	}
+	t.retryParams.maxRetries = max
+}
+
+// SetRetryParams customizes how commands will be retries before failing with an error. The maxRetries
+// argument specifies the maximum amount of retries. The initialBackoff argument specifies the time to
+// wait before submitting the first retry. The backoffRate argument specifies how much more time to wait
+// for each retry. The default values are 4 for maxRetries, 20ms for initialBackoff and 2 for backoffRate.
+// This means that the first retry will be attempted after a delay of 20ms, the second retry after 40ms,
+// the third retry after 80ms and the fourth retry after 160ms.
+func (t *TPMContext) SetRetryParameters(maxRetries uint, initialBackoff time.Duration, backoffRate uint) {
+	t.retryParams.maxRetries = maxRetries
+	t.retryParams.initialBackoff = initialBackoff
+	t.retryParams.backoffRate = backoffRate
 }
 
 // SetCommandTimeout sets the maximum time that the context will wait for a response before a
@@ -480,11 +501,16 @@ func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
 		return nil, err
 	}
 
-	tpm := new(TPMContext)
-	tpm.device = device
-	tpm.tcti = tcti
-	tpm.permanentResources = make(map[Handle]*permanentContext)
-	tpm.maxSubmissions = 5
+	tpm := &TPMContext{
+		device:             device,
+		tcti:               tcti,
+		permanentResources: make(map[Handle]*permanentContext),
+		retryParams: tpmRetryParameters{
+			maxRetries:     4,
+			initialBackoff: 20 * time.Millisecond,
+			backoffRate:    2,
+		},
+	}
 	tpm.execContext.dispatcher = tpm
 	return tpm, nil
 }
