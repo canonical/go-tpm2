@@ -92,7 +92,6 @@ type objectContextInternal interface {
 type nvIndexContextInternal interface {
 	resourceContextInternal
 
-	GetPublic() *NVPublic
 	SetAttr(a NVAttributes)
 	ClearAttr(a NVAttributes)
 	Attrs() NVAttributes
@@ -299,10 +298,6 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 
 type nvIndexContext struct {
 	resourceContext
-}
-
-func (r *nvIndexContext) GetPublic() *NVPublic {
-	return r.Data.NV
 }
 
 func (r *nvIndexContext) SetAttr(a NVAttributes) {

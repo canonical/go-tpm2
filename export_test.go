@@ -40,6 +40,10 @@ func (c *CommandContext) Cmd() *CmdContext {
 	return &c.cmd
 }
 
+func (c *NvIndexContext) GetPublic() *NVPublic {
+	return c.Data.NV
+}
+
 func (c *ResponseContext) Dispatcher() commandDispatcher {
 	return c.dispatcher
 }
