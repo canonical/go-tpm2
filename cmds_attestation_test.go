@@ -8,6 +8,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	. "github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/cryptutil"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/objectutil"
@@ -60,7 +61,11 @@ func (s *attestationSuite) checkAttestSignature(c *C, signature *Signature, sign
 		pub, _, _, err := s.TPM.ReadPublic(sign)
 		c.Assert(err, IsNil)
 
-		ok, err := util.VerifyAttestationSignature(pub.Public(), attest, signature)
+		// TODO: Implement a helper for this
+		h := signature.HashAlg().NewHash()
+		mu.MustMarshalToWriter(h, attest)
+
+		ok, err := cryptutil.VerifySignature(pub.Public(), h.Sum(nil), signature)
 		c.Check(err, IsNil)
 		c.Check(ok, internal_testutil.IsTrue)
 	}

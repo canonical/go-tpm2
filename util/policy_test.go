@@ -45,7 +45,8 @@ func (s *policySuite) testPolicySigned(c *C, data *testPolicySignedData) {
 				Hash: tpm2.HashAlgorithmSHA256,
 				Sig:  make([]byte, 256)}}}
 
-	pub := NewExternalRSAPublicKeyWithDefaults(objectutil.UsageSign, &key.PublicKey)
+	pub, err := objectutil.NewRSAPublicKey(&key.PublicKey)
+	c.Assert(err, IsNil)
 
 	pubKey, err := s.TPM.LoadExternal(nil, pub, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
