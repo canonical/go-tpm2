@@ -32,12 +32,15 @@ func TestDuplicate(t *testing.T) {
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrSign,
 		AuthPolicy: trial.GetDigest(),
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
-				Exponent:  0}}}
+				Exponent:  0,
+			},
+		),
+	}
 	sensitive := &SensitiveCreate{UserAuth: []byte("foo")}
 	priv, pub, _, _, _, err := tpm.Create(primary, sensitive, template, nil, nil, nil)
 	if err != nil {
@@ -59,16 +62,19 @@ func TestDuplicate(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
+					KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+					Mode:      MakeSymModeUnion(SymModeCFB)},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
-				Exponent: uint32(key.PublicKey.E)}},
-		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
+				Exponent: uint32(key.PublicKey.E),
+			},
+		),
+		Unique: MakePublicIDUnion(PublicKeyRSA(key.PublicKey.N.Bytes())),
+	}
 	parent, err := tpm.LoadExternal(nil, parentPub, HandleOwner)
 	if err != nil {
 		t.Fatalf("LoadExternal failed: %v", err)
@@ -101,7 +107,7 @@ func TestDuplicate(t *testing.T) {
 		if outer {
 			privKey = key
 			parentNameAlg = parentPub.NameAlg
-			parentSymmetricAlg = &parentPub.AsymDetail().Symmetric
+			parentSymmetricAlg = &parentPub.Params.AsymDetail().Symmetric
 		}
 
 		sensitiveDup, err := objectutil.UnwrapDuplicated(duplicate, pub, privKey, parentNameAlg, parentSymmetricAlg, inSymSeed, encryptionKey, symmetricAlg)
@@ -118,7 +124,7 @@ func TestDuplicate(t *testing.T) {
 		if !bytes.Equal(sensitiveDup.AuthValue[0:len(sensitive.UserAuth)], sensitive.UserAuth) {
 			t.Errorf("Unexpected duplicate auth value")
 		}
-		if len(sensitiveDup.Sensitive.RSA) != int(template.Params.RSADetail.KeyBits)/16 {
+		if len(sensitiveDup.Sensitive.RSA()) != int(template.Params.RSADetail().KeyBits)/16 {
 			t.Errorf("Unexpected duplicate sensitive size")
 		}
 	}
@@ -137,10 +143,11 @@ func TestDuplicate(t *testing.T) {
 	t.Run("InnerWrapper", func(t *testing.T) {
 		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      &SymModeU{Sym: SymModeCFB}}
+			KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+			Mode:      MakeSymModeUnion(SymModeCFB),
+		}
 		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, nil, symmetricAlg)
-		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
+		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym())/8 {
 			t.Errorf("Unexpected encryption key size")
 		}
 		if len(outSymSeed) > 0 {
@@ -153,8 +160,9 @@ func TestDuplicate(t *testing.T) {
 	t.Run("InnerWrapperWithKey", func(t *testing.T) {
 		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      &SymModeU{Sym: SymModeCFB}}
+			KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+			Mode:      MakeSymModeUnion(SymModeCFB),
+		}
 		encryptionKeyIn := make(Data, 16)
 		rand.Read(encryptionKeyIn)
 		encryptionKeyOut, duplicate, outSymSeed := run(t, nil, encryptionKeyIn, symmetricAlg)
@@ -173,7 +181,7 @@ func TestDuplicate(t *testing.T) {
 		if len(encryptionKeyOut) > 0 {
 			t.Errorf("Unexpected encryption key")
 		}
-		if len(outSymSeed) != int(parentPub.Params.RSADetail.KeyBits)/8 {
+		if len(outSymSeed) != int(parentPub.Params.RSADetail().KeyBits)/8 {
 			t.Errorf("Unexpected outSymSeed size")
 		}
 
@@ -183,13 +191,14 @@ func TestDuplicate(t *testing.T) {
 	t.Run("OuterAndInnerWrapper", func(t *testing.T) {
 		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      &SymModeU{Sym: SymModeCFB}}
+			KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+			Mode:      MakeSymModeUnion(SymModeCFB),
+		}
 		encryptionKeyOut, duplicate, outSymSeed := run(t, parent, nil, symmetricAlg)
-		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym)/8 {
+		if len(encryptionKeyOut) != int(symmetricAlg.KeyBits.Sym())/8 {
 			t.Errorf("Unexpected encryption key size")
 		}
-		if len(outSymSeed) != int(parentPub.Params.RSADetail.KeyBits)/8 {
+		if len(outSymSeed) != int(parentPub.Params.RSADetail().KeyBits)/8 {
 			t.Errorf("Unexpected outSymSeed size")
 		}
 
@@ -213,17 +222,21 @@ func TestImport(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrSign,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
-				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
+				Exponent:  uint32(key.PublicKey.E),
+			},
+		),
+		Unique: MakePublicIDUnion(PublicKeyRSA(key.PublicKey.N.Bytes())),
+	}
 	objectSensitive := &Sensitive{
 		Type:      ObjectTypeRSA,
 		AuthValue: []byte("foo"),
-		Sensitive: &SensitiveCompositeU{RSA: key.Primes[0].Bytes()}}
+		Sensitive: MakeSensitiveCompositeUnion(PrivateKeyRSA(key.Primes[0].Bytes())),
+	}
 
 	run := func(t *testing.T, encryptionKey Data, duplicate Private, inSymSeed EncryptedSecret, symmetricAlg *SymDefObject, parentContextAuthSession SessionContext) {
 		priv, err := tpm.Import(primary, encryptionKey, objectPublic, duplicate, inSymSeed, symmetricAlg, parentContextAuthSession)
@@ -248,8 +261,9 @@ func TestImport(t *testing.T) {
 	t.Run("InnerWrapper", func(t *testing.T) {
 		symmetricAlg := &SymDefObject{
 			Algorithm: SymObjectAlgorithmAES,
-			KeyBits:   &SymKeyBitsU{Sym: 128},
-			Mode:      &SymModeU{Sym: SymModeCFB}}
+			KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+			Mode:      MakeSymModeUnion(SymModeCFB),
+		}
 		encryptionKey, duplicate, _, err := objectutil.CreateImportable(rand.Reader, objectSensitive, objectPublic, nil, nil, symmetricAlg)
 		if err != nil {
 			t.Fatalf("CreateDuplicationObject failed: %v", err)

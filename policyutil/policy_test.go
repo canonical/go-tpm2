@@ -442,7 +442,7 @@ func (s *computeSuite) testPolicyCpHash(c *C, data *testComputePolicyCpHashData)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.alg, digest)},
 		nil,
 		NewMockPolicyCpHashElement(nil, expectedCpHashA),
 	)
@@ -521,7 +521,7 @@ func (s *computeSuite) testPolicyNameHash(c *C, data *testComputePolicyNameHashD
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{{HashAlg: data.alg, Digest: digest}},
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.alg, digest)},
 		nil,
 		NewMockPolicyNameHashElement(nil, expectedNameHash),
 	)
@@ -839,16 +839,16 @@ func (s *computeSuite) TestPolicyBranches(c *C) {
 	c.Check(digest, DeepEquals, expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, digest)},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
-				"branch1", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[0]}},
+				"branch1", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList[0])},
 				NewMockPolicyAuthValueElement(),
 			),
 			NewMockPolicyBranch(
-				"branch2", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[1]}},
+				"branch2", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList[1])},
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
 			),
 		),
@@ -891,7 +891,7 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
 	policy, err = builder.Policy()
 	c.Assert(err, IsNil)
-	expectedDigests := TaggedHashList{
+	expectedDigests := []TaggedHash{
 		{HashAlg: tpm2.HashAlgorithmSHA1, Digest: make(tpm2.Digest, 20)},
 		{HashAlg: tpm2.HashAlgorithmSHA256, Digest: make(tpm2.Digest, 32)},
 	}
@@ -927,24 +927,24 @@ func (s *computeSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	c.Check(digestSHA256, DeepEquals, expectedDigests[1].Digest)
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{
-			{HashAlg: tpm2.HashAlgorithmSHA1, Digest: digestSHA1},
-			{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digestSHA256},
+		tpm2.TaggedHashList{
+			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, digestSHA1),
+			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, digestSHA256),
 		},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
-				"branch1", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[0]},
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashListSHA256[0]},
+				"branch1", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, pHashListSHA1[0]),
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashListSHA256[0]),
 				},
 				NewMockPolicyAuthValueElement(),
 			),
 			NewMockPolicyBranch(
-				"branch2", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[1]},
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashListSHA256[1]},
+				"branch2", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, pHashListSHA1[1]),
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashListSHA256[1]),
 				},
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
 			),
@@ -1028,33 +1028,33 @@ func (s *computeSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(digest, DeepEquals, expectedDigest.Digest)
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, digest)},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
-				"branch1", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[0]},
+				"branch1", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList1[0]),
 				},
 				NewMockPolicyAuthValueElement(),
 			),
 			NewMockPolicyBranch(
-				"branch2", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[1]},
+				"branch2", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList1[1]),
 				},
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
 			),
 		),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
-				"branch3", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[0]},
+				"branch3", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList2[0]),
 				},
 				NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 			),
 			NewMockPolicyBranch(
-				"branch4", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[1]},
+				"branch4", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList2[1]),
 				},
 				NewMockPolicyCommandCodeElement(tpm2.CommandNVWriteLock),
 			),
@@ -1157,45 +1157,45 @@ func (s *computeSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(digest, DeepEquals, expectedDigest.Digest)
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: digest}},
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, digest)},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyORElement(
 			NewMockPolicyBranch(
-				"branch1", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[0]},
+				"branch1", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList1[0]),
 				},
 				NewMockPolicyAuthValueElement(),
 				NewMockPolicyORElement(
 					NewMockPolicyBranch(
-						"branch2", TaggedHashList{
-							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[0]},
+						"branch2", tpm2.TaggedHashList{
+							tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList2[0]),
 						},
 						NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 					),
 					NewMockPolicyBranch(
-						"branch3", TaggedHashList{
-							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[1]},
+						"branch3", tpm2.TaggedHashList{
+							tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList2[1]),
 						},
 						NewMockPolicyCommandCodeElement(tpm2.CommandNVWriteLock),
 					),
 				),
 			),
 			NewMockPolicyBranch(
-				"branch4", TaggedHashList{
-					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[1]},
+				"branch4", tpm2.TaggedHashList{
+					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList1[1]),
 				},
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
 				NewMockPolicyORElement(
 					NewMockPolicyBranch(
-						"branch5", TaggedHashList{
-							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList3[0]},
+						"branch5", tpm2.TaggedHashList{
+							tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList3[0]),
 						},
 						NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 					),
 					NewMockPolicyBranch(
-						"branch6", TaggedHashList{
-							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList3[1]},
+						"branch6", tpm2.TaggedHashList{
+							tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashList3[1]),
 						},
 						NewMockPolicyCommandCodeElement(tpm2.CommandNVWriteLock),
 					),
@@ -1347,7 +1347,7 @@ func (s *policySuiteNoTPM) testAuthorizePolicy(c *C, data *testAuthorizePolicyDa
 	}
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{{HashAlg: data.nameAlg, Digest: data.expectedDigest}},
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.nameAlg, data.expectedDigest)},
 		[]PolicyAuthorization{{AuthKey: keySign, PolicyRef: data.policyRef, Signature: data.expectedSignature}},
 		NewMockPolicyAuthValueElement(),
 	)
@@ -1372,13 +1372,13 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 		expectedDigest: internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
 		expectedSignature: &tpm2.Signature{
 			SigAlg: tpm2.SigSchemeAlgECDSA,
-			Signature: &tpm2.SignatureU{
-				ECDSA: &tpm2.SignatureECDSA{
+			Signature: tpm2.MakeSignatureUnion(
+				tpm2.SignatureECDSA{
 					Hash:       tpm2.HashAlgorithmSHA256,
 					SignatureR: internal_testutil.DecodeHexString(c, "fef27905ea5b0265ed72649b518c9dc34d9d729214fb65106b25188acdb0aa09"),
 					SignatureS: internal_testutil.DecodeHexString(c, "55e8e6eb6bc688e16225539019ae82d6eba0ac9db61974d366f72a4d4c125ae4"),
 				},
-			},
+			),
 		},
 	})
 	c.Check(err, IsNil)
@@ -1400,13 +1400,13 @@ c7C9ElAfzkjURTxVWrFldXF9M8kCdot7wNuLeWnIJL7p5y2A43mu4mOb
 		expectedDigest: internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
 		expectedSignature: &tpm2.Signature{
 			SigAlg: tpm2.SigSchemeAlgECDSA,
-			Signature: &tpm2.SignatureU{
-				ECDSA: &tpm2.SignatureECDSA{
+			Signature: tpm2.MakeSignatureUnion(
+				tpm2.SignatureECDSA{
 					Hash:       tpm2.HashAlgorithmSHA256,
 					SignatureR: internal_testutil.DecodeHexString(c, "4ac10b34ab032a57fd2e430eadc31dedde61462cc8fa40ff6b13515abdb2b416"),
 					SignatureS: internal_testutil.DecodeHexString(c, "3dbd37dbcb7b731c21505e919c003d23c8084e6c6ec0dfaa7b2a3341ec920514"),
 				},
-			},
+			),
 		},
 	})
 	c.Check(err, IsNil)
@@ -1427,13 +1427,13 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 		expectedDigest: internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
 		expectedSignature: &tpm2.Signature{
 			SigAlg: tpm2.SigSchemeAlgECDSA,
-			Signature: &tpm2.SignatureU{
-				ECDSA: &tpm2.SignatureECDSA{
+			Signature: tpm2.MakeSignatureUnion(
+				tpm2.SignatureECDSA{
 					Hash:       tpm2.HashAlgorithmSHA256,
 					SignatureR: internal_testutil.DecodeHexString(c, "5743fafc980e7dead11954e19ba3a0440f06fa0cd6eb2fbebc24a136834d392f"),
 					SignatureS: internal_testutil.DecodeHexString(c, "8a0da89b7e1bd9cc56b21cb4b686b54d102d319186eeb819e2d70f80cf14d115"),
 				},
-			},
+			),
 		},
 	})
 	c.Check(err, IsNil)
@@ -1455,13 +1455,13 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 		expectedDigest: internal_testutil.DecodeHexString(c, "af6038c78c5c962d37127e319124e3a8dc582e9b"),
 		expectedSignature: &tpm2.Signature{
 			SigAlg: tpm2.SigSchemeAlgECDSA,
-			Signature: &tpm2.SignatureU{
-				ECDSA: &tpm2.SignatureECDSA{
+			Signature: tpm2.MakeSignatureUnion(
+				tpm2.SignatureECDSA{
 					Hash:       tpm2.HashAlgorithmSHA1,
 					SignatureR: internal_testutil.DecodeHexString(c, "039dfb9e7b2ab5546fe8c47c8ddfc20a966fae87397bfdb1f7007e2db971f603"),
 					SignatureS: internal_testutil.DecodeHexString(c, "cf61bdfff0ddf9edce5a2ebb53f3910b88c9406cb35bb5a117fb149b2550250c"),
 				},
-			},
+			),
 		},
 	})
 	c.Check(err, IsNil)

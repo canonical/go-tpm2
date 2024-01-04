@@ -11,11 +11,11 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"reflect"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/internal/union"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -277,30 +277,6 @@ type taggedHash struct {
 	HashAlg tpm2.HashAlgorithmId
 	Digest  tpm2.Digest
 }
-
-func (h taggedHash) Marshal(w io.Writer) error {
-	ta := tpm2.MakeTaggedHash(h.HashAlg, h.Digest)
-	_, err := mu.MarshalToWriter(w, ta)
-	return err
-}
-
-func (h *taggedHash) Unmarshal(r io.Reader) error {
-	var ta tpm2.TaggedHash
-	if _, err := mu.UnmarshalFromReader(r, &ta); err != nil {
-		return err
-	}
-
-	if ta.HashAlg != tpm2.HashAlgorithmNull && !ta.HashAlg.IsValid() {
-		return errors.New("invalid digest algorithm")
-	}
-
-	*h = taggedHash{
-		HashAlg: ta.HashAlg,
-		Digest:  ta.Digest()}
-	return nil
-}
-
-type taggedHashList []taggedHash
 
 type policyNVElement struct {
 	NvIndex   *tpm2.NVPublic
@@ -641,7 +617,7 @@ func (e *policyNameHashElement) run(runner policyRunner) error {
 
 type policyBranch struct {
 	Name          policyBranchName
-	PolicyDigests taggedHashList
+	PolicyDigests tpm2.TaggedHashList
 	Policy        policyElements
 }
 
@@ -696,7 +672,7 @@ func (e *policyORElement) run(runner policyRunner) error {
 				continue
 			}
 
-			digests = append(digests, digest.Digest)
+			digests = append(digests, digest.Digest())
 			found = true
 			break
 		}
@@ -722,7 +698,7 @@ func (e *policyORElement) run(runner policyRunner) error {
 
 type pcrValue struct {
 	PCR    tpm2.Handle
-	Digest taggedHash
+	Digest tpm2.TaggedHash
 }
 
 type pcrValueList []pcrValue
@@ -751,7 +727,7 @@ func (e *policyPCRElement) pcrValues() (tpm2.PCRValues, error) {
 		if value.PCR.Type() != tpm2.HandleTypePCR {
 			return nil, fmt.Errorf("invalid PCR handle at index %d", i)
 		}
-		if err := values.SetValue(value.Digest.HashAlg, int(value.PCR), value.Digest.Digest); err != nil {
+		if err := values.SetValue(value.Digest.HashAlg, int(value.PCR), value.Digest.Digest()); err != nil {
 			return nil, fmt.Errorf("invalid PCR value at index %d: %w", i, err)
 		}
 	}
@@ -788,53 +764,139 @@ func (e *policyNvWrittenElement) run(runner policyRunner) error {
 	return runner.session().PolicyNvWritten(e.WrittenSet)
 }
 
-type policyElementDetails struct {
-	NV                *policyNVElement
-	Secret            *policySecretElement
-	Signed            *policySignedElement
-	Authorize         *policyAuthorizeElement
-	AuthValue         *policyAuthValueElement
-	CommandCode       *policyCommandCodeElement
-	CounterTimer      *policyCounterTimerElement
-	CpHash            *policyCpHashElement
-	NameHash          *policyNameHashElement
-	OR                *policyORElement
-	PCR               *policyPCRElement
-	DuplicationSelect *policyDuplicationSelectElement
-	Password          *policyPasswordElement
-	NvWritten         *policyNvWrittenElement
+type policyElementConstraint interface {
+	policyNVElement | policySecretElement | policySignedElement | policyAuthorizeElement | policyAuthValueElement | policyCommandCodeElement | policyCounterTimerElement | policyCpHashElement | policyNameHashElement | policyORElement | policyPCRElement | policyDuplicationSelectElement | policyPasswordElement | policyNvWrittenElement
 }
 
-func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(tpm2.CommandCode) {
+type policyElementDetails struct {
+	contents union.Contents
+}
+
+func makePolicyElementDetails[T policyElementConstraint](contents T) policyElementDetails {
+	return policyElementDetails{contents: union.NewContents(contents)}
+}
+
+func (d *policyElementDetails) NV() *policyNVElement {
+	return union.ContentsPtr[policyNVElement](d.contents)
+}
+
+func (d *policyElementDetails) Secret() *policySecretElement {
+	return union.ContentsPtr[policySecretElement](d.contents)
+}
+
+func (d *policyElementDetails) Signed() *policySignedElement {
+	return union.ContentsPtr[policySignedElement](d.contents)
+}
+
+func (d *policyElementDetails) Authorize() *policyAuthorizeElement {
+	return union.ContentsPtr[policyAuthorizeElement](d.contents)
+}
+
+func (d *policyElementDetails) AuthValue() *policyAuthValueElement {
+	return union.ContentsPtr[policyAuthValueElement](d.contents)
+}
+
+func (d *policyElementDetails) CommandCode() *policyCommandCodeElement {
+	return union.ContentsPtr[policyCommandCodeElement](d.contents)
+}
+
+func (d *policyElementDetails) CounterTimer() *policyCounterTimerElement {
+	return union.ContentsPtr[policyCounterTimerElement](d.contents)
+}
+
+func (d *policyElementDetails) CpHash() *policyCpHashElement {
+	return union.ContentsPtr[policyCpHashElement](d.contents)
+}
+
+func (d *policyElementDetails) NameHash() *policyNameHashElement {
+	return union.ContentsPtr[policyNameHashElement](d.contents)
+}
+
+func (d *policyElementDetails) OR() *policyORElement {
+	return union.ContentsPtr[policyORElement](d.contents)
+}
+
+func (d *policyElementDetails) PCR() *policyPCRElement {
+	return union.ContentsPtr[policyPCRElement](d.contents)
+}
+
+func (d *policyElementDetails) DuplicationSelect() *policyDuplicationSelectElement {
+	return union.ContentsPtr[policyDuplicationSelectElement](d.contents)
+}
+
+func (d *policyElementDetails) Password() *policyPasswordElement {
+	return union.ContentsPtr[policyPasswordElement](d.contents)
+}
+
+func (d *policyElementDetails) NvWritten() *policyNvWrittenElement {
+	return union.ContentsPtr[policyNvWrittenElement](d.contents)
+}
+
+func (d policyElementDetails) SelectMarshal(selector any) any {
+	switch selector.(tpm2.CommandCode) {
 	case tpm2.CommandPolicyNV:
-		return &d.NV
+		return union.ContentsMarshal[policyNVElement](d.contents)
 	case tpm2.CommandPolicySecret:
-		return &d.Secret
+		return union.ContentsMarshal[policySecretElement](d.contents)
 	case tpm2.CommandPolicySigned:
-		return &d.Signed
+		return union.ContentsMarshal[policySignedElement](d.contents)
 	case tpm2.CommandPolicyAuthorize:
-		return &d.Authorize
+		return union.ContentsMarshal[policyAuthorizeElement](d.contents)
 	case tpm2.CommandPolicyAuthValue:
-		return &d.AuthValue
+		return union.ContentsMarshal[policyAuthValueElement](d.contents)
 	case tpm2.CommandPolicyCommandCode:
-		return &d.CommandCode
+		return union.ContentsMarshal[policyCommandCodeElement](d.contents)
 	case tpm2.CommandPolicyCounterTimer:
-		return &d.CounterTimer
+		return union.ContentsMarshal[policyCounterTimerElement](d.contents)
 	case tpm2.CommandPolicyCpHash:
-		return &d.CpHash
+		return union.ContentsMarshal[policyCpHashElement](d.contents)
 	case tpm2.CommandPolicyNameHash:
-		return &d.NameHash
+		return union.ContentsMarshal[policyNameHashElement](d.contents)
 	case tpm2.CommandPolicyOR:
-		return &d.OR
+		return union.ContentsMarshal[policyORElement](d.contents)
 	case tpm2.CommandPolicyPCR:
-		return &d.PCR
+		return union.ContentsMarshal[policyPCRElement](d.contents)
 	case tpm2.CommandPolicyDuplicationSelect:
-		return &d.DuplicationSelect
+		return union.ContentsMarshal[policyDuplicationSelectElement](d.contents)
 	case tpm2.CommandPolicyPassword:
-		return &d.Password
+		return union.ContentsMarshal[policyPasswordElement](d.contents)
 	case tpm2.CommandPolicyNvWritten:
-		return &d.NvWritten
+		return union.ContentsMarshal[policyNvWrittenElement](d.contents)
+	default:
+		return nil
+	}
+}
+
+func (d *policyElementDetails) SelectUnmarshal(selector any) any {
+	switch selector.(tpm2.CommandCode) {
+	case tpm2.CommandPolicyNV:
+		return union.ContentsUnmarshal[policyNVElement](&d.contents)
+	case tpm2.CommandPolicySecret:
+		return union.ContentsUnmarshal[policySecretElement](&d.contents)
+	case tpm2.CommandPolicySigned:
+		return union.ContentsUnmarshal[policySignedElement](&d.contents)
+	case tpm2.CommandPolicyAuthorize:
+		return union.ContentsUnmarshal[policyAuthorizeElement](&d.contents)
+	case tpm2.CommandPolicyAuthValue:
+		return union.ContentsUnmarshal[policyAuthValueElement](&d.contents)
+	case tpm2.CommandPolicyCommandCode:
+		return union.ContentsUnmarshal[policyCommandCodeElement](&d.contents)
+	case tpm2.CommandPolicyCounterTimer:
+		return union.ContentsUnmarshal[policyCounterTimerElement](&d.contents)
+	case tpm2.CommandPolicyCpHash:
+		return union.ContentsUnmarshal[policyCpHashElement](&d.contents)
+	case tpm2.CommandPolicyNameHash:
+		return union.ContentsUnmarshal[policyNameHashElement](&d.contents)
+	case tpm2.CommandPolicyOR:
+		return union.ContentsUnmarshal[policyORElement](&d.contents)
+	case tpm2.CommandPolicyPCR:
+		return union.ContentsUnmarshal[policyPCRElement](&d.contents)
+	case tpm2.CommandPolicyDuplicationSelect:
+		return union.ContentsUnmarshal[policyDuplicationSelectElement](&d.contents)
+	case tpm2.CommandPolicyPassword:
+		return union.ContentsUnmarshal[policyPasswordElement](&d.contents)
+	case tpm2.CommandPolicyNvWritten:
+		return union.ContentsUnmarshal[policyNvWrittenElement](&d.contents)
 	default:
 		return nil
 	}
@@ -847,39 +909,39 @@ type policyElementRunner interface {
 
 type policyElement struct {
 	Type    tpm2.CommandCode
-	Details *policyElementDetails
+	Details policyElementDetails
 }
 
 func (e *policyElement) runner() policyElementRunner {
 	switch e.Type {
 	case tpm2.CommandPolicyNV:
-		return e.Details.NV
+		return e.Details.NV()
 	case tpm2.CommandPolicySecret:
-		return e.Details.Secret
+		return e.Details.Secret()
 	case tpm2.CommandPolicySigned:
-		return e.Details.Signed
+		return e.Details.Signed()
 	case tpm2.CommandPolicyAuthorize:
-		return e.Details.Authorize
+		return e.Details.Authorize()
 	case tpm2.CommandPolicyAuthValue:
-		return e.Details.AuthValue
+		return e.Details.AuthValue()
 	case tpm2.CommandPolicyCommandCode:
-		return e.Details.CommandCode
+		return e.Details.CommandCode()
 	case tpm2.CommandPolicyCounterTimer:
-		return e.Details.CounterTimer
+		return e.Details.CounterTimer()
 	case tpm2.CommandPolicyCpHash:
-		return e.Details.CpHash
+		return e.Details.CpHash()
 	case tpm2.CommandPolicyNameHash:
-		return e.Details.NameHash
+		return e.Details.NameHash()
 	case tpm2.CommandPolicyOR:
-		return e.Details.OR
+		return e.Details.OR()
 	case tpm2.CommandPolicyPCR:
-		return e.Details.PCR
+		return e.Details.PCR()
 	case tpm2.CommandPolicyDuplicationSelect:
-		return e.Details.DuplicationSelect
+		return e.Details.DuplicationSelect()
 	case tpm2.CommandPolicyPassword:
-		return e.Details.Password
+		return e.Details.Password()
 	case tpm2.CommandPolicyNvWritten:
-		return e.Details.NvWritten
+		return e.Details.NvWritten()
 	default:
 		panic("invalid type")
 	}
@@ -888,7 +950,7 @@ func (e *policyElement) runner() policyElementRunner {
 type policyElements []*policyElement
 
 type policy struct {
-	PolicyDigests        taggedHashList
+	PolicyDigests        tpm2.TaggedHashList
 	PolicyAuthorizations policyAuthorizations
 	Policy               policyElements
 }
@@ -1673,12 +1735,12 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 				continue
 			}
 
-			branch.PolicyDigests[j] = computedDigest
+			branch.PolicyDigests[j] = tpm2.MakeTaggedHash(computedDigest.HashAlg, computedDigest.Digest)
 			added = true
 			break
 		}
 		if !added {
-			branch.PolicyDigests = append(branch.PolicyDigests, computedDigest)
+			branch.PolicyDigests = append(branch.PolicyDigests, tpm2.MakeTaggedHash(computedDigest.HashAlg, computedDigest.Digest))
 		}
 	}
 
@@ -1716,13 +1778,13 @@ func (p *Policy) computeForDigest(digest *taggedHash) error {
 	addedDigest := false
 	for i, d := range policy.PolicyDigests {
 		if d.HashAlg == digest.HashAlg {
-			policy.PolicyDigests[i] = *digest
+			policy.PolicyDigests[i] = tpm2.MakeTaggedHash(digest.HashAlg, digest.Digest)
 			addedDigest = true
 			break
 		}
 	}
 	if !addedDigest {
-		policy.PolicyDigests = append(policy.PolicyDigests, *digest)
+		policy.PolicyDigests = append(policy.PolicyDigests, tpm2.MakeTaggedHash(digest.HashAlg, digest.Digest))
 	}
 
 	if runner.hasCpHash && len(policy.PolicyDigests) > 1 {
@@ -1766,7 +1828,7 @@ func (p *Policy) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 
 	for _, digest := range p.policy.PolicyDigests {
 		if digest.HashAlg == alg {
-			return digest.Digest, nil
+			return digest.Digest(), nil
 		}
 	}
 
@@ -1906,8 +1968,8 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 				continue
 			}
 
-			if !bytes.Equal(digest.Digest, computedDigest.Digest) {
-				return 0, fmt.Errorf("stored and computed branch digest mismatch for branch %d (computed: %x, stored: %x)", i, computedDigest.Digest, digest.Digest)
+			if !bytes.Equal(digest.Digest(), computedDigest.Digest) {
+				return 0, fmt.Errorf("stored and computed branch digest mismatch for branch %d (computed: %x, stored: %x)", i, computedDigest.Digest, digest.Digest())
 			}
 			found = true
 			break

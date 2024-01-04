@@ -19,7 +19,6 @@ type PolicyBranchName = policyBranchName
 type PolicyBranchPath = policyBranchPath
 type PolicyOrTree = policyOrTree
 type TaggedHash = taggedHash
-type TaggedHashList = taggedHashList
 
 func (n *policyOrNode) Parent() *policyOrNode {
 	return n.parent
@@ -44,83 +43,107 @@ func (p *Policy) ComputeForDigest(digest *TaggedHash) error {
 func NewMockPolicyNVElement(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNV,
-		Details: &policyElementDetails{
-			NV: &policyNVElement{
+		Details: makePolicyElementDetails(
+			policyNVElement{
 				NvIndex:   nvIndex,
 				OperandB:  operandB,
 				Offset:    offset,
-				Operation: operation}}}
+				Operation: operation,
+			},
+		),
+	}
 }
 
 func NewMockPolicySecretElement(authObjectName tpm2.Name, policyRef tpm2.Nonce) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicySecret,
-		Details: &policyElementDetails{
-			Secret: &policySecretElement{
+		Details: makePolicyElementDetails(
+			policySecretElement{
 				AuthObjectName: authObjectName,
-				PolicyRef:      policyRef}}}
+				PolicyRef:      policyRef,
+			},
+		),
+	}
 }
 
 func NewMockPolicySignedElement(authKey *tpm2.Public, policyRef tpm2.Nonce) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicySigned,
-		Details: &policyElementDetails{
-			Signed: &policySignedElement{
+		Details: makePolicyElementDetails(
+			policySignedElement{
 				AuthKey:   authKey,
-				PolicyRef: policyRef}}}
+				PolicyRef: policyRef,
+			},
+		),
+	}
 }
 
 func NewMockPolicyAuthorizeElement(policyRef tpm2.Nonce, keySign *tpm2.Public) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyAuthorize,
-		Details: &policyElementDetails{
-			Authorize: &policyAuthorizeElement{
+		Details: makePolicyElementDetails(
+			policyAuthorizeElement{
 				PolicyRef: policyRef,
-				KeySign:   keySign}}}
+				KeySign:   keySign,
+			},
+		),
+	}
 }
 
 func NewMockPolicyAuthValueElement() *policyElement {
 	return &policyElement{
 		Type:    tpm2.CommandPolicyAuthValue,
-		Details: &policyElementDetails{AuthValue: new(policyAuthValueElement)}}
+		Details: makePolicyElementDetails(policyAuthValueElement{}),
+	}
 }
 
 func NewMockPolicyCommandCodeElement(code tpm2.CommandCode) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCommandCode,
-		Details: &policyElementDetails{
-			CommandCode: &policyCommandCodeElement{CommandCode: code}}}
+		Details: makePolicyElementDetails(
+			policyCommandCodeElement{CommandCode: code},
+		),
+	}
 }
 
 func NewMockPolicyCounterTimerElement(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCounterTimer,
-		Details: &policyElementDetails{
-			CounterTimer: &policyCounterTimerElement{
+		Details: makePolicyElementDetails(
+			policyCounterTimerElement{
 				OperandB:  operandB,
 				Offset:    offset,
-				Operation: operation}}}
+				Operation: operation,
+			},
+		),
+	}
 }
 
 func NewMockPolicyCpHashElement(params *CpHashParams, digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
-		Details: &policyElementDetails{
-			CpHash: &policyCpHashElement{
+		Details: makePolicyElementDetails(
+			policyCpHashElement{
 				Params: params,
-				Digest: digest}}}
+				Digest: digest,
+			},
+		),
+	}
 }
 
 func NewMockPolicyNameHashElement(params *NameHashParams, digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
-		Details: &policyElementDetails{
-			NameHash: &policyNameHashElement{
+		Details: makePolicyElementDetails(
+			policyNameHashElement{
 				Params: params,
-				Digest: digest}}}
+				Digest: digest,
+			},
+		),
+	}
 }
 
-func NewMockPolicyBranch(name policyBranchName, digests taggedHashList, elements ...*policyElement) *policyBranch {
+func NewMockPolicyBranch(name policyBranchName, digests tpm2.TaggedHashList, elements ...*policyElement) *policyBranch {
 	return &policyBranch{
 		Name:          name,
 		PolicyDigests: digests,
@@ -130,41 +153,51 @@ func NewMockPolicyBranch(name policyBranchName, digests taggedHashList, elements
 func NewMockPolicyORElement(branches ...*policyBranch) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyOR,
-		Details: &policyElementDetails{
-			OR: &policyORElement{Branches: branches}}}
+		Details: makePolicyElementDetails(
+			policyORElement{Branches: branches},
+		),
+	}
 }
 
 func NewMockPolicyPCRElement(pcrs PcrValueList) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyPCR,
-		Details: &policyElementDetails{
-			PCR: &policyPCRElement{PCRs: pcrs}}}
+		Details: makePolicyElementDetails(
+			policyPCRElement{PCRs: pcrs},
+		),
+	}
 }
 
 func NewMockPolicyDuplicationSelectElement(objectName, newParentName tpm2.Name, includeObject bool) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyDuplicationSelect,
-		Details: &policyElementDetails{
-			DuplicationSelect: &policyDuplicationSelectElement{
+		Details: makePolicyElementDetails(
+			policyDuplicationSelectElement{
 				Object:        objectName,
 				NewParent:     newParentName,
-				IncludeObject: includeObject}}}
+				IncludeObject: includeObject,
+			},
+		),
+	}
 }
 
 func NewMockPolicyPasswordElement() *policyElement {
 	return &policyElement{
 		Type:    tpm2.CommandPolicyPassword,
-		Details: &policyElementDetails{Password: new(policyPasswordElement)}}
+		Details: makePolicyElementDetails(policyPasswordElement{}),
+	}
 }
 
 func NewMockPolicyNvWrittenElement(writtenSet bool) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNvWritten,
-		Details: &policyElementDetails{
-			NvWritten: &policyNvWrittenElement{WrittenSet: writtenSet}}}
+		Details: makePolicyElementDetails(
+			policyNvWrittenElement{WrittenSet: writtenSet},
+		),
+	}
 }
 
-func NewMockPolicy(digests taggedHashList, authorizations []PolicyAuthorization, elements ...*policyElement) *Policy {
+func NewMockPolicy(digests tpm2.TaggedHashList, authorizations []PolicyAuthorization, elements ...*policyElement) *Policy {
 	return &Policy{
 		policy: policy{
 			PolicyDigests:        digests,

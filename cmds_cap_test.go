@@ -517,53 +517,69 @@ func (s *capabilitiesSuite) testTestParms(c *C, params *PublicParams) {
 func (s *capabilitiesSuite) TestTestParms1(c *C) {
 	s.testTestParms(c, &PublicParams{
 		Type: ObjectTypeRSA,
-		Parameters: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Parameters: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
+					KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+					Mode:      MakeSymModeUnion(SymModeCFB),
+				},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
-				Exponent: 0}}})
+				Exponent: 0,
+			},
+		),
+	})
 }
 
 func (s *capabilitiesSuite) TestTestParms2(c *C) {
 	s.testTestParms(c, &PublicParams{
 		Type: ObjectTypeECC,
-		Parameters: &PublicParamsU{
-			ECCDetail: &ECCParams{
+		Parameters: MakePublicParamsUnion(
+			ECCParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: ECCScheme{
 					Scheme:  ECCSchemeECDSA,
-					Details: &AsymSchemeU{ECDSA: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
+					Details: MakeAsymSchemeUnion(SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}),
+				},
 				CurveID: ECCCurveNIST_P256,
-				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}})
+				KDF:     KDFScheme{Scheme: KDFAlgorithmNull},
+			},
+		),
+	})
 }
 
 func (s *capabilitiesSuite) TestTestParms3(c *C) {
 	s.testTestParms(c, &PublicParams{
 		Type: ObjectTypeSymCipher,
-		Parameters: &PublicParamsU{
-			SymDetail: &SymCipherParams{
+		Parameters: MakePublicParamsUnion(
+			SymCipherParams{
 				Sym: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 256},
-					Mode:      &SymModeU{Sym: SymModeCFB}}}}})
+					KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+					Mode:      MakeSymModeUnion(SymModeCFB),
+				},
+			},
+		),
+	})
 }
 
 func (s *capabilitiesSuite) TestTestParmsErrValue(c *C) {
 	err := s.TPM.TestParms(&PublicParams{
 		Type: ObjectTypeRSA,
-		Parameters: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Parameters: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
+					KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+					Mode:      MakeSymModeUnion(SymModeCFB),
+				},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2047,
-				Exponent: 0}}})
+				Exponent: 0,
+			},
+		),
+	})
 	c.Check(IsTPMParameterError(err, ErrorValue, CommandTestParms, 1), internal_testutil.IsTrue)
 }
 

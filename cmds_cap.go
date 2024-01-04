@@ -63,7 +63,28 @@ func (t *TPMContext) GetCapabilityRaw(capability Capability, property, propertyC
 // On success, a capability structure is returned containing the requested number of properties,
 // or the number of properties available, whichever is less.
 func (t *TPMContext) GetCapability(capability Capability, property, propertyCount uint32, sessions ...SessionContext) (capabilityData *CapabilityData, err error) {
-	capabilityData = &CapabilityData{Capability: capability, Data: &CapabilitiesU{}}
+	capabilityData = &CapabilityData{Capability: capability}
+	switch capability {
+	case CapabilityAlgs:
+		capabilityData.Data = MakeCapabilitiesUnion(AlgorithmPropertyList{})
+	case CapabilityHandles:
+		capabilityData.Data = MakeCapabilitiesUnion(HandleList{})
+	case CapabilityCommands:
+		capabilityData.Data = MakeCapabilitiesUnion(CommandAttributesList{})
+	case CapabilityPPCommands, CapabilityAuditCommands:
+		capabilityData.Data = MakeCapabilitiesUnion(CommandCodeList{})
+	case CapabilityPCRs:
+	case CapabilityTPMProperties:
+		capabilityData.Data = MakeCapabilitiesUnion(TaggedTPMPropertyList{})
+	case CapabilityPCRProperties:
+		capabilityData.Data = MakeCapabilitiesUnion(TaggedPCRPropertyList{})
+	case CapabilityECCCurves:
+		capabilityData.Data = MakeCapabilitiesUnion(ECCCurveList{})
+	case CapabilityAuthPolicies:
+		capabilityData.Data = MakeCapabilitiesUnion(TaggedPolicyList{})
+	default:
+		return nil, errors.New("invalid capability")
+	}
 
 	nextProperty := property
 	remaining := propertyCount
@@ -83,34 +104,34 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 		var p uint32
 		switch data.Capability {
 		case CapabilityAlgs:
-			capabilityData.Data.Algorithms = append(capabilityData.Data.Algorithms, data.Data.Algorithms...)
-			l = len(data.Data.Algorithms)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.Algorithms(), data.Data.Algorithms()...))
+			l = len(data.Data.Algorithms())
 			if l > 0 {
-				p = uint32(data.Data.Algorithms[l-1].Alg)
+				p = uint32(data.Data.Algorithms()[l-1].Alg)
 			}
 		case CapabilityHandles:
-			capabilityData.Data.Handles = append(capabilityData.Data.Handles, data.Data.Handles...)
-			l = len(data.Data.Handles)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.Handles(), data.Data.Handles()...))
+			l = len(data.Data.Handles())
 			if l > 0 {
-				p = uint32(data.Data.Handles[l-1])
+				p = uint32(data.Data.Handles()[l-1])
 			}
 		case CapabilityCommands:
-			capabilityData.Data.Command = append(capabilityData.Data.Command, data.Data.Command...)
-			l = len(data.Data.Command)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.Command(), data.Data.Command()...))
+			l = len(data.Data.Command())
 			if l > 0 {
-				p = uint32(data.Data.Command[l-1].CommandCode())
+				p = uint32(data.Data.Command()[l-1].CommandCode())
 			}
 		case CapabilityPPCommands:
-			capabilityData.Data.PPCommands = append(capabilityData.Data.PPCommands, data.Data.PPCommands...)
-			l = len(data.Data.PPCommands)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.PPCommands(), data.Data.PPCommands()...))
+			l = len(data.Data.PPCommands())
 			if l > 0 {
-				p = uint32(data.Data.PPCommands[l-1])
+				p = uint32(data.Data.PPCommands()[l-1])
 			}
 		case CapabilityAuditCommands:
-			capabilityData.Data.AuditCommands = append(capabilityData.Data.AuditCommands, data.Data.AuditCommands...)
-			l = len(data.Data.AuditCommands)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.AuditCommands(), data.Data.AuditCommands()...))
+			l = len(data.Data.AuditCommands())
 			if l > 0 {
-				p = uint32(data.Data.AuditCommands[l-1])
+				p = uint32(data.Data.AuditCommands()[l-1])
 			}
 		case CapabilityPCRs:
 			if moreData {
@@ -119,28 +140,28 @@ func (t *TPMContext) GetCapability(capability Capability, property, propertyCoun
 			}
 			return data, nil
 		case CapabilityTPMProperties:
-			capabilityData.Data.TPMProperties = append(capabilityData.Data.TPMProperties, data.Data.TPMProperties...)
-			l = len(data.Data.TPMProperties)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.TPMProperties(), data.Data.TPMProperties()...))
+			l = len(data.Data.TPMProperties())
 			if l > 0 {
-				p = uint32(data.Data.TPMProperties[l-1].Property)
+				p = uint32(data.Data.TPMProperties()[l-1].Property)
 			}
 		case CapabilityPCRProperties:
-			capabilityData.Data.PCRProperties = append(capabilityData.Data.PCRProperties, data.Data.PCRProperties...)
-			l = len(data.Data.PCRProperties)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.PCRProperties(), data.Data.PCRProperties()...))
+			l = len(data.Data.PCRProperties())
 			if l > 0 {
-				p = uint32(data.Data.PCRProperties[l-1].Tag)
+				p = uint32(data.Data.PCRProperties()[l-1].Tag)
 			}
 		case CapabilityECCCurves:
-			capabilityData.Data.ECCCurves = append(capabilityData.Data.ECCCurves, data.Data.ECCCurves...)
-			l = len(data.Data.ECCCurves)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.ECCCurves(), data.Data.ECCCurves()...))
+			l = len(data.Data.ECCCurves())
 			if l > 0 {
-				p = uint32(data.Data.ECCCurves[l-1])
+				p = uint32(data.Data.ECCCurves()[l-1])
 			}
 		case CapabilityAuthPolicies:
-			capabilityData.Data.AuthPolicies = append(capabilityData.Data.AuthPolicies, data.Data.AuthPolicies...)
-			l = len(data.Data.AuthPolicies)
+			capabilityData.Data = MakeCapabilitiesUnion(append(capabilityData.Data.AuthPolicies(), data.Data.AuthPolicies()...))
+			l = len(data.Data.AuthPolicies())
 			if l > 0 {
-				p = uint32(data.Data.AuthPolicies[l-1].Handle)
+				p = uint32(data.Data.AuthPolicies()[l-1].Handle)
 			}
 		}
 
@@ -165,7 +186,7 @@ func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32, 
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Algorithms, nil
+	return data.Data.Algorithms(), nil
 }
 
 // GetCapabilityAlg is a convenience function for [TPMContext.GetCapability] that returns the
@@ -202,7 +223,7 @@ func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Command, nil
+	return data.Data.Command(), nil
 }
 
 // GetCapabilityCommand is a convenience function for [TPMContext.GetCapability] that returns the
@@ -238,7 +259,7 @@ func (t *TPMContext) GetCapabilityPPCommands(first CommandCode, propertyCount ui
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.PPCommands, nil
+	return data.Data.PPCommands(), nil
 }
 
 // GetCapabilityAuditCommands is a convenience function for [TPMContext.GetCapability], and returns
@@ -250,7 +271,7 @@ func (t *TPMContext) GetCapabilityAuditCommands(first CommandCode, propertyCount
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AuditCommands, nil
+	return data.Data.AuditCommands(), nil
 }
 
 // GetCapabilityHandles is a convenience function for [TPMContext.GetCapability], and returns a
@@ -262,7 +283,7 @@ func (t *TPMContext) GetCapabilityHandles(firstHandle Handle, propertyCount uint
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.Handles, nil
+	return data.Data.Handles(), nil
 }
 
 // DoesHandleExist is a convenience function for [TPMContext.GetCapability] that determines if a
@@ -320,7 +341,7 @@ func (t *TPMContext) GetCapabilityPCRs(sessions ...SessionContext) (pcrs PCRSele
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AssignedPCR, nil
+	return data.Data.AssignedPCR(), nil
 }
 
 // GetCapabilityTPMProperties is a convenience function for [TPMContext.GetCapability], and returns
@@ -333,7 +354,7 @@ func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount ui
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.TPMProperties, nil
+	return data.Data.TPMProperties(), nil
 }
 
 // GetCapabilityTPMProperty is a convenience function for [TPMContext.GetCapability] that returns
@@ -498,7 +519,7 @@ func (t *TPMContext) GetCapabilityPCRProperties(first PropertyPCR, propertyCount
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.PCRProperties, nil
+	return data.Data.PCRProperties(), nil
 }
 
 // GetCapabilityECCCurves is a convenience function for [TPMContext.GetCapability], and returns a
@@ -508,7 +529,7 @@ func (t *TPMContext) GetCapabilityECCCurves(sessions ...SessionContext) (eccCurv
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.ECCCurves, nil
+	return data.Data.ECCCurves(), nil
 }
 
 // IsECCCurveSupported is a convenience function for [TPMContext.GetCapability] that determines if
@@ -537,7 +558,7 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 	if err != nil {
 		return nil, err
 	}
-	return data.Data.AuthPolicies, nil
+	return data.Data.AuthPolicies(), nil
 }
 
 // IsTPM2 determines whether this TPMContext is connected to a TPM2 device. It does this by
@@ -566,12 +587,12 @@ func (t *TPMContext) TestParms(parameters *PublicParams, sessions ...SessionCont
 func (t *TPMContext) IsRSAKeySizeSupported(keyBits uint16, sessions ...SessionContext) bool {
 	params := PublicParams{
 		Type: ObjectTypeRSA,
-		Parameters: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Parameters: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   keyBits,
-				Exponent:  0}}}
+				Exponent:  0})}
 	if err := t.TestParms(&params, sessions...); err != nil {
 		return false
 	}
@@ -581,14 +602,26 @@ func (t *TPMContext) IsRSAKeySizeSupported(keyBits uint16, sessions ...SessionCo
 // IsSymmetricAlgorithmSupported is a convenience function around [TPMContext.TestParms] that
 // determines whether the specified symmetric algorithm and key size combination is supported.
 func (t *TPMContext) IsSymmetricAlgorithmSupported(algorithm SymObjectAlgorithmId, keyBits uint16, sessions ...SessionContext) bool {
+	var bits SymKeyBitsUnion
+	switch algorithm {
+	case SymObjectAlgorithmAES, SymObjectAlgorithmSM4, SymObjectAlgorithmCamellia:
+		bits = MakeSymKeyBitsUnion(keyBits)
+	}
+
+	var mode SymModeUnion
+	switch algorithm {
+	case SymObjectAlgorithmAES, SymObjectAlgorithmSM4, SymObjectAlgorithmCamellia:
+		mode = MakeSymModeUnion(SymModeCFB)
+	}
+
 	params := PublicParams{
 		Type: ObjectTypeSymCipher,
-		Parameters: &PublicParamsU{
-			SymDetail: &SymCipherParams{
+		Parameters: MakePublicParamsUnion(
+			SymCipherParams{
 				Sym: SymDefObject{
 					Algorithm: algorithm,
-					KeyBits:   &SymKeyBitsU{Sym: keyBits},
-					Mode:      &SymModeU{Sym: SymModeCFB}}}}}
+					KeyBits:   bits,
+					Mode:      mode}})}
 	if err := t.TestParms(&params, sessions...); err != nil {
 		return false
 	}

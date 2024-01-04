@@ -46,7 +46,7 @@ Go types are marshalled to and from the TPM wire format according to the followi
     or pointer to a struct that represents a union. The first member is the selector field
     unless overridden on the union member with the `tpm2:"selector:<field_name>"` tag.
 
-  - TPMU prefixed types (unions) <-> struct which implements the Union interface. The default
+  - TPMU prefixed types (unions) <-> a type which implements the Union interface. The default
     selector field can be overridden by using the `tpm2:"selector:<field_name>"` tag.
 
 TPMI prefixed types (interface types) are generally not explicitly supported. These are used

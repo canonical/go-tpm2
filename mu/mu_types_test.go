@@ -7,9 +7,8 @@ package mu_test
 import (
 	"encoding/binary"
 	"io"
-	"math"
-	"reflect"
 
+	"github.com/canonical/go-tpm2/internal/union"
 	. "github.com/canonical/go-tpm2/mu"
 )
 
@@ -36,25 +35,55 @@ type testStructWithSizedField2 struct {
 	A *testStructWithImplicitSizedField `tpm2:"sized"`
 }
 
+type empty struct{}
+
+var emptyValue empty
+
 type testUnion struct {
-	A *testStruct
-	B []uint32
-	C uint16
+	contents union.Contents
 }
 
-func (t *testUnion) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(uint32) {
+func newTestUnion[T *testStruct | []uint32 | uint16 | empty](contents T) *testUnion {
+	return &testUnion{contents: union.NewContents(contents)}
+}
+
+func (t *testUnion) A() *testStruct {
+	return union.ContentsElem[*testStruct](t.contents)
+}
+
+func (t *testUnion) B() []uint32 {
+	return union.ContentsElem[[]uint32](t.contents)
+}
+
+func (t *testUnion) C() uint16 {
+	return union.ContentsElem[uint16](t.contents)
+}
+
+func (t testUnion) SelectMarshal(selector any) (value any) {
+	switch selector.(uint32) {
 	case 1:
-		return &t.A
+		return union.ContentsMarshal[*testStruct](t.contents)
 	case 2:
-		return &t.B
+		return union.ContentsMarshal[[]uint32](t.contents)
 	case 3:
-		return &t.C
+		return union.ContentsMarshal[uint16](t.contents)
 	case 4:
-		return NilUnionValue
-	case math.MaxUint32:
-		var a uint32
-		return &a
+		return union.ContentsMarshal[empty](t.contents)
+	default:
+		return nil
+	}
+}
+
+func (t *testUnion) SelectUnmarshal(selector any) any {
+	switch selector.(uint32) {
+	case 1:
+		return union.ContentsUnmarshal[*testStruct](&t.contents)
+	case 2:
+		return union.ContentsUnmarshal[[]uint32](&t.contents)
+	case 3:
+		return union.ContentsUnmarshal[uint16](&t.contents)
+	case 4:
+		return union.ContentsUnmarshal[empty](&t.contents)
 	default:
 		return nil
 	}
@@ -68,11 +97,6 @@ type testTaggedUnion struct {
 type testTaggedUnion2 struct {
 	Select uint32
 	Union  *testUnion `tpm2:"selector:Select"`
-}
-
-type testTaggedUnion3 struct {
-	Select uint32
-	Union  testUnion
 }
 
 type testStructContainingCustom struct {
@@ -198,7 +222,11 @@ type testInvalidTaggedUnion2 struct {
 	A        *testUnion
 }
 
-func (u *testInvalidTaggedUnion2) Select(selector reflect.Value) interface{} {
+func (u testInvalidTaggedUnion2) SelectMarshal(selector any) any {
+	return nil
+}
+
+func (u *testInvalidTaggedUnion2) SelectUnmarshal(selector any) any {
 	return nil
 }
 

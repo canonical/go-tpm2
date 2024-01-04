@@ -112,12 +112,15 @@ func TestDictionaryAttackLockReset(t *testing.T) {
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme:    RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:   2048,
-				Exponent:  0}}}
+				Exponent:  0,
+			},
+		),
+	}
 	sensitive := SensitiveCreate{UserAuth: testAuth}
 	priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 	if err != nil {

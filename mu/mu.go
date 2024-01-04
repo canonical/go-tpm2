@@ -29,15 +29,15 @@ var (
 	sized1BytesType        reflect.Type = reflect.TypeOf(Sized1Bytes(nil))
 	customMarshallerType   reflect.Type = reflect.TypeOf((*customMarshallerIface)(nil)).Elem()
 	customUnmarshallerType reflect.Type = reflect.TypeOf((*customUnmarshallerIface)(nil)).Elem()
-	nilValueType           reflect.Type = reflect.TypeOf(NilUnionValue)
 	rawBytesType           reflect.Type = reflect.TypeOf(RawBytes(nil))
 	unionType              reflect.Type = reflect.TypeOf((*Union)(nil)).Elem()
 )
 
-// InvalidSelectorError may be returned as a wrapped error from [UnmarshalFromBytes] or
-// [UnmarshalFromReader] when a union type indicates that a selector value is invalid.
+// InvalidSelectorError is returned as a wrapped error during marshalling and unmarshalling
+// when a union type indicates that a selector value is invalid. It may also be returned during
+// marshalling if a union type has a content type that is inconsistent with the selector.
 type InvalidSelectorError struct {
-	Selector reflect.Value
+	Selector any
 }
 
 func (e *InvalidSelectorError) Error() string {
@@ -119,25 +119,40 @@ func Sized(val interface{}) *wrappedValue {
 	return &wrappedValue{value: val, opts: &options{sized: true}}
 }
 
-// Union is implemented by structure types that correspond to TPMU prefixed TPM types.
+type unionMarshalIface interface {
+	SelectMarshal(selector any) any
+}
+
+type unionUnmarshalIface interface {
+	SelectUnmarshal(selector any) any
+}
+
+// Union is implemented by go types that correspond to TPMU prefixed TPM types.
 // A struct that contains a union member automatically becomes a tagged union. The
 // selector field is the first member of the tagged union, unless overridden with the
 // `tpm2:"selector:<field_name>"` tag.
 //
-// Go doesn't have support for unions - TPMU types must be implemented with
-// a struct that contains a field for each possible value.
-//
-// Implementations of this must be addressable when marshalling.
+// Go doesn't have support for unions - TPMU types are implemented by any type that
+// implements this interface. They should use the [UnionContents] helper for storing
+// the value of the union.
 type Union interface {
-	// Select is called by this package to map the supplied selector value
-	// to a field. The returned value must be a pointer to the selected field.
-	// For this to work correctly, implementations must take a pointer receiver.
+	// SelectMarshal is called by this package to map the supplied selector
+	// value to a union value.
 	//
-	// If the supplied selector value maps to no data, return NilUnionValue.
+	// If nil is returned, this is interpreted as a [InvalidSelectorError] error.
+	SelectMarshal(selector any) any
+
+	// SelectUnmarshal is called by this package to map the supplied selector
+	// value to a pointer to a union value.
 	//
-	// If nil is returned, this is interpreted as an error.
-	Select(selector reflect.Value) interface{}
+	// If nil is returned, this is interpreted as a [InvalidSelectorError] error.
+	SelectUnmarshal(selector any) any
 }
+
+var _ Union = struct {
+	unionMarshalIface
+	unionUnmarshalIface
+}{}
 
 type containerNode struct {
 	value  reflect.Value
@@ -438,12 +453,12 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		}
 
 		k := TPMKindStruct
+		var hasUnexported bool
 
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			if f.PkgPath != "" {
-				// structs with unexported fields are unsupported
-				return TPMKindUnsupported, errors.New("struct type with unexported fields")
+				hasUnexported = true
 			}
 			if isUnion(f.Type) {
 				k = TPMKindTaggedUnion
@@ -458,7 +473,11 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 			return TPMKindUnion, nil
 		}
 
-		if o.selector != "" {
+		switch {
+		case hasUnexported:
+			// structs with unexported fields are unsupported
+			return TPMKindUnsupported, errors.New("struct type with unexported fields")
+		case o.selector != "":
 			return TPMKindUnsupported, errors.New(`"selector" option is invalid with struct types that don't represent unions`)
 		}
 
@@ -549,7 +568,7 @@ func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 	}
 }
 
-func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.Value, exit func(), err error) {
+func (c *context) unionSelectorValue(u reflect.Value, opts *options) any {
 	valid := false
 	if len(c.stack) > 0 {
 		if k, _ := tpmKind(c.stack.top().value.Type(), nil); k == TPMKindTaggedUnion {
@@ -571,32 +590,7 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 		}
 	}
 
-	if !u.CanAddr() {
-		panic(fmt.Sprintf("union type %s needs to be addressable", u.Type()))
-	}
-
-	p := u.Addr().Interface().(Union).Select(selectorVal)
-	switch {
-	case p == nil:
-		return reflect.Value{}, nil, &InvalidSelectorError{selectorVal}
-	case p == NilUnionValue:
-		return reflect.Value{}, nil, nil
-	}
-	pv := reflect.ValueOf(p)
-
-	index := -1
-	for i := 0; i < u.NumField(); i++ {
-		if u.Field(i).Addr().Interface() == pv.Interface() {
-			index = i
-			break
-		}
-	}
-	if index == -1 {
-		panic(fmt.Sprintf("Union.Select implementation for type %s returned a non-member pointer",
-			u.Type()))
-	}
-
-	return pv.Elem(), c.enterStructField(u, index, nil), nil
+	return selectorVal.Interface()
 }
 
 func (c *context) enterCustomType(v reflect.Value) (exit func()) {
@@ -808,14 +802,13 @@ func (m *marshaller) marshalStruct(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalUnion(v reflect.Value, opts *options) error {
-	// Ignore during marshalling - let the TPM unmarshalling catch it
-	elem, exit, _ := m.enterUnionElem(v, opts)
-	if !elem.IsValid() {
-		return nil
+	selectorVal := m.unionSelectorValue(v, opts)
+	elem := v.Interface().(unionMarshalIface).SelectMarshal(selectorVal)
+	if elem == nil {
+		return m.newError(v, &InvalidSelectorError{selectorVal})
 	}
-	err := m.marshalValue(elem, nil)
-	exit()
-	return err
+
+	return m.marshalValue(reflect.ValueOf(elem), nil)
 }
 
 func (m *marshaller) marshalCustom(v reflect.Value) error {
@@ -1071,16 +1064,13 @@ func (u *unmarshaller) unmarshalStruct(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshalUnion(v reflect.Value, opts *options) error {
-	elem, exit, err := u.enterUnionElem(v, opts)
-	if err != nil {
-		return u.newError(v, err)
+	selectorVal := u.unionSelectorValue(v, opts)
+	elemPtr := v.Addr().Interface().(unionUnmarshalIface).SelectUnmarshal(selectorVal)
+	if elemPtr == nil {
+		return u.newError(v, &InvalidSelectorError{selectorVal})
 	}
-	if !elem.IsValid() {
-		return nil
-	}
-	err = u.unmarshalValue(elem, nil)
-	exit()
-	return err
+
+	return u.unmarshalValue(reflect.ValueOf(elemPtr).Elem(), nil)
 }
 
 func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {

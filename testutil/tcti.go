@@ -1025,7 +1025,7 @@ func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) 
 		if err != nil {
 			return nil, fmt.Errorf("cannot request audit info from TPM: %w", err)
 		}
-		cmdAuditStatus.alg = tpm2.HashAlgorithmId(auditInfo.Attested.CommandAudit.DigestAlg)
+		cmdAuditStatus.alg = tpm2.HashAlgorithmId(auditInfo.Attested.CommandAudit().DigestAlg)
 		cmdAuditStatus.commands = commands
 	}
 

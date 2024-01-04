@@ -76,12 +76,12 @@ func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
-		if symmetric.Mode.Sym != SymModeCFB {
+		if symmetric.Mode.Sym() != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
 		k := internal_crypt.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM,
-			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
-		offset := (symmetric.KeyBits.Sym + 7) / 8
+			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
+		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
 		if err := internal_crypt.SymmetricEncrypt(symmetric.Algorithm, symKey, iv, data); err != nil {
@@ -118,12 +118,12 @@ func (p *sessionParams) DecryptResponseParameter(rpBytes []byte) error {
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
-		if symmetric.Mode.Sym != SymModeCFB {
+		if symmetric.Mode.Sym() != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
 		k := internal_crypt.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), sessionData.NonceTPM, sessionData.NonceCaller,
-			int(symmetric.KeyBits.Sym)+(aes.BlockSize*8))
-		offset := (symmetric.KeyBits.Sym + 7) / 8
+			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
+		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
 		iv := k[offset:]
 		if err := internal_crypt.SymmetricDecrypt(symmetric.Algorithm, symKey, iv, data); err != nil {

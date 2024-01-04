@@ -22,7 +22,7 @@ func TestHMACSequence(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, 0)
 	defer closeTPM()
 
-	key := make([]byte, 32)
+	key := make(SensitiveData, 32)
 	rand.Read(key)
 
 	seed := make([]byte, 32)
@@ -30,15 +30,15 @@ func TestHMACSequence(t *testing.T) {
 	h := crypto.SHA256.New()
 	h.Write(seed)
 	h.Write(key)
-	unique := h.Sum(nil)
+	unique := Digest(h.Sum(nil))
 
-	loadKey := func(t *testing.T, params *KeyedHashParams, auth Auth) ResourceContext {
+	loadKey := func(t *testing.T, params KeyedHashParams, auth Auth) ResourceContext {
 		public := Public{
 			Type:    ObjectTypeKeyedHash,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign | AttrNoDA,
-			Params:  &PublicParamsU{KeyedHashDetail: params},
-			Unique:  &PublicIDU{KeyedHash: unique}}
+			Params:  MakePublicParamsUnion(params),
+			Unique:  MakePublicIDUnion(unique)}
 		if params.Scheme.Scheme == KeyedHashSchemeNull {
 			public.Attrs |= AttrDecrypt
 		}
@@ -49,7 +49,7 @@ func TestHMACSequence(t *testing.T) {
 			Type:      ObjectTypeKeyedHash,
 			AuthValue: authValue,
 			SeedValue: seed,
-			Sensitive: &SensitiveCompositeU{Bits: key}}
+			Sensitive: MakeSensitiveCompositeUnion(key)}
 		rc, err := tpm.LoadExternal(&sensitive, &public, HandleNull)
 		if err != nil {
 			t.Fatalf("LoadExternal failed: %v", err)
@@ -92,31 +92,31 @@ func TestHMACSequence(t *testing.T) {
 	}
 
 	t.Run("WithSignOnlyKey/1", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}, nil)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})}}, nil)
 		seq := start(t, keyContext, nil, HashAlgorithmSHA256, nil)
 		run(t, seq, [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("WithSignOnlyKey/2", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}, nil)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})}}, nil)
 		seq := start(t, keyContext, nil, HashAlgorithmNull, nil)
 		run(t, seq, [][]byte{[]byte("foo"), []byte("bar"), []byte("baz2")}, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("WithSignAndDecryptKey", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}, nil)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}, nil)
 		seq := start(t, keyContext, nil, HashAlgorithmSHA256, nil)
 		run(t, seq, [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("UsePasswordFoHMACKey", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}, testAuth)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})}}, testAuth)
 		seq := start(t, keyContext, nil, HashAlgorithmSHA256, nil)
 		run(t, seq, [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("UseSessionForHMACKey", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}, testAuth)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})}}, testAuth)
 
 		session, err := tpm.StartAuthSession(nil, keyContext, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 		if err != nil {
@@ -129,20 +129,20 @@ func TestHMACSequence(t *testing.T) {
 	})
 
 	t.Run("UsePasswordForSeq/1", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}, nil)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})}}, nil)
 		seq := start(t, keyContext, testAuth, HashAlgorithmNull, nil)
 		run(t, seq, [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("UsePasswordForSeq/2", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}, nil)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})}}, nil)
 		seq := start(t, keyContext, testAuth, HashAlgorithmNull, nil)
 		seq.SetAuthValue(testAuth)
 		run(t, seq, [][]byte{[]byte("foo"), []byte("bar"), []byte("baz")}, HashAlgorithmSHA256, nil)
 	})
 
 	t.Run("UseSessionForSeq", func(t *testing.T) {
-		keyContext := loadKey(t, &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}}}, nil)
+		keyContext := loadKey(t, KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeHMAC, Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})}}, nil)
 		seq := start(t, keyContext, testAuth, HashAlgorithmNull, nil)
 
 		session, err := tpm.StartAuthSession(nil, seq, SessionTypeHMAC, nil, HashAlgorithmSHA256)

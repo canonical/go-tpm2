@@ -45,7 +45,7 @@ func MakeCredential(rand io.Reader, key *tpm2.Public, credential tpm2.Digest, ob
 		return nil, nil, fmt.Errorf("cannot create encrypted symmetric seed: %w", err)
 	}
 
-	credentialBlob, err = internal_util.ProduceOuterWrap(key.NameAlg, &key.AsymDetail().Symmetric, objectName, seed, false, credentialBlob)
+	credentialBlob, err = internal_util.ProduceOuterWrap(key.NameAlg, &key.Params.AsymDetail().Symmetric, objectName, seed, false, credentialBlob)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
 	}

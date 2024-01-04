@@ -6,8 +6,9 @@ package tpm2
 
 import (
 	"reflect"
+	"unsafe"
 
-	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/internal/union"
 )
 
 // This file contains types defined in section 11 (Algorithm Parameters
@@ -15,61 +16,128 @@ import (
 
 // 11.1) Symmetric
 
-// SymKeyBitsU is a union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to
-// specify symmetric encryption key sizes. The selector type is [AlgorithmId]. Mapping of
-// selector values to fields is as follows:
-//   - AlgorithmAES: Sym
-//   - AlgorithmSM4: Sym
-//   - AlgorithmCamellia: Sym
-//   - AlgorithmXOR: XOR
-//   - AlgorithmNull: none
-type SymKeyBitsU struct {
-	Sym uint16
-	XOR HashAlgorithmId
+type SymKeyBitsUnionConstraint interface {
+	uint16 | HashAlgorithmId | Empty
 }
 
-// Select implements [mu.Union].
-func (b *SymKeyBitsU) Select(selector reflect.Value) interface{} {
-	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
-	case AlgorithmAES:
-		fallthrough
-	case AlgorithmSM4:
-		fallthrough
-	case AlgorithmCamellia:
-		return &b.Sym
+// SymKeyBitsUnion is a union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to
+// specify symmetric encryption key sizes. The selector type is [AlgorithmId]. Mapping of
+// selector values to fields is as follows:
+//   - AlgorithmAES: AES
+//   - AlgorithmSM4: SM4
+//   - AlgorithmCamellia: Camellia
+//   - AlgorithmXOR: XOR
+//   - AlgorithmNull: none
+type SymKeyBitsUnion struct {
+	contents union.Contents
+}
+
+func MakeSymKeyBitsUnion[T SymKeyBitsUnionConstraint](contents T) SymKeyBitsUnion {
+	return SymKeyBitsUnion{contents: union.NewContents(contents)}
+}
+
+func (b *SymKeyBitsUnion) AES() uint16 {
+	return union.ContentsElem[uint16](b.contents)
+}
+
+func (b *SymKeyBitsUnion) SM4() uint16 {
+	return union.ContentsElem[uint16](b.contents)
+}
+
+func (b *SymKeyBitsUnion) Camellia() uint16 {
+	return union.ContentsElem[uint16](b.contents)
+}
+
+func (b *SymKeyBitsUnion) XOR() HashAlgorithmId {
+	return union.ContentsElem[HashAlgorithmId](b.contents)
+}
+
+func (b *SymKeyBitsUnion) Sym() uint16 {
+	return union.ContentsElem[uint16](b.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (b SymKeyBitsUnion) SelectMarshal(selector any) any {
+	switch reflect.ValueOf(selector).Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
+	case AlgorithmAES, AlgorithmSM4, AlgorithmCamellia:
+		return union.ContentsMarshal[uint16](b.contents)
 	case AlgorithmXOR:
-		return &b.XOR
+		return union.ContentsMarshal[HashAlgorithmId](b.contents)
 	case AlgorithmNull:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](b.contents)
 	default:
 		return nil
 	}
 }
 
-// SymModeU is a union type that corresponds to the TPMU_SYM_MODE type. The selector
-// type is [AlgorithmId]. The mapping of selector values to fields is as follows:
-//   - AlgorithmAES: Sym
-//   - AlgorithmSM4: Sym
-//   - AlgorithmCamellia: Sym
-//   - AlgorithmXOR: none
-//   - AlgorithmNull: none
-type SymModeU struct {
-	Sym SymModeId
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (b *SymKeyBitsUnion) SelectUnmarshal(selector any) any {
+	switch reflect.ValueOf(selector).Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
+	case AlgorithmAES, AlgorithmSM4, AlgorithmCamellia:
+		return union.ContentsUnmarshal[uint16](&b.contents)
+	case AlgorithmXOR:
+		return union.ContentsUnmarshal[HashAlgorithmId](&b.contents)
+	case AlgorithmNull:
+		return union.ContentsUnmarshal[Empty](&b.contents)
+	default:
+		return nil
+	}
 }
 
-// Select implements [mu.Union].
-func (m *SymModeU) Select(selector reflect.Value) interface{} {
-	switch selector.Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
-	case AlgorithmAES:
-		fallthrough
-	case AlgorithmSM4:
-		fallthrough
-	case AlgorithmCamellia:
-		return &m.Sym
-	case AlgorithmXOR:
-		fallthrough
-	case AlgorithmNull:
-		return mu.NilUnionValue
+type SymModeUnionConstraint interface {
+	SymModeId | Empty
+}
+
+// SymModeUnion is a union type that corresponds to the TPMU_SYM_MODE type. The selector
+// type is [AlgorithmId]. The mapping of selector values to fields is as follows:
+//   - AlgorithmAES: AES
+//   - AlgorithmSM4: SM4
+//   - AlgorithmCamellia: Camellia
+//   - AlgorithmXOR: none
+//   - AlgorithmNull: none
+type SymModeUnion struct {
+	contents union.Contents
+}
+
+func MakeSymModeUnion[T SymModeUnionConstraint](contents T) SymModeUnion {
+	return SymModeUnion{contents: union.NewContents(contents)}
+}
+
+func (m *SymModeUnion) AES() SymModeId {
+	return union.ContentsElem[SymModeId](m.contents)
+}
+
+func (m *SymModeUnion) SM4() SymModeId {
+	return union.ContentsElem[SymModeId](m.contents)
+}
+
+func (m *SymModeUnion) Camellia() SymModeId {
+	return union.ContentsElem[SymModeId](m.contents)
+}
+
+func (m *SymModeUnion) Sym() SymModeId {
+	return union.ContentsElem[SymModeId](m.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (m SymModeUnion) SelectMarshal(selector any) any {
+	switch reflect.ValueOf(selector).Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
+	case AlgorithmAES, AlgorithmSM4, AlgorithmCamellia:
+		return union.ContentsMarshal[SymModeId](m.contents)
+	case AlgorithmXOR, AlgorithmNull:
+		return union.ContentsMarshal[Empty](m.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (m *SymModeUnion) SelectUnmarshal(selector any) any {
+	switch reflect.ValueOf(selector).Convert(reflect.TypeOf(AlgorithmId(0))).Interface().(AlgorithmId) {
+	case AlgorithmAES, AlgorithmSM4, AlgorithmCamellia:
+		return union.ContentsUnmarshal[SymModeId](&m.contents)
+	case AlgorithmXOR, AlgorithmNull:
+		return union.ContentsUnmarshal[Empty](&m.contents)
 	default:
 		return nil
 	}
@@ -78,17 +146,17 @@ func (m *SymModeU) Select(selector reflect.Value) interface{} {
 // SymDef corresponds to the TPMT_SYM_DEF type, and is used to select the algorithm
 // used for parameter encryption.
 type SymDef struct {
-	Algorithm SymAlgorithmId // Symmetric algorithm
-	KeyBits   *SymKeyBitsU   // Symmetric key size
-	Mode      *SymModeU      // Symmetric mode
+	Algorithm SymAlgorithmId  // Symmetric algorithm
+	KeyBits   SymKeyBitsUnion // Symmetric key size
+	Mode      SymModeUnion    // Symmetric mode
 }
 
 // SymDefObject corresponds to the TPMT_SYM_DEF_OBJECT type, and is used to define an
 // object's symmetric algorithm.
 type SymDefObject struct {
 	Algorithm SymObjectAlgorithmId // Symmetric algorithm
-	KeyBits   *SymKeyBitsU         // Symmetric key size
-	Mode      *SymModeU            // Symmetric mode
+	KeyBits   SymKeyBitsUnion      // Symmetric key size
+	Mode      SymModeUnion         // Symmetric mode
 }
 
 // SymKey corresponds to the TPM2B_SYM_KEY type.
@@ -150,26 +218,55 @@ type SchemeXOR struct {
 	KDF     KDFAlgorithmId  // Hash algorithm used for the KDF
 }
 
-// SchemeKeyedHashU is a union type that corresponds to the TPMU_SCHEME_KEYED_HASH type.
+type SchemeKeyedHashUnionConstraint interface {
+	SchemeHMAC | SchemeXOR | Empty
+}
+
+// SchemeKeyedHashUnion is a union type that corresponds to the TPMU_SCHEME_KEYED_HASH type.
 // The selector type is [KeyedHashSchemeId]. The mapping of selector values to fields is
 // as follows:
 //   - KeyedHashSchemeHMAC: HMAC
 //   - KeyedHashSchemeXOR: XOR
 //   - KeyedHashSchemeNull: none
-type SchemeKeyedHashU struct {
-	HMAC *SchemeHMAC
-	XOR  *SchemeXOR
+type SchemeKeyedHashUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (d *SchemeKeyedHashU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(KeyedHashSchemeId) {
+func MakeSchemeKeyedHashUnion[T SchemeKeyedHashUnionConstraint](contents T) SchemeKeyedHashUnion {
+	return SchemeKeyedHashUnion{contents: union.NewContents(contents)}
+}
+
+func (d *SchemeKeyedHashUnion) HMAC() *SchemeHMAC {
+	return union.ContentsPtr[SchemeHMAC](d.contents)
+}
+
+func (d *SchemeKeyedHashUnion) XOR() *SchemeXOR {
+	return union.ContentsPtr[SchemeXOR](d.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (d SchemeKeyedHashUnion) SelectMarshal(selector any) any {
+	switch selector.(KeyedHashSchemeId) {
 	case KeyedHashSchemeHMAC:
-		return &d.HMAC
+		return union.ContentsMarshal[SchemeHMAC](d.contents)
 	case KeyedHashSchemeXOR:
-		return &d.XOR
+		return union.ContentsMarshal[SchemeXOR](d.contents)
 	case KeyedHashSchemeNull:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](d.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (d *SchemeKeyedHashUnion) SelectUnmarshal(selector any) any {
+	switch selector.(KeyedHashSchemeId) {
+	case KeyedHashSchemeHMAC:
+		return union.ContentsUnmarshal[SchemeHMAC](&d.contents)
+	case KeyedHashSchemeXOR:
+		return union.ContentsUnmarshal[SchemeXOR](&d.contents)
+	case KeyedHashSchemeNull:
+		return union.ContentsUnmarshal[Empty](&d.contents)
 	default:
 		return nil
 	}
@@ -177,8 +274,8 @@ func (d *SchemeKeyedHashU) Select(selector reflect.Value) interface{} {
 
 // KeyedHashScheme corresponds to the TPMT_KEYEDHASH_SCHEME type.
 type KeyedHashScheme struct {
-	Scheme  KeyedHashSchemeId // Scheme selector
-	Details *SchemeKeyedHashU // Scheme specific parameters
+	Scheme  KeyedHashSchemeId    // Scheme selector
+	Details SchemeKeyedHashUnion // Scheme specific parameters
 }
 
 // 11.2 Assymetric
@@ -192,7 +289,11 @@ type SigSchemeECDAA = SchemeECDAA
 type SigSchemeSM2 = SchemeHash
 type SigSchemeECSchnorr = SchemeHash
 
-// SigSchemeU is a union type that corresponds to the TPMU_SIG_SCHEME type. The
+type SigSchemeUnionConstraint interface {
+	SchemeHash | SchemeECDAA | Empty
+}
+
+// SigSchemeUnion is a union type that corresponds to the TPMU_SIG_SCHEME type. The
 // selector type is [SigSchemeId]. The mapping of selector value to fields is as follows:
 //   - SigSchemeAlgRSASSA: RSASSA
 //   - SigSchemeAlgRSAPSS: RSAPSS
@@ -202,91 +303,106 @@ type SigSchemeECSchnorr = SchemeHash
 //   - SigSchemeAlgECSchnorr: ECSchnorr
 //   - SigSchemeAlgHMAC: HMAC
 //   - SigSchemeAlgNull: none
-type SigSchemeU struct {
-	RSASSA    *SigSchemeRSASSA
-	RSAPSS    *SigSchemeRSAPSS
-	ECDSA     *SigSchemeECDSA
-	ECDAA     *SigSchemeECDAA
-	SM2       *SigSchemeSM2
-	ECSchnorr *SigSchemeECSchnorr
-	HMAC      *SchemeHMAC
+type SigSchemeUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(SigSchemeId) {
+func MakeSigSchemeUnion[T SigSchemeUnionConstraint](contents T) SigSchemeUnion {
+	return SigSchemeUnion{contents: union.NewContents(contents)}
+}
+
+func (s *SigSchemeUnion) RSASSA() *SigSchemeRSASSA {
+	return union.ContentsPtr[SigSchemeRSASSA](s.contents)
+}
+
+func (s *SigSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
+	return union.ContentsPtr[SigSchemeRSAPSS](s.contents)
+}
+
+func (s *SigSchemeUnion) ECDSA() *SigSchemeECDSA {
+	return union.ContentsPtr[SigSchemeECDSA](s.contents)
+}
+
+func (s *SigSchemeUnion) ECDAA() *SigSchemeECDAA {
+	return union.ContentsPtr[SigSchemeECDAA](s.contents)
+}
+
+func (s *SigSchemeUnion) SM2() *SigSchemeSM2 {
+	return union.ContentsPtr[SigSchemeSM2](s.contents)
+}
+
+func (s *SigSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
+	return union.ContentsPtr[SigSchemeECSchnorr](s.contents)
+}
+
+func (s *SigSchemeUnion) HMAC() *SchemeHMAC {
+	return union.ContentsPtr[SchemeHMAC](s.contents)
+}
+
+// Any returns the signature scheme associated with scheme as a *SchemeHash.
+func (s *SigSchemeUnion) Any() *SchemeHash {
+	switch ptr := s.contents.(type) {
+	case *SchemeHash:
+		return ptr
+	case *SigSchemeECDAA:
+		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	default:
+		panic("invalid type")
+	}
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (s SigSchemeUnion) SelectMarshal(selector any) any {
+	switch selector.(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return &s.RSASSA
+		return union.ContentsMarshal[SigSchemeRSASSA](s.contents)
 	case SigSchemeAlgRSAPSS:
-		return &s.RSAPSS
+		return union.ContentsMarshal[SigSchemeRSAPSS](s.contents)
 	case SigSchemeAlgECDSA:
-		return &s.ECDSA
+		return union.ContentsMarshal[SigSchemeECDSA](s.contents)
 	case SigSchemeAlgECDAA:
-		return &s.ECDAA
+		return union.ContentsMarshal[SigSchemeECDAA](s.contents)
 	case SigSchemeAlgSM2:
-		return &s.SM2
+		return union.ContentsMarshal[SigSchemeSM2](s.contents)
 	case SigSchemeAlgECSchnorr:
-		return &s.ECSchnorr
+		return union.ContentsMarshal[SigSchemeECSchnorr](s.contents)
 	case SigSchemeAlgHMAC:
-		return &s.HMAC
+		return union.ContentsMarshal[SchemeHMAC](s.contents)
 	case SigSchemeAlgNull:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](s.contents)
 	default:
 		return nil
 	}
 }
 
-// Any returns the signature scheme associated with scheme as a *SchemeHash.
-// It panics if the specified scheme is invalid ([SigSchemeId.IsValid] returns
-// false), or the appropriate field isn't set.
-//
-// Deprecated: Use [SigScheme.AnyDetails] instead.
-func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
-	switch scheme {
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (s *SigSchemeUnion) SelectUnmarshal(selector any) any {
+	switch selector.(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return (*SchemeHash)(&(*s.RSASSA))
+		return union.ContentsUnmarshal[SigSchemeRSASSA](&s.contents)
 	case SigSchemeAlgRSAPSS:
-		return (*SchemeHash)(&(*s.RSAPSS))
+		return union.ContentsUnmarshal[SigSchemeRSAPSS](&s.contents)
 	case SigSchemeAlgECDSA:
-		return (*SchemeHash)(&(*s.ECDSA))
+		return union.ContentsUnmarshal[SigSchemeECDSA](&s.contents)
 	case SigSchemeAlgECDAA:
-		return &SchemeHash{HashAlg: s.ECDAA.HashAlg}
+		return union.ContentsUnmarshal[SigSchemeECDAA](&s.contents)
 	case SigSchemeAlgSM2:
-		return (*SchemeHash)(&(*s.SM2))
+		return union.ContentsUnmarshal[SigSchemeSM2](&s.contents)
 	case SigSchemeAlgECSchnorr:
-		return (*SchemeHash)(&(*s.ECSchnorr))
+		return union.ContentsUnmarshal[SigSchemeECSchnorr](&s.contents)
 	case SigSchemeAlgHMAC:
-		return (*SchemeHash)(&(*s.HMAC))
+		return union.ContentsUnmarshal[SchemeHMAC](&s.contents)
+	case SigSchemeAlgNull:
+		return union.ContentsUnmarshal[Empty](&s.contents)
 	default:
-		panic("invalid scheme")
+		return nil
 	}
 }
 
 // SigScheme corresponds to the TPMT_SIG_SCHEME type.
 type SigScheme struct {
-	Scheme  SigSchemeId // Scheme selector
-	Details *SigSchemeU // Scheme specific parameters
-}
-
-// AnyDetails returns the details of the signature scheme. If the scheme is [SigSchemeAlgNull],
-// then nil is returned. If the scheme is not otherwise valid, it will panic.
-func (s *SigScheme) AnyDetails() *SchemeHash {
-	switch {
-	case s.Scheme == SigSchemeAlgNull:
-		return nil
-	case !s.Scheme.IsValid():
-		panic("invalid scheme")
-	}
-
-	data := mu.MustMarshalToBytes(s)
-
-	var scheme SigSchemeId
-	var details *SchemeHash
-	if _, err := mu.UnmarshalFromBytes(data, &scheme, &details); err != nil {
-		panic(err)
-	}
-
-	return details
+	Scheme  SigSchemeId    // Scheme selector
+	Details SigSchemeUnion // Scheme specific parameters
 }
 
 // 11.2.2 Encryption Schemes
@@ -304,7 +420,11 @@ type SchemeKDF1_SP800_56A = SchemeHash
 type SchemeKDF2 = SchemeHash
 type SchemeKDF1_SP800_108 = SchemeHash
 
-// KDFSchemeU is a union type that corresponds to the TPMU_KDF_SCHEME
+type KDFSchemeUnionConstraint interface {
+	SchemeHash | Empty
+}
+
+// KDFSchemeUnion is a union type that corresponds to the TPMU_KDF_SCHEME
 // type. The selector type is [KDFAlgorithmId]. The mapping of selector
 // value to field is as follows:
 //   - KDFAlgorithmMGF1: MGF1
@@ -312,26 +432,61 @@ type SchemeKDF1_SP800_108 = SchemeHash
 //   - KDFAlgorithmKDF2: KDF2
 //   - KDFAlgorithmKDF1_SP800_108: KDF1_SP800_108
 //   - KDFAlgorithmNull: none
-type KDFSchemeU struct {
-	MGF1           *SchemeMGF1
-	KDF1_SP800_56A *SchemeKDF1_SP800_56A
-	KDF2           *SchemeKDF2
-	KDF1_SP800_108 *SchemeKDF1_SP800_108
+type KDFSchemeUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (s *KDFSchemeU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(KDFAlgorithmId) {
+func MakeKDFSchemeUnion[T KDFSchemeUnionConstraint](contents T) KDFSchemeUnion {
+	return KDFSchemeUnion{contents: union.NewContents(contents)}
+}
+
+func (s *KDFSchemeUnion) MGF1() *SchemeMGF1 {
+	return union.ContentsPtr[SchemeMGF1](s.contents)
+}
+
+func (s *KDFSchemeUnion) KDF1_SP800_56A() *SchemeKDF1_SP800_56A {
+	return union.ContentsPtr[SchemeKDF1_SP800_56A](s.contents)
+}
+
+func (s *KDFSchemeUnion) KDF2() *SchemeKDF2 {
+	return union.ContentsPtr[SchemeKDF2](s.contents)
+}
+
+func (s *KDFSchemeUnion) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
+	return union.ContentsPtr[SchemeKDF1_SP800_108](s.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (s KDFSchemeUnion) SelectMarshal(selector any) any {
+	switch selector.(KDFAlgorithmId) {
 	case KDFAlgorithmMGF1:
-		return &s.MGF1
+		return union.ContentsMarshal[SchemeMGF1](s.contents)
 	case KDFAlgorithmKDF1_SP800_56A:
-		return &s.KDF1_SP800_56A
+		return union.ContentsMarshal[SchemeKDF1_SP800_56A](s.contents)
 	case KDFAlgorithmKDF2:
-		return &s.KDF2
+		return union.ContentsMarshal[SchemeKDF2](s.contents)
 	case KDFAlgorithmKDF1_SP800_108:
-		return &s.KDF1_SP800_108
+		return union.ContentsMarshal[SchemeKDF1_SP800_108](s.contents)
 	case KDFAlgorithmNull:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](s.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (s *KDFSchemeUnion) SelectUnmarshal(selector any) any {
+	switch selector.(KDFAlgorithmId) {
+	case KDFAlgorithmMGF1:
+		return union.ContentsUnmarshal[SchemeMGF1](&s.contents)
+	case KDFAlgorithmKDF1_SP800_56A:
+		return union.ContentsUnmarshal[SchemeKDF1_SP800_56A](&s.contents)
+	case KDFAlgorithmKDF2:
+		return union.ContentsUnmarshal[SchemeKDF2](&s.contents)
+	case KDFAlgorithmKDF1_SP800_108:
+		return union.ContentsUnmarshal[SchemeKDF1_SP800_108](&s.contents)
+	case KDFAlgorithmNull:
+		return union.ContentsUnmarshal[Empty](&s.contents)
 	default:
 		return nil
 	}
@@ -340,7 +495,7 @@ func (s *KDFSchemeU) Select(selector reflect.Value) interface{} {
 // KDFScheme corresponds to the TPMT_KDF_SCHEME type.
 type KDFScheme struct {
 	Scheme  KDFAlgorithmId // Scheme selector
-	Details *KDFSchemeU    // Scheme specific parameters.
+	Details KDFSchemeUnion // Scheme specific parameters.
 }
 
 // AsymSchemeId corresponds to the TPMI_ALG_ASYM_SCHEME type
@@ -398,7 +553,11 @@ const (
 	AsymSchemeECMQV     AsymSchemeId = AsymSchemeId(AlgorithmECMQV)     // TPM_ALG_ECMQV
 )
 
-// AsymSchemeU is a union type that corresponds to the TPMU_ASYM_SCHEME type. The
+type AsymSchemeUnionConstraint interface {
+	SchemeHash | Empty | SchemeECDAA
+}
+
+// AsymSchemeUnion is a union type that corresponds to the TPMU_ASYM_SCHEME type. The
 // selector type is [AsymSchemeId]. The mapping of selector values to fields is as follows:
 //   - AsymSchemeRSASSA: RSASSA
 //   - AsymSchemeRSAES: RSAES
@@ -411,112 +570,131 @@ const (
 //   - AsymSchemeECSchnorr: ECSchnorr
 //   - AsymSchemeECMQV: ECMQV
 //   - AsymSchemeNull: none
-type AsymSchemeU struct {
-	RSASSA    *SigSchemeRSASSA
-	RSAES     *EncSchemeRSAES
-	RSAPSS    *SigSchemeRSAPSS
-	OAEP      *EncSchemeOAEP
-	ECDSA     *SigSchemeECDSA
-	ECDH      *KeySchemeECDH
-	ECDAA     *SigSchemeECDAA
-	SM2       *SigSchemeSM2
-	ECSchnorr *SigSchemeECSchnorr
-	ECMQV     *KeySchemeECMQV
+type AsymSchemeUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
-	switch selector.Convert(reflect.TypeOf(AsymSchemeId(0))).Interface().(AsymSchemeId) {
+func MakeAsymSchemeUnion[T AsymSchemeUnionConstraint](contents T) AsymSchemeUnion {
+	return AsymSchemeUnion{contents: union.NewContents(contents)}
+}
+
+func (s *AsymSchemeUnion) RSASSA() *SigSchemeRSASSA {
+	return union.ContentsPtr[SigSchemeRSASSA](s.contents)
+}
+
+func (s *AsymSchemeUnion) RSAES() *EncSchemeRSAES {
+	return union.ContentsPtr[EncSchemeRSAES](s.contents)
+}
+
+func (s *AsymSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
+	return union.ContentsPtr[SigSchemeRSAPSS](s.contents)
+}
+
+func (s *AsymSchemeUnion) OAEP() *EncSchemeOAEP {
+	return union.ContentsPtr[EncSchemeOAEP](s.contents)
+}
+
+func (s *AsymSchemeUnion) ECDSA() *SigSchemeECDSA {
+	return union.ContentsPtr[SigSchemeECDSA](s.contents)
+}
+
+func (s *AsymSchemeUnion) ECDH() *KeySchemeECDH {
+	return union.ContentsPtr[KeySchemeECDH](s.contents)
+}
+
+func (s *AsymSchemeUnion) ECDAA() *SigSchemeECDAA {
+	return union.ContentsPtr[SigSchemeECDAA](s.contents)
+}
+
+func (s *AsymSchemeUnion) SM2() *SigSchemeSM2 {
+	return union.ContentsPtr[SigSchemeSM2](s.contents)
+}
+
+func (s *AsymSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
+	return union.ContentsPtr[SigSchemeECSchnorr](s.contents)
+}
+
+func (s *AsymSchemeUnion) ECMQV() *KeySchemeECMQV {
+	return union.ContentsPtr[KeySchemeECMQV](s.contents)
+}
+
+// Any returns the asymmetric scheme associated with scheme as a *SchemeHash.
+// It panics if the specified scheme does not have an associated digest algorithm
+func (s *AsymSchemeUnion) Any() *SchemeHash {
+	switch ptr := s.contents.(type) {
+	case *SchemeHash:
+		return ptr
+	case *SigSchemeECDAA:
+		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	default:
+		panic("invalid type")
+	}
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (s AsymSchemeUnion) SelectMarshal(selector any) any {
+	switch reflect.ValueOf(selector).Convert(reflect.TypeOf(AsymSchemeId(0))).Interface().(AsymSchemeId) {
 	case AsymSchemeRSASSA:
-		return &s.RSASSA
+		return union.ContentsMarshal[SigSchemeRSASSA](s.contents)
 	case AsymSchemeRSAES:
-		return &s.RSAES
+		return union.ContentsMarshal[EncSchemeRSAES](s.contents)
 	case AsymSchemeRSAPSS:
-		return &s.RSAPSS
+		return union.ContentsMarshal[SigSchemeRSAPSS](s.contents)
 	case AsymSchemeOAEP:
-		return &s.OAEP
+		return union.ContentsMarshal[EncSchemeOAEP](s.contents)
 	case AsymSchemeECDSA:
-		return &s.ECDSA
+		return union.ContentsMarshal[SigSchemeECDSA](s.contents)
 	case AsymSchemeECDH:
-		return &s.ECDH
+		return union.ContentsMarshal[KeySchemeECDH](s.contents)
 	case AsymSchemeECDAA:
-		return &s.ECDAA
+		return union.ContentsMarshal[SigSchemeECDAA](s.contents)
 	case AsymSchemeSM2:
-		return &s.SM2
+		return union.ContentsMarshal[SigSchemeSM2](s.contents)
 	case AsymSchemeECSchnorr:
-		return &s.ECSchnorr
+		return union.ContentsMarshal[SigSchemeECSchnorr](s.contents)
 	case AsymSchemeECMQV:
-		return &s.ECMQV
+		return union.ContentsMarshal[KeySchemeECMQV](s.contents)
 	case AsymSchemeNull:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](s.contents)
 	default:
 		return nil
 	}
 }
 
-// Any returns the asymmetric scheme associated with scheme as a *SchemeHash.
-// It panics if the specified scheme does not have an associated digest algorithm
-// ([AsymSchemeId.HasDigest] returns false), or if the appropriate field isn't set.
-//
-// Deprecated: Use [AsymScheme.AnyDetails], [RSAScheme.AnyDetails] or
-// [ECCScheme.AnyDetails] instead.
-func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
-	if !scheme.HasDigest() {
-		panic("invalid asymmetric scheme")
-	}
-
-	switch scheme {
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (s *AsymSchemeUnion) SelectUnmarshal(selector any) any {
+	switch reflect.ValueOf(selector).Convert(reflect.TypeOf(AsymSchemeId(0))).Interface().(AsymSchemeId) {
 	case AsymSchemeRSASSA:
-		return (*SchemeHash)(&(*s.RSASSA))
+		return union.ContentsUnmarshal[SigSchemeRSASSA](&s.contents)
+	case AsymSchemeRSAES:
+		return union.ContentsUnmarshal[EncSchemeRSAES](&s.contents)
 	case AsymSchemeRSAPSS:
-		return (*SchemeHash)(&(*s.RSAPSS))
+		return union.ContentsUnmarshal[SigSchemeRSAPSS](&s.contents)
 	case AsymSchemeOAEP:
-		return (*SchemeHash)(&(*s.OAEP))
+		return union.ContentsUnmarshal[EncSchemeOAEP](&s.contents)
 	case AsymSchemeECDSA:
-		return (*SchemeHash)(&(*s.ECDSA))
+		return union.ContentsUnmarshal[SigSchemeECDSA](&s.contents)
 	case AsymSchemeECDH:
-		return (*SchemeHash)(&(*s.ECDH))
+		return union.ContentsUnmarshal[KeySchemeECDH](&s.contents)
 	case AsymSchemeECDAA:
-		return &SchemeHash{HashAlg: s.ECDAA.HashAlg}
+		return union.ContentsUnmarshal[SigSchemeECDAA](&s.contents)
 	case AsymSchemeSM2:
-		return (*SchemeHash)(&(*s.SM2))
+		return union.ContentsUnmarshal[SigSchemeSM2](&s.contents)
 	case AsymSchemeECSchnorr:
-		return (*SchemeHash)(&(*s.ECSchnorr))
+		return union.ContentsUnmarshal[SigSchemeECSchnorr](&s.contents)
 	case AsymSchemeECMQV:
-		return (*SchemeHash)(&(*s.ECMQV))
+		return union.ContentsUnmarshal[KeySchemeECMQV](&s.contents)
+	case AsymSchemeNull:
+		return union.ContentsUnmarshal[Empty](&s.contents)
 	default:
-		panic("not reached")
+		return nil
 	}
 }
 
 // AsymScheme corresponds to the TPMT_ASYM_SCHEME type.
 type AsymScheme struct {
-	Scheme  AsymSchemeId // Scheme selector
-	Details *AsymSchemeU // Scheme specific parameters
-}
-
-// AnyDetails returns the details of the asymmetric scheme. If the scheme is [AsymSchemeNull],
-// or doesn't have a digest, then nil is returned. If the scheme is not otherwise valid, it
-// will panic.
-func (s *AsymScheme) AnyDetails() *SchemeHash {
-	switch {
-	case s.Scheme == AsymSchemeNull:
-		return nil
-	case !s.Scheme.HasDigest():
-		return nil
-	case !s.Scheme.IsValid():
-		panic("invalid scheme")
-	}
-
-	data := mu.MustMarshalToBytes(s)
-
-	var scheme AsymSchemeId
-	var details *SchemeHash
-	if _, err := mu.UnmarshalFromBytes(data, &scheme, &details); err != nil {
-		panic(err)
-	}
-
-	return details
+	Scheme  AsymSchemeId    // Scheme selector
+	Details AsymSchemeUnion // Scheme specific parameters
 }
 
 // 11.2.4 RSA
@@ -534,18 +712,8 @@ const (
 
 // RSAScheme corresponds to the TPMT_RSA_SCHEME type.
 type RSAScheme struct {
-	Scheme  RSASchemeId  // Scheme selector
-	Details *AsymSchemeU // Scheme specific parameters.
-}
-
-// AnyDetails returns the details of the RSA scheme. If the scheme is [RSASchemeNull],
-// or doesn't have a digest, then nil is returned. If the scheme is not otherwise valid, it
-// will panic.
-func (s *RSAScheme) AnyDetails() *SchemeHash {
-	scheme := AsymScheme{
-		Scheme:  AsymSchemeId(s.Scheme),
-		Details: s.Details}
-	return scheme.AnyDetails()
+	Scheme  RSASchemeId     // Scheme selector
+	Details AsymSchemeUnion // Scheme specific parameters.
 }
 
 // PublicKeyRSA corresponds to the TPM2B_PUBLIC_KEY_RSA type.
@@ -581,17 +749,8 @@ const (
 
 // ECCScheme corresponds to the TPMT_ECC_SCHEME type.
 type ECCScheme struct {
-	Scheme  ECCSchemeId  // Scheme selector
-	Details *AsymSchemeU // Scheme specific parameters.
-}
-
-// AnyDetails returns the details of the ECC scheme. If the scheme is [ECCSchemeNull]
-// then nil is returned. If the scheme is not otherwise valid, it will panic.
-func (s *ECCScheme) AnyDetails() *SchemeHash {
-	scheme := AsymScheme{
-		Scheme:  AsymSchemeId(s.Scheme),
-		Details: s.Details}
-	return scheme.AnyDetails()
+	Scheme  ECCSchemeId     // Scheme selector
+	Details AsymSchemeUnion // Scheme specific parameters.
 }
 
 // 11.3 Signatures
@@ -616,7 +775,11 @@ type SignatureECDAA = SignatureECC
 type SignatureSM2 = SignatureECC
 type SignatureECSchnorr = SignatureECC
 
-// SignatureU is a union type that corresponds to TPMU_SIGNATURE. The selector
+type SignatureUnionConstraint interface {
+	SignatureRSA | SignatureECC | TaggedHash | Empty
+}
+
+// SignatureUnion is a union type that corresponds to TPMU_SIGNATURE. The selector
 // type is [SigSchemeId]. The mapping of selector values to fields is as follows:
 //   - SigSchemeAlgRSASSA: RSASSA
 //   - SigSchemeAlgRSAPSS: RSAPSS
@@ -626,95 +789,119 @@ type SignatureECSchnorr = SignatureECC
 //   - SigSchemeAlgECSchnorr: ECSchnorr
 //   - SigSchemeAlgHMAC: HMAC
 //   - SigSchemeAlgNull: none
-type SignatureU struct {
-	RSASSA    *SignatureRSASSA
-	RSAPSS    *SignatureRSAPSS
-	ECDSA     *SignatureECDSA
-	ECDAA     *SignatureECDAA
-	SM2       *SignatureSM2
-	ECSchnorr *SignatureECSchnorr
-	HMAC      *TaggedHash
+type SignatureUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (s *SignatureU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(SigSchemeId) {
+func MakeSignatureUnion[T SignatureUnionConstraint](contents T) SignatureUnion {
+	return SignatureUnion{contents: union.NewContents(contents)}
+}
+
+func (s *SignatureUnion) RSASSA() *SignatureRSASSA {
+	return union.ContentsPtr[SignatureRSASSA](s.contents)
+}
+
+func (s *SignatureUnion) RSAPSS() *SignatureRSAPSS {
+	return union.ContentsPtr[SignatureRSAPSS](s.contents)
+}
+
+func (s *SignatureUnion) ECDSA() *SignatureECDSA {
+	return union.ContentsPtr[SignatureECDSA](s.contents)
+}
+
+func (s *SignatureUnion) ECDAA() *SignatureECDAA {
+	return union.ContentsPtr[SignatureECDAA](s.contents)
+}
+
+func (s *SignatureUnion) SM2() *SignatureSM2 {
+	return union.ContentsPtr[SignatureSM2](s.contents)
+}
+
+func (s *SignatureUnion) ECSchnorr() *SignatureECSchnorr {
+	return union.ContentsPtr[SignatureECSchnorr](s.contents)
+}
+
+func (s *SignatureUnion) HMAC() *TaggedHash {
+	return union.ContentsPtr[TaggedHash](s.contents)
+}
+
+// Any returns the signature associated with scheme as a *SchemeHash.
+func (s *SignatureUnion) Any() *SchemeHash {
+	switch ptr := s.contents.(type) {
+	case *SignatureRSA:
+		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	case *SignatureECC:
+		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	case *TaggedHash:
+		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	default:
+		panic("invalid type")
+	}
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (s SignatureUnion) SelectMarshal(selector any) any {
+	switch selector.(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return &s.RSASSA
+		return union.ContentsMarshal[SignatureRSASSA](s.contents)
 	case SigSchemeAlgRSAPSS:
-		return &s.RSAPSS
+		return union.ContentsMarshal[SignatureRSAPSS](s.contents)
 	case SigSchemeAlgECDSA:
-		return &s.ECDSA
+		return union.ContentsMarshal[SignatureECDSA](s.contents)
 	case SigSchemeAlgECDAA:
-		return &s.ECDAA
+		return union.ContentsMarshal[SignatureECDAA](s.contents)
 	case SigSchemeAlgSM2:
-		return &s.SM2
+		return union.ContentsMarshal[SignatureSM2](s.contents)
 	case SigSchemeAlgECSchnorr:
-		return &s.ECSchnorr
+		return union.ContentsMarshal[SignatureECSchnorr](s.contents)
 	case SigSchemeAlgHMAC:
-		return &s.HMAC
+		return union.ContentsMarshal[TaggedHash](s.contents)
 	case SigSchemeAlgNull:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](s.contents)
 	default:
 		return nil
 	}
 }
 
-// Any returns the signature associated with scheme as a *SchemeHash. It
-// panics if scheme is [SigSchemeAlgNull] or the appropriate field isn't
-// set.
-//
-// Deprecated: Use [Signature.Digest] instead.
-func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
-	if !scheme.IsValid() {
-		panic("invalid signature scheme")
-	}
-
-	switch scheme {
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (s *SignatureUnion) SelectUnmarshal(selector any) any {
+	switch selector.(SigSchemeId) {
 	case SigSchemeAlgRSASSA:
-		return &SchemeHash{HashAlg: s.RSASSA.Hash}
+		return union.ContentsUnmarshal[SignatureRSASSA](&s.contents)
 	case SigSchemeAlgRSAPSS:
-		return &SchemeHash{HashAlg: s.RSAPSS.Hash}
+		return union.ContentsUnmarshal[SignatureRSAPSS](&s.contents)
 	case SigSchemeAlgECDSA:
-		return &SchemeHash{HashAlg: s.ECDSA.Hash}
+		return union.ContentsUnmarshal[SignatureECDSA](&s.contents)
 	case SigSchemeAlgECDAA:
-		return &SchemeHash{HashAlg: s.ECDAA.Hash}
+		return union.ContentsUnmarshal[SignatureECDAA](&s.contents)
 	case SigSchemeAlgSM2:
-		return &SchemeHash{HashAlg: s.SM2.Hash}
+		return union.ContentsUnmarshal[SignatureSM2](&s.contents)
 	case SigSchemeAlgECSchnorr:
-		return &SchemeHash{HashAlg: s.ECSchnorr.Hash}
+		return union.ContentsUnmarshal[SignatureECSchnorr](&s.contents)
 	case SigSchemeAlgHMAC:
-		return &SchemeHash{HashAlg: s.HMAC.HashAlg}
+		return union.ContentsUnmarshal[TaggedHash](&s.contents)
+	case SigSchemeAlgNull:
+		return union.ContentsUnmarshal[Empty](&s.contents)
 	default:
-		panic("not reached")
+		return nil
 	}
 }
 
 // Signature corresponds to the TPMT_SIGNATURE type which represents a
 // signature.
 type Signature struct {
-	SigAlg    SigSchemeId // Signature algorithm
-	Signature *SignatureU // Actual signature
+	SigAlg    SigSchemeId    // Signature algorithm
+	Signature SignatureUnion // Actual signature
 }
 
 // HashAlg returns the digest algorithm used to create the signature. This will panic if
-// the signature algorithm is not valid ([SigSchemeId.IsValid] returns false) or if the signature
-// structure is otherwise invalid ([mu.IsValid] returns false). The signature structure will be
-// valid if it was constructed by the [github.com/canonical/go-tpm2/mu] package.
+// the signature algorithm is not valid ([SigSchemeId.IsValid] returns false).
 func (s *Signature) HashAlg() HashAlgorithmId {
 	if !s.SigAlg.IsValid() {
 		panic("invalid scheme")
 	}
 
-	data := mu.MustMarshalToBytes(s)
-
-	var alg SigSchemeId
-	var hashAlg HashAlgorithmId
-	if _, err := mu.UnmarshalFromBytes(data, &alg, &hashAlg); err != nil {
-		panic(err)
-	}
-
-	return hashAlg
+	return s.Signature.Any().HashAlg
 }
 
 // 11.4) Key/Secret Exchange

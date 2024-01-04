@@ -11,8 +11,9 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"math/big"
-	"reflect"
+	"unsafe"
 
+	"github.com/canonical/go-tpm2/internal/union"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -35,30 +36,67 @@ const (
 	ObjectTypeSymCipher ObjectTypeId = ObjectTypeId(AlgorithmSymCipher) // TPM_ALG_SYMCIPHER
 )
 
-// PublicIDU is a union type that corresponds to the TPMU_PUBLIC_ID type. The selector type
+type PublicIDUnionConstraint interface {
+	Digest | PublicKeyRSA | ECCPoint
+}
+
+// PublicIDUnion is a union type that corresponds to the TPMU_PUBLIC_ID type. The selector type
 // is [ObjectTypeId]. The mapping of selector values to fields is as follows:
 //   - ObjectTypeRSA: RSA
 //   - ObjectTypeKeyedHash: KeyedHash
 //   - ObjectTypeECC: ECC
 //   - ObjectTypeSymCipher: Sym
-type PublicIDU struct {
-	KeyedHash Digest
-	Sym       Digest
-	RSA       PublicKeyRSA
-	ECC       *ECCPoint
+type PublicIDUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (p *PublicIDU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(ObjectTypeId) {
+func MakePublicIDUnion[T PublicIDUnionConstraint](contents T) PublicIDUnion {
+	return PublicIDUnion{contents: union.NewContents(contents)}
+}
+
+func (p *PublicIDUnion) KeyedHash() Digest {
+	return union.ContentsElem[Digest](p.contents)
+}
+
+func (p *PublicIDUnion) Sym() Digest {
+	return union.ContentsElem[Digest](p.contents)
+}
+
+func (p *PublicIDUnion) RSA() PublicKeyRSA {
+	return union.ContentsElem[PublicKeyRSA](p.contents)
+}
+
+func (p *PublicIDUnion) ECC() *ECCPoint {
+	return union.ContentsPtr[ECCPoint](p.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (p PublicIDUnion) SelectMarshal(selector any) any {
+	switch selector.(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return &p.RSA
+		return union.ContentsMarshal[PublicKeyRSA](p.contents)
 	case ObjectTypeKeyedHash:
-		return &p.KeyedHash
+		return union.ContentsMarshal[Digest](p.contents)
 	case ObjectTypeECC:
-		return &p.ECC
+		return union.ContentsMarshal[ECCPoint](p.contents)
 	case ObjectTypeSymCipher:
-		return &p.Sym
+		return union.ContentsMarshal[Digest](p.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (p *PublicIDUnion) SelectUnmarshal(selector any) any {
+	switch selector.(ObjectTypeId) {
+	case ObjectTypeRSA:
+		return union.ContentsUnmarshal[PublicKeyRSA](&p.contents)
+	case ObjectTypeKeyedHash:
+		return union.ContentsUnmarshal[Digest](&p.contents)
+	case ObjectTypeECC:
+		return union.ContentsUnmarshal[ECCPoint](&p.contents)
+	case ObjectTypeSymCipher:
+		return union.ContentsUnmarshal[Digest](&p.contents)
 	default:
 		return nil
 	}
@@ -105,74 +143,100 @@ type ECCParams struct {
 	KDF     KDFScheme // Unused - always KDFAlgorithmNull
 }
 
-// PublicParamsU is a union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector
+type PublicParamsUnionConstraint interface {
+	KeyedHashParams | SymCipherParams | RSAParams | ECCParams
+}
+
+// PublicParamsUnion is a union type that corresponds to the TPMU_PUBLIC_PARMS type. The selector
 // type is ]ObjectTypeId].
 // The mapping of selector values to fields is as follows:
 //   - ObjectTypeRSA: RSADetail
 //   - ObjectTypeKeyedHash: KeyedHashDetail
 //   - ObjectTypeECC: ECCDetail
 //   - ObjectTypeSymCipher: SymDetail
-type PublicParamsU struct {
-	KeyedHashDetail *KeyedHashParams
-	SymDetail       *SymCipherParams
-	RSADetail       *RSAParams
-	ECCDetail       *ECCParams
+type PublicParamsUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (p *PublicParamsU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(ObjectTypeId) {
-	case ObjectTypeRSA:
-		return &p.RSADetail
-	case ObjectTypeKeyedHash:
-		return &p.KeyedHashDetail
-	case ObjectTypeECC:
-		return &p.ECCDetail
-	case ObjectTypeSymCipher:
-		return &p.SymDetail
-	default:
-		return nil
-	}
+func MakePublicParamsUnion[T PublicParamsUnionConstraint](contents T) PublicParamsUnion {
+	return PublicParamsUnion{contents: union.NewContents(contents)}
+}
+
+func (p *PublicParamsUnion) KeyedHashDetail() *KeyedHashParams {
+	return union.ContentsPtr[KeyedHashParams](p.contents)
+}
+
+func (p *PublicParamsUnion) SymDetail() *SymCipherParams {
+	return union.ContentsPtr[SymCipherParams](p.contents)
+}
+
+func (p *PublicParamsUnion) RSADetail() *RSAParams {
+	return union.ContentsPtr[RSAParams](p.contents)
+}
+
+func (p *PublicParamsUnion) ECCDetail() *ECCParams {
+	return union.ContentsPtr[ECCParams](p.contents)
 }
 
 // AsymDetail returns the parameters associated with the specified object type
-// as *AsymParams. It panics if the type is not [ObjectTypeRSA] or [ObjectTypeECC],
-// or the appropriate field isn't set.
-//
-// Deprecated: Use [Public.AsymDetail] instead.
-func (p PublicParamsU) AsymDetail(t ObjectTypeId) *AsymParams {
-	switch t {
-	case ObjectTypeRSA:
-		return &AsymParams{
-			Symmetric: p.RSADetail.Symmetric,
-			Scheme: AsymScheme{
-				Scheme:  AsymSchemeId(p.RSADetail.Scheme.Scheme),
-				Details: p.RSADetail.Scheme.Details}}
-	case ObjectTypeECC:
-		return &AsymParams{
-			Symmetric: p.ECCDetail.Symmetric,
-			Scheme: AsymScheme{
-				Scheme:  AsymSchemeId(p.ECCDetail.Scheme.Scheme),
-				Details: p.ECCDetail.Scheme.Details}}
+// as *AsymParams. It panics if the type is not *RSAParams or *ECCParams.
+func (p PublicParamsUnion) AsymDetail() *AsymParams {
+	switch ptr := p.contents.(type) {
+	case *RSAParams:
+		return *(**AsymParams)(unsafe.Pointer(&ptr))
+	case *ECCParams:
+		return *(**AsymParams)(unsafe.Pointer(&ptr))
 	default:
 		panic("invalid type")
 	}
 }
 
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (p PublicParamsUnion) SelectMarshal(selector any) any {
+	switch selector.(ObjectTypeId) {
+	case ObjectTypeRSA:
+		return union.ContentsMarshal[RSAParams](p.contents)
+	case ObjectTypeKeyedHash:
+		return union.ContentsMarshal[KeyedHashParams](p.contents)
+	case ObjectTypeECC:
+		return union.ContentsMarshal[ECCParams](p.contents)
+	case ObjectTypeSymCipher:
+		return union.ContentsMarshal[SymCipherParams](p.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (p *PublicParamsUnion) SelectUnmarshal(selector any) any {
+	switch selector.(ObjectTypeId) {
+	case ObjectTypeRSA:
+		return union.ContentsUnmarshal[RSAParams](&p.contents)
+	case ObjectTypeKeyedHash:
+		return union.ContentsUnmarshal[KeyedHashParams](&p.contents)
+	case ObjectTypeECC:
+		return union.ContentsUnmarshal[ECCParams](&p.contents)
+	case ObjectTypeSymCipher:
+		return union.ContentsUnmarshal[SymCipherParams](&p.contents)
+	default:
+		return nil
+	}
+}
+
 // PublicParams corresponds to the TPMT_PUBLIC_PARMS type.
 type PublicParams struct {
-	Type       ObjectTypeId   // Type specifier
-	Parameters *PublicParamsU // Algorithm details
+	Type       ObjectTypeId      // Type specifier
+	Parameters PublicParamsUnion // Algorithm details
 }
 
 // Public corresponds to the TPMT_PUBLIC type, and defines the public area for an object.
 type Public struct {
-	Type       ObjectTypeId     // Type of this object
-	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
-	Attrs      ObjectAttributes // Object attributes
-	AuthPolicy Digest           // Authorization policy for this object
-	Params     *PublicParamsU   // Type specific parameters
-	Unique     *PublicIDU       // Type specific unique identifier
+	Type       ObjectTypeId      // Type of this object
+	NameAlg    HashAlgorithmId   // NameAlg is the algorithm used to compute the name of this object
+	Attrs      ObjectAttributes  // Object attributes
+	AuthPolicy Digest            // Authorization policy for this object
+	Params     PublicParamsUnion // Type specific parameters
+	Unique     PublicIDUnion     // Type specific unique identifier
 }
 
 // ComputeName computes the name of this object
@@ -193,30 +257,6 @@ func (p *Public) compareName(name Name) bool {
 		return false
 	}
 	return bytes.Equal(n, name)
-}
-
-// AsymDetail returns the asymmetric parameters associated with the object. It panics if it is
-// not an asymmetric key ([Public.IsAsymmetric] returns false) or if the public area is invalid
-// ([mu.IsValid] returns false). The public area will be valid if it was constructed by the
-// [github.com/canonical/go-tpm2/mu] package.
-func (p *Public) AsymDetail() *AsymParams {
-	switch p.Type {
-	case ObjectTypeRSA, ObjectTypeECC:
-		data := mu.MustMarshalToBytes(p)
-
-		var t ObjectTypeId
-		var nameAlg HashAlgorithmId
-		var attrs ObjectAttributes
-		var policy Digest
-		var params *AsymParams
-		if _, err := mu.UnmarshalFromBytes(data, &t, &nameAlg, &attrs, &policy, &params); err != nil {
-			panic(err)
-		}
-
-		return params
-	default:
-		panic("invalid type")
-	}
 }
 
 // Name implements [github.com/canonical/go-tpm2/objectutil.Named] and
@@ -285,18 +325,18 @@ func (p *Public) IsDerivationParent() bool {
 func (p *Public) Public() crypto.PublicKey {
 	switch p.Type {
 	case ObjectTypeRSA:
-		exp := int(p.Params.RSADetail.Exponent)
+		exp := int(p.Params.RSADetail().Exponent)
 		if exp == 0 {
 			exp = DefaultRSAExponent
 		}
 		return &rsa.PublicKey{
-			N: new(big.Int).SetBytes(p.Unique.RSA),
+			N: new(big.Int).SetBytes(p.Unique.RSA()),
 			E: exp}
 	case ObjectTypeECC:
 		return &ecdsa.PublicKey{
-			Curve: p.Params.ECCDetail.CurveID.GoCurve(),
-			X:     new(big.Int).SetBytes(p.Unique.ECC.X),
-			Y:     new(big.Int).SetBytes(p.Unique.ECC.Y)}
+			Curve: p.Params.ECCDetail().CurveID.GoCurve(),
+			X:     new(big.Int).SetBytes(p.Unique.ECC().X),
+			Y:     new(big.Int).SetBytes(p.Unique.ECC().Y)}
 	default:
 		panic("object is not a public key")
 	}
@@ -305,11 +345,11 @@ func (p *Public) Public() crypto.PublicKey {
 // PublicDerived is similar to Public but can be used as a template to create a derived object
 // with [TPMContext.CreateLoaded].
 type PublicDerived struct {
-	Type       ObjectTypeId     // Type of this object
-	NameAlg    HashAlgorithmId  // NameAlg is the algorithm used to compute the name of this object
-	Attrs      ObjectAttributes // Object attributes
-	AuthPolicy Digest           // Authorization policy for this object
-	Params     *PublicParamsU   // Type specific parameters
+	Type       ObjectTypeId      // Type of this object
+	NameAlg    HashAlgorithmId   // NameAlg is the algorithm used to compute the name of this object
+	Attrs      ObjectAttributes  // Object attributes
+	AuthPolicy Digest            // Authorization policy for this object
+	Params     PublicParamsUnion // Type specific parameters
 
 	// Unique contains the derivation values. These take precedence over any values specified
 	// in SensitiveCreate.Data when creating a derived object,
@@ -357,50 +397,85 @@ type Template []byte
 // PrivateVendorSpecific corresponds to the TPM2B_PRIVATE_VENDOR_SPECIFIC type.
 type PrivateVendorSpecific []byte
 
-// SensitiveCompositeU is a union type that corresponds to the TPMU_SENSITIVE_COMPOSITE
+type SensitiveCompositeUnionConstraint interface {
+	PrivateKeyRSA | ECCParameter | SensitiveData | SymKey
+}
+
+// SensitiveCompositeUnion is a union type that corresponds to the TPMU_SENSITIVE_COMPOSITE
 // type. The selector type is [ObjectTypeId]. The mapping of selector values to fields is
 // as follows:
 //   - ObjectTypeRSA: RSA
 //   - ObjectTypeECC: ECC
 //   - ObjectTypeKeyedHash: Bits
 //   - ObjectTypeSymCipher: Sym
-type SensitiveCompositeU struct {
-	RSA  PrivateKeyRSA
-	ECC  ECCParameter
-	Bits SensitiveData
-	Sym  SymKey
+type SensitiveCompositeUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (s *SensitiveCompositeU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(ObjectTypeId) {
+func MakeSensitiveCompositeUnion[T SensitiveCompositeUnionConstraint](contents T) SensitiveCompositeUnion {
+	return SensitiveCompositeUnion{contents: union.NewContents(contents)}
+}
+
+func (s *SensitiveCompositeUnion) RSA() PrivateKeyRSA {
+	return union.ContentsElem[PrivateKeyRSA](s.contents)
+}
+
+func (s *SensitiveCompositeUnion) ECC() ECCParameter {
+	return union.ContentsElem[ECCParameter](s.contents)
+}
+
+func (s *SensitiveCompositeUnion) Bits() SensitiveData {
+	return union.ContentsElem[SensitiveData](s.contents)
+}
+
+func (s *SensitiveCompositeUnion) Sym() SymKey {
+	return union.ContentsElem[SymKey](s.contents)
+}
+
+// Any returns the value associated with the specified object type as
+// PrivateVendorSpecific.
+func (s *SensitiveCompositeUnion) Any() PrivateVendorSpecific {
+	switch ptr := s.contents.(type) {
+	case *PrivateKeyRSA:
+		return PrivateVendorSpecific(*ptr)
+	case *ECCParameter:
+		return PrivateVendorSpecific(*ptr)
+	case *SensitiveData:
+		return PrivateVendorSpecific(*ptr)
+	case *SymKey:
+		return PrivateVendorSpecific(*ptr)
+	default:
+		panic("invalid type")
+	}
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (s SensitiveCompositeUnion) SelectMarshal(selector any) any {
+	switch selector.(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return &s.RSA
+		return union.ContentsMarshal[PrivateKeyRSA](s.contents)
 	case ObjectTypeECC:
-		return &s.ECC
+		return union.ContentsMarshal[ECCParameter](s.contents)
 	case ObjectTypeKeyedHash:
-		return &s.Bits
+		return union.ContentsMarshal[SensitiveData](s.contents)
 	case ObjectTypeSymCipher:
-		return &s.Sym
+		return union.ContentsMarshal[SymKey](s.contents)
 	default:
 		return nil
 	}
 }
 
-// Any returns the value associated with the specified object type as
-// PrivateVendorSpecific.
-//
-// Deprecated: Use [Sensitive.AnySensitive] instead.
-func (s SensitiveCompositeU) Any(t ObjectTypeId) PrivateVendorSpecific {
-	switch t {
+// SelectUnmarshal implements [mu.Union.SelectUnmrshal].
+func (s *SensitiveCompositeUnion) SelectUnmarshal(selector any) any {
+	switch selector.(ObjectTypeId) {
 	case ObjectTypeRSA:
-		return PrivateVendorSpecific(s.RSA)
+		return union.ContentsUnmarshal[PrivateKeyRSA](&s.contents)
 	case ObjectTypeECC:
-		return PrivateVendorSpecific(s.ECC)
+		return union.ContentsUnmarshal[ECCParameter](&s.contents)
 	case ObjectTypeKeyedHash:
-		return PrivateVendorSpecific(s.Bits)
+		return union.ContentsUnmarshal[SensitiveData](&s.contents)
 	case ObjectTypeSymCipher:
-		return PrivateVendorSpecific(s.Sym)
+		return union.ContentsUnmarshal[SymKey](&s.contents)
 	default:
 		return nil
 	}
@@ -408,30 +483,10 @@ func (s SensitiveCompositeU) Any(t ObjectTypeId) PrivateVendorSpecific {
 
 // Sensitive corresponds to the TPMT_SENSITIVE type.
 type Sensitive struct {
-	Type      ObjectTypeId         // Same as the corresponding Type in the Public object
-	AuthValue Auth                 // Authorization value
-	SeedValue Digest               // For a parent object, the seed value for protecting descendant objects
-	Sensitive *SensitiveCompositeU // Type specific private data
-}
-
-func (s *Sensitive) AnySensitive() PrivateVendorSpecific {
-	sensitive := s.Sensitive
-	if sensitive == nil {
-		sensitive = new(SensitiveCompositeU)
-	}
-
-	switch s.Type {
-	case ObjectTypeRSA:
-		return PrivateVendorSpecific(sensitive.RSA)
-	case ObjectTypeECC:
-		return PrivateVendorSpecific(sensitive.ECC)
-	case ObjectTypeKeyedHash:
-		return PrivateVendorSpecific(sensitive.Bits)
-	case ObjectTypeSymCipher:
-		return PrivateVendorSpecific(sensitive.Sym)
-	default:
-		panic("invalid object type")
-	}
+	Type      ObjectTypeId            // Same as the corresponding Type in the Public object
+	AuthValue Auth                    // Authorization value
+	SeedValue Digest                  // For a parent object, the seed value for protecting descendant objects
+	Sensitive SensitiveCompositeUnion // Type specific private data
 }
 
 // Private corresponds to the TPM2B_PRIVATE type.

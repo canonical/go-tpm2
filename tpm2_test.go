@@ -14,7 +14,6 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"reflect"
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
@@ -133,11 +132,11 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 	if !bytes.Equal(public.AuthPolicy, template.AuthPolicy) {
 		t.Errorf("public object has wrong auth policy")
 	}
-	pp, err := mu.MarshalToBytes(public.Params.Select(reflect.ValueOf(public.Type)))
+	pp, err := mu.MarshalToBytes(public.Params.SelectMarshal(public.Type))
 	if err != nil {
 		t.Errorf("cannot marshal public params: %v", err)
 	}
-	tp, err := mu.MarshalToBytes(template.Params.Select(reflect.ValueOf(template.Type)))
+	tp, err := mu.MarshalToBytes(template.Params.SelectMarshal(template.Type))
 	if err != nil {
 		t.Errorf("cannot marshal template params: %v", err)
 	}
@@ -147,8 +146,8 @@ func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
 }
 
 func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
-	if len(public.Unique.RSA) != int(template.Params.RSADetail.KeyBits)/8 {
-		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA))
+	if len(public.Unique.RSA()) != int(template.Params.RSADetail().KeyBits)/8 {
+		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA()))
 	}
 }
 
@@ -219,15 +218,15 @@ func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg HashAlgorithmId,
 func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signature) {
 	switch pub.Type {
 	case ObjectTypeRSA:
-		exp := int(pub.Params.RSADetail.Exponent)
+		exp := int(pub.Params.RSADetail().Exponent)
 		if exp == 0 {
 			exp = DefaultRSAExponent
 		}
-		pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA), E: exp}
+		pubKey := rsa.PublicKey{N: new(big.Int).SetBytes(pub.Unique.RSA()), E: exp}
 
 		switch signature.SigAlg {
 		case SigSchemeAlgRSASSA:
-			sig := (*SignatureRSA)(signature.Signature.RSASSA)
+			sig := signature.Signature.RSASSA()
 			if !sig.Hash.Available() {
 				t.Fatalf("Signature has unavailable digest")
 			}
@@ -235,7 +234,7 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 				t.Errorf("Signature is invalid")
 			}
 		case SigSchemeAlgRSAPSS:
-			sig := (*SignatureRSA)(signature.Signature.RSAPSS)
+			sig := signature.Signature.RSAPSS()
 			if !sig.Hash.Available() {
 				t.Fatalf("Signature has unavailable digest")
 			}
@@ -246,11 +245,11 @@ func verifySignature(t *testing.T, pub *Public, digest []byte, signature *Signat
 			t.Errorf("Unknown signature algorithm")
 		}
 	case ObjectTypeECC:
-		pubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(pub.Unique.ECC.X), Y: new(big.Int).SetBytes(pub.Unique.ECC.Y)}
+		pubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(pub.Unique.ECC().X), Y: new(big.Int).SetBytes(pub.Unique.ECC().Y)}
 
 		switch signature.SigAlg {
 		case SigSchemeAlgECDSA:
-			sig := signature.Signature.ECDSA
+			sig := signature.Signature.ECDSA()
 			if !ecdsa.Verify(&pubKey, digest, new(big.Int).SetBytes(sig.SignatureR), new(big.Int).SetBytes(sig.SignatureS)) {
 				t.Errorf("Signature is invalid")
 			}
@@ -267,15 +266,19 @@ func createRSASrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
+					KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+					Mode:      MakeSymModeUnion(SymModeCFB),
+				},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
-				Exponent: 0}}}
+				Exponent: 0,
+			},
+		),
+	}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
 	objectHandle, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
@@ -289,15 +292,19 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 		Type:    ObjectTypeECC,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrNoDA | AttrRestricted | AttrDecrypt,
-		Params: &PublicParamsU{
-			ECCDetail: &ECCParams{
+		Params: MakePublicParamsUnion(
+			ECCParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
+					KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+					Mode:      MakeSymModeUnion(SymModeCFB),
+				},
 				Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 				CurveID: ECCCurveNIST_P256,
-				KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
+				KDF:     KDFScheme{Scheme: KDFAlgorithmNull},
+			},
+		),
+	}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
 	objectHandle, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), &sensitiveCreate, &template, nil, nil, nil)
 	if err != nil {
@@ -313,15 +320,19 @@ func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 		AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 			0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{
 					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
+					KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+					Mode:      MakeSymModeUnion(SymModeCFB),
+				},
 				Scheme:   RSAScheme{Scheme: RSASchemeNull},
 				KeyBits:  2048,
-				Exponent: 0}}}
+				Exponent: 0,
+			},
+		),
+	}
 	objectHandle, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePrimary failed: %v", err)
@@ -347,14 +358,18 @@ func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceCont
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrSign,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
 					Scheme:  RSASchemeRSASSA,
-					Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}},
+					Details: MakeAsymSchemeUnion(SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}),
+				},
 				KeyBits:  2048,
-				Exponent: 0}}}
+				Exponent: 0,
+			},
+		),
+	}
 	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
 	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, sessionContext)
 	if err != nil {
@@ -378,15 +393,20 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 		Type:    ObjectTypeRSA,
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign | AttrNoDA,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
+		Params: MakePublicParamsUnion(
+			RSAParams{
 				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 				Scheme: RSAScheme{
 					Scheme: RSASchemeRSAPSS,
-					Details: &AsymSchemeU{
-						RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}},
+					Details: MakeAsymSchemeUnion(
+						SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256},
+					),
+				},
 				KeyBits:  2048,
-				Exponent: 0}}}
+				Exponent: 0,
+			},
+		),
+	}
 	priv, pub, _, _, _, err := tpm.Create(parent, nil, &template, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)

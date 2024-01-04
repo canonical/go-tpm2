@@ -49,8 +49,8 @@ func SecretEncrypt(rand io.Reader, public *tpm2.Public, label []byte) (secret tp
 	pub := public.Public()
 	switch p := pub.(type) {
 	case *rsa.PublicKey:
-		if public.Params.RSADetail.Scheme.Scheme != tpm2.RSASchemeNull &&
-			public.Params.RSADetail.Scheme.Scheme != tpm2.RSASchemeOAEP {
+		if public.Params.RSADetail().Scheme.Scheme != tpm2.RSASchemeNull &&
+			public.Params.RSADetail().Scheme.Scheme != tpm2.RSASchemeOAEP {
 			return nil, nil, errors.New("unsupported RSA scheme")
 		}
 	case *ecdsa.PublicKey:

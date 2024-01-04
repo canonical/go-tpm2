@@ -107,18 +107,16 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrDecrypt | tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
-				Symmetric: tpm2.SymDefObject{
-					Algorithm: tpm2.SymObjectAlgorithmNull,
-					KeyBits:   &tpm2.SymKeyBitsU{},
-					Mode:      &tpm2.SymModeU{}},
-				Scheme: tpm2.RSAScheme{
-					Scheme:  tpm2.RSASchemeNull,
-					Details: &tpm2.AsymSchemeU{}},
-				KeyBits:  2048,
-				Exponent: uint32(key.PublicKey.E)}},
-		Unique: &tpm2.PublicIDU{RSA: key.PublicKey.N.Bytes()}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.RSAParams{
+				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
+				Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
+				KeyBits:   2048,
+				Exponent:  uint32(key.PublicKey.E),
+			},
+		),
+		Unique: tpm2.MakePublicIDUnion(tpm2.PublicKeyRSA(key.PublicKey.N.Bytes())),
+	}
 	object, err := s.TPM.LoadExternal(nil, &public, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
 
@@ -185,8 +183,8 @@ func (s *tctiSuite) TestCommandLog(c *C) {
 	c.Check(moreData, Equals, false)
 	c.Check(capabilityData, DeepEquals, tpm2.CapabilityData{
 		Capability: tpm2.CapabilityHandles,
-		Data: &tpm2.CapabilitiesU{
-			Handles: tpm2.HandleList{object.Handle()}}})
+		Data:       tpm2.MakeCapabilitiesUnion(tpm2.HandleList{object.Handle()}),
+	})
 }
 
 type testHierarchyAllowedData struct {
@@ -1023,8 +1021,9 @@ func (s *tctiSuite) TestManualRestoreHierarchyAuthChangeWithCommandEncrypt(c *C)
 
 	sym := tpm2.SymDef{
 		Algorithm: tpm2.SymAlgorithmAES,
-		KeyBits:   &tpm2.SymKeyBitsU{Sym: 256},
-		Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}
+		KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](256),
+		Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+	}
 	session, err := s.TPM.StartAuthSession(nil, nil, tpm2.SessionTypeHMAC, &sym, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 
@@ -1039,8 +1038,9 @@ func (s *tctiSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryption(
 
 	sym := tpm2.SymDef{
 		Algorithm: tpm2.SymAlgorithmAES,
-		KeyBits:   &tpm2.SymKeyBitsU{Sym: 256},
-		Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}
+		KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](256),
+		Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+	}
 	session, err := s.TPM.StartAuthSession(nil, nil, tpm2.SessionTypeHMAC, &sym, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 
@@ -1227,12 +1227,17 @@ func (s *tctiSuite) TestCreateAndFlushHMACObject(c *C) {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
 				Scheme: tpm2.KeyedHashScheme{
 					Scheme: tpm2.KeyedHashSchemeHMAC,
-					Details: &tpm2.SchemeKeyedHashU{
-						HMAC: &tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256}}}}}}
+					Details: tpm2.MakeSchemeKeyedHashUnion(
+						tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256},
+					),
+				},
+			},
+		),
+	}
 	key, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -1287,13 +1292,16 @@ func (s *tctiSuite) TestLoadAndFlushExternalObject(c *C) {
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrDecrypt | tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
 				KeyBits:   2048,
-				Exponent:  uint32(key.PublicKey.E)}},
-		Unique: &tpm2.PublicIDU{RSA: key.PublicKey.N.Bytes()}}
+				Exponent:  uint32(key.PublicKey.E),
+			},
+		),
+		Unique: tpm2.MakePublicIDUnion(tpm2.PublicKeyRSA(key.PublicKey.N.Bytes())),
+	}
 	object, err := s.TPM.LoadExternal(nil, &public, tpm2.HandleOwner)
 	c.Assert(err, IsNil)
 
@@ -1562,15 +1570,19 @@ func (s *tctiSuite) TestClear(c *C) {
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{
 					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
+					KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](128),
+					Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+				},
 				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
 				KeyBits:  2048,
-				Exponent: 0}}}
+				Exponent: 0,
+			},
+		),
+	}
 
 	oObject, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
@@ -1626,7 +1638,7 @@ func (s *tctiSuite) testRestoreCommandCodeAuditStatus(c *C, data *testRestoreCom
 	c.Assert(err, IsNil)
 	auditInfo, _, err := s.TPM.GetCommandAuditDigest(s.TPM.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 	c.Assert(err, IsNil)
-	restoreAlg := auditInfo.Attested.CommandAudit.DigestAlg
+	restoreAlg := auditInfo.Attested.CommandAudit().DigestAlg
 
 	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.GetPermanentContext(data.handle), tpm2.HashAlgorithmSHA1, nil, nil, nil), IsNil)
 	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.GetPermanentContext(data.handle), tpm2.HashAlgorithmNull, tpm2.CommandCodeList{tpm2.CommandStirRandom}, restoreCommands, nil), IsNil)
@@ -1636,7 +1648,7 @@ func (s *tctiSuite) testRestoreCommandCodeAuditStatus(c *C, data *testRestoreCom
 	c.Check(commands, DeepEquals, tpm2.CommandCodeList{tpm2.CommandSetCommandCodeAuditStatus, tpm2.CommandStirRandom})
 	auditInfo, _, err = s.TPM.GetCommandAuditDigest(s.TPM.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 	c.Assert(err, IsNil)
-	c.Check(auditInfo.Attested.CommandAudit.DigestAlg, Equals, tpm2.AlgorithmSHA1)
+	c.Check(auditInfo.Attested.CommandAudit().DigestAlg, Equals, tpm2.AlgorithmSHA1)
 
 	// Check that changing the endorsement hierarchy auth value and then disabling the hierarchy
 	// isn't a problem.
@@ -1652,7 +1664,7 @@ func (s *tctiSuite) testRestoreCommandCodeAuditStatus(c *C, data *testRestoreCom
 	c.Check(commands, DeepEquals, restoreCommands)
 	auditInfo, _, err = s.rawTpm(c).GetCommandAuditDigest(s.rawTpm(c).EndorsementHandleContext(), nil, nil, nil, nil, nil)
 	c.Assert(err, IsNil)
-	c.Check(auditInfo.Attested.CommandAudit.DigestAlg, Equals, restoreAlg)
+	c.Check(auditInfo.Attested.CommandAudit().DigestAlg, Equals, restoreAlg)
 }
 
 func (s *tctiSuite) TestRestoreCommandCodeAuditStatusOwner(c *C) {
@@ -1758,9 +1770,12 @@ func (s *tctiSuite) testUseLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags)
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrNoDA | tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	priv, pub, _, _, _, err := s.TPM.Create(primary, &sensitive, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -1791,9 +1806,12 @@ func (s *tctiSuite) TestUseLoadedObjectDAPermitted(c *C) {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	priv, pub, _, _, _, err := s.TPM.Create(primary, &sensitive, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -1816,9 +1834,12 @@ func (s *tctiSuite) TestUseLoadedObjectDAForbidden(c *C) {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	priv, pub, _, _, _, err := s.TPM.Create(primary, &sensitive, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -1837,12 +1858,17 @@ func (s *tctiSuite) testUseHMACObject(c *C, extraFeatures TPMFeatureFlags) {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign | tpm2.AttrNoDA,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
 				Scheme: tpm2.KeyedHashScheme{
 					Scheme: tpm2.KeyedHashSchemeHMAC,
-					Details: &tpm2.SchemeKeyedHashU{
-						HMAC: &tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256}}}}}}
+					Details: tpm2.MakeSchemeKeyedHashUnion(
+						tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256},
+					),
+				},
+			},
+		),
+	}
 	key, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -1890,9 +1916,12 @@ func (s *tctiSuite) testUseContextLoadedObjectNoDA(c *C, extraFeatures TPMFeatur
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrNoDA | tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	priv, pub, _, _, _, err := s.TPM.Create(primary, &sensitive, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -1929,9 +1958,12 @@ func (s *tctiSuite) TestUseContextLoadedObjectDAPermitted(c *C) {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	priv, pub, _, _, _, err := s.TPM.Create(primary, &sensitive, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -1960,9 +1992,12 @@ func (s *tctiSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	priv, pub, _, _, _, err := s.TPM.Create(primary, &sensitive, &template, nil, nil, nil)
 	c.Assert(err, IsNil)
 

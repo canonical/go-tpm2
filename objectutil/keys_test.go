@@ -35,7 +35,7 @@ func (s *keysSuite) TestNewRSAPublicKey(c *C) {
 	c.Check(pub.Type, Equals, tpm2.ObjectTypeRSA)
 	c.Check(pub.NameAlg, Equals, tpm2.HashAlgorithmSHA256)
 	c.Check(pub.Attrs, Equals, tpm2.AttrSign)
-	c.Check(pub.Params.RSADetail, testutil.TPMValueDeepEquals, &tpm2.RSAParams{
+	c.Check(pub.Params.RSADetail(), testutil.TPMValueDeepEquals, &tpm2.RSAParams{
 		Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 		Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
 		KeyBits:   2048})
@@ -54,7 +54,7 @@ func (s *keysSuite) TestNewECCPublicKey(c *C) {
 	c.Check(pub.Type, Equals, tpm2.ObjectTypeECC)
 	c.Check(pub.NameAlg, Equals, tpm2.HashAlgorithmSHA256)
 	c.Check(pub.Attrs, Equals, tpm2.AttrSign)
-	c.Check(pub.Params.ECCDetail, testutil.TPMValueDeepEquals, &tpm2.ECCParams{
+	c.Check(pub.Params.ECCDetail(), testutil.TPMValueDeepEquals, &tpm2.ECCParams{
 		Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 		Scheme:    tpm2.ECCScheme{Scheme: tpm2.ECCSchemeNull},
 		CurveID:   tpm2.ECCCurveNIST_P256,
@@ -75,13 +75,13 @@ func (s *keysSuite) TestNewSealedObject(c *C) {
 	c.Check(pub.Type, Equals, tpm2.ObjectTypeKeyedHash)
 	c.Check(pub.NameAlg, Equals, tpm2.HashAlgorithmSHA256)
 	c.Check(pub.Attrs, Equals, tpm2.AttrNoDA|tpm2.AttrUserWithAuth)
-	c.Check(pub.Params.KeyedHashDetail, testutil.TPMValueDeepEquals, &tpm2.KeyedHashParams{
+	c.Check(pub.Params.KeyedHashDetail(), testutil.TPMValueDeepEquals, &tpm2.KeyedHashParams{
 		Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}})
 
 	c.Check(sensitive.Type, Equals, tpm2.ObjectTypeKeyedHash)
 	c.Check(sensitive.AuthValue, DeepEquals, tpm2.Auth(append(authValue, make([]byte, 28)...)))
 	c.Check(sensitive.SeedValue, DeepEquals, tpm2.Digest(seed))
-	c.Check(sensitive.Sensitive.Bits, DeepEquals, tpm2.SensitiveData(data))
+	c.Check(sensitive.Sensitive.Bits(), DeepEquals, tpm2.SensitiveData(data))
 
 	object, err := s.TPM.LoadExternal(sensitive, pub, tpm2.HandleNull)
 	c.Assert(err, IsNil)
@@ -103,16 +103,18 @@ func (s *keysSuite) TestNewSymmetricKey(c *C) {
 	c.Check(pub.Type, Equals, tpm2.ObjectTypeSymCipher)
 	c.Check(pub.NameAlg, Equals, tpm2.HashAlgorithmSHA256)
 	c.Check(pub.Attrs, Equals, tpm2.AttrUserWithAuth|tpm2.AttrDecrypt)
-	c.Check(pub.Params.SymDetail, testutil.TPMValueDeepEquals, &tpm2.SymCipherParams{
+	c.Check(pub.Params.SymDetail(), testutil.TPMValueDeepEquals, &tpm2.SymCipherParams{
 		Sym: tpm2.SymDefObject{
 			Algorithm: tpm2.SymObjectAlgorithmAES,
-			KeyBits:   &tpm2.SymKeyBitsU{Sym: 256},
-			Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}})
+			KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](256),
+			Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+		},
+	})
 
 	c.Check(sensitive.Type, Equals, tpm2.ObjectTypeSymCipher)
 	c.Check(sensitive.AuthValue, DeepEquals, tpm2.Auth(append(authValue, make([]byte, 28)...)))
 	c.Check(sensitive.SeedValue, DeepEquals, tpm2.Digest(seed))
-	c.Check(sensitive.Sensitive.Sym, DeepEquals, tpm2.SymKey(key))
+	c.Check(sensitive.Sensitive.Sym(), DeepEquals, tpm2.SymKey(key))
 
 	_, err = s.TPM.LoadExternal(sensitive, pub, tpm2.HandleNull)
 	c.Assert(err, IsNil)
@@ -130,15 +132,17 @@ func (s *keysSuite) TestNewHMACKey(c *C) {
 	c.Check(pub.Type, Equals, tpm2.ObjectTypeKeyedHash)
 	c.Check(pub.NameAlg, Equals, tpm2.HashAlgorithmSHA256)
 	c.Check(pub.Attrs, Equals, tpm2.AttrUserWithAuth|tpm2.AttrSign)
-	c.Check(pub.Params.KeyedHashDetail, testutil.TPMValueDeepEquals, &tpm2.KeyedHashParams{
+	c.Check(pub.Params.KeyedHashDetail(), testutil.TPMValueDeepEquals, &tpm2.KeyedHashParams{
 		Scheme: tpm2.KeyedHashScheme{
 			Scheme:  tpm2.KeyedHashSchemeHMAC,
-			Details: &tpm2.SchemeKeyedHashU{HMAC: &tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256}}}})
+			Details: tpm2.MakeSchemeKeyedHashUnion(tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256}),
+		},
+	})
 
 	c.Check(sensitive.Type, Equals, tpm2.ObjectTypeKeyedHash)
 	c.Check(sensitive.AuthValue, DeepEquals, tpm2.Auth(append(authValue, make([]byte, 28)...)))
 	c.Check(sensitive.SeedValue, DeepEquals, tpm2.Digest(seed))
-	c.Check(sensitive.Sensitive.Bits, DeepEquals, tpm2.SensitiveData(key))
+	c.Check(sensitive.Sensitive.Bits(), DeepEquals, tpm2.SensitiveData(key))
 
 	_, err = s.TPM.LoadExternal(sensitive, pub, tpm2.HandleNull)
 	c.Assert(err, IsNil)

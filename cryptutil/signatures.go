@@ -94,17 +94,23 @@ func Sign(rand io.Reader, signer crypto.Signer, digest []byte, opts crypto.Signe
 		if _, pss := opts.(*rsa.PSSOptions); pss {
 			return &tpm2.Signature{
 				SigAlg: tpm2.SigSchemeAlgRSAPSS,
-				Signature: &tpm2.SignatureU{
-					RSAPSS: &tpm2.SignatureRSAPSS{
+				Signature: tpm2.MakeSignatureUnion(
+					tpm2.SignatureRSAPSS{
 						Hash: hashAlg,
-						Sig:  sig}}}, nil
+						Sig:  sig,
+					},
+				),
+			}, nil
 		}
 		return &tpm2.Signature{
 			SigAlg: tpm2.SigSchemeAlgRSASSA,
-			Signature: &tpm2.SignatureU{
-				RSASSA: &tpm2.SignatureRSASSA{
+			Signature: tpm2.MakeSignatureUnion(
+				tpm2.SignatureRSASSA{
 					Hash: hashAlg,
-					Sig:  sig}}}, nil
+					Sig:  sig,
+				},
+			),
+		}, nil
 	case *ecdsa.PublicKey:
 		_ = k
 		r, s := new(big.Int), new(big.Int)
@@ -120,17 +126,20 @@ func Sign(rand io.Reader, signer crypto.Signer, digest []byte, opts crypto.Signe
 		}
 		return &tpm2.Signature{
 			SigAlg: tpm2.SigSchemeAlgECDSA,
-			Signature: &tpm2.SignatureU{
-				ECDSA: &tpm2.SignatureECDSA{
+			Signature: tpm2.MakeSignatureUnion(
+				tpm2.SignatureECDSA{
 					Hash:       hashAlg,
 					SignatureR: r.Bytes(),
-					SignatureS: s.Bytes()}}}, nil
+					SignatureS: s.Bytes(),
+				},
+			),
+		}, nil
 	case HMACKey:
 		_ = k
-		d := tpm2.MakeTaggedHash(hashAlg, sig)
 		return &tpm2.Signature{
 			SigAlg:    tpm2.SigSchemeAlgHMAC,
-			Signature: &tpm2.SignatureU{HMAC: &d}}, nil
+			Signature: tpm2.MakeSignatureUnion(tpm2.MakeTaggedHash(hashAlg, sig)),
+		}, nil
 	default:
 		panic("not reached")
 	}
@@ -154,7 +163,7 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 	case *rsa.PublicKey:
 		switch signature.SigAlg {
 		case tpm2.SigSchemeAlgRSASSA:
-			if err := rsa.VerifyPKCS1v15(k, hashAlg.GetHash(), digest, signature.Signature.RSASSA.Sig); err != nil {
+			if err := rsa.VerifyPKCS1v15(k, hashAlg.GetHash(), digest, signature.Signature.RSASSA().Sig); err != nil {
 				if err == rsa.ErrVerification {
 					return false, nil
 				}
@@ -166,7 +175,7 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 				return false, errors.New("digest algorithm is not available")
 			}
 			options := rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash}
-			if err := rsa.VerifyPSS(k, hashAlg.GetHash(), digest, signature.Signature.RSAPSS.Sig, &options); err != nil {
+			if err := rsa.VerifyPSS(k, hashAlg.GetHash(), digest, signature.Signature.RSAPSS().Sig, &options); err != nil {
 				if err == rsa.ErrVerification {
 					return false, nil
 				}
@@ -179,8 +188,8 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 	case *ecdsa.PublicKey:
 		switch signature.SigAlg {
 		case tpm2.SigSchemeAlgECDSA:
-			ok = ecdsa.Verify(k, digest, new(big.Int).SetBytes(signature.Signature.ECDSA.SignatureR),
-				new(big.Int).SetBytes(signature.Signature.ECDSA.SignatureS))
+			ok = ecdsa.Verify(k, digest, new(big.Int).SetBytes(signature.Signature.ECDSA().SignatureR),
+				new(big.Int).SetBytes(signature.Signature.ECDSA().SignatureS))
 			return ok, nil
 		default:
 			return false, errors.New("unsupported ECC signature algorithm")
@@ -195,7 +204,7 @@ func VerifySignature(key crypto.PublicKey, digest []byte, signature *tpm2.Signat
 			if err != nil {
 				return false, err
 			}
-			return subtle.ConstantTimeCompare(signature.Signature.HMAC.Digest(), test.Signature.HMAC.Digest()) == 1, nil
+			return subtle.ConstantTimeCompare(signature.Signature.HMAC().Digest(), test.Signature.HMAC().Digest()) == 1, nil
 		default:
 			return false, errors.New("unsupported keyed hash signature algorithm")
 		}

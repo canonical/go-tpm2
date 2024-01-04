@@ -484,8 +484,8 @@ func (s *builderSuite) TestPolicyPCR(c *C) {
 				4: foo,
 				7: bar}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: foo}},
-			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: bar}}}})
+			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, foo)},
+			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, bar)}}})
 }
 
 func (s *builderSuite) TestPolicyPCRDifferentDigests(c *C) {
@@ -503,8 +503,8 @@ func (s *builderSuite) TestPolicyPCRDifferentDigests(c *C) {
 				4: bar,
 				7: foo}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: bar}},
-			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: foo}}}})
+			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, bar)},
+			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, foo)}}})
 }
 
 func (s *builderSuite) TestPolicyPCRDifferentSelection(c *C) {
@@ -522,8 +522,8 @@ func (s *builderSuite) TestPolicyPCRDifferentSelection(c *C) {
 				4: foo,
 				7: bar}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA1, Digest: foo}},
-			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA1, Digest: bar}}}})
+			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, foo)},
+			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, bar)}}})
 }
 
 func (s *builderSuite) TestPolicyPCRMultipleBanks(c *C) {
@@ -544,8 +544,8 @@ func (s *builderSuite) TestPolicyPCRMultipleBanks(c *C) {
 			tpm2.HashAlgorithmSHA256: {
 				7: bar}},
 		expectedPcrs: PcrValueList{
-			{PCR: 0x00000004, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA1, Digest: foo}},
-			{PCR: 0x00000007, Digest: TaggedHash{HashAlg: tpm2.HashAlgorithmSHA256, Digest: bar}}}})
+			{PCR: 0x00000004, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, foo)},
+			{PCR: 0x00000007, Digest: tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, bar)}}})
 }
 
 func (s *builderSuite) TestPolicyPCRInvalidAlg(c *C) {

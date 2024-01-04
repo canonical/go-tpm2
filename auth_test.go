@@ -1242,8 +1242,8 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 
 		switch sessionData.Symmetric.Algorithm {
 		case SymAlgorithmAES:
-			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
-			offset := (sessionData.Symmetric.KeyBits.Sym + 7) / 8
+			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM, int(sessionData.Symmetric.KeyBits.Sym())+(aes.BlockSize*8))
+			offset := (sessionData.Symmetric.KeyBits.Sym() + 7) / 8
 			symKey := k[0:offset]
 			iv := k[offset:]
 			c.Check(internal_crypt.SymmetricDecrypt(sessionData.Symmetric.Algorithm, symKey, iv, recovered[2:n+2]), IsNil)
@@ -1319,8 +1319,8 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaWithDecryptSession(c *C
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}},
 				attrs: AttrContinueSession | AttrCommandEncrypt}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
 		commandCode:         CommandNVWrite,
@@ -1357,8 +1357,8 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaWithExtraDecryptSession
 					NonceTPM:    internal_testutil.DecodeHexString(c, "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}},
 				attrs: AttrContinueSession | AttrCommandEncrypt}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		commandCode:         CommandNVWrite,
@@ -1418,8 +1418,8 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaWithExtraEncryptSession
 					NonceTPM:    internal_testutil.DecodeHexString(c, "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}},
 				attrs: AttrContinueSession | AttrCommandEncrypt}},
 		resources:            []ResourceContext{new(mockResourceContext)},
 		commandCode:          CommandUnseal,
@@ -1490,8 +1490,8 @@ func (s *authSuite) testSessionParamsProcessResponseAuthArea(c *C, data *testSes
 
 		switch sessionData.Symmetric.Algorithm {
 		case SymAlgorithmAES:
-			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), auth.Nonce, sessionData.NonceCaller, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
-			offset := (sessionData.Symmetric.KeyBits.Sym + 7) / 8
+			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), auth.Nonce, sessionData.NonceCaller, int(sessionData.Symmetric.KeyBits.Sym())+(aes.BlockSize*8))
+			offset := (sessionData.Symmetric.KeyBits.Sym() + 7) / 8
 			symKey := k[0:offset]
 			iv := k[offset:]
 			c.Check(internal_crypt.SymmetricEncrypt(sessionData.Symmetric.Algorithm, symKey, iv, rpBytes[2:n+2]), IsNil)
@@ -1618,8 +1618,8 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaWithDecryptSession(c
 					NonceCaller: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
 		commandCode:         CommandUnseal,
 		encryptSessionIndex: 0,
@@ -1652,8 +1652,8 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaWithExtraDecryptSess
 					NonceTPM:    internal_testutil.DecodeHexString(c, "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
 		encryptNonce:        internal_testutil.DecodeHexString(c, "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"),
 		commandCode:         CommandUnseal,
@@ -1741,12 +1741,12 @@ func TestHMACSessions(t *testing.T) {
 				Type:    ObjectTypeRSA,
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-				Params: &PublicParamsU{
-					RSADetail: &RSAParams{
+				Params: MakePublicParamsUnion(
+					RSAParams{
 						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 						Scheme:    RSAScheme{Scheme: RSASchemeNull},
 						KeyBits:   2048,
-						Exponent:  0}}}
+						Exponent:  0})}
 
 			sc.SetAttrs(data.sessionAttrs)
 			_, _, _, _, _, err = tpm.Create(primary, nil, &template, nil, nil, sc)
@@ -1782,7 +1782,7 @@ func TestPolicySessions(t *testing.T) {
 		NameAlg:    HashAlgorithmSHA256,
 		Attrs:      AttrFixedTPM | AttrFixedParent | AttrNoDA,
 		AuthPolicy: make([]byte, 32),
-		Params:     &PublicParamsU{KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+		Params:     MakePublicParamsUnion(KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}})}
 	sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 	outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)

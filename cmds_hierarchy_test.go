@@ -42,15 +42,19 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 		creationPCR := PCRSelectionList{
 			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
 			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
@@ -65,22 +69,26 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA1,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				ECCDetail: &ECCParams{
+			Params: MakePublicParamsUnion(
+				ECCParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
 					CurveID: ECCCurveNIST_P256,
-					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
+					KDF:     KDFScheme{Scheme: KDFAlgorithmNull},
+				},
+			),
+		}
 		creationPCR := PCRSelectionList{
 			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
 			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
-		if len(pub.Unique.ECC.X) != 32 || len(pub.Unique.ECC.Y) != 32 {
+		if len(pub.Unique.ECC().X) != 32 || len(pub.Unique.ECC().Y) != 32 {
 			t.Errorf("CreatePrimary returned object with invalid ECC coords")
 		}
 	})
@@ -92,15 +100,19 @@ func TestCreatePrimary(t *testing.T) {
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 
 		objectContext, pub := run(t, tpm.EndorsementHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 		defer flushContext(t, tpm, objectContext)
@@ -113,15 +125,19 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt | AttrNoDA,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 		creationPCR := PCRSelectionList{
 			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
 			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
@@ -134,12 +150,15 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
-					Exponent:  0}}}
+					Exponent:  0,
+				},
+			),
+		}
 
 		// We shouldn't need to call ResourceContext.SetAuthValue to use the primary object.
 		_, _, _, _, _, err := tpm.Create(objectContext, nil, &childTemplate, nil, nil, nil)
@@ -163,15 +182,19 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
 		defer flushContext(t, tpm, objectContext)
@@ -192,15 +215,19 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, sessionContext)
 		defer flushContext(t, tpm, objectContext)
@@ -212,15 +239,19 @@ func TestCreatePrimary(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 		creationPCR := PCRSelectionList{
 			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
 			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
@@ -229,27 +260,6 @@ func TestCreatePrimary(t *testing.T) {
 		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, data, creationPCR, nil)
 		defer flushContext(t, tpm, objectContext)
 		verifyRSAAgainstTemplate(t, pub, &template)
-	})
-
-	t.Run("InvalidTemplate", func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeECC,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-
-		_, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
-		if !IsTPMParameterError(err, ErrorSymmetric, CommandCreatePrimary, 2) {
-			t.Errorf("CreatePrimary returned an unexpected error: %v", err)
-		}
 	})
 }
 
@@ -431,15 +441,19 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Errorf("CreatePrimary failed: %v", err)
@@ -453,15 +467,19 @@ func TestHierarchyChangeAuth(t *testing.T) {
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
 			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
 				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{
 						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+						Mode:      MakeSymModeUnion(SymModeCFB),
+					},
 					Scheme:   RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:  2048,
-					Exponent: 0}}}
+					Exponent: 0,
+				},
+			),
+		}
 		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Errorf("CreatePrimary failed: %v", err)

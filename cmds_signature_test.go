@@ -29,12 +29,15 @@ func TestSign(t *testing.T) {
 				Type:    ObjectTypeRSA,
 				NameAlg: HashAlgorithmSHA256,
 				Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign | AttrNoDA,
-				Params: &PublicParamsU{
-					RSADetail: &RSAParams{
+				Params: MakePublicParamsUnion(
+					RSAParams{
 						Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 						Scheme:    *scheme,
 						KeyBits:   2048,
-						Exponent:  0}}}
+						Exponent:  0,
+					},
+				),
+			}
 			sensitive := SensitiveCreate{UserAuth: authValue}
 			priv, pub, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, nil)
 			if err != nil {
@@ -77,7 +80,8 @@ func TestSign(t *testing.T) {
 		t.Run("UseKeyScheme", func(t *testing.T) {
 			scheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: MakeAsymSchemeUnion(SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}),
+			}
 			key, pub := create(t, &scheme, nil)
 			defer flushContext(t, tpm, key)
 
@@ -92,10 +96,12 @@ func TestSign(t *testing.T) {
 		t.Run("SpecifyInSchemeWithKeyScheme", func(t *testing.T) {
 			keyScheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: MakeAsymSchemeUnion(SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}),
+			}
 			inScheme := SigScheme{
 				Scheme:  SigSchemeAlgRSASSA,
-				Details: &SigSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: MakeSigSchemeUnion(SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}),
+			}
 
 			key, pub := create(t, &keyScheme, nil)
 			defer flushContext(t, tpm, key)
@@ -112,7 +118,8 @@ func TestSign(t *testing.T) {
 			keyScheme := RSAScheme{Scheme: RSASchemeNull}
 			inScheme := SigScheme{
 				Scheme:  SigSchemeAlgRSAPSS,
-				Details: &SigSchemeU{RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA1}}}
+				Details: MakeSigSchemeUnion(SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA1}),
+			}
 
 			key, pub := create(t, &keyScheme, nil)
 			defer flushContext(t, tpm, key)
@@ -128,7 +135,8 @@ func TestSign(t *testing.T) {
 		t.Run("UsePasswordAuth", func(t *testing.T) {
 			scheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: MakeAsymSchemeUnion(SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}),
+			}
 			key, pub := create(t, &scheme, testAuth)
 			defer flushContext(t, tpm, key)
 
@@ -143,7 +151,8 @@ func TestSign(t *testing.T) {
 		t.Run("UseSessionAuth", func(t *testing.T) {
 			scheme := RSAScheme{
 				Scheme:  RSASchemeRSASSA,
-				Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}}
+				Details: MakeAsymSchemeUnion(SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}),
+			}
 			key, pub := create(t, &scheme, testAuth)
 			defer flushContext(t, tpm, key)
 
@@ -170,14 +179,18 @@ func TestSign(t *testing.T) {
 			Type:    ObjectTypeECC,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrSign | AttrNoDA,
-			Params: &PublicParamsU{
-				ECCDetail: &ECCParams{
+			Params: MakePublicParamsUnion(
+				ECCParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme: ECCScheme{
 						Scheme:  ECCSchemeECDSA,
-						Details: &AsymSchemeU{ECDSA: &SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}}},
+						Details: MakeAsymSchemeUnion(SigSchemeECDSA{HashAlg: HashAlgorithmSHA256}),
+					},
 					CurveID: ECCCurveNIST_P256,
-					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
+					KDF:     KDFScheme{Scheme: KDFAlgorithmNull},
+				},
+			),
+		}
 		priv, pub, _, _, _, err := tpm.Create(primary, nil, &template, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
@@ -201,7 +214,7 @@ func TestSign(t *testing.T) {
 		if SigSchemeAlgECDSA != signature.SigAlg {
 			t.Fatalf("Signature has the wrong scheme")
 		}
-		sig := signature.Signature.ECDSA
+		sig := signature.Signature.ECDSA()
 		if HashAlgorithmSHA256 != sig.Hash {
 			t.Errorf("Signature has the wrong hash")
 		}
@@ -226,13 +239,16 @@ func TestVerifySignature(t *testing.T) {
 			Type:    ObjectTypeRSA,
 			NameAlg: HashAlgorithmSHA256,
 			Attrs:   AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
+			Params: MakePublicParamsUnion(
+				RSAParams{
 					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
 					Scheme:    RSAScheme{Scheme: RSASchemeNull},
 					KeyBits:   2048,
-					Exponent:  uint32(key.PublicKey.E)}},
-			Unique: &PublicIDU{RSA: key.PublicKey.N.Bytes()}}
+					Exponent:  uint32(key.PublicKey.E),
+				},
+			),
+			Unique: MakePublicIDUnion(PublicKeyRSA(key.PublicKey.N.Bytes())),
+		}
 
 		context, err := tpm.LoadExternal(nil, &public, HandleOwner)
 		if err != nil {
@@ -274,7 +290,8 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: &SignatureU{RSASSA: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: MakeSignatureUnion(SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}),
+			}
 			run(t, true, digest, &signature)
 		})
 
@@ -290,7 +307,8 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSAPSS,
-				Signature: &SignatureU{RSAPSS: &SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: MakeSignatureUnion(SignatureRSAPSS{Hash: HashAlgorithmSHA256, Sig: s}),
+			}
 			run(t, true, digest, &signature)
 		})
 
@@ -306,7 +324,8 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: &SignatureU{RSASSA: &SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}}}
+				Signature: MakeSignatureUnion(SignatureRSASSA{Hash: HashAlgorithmSHA256, Sig: s}),
+			}
 			run(t, false, digest, &signature)
 		})
 
@@ -322,7 +341,8 @@ func TestVerifySignature(t *testing.T) {
 
 			signature := Signature{
 				SigAlg:    SigSchemeAlgRSASSA,
-				Signature: &SignatureU{RSASSA: &SignatureRSASSA{Hash: HashAlgorithmSHA1, Sig: s}}}
+				Signature: MakeSignatureUnion(SignatureRSASSA{Hash: HashAlgorithmSHA1, Sig: s}),
+			}
 			run(t, true, digest, &signature)
 		})
 	})

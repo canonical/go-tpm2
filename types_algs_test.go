@@ -13,38 +13,29 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-type TestSchemeKeyedHashUContainer struct {
+type TestSchemeKeyedHashUnionContainer struct {
 	Scheme  KeyedHashSchemeId
-	Details *SchemeKeyedHashU
+	Details SchemeKeyedHashUnion
 }
 
 func TestSchemeKeyedHashUnion(t *testing.T) {
 	for _, data := range []struct {
 		desc string
-		in   TestSchemeKeyedHashUContainer
+		in   TestSchemeKeyedHashUnionContainer
 		out  []byte
 		err  string
 	}{
 		{
 			desc: "HMAC",
-			in: TestSchemeKeyedHashUContainer{
+			in: TestSchemeKeyedHashUnionContainer{
 				Scheme:  KeyedHashSchemeHMAC,
-				Details: &SchemeKeyedHashU{HMAC: &SchemeHMAC{HashAlg: HashAlgorithmSHA256}}},
+				Details: MakeSchemeKeyedHashUnion(SchemeHMAC{HashAlg: HashAlgorithmSHA256})},
 			out: []byte{0x00, 0x05, 0x00, 0x0b},
 		},
 		{
 			desc: "Null",
-			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeNull, Details: &SchemeKeyedHashU{}},
+			in:   TestSchemeKeyedHashUnionContainer{Scheme: KeyedHashSchemeNull, Details: MakeSchemeKeyedHashUnion(EmptyValue)},
 			out:  []byte{0x00, 0x10},
-		},
-		{
-			desc: "InvalidSelector",
-			in:   TestSchemeKeyedHashUContainer{Scheme: KeyedHashSchemeId(HashAlgorithmSHA256)},
-			out:  []byte{0x00, 0x0b},
-			err: "cannot unmarshal argument 0 whilst processing element of type tpm2.SchemeKeyedHashU: invalid selector value: TPM_ALG_SHA256\n\n" +
-				"=== BEGIN STACK ===\n" +
-				"... tpm2_test.TestSchemeKeyedHashUContainer field Details\n" +
-				"=== END STACK ===\n",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -57,7 +48,7 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 				t.Errorf("MarshalToBytes returned an unexpected sequence of bytes: %x", out)
 			}
 
-			var a TestSchemeKeyedHashUContainer
+			var a TestSchemeKeyedHashUnionContainer
 			n, err := mu.UnmarshalFromBytes(out, &a)
 			if data.err != "" {
 				if err == nil {
@@ -80,4 +71,18 @@ func TestSchemeKeyedHashUnion(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("InvalidSelector", func(t *testing.T) {
+		var a TestSchemeKeyedHashUnionContainer
+		_, err := mu.UnmarshalFromBytes([]byte{0x00, 0x0b}, &a)
+		if err == nil {
+			t.Fatalf("UnmarshaFromBytes was expected to fail")
+		}
+		if err.Error() != "cannot unmarshal argument 0 whilst processing element of type tpm2.SchemeKeyedHashUnion: invalid selector value: TPM_ALG_SHA256\n\n"+
+			"=== BEGIN STACK ===\n"+
+			"... tpm2_test.TestSchemeKeyedHashUnionContainer field Details\n"+
+			"=== END STACK ===\n" {
+			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+		}
+	})
 }

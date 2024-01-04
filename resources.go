@@ -12,8 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 
+	"github.com/canonical/go-tpm2/internal/union"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -126,22 +126,51 @@ type sessionContextDataWrapper struct {
 	Data *sessionContextData `tpm2:"sized"`
 }
 
-type handleContextU struct {
-	Object  *Public
-	NV      *NVPublic
-	Session *sessionContextDataWrapper
+type handleContextUnion struct {
+	contents union.Contents
 }
 
-func (d *handleContextU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(handleContextType) {
+func newHandleContextUnion[T *Public | *NVPublic | *sessionContextDataWrapper | Empty](contents T) *handleContextUnion {
+	return &handleContextUnion{contents: union.NewContents(contents)}
+}
+
+func (d *handleContextUnion) Object() *Public {
+	return union.ContentsElem[*Public](d.contents)
+}
+
+func (d *handleContextUnion) NV() *NVPublic {
+	return union.ContentsElem[*NVPublic](d.contents)
+}
+
+func (d *handleContextUnion) Session() *sessionContextDataWrapper {
+	return union.ContentsElem[*sessionContextDataWrapper](d.contents)
+}
+
+func (d handleContextUnion) SelectMarshal(selector any) any {
+	switch selector.(handleContextType) {
 	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeLimitedResource:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](d.contents)
 	case handleContextTypeObject:
-		return &d.Object
+		return union.ContentsMarshal[*Public](d.contents)
 	case handleContextTypeNvIndex:
-		return &d.NV
+		return union.ContentsMarshal[*NVPublic](d.contents)
 	case handleContextTypeSession:
-		return &d.Session
+		return union.ContentsMarshal[*sessionContextDataWrapper](d.contents)
+	default:
+		return nil
+	}
+}
+
+func (d *handleContextUnion) SelectUnmarshal(selector any) any {
+	switch selector.(handleContextType) {
+	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeLimitedResource:
+		return union.ContentsUnmarshal[Empty](&d.contents)
+	case handleContextTypeObject:
+		return union.ContentsUnmarshal[*Public](&d.contents)
+	case handleContextTypeNvIndex:
+		return union.ContentsUnmarshal[*NVPublic](&d.contents)
+	case handleContextTypeSession:
+		return union.ContentsUnmarshal[*sessionContextDataWrapper](&d.contents)
 	default:
 		return nil
 	}
@@ -151,7 +180,7 @@ type handleContext struct {
 	Type handleContextType
 	H    Handle
 	N    Name
-	Data *handleContextU
+	Data *handleContextUnion
 }
 
 func (h *handleContext) Handle() Handle {
@@ -194,7 +223,7 @@ func (h *handleContext) checkValid() error {
 	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeObject, handleContextTypeNvIndex, handleContextTypeLimitedResource:
 		return nil
 	case handleContextTypeSession:
-		data := h.Data.Session.Data
+		data := h.Data.Session().Data
 		if data == nil {
 			return nil
 		}
@@ -272,7 +301,7 @@ type objectContext struct {
 }
 
 func (r *objectContext) GetPublic() *Public {
-	return r.Data.Object
+	return r.Data.Object()
 }
 
 func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
@@ -282,7 +311,7 @@ func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 				Type: handleContextTypeObject,
 				H:    handle,
 				N:    name,
-				Data: &handleContextU{Object: public}}}}
+				Data: newHandleContextUnion(public)}}}
 }
 
 func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -301,17 +330,17 @@ type nvIndexContext struct {
 }
 
 func (r *nvIndexContext) SetAttr(a NVAttributes) {
-	r.Data.NV.Attrs |= a
-	r.N = r.Data.NV.Name()
+	r.Data.NV().Attrs |= a
+	r.N = r.Data.NV().Name()
 }
 
 func (r *nvIndexContext) ClearAttr(a NVAttributes) {
-	r.Data.NV.Attrs &= ^a
-	r.N = r.Data.NV.Name()
+	r.Data.NV().Attrs &= ^a
+	r.N = r.Data.NV().Name()
 }
 
 func (r *nvIndexContext) Attrs() NVAttributes {
-	return r.Data.NV.Attrs
+	return r.Data.NV().Attrs
 }
 
 func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
@@ -321,7 +350,7 @@ func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 				Type: handleContextTypeNvIndex,
 				H:    public.Index,
 				N:    name,
-				Data: &handleContextU{NV: public}}}}
+				Data: newHandleContextUnion(public)}}}
 }
 
 func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -403,11 +432,11 @@ func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
 }
 
 func (r *sessionContext) Data() *sessionContextData {
-	return r.handleContext.Data.Session.Data
+	return r.handleContext.Data.Session().Data
 }
 
 func (r *sessionContext) Unload() {
-	r.handleContext.Data.Session.Data = nil
+	r.handleContext.Data.Session().Data = nil
 }
 
 func (r *sessionContext) SetHandle(handle Handle) {
@@ -422,7 +451,7 @@ func newSessionContext(handle Handle, data *sessionContextData) *sessionContext 
 			Type: handleContextTypeSession,
 			H:    handle,
 			N:    name,
-			Data: &handleContextU{Session: &sessionContextDataWrapper{Data: data}}}}
+			Data: newHandleContextUnion(&sessionContextDataWrapper{Data: data})}}
 }
 
 func pwSession() SessionContext {

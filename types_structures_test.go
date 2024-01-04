@@ -421,44 +421,15 @@ func (s *typesStructuresSuite) TestPCRSelectionListRemove3(c *C) {
 	c.Check(removed, DeepEquals, expected)
 }
 
-func (s *typesStructuresSuite) TestNewTaggedHashSHA1(c *C) {
-	digest := internal_testutil.DecodeHexString(c, "e5fa44f2b31c1fb553b6021e7360d07d5d91ff5e")
-
-	expected := &TaggedHash{
-		HashAlg:    HashAlgorithmSHA1,
-		DigestData: new(TaggedHashU)}
-	copy(expected.DigestData.SHA1[:], digest)
-
-	h, err := NewTaggedHash(HashAlgorithmSHA1, digest)
-	c.Assert(err, IsNil)
-	c.Check(h, DeepEquals, expected)
-}
-
-func (s *typesStructuresSuite) TestNewTaggedHashSHA256(c *C) {
-	digest := internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")
-
-	expected := &TaggedHash{
-		HashAlg:    HashAlgorithmSHA256,
-		DigestData: new(TaggedHashU)}
-	copy(expected.DigestData.SHA256[:], digest)
-
-	h, err := NewTaggedHash(HashAlgorithmSHA256, digest)
-	c.Assert(err, IsNil)
-	c.Check(h, DeepEquals, expected)
-}
-
-func (s *typesStructuresSuite) TestNewTaggedHashError(c *C) {
-	_, err := NewTaggedHash(HashAlgorithmSHA256, make([]byte, 20))
-	c.Assert(err, ErrorMatches, "invalid digest size")
-}
-
 func (s *typesStructuresSuite) TestMakeTaggedHashSHA1(c *C) {
 	digest := internal_testutil.DecodeHexString(c, "e5fa44f2b31c1fb553b6021e7360d07d5d91ff5e")
 
+	var d [20]byte
+	copy(d[:], digest)
 	expected := TaggedHash{
 		HashAlg:    HashAlgorithmSHA1,
-		DigestData: new(TaggedHashU)}
-	copy(expected.DigestData.SHA1[:], digest)
+		DigestData: MakeTaggedHashUnion(d),
+	}
 
 	h := MakeTaggedHash(HashAlgorithmSHA1, digest)
 	c.Check(h, DeepEquals, expected)
@@ -467,10 +438,12 @@ func (s *typesStructuresSuite) TestMakeTaggedHashSHA1(c *C) {
 func (s *typesStructuresSuite) TestMakeTaggedHashSHA256(c *C) {
 	digest := internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")
 
+	var d [32]byte
+	copy(d[:], digest)
 	expected := TaggedHash{
 		HashAlg:    HashAlgorithmSHA256,
-		DigestData: new(TaggedHashU)}
-	copy(expected.DigestData.SHA256[:], digest)
+		DigestData: MakeTaggedHashUnion(d),
+	}
 
 	h := MakeTaggedHash(HashAlgorithmSHA256, digest)
 	c.Check(h, DeepEquals, expected)
@@ -558,41 +531,8 @@ func (s *typesStructuresSuite) TestUnmarshalInvalidTaggedHash(c *C) {
 
 	var h *TaggedHash
 	_, err := mu.UnmarshalFromBytes(b, &h)
-	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type tpm2.TaggedHashU: invalid selector value: TPM_ALG_TDES\n\n"+
+	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type tpm2.TaggedHashUnion: invalid selector value: TPM_ALG_TDES\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... tpm2.TaggedHash field DigestData\n"+
 		"=== END STACK ===\n")
-}
-
-func (s *typesStructuresSuite) TestTaggedHashListBuilder(c *C) {
-	d1, err := NewTaggedHash(HashAlgorithmSHA1, internal_testutil.DecodeHexString(c, "7448d8798a4380162d4b56f9b452e2f6f9e24e7a"))
-	c.Assert(err, IsNil)
-	d2, err := NewTaggedHash(HashAlgorithmSHA256, internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"))
-	c.Assert(err, IsNil)
-
-	builder := NewTaggedHashListBuilder()
-	c.Assert(builder, NotNil)
-
-	c.Check(builder.Append(d1.HashAlg, d1.Digest()), Equals, builder)
-	c.Check(builder.Append(d2.HashAlg, d2.Digest()), Equals, builder)
-
-	l, err := builder.Finish()
-	c.Check(err, IsNil)
-
-	expected := TaggedHashList{*d1, *d2}
-
-	c.Check(l, DeepEquals, expected)
-}
-
-func (s *typesStructuresSuite) TestTaggedHashListBuilderError(c *C) {
-	builder := NewTaggedHashListBuilder()
-	c.Assert(builder, NotNil)
-
-	c.Check(builder.Append(HashAlgorithmSHA1, make([]byte, 20)), Equals, builder)
-	c.Check(builder.Append(HashAlgorithmSHA256, make([]byte, 10)), Equals, builder)
-	c.Check(builder.Append(HashAlgorithmSHA384, make([]byte, 48)), Equals, builder)
-	c.Check(builder.Append(HashAlgorithmSHA512, nil), Equals, builder)
-
-	_, err := builder.Finish()
-	c.Check(err, ErrorMatches, "encountered error on digest 1: invalid digest size")
 }

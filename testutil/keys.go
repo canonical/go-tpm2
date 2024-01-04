@@ -33,10 +33,11 @@ func NewExternalRSAStoragePublicKey(key *rsa.PublicKey) *tpm2.Public {
 	}
 	pub.Attrs |= (tpm2.AttrRestricted | tpm2.AttrDecrypt)
 	pub.Attrs &^= tpm2.AttrSign
-	pub.Params.RSADetail.Symmetric = tpm2.SymDefObject{
+	pub.Params.RSADetail().Symmetric = tpm2.SymDefObject{
 		Algorithm: tpm2.SymObjectAlgorithmAES,
-		KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-		Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}
+		KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](128),
+		Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+	}
 
 	return pub
 }

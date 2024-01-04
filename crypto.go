@@ -73,13 +73,13 @@ func cryptSecretEncrypt(public *Public, label []byte) (EncryptedSecret, []byte, 
 	pub := public.Public()
 	switch p := pub.(type) {
 	case *rsa.PublicKey:
-		if public.Params.RSADetail.Scheme.Scheme != RSASchemeNull &&
-			public.Params.RSADetail.Scheme.Scheme != RSASchemeOAEP {
-			return nil, nil, fmt.Errorf("unsupported RSA scheme: %v", public.Params.RSADetail.Scheme.Scheme)
+		if public.Params.RSADetail().Scheme.Scheme != RSASchemeNull &&
+			public.Params.RSADetail().Scheme.Scheme != RSASchemeOAEP {
+			return nil, nil, fmt.Errorf("unsupported RSA scheme: %v", public.Params.RSADetail().Scheme.Scheme)
 		}
 	case *ecdsa.PublicKey:
 		if p.Curve == nil {
-			return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail.CurveID.GoCurve())
+			return nil, nil, fmt.Errorf("unsupported curve: %v", public.Params.ECCDetail().CurveID.GoCurve())
 		}
 	}
 

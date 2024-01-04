@@ -11,20 +11,28 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"reflect"
 	"sort"
 
+	"github.com/canonical/go-tpm2/internal/union"
 	"github.com/canonical/go-tpm2/mu"
 )
 
 // This file contains types defined in section 10 (Structures) in
 // part 2 of the library spec.
 
+// Empty corresponds to the TPMS_EMPTY type.
 type Empty struct{}
+
+// EmptyValue is an instance of Empty.
+var EmptyValue Empty
 
 // 10.3) Hash/Digest structures
 
-// TaggedHashU is a union type that corresponds to the TPMU_HA type. The
+type TaggedHashUnionConstraint interface {
+	[20]byte | [32]byte | [48]byte | [64]byte | Empty
+}
+
+// TaggedHashUnion is a union type that corresponds to the TPMU_HA type. The
 // selector type is [HashAlgorithmId]. Mapping of selector values to fields is
 // as follows:
 //   - HashAlgorithmSHA1: SHA1
@@ -34,38 +42,93 @@ type Empty struct{}
 //   - HashAlgorithmSHA3_256: SHA3_256
 //   - HashAlgorithmSHA3_384: SHA3_384
 //   - HashAlgorithmSHA3_512: SHA3_512
-type TaggedHashU struct {
-	SHA1     [20]byte
-	SHA256   [32]byte
-	SHA384   [48]byte
-	SHA512   [64]byte
-	SM3_256  [32]byte
-	SHA3_256 [32]byte
-	SHA3_384 [48]byte
-	SHA3_512 [64]byte
+type TaggedHashUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(HashAlgorithmId) {
+func MakeTaggedHashUnion[T TaggedHashUnionConstraint](contents T) TaggedHashUnion {
+	return TaggedHashUnion{contents: union.NewContents(contents)}
+}
+
+func (u *TaggedHashUnion) SHA1() [20]byte {
+	return union.ContentsElem[[20]byte](u.contents)
+}
+
+func (u *TaggedHashUnion) SHA256() [32]byte {
+	return union.ContentsElem[[32]byte](u.contents)
+}
+
+func (u *TaggedHashUnion) SHA384() [48]byte {
+	return union.ContentsElem[[48]byte](u.contents)
+}
+
+func (u *TaggedHashUnion) SHA512() [64]byte {
+	return union.ContentsElem[[64]byte](u.contents)
+}
+
+func (u *TaggedHashUnion) SM3_256() [32]byte {
+	return union.ContentsElem[[32]byte](u.contents)
+}
+
+func (u *TaggedHashUnion) SHA3_256() [32]byte {
+	return union.ContentsElem[[32]byte](u.contents)
+}
+
+func (u *TaggedHashUnion) SHA3_384() [48]byte {
+	return union.ContentsElem[[48]byte](u.contents)
+}
+
+func (u *TaggedHashUnion) SHA3_512() [64]byte {
+	return union.ContentsElem[[64]byte](u.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (u TaggedHashUnion) SelectMarshal(selector any) any {
+	switch selector.(HashAlgorithmId) {
 	case HashAlgorithmNull:
-		return mu.NilUnionValue
+		return union.ContentsMarshal[Empty](u.contents)
 	case HashAlgorithmSHA1:
-		return &u.SHA1
+		return union.ContentsMarshal[[20]byte](u.contents)
 	case HashAlgorithmSHA256:
-		return &u.SHA256
+		return union.ContentsMarshal[[32]byte](u.contents)
 	case HashAlgorithmSHA384:
-		return &u.SHA384
+		return union.ContentsMarshal[[48]byte](u.contents)
 	case HashAlgorithmSHA512:
-		return &u.SHA512
+		return union.ContentsMarshal[[64]byte](u.contents)
 	case HashAlgorithmSM3_256:
-		return &u.SM3_256
+		return union.ContentsMarshal[[32]byte](u.contents)
 	case HashAlgorithmSHA3_256:
-		return &u.SHA3_256
+		return union.ContentsMarshal[[32]byte](u.contents)
 	case HashAlgorithmSHA3_384:
-		return &u.SHA3_384
+		return union.ContentsMarshal[[48]byte](u.contents)
 	case HashAlgorithmSHA3_512:
-		return &u.SHA3_512
+		return union.ContentsMarshal[[64]byte](u.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (u *TaggedHashUnion) SelectUnmarshal(selector any) any {
+	switch selector.(HashAlgorithmId) {
+	case HashAlgorithmNull:
+		return union.ContentsUnmarshal[Empty](&u.contents)
+	case HashAlgorithmSHA1:
+		return union.ContentsUnmarshal[[20]byte](&u.contents)
+	case HashAlgorithmSHA256:
+		return union.ContentsUnmarshal[[32]byte](&u.contents)
+	case HashAlgorithmSHA384:
+		return union.ContentsUnmarshal[[48]byte](&u.contents)
+	case HashAlgorithmSHA512:
+		return union.ContentsUnmarshal[[64]byte](&u.contents)
+	case HashAlgorithmSM3_256:
+		return union.ContentsUnmarshal[[32]byte](&u.contents)
+	case HashAlgorithmSHA3_256:
+		return union.ContentsUnmarshal[[32]byte](&u.contents)
+	case HashAlgorithmSHA3_384:
+		return union.ContentsUnmarshal[[48]byte](&u.contents)
+	case HashAlgorithmSHA3_512:
+		return union.ContentsUnmarshal[[64]byte](&u.contents)
 	default:
 		return nil
 	}
@@ -74,45 +137,7 @@ func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
 // TaggedHash corresponds to the TPMT_HA type.
 type TaggedHash struct {
 	HashAlg    HashAlgorithmId // Algorithm of the digest contained with Digest
-	DigestData *TaggedHashU    // Digest data
-}
-
-// NewTaggedHash creates a new tagged hash that represents the specified
-// digest. It will return an error if the algorithm is invalid or the
-// size of the digest doesn't match the algorithm.
-//
-// Deprecated: Use [MakeTaggedHash].
-func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
-	if !alg.IsValid() {
-		return nil, errors.New("invalid algorithm")
-	}
-	if len(digest) != alg.Size() {
-		return nil, errors.New("invalid digest size")
-	}
-
-	digestData := new(TaggedHashU)
-	switch alg {
-	case HashAlgorithmSHA1:
-		copy(digestData.SHA1[:], digest)
-	case HashAlgorithmSHA256:
-		copy(digestData.SHA256[:], digest)
-	case HashAlgorithmSHA384:
-		copy(digestData.SHA384[:], digest)
-	case HashAlgorithmSHA512:
-		copy(digestData.SHA512[:], digest)
-	case HashAlgorithmSM3_256:
-		copy(digestData.SM3_256[:], digest)
-	case HashAlgorithmSHA3_256:
-		copy(digestData.SHA3_256[:], digest)
-	case HashAlgorithmSHA3_384:
-		copy(digestData.SHA3_384[:], digest)
-	case HashAlgorithmSHA3_512:
-		copy(digestData.SHA3_512[:], digest)
-	}
-
-	return &TaggedHash{
-		HashAlg:    alg,
-		DigestData: digestData}, nil
+	DigestData TaggedHashUnion // Digest data
 }
 
 // MakeTaggedHash creates a new tagged hash that represents the specified
@@ -120,34 +145,36 @@ func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
 // should be the correct length - it will be padded if it's too short or
 // truncated if it's too long.
 func MakeTaggedHash(alg HashAlgorithmId, digest Digest) TaggedHash {
-	digestData := new(TaggedHashU)
+	var union TaggedHashUnion
 	switch alg {
 	case HashAlgorithmSHA1:
-		copy(digestData.SHA1[:], digest)
-	case HashAlgorithmSHA256:
-		copy(digestData.SHA256[:], digest)
-	case HashAlgorithmSHA384:
-		copy(digestData.SHA384[:], digest)
-	case HashAlgorithmSHA512:
-		copy(digestData.SHA512[:], digest)
-	case HashAlgorithmSM3_256:
-		copy(digestData.SM3_256[:], digest)
-	case HashAlgorithmSHA3_256:
-		copy(digestData.SHA3_256[:], digest)
-	case HashAlgorithmSHA3_384:
-		copy(digestData.SHA3_384[:], digest)
-	case HashAlgorithmSHA3_512:
-		copy(digestData.SHA3_512[:], digest)
+		var data [20]byte
+		copy(data[:], digest)
+		union = MakeTaggedHashUnion(data)
+	case HashAlgorithmSHA256, HashAlgorithmSM3_256, HashAlgorithmSHA3_256:
+		var data [32]byte
+		copy(data[:], digest)
+		union = MakeTaggedHashUnion(data)
+	case HashAlgorithmSHA384, HashAlgorithmSHA3_384:
+		var data [48]byte
+		copy(data[:], digest)
+		union = MakeTaggedHashUnion(data)
+	case HashAlgorithmSHA512, HashAlgorithmSHA3_512:
+		var data [64]byte
+		copy(data[:], digest)
+		union = MakeTaggedHashUnion(data)
+	case HashAlgorithmNull:
+		union = MakeTaggedHashUnion(EmptyValue)
 	}
-	return TaggedHash{
-		HashAlg:    alg,
-		DigestData: digestData}
+
+	return TaggedHash{HashAlg: alg, DigestData: union}
 }
 
-// Digest returns the value of this tagged hash. It will panic
-// if the digest algorithm is invalid and not [HashAlgorithmNull].
-// It will be valid if this tagged hash was created by unmarshalling
-// it, else check the value of the HashAlg field first.
+// Digest returns the value of this tagged hash. It will panic if the digest
+// algorithm is invalid and not [HashAlgorithmNull]. It will be valid if this
+// tagged hash was created by unmarshalling, else it is up to the caller to
+// ensure that the HashAlg field is valid and the value is consistent with the
+// contents of the DigestData field.
 func (h *TaggedHash) Digest() Digest {
 	if h.HashAlg == HashAlgorithmNull {
 		return nil
@@ -157,21 +184,29 @@ func (h *TaggedHash) Digest() Digest {
 
 	switch h.HashAlg {
 	case HashAlgorithmSHA1:
-		copy(out, h.DigestData.SHA1[:])
+		digest := h.DigestData.SHA1()
+		copy(out, digest[:])
 	case HashAlgorithmSHA256:
-		copy(out, h.DigestData.SHA256[:])
+		digest := h.DigestData.SHA256()
+		copy(out, digest[:])
 	case HashAlgorithmSHA384:
-		copy(out, h.DigestData.SHA384[:])
+		digest := h.DigestData.SHA384()
+		copy(out, digest[:])
 	case HashAlgorithmSHA512:
-		copy(out, h.DigestData.SHA512[:])
+		digest := h.DigestData.SHA512()
+		copy(out, digest[:])
 	case HashAlgorithmSM3_256:
-		copy(out, h.DigestData.SM3_256[:])
+		digest := h.DigestData.SM3_256()
+		copy(out, digest[:])
 	case HashAlgorithmSHA3_256:
-		copy(out, h.DigestData.SHA3_256[:])
+		digest := h.DigestData.SHA3_256()
+		copy(out, digest[:])
 	case HashAlgorithmSHA3_384:
-		copy(out, h.DigestData.SHA3_384[:])
+		digest := h.DigestData.SHA3_384()
+		copy(out, digest[:])
 	case HashAlgorithmSHA3_512:
-		copy(out, h.DigestData.SHA3_512[:])
+		digest := h.DigestData.SHA3_512()
+		copy(out, digest[:])
 	}
 
 	return out
@@ -525,55 +560,6 @@ type DigestList []Digest
 // TaggedHashList is a slice of TaggedHash values, and corresponds to the TPML_DIGEST_VALUES type.
 type TaggedHashList []TaggedHash
 
-// TaggedHashListBuilder facilitates creating a [TaggedHashList]. It
-// allows a list to be constructed without having to check for errors
-// until the end.
-//
-// Deprecated: Use [TaggedHashList] and [MakeTaggedHash].
-type TaggedHashListBuilder struct {
-	hashes TaggedHashList
-	err    error
-}
-
-// NewTaggedHashListBuilder returns a new TaggedHashListBuilder.
-//
-// Deprecated: Use [TaggedHashList] and [MakeTaggedHash].
-func NewTaggedHashListBuilder() *TaggedHashListBuilder {
-	return new(TaggedHashListBuilder)
-}
-
-// Append appends the digest with the specified algorithm to the list.
-func (b *TaggedHashListBuilder) Append(alg HashAlgorithmId, digest Digest) *TaggedHashListBuilder {
-	if b.err != nil {
-		return b
-	}
-
-	h, err := NewTaggedHash(alg, digest)
-	if err != nil {
-		b.err = fmt.Errorf("encountered error on digest %d: %w", len(b.hashes), err)
-		b.hashes = nil
-	} else {
-		b.hashes = append(b.hashes, *h)
-	}
-	return b
-}
-
-// Finish returns the final list, or an error if one occurred whilst the
-// list was being built.
-func (b *TaggedHashListBuilder) Finish() (TaggedHashList, error) {
-	return b.hashes, b.err
-}
-
-// MustFinish is the same as [TaggedHashListBuilder.Finish] except if panics if an error
-// occurred.
-func (b *TaggedHashListBuilder) MustFinish() TaggedHashList {
-	l, err := b.Finish()
-	if err != nil {
-		panic(err)
-	}
-	return l
-}
-
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
 
@@ -814,7 +800,11 @@ type TaggedPolicyList []TaggedPolicy
 
 // 10.10) Capabilities Structures
 
-// Capabilities is a union type that corresponds to the TPMU_CAPABILITIES type. The
+type CapabilitiesUnionConstraint interface {
+	AlgorithmPropertyList | HandleList | CommandAttributesList | CommandCodeList | PCRSelectionList | TaggedTPMPropertyList | TaggedPCRPropertyList | ECCCurveList | TaggedPolicyList
+}
+
+// CapabilitiesUnion is a union type that corresponds to the TPMU_CAPABILITIES type. The
 // selector type is Capability. Mapping of selector values to fields is as follows:
 //   - CapabilityAlgs: Algorithms
 //   - CapabilityHandles: Handles
@@ -826,42 +816,105 @@ type TaggedPolicyList []TaggedPolicy
 //   - CapabilityPCRProperties: PCRProperties
 //   - CapabilityECCCurves: ECCCurves
 //   - CapabilityAuthPolicies: AuthPolicies
-type CapabilitiesU struct {
-	Algorithms    AlgorithmPropertyList
-	Handles       HandleList
-	Command       CommandAttributesList
-	PPCommands    CommandCodeList
-	AuditCommands CommandCodeList
-	AssignedPCR   PCRSelectionList
-	TPMProperties TaggedTPMPropertyList
-	PCRProperties TaggedPCRPropertyList
-	ECCCurves     ECCCurveList
-	AuthPolicies  TaggedPolicyList
+type CapabilitiesUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (c *CapabilitiesU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(Capability) {
+func MakeCapabilitiesUnion[T CapabilitiesUnionConstraint](contents T) CapabilitiesUnion {
+	return CapabilitiesUnion{contents: union.NewContents(contents)}
+}
+
+func (c *CapabilitiesUnion) Algorithms() AlgorithmPropertyList {
+	return union.ContentsElem[AlgorithmPropertyList](c.contents)
+}
+
+func (c *CapabilitiesUnion) Handles() HandleList {
+	return union.ContentsElem[HandleList](c.contents)
+}
+
+func (c *CapabilitiesUnion) Command() CommandAttributesList {
+	return union.ContentsElem[CommandAttributesList](c.contents)
+}
+
+func (c *CapabilitiesUnion) PPCommands() CommandCodeList {
+	return union.ContentsElem[CommandCodeList](c.contents)
+}
+
+func (c *CapabilitiesUnion) AuditCommands() CommandCodeList {
+	return union.ContentsElem[CommandCodeList](c.contents)
+}
+
+func (c *CapabilitiesUnion) AssignedPCR() PCRSelectionList {
+	return union.ContentsElem[PCRSelectionList](c.contents)
+}
+
+func (c *CapabilitiesUnion) TPMProperties() TaggedTPMPropertyList {
+	return union.ContentsElem[TaggedTPMPropertyList](c.contents)
+}
+
+func (c *CapabilitiesUnion) PCRProperties() TaggedPCRPropertyList {
+	return union.ContentsElem[TaggedPCRPropertyList](c.contents)
+}
+
+func (c *CapabilitiesUnion) ECCCurves() ECCCurveList {
+	return union.ContentsElem[ECCCurveList](c.contents)
+}
+
+func (c *CapabilitiesUnion) AuthPolicies() TaggedPolicyList {
+	return union.ContentsElem[TaggedPolicyList](c.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (c CapabilitiesUnion) SelectMarshal(selector any) any {
+	switch selector.(Capability) {
 	case CapabilityAlgs:
-		return &c.Algorithms
+		return union.ContentsMarshal[AlgorithmPropertyList](c.contents)
 	case CapabilityHandles:
-		return &c.Handles
+		return union.ContentsMarshal[HandleList](c.contents)
 	case CapabilityCommands:
-		return &c.Command
+		return union.ContentsMarshal[CommandAttributesList](c.contents)
 	case CapabilityPPCommands:
-		return &c.PPCommands
+		return union.ContentsMarshal[CommandCodeList](c.contents)
 	case CapabilityAuditCommands:
-		return &c.AuditCommands
+		return union.ContentsMarshal[CommandCodeList](c.contents)
 	case CapabilityPCRs:
-		return &c.AssignedPCR
+		return union.ContentsMarshal[PCRSelectionList](c.contents)
 	case CapabilityTPMProperties:
-		return &c.TPMProperties
+		return union.ContentsMarshal[TaggedTPMPropertyList](c.contents)
 	case CapabilityPCRProperties:
-		return &c.PCRProperties
+		return union.ContentsMarshal[TaggedPCRPropertyList](c.contents)
 	case CapabilityECCCurves:
-		return &c.ECCCurves
+		return union.ContentsMarshal[ECCCurveList](c.contents)
 	case CapabilityAuthPolicies:
-		return &c.AuthPolicies
+		return union.ContentsMarshal[TaggedPolicyList](c.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (c *CapabilitiesUnion) SelectUnmarshal(selector any) any {
+	switch selector.(Capability) {
+	case CapabilityAlgs:
+		return union.ContentsUnmarshal[AlgorithmPropertyList](&c.contents)
+	case CapabilityHandles:
+		return union.ContentsUnmarshal[HandleList](&c.contents)
+	case CapabilityCommands:
+		return union.ContentsUnmarshal[CommandAttributesList](&c.contents)
+	case CapabilityPPCommands:
+		return union.ContentsUnmarshal[CommandCodeList](&c.contents)
+	case CapabilityAuditCommands:
+		return union.ContentsUnmarshal[CommandCodeList](&c.contents)
+	case CapabilityPCRs:
+		return union.ContentsUnmarshal[PCRSelectionList](&c.contents)
+	case CapabilityTPMProperties:
+		return union.ContentsUnmarshal[TaggedTPMPropertyList](&c.contents)
+	case CapabilityPCRProperties:
+		return union.ContentsUnmarshal[TaggedPCRPropertyList](&c.contents)
+	case CapabilityECCCurves:
+		return union.ContentsUnmarshal[ECCCurveList](&c.contents)
+	case CapabilityAuthPolicies:
+		return union.ContentsUnmarshal[TaggedPolicyList](&c.contents)
 	default:
 		return nil
 	}
@@ -870,8 +923,8 @@ func (c *CapabilitiesU) Select(selector reflect.Value) interface{} {
 // CapabilityData corresponds to the TPMS_CAPABILITY_DATA type, and is returned by
 // TPMContext.GetCapability.
 type CapabilityData struct {
-	Capability Capability     // Capability
-	Data       *CapabilitiesU // Capability data
+	Capability Capability        // Capability
+	Data       CapabilitiesUnion // Capability data
 }
 
 // 10.11 Clock/Counter Structures
@@ -947,7 +1000,11 @@ type NVCertifyInfo struct {
 	NVContents MaxNVBuffer // Contents of the NV index
 }
 
-// AttestU is a union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag.
+type AttestUnionConstraint interface {
+	CertifyInfo | CreationInfo | QuoteInfo | CommandAuditInfo | SessionAuditInfo | TimeAttestInfo | NVCertifyInfo
+}
+
+// AttestUnion is a union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag.
 // Mapping of selector values to fields is as follows:
 //   - TagAttestNV: NV
 //   - TagAttestCommandAudit: CommandAudit
@@ -956,33 +1013,81 @@ type NVCertifyInfo struct {
 //   - TagAttestQuote: Quote
 //   - TagAttestTime: Time
 //   - TagAttestCreation: Creation
-type AttestU struct {
-	Certify      *CertifyInfo
-	Creation     *CreationInfo
-	Quote        *QuoteInfo
-	CommandAudit *CommandAuditInfo
-	SessionAudit *SessionAuditInfo
-	Time         *TimeAttestInfo
-	NV           *NVCertifyInfo
+type AttestUnion struct {
+	contents union.Contents
 }
 
-// Select implements [mu.Union].
-func (a *AttestU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(StructTag) {
+func MakeAttestUnion[T AttestUnionConstraint](contents T) AttestUnion {
+	return AttestUnion{contents: union.NewContents(contents)}
+}
+
+func (a *AttestUnion) Certify() *CertifyInfo {
+	return union.ContentsPtr[CertifyInfo](a.contents)
+}
+
+func (a *AttestUnion) Creation() *CreationInfo {
+	return union.ContentsPtr[CreationInfo](a.contents)
+}
+
+func (a *AttestUnion) Quote() *QuoteInfo {
+	return union.ContentsPtr[QuoteInfo](a.contents)
+}
+
+func (a *AttestUnion) CommandAudit() *CommandAuditInfo {
+	return union.ContentsPtr[CommandAuditInfo](a.contents)
+}
+
+func (a *AttestUnion) SessionAudit() *SessionAuditInfo {
+	return union.ContentsPtr[SessionAuditInfo](a.contents)
+}
+
+func (a *AttestUnion) Time() *TimeAttestInfo {
+	return union.ContentsPtr[TimeAttestInfo](a.contents)
+}
+
+func (a *AttestUnion) NV() *NVCertifyInfo {
+	return union.ContentsPtr[NVCertifyInfo](a.contents)
+}
+
+// SelectMarshal implements [mu.Union.SelectMarshal].
+func (a AttestUnion) SelectMarshal(selector any) any {
+	switch selector.(StructTag) {
 	case TagAttestNV:
-		return &a.NV
+		return union.ContentsMarshal[NVCertifyInfo](a.contents)
 	case TagAttestCommandAudit:
-		return &a.CommandAudit
+		return union.ContentsMarshal[CommandAuditInfo](a.contents)
 	case TagAttestSessionAudit:
-		return &a.SessionAudit
+		return union.ContentsMarshal[SessionAuditInfo](a.contents)
 	case TagAttestCertify:
-		return &a.Certify
+		return union.ContentsMarshal[CertifyInfo](a.contents)
 	case TagAttestQuote:
-		return &a.Quote
+		return union.ContentsMarshal[QuoteInfo](a.contents)
 	case TagAttestTime:
-		return &a.Time
+		return union.ContentsMarshal[TimeAttestInfo](a.contents)
 	case TagAttestCreation:
-		return &a.Creation
+		return union.ContentsMarshal[CreationInfo](a.contents)
+	default:
+		return nil
+	}
+}
+
+// SelectUnmarshal implements [mu.Union.SelectUnmarshal].
+func (a *AttestUnion) SelectUnmarshal(selector any) any {
+	switch selector.(StructTag) {
+	case TagAttestNV:
+		return union.ContentsUnmarshal[NVCertifyInfo](&a.contents)
+	case TagAttestCommandAudit:
+		return union.ContentsUnmarshal[CommandAuditInfo](&a.contents)
+	case TagAttestSessionAudit:
+		return union.ContentsUnmarshal[SessionAuditInfo](&a.contents)
+	case TagAttestCertify:
+		return union.ContentsUnmarshal[CertifyInfo](&a.contents)
+	case TagAttestQuote:
+		return union.ContentsUnmarshal[QuoteInfo](&a.contents)
+	case TagAttestTime:
+		return union.ContentsUnmarshal[TimeAttestInfo](&a.contents)
+	case TagAttestCreation:
+		return union.ContentsUnmarshal[CreationInfo](&a.contents)
 	default:
 		return nil
 	}
@@ -997,7 +1102,7 @@ type Attest struct {
 	ExtraData       Data         // External information provided by the caller
 	ClockInfo       ClockInfo    // Clock information
 	FirmwareVersion uint64       // TPM vendor specific value indicating the version of the firmware
-	Attested        *AttestU     `tpm2:"selector:Type"` // Type specific attestation data
+	Attested        AttestUnion  `tpm2:"selector:Type"` // Type specific attestation data
 }
 
 // 10.13) Authorization Structures

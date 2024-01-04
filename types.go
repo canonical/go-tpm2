@@ -174,3 +174,6 @@ func (v PCRValues) SetValue(alg HashAlgorithmId, pcr int, digest Digest) error {
 type PublicTemplate interface {
 	ToTemplate() (Template, error)
 }
+
+// KeyBits corresponds to the TPM_KEY_BITS type.
+type KeyBits uint16

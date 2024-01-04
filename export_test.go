@@ -41,7 +41,7 @@ func (c *CommandContext) Cmd() *CmdContext {
 }
 
 func (c *NvIndexContext) GetPublic() *NVPublic {
-	return c.Data.NV
+	return c.Data.NV()
 }
 
 func (c *ResponseContext) Dispatcher() commandDispatcher {

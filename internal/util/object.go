@@ -66,7 +66,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 
 	data, _ = ioutil.ReadAll(r)
 
-	symKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
+	symKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym()))
 
 	if err := internal_crypt.SymmetricDecrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
 		return nil, fmt.Errorf("cannot decrypt: %w", err)
@@ -99,7 +99,7 @@ func ProduceOuterWrap(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObj
 		}
 	}
 
-	symKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym))
+	symKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym()))
 
 	if err := internal_crypt.SymmetricEncrypt(symmetricAlg.Algorithm, symKey, iv, data); err != nil {
 		return nil, fmt.Errorf("cannot encrypt: %w", err)

@@ -38,9 +38,9 @@ func (s *objectSuite) checkPublicAgainstTemplate(c *C, public, template *Public)
 	mu.MustCopyValue(&p, public)
 
 	for _, p := range []*Public{template, p} {
-		p.Unique = nil
-		if p.Type == ObjectTypeRSA && p.Params.RSADetail.Exponent == 0 {
-			p.Params.RSADetail.Exponent = DefaultRSAExponent
+		p.Unique = PublicIDUnion{}
+		if p.Type == ObjectTypeRSA && p.Params.RSADetail().Exponent == 0 {
+			p.Params.RSADetail().Exponent = DefaultRSAExponent
 		}
 	}
 
@@ -48,10 +48,10 @@ func (s *objectSuite) checkPublicAgainstTemplate(c *C, public, template *Public)
 
 	switch template.Type {
 	case ObjectTypeRSA:
-		c.Check(unique.RSA, internal_testutil.LenEquals, int(template.Params.RSADetail.KeyBits)/8)
+		c.Check(unique.RSA(), internal_testutil.LenEquals, int(template.Params.RSADetail().KeyBits)/8)
 	case ObjectTypeECC:
-		c.Check(unique.ECC.X, internal_testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
-		c.Check(unique.ECC.Y, internal_testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
+		c.Check(unique.ECC().X, internal_testutil.LenEquals, template.Params.ECCDetail().CurveID.GoCurve().Params().BitSize/8)
+		c.Check(unique.ECC().Y, internal_testutil.LenEquals, template.Params.ECCDetail().CurveID.GoCurve().Params().BitSize/8)
 	}
 }
 
@@ -419,8 +419,9 @@ func (s *objectSuite) TestUnsealWithEncryptSession(c *C) {
 
 	symmetric := SymDef{
 		Algorithm: SymAlgorithmAES,
-		KeyBits:   &SymKeyBitsU{Sym: 128},
-		Mode:      &SymModeU{Sym: SymModeCFB}}
+		KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+		Mode:      MakeSymModeUnion(SymModeCFB),
+	}
 	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, &symmetric, HashAlgorithmSHA256)
 	c.Check(s.TPM.PolicyAuthValue(session), IsNil)
 
@@ -488,7 +489,7 @@ func (s *objectSuite) TestMakeCredential(c *C) {
 	seed, err := internal_crypt.SecretDecrypt(key, crypto.SHA256, []byte(IdentityKey), secret)
 	c.Check(err, IsNil)
 
-	recoveredCredential, err := testutil.UnwrapOuter(HashAlgorithmSHA256, &ekPub.Params.RSADetail.Symmetric, name, seed, false, credentialBlob)
+	recoveredCredential, err := testutil.UnwrapOuter(HashAlgorithmSHA256, &ekPub.Params.RSADetail().Symmetric, name, seed, false, credentialBlob)
 	c.Check(err, IsNil)
 
 	_, err = mu.UnmarshalFromBytes(recoveredCredential, &recoveredCredential)

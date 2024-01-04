@@ -153,12 +153,12 @@ func sensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAl
 		duplicate = mu.MustMarshalToBytes(innerIntegrity, mu.RawBytes(duplicate))
 
 		if len(innerSymmetricKey) == 0 {
-			innerSymmetricKeyOut = make([]byte, innerSymmetricAlg.KeyBits.Sym/8)
+			innerSymmetricKeyOut = make([]byte, innerSymmetricAlg.KeyBits.Sym()/8)
 			if _, err := rand.Read(innerSymmetricKeyOut); err != nil {
 				return nil, nil, fmt.Errorf("cannot obtain symmetric key for inner wrapper: %w", err)
 			}
 			innerSymmetricKey = innerSymmetricKeyOut
-		} else if len(innerSymmetricKey) != int(innerSymmetricAlg.KeyBits.Sym/8) {
+		} else if len(innerSymmetricKey) != int(innerSymmetricAlg.KeyBits.Sym()/8) {
 			return nil, nil, errors.New("the supplied symmetric key for inner wrapper has the wrong length")
 		}
 
@@ -226,7 +226,7 @@ func CreateImportable(rand io.Reader, sensitive *tpm2.Sensitive, public, parentP
 		}
 
 		outerHashAlg = parentPublic.NameAlg
-		outerSymmetricAlg = &parentPublic.AsymDetail().Symmetric
+		outerSymmetricAlg = &parentPublic.Params.AsymDetail().Symmetric
 
 		outerSecret, seed, err = internal_crypt.SecretEncrypt(rand, parentPublic.Public(), parentPublic.NameAlg.GetHash(), []byte(tpm2.DuplicateString))
 		if err != nil {

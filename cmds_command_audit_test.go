@@ -60,7 +60,7 @@ func (s *commandCodeAuditSuiteBase) testSetCommandCodeAuditStatus(c *C, data *te
 
 	auditInfo, _, err := s.TPM.GetCommandAuditDigest(s.TPM.EndorsementHandleContext(), nil, nil, nil, nil, nil)
 	c.Assert(err, IsNil)
-	c.Check(auditInfo.Attested.CommandAudit.DigestAlg, Equals, AlgorithmId(data.alg))
+	c.Check(auditInfo.Attested.CommandAudit().DigestAlg, Equals, AlgorithmId(data.alg))
 }
 
 func (s *commandCodeAuditSuiteOwner) TestSetCommandCodeAuditStatus1(c *C) {

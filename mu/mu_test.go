@@ -7,7 +7,6 @@ package mu_test
 import (
 	"bytes"
 	"io"
-	"math"
 	"reflect"
 	"testing"
 
@@ -358,7 +357,7 @@ func (s *muSuite) TestMarshalAndUnmarshalSized3(c *C) {
 
 func (s *muSuite) TestSizedMarshalAndUnmarshalSized4(c *C) {
 	var u32 uint32 = 657763432
-	a := &testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
+	a := &testTaggedUnion{Select: 1, Union: newTestUnion(&testStruct{56324, &u32, true, []uint32{98767643, 5453423}})}
 	expected := internal_testutil.DecodeHexString(c, "001700000001dc042734ac68010000000205e3131b0053366f")
 
 	var ua *testTaggedUnion
@@ -518,9 +517,9 @@ func (s *muSuite) TestMarshalAndUnmarshalSizedStruct(c *C) {
 
 func (s *muSuite) TestMarshalAndUnmarshalUnion(c *C) {
 	var u32 uint32 = 657763432
-	v := testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
-	w := testTaggedUnion{Select: 2, Union: &testUnion{B: []uint32{3287743, 98731}}}
-	x := testTaggedUnion{Select: 3, Union: &testUnion{C: uint16(4321)}}
+	v := testTaggedUnion{Select: 1, Union: newTestUnion(&testStruct{56324, &u32, true, []uint32{98767643, 5453423}})}
+	w := testTaggedUnion{Select: 2, Union: newTestUnion([]uint32{3287743, 98731})}
+	x := testTaggedUnion{Select: 3, Union: newTestUnion(uint16(4321))}
 	y := testTaggedUnion{Select: 4}
 	z := testTaggedUnion{Select: 1} // Test that the zero value gets marshalled
 
@@ -531,18 +530,18 @@ func (s *muSuite) TestMarshalAndUnmarshalUnion(c *C) {
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: &testUnion{}}, testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: newTestUnion(emptyValue)}, testTaggedUnion{Select: 1, Union: newTestUnion(&testStruct{B: &u32_0, D: nil})}}})
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: &testUnion{}}, testTaggedUnion{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion{Select: 4, Union: newTestUnion(emptyValue)}, testTaggedUnion{Select: 1, Union: newTestUnion(&testStruct{B: &u32_0, D: nil})}}})
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 	var u32 uint32 = 657763432
-	v := testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
-	w := testTaggedUnion2{Select: 2, Union: &testUnion{B: []uint32{3287743, 98731}}}
-	x := testTaggedUnion2{Select: 3, Union: &testUnion{C: uint16(4321)}}
+	v := testTaggedUnion2{Select: 1, Union: newTestUnion(&testStruct{56324, &u32, true, []uint32{98767643, 5453423}})}
+	w := testTaggedUnion2{Select: 2, Union: newTestUnion([]uint32{3287743, 98731})}
+	x := testTaggedUnion2{Select: 3, Union: newTestUnion(uint16(4321))}
 	y := testTaggedUnion2{Select: 4}
 	z := testTaggedUnion2{Select: 1} // Test that the zero value gets marshalled
 
@@ -553,33 +552,11 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionUsingSelectField(c *C) {
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: &testUnion{}}, testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32(nil)}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: newTestUnion(emptyValue)}, testTaggedUnion2{Select: 1, Union: newTestUnion(&testStruct{B: &u32_0, D: []uint32(nil)})}}})
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
 		values:                []interface{}{v, w, x, y, z},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: &testUnion{}}, testTaggedUnion2{Select: 1, Union: &testUnion{A: &testStruct{B: &u32_0, D: []uint32(nil)}}}}})
-}
-
-func (s *muSuite) TestMarshalAndUnmarshalUnion3(c *C) {
-	var u32 uint32 = 657763432
-	v := &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{56324, &u32, true, []uint32{98767643, 5453423}}}}
-	w := &testTaggedUnion3{Select: 2, Union: testUnion{B: []uint32{3287743, 98731}}}
-	x := &testTaggedUnion3{Select: 3, Union: testUnion{C: uint16(4321)}}
-	y := &testTaggedUnion3{Select: 4}
-	z := &testTaggedUnion3{Select: 1} // Test that the zero value gets marshalled
-
-	expected := internal_testutil.DecodeHexString(c, "00000001dc042734ac68010000000205e3131b0053366f000000020000000200322abf000181ab0000000310e100000004000000010000000000000000000000")
-
-	var u32_0 uint32
-
-	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{v, w, x, y, z},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
-	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{v, w, x, y, z},
-		expected:              expected,
-		unmarshalExpectedVals: []interface{}{v, w, x, y, &testTaggedUnion3{Select: 1, Union: testUnion{A: &testStruct{B: &u32_0, D: nil}}}}})
+		unmarshalExpectedVals: []interface{}{v, w, x, testTaggedUnion2{Select: 4, Union: newTestUnion(emptyValue)}, testTaggedUnion2{Select: 1, Union: newTestUnion(&testStruct{B: &u32_0, D: []uint32(nil)})}}})
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalCustomMarshaller(c *C) {
@@ -713,10 +690,6 @@ func (s *muSuite) TestDetermineTPMKindStruct(c *C) {
 
 func (s *muSuite) TestDetermineTPMKindTaggedUnion(c *C) {
 	s.testDetermineTPMKind(c, testTaggedUnion{}, TPMKindTaggedUnion)
-}
-
-func (s *muSuite) TestDetermineTPMKindTaggedUnion2(c *C) {
-	s.testDetermineTPMKind(c, testTaggedUnion3{}, TPMKindTaggedUnion)
 }
 
 func (s *muSuite) TestDetermineTPMKindUnion(c *C) {
@@ -860,13 +833,21 @@ func (s *muSuite) TestErrorFromCustomType(c *C) {
 	c.Check(i, Equals, 1)
 }
 
-func (s *muSuite) TestMarshalAndUnmarshalUnionWithInvalidSelector(c *C) {
+func (s *muSuite) TestMarshalUnionWithInvalidSelector(c *C) {
 	w := testTaggedUnion{Select: 259}
-	b, err := MarshalToBytes(w)
-	c.Check(err, IsNil)
+	_, err := MarshalToBytes(w)
+	c.Check(err, ErrorMatches, "cannot marshal argument 0 whilst processing element of type mu_test.testUnion: invalid selector value: 259\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu_test.testTaggedUnion field Union\n"+
+		"=== END STACK ===\n")
 
-	var uw testTaggedUnion
-	_, err = UnmarshalFromBytes(b, &uw)
+	var e *InvalidSelectorError
+	c.Check(err, internal_testutil.ErrorAs, &e)
+}
+
+func (s *muSuite) TestUnmarshalUnionWithInvalidSelector(c *C) {
+	var w testTaggedUnion
+	_, err := UnmarshalFromBytes([]byte{0x00, 0x00, 0x01, 0x03}, &w)
 	c.Check(err, ErrorMatches, "cannot unmarshal argument 0 whilst processing element of type mu_test.testUnion: invalid selector value: 259\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testTaggedUnion field Union\n"+
@@ -874,8 +855,6 @@ func (s *muSuite) TestMarshalAndUnmarshalUnionWithInvalidSelector(c *C) {
 
 	var e *InvalidSelectorError
 	c.Check(err, internal_testutil.ErrorAs, &e)
-
-	c.Check(IsValid(w), internal_testutil.IsFalse)
 }
 
 func (s *muSuite) TestUnmarshalBadSizedBuffer(c *C) {
@@ -910,15 +889,6 @@ func (s *muSuite) TestMarshalInvalidTaggedUnion(c *C) {
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "selector name foo for union type mu_test.testUnion does not reference a valid field\n\n"+
 		"=== BEGIN STACK ===\n"+
 		"... mu_test.testInvalidTaggedUnion field A\n"+
-		"=== END STACK ===\n")
-	c.Check(IsValid(a), internal_testutil.IsFalse)
-}
-
-func (s *muSuite) TestMarshalNonAddressableUnion(c *C) {
-	a := testTaggedUnion3{}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "union type mu_test.testUnion needs to be addressable\n\n"+
-		"=== BEGIN STACK ===\n"+
-		"... mu_test.testTaggedUnion3 field Union\n"+
 		"=== END STACK ===\n")
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
@@ -1113,15 +1083,6 @@ func (s *muSuite) TestMarshalStructContainingInvalidSliceField4(c *C) {
 func (s *muSuite) TestMarshalInvalidTaggedUnion2(c *C) {
 	a := testInvalidTaggedUnion2{}
 	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu_test.testInvalidTaggedUnion2 \\(struct type cannot represent both a union and tagged union\\)")
-	c.Check(IsValid(a), internal_testutil.IsFalse)
-}
-
-func (s *muSuite) TestMarshalInvalidUnion(c *C) {
-	a := testTaggedUnion{Select: math.MaxUint32}
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "Union.Select implementation for type mu_test.testUnion returned a non-member pointer\n\n"+
-		"=== BEGIN STACK ===\n"+
-		"... mu_test.testTaggedUnion field Union\n"+
-		"=== END STACK ===\n")
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
 

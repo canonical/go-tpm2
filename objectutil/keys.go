@@ -35,16 +35,19 @@ func NewRSAPublicKey(key *rsa.PublicKey, options ...PublicTemplateOption) (*tpm2
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
-				Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull}}}}
+				Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
+			},
+		),
+	}
 	applyPublicTemplateOptions(pub, options...)
 
 	keyBits := uint16(key.N.BitLen())
-	switch pub.Params.RSADetail.KeyBits {
+	switch pub.Params.RSADetail().KeyBits {
 	case 0:
-		pub.Params.RSADetail.KeyBits = keyBits
+		pub.Params.RSADetail().KeyBits = keyBits
 	case keyBits:
 		// ok
 	default:
@@ -52,19 +55,19 @@ func NewRSAPublicKey(key *rsa.PublicKey, options ...PublicTemplateOption) (*tpm2
 	}
 
 	exponent := uint32(key.E)
-	switch pub.Params.RSADetail.Exponent {
+	switch pub.Params.RSADetail().Exponent {
 	case 0:
-		pub.Params.RSADetail.Exponent = exponent
+		pub.Params.RSADetail().Exponent = exponent
 	case exponent:
 		// ok
 	default:
 		return nil, errors.New("invalid RSA key exponent")
 	}
-	if pub.Params.RSADetail.Exponent == tpm2.DefaultRSAExponent {
-		pub.Params.RSADetail.Exponent = 0
+	if pub.Params.RSADetail().Exponent == tpm2.DefaultRSAExponent {
+		pub.Params.RSADetail().Exponent = 0
 	}
 
-	pub.Unique = &tpm2.PublicIDU{RSA: key.N.Bytes()}
+	pub.Unique = tpm2.MakePublicIDUnion(tpm2.PublicKeyRSA(key.N.Bytes()))
 
 	return pub, nil
 }
@@ -96,26 +99,31 @@ func NewECCPublicKey(key *ecdsa.PublicKey, options ...PublicTemplateOption) (*tp
 		Type:    tpm2.ObjectTypeECC,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			ECCDetail: &tpm2.ECCParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.ECCParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme:    tpm2.ECCScheme{Scheme: tpm2.ECCSchemeNull},
-				KDF:       tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull}}}}
+				KDF:       tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull},
+			},
+		),
+	}
 	applyPublicTemplateOptions(pub, options...)
 
-	switch pub.Params.ECCDetail.CurveID {
+	switch pub.Params.ECCDetail().CurveID {
 	case tpm2.ECCCurve(0):
-		pub.Params.ECCDetail.CurveID = curve
+		pub.Params.ECCDetail().CurveID = curve
 	case curve:
 		// ok:
 	default:
 		return nil, errors.New("invalid elliptic curve")
 	}
 
-	pub.Unique = &tpm2.PublicIDU{
-		ECC: &tpm2.ECCPoint{
+	pub.Unique = tpm2.MakePublicIDUnion(
+		tpm2.ECCPoint{
 			X: zeroExtendBytes(key.X, key.Params().BitSize/8),
-			Y: zeroExtendBytes(key.Y, key.Params().BitSize/8)}}
+			Y: zeroExtendBytes(key.Y, key.Params().BitSize/8),
+		},
+	)
 
 	return pub, nil
 }
@@ -140,9 +148,12 @@ func NewSealedObject(rand io.Reader, data []byte, authValue tpm2.Auth, options .
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	applyPublicTemplateOptions(pub, options...)
 
 	if len(authValue) > pub.NameAlg.Size() {
@@ -153,7 +164,8 @@ func NewSealedObject(rand io.Reader, data []byte, authValue tpm2.Auth, options .
 		Type:      tpm2.ObjectTypeKeyedHash,
 		AuthValue: make(tpm2.Auth, pub.NameAlg.Size()),
 		SeedValue: make(tpm2.Digest, pub.NameAlg.Size()),
-		Sensitive: &tpm2.SensitiveCompositeU{Bits: data}}
+		Sensitive: tpm2.MakeSensitiveCompositeUnion(tpm2.SensitiveData(data)),
+	}
 	copy(sensitive.AuthValue, authValue)
 
 	if _, err := io.ReadFull(rand, sensitive.SeedValue); err != nil {
@@ -162,8 +174,8 @@ func NewSealedObject(rand io.Reader, data []byte, authValue tpm2.Auth, options .
 
 	h := pub.NameAlg.NewHash()
 	h.Write(sensitive.SeedValue)
-	h.Write(sensitive.Sensitive.Bits)
-	pub.Unique = &tpm2.PublicIDU{KeyedHash: h.Sum(nil)}
+	h.Write(sensitive.Sensitive.Bits())
+	pub.Unique = tpm2.MakePublicIDUnion(tpm2.Digest(h.Sum(nil)))
 
 	return pub, sensitive, nil
 }
@@ -200,18 +212,22 @@ func NewSymmetricKey(rand io.Reader, usage Usage, key []byte, authValue tpm2.Aut
 		Type:    tpm2.ObjectTypeSymCipher,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   attrs,
-		Params: &tpm2.PublicParamsU{
-			SymDetail: &tpm2.SymCipherParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.SymCipherParams{
 				Sym: tpm2.SymDefObject{
 					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   new(tpm2.SymKeyBitsU),
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}}}}
+					KeyBits:   tpm2.MakeSymKeyBitsUnion(uint16(0)),
+					Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+				},
+			},
+		),
+	}
 	applyPublicTemplateOptions(pub, options...)
 
 	symKeyBits := uint16(len(key) * 8)
-	switch pub.Params.SymDetail.Sym.KeyBits.Sym {
+	switch pub.Params.SymDetail().Sym.KeyBits.Sym() {
 	case 0:
-		pub.Params.SymDetail.Sym.KeyBits.Sym = symKeyBits
+		pub.Params.SymDetail().Sym.KeyBits = tpm2.MakeSymKeyBitsUnion(uint16(symKeyBits))
 	case symKeyBits:
 		// ok
 	default:
@@ -226,7 +242,8 @@ func NewSymmetricKey(rand io.Reader, usage Usage, key []byte, authValue tpm2.Aut
 		Type:      tpm2.ObjectTypeSymCipher,
 		AuthValue: make(tpm2.Auth, pub.NameAlg.Size()),
 		SeedValue: make(tpm2.Digest, pub.NameAlg.Size()),
-		Sensitive: &tpm2.SensitiveCompositeU{Sym: key}}
+		Sensitive: tpm2.MakeSensitiveCompositeUnion(tpm2.SymKey(key)),
+	}
 	copy(sensitive.AuthValue, authValue)
 
 	if _, err := io.ReadFull(rand, sensitive.SeedValue); err != nil {
@@ -235,8 +252,8 @@ func NewSymmetricKey(rand io.Reader, usage Usage, key []byte, authValue tpm2.Aut
 
 	h := pub.NameAlg.NewHash()
 	h.Write(sensitive.SeedValue)
-	h.Write(sensitive.Sensitive.Sym)
-	pub.Unique = &tpm2.PublicIDU{Sym: h.Sum(nil)}
+	h.Write(sensitive.Sensitive.Sym())
+	pub.Unique = tpm2.MakePublicIDUnion(tpm2.Digest(h.Sum(nil)))
 
 	return pub, sensitive, nil
 }
@@ -261,12 +278,17 @@ func NewHMACKey(rand io.Reader, key []byte, authValue tpm2.Auth, options ...Publ
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrUserWithAuth | tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
 				Scheme: tpm2.KeyedHashScheme{
 					Scheme: tpm2.KeyedHashSchemeHMAC,
-					Details: &tpm2.SchemeKeyedHashU{
-						HMAC: &tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256}}}}}}
+					Details: tpm2.MakeSchemeKeyedHashUnion(
+						tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256},
+					),
+				},
+			},
+		),
+	}
 	applyPublicTemplateOptions(pub, options...)
 
 	if len(authValue) > pub.NameAlg.Size() {
@@ -277,7 +299,8 @@ func NewHMACKey(rand io.Reader, key []byte, authValue tpm2.Auth, options ...Publ
 		Type:      tpm2.ObjectTypeKeyedHash,
 		AuthValue: make(tpm2.Auth, pub.NameAlg.Size()),
 		SeedValue: make(tpm2.Digest, pub.NameAlg.Size()),
-		Sensitive: &tpm2.SensitiveCompositeU{Bits: key}}
+		Sensitive: tpm2.MakeSensitiveCompositeUnion(tpm2.SensitiveData(key)),
+	}
 	copy(sensitive.AuthValue, authValue)
 
 	if _, err := io.ReadFull(rand, sensitive.SeedValue); err != nil {
@@ -286,8 +309,8 @@ func NewHMACKey(rand io.Reader, key []byte, authValue tpm2.Auth, options ...Publ
 
 	h := pub.NameAlg.NewHash()
 	h.Write(sensitive.SeedValue)
-	h.Write(sensitive.Sensitive.Bits)
-	pub.Unique = &tpm2.PublicIDU{KeyedHash: h.Sum(nil)}
+	h.Write(sensitive.Sensitive.Bits())
+	pub.Unique = tpm2.MakePublicIDUnion(tpm2.Digest(h.Sum(nil)))
 
 	return pub, sensitive, nil
 }

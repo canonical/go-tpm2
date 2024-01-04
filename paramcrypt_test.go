@@ -228,8 +228,8 @@ func (s *paramcryptSuite) TestEncryptCommandParameterAES(c *C) {
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("1234")}},
 		decryptSessionIndex: 0,
 		cpBytes:             append([]byte{0, 3}, []byte("foobar")...),
@@ -247,7 +247,7 @@ func (s *paramcryptSuite) TestEncryptCommandParameterXOR(c *C) {
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmXOR,
-						KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}}}}},
+						KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		decryptSessionIndex: 0,
 		cpBytes:             append([]byte{0, 6}, []byte("foobar")...),
@@ -266,8 +266,8 @@ func (s *paramcryptSuite) TestEncryptCommandParameterExtra(c *C) {
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		decryptSessionIndex: 1,
 		cpBytes:             append([]byte{0, 3}, []byte("foobar")...),
@@ -286,8 +286,8 @@ func (s *paramcryptSuite) TestEncryptCommandParameterExtraNoAuth(c *C) {
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
 		decryptSessionIndex: 1,
 		cpBytes:             append([]byte{0, 6}, []byte("foobar")...),
 		expected:            []byte{0x00, 0x06, 0x10, 0x1d, 0x80, 0xa7, 0x7e, 0x09}})
@@ -366,8 +366,8 @@ func (s *paramcryptSuite) TestDecryptResponseParameterAES(c *C) {
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("1234")}},
 		encryptSessionIndex: 0,
 		rpBytes:             []byte{0x00, 0x03, 0xf6, 0x86, 0x65, 'f', 'o', 'o'},
@@ -385,7 +385,7 @@ func (s *paramcryptSuite) TestDecryptResponseParameterXOR(c *C) {
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmXOR,
-						KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}}}}},
+						KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		encryptSessionIndex: 0,
 		rpBytes:             []byte{0x00, 0x06, 0xb8, 0x5d, 0xe0, 0xa8, 0x1a, 0x5d},
@@ -404,8 +404,8 @@ func (s *paramcryptSuite) TestDecryptResponseParameterExtra(c *C) {
 					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 256},
-						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
+						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		encryptSessionIndex: 1,
 		rpBytes:             []byte{0x00, 0x03, 0x85, 0x5e, 0xfb, 'f', 'o', 'o'},
@@ -427,14 +427,14 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   &SymKeyBitsU{Sym: 128},
-				Mode:      &SymModeU{Sym: SymModeCFB}},
+				KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+				Mode:      MakeSymModeUnion(SymModeCFB)},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}},
+				KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -469,8 +469,10 @@ func TestParameterEncryptionSingleExtra(t *testing.T) {
 							Type:    ObjectTypeKeyedHash,
 							NameAlg: HashAlgorithmSHA256,
 							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth | AttrNoDA,
-							Params: &PublicParamsU{
-								KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+							Params: MakePublicParamsUnion(
+								KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}},
+							),
+						}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 						sessionContext.SetAttrs(AttrContinueSession | data2.attrs)
@@ -556,14 +558,14 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   &SymKeyBitsU{Sym: 128},
-				Mode:      &SymModeU{Sym: SymModeCFB}},
+				KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+				Mode:      MakeSymModeUnion(SymModeCFB)},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}},
+				KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -598,8 +600,10 @@ func TestParameterEncryptionSharedWithAuth(t *testing.T) {
 						Type:    ObjectTypeKeyedHash,
 						NameAlg: HashAlgorithmSHA256,
 						Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth | AttrNoDA,
-						Params: &PublicParamsU{
-							KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+						Params: MakePublicParamsUnion(
+							KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}},
+						),
+					}
 					sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 					outPrivate, outPublic, _, _, _, err := tpm.Create(primary, &sensitive, &template, nil, nil, sessionContext)
@@ -651,14 +655,14 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 			desc: "AES",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmAES,
-				KeyBits:   &SymKeyBitsU{Sym: 128},
-				Mode:      &SymModeU{Sym: SymModeCFB}},
+				KeyBits:   MakeSymKeyBitsUnion[uint16](128),
+				Mode:      MakeSymModeUnion(SymModeCFB)},
 		},
 		{
 			desc: "XOR",
 			symmetric: SymDef{
 				Algorithm: SymAlgorithmXOR,
-				KeyBits:   &SymKeyBitsU{XOR: HashAlgorithmSHA256}},
+				KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)},
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -698,8 +702,10 @@ func TestParameterEncryptionMultipleExtra(t *testing.T) {
 							Type:    ObjectTypeKeyedHash,
 							NameAlg: HashAlgorithmSHA256,
 							Attrs:   AttrFixedTPM | AttrFixedParent | AttrUserWithAuth | AttrNoDA,
-							Params: &PublicParamsU{
-								KeyedHashDetail: &KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}}}}
+							Params: MakePublicParamsUnion(
+								KeyedHashParams{Scheme: KeyedHashScheme{Scheme: KeyedHashSchemeNull}},
+							),
+						}
 						sensitive := SensitiveCreate{Data: secret, UserAuth: testAuth}
 
 						sessionContext1.SetAttrs(AttrContinueSession | data2.attrs1)

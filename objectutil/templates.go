@@ -235,19 +235,43 @@ func WithAuthPolicy(policy tpm2.Digest) PublicTemplateOption {
 // Symmetric keys and asymmetric storage keys always have a symmetric scheme. Other keys never have
 // a symmetric scheme. Only [tpm2.SymModeCFB] is valid for storage keys.
 func WithSymmetricScheme(alg tpm2.SymObjectAlgorithmId, keyBits uint16, mode tpm2.SymModeId) PublicTemplateOption {
-	return func(pub *tpm2.Public) {
-		sym := tpm2.SymDefObject{
-			Algorithm: alg,
-			KeyBits:   &tpm2.SymKeyBitsU{Sym: keyBits},
-			Mode:      &tpm2.SymModeU{Sym: mode}}
+	var b tpm2.SymKeyBitsUnion
+	switch alg {
+	case tpm2.SymObjectAlgorithmAES, tpm2.SymObjectAlgorithmSM4, tpm2.SymObjectAlgorithmCamellia:
+		b = tpm2.MakeSymKeyBitsUnion(keyBits)
+	case tpm2.SymObjectAlgorithmNull:
+		b = tpm2.MakeSymKeyBitsUnion(tpm2.EmptyValue)
+	default:
+		panic("invalid algorithm")
+	}
 
+	var m tpm2.SymModeUnion
+	switch alg {
+	case tpm2.SymObjectAlgorithmAES, tpm2.SymObjectAlgorithmSM4, tpm2.SymObjectAlgorithmCamellia:
+		m = tpm2.MakeSymModeUnion(mode)
+	case tpm2.SymObjectAlgorithmNull:
+		if mode != tpm2.SymModeNull {
+			panic("invalid mode")
+		}
+		m = tpm2.MakeSymModeUnion(tpm2.EmptyValue)
+	default:
+		panic("invalid algorithm")
+	}
+
+	sym := tpm2.SymDefObject{
+		Algorithm: alg,
+		KeyBits:   b,
+		Mode:      m,
+	}
+
+	return func(pub *tpm2.Public) {
 		switch pub.Type {
 		case tpm2.ObjectTypeRSA:
-			pub.Params.RSADetail.Symmetric = sym
+			pub.Params.RSADetail().Symmetric = sym
 		case tpm2.ObjectTypeECC:
-			pub.Params.ECCDetail.Symmetric = sym
+			pub.Params.ECCDetail().Symmetric = sym
 		case tpm2.ObjectTypeSymCipher:
-			pub.Params.SymDetail.Sym = sym
+			pub.Params.SymDetail().Sym = sym
 		default:
 			panic("invalid object type")
 		}
@@ -264,8 +288,9 @@ func WithSymmetricUnique(unique tpm2.Digest) PublicTemplateOption {
 			panic("invalid object type")
 		}
 
-		pub.Unique = &tpm2.PublicIDU{Sym: make([]byte, len(unique))}
-		copy(pub.Unique.Sym, unique)
+		id := make(tpm2.Digest, len(unique))
+		copy(id, unique)
+		pub.Unique = tpm2.MakePublicIDUnion(id)
 	}
 }
 
@@ -277,7 +302,7 @@ func WithRSAKeyBits(keyBits uint16) PublicTemplateOption {
 			panic("invalid object type")
 		}
 
-		pub.Params.RSADetail.KeyBits = keyBits
+		pub.Params.RSADetail().KeyBits = keyBits
 	}
 }
 
@@ -292,8 +317,8 @@ func WithRSAParams(keyBits uint16, exponent uint32) PublicTemplateOption {
 		if exponent == tpm2.DefaultRSAExponent {
 			exponent = 0
 		}
-		pub.Params.RSADetail.KeyBits = keyBits
-		pub.Params.RSADetail.Exponent = exponent
+		pub.Params.RSADetail().KeyBits = keyBits
+		pub.Params.RSADetail().Exponent = exponent
 	}
 }
 
@@ -303,29 +328,35 @@ func WithRSAParams(keyBits uint16, exponent uint32) PublicTemplateOption {
 // Attestation keys always have a signing scheme. Storage keys never have a scheme set. Decrypt or
 // signing keys may have an appropriate scheme set.
 func WithRSAScheme(scheme tpm2.RSASchemeId, hashAlg tpm2.HashAlgorithmId) PublicTemplateOption {
+	s := tpm2.RSAScheme{Scheme: scheme}
+
+	switch scheme {
+	case tpm2.RSASchemeRSASSA:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.SigSchemeRSASSA{HashAlg: hashAlg})
+	case tpm2.RSASchemeRSAES:
+		if hashAlg != tpm2.HashAlgorithmNull {
+			panic("invalid digest")
+		}
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.EncSchemeRSAES{})
+	case tpm2.RSASchemeRSAPSS:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.SigSchemeRSAPSS{HashAlg: hashAlg})
+	case tpm2.RSASchemeOAEP:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.EncSchemeOAEP{HashAlg: hashAlg})
+	case tpm2.RSASchemeNull:
+		if hashAlg != tpm2.HashAlgorithmNull {
+			panic("invalid digest")
+		}
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.EmptyValue)
+	default:
+		panic("invalid scheme")
+	}
+
 	return func(pub *tpm2.Public) {
 		if pub.Type != tpm2.ObjectTypeRSA {
 			panic("invalid object type")
 		}
 
-		s := tpm2.RSAScheme{
-			Scheme:  scheme,
-			Details: new(tpm2.AsymSchemeU)}
-		switch scheme {
-		case tpm2.RSASchemeRSASSA:
-			s.Details.RSASSA = &tpm2.SigSchemeRSASSA{HashAlg: hashAlg}
-		case tpm2.RSASchemeRSAES:
-			s.Details.RSAES = new(tpm2.EncSchemeRSAES)
-			if hashAlg != tpm2.HashAlgorithmNull {
-				panic("invalid digest")
-			}
-		case tpm2.RSASchemeRSAPSS:
-			s.Details.RSAPSS = &tpm2.SigSchemeRSAPSS{HashAlg: hashAlg}
-		case tpm2.RSASchemeOAEP:
-			s.Details.OAEP = &tpm2.EncSchemeOAEP{HashAlg: hashAlg}
-		}
-
-		pub.Params.RSADetail.Scheme = s
+		pub.Params.RSADetail().Scheme = s
 	}
 }
 
@@ -339,8 +370,9 @@ func WithRSAUnique(unique tpm2.PublicKeyRSA) PublicTemplateOption {
 			panic("invalid object type")
 		}
 
-		pub.Unique = &tpm2.PublicIDU{RSA: make([]byte, len(unique))}
-		copy(pub.Unique.RSA, unique)
+		id := make(tpm2.PublicKeyRSA, len(unique))
+		copy(id, unique)
+		pub.Unique = tpm2.MakePublicIDUnion(id)
 	}
 }
 
@@ -352,7 +384,7 @@ func WithECCCurve(curve tpm2.ECCCurve) PublicTemplateOption {
 			panic("invalid object type")
 		}
 
-		pub.Params.ECCDetail.CurveID = curve
+		pub.Params.ECCDetail().CurveID = curve
 	}
 }
 
@@ -362,30 +394,36 @@ func WithECCCurve(curve tpm2.ECCCurve) PublicTemplateOption {
 // Attestation keys always have a signing scheme. Storage keys never have a scheme set. Key
 // exchange or signing keys may have an appropriate scheme set.
 func WithECCScheme(scheme tpm2.ECCSchemeId, hashAlg tpm2.HashAlgorithmId) PublicTemplateOption {
+	s := tpm2.ECCScheme{Scheme: scheme}
+
+	switch scheme {
+	case tpm2.ECCSchemeECDSA:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.SigSchemeECDSA{HashAlg: hashAlg})
+	case tpm2.ECCSchemeECDH:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.KeySchemeECDH{HashAlg: hashAlg})
+	case tpm2.ECCSchemeECDAA:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.SigSchemeECDAA{HashAlg: hashAlg})
+	case tpm2.ECCSchemeSM2:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.SigSchemeSM2{HashAlg: hashAlg})
+	case tpm2.ECCSchemeECSchnorr:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.SigSchemeECSchnorr{HashAlg: hashAlg})
+	case tpm2.ECCSchemeECMQV:
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.KeySchemeECMQV{HashAlg: hashAlg})
+	case tpm2.ECCSchemeNull:
+		if hashAlg != tpm2.HashAlgorithmNull {
+			panic("invalid digest")
+		}
+		s.Details = tpm2.MakeAsymSchemeUnion(tpm2.EmptyValue)
+	default:
+		panic("invalid scheme")
+	}
+
 	return func(pub *tpm2.Public) {
 		if pub.Type != tpm2.ObjectTypeECC {
 			panic("invalid object type")
 		}
 
-		s := tpm2.ECCScheme{
-			Scheme:  scheme,
-			Details: new(tpm2.AsymSchemeU)}
-		switch scheme {
-		case tpm2.ECCSchemeECDSA:
-			s.Details.ECDSA = &tpm2.SigSchemeECDSA{HashAlg: hashAlg}
-		case tpm2.ECCSchemeECDH:
-			s.Details.ECDH = &tpm2.KeySchemeECDH{HashAlg: hashAlg}
-		case tpm2.ECCSchemeECDAA:
-			s.Details.ECDAA = &tpm2.SigSchemeECDAA{HashAlg: hashAlg}
-		case tpm2.ECCSchemeSM2:
-			s.Details.SM2 = &tpm2.SigSchemeSM2{HashAlg: hashAlg}
-		case tpm2.ECCSchemeECSchnorr:
-			s.Details.ECSchnorr = &tpm2.SigSchemeECSchnorr{HashAlg: hashAlg}
-		case tpm2.ECCSchemeECMQV:
-			s.Details.ECMQV = &tpm2.KeySchemeECMQV{HashAlg: hashAlg}
-		}
-
-		pub.Params.ECCDetail.Scheme = s
+		pub.Params.ECCDetail().Scheme = s
 	}
 }
 
@@ -399,12 +437,14 @@ func WithECCUnique(unique *tpm2.ECCPoint) PublicTemplateOption {
 			panic("invalid object type")
 		}
 
-		pub.Unique = &tpm2.PublicIDU{
-			ECC: &tpm2.ECCPoint{
+		pub.Unique = tpm2.MakePublicIDUnion(
+			tpm2.ECCPoint{
 				X: make([]byte, len(unique.X)),
-				Y: make([]byte, len(unique.Y))}}
-		copy(pub.Unique.ECC.X, unique.X)
-		copy(pub.Unique.ECC.Y, unique.Y)
+				Y: make([]byte, len(unique.Y)),
+			},
+		)
+		copy(pub.Unique.ECC().X, unique.X)
+		copy(pub.Unique.ECC().Y, unique.Y)
 	}
 }
 
@@ -413,11 +453,11 @@ func WithECCUnique(unique *tpm2.ECCPoint) PublicTemplateOption {
 // [tpm2.KeyedHashSchemeHMAC].
 func WithHMACDigest(alg tpm2.HashAlgorithmId) PublicTemplateOption {
 	return func(pub *tpm2.Public) {
-		if pub.Type != tpm2.ObjectTypeKeyedHash || pub.Params.KeyedHashDetail.Scheme.Scheme != tpm2.KeyedHashSchemeHMAC {
+		if pub.Type != tpm2.ObjectTypeKeyedHash || pub.Params.KeyedHashDetail().Scheme.Scheme != tpm2.KeyedHashSchemeHMAC {
 			panic("invalid object type")
 		}
 
-		pub.Params.KeyedHashDetail.Scheme.Details.HMAC = &tpm2.SchemeHMAC{HashAlg: alg}
+		pub.Params.KeyedHashDetail().Scheme.Details = tpm2.MakeSchemeKeyedHashUnion(tpm2.SchemeHMAC{HashAlg: alg})
 	}
 }
 
@@ -427,11 +467,11 @@ func WithHMACDigest(alg tpm2.HashAlgorithmId) PublicTemplateOption {
 // derivation parents.
 func WithDerivationScheme(hashAlg tpm2.HashAlgorithmId, kdf tpm2.KDFAlgorithmId) PublicTemplateOption {
 	return func(pub *tpm2.Public) {
-		if pub.Type != tpm2.ObjectTypeKeyedHash || pub.Params.KeyedHashDetail.Scheme.Scheme != tpm2.KeyedHashSchemeXOR || pub.Attrs&(tpm2.AttrRestricted|tpm2.AttrDecrypt|tpm2.AttrSign) != (tpm2.AttrRestricted|tpm2.AttrDecrypt) {
+		if pub.Type != tpm2.ObjectTypeKeyedHash || pub.Params.KeyedHashDetail().Scheme.Scheme != tpm2.KeyedHashSchemeXOR || pub.Attrs&(tpm2.AttrRestricted|tpm2.AttrDecrypt|tpm2.AttrSign) != (tpm2.AttrRestricted|tpm2.AttrDecrypt) {
 			panic("invalid object type")
 		}
 
-		pub.Params.KeyedHashDetail.Scheme.Details.XOR = &tpm2.SchemeXOR{HashAlg: hashAlg, KDF: kdf}
+		pub.Params.KeyedHashDetail().Scheme.Details = tpm2.MakeSchemeKeyedHashUnion(tpm2.SchemeXOR{HashAlg: hashAlg, KDF: kdf})
 	}
 }
 
@@ -445,8 +485,9 @@ func WithKeyedHashUnique(unique tpm2.Digest) PublicTemplateOption {
 			panic("invalid object type")
 		}
 
-		pub.Unique = &tpm2.PublicIDU{KeyedHash: make([]byte, len(unique))}
-		copy(pub.Unique.KeyedHash, unique)
+		id := make(tpm2.Digest, len(unique))
+		copy(id, unique)
+		pub.Unique = tpm2.MakePublicIDUnion(id)
 	}
 }
 
@@ -473,15 +514,19 @@ func NewRSAStorageKeyTemplate(options ...PublicTemplateOption) *tpm2.Public {
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{
 					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
+					KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](128),
+					Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+				},
 				Scheme:   tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
 				KeyBits:  2048,
-				Exponent: 0}}}
+				Exponent: 0,
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -503,15 +548,20 @@ func NewRSAAttestationKeyTemplate(options ...PublicTemplateOption) *tpm2.Public 
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme: tpm2.RSAScheme{
 					Scheme: tpm2.RSASchemeRSAPSS,
-					Details: &tpm2.AsymSchemeU{
-						RSAPSS: &tpm2.SigSchemeRSAPSS{HashAlg: tpm2.HashAlgorithmSHA256}}},
+					Details: tpm2.MakeAsymSchemeUnion(
+						tpm2.SigSchemeRSAPSS{HashAlg: tpm2.HashAlgorithmSHA256},
+					),
+				},
 				KeyBits:  2048,
-				Exponent: 0}}}
+				Exponent: 0,
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -545,12 +595,15 @@ func NewRSAKeyTemplate(usage Usage, options ...PublicTemplateOption) *tpm2.Publi
 		Type:    tpm2.ObjectTypeRSA,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   attrs,
-		Params: &tpm2.PublicParamsU{
-			RSADetail: &tpm2.RSAParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.RSAParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme:    tpm2.RSAScheme{Scheme: tpm2.RSASchemeNull},
 				KeyBits:   2048,
-				Exponent:  0}}}
+				Exponent:  0,
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -572,15 +625,19 @@ func NewECCStorageKeyTemplate(options ...PublicTemplateOption) *tpm2.Public {
 		Type:    tpm2.ObjectTypeECC,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt,
-		Params: &tpm2.PublicParamsU{
-			ECCDetail: &tpm2.ECCParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.ECCParams{
 				Symmetric: tpm2.SymDefObject{
 					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}},
+					KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](128),
+					Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+				},
 				Scheme:  tpm2.ECCScheme{Scheme: tpm2.ECCSchemeNull},
 				CurveID: tpm2.ECCCurveNIST_P256,
-				KDF:     tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull}}}}
+				KDF:     tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -602,15 +659,20 @@ func NewECCAttestationKeyTemplate(options ...PublicTemplateOption) *tpm2.Public 
 		Type:    tpm2.ObjectTypeECC,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			ECCDetail: &tpm2.ECCParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.ECCParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme: tpm2.ECCScheme{
 					Scheme: tpm2.ECCSchemeECDSA,
-					Details: &tpm2.AsymSchemeU{
-						ECDSA: &tpm2.SigSchemeECDSA{HashAlg: tpm2.HashAlgorithmSHA256}}},
+					Details: tpm2.MakeAsymSchemeUnion(
+						tpm2.SigSchemeECDSA{HashAlg: tpm2.HashAlgorithmSHA256},
+					),
+				},
 				CurveID: tpm2.ECCCurveNIST_P256,
-				KDF:     tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull}}}}
+				KDF:     tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -644,12 +706,15 @@ func NewECCKeyTemplate(usage Usage, options ...PublicTemplateOption) *tpm2.Publi
 		Type:    tpm2.ObjectTypeECC,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   attrs,
-		Params: &tpm2.PublicParamsU{
-			ECCDetail: &tpm2.ECCParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.ECCParams{
 				Symmetric: tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull},
 				Scheme:    tpm2.ECCScheme{Scheme: tpm2.ECCSchemeNull},
 				CurveID:   tpm2.ECCCurveNIST_P256,
-				KDF:       tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull}}}}
+				KDF:       tpm2.KDFScheme{Scheme: tpm2.KDFAlgorithmNull},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -672,12 +737,16 @@ func NewSymmetricStorageKeyTemplate(options ...PublicTemplateOption) *tpm2.Publi
 		Type:    tpm2.ObjectTypeSymCipher,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt,
-		Params: &tpm2.PublicParamsU{
-			SymDetail: &tpm2.SymCipherParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.SymCipherParams{
 				Sym: tpm2.SymDefObject{
 					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}}}}
+					KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](128),
+					Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+				},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -711,12 +780,16 @@ func NewSymmetricKeyTemplate(usage Usage, options ...PublicTemplateOption) *tpm2
 		Type:    tpm2.ObjectTypeSymCipher,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   attrs,
-		Params: &tpm2.PublicParamsU{
-			SymDetail: &tpm2.SymCipherParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.SymCipherParams{
 				Sym: tpm2.SymDefObject{
 					Algorithm: tpm2.SymObjectAlgorithmAES,
-					KeyBits:   &tpm2.SymKeyBitsU{Sym: 128},
-					Mode:      &tpm2.SymModeU{Sym: tpm2.SymModeCFB}}}}}
+					KeyBits:   tpm2.MakeSymKeyBitsUnion[uint16](128),
+					Mode:      tpm2.MakeSymModeUnion(tpm2.SymModeCFB),
+				},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -739,12 +812,17 @@ func NewHMACKeyTemplate(options ...PublicTemplateOption) *tpm2.Public {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrSign,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
 				Scheme: tpm2.KeyedHashScheme{
 					Scheme: tpm2.KeyedHashSchemeHMAC,
-					Details: &tpm2.SchemeKeyedHashU{
-						HMAC: &tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256}}}}}}
+					Details: tpm2.MakeSchemeKeyedHashUnion(
+						tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256},
+					),
+				},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -767,14 +845,20 @@ func NewDerivationParentTemplate(options ...PublicTemplateOption) *tpm2.Public {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrSensitiveDataOrigin | tpm2.AttrUserWithAuth | tpm2.AttrRestricted | tpm2.AttrDecrypt,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
 				Scheme: tpm2.KeyedHashScheme{
 					Scheme: tpm2.KeyedHashSchemeXOR,
-					Details: &tpm2.SchemeKeyedHashU{
-						XOR: &tpm2.SchemeXOR{
+					Details: tpm2.MakeSchemeKeyedHashUnion(
+						tpm2.SchemeXOR{
 							HashAlg: tpm2.HashAlgorithmSHA256,
-							KDF:     tpm2.KDFAlgorithmKDF1_SP800_108}}}}}}
+							KDF:     tpm2.KDFAlgorithmKDF1_SP800_108,
+						},
+					),
+				},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }
@@ -794,9 +878,12 @@ func NewSealedObjectTemplate(options ...PublicTemplateOption) *tpm2.Public {
 		Type:    tpm2.ObjectTypeKeyedHash,
 		NameAlg: tpm2.HashAlgorithmSHA256,
 		Attrs:   tpm2.AttrFixedTPM | tpm2.AttrFixedParent | tpm2.AttrUserWithAuth,
-		Params: &tpm2.PublicParamsU{
-			KeyedHashDetail: &tpm2.KeyedHashParams{
-				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull}}}}
+		Params: tpm2.MakePublicParamsUnion(
+			tpm2.KeyedHashParams{
+				Scheme: tpm2.KeyedHashScheme{Scheme: tpm2.KeyedHashSchemeNull},
+			},
+		),
+	}
 	applyPublicTemplateOptions(template, options...)
 	return template
 }

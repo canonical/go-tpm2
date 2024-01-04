@@ -664,9 +664,9 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	if err := walker.run(policyElements{
 		&policyElement{
 			Type: tpm2.CommandPolicyOR,
-			Details: &policyElementDetails{
-				OR: &policyORElement{Branches: branches},
-			},
+			Details: makePolicyElementDetails(
+				policyORElement{Branches: branches},
+			),
 		},
 	}); err != nil {
 		return "", &policyPathSelectorTreeWalkError{err: err}
@@ -866,7 +866,7 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 				}
 
 				branch := &policyBranch{
-					Name:   policyBranchName(fmt.Sprintf("%x", digest.Digest)),
+					Name:   policyBranchName(fmt.Sprintf("%x", digest.Digest())),
 					Policy: policy.policy.Policy,
 				}
 				if err := w.walkBranch(beginBranchFn, i, branch, remaining); err != nil {

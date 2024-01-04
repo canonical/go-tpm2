@@ -12,9 +12,9 @@ import (
 func rsaSchemeOption(scheme *tpm2.RSAScheme) objectutil.PublicTemplateOption {
 	schemeId := tpm2.RSASchemeNull
 	hashAlg := tpm2.HashAlgorithmNull
-	if scheme != nil {
+	if scheme != nil && scheme.Scheme != tpm2.RSASchemeNull {
 		schemeId = scheme.Scheme
-		details := scheme.AnyDetails()
+		details := scheme.Details.Any()
 		if details != nil {
 			hashAlg = details.HashAlg
 		}
@@ -25,9 +25,9 @@ func rsaSchemeOption(scheme *tpm2.RSAScheme) objectutil.PublicTemplateOption {
 func eccSchemeOption(scheme *tpm2.ECCScheme) objectutil.PublicTemplateOption {
 	schemeId := tpm2.ECCSchemeNull
 	hashAlg := tpm2.HashAlgorithmNull
-	if scheme != nil {
+	if scheme != nil && scheme.Scheme != tpm2.ECCSchemeNull {
 		schemeId = scheme.Scheme
-		details := scheme.AnyDetails()
+		details := scheme.Details.Any()
 		if details != nil {
 			hashAlg = details.HashAlg
 		}

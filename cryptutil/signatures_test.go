@@ -42,7 +42,7 @@ func (s *signaturesSuite) TestSignRSASSA(c *C) {
 	sig, err := Sign(rand.Reader, key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSASSA)
-	c.Check(sig.Signature.RSASSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
+	c.Check(sig.Signature.RSASSA().Hash, Equals, tpm2.HashAlgorithmSHA256)
 
 	pubKey, err := objectutil.NewRSAPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
@@ -65,7 +65,7 @@ func (s *signaturesSuite) TestSignRSAPSS(c *C) {
 	sig, err := Sign(rand.Reader, key, digest, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256})
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgRSAPSS)
-	c.Check(sig.Signature.RSAPSS.Hash, Equals, tpm2.HashAlgorithmSHA256)
+	c.Check(sig.Signature.RSAPSS().Hash, Equals, tpm2.HashAlgorithmSHA256)
 
 	pubKey, err := objectutil.NewRSAPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
@@ -88,7 +88,7 @@ func (s *signaturesSuite) TestSignECDSA(c *C) {
 	sig, err := Sign(rand.Reader, key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgECDSA)
-	c.Check(sig.Signature.ECDSA.Hash, Equals, tpm2.HashAlgorithmSHA256)
+	c.Check(sig.Signature.ECDSA().Hash, Equals, tpm2.HashAlgorithmSHA256)
 
 	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
@@ -111,7 +111,7 @@ func (s *signaturesSuite) TestSignHMAC(c *C) {
 	sig, err := Sign(rand.Reader, key, digest, tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 	c.Check(sig.SigAlg, Equals, tpm2.SigSchemeAlgHMAC)
-	c.Check(sig.Signature.HMAC.HashAlg, Equals, tpm2.HashAlgorithmSHA256)
+	c.Check(sig.Signature.HMAC().HashAlg, Equals, tpm2.HashAlgorithmSHA256)
 
 	pub, sensitive, err := objectutil.NewHMACKey(rand.Reader, key, nil)
 
@@ -131,9 +131,10 @@ func (s *signaturesSuite) TestVerifyRSASSA(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgRSASSA,
-		Details: &tpm2.SigSchemeU{
-			RSASSA: &tpm2.SigSchemeRSASSA{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SigSchemeRSASSA{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(key, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -154,9 +155,10 @@ func (s *signaturesSuite) TestVerifyRSASSAInvalid(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgRSASSA,
-		Details: &tpm2.SigSchemeU{
-			RSASSA: &tpm2.SigSchemeRSASSA{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SigSchemeRSASSA{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(key, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -177,9 +179,10 @@ func (s *signaturesSuite) TestVerifyRSAPSS(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgRSAPSS,
-		Details: &tpm2.SigSchemeU{
-			RSAPSS: &tpm2.SigSchemeRSAPSS{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SigSchemeRSAPSS{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(key, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -200,9 +203,10 @@ func (s *signaturesSuite) TestVerifyRSAPSSInvalid(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgRSAPSS,
-		Details: &tpm2.SigSchemeU{
-			RSAPSS: &tpm2.SigSchemeRSAPSS{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SigSchemeRSAPSS{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(key, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -223,9 +227,10 @@ func (s *signaturesSuite) TestVerifyECDSA(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgECDSA,
-		Details: &tpm2.SigSchemeU{
-			ECDSA: &tpm2.SigSchemeECDSA{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SigSchemeECDSA{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(key, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -246,9 +251,10 @@ func (s *signaturesSuite) TestVerifyECDSAInvalid(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgECDSA,
-		Details: &tpm2.SigSchemeU{
-			ECDSA: &tpm2.SigSchemeECDSA{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SigSchemeECDSA{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(key, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -275,9 +281,10 @@ func (s *signaturesSuite) TestVerifyHMAC(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgHMAC,
-		Details: &tpm2.SigSchemeU{
-			HMAC: &tpm2.SchemeHMAC{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(rc, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 
@@ -301,9 +308,10 @@ func (s *signaturesSuite) TestVerifyHMACInvalid(c *C) {
 
 	scheme := tpm2.SigScheme{
 		Scheme: tpm2.SigSchemeAlgHMAC,
-		Details: &tpm2.SigSchemeU{
-			HMAC: &tpm2.SchemeHMAC{
-				HashAlg: tpm2.HashAlgorithmSHA256}}}
+		Details: tpm2.MakeSigSchemeUnion(
+			tpm2.SchemeHMAC{HashAlg: tpm2.HashAlgorithmSHA256},
+		),
+	}
 	sig, err := s.TPM.Sign(rc, digest, &scheme, nil, nil)
 	c.Assert(err, IsNil)
 

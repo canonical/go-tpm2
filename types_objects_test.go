@@ -53,39 +53,29 @@ func (s *typesObjectsSuite) TestPublicIsStorageParentRSANoNameAlg(c *C) {
 	c.Check(pub.IsStorageParent(), internal_testutil.IsFalse)
 }
 
-type TestPublicIDUContainer struct {
+type TestPublicIDUnionContainer struct {
 	Alg    ObjectTypeId
-	Unique *PublicIDU
+	Unique PublicIDUnion
 }
 
 func TestPublicIDUnion(t *testing.T) {
 	for _, data := range []struct {
 		desc string
-		in   TestPublicIDUContainer
+		in   TestPublicIDUnionContainer
 		out  []byte
 		err  string
 	}{
 		{
 			desc: "RSA",
-			in: TestPublicIDUContainer{Alg: ObjectTypeRSA,
-				Unique: &PublicIDU{RSA: PublicKeyRSA{0x01, 0x02, 0x03}}},
+			in: TestPublicIDUnionContainer{Alg: ObjectTypeRSA,
+				Unique: MakePublicIDUnion(PublicKeyRSA{0x01, 0x02, 0x03})},
 			out: []byte{0x00, 0x01, 0x00, 0x03, 0x01, 0x02, 0x03},
 		},
 		{
 			desc: "KeyedHash",
-			in: TestPublicIDUContainer{Alg: ObjectTypeKeyedHash,
-				Unique: &PublicIDU{KeyedHash: Digest{0x04, 0x05, 0x06, 0x07}}},
+			in: TestPublicIDUnionContainer{Alg: ObjectTypeKeyedHash,
+				Unique: MakePublicIDUnion(Digest{0x04, 0x05, 0x06, 0x07})},
 			out: []byte{0x00, 0x08, 0x00, 0x04, 0x04, 0x05, 0x06, 0x07},
-		},
-		{
-			desc: "InvalidSelector",
-			in: TestPublicIDUContainer{Alg: ObjectTypeId(AlgorithmNull),
-				Unique: &PublicIDU{Sym: Digest{0x04, 0x05, 0x06, 0x07}}},
-			out: []byte{0x00, 0x10},
-			err: "cannot unmarshal argument 0 whilst processing element of type tpm2.PublicIDU: invalid selector value: TPM_ALG_NULL\n\n" +
-				"=== BEGIN STACK ===\n" +
-				"... tpm2_test.TestPublicIDUContainer field Unique\n" +
-				"=== END STACK ===\n",
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
@@ -98,7 +88,7 @@ func TestPublicIDUnion(t *testing.T) {
 				t.Fatalf("MarshalToBytes returned an unexpected byte sequence: %x", out)
 			}
 
-			var a TestPublicIDUContainer
+			var a TestPublicIDUnionContainer
 			n, err := mu.UnmarshalFromBytes(out, &a)
 			if data.err != "" {
 				if err == nil {
@@ -121,6 +111,20 @@ func TestPublicIDUnion(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("InvalidSelector", func(t *testing.T) {
+		var a TestPublicIDUnionContainer
+		_, err := mu.UnmarshalFromBytes([]byte{0x00, 0x10}, &a)
+		if err == nil {
+			t.Fatalf("UnmarshaFromBytes was expected to fail")
+		}
+		if err.Error() != "cannot unmarshal argument 0 whilst processing element of type tpm2.PublicIDUnion: invalid selector value: TPM_ALG_NULL\n\n"+
+			"=== BEGIN STACK ===\n"+
+			"... tpm2_test.TestPublicIDUnionContainer field Unique\n"+
+			"=== END STACK ===\n" {
+			t.Errorf("UnmarshalFromBytes returned an unexpected error: %v", err)
+		}
+	})
 }
 
 func TestPublicName(t *testing.T) {

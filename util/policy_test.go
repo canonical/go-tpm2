@@ -40,10 +40,13 @@ func (s *policySuite) testPolicySigned(c *C, data *testPolicySignedData) {
 
 	sig := &tpm2.Signature{
 		SigAlg: tpm2.SigSchemeAlgRSASSA,
-		Signature: &tpm2.SignatureU{
-			RSASSA: &tpm2.SignatureRSASSA{
+		Signature: tpm2.MakeSignatureUnion(
+			tpm2.SignatureRSASSA{
 				Hash: tpm2.HashAlgorithmSHA256,
-				Sig:  make([]byte, 256)}}}
+				Sig:  make([]byte, 256),
+			},
+		),
+	}
 
 	pub, err := objectutil.NewRSAPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
