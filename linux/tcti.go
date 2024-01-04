@@ -18,10 +18,14 @@ const (
 	maxCommandSize int = 4096
 )
 
-type timeoutError struct{}
-
-func (e timeoutError) Error() string { return "i/o timeout" }
-func (e timeoutError) Timeout() bool { return true }
+func ignoringEINTR(fn func() error) error {
+	for {
+		err := fn()
+		if err != syscall.EINTR {
+			return err
+		}
+	}
+}
 
 // Tcti represents a connection to a Linux TPM character device.
 type Tcti struct {
@@ -49,8 +53,10 @@ func (d *Tcti) pollReadyToRead() error {
 	if err := d.conn.Control(func(fd uintptr) {
 		pollErr = func() error {
 			fds := []unix.PollFd{unix.PollFd{Fd: int32(fd), Events: unix.POLLIN}}
-			_, err := unix.Ppoll(fds, nil, nil)
-			return err
+			return ignoringEINTR(func() error {
+				_, err := unix.Ppoll(fds, nil, nil)
+				return err
+			})
 		}()
 	}); err != nil {
 		// The only error that can be returned from this is poll.ErrFileClosing
@@ -64,7 +70,10 @@ func (d *Tcti) pollReadyToRead() error {
 func (d *Tcti) read(data []byte) (n int, err error) {
 	var readErr error
 	if err := d.conn.Read(func(fd uintptr) bool {
-		n, readErr = syscall.Read(int(fd), data)
+		readErr = ignoringEINTR(func() error {
+			n, err = syscall.Read(int(fd), data)
+			return err
+		})
 		return true
 	}); err != nil {
 		// The only error that can be returned from this is poll.ErrFileClosing
