@@ -18,8 +18,8 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/policyutil"
 	"github.com/canonical/go-tpm2/testutil"
-	"github.com/canonical/go-tpm2/util"
 
 	. "gopkg.in/check.v1"
 )
@@ -207,7 +207,7 @@ func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg HashAlgorithmId,
 		t.Fatalf("PCRRead failed: %v", err)
 	}
 
-	digest, err := util.ComputePCRDigest(alg, pcrs, pcrValues)
+	digest, err := policyutil.ComputePCRDigest(alg, pcrs, pcrValues)
 	if err != nil {
 		t.Fatalf("ComputePCRDigest failed: %v", err)
 	}

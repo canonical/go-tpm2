@@ -52,11 +52,6 @@ type tpmDevices struct {
 
 var devices tpmDevices
 
-// TctiDevice represents a connection to a Linux TPM character device.
-//
-// Deprecated: Use Tcti
-type TctiDevice = Tcti
-
 // TPMMajorVersion describes the major version of a TPM device.
 type TPMMajorVersion int
 

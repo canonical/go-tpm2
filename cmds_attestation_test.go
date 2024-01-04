@@ -12,8 +12,8 @@ import (
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/objectutil"
+	"github.com/canonical/go-tpm2/policyutil"
 	"github.com/canonical/go-tpm2/testutil"
-	"github.com/canonical/go-tpm2/util"
 )
 
 type attestationSuite struct {
@@ -286,7 +286,7 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 	s.checkAttestCommon(c, quoted, TagAttestQuote, data.sign, data.signHierarchy, data.qualifyingData)
 	_, pcrValues, err := s.TPM.PCRRead(data.pcrs)
 	c.Assert(err, IsNil)
-	digest, err := util.ComputePCRDigest(data.alg, data.pcrs, pcrValues)
+	digest, err := policyutil.ComputePCRDigest(data.alg, data.pcrs, pcrValues)
 	c.Check(err, IsNil)
 	c.Check(quoted.Attested.Quote().PCRSelect, DeepEquals, pcrs)
 	c.Check(quoted.Attested.Quote().PCRDigest, DeepEquals, digest)

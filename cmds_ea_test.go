@@ -15,6 +15,7 @@ import (
 
 	. "github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/policyutil"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
@@ -304,7 +305,7 @@ func TestPolicySecret(t *testing.T) {
 		}
 		defer flushContext(t, tpm, objectContext2)
 
-		cpHash, err := util.ComputeCpHash(HashAlgorithmSHA256, CommandUnseal, []util.Entity{objectContext2})
+		cpHash, err := policyutil.ComputeCpHash(HashAlgorithmSHA256, CommandUnseal, []policyutil.Named{objectContext2})
 		if err != nil {
 			t.Fatalf("ComputeCpHash failed: %v", err)
 		}

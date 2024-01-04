@@ -395,21 +395,6 @@ func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
 		cmd:        cmdContext{CommandCode: commandCode}}
 }
 
-// SetMaxSubmissions sets the maximum number of times that [CommandContext] will attempt to submit
-// a command before failing with an error. The default value is 5. Setting this to 1 disables
-// resubmission. Note that 1 and 0 behave the same.
-//
-// Each submission is performed after an incremental delay. The first submission is delayed for
-// 20ms, with the delay time doubling for each subsequent submission.
-//
-// Deprecated: use [SetRetryParameters].
-func (t *TPMContext) SetMaxSubmissions(max uint) {
-	if max > 0 {
-		max -= 1
-	}
-	t.retryParams.maxRetries = max
-}
-
 // SetRetryParams customizes how commands will be retries before failing with an error. The maxRetries
 // argument specifies the maximum amount of retries. The initialBackoff argument specifies the time to
 // wait before submitting the first retry. The backoffRate argument specifies how much more time to wait
@@ -420,20 +405,6 @@ func (t *TPMContext) SetRetryParameters(maxRetries uint, initialBackoff time.Dur
 	t.retryParams.maxRetries = maxRetries
 	t.retryParams.initialBackoff = initialBackoff
 	t.retryParams.backoffRate = backoffRate
-}
-
-// SetCommandTimeout sets the maximum time that the context will wait for a response before a
-// command times out. Set this to [InfiniteTimeout] to disable the timeout entirely, which is
-// the default value.
-//
-// Note that there isn't a way to reattempt to the fetch the result of a command that times out.
-// If a command times out, the connection will generally be unusable for future commands.
-//
-// Deprecated: This always returns [ErrTimeoutNotSupported]. Timing out after a command has been
-// submitted doesn't make sense for this API, as there is no mechanism to obtain a response from
-// a command that previously timed out.
-func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
-	return ErrTimeoutNotSupported
 }
 
 // TCTI returns the underlying transmission channel for this context.

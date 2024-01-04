@@ -380,20 +380,6 @@ func (t *TPMContext) GetManufacturer(sessions ...SessionContext) (manufacturer T
 	return TPMManufacturer(m), nil
 }
 
-// GetInputBuffer is a convenience function for [TPMContext.GetCapability] that returns the value
-// of the [PropertyInputBuffer] property, which indicates the maximum size of arguments of the
-// [MaxBuffer] type in bytes. The size is TPM implementation specific, but required to be at least
-// 1024 bytes.
-//
-// Deprecated: Use [GetMaxBufferSize] instead.
-func (t *TPMContext) GetInputBuffer(sessions ...SessionContext) int {
-	n, err := t.GetCapabilityTPMProperty(PropertyInputBuffer, sessions...)
-	if err != nil {
-		return 1024
-	}
-	return int(n)
-}
-
 // GetMaxBufferSize is a convenience function for [TPMContext.GetCapability] that returns the value
 // of the [PropertyInputBuffer] property, which indicates the maximum size in bytes supported by the
 // TPM for arguments of the [MaxBuffer] type.
@@ -406,16 +392,6 @@ func (t *TPMContext) GetMaxBufferSize(sessions ...SessionContext) (uint16, error
 		return 0, &InvalidResponseError{CommandGetCapability, errors.New("value out of range")}
 	}
 	return uint16(n), nil
-}
-
-// GetMaxDigest is a convenience function for [TPMContext.GetCapability] that returns the value of
-// the [PropertyMaxDigest] property, which indicates the size of the largest digest algorithm
-// supported by the TPM in bytes.
-//
-// Deprecated: Use [GetMaxDigestSize].
-func (t *TPMContext) GetMaxDigest(sessions ...SessionContext) (int, error) {
-	n, err := t.GetMaxDigestSize(sessions...)
-	return int(n), err
 }
 
 // GetMaxDigestSize is a convenience function for [TPMContext.GetCapability] that returns the value
@@ -432,15 +408,6 @@ func (t *TPMContext) GetMaxDigestSize(sessions ...SessionContext) (uint16, error
 	return uint16(n), nil
 }
 
-// GetMaxData is a convenience function for [TPMContext.GetCapability] that returns the maximum
-// size of arguments of the [Data] type supported by the TPM in bytes.
-//
-// Deprecated: Use [GetMaxDataSize].
-func (t *TPMContext) GetMaxData(sessions ...SessionContext) (int, error) {
-	n, err := t.GetMaxDataSize(sessions...)
-	return int(n), err
-}
-
 // GetMaxDataSize is a convenience function for [TPMContext.GetCapability] that returns the
 // maximum size in bytes supported by the TPM for arguments of the [Data] type.
 func (t *TPMContext) GetMaxDataSize(sessions ...SessionContext) (uint16, error) {
@@ -449,16 +416,6 @@ func (t *TPMContext) GetMaxDataSize(sessions ...SessionContext) (uint16, error) 
 		return 0, err
 	}
 	return n + uint16(binary.Size(AlgorithmId(0))), nil
-}
-
-// GetNVBufferMax is a convenience function for [TPMContext.GetCapability] that returns the value
-// of the [PropertyNVBufferMax] property, which indicates the maximum buffer size supported by the
-// TPM in bytes for [TPMContext.NVReadRaw] and [TPMContext.NVWriteRaw].
-//
-// Deprecated: Use [GetNVMaxBufferSize].
-func (t *TPMContext) GetNVBufferMax(sessions ...SessionContext) (int, error) {
-	n, err := t.GetNVMaxBufferSize(sessions...)
-	return int(n), err
 }
 
 // GetNVMaxBufferSize is a convenience function for [TPMContext.GetCapability] that returns the
@@ -474,14 +431,6 @@ func (t *TPMContext) GetNVMaxBufferSize(sessions ...SessionContext) (uint16, err
 		return 0, &InvalidResponseError{CommandGetCapability, errors.New("value out of range")}
 	}
 	return uint16(n), nil
-}
-
-// GetNVIndexMax is a convenience function for [TPMContext.GetCapability] that returns the value of
-// the [PropertyNVIndexMax] property, which indicates the maximum size of a single NV index.
-//
-// Deprecated: Use [GetNVMaxIndexSize].
-func (t *TPMContext) GetNVIndexMax(sessions ...SessionContext) (int, error) {
-	return t.GetNVMaxIndexSize(sessions...)
 }
 
 // GetNVMaxIndexSize is a convenience function for [TPMContext.GetCapability] that returns the

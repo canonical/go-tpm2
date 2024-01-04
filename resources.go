@@ -510,29 +510,6 @@ func (t *TPMContext) NewResourceContext(handle Handle, sessions ...SessionContex
 	return t.newResourceContextFromTPM(rc, sessions...)
 }
 
-// CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle.
-// It will execute a command to read the public area from the TPM in order to initialize state that
-// is maintained on the host side. A [ResourceUnavailableError] error will be returned if the
-// specified handle references a resource that doesn't exist.
-//
-// The public area and name returned from the TPM are checked for consistency as long as the
-// corresponding name algorithm is linked into the current binary.
-//
-// If any sessions are supplied, the public area is read from the TPM twice. The second time uses
-// the supplied sessions.
-//
-// This function will panic if handle doesn't correspond to a NV index, transient object or
-// persistent object.
-//
-// If subsequent use of the returned ResourceContext requires knowledge of the authorization value
-// of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
-//
-// Deprecated: Use [TPMContext.NewResourceContext] instead.
-func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
-	return t.NewResourceContext(handle, sessions...)
-}
-
 // NewLimitedHandleContext creates a new HandleContext for the specified handle. The returned
 // HandleContext can not be used in any commands other than [TPMContext.FlushContext],
 // [TPMContext.ReadPublic] or [TPMContext.NVReadPublic], and it cannot be used with any sessions.
@@ -546,18 +523,6 @@ func NewLimitedHandleContext(handle Handle) HandleContext {
 	default:
 		panic("invalid handle type")
 	}
-}
-
-// CreatePartialHandleContext creates a new HandleContext for the specified handle. The returned
-// HandleContext is partial and cannot be used in any command other than [TPMContext.FlushContext],
-// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic], and it cannot be used with any sessions.
-//
-// This function will panic if handle doesn't correspond to a session, transient or persistent
-// object, or NV index.
-//
-// Deprecated: Use [NewLimitedHandleContext].
-func CreatePartialHandleContext(handle Handle) HandleContext {
-	return NewLimitedHandleContext(handle)
 }
 
 // GetPermanentContext returns a ResourceContext for the specified permanent handle or PCR handle.
@@ -685,22 +650,6 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	return hc, nil
 }
 
-// CreateHandleContextFromReader returns a new HandleContext created from the serialized data read
-// from the supplied io.Reader. This should contain data that was previously created by
-// [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
-//
-// If the supplied data corresponds to a session then a [SessionContext] will be returned, else a
-// [ResourceContext] will be returned.
-//
-// If a ResourceContext is returned and subsequent use of it requires knowledge of the
-// authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
-//
-// Deprecated: Use [NewHandleContextFromReader].
-func CreateHandleContextFromReader(r io.Reader) (HandleContext, error) {
-	return NewHandleContextFromReader(r)
-}
-
 // NewHandleContextFromBytes returns a new HandleContext created from the serialized data read
 // from the supplied byte slice. This should contain data that was previously created by
 // [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
@@ -736,22 +685,6 @@ func NewLimitedResourceContext(handle Handle, name Name) ResourceContext {
 	}
 }
 
-// CreateHandleContextFromBytes returns a new HandleContext created from the serialized data read
-// from the supplied byte slice. This should contain data that was previously created by
-// [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
-//
-// If the supplied data corresponds to a session then a [SessionContext] will be returned, else a
-// [ResourceContext] will be returned.
-//
-// If a ResourceContext is returned and subsequent use of it requires knowledge of the
-// authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
-//
-// Deprecated: Use [NewHandleContextFromBytes].
-func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
-	return NewHandleContextFromBytes(b)
-}
-
 // NewNVIndexResourceContextFromPub returns a new ResourceContext created from the provided
 // public area. If subsequent use of the returned ResourceContext requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
@@ -773,18 +706,6 @@ func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
 // by calling [ResourceContext].SetAuthValue.
 func NewNVIndexResourceContext(pub *NVPublic, name Name) ResourceContext {
 	return newNVIndexContext(name, pub)
-}
-
-// CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided
-// public area. If subsequent use of the returned ResourceContext requires knowledge of the
-// authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
-//
-// This requires that the associated name algorithm is linked into the current binary.
-//
-// Deprecated: Use [NewNVIndexResourceContextFromPub].
-func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, error) {
-	return NewNVIndexResourceContextFromPub(pub)
 }
 
 // NewObjectResourceContextFromPub returns a new ResourceContext created from the provided
@@ -820,16 +741,4 @@ func NewObjectResourceContext(handle Handle, pub *Public, name Name) ResourceCon
 	default:
 		panic("invalid handle type")
 	}
-}
-
-// CreateObjectResourceContextFromPublic returns a new ResourceContext created from the provided
-// public area. If subsequent use of the returned ResourceContext requires knowledge of the
-// authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
-//
-// This requires that the associated name algorithm is linked into the current binary.
-//
-// Deprecated: Use [NewObjectResourceContextFromPub].
-func CreateObjectResourceContextFromPublic(handle Handle, pub *Public) (ResourceContext, error) {
-	return NewObjectResourceContextFromPub(handle, pub)
 }

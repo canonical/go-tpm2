@@ -12,6 +12,7 @@ import (
 	"github.com/canonical/go-tpm2/linux"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/objectutil"
+	"github.com/canonical/go-tpm2/policyutil"
 	"github.com/canonical/go-tpm2/util"
 )
 
@@ -49,7 +50,7 @@ func seal(secret []byte, pcrSelection tpm2.PCRSelectionList) ([]byte, error) {
 		return nil, err
 	}
 
-	digest, err := util.ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrSelection, values)
+	digest, err := policyutil.ComputePCRDigest(tpm2.HashAlgorithmSHA256, pcrSelection, values)
 	if err != nil {
 		return nil, err
 	}

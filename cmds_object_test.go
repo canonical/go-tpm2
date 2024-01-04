@@ -19,6 +19,7 @@ import (
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/objectutil"
+	"github.com/canonical/go-tpm2/policyutil"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
@@ -67,7 +68,7 @@ func (s *objectSuite) checkCreationData(c *C, data *CreationData, hash Digest, t
 
 	_, pcrValues, err := s.TPM.PCRRead(creationPCR)
 	c.Assert(err, IsNil)
-	pcrDigest, err := util.ComputePCRDigest(template.NameAlg, creationPCR, pcrValues)
+	pcrDigest, err := policyutil.ComputePCRDigest(template.NameAlg, creationPCR, pcrValues)
 	c.Check(err, IsNil)
 
 	c.Check(data, NotNil)

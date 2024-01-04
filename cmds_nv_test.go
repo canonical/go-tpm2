@@ -334,13 +334,13 @@ func (s *nvSuite) TestWriteAndReadWithAuthSession(c *C) {
 }
 
 func (s *nvSuite) TestWriteAndReadLargerThanNVBufferMax(c *C) {
-	bufferMax, err := s.TPM.GetNVBufferMax()
+	bufferMax, err := s.TPM.GetNVMaxBufferSize()
 	c.Check(err, IsNil)
 
-	indexMax, err := s.TPM.GetNVIndexMax()
+	indexMax, err := s.TPM.GetNVMaxIndexSize()
 	c.Check(err, IsNil)
 
-	if indexMax <= bufferMax {
+	if indexMax <= int(bufferMax) {
 		c.Skip("TPM_PT_NV_INDEX_MAX not larger than TPM_PT_NV_BUFFER_MAX")
 	}
 

@@ -496,8 +496,3 @@ type Private []byte
 
 // IDObject corresponds to the TPM2B_ID_OBJECT type.
 type IDObject []byte
-
-// IDObjectRaw corresponds to the TPM2B_ID_OBJECT type.
-//
-// Deprecated: use IDObject
-type IDObjectRaw = IDObject

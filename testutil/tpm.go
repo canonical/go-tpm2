@@ -260,7 +260,6 @@ func (c *tpmSimulatorLaunchContext) stopAndTerminate() (err error) {
 	}
 
 	tpm := tpm2.NewTPMContext(tcti)
-	tpm.SetCommandTimeout(5 * time.Second)
 
 	c.captureErr("shutdown", func() error {
 		return tpm.Shutdown(tpm2.StartupClear)
