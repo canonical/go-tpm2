@@ -27,11 +27,6 @@ func ignoringEINTR(fn func() error) error {
 	}
 }
 
-type timeoutError struct{}
-
-func (e timeoutError) Error() string { return "i/o timeout" }
-func (e timeoutError) Timeout() bool { return true }
-
 // Tcti represents a connection to a Linux TPM character device.
 type Tcti struct {
 	name   string
