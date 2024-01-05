@@ -15,7 +15,7 @@ import (
 )
 
 func isParamEncryptable(param interface{}) bool {
-	return mu.DetermineTPMKind(param) == mu.TPMKindSized
+	return mu.IsSized(param)
 }
 
 func (s *sessionParam) ComputeSessionValue() []byte {

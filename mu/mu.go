@@ -311,57 +311,57 @@ func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
 	return out
 }
 
-// TPMKind indicates the TPM type class associated with a Go type
-type TPMKind int
+// kind indicates the TPM type class associated with a Go type
+type kind int
 
 const (
-	// TPMKindUnsupported indicates that a go type has no corresponding
+	// kindUnsupported indicates that a go type has no corresponding
 	// TPM type class.
-	TPMKindUnsupported TPMKind = iota
+	kindUnsupported kind = iota
 
-	// TPMKindPrimitive indicates that a go type corresponds to one
+	// kindPrimitive indicates that a go type corresponds to one
 	// of the primitive TPM types (UINT8, BYTE, INT8, BOOL, UINT16,
 	// INT16, UINT32, INT32, UINT64, INT64, TPM_ALG_ID, any TPMA_
 	// prefixed type).
-	TPMKindPrimitive
+	kindPrimitive
 
-	// TPMKindSized indicates that a go type corresponds to a
+	// kindSized indicates that a go type corresponds to a
 	// TPM2B prefixed TPM type.
-	TPMKindSized
+	kindSized
 
-	// TPMKindList indicates that a go type corresponds to a
+	// kindList indicates that a go type corresponds to a
 	// TPML prefixed TPM type.
-	TPMKindList
+	kindList
 
-	// TPMKindStruct indicates that a go type corresponds to a
+	// kindStruct indicates that a go type corresponds to a
 	// TPMS prefixed TPM type.
-	TPMKindStruct
+	kindStruct
 
-	// TPMKindTaggedUnion indicates that a go type corresponds
+	// kindTaggedUnion indicates that a go type corresponds
 	// to a TPMT prefixed TPM type.
-	TPMKindTaggedUnion
+	kindTaggedUnion
 
-	// TPMKindUnion indicates that a go type corresponds to a
+	// kindUnion indicates that a go type corresponds to a
 	// TPMU prefixed TPM type.
-	TPMKindUnion
+	kindUnion
 
-	// TPMKindCustom correponds to a go type that defines its own
+	// kindCustom correponds to a go type that defines its own
 	// marshalling behaviour.
-	TPMKindCustom
+	kindCustom
 
-	// TPMKindRaw corresponds to a go slice that is marshalled
+	// kindRaw corresponds to a go slice that is marshalled
 	// without a size field. It behaves like a sequence of
 	// individual values.
-	TPMKindRaw
+	kindRaw
 
-	// TPMKindSized1Bytes indicates that a go type corresponds to
+	// kindSized1Bytes indicates that a go type corresponds to
 	// a variable sized byte slice with a single byte size field,
 	// and is a special type used to support TPMS_PCR_SELECT.
-	TPMKindSized1Bytes
+	kindSized1Bytes
 
-	TPMKindFixedBytes
+	kindFixedBytes
 
-	tpmKindIgnore
+	kindIgnore
 )
 
 func isCustom(t reflect.Type) bool {
@@ -378,14 +378,14 @@ func isUnion(t reflect.Type) bool {
 	return t.Elem().Kind() == reflect.Struct && t.Implements(unionType)
 }
 
-func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
+func classifyKind(t reflect.Type, o *options) (kind, error) {
 	if o == nil {
 		var def options
 		o = &def
 	}
 
 	if o.ignore {
-		return tpmKindIgnore, nil
+		return kindIgnore, nil
 	}
 
 	sizeSpecifiers := 0
@@ -399,54 +399,54 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		sizeSpecifiers += 1
 	}
 	if sizeSpecifiers > 1 {
-		return TPMKindUnsupported, errors.New(`only one of "sized", "raw" and "sized1" may be specified`)
+		return kindUnsupported, errors.New(`only one of "sized", "raw" and "sized1" may be specified`)
 	}
 
 	if t.Kind() != reflect.Ptr && isCustom(t) {
 		if sizeSpecifiers != 0 || o.selector != "" {
-			return TPMKindUnsupported, errors.New("invalid options for custom type")
+			return kindUnsupported, errors.New("invalid options for custom type")
 		}
-		return TPMKindCustom, nil
+		return kindCustom, nil
 	}
 
 	switch t.Kind() {
 	case reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		if sizeSpecifiers != 0 || o.selector != "" {
-			return TPMKindUnsupported, errors.New("invalid options for primitive type")
+			return kindUnsupported, errors.New("invalid options for primitive type")
 		}
-		return TPMKindPrimitive, nil
+		return kindPrimitive, nil
 	case reflect.Ptr:
 		switch {
 		case t.Elem().Kind() != reflect.Struct:
 			// Ignore "sized" for pointers to non-structures. If this parameter is
 			// present, we'll return an error after dereferencing.
-			return TPMKindUnsupported, nil
+			return kindUnsupported, nil
 		case o.sized:
-			return TPMKindSized, nil
+			return kindSized, nil
 		default:
-			return TPMKindUnsupported, nil
+			return kindUnsupported, nil
 		}
 	case reflect.Slice:
 		switch {
 		case o.sized || o.selector != "":
-			return TPMKindUnsupported, errors.New("invalid options for slice type")
+			return kindUnsupported, errors.New("invalid options for slice type")
 		case o.raw && t == sized1BytesType:
-			return TPMKindUnsupported, errors.New(`"raw" option is invalid with Sized1Bytes type`)
+			return kindUnsupported, errors.New(`"raw" option is invalid with Sized1Bytes type`)
 		case t == sized1BytesType || o.sized1:
-			return TPMKindSized1Bytes, nil
+			return kindSized1Bytes, nil
 		case t == rawBytesType || o.raw:
-			return TPMKindRaw, nil
+			return kindRaw, nil
 		case t.Elem().Kind() == reflect.Uint8:
-			return TPMKindSized, nil
+			return kindSized, nil
 		default:
-			return TPMKindList, nil
+			return kindList, nil
 		}
 	case reflect.Struct:
 		if sizeSpecifiers > 0 {
-			return TPMKindUnsupported, errors.New("invalid options for struct type")
+			return kindUnsupported, errors.New("invalid options for struct type")
 		}
 
-		k := TPMKindStruct
+		k := kindStruct
 		var hasUnexported bool
 
 		for i := 0; i < t.NumField(); i++ {
@@ -455,47 +455,44 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 				hasUnexported = true
 			}
 			if isUnion(f.Type) {
-				k = TPMKindTaggedUnion
+				k = kindTaggedUnion
 				break
 			}
 		}
 
 		if isUnion(t) {
-			if k == TPMKindTaggedUnion {
-				return TPMKindUnsupported, errors.New("struct type cannot represent both a union and tagged union")
+			if k == kindTaggedUnion {
+				return kindUnsupported, errors.New("struct type cannot represent both a union and tagged union")
 			}
-			return TPMKindUnion, nil
+			return kindUnion, nil
 		}
 
 		switch {
 		case hasUnexported:
 			// structs with unexported fields are unsupported
-			return TPMKindUnsupported, errors.New("struct type with unexported fields")
+			return kindUnsupported, errors.New("struct type with unexported fields")
 		case o.selector != "":
-			return TPMKindUnsupported, errors.New(`"selector" option is invalid with struct types that don't represent unions`)
+			return kindUnsupported, errors.New(`"selector" option is invalid with struct types that don't represent unions`)
 		}
 
 		return k, nil
 	case reflect.Array:
 		switch {
 		case sizeSpecifiers != 0 || o.selector != "":
-			return TPMKindUnsupported, errors.New("invalid options for array type")
+			return kindUnsupported, errors.New("invalid options for array type")
 		case t.Elem().Kind() != reflect.Uint8:
-			return TPMKindUnsupported, errors.New("unsupported array type")
+			return kindUnsupported, errors.New("unsupported array type")
 		}
-		return TPMKindFixedBytes, nil
+		return kindFixedBytes, nil
 	default:
-		return TPMKindUnsupported, fmt.Errorf("unsupported kind: %v", t.Kind())
+		return kindUnsupported, fmt.Errorf("unsupported kind: %v", t.Kind())
 	}
 
 }
 
-// DetermineTPMKind returns the TPMKind associated with the supplied go value. It will
+// IsSized indicates that the supplied value is a TPM2B type. This will
 // automatically dereference pointer types.
-//
-// This doesn't mean that the supplied go value can actually be handled by this package
-// because it doesn't recurse into containers.
-func DetermineTPMKind(i interface{}) TPMKind {
+func IsSized(i interface{}) bool {
 	var t reflect.Type
 	var o *options
 
@@ -508,14 +505,14 @@ func DetermineTPMKind(i interface{}) TPMKind {
 	}
 
 	for {
-		k, err := tpmKind(t, o)
+		k, err := classifyKind(t, o)
 		switch {
 		case err != nil:
-			return TPMKindUnsupported
-		case k == TPMKindUnsupported:
+			return false
+		case k == kindUnsupported:
 			t = t.Elem()
 		default:
-			return k
+			return k == kindSized
 		}
 	}
 }
@@ -565,7 +562,7 @@ func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 func (c *context) unionSelectorValue(u reflect.Value, opts *options) any {
 	valid := false
 	if len(c.stack) > 0 {
-		if k, _ := tpmKind(c.stack.top().value.Type(), nil); k == TPMKindTaggedUnion {
+		if k, _ := classifyKind(c.stack.top().value.Type(), nil); k == kindTaggedUnion {
 			valid = true
 		}
 	}
@@ -826,35 +823,35 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
-	kind, err := tpmKind(v.Type(), opts)
+	kind, err := classifyKind(v.Type(), opts)
 
 	switch {
 	case err != nil:
 		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)", v.Type(), err))
-	case kind == TPMKindUnsupported:
+	case kind == kindUnsupported:
 		return m.marshalPtr(v, opts)
-	case kind == tpmKindIgnore:
+	case kind == kindIgnore:
 		return nil
 	}
 
 	switch kind {
-	case TPMKindPrimitive:
+	case kindPrimitive:
 		return m.marshalPrimitive(v)
-	case TPMKindSized:
+	case kindSized:
 		return m.marshalSized(v, opts)
-	case TPMKindList:
+	case kindList:
 		return m.marshalList(v)
-	case TPMKindStruct, TPMKindTaggedUnion:
+	case kindStruct, kindTaggedUnion:
 		return m.marshalStruct(v)
-	case TPMKindUnion:
+	case kindUnion:
 		return m.marshalUnion(v, opts)
-	case TPMKindCustom:
+	case kindCustom:
 		return m.marshalCustom(v)
-	case TPMKindRaw:
+	case kindRaw:
 		return m.marshalRaw(v)
-	case TPMKindSized1Bytes:
+	case kindSized1Bytes:
 		return m.marshalSized1Bytes(v)
-	case TPMKindFixedBytes:
+	case kindFixedBytes:
 		return m.marshalFixedBytes(v)
 	}
 
@@ -1084,35 +1081,35 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
-	kind, err := tpmKind(v.Type(), opts)
+	kind, err := classifyKind(v.Type(), opts)
 
 	switch {
 	case err != nil:
 		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)", v.Type(), err))
-	case kind == TPMKindUnsupported:
+	case kind == kindUnsupported:
 		return u.unmarshalPtr(v, opts)
-	case kind == tpmKindIgnore:
+	case kind == kindIgnore:
 		return nil
 	}
 
 	switch kind {
-	case TPMKindPrimitive:
+	case kindPrimitive:
 		return u.unmarshalPrimitive(v)
-	case TPMKindSized:
+	case kindSized:
 		return u.unmarshalSized(v, opts)
-	case TPMKindList:
+	case kindList:
 		return u.unmarshalList(v)
-	case TPMKindStruct, TPMKindTaggedUnion:
+	case kindStruct, kindTaggedUnion:
 		return u.unmarshalStruct(v)
-	case TPMKindUnion:
+	case kindUnion:
 		return u.unmarshalUnion(v, opts)
-	case TPMKindCustom:
+	case kindCustom:
 		return u.unmarshalCustom(v)
-	case TPMKindRaw:
+	case kindRaw:
 		return u.unmarshalRaw(v)
-	case TPMKindSized1Bytes:
+	case kindSized1Bytes:
 		return u.unmarshalSized1Bytes(v)
-	case TPMKindFixedBytes:
+	case kindFixedBytes:
 		return u.unmarshalFixedBytes(v)
 	}
 
