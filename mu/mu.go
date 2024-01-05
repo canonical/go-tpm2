@@ -334,12 +334,8 @@ const (
 	kindList
 
 	// kindStruct indicates that a go type corresponds to a
-	// TPMS prefixed TPM type.
+	// TPMS or TPMT prefixed TPM type.
 	kindStruct
-
-	// kindTaggedUnion indicates that a go type corresponds
-	// to a TPMT prefixed TPM type.
-	kindTaggedUnion
 
 	// kindUnion indicates that a go type corresponds to a
 	// TPMU prefixed TPM type.
@@ -349,17 +345,21 @@ const (
 	// marshalling behaviour.
 	kindCustom
 
-	// kindRaw corresponds to a go slice that is marshalled
-	// without a size field. It behaves like a sequence of
+	// kindRawList corresponds to a go slice that is marshalled
+	// without a length field. It behaves like a sequence of
 	// individual values.
-	kindRaw
+	kindRawList
+
+	// kindRawBytes corresponds to a byte slice that is marshalled
+	// without a size field.
+	kindRawBytes
 
 	// kindSized1Bytes indicates that a go type corresponds to
 	// a variable sized byte slice with a single byte size field,
 	// and is a special type used to support TPMS_PCR_SELECT.
 	kindSized1Bytes
 
-	kindFixedBytes
+	kindNeedsDeref
 
 	kindIgnore
 )
@@ -420,11 +420,11 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		case t.Elem().Kind() != reflect.Struct:
 			// Ignore "sized" for pointers to non-structures. If this parameter is
 			// present, we'll return an error after dereferencing.
-			return kindUnsupported, nil
+			return kindNeedsDeref, nil
 		case o.sized:
 			return kindSized, nil
 		default:
-			return kindUnsupported, nil
+			return kindNeedsDeref, nil
 		}
 	case reflect.Slice:
 		switch {
@@ -432,10 +432,14 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 			return kindUnsupported, errors.New("invalid options for slice type")
 		case o.raw && t == sized1BytesType:
 			return kindUnsupported, errors.New(`"raw" option is invalid with Sized1Bytes type`)
+		case o.sized && t.Elem().Kind() != reflect.Uint8:
+			return kindUnsupported, errors.New(`"sized1" option is only valid with byte slices`)
 		case t == sized1BytesType || o.sized1:
 			return kindSized1Bytes, nil
-		case t == rawBytesType || o.raw:
-			return kindRaw, nil
+		case t == rawBytesType || (o.raw && t.Elem().Kind() == reflect.Uint8):
+			return kindRawBytes, nil
+		case o.raw:
+			return kindRawList, nil
 		case t.Elem().Kind() == reflect.Uint8:
 			return kindSized, nil
 		default:
@@ -446,7 +450,7 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 			return kindUnsupported, errors.New("invalid options for struct type")
 		}
 
-		k := kindStruct
+		var taggedUnion bool
 		var hasUnexported bool
 
 		for i := 0; i < t.NumField(); i++ {
@@ -455,13 +459,12 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 				hasUnexported = true
 			}
 			if isUnion(f.Type) {
-				k = kindTaggedUnion
-				break
+				taggedUnion = true
 			}
 		}
 
 		if isUnion(t) {
-			if k == kindTaggedUnion {
+			if taggedUnion {
 				return kindUnsupported, errors.New("struct type cannot represent both a union and tagged union")
 			}
 			return kindUnion, nil
@@ -475,7 +478,7 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 			return kindUnsupported, errors.New(`"selector" option is invalid with struct types that don't represent unions`)
 		}
 
-		return k, nil
+		return kindStruct, nil
 	case reflect.Array:
 		switch {
 		case sizeSpecifiers != 0 || o.selector != "":
@@ -483,11 +486,10 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		case t.Elem().Kind() != reflect.Uint8:
 			return kindUnsupported, errors.New("unsupported array type")
 		}
-		return kindFixedBytes, nil
+		return kindPrimitive, nil
 	default:
 		return kindUnsupported, fmt.Errorf("unsupported kind: %v", t.Kind())
 	}
-
 }
 
 // IsSized indicates that the supplied value is a TPM2B type. This will
@@ -509,7 +511,7 @@ func IsSized(i interface{}) bool {
 		switch {
 		case err != nil:
 			return false
-		case k == kindUnsupported:
+		case k == kindNeedsDeref:
 			t = t.Elem()
 		default:
 			return k == kindSized
@@ -560,13 +562,7 @@ func (c *context) enterListElem(l reflect.Value, i int) (exit func()) {
 }
 
 func (c *context) unionSelectorValue(u reflect.Value, opts *options) any {
-	valid := false
-	if len(c.stack) > 0 {
-		if k, _ := classifyKind(c.stack.top().value.Type(), nil); k == kindTaggedUnion {
-			valid = true
-		}
-	}
-	if !valid {
+	if len(c.stack) == 0 || c.stack.top().value.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("union type %s is not inside a struct", u.Type()))
 	}
 
@@ -716,14 +712,7 @@ func (m *marshaller) marshalSized1Bytes(v reflect.Value) error {
 	if err := binary.Write(m, binary.BigEndian, uint8(v.Len())); err != nil {
 		return m.newError(v, err)
 	}
-	return m.marshalRaw(v)
-}
-
-func (m *marshaller) marshalFixedBytes(v reflect.Value) error {
-	if err := binary.Write(m, binary.BigEndian, v.Interface()); err != nil {
-		return m.newError(v, err)
-	}
-	return nil
+	return m.marshalRawBytes(v)
 }
 
 func (m *marshaller) marshalRawList(v reflect.Value) error {
@@ -738,16 +727,11 @@ func (m *marshaller) marshalRawList(v reflect.Value) error {
 	return nil
 }
 
-func (m *marshaller) marshalRaw(v reflect.Value) error {
-	switch v.Type().Elem().Kind() {
-	case reflect.Uint8:
-		if _, err := m.Write(v.Bytes()); err != nil {
-			return m.newError(v, err)
-		}
-		return nil
-	default:
-		return m.marshalRawList(v)
+func (m *marshaller) marshalRawBytes(v reflect.Value) error {
+	if _, err := m.Write(v.Bytes()); err != nil {
+		return m.newError(v, err)
 	}
+	return nil
 }
 
 func (m *marshaller) marshalPtr(v reflect.Value, opts *options) error {
@@ -824,14 +808,8 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 
 func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 	kind, err := classifyKind(v.Type(), opts)
-
-	switch {
-	case err != nil:
+	if err != nil {
 		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)", v.Type(), err))
-	case kind == kindUnsupported:
-		return m.marshalPtr(v, opts)
-	case kind == kindIgnore:
-		return nil
 	}
 
 	switch kind {
@@ -841,18 +819,22 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 		return m.marshalSized(v, opts)
 	case kindList:
 		return m.marshalList(v)
-	case kindStruct, kindTaggedUnion:
+	case kindStruct:
 		return m.marshalStruct(v)
 	case kindUnion:
 		return m.marshalUnion(v, opts)
 	case kindCustom:
 		return m.marshalCustom(v)
-	case kindRaw:
-		return m.marshalRaw(v)
+	case kindRawList:
+		return m.marshalRawList(v)
+	case kindRawBytes:
+		return m.marshalRawBytes(v)
 	case kindSized1Bytes:
 		return m.marshalSized1Bytes(v)
-	case kindFixedBytes:
-		return m.marshalFixedBytes(v)
+	case kindNeedsDeref:
+		return m.marshalPtr(v, opts)
+	case kindIgnore:
+		return nil
 	}
 
 	panic("unhandled kind")
@@ -964,14 +946,7 @@ func (u *unmarshaller) unmarshalSized1Bytes(v reflect.Value) error {
 		v.SetLen(int(size))
 	}
 
-	return u.unmarshalRaw(v)
-}
-
-func (u *unmarshaller) unmarshalFixedBytes(v reflect.Value) error {
-	if err := binary.Read(u, binary.BigEndian, v.Addr().Interface()); err != nil {
-		return u.newError(v, err)
-	}
-	return nil
+	return u.unmarshalRawBytes(v)
 }
 
 func (u *unmarshaller) unmarshalRawList(v reflect.Value, n int) (reflect.Value, error) {
@@ -987,17 +962,11 @@ func (u *unmarshaller) unmarshalRawList(v reflect.Value, n int) (reflect.Value, 
 	return v, nil
 }
 
-func (u *unmarshaller) unmarshalRaw(v reflect.Value) error {
-	switch v.Type().Elem().Kind() {
-	case reflect.Uint8:
-		if _, err := io.ReadFull(u, v.Bytes()); err != nil {
-			return u.newError(v, err)
-		}
-		return nil
-	default:
-		_, err := u.unmarshalRawList(v.Slice(0, 0), v.Len())
-		return err
+func (u *unmarshaller) unmarshalRawBytes(v reflect.Value) error {
+	if _, err := io.ReadFull(u, v.Bytes()); err != nil {
+		return u.newError(v, err)
 	}
+	return nil
 }
 
 func (u *unmarshaller) unmarshalPtr(v reflect.Value, opts *options) error {
@@ -1082,14 +1051,8 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 
 func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 	kind, err := classifyKind(v.Type(), opts)
-
-	switch {
-	case err != nil:
+	if err != nil {
 		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)", v.Type(), err))
-	case kind == kindUnsupported:
-		return u.unmarshalPtr(v, opts)
-	case kind == kindIgnore:
-		return nil
 	}
 
 	switch kind {
@@ -1099,18 +1062,23 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 		return u.unmarshalSized(v, opts)
 	case kindList:
 		return u.unmarshalList(v)
-	case kindStruct, kindTaggedUnion:
+	case kindStruct:
 		return u.unmarshalStruct(v)
 	case kindUnion:
 		return u.unmarshalUnion(v, opts)
 	case kindCustom:
 		return u.unmarshalCustom(v)
-	case kindRaw:
-		return u.unmarshalRaw(v)
+	case kindRawList:
+		_, err = u.unmarshalRawList(v.Slice(0, 0), v.Len())
+		return err
+	case kindRawBytes:
+		return u.unmarshalRawBytes(v)
 	case kindSized1Bytes:
 		return u.unmarshalSized1Bytes(v)
-	case kindFixedBytes:
-		return u.unmarshalFixedBytes(v)
+	case kindNeedsDeref:
+		return u.unmarshalPtr(v, opts)
+	case kindIgnore:
+		return nil
 	}
 
 	panic("unhandled kind")
