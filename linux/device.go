@@ -67,19 +67,13 @@ type TPMDevice struct {
 	version   TPMMajorVersion
 }
 
-func (d *TPMDevice) openInternal() (*Tcti, *os.File, error) {
+func (d *TPMDevice) openInternal() (*Tcti, error) {
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	conn, err := f.SyscallConn()
-	if err != nil {
-		f.Close()
-		return nil, nil, err
-	}
-
-	return &Tcti{name: d.path, closer: f, conn: conn}, f, nil
+	return &Tcti{file: &tpmFile{file: f}}, nil
 }
 
 // Path returns the path of the character device.
@@ -99,8 +93,7 @@ func (d *TPMDevice) MajorVersion() TPMMajorVersion {
 
 // Open implements [tpm2.TPMDevice.Open].
 func (d *TPMDevice) Open() (tpm2.TCTI, error) {
-	tcti, _, err := d.openInternal()
-	return tcti, err
+	return d.openInternal()
 }
 
 // ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
@@ -197,17 +190,19 @@ func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
 // Deprecated: Use [TPMDeviceRaw] and [TPMDeviceRM].
 func OpenDevice(path string) (*Tcti, error) {
 	device := &TPMDevice{path: path}
-	tcti, f, err := device.openInternal()
+	tcti, err := device.openInternal()
 	if err != nil {
 		return nil, err
 	}
 
-	s, err := f.Stat()
+	s, err := tcti.file.Stat()
 	if err != nil {
+		tcti.Close()
 		return nil, err
 	}
 
 	if s.Mode()&os.ModeDevice == 0 {
+		tcti.Close()
 		return nil, fmt.Errorf("unsupported file mode %v", s.Mode())
 	}
 
