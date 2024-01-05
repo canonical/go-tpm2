@@ -22,17 +22,18 @@ import (
 // a boolean which indicates whether the operation should complete, or whether the operation
 // should block and poll the descriptor to become ready.
 //
-// In the read case, we immediately block and poll the device before performing the read when
-// the device is ready. Skipping the initial read and polling immediately works around another
-// issue with the way that the driver works. The read() implementation can block until the
-// current command completes, even in non-blocking mode, if we call it whilst the kernel's TPM
-// async worker is dispatching the command. This is because both reading and command dispatching
-// take a lock on the command/response buffer.
+// In the read case, we immediately block and poll the device, before performing the read whenever
+// the device becomes ready in the future. Skipping the initial read and polling immediately works
+// around another issue with the way that the driver works. The read() implementation can block
+// until the current command completes, even in non-blocking mode, if we call it whilst the
+// kernel's TPM async worker is dispatching the command. This is because both reading and command
+// dispatching take a lock on the command/response buffer.
 //
 // This still doesn't really work properly though, as the poll() implementation can also block
-// for the same reason (the poll implementation also locks the command/response buffer). This
-// means that polling can potentially ignore any specified timeout if poll() is called whilst
-// a command is being dispatched.
+// for the same reason (the poll implementation also locks the command/response buffer). As the
+// poll() implementation blocks before the system call would normally suspend the current task
+// in the VFS layer, this means that polling can potentially ignore any specified timeout if it
+// is called whilst a TPM command is being dispatched.
 //
 // We never block and poll the device in the write case. Although the write() implementation
 // will return -EBUSY if there is a response waiting to be read from the device, it's not
@@ -87,7 +88,7 @@ func (f *tpmFile) Read(data []byte) (n int, err error) {
 	}); err != nil {
 		// The only error that can be returned from this is poll.ErrFileClosing
 		// which is private
-		return 0, f.wrapErr("poll", errClosed)
+		return 0, f.wrapErr("read", errClosed)
 	}
 	if n == 0 && readErr == nil {
 		readErr = io.EOF
