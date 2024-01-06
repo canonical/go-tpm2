@@ -54,7 +54,7 @@ func PrivateToSensitive(private tpm2.Private, name tpm2.Name, hashAlg tpm2.HashA
 		return nil, fmt.Errorf("cannot unwrap outer wrapper: %w", err)
 	}
 
-	if _, err := mu.UnmarshalFromBytes(data, mu.Sized(&sensitive)); err != nil {
+	if _, err := mu.UnmarshalFromBytes(data, mu.MakeSizedDest(&sensitive)); err != nil {
 		return nil, fmt.Errorf("cannot unmarhsal sensitive: %w", err)
 	}
 
@@ -73,7 +73,7 @@ func PrivateToSensitive(private tpm2.Private, name tpm2.Name, hashAlg tpm2.HashA
 // of the TPM and then imported, or objects created inside of the TPM that
 // can be duplicated and unwrapped outside of the TPM.
 func SensitiveToPrivate(sensitive *tpm2.Sensitive, name tpm2.Name, hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, seed []byte) (tpm2.Private, error) {
-	private, err := mu.MarshalToBytes(mu.Sized(sensitive))
+	private, err := mu.MarshalToBytes(mu.MakeSizedSource(&sensitive))
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal sensitive: %w", err)
 	}

@@ -150,9 +150,9 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 
 	if err := t.StartCommand(CommandCreate).
 		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
-		AddParams(mu.Sized(inSensitive), mu.Sized(inPublic), outsideInfo, creationPCR.WithMinSelectSize(t.properties.minPcrSelectSize)).
+		AddParams(mu.MakeSizedSource(inSensitive), mu.MakeSizedSource(inPublic), outsideInfo, creationPCR.WithMinSelectSize(t.properties.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
-		Run(nil, &outPrivate, mu.Sized(&outPublic), mu.Sized(&creationData), &creationHash, &creationTicket); err != nil {
+		Run(nil, &outPrivate, mu.MakeSizedDest(&outPublic), mu.MakeSizedDest(&creationData), &creationHash, &creationTicket); err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
@@ -242,7 +242,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 
 	if err := t.StartCommand(CommandLoad).
 		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
-		AddParams(inPrivate, mu.Sized(inPublic)).
+		AddParams(inPrivate, mu.MakeSizedSource(inPublic)).
 		AddExtraSessions(sessions...).
 		Run(&objectHandle, &name); err != nil {
 		return nil, err
@@ -346,7 +346,7 @@ func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierar
 	var name Name
 
 	if err := t.StartCommand(CommandLoadExternal).
-		AddParams(mu.Sized(inPrivate), mu.Sized(inPublic), hierarchy).
+		AddParams(mu.MakeSizedSource(inPrivate), mu.MakeSizedSource(inPublic), hierarchy).
 		AddExtraSessions(sessions...).
 		Run(&objectHandle, &name); err != nil {
 		return nil, err
@@ -388,7 +388,7 @@ func (t *TPMContext) ReadPublic(objectContext HandleContext, sessions ...Session
 	if err := t.StartCommand(CommandReadPublic).
 		AddHandles(UseHandleContext(objectContext)).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&outPublic), &name, &qualifiedName); err != nil {
+		Run(nil, mu.MakeSizedDest(&outPublic), &name, &qualifiedName); err != nil {
 		return nil, nil, nil, err
 	}
 	return outPublic, name, qualifiedName, nil
@@ -692,9 +692,9 @@ func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *Se
 
 	if err := t.StartCommand(CommandCreateLoaded).
 		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
-		AddParams(mu.Sized(inSensitive), inTemplate).
+		AddParams(mu.MakeSizedSource(inSensitive), inTemplate).
 		AddExtraSessions(sessions...).
-		Run(&objectHandle, &outPrivate, mu.Sized(&outPublic), &name); err != nil {
+		Run(&objectHandle, &outPrivate, mu.MakeSizedDest(&outPublic), &name); err != nil {
 		return nil, nil, nil, err
 	}
 

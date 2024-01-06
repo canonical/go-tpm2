@@ -55,7 +55,7 @@ func (p CommandPacket) Unmarshal(numHandles int) (handles HandleList, authArea [
 	}
 
 	handles = make(HandleList, numHandles)
-	if _, err := mu.UnmarshalFromReader(buf, mu.Raw(&handles)); err != nil {
+	if _, err := mu.UnmarshalFromReader(buf, mu.MakeRaw(handles)); err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot unmarshal handles: %w", err)
 	}
 
@@ -100,18 +100,18 @@ func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []Au
 	case len(authArea) > 0:
 		header.Tag = TagSessions
 
-		aBytes, err := mu.MarshalToBytes(mu.Raw(authArea))
+		aBytes, err := mu.MarshalToBytes(mu.MakeRaw(authArea))
 		if err != nil {
 			return nil, fmt.Errorf("cannot marshal authArea: %w", err)
 		}
 		if int64(len(aBytes)) > math.MaxUint32 {
 			return nil, errors.New("authArea is too large")
 		}
-		payload = mu.MustMarshalToBytes(mu.Raw(handles), uint32(len(aBytes)), mu.Raw(aBytes), mu.Raw(parameters))
+		payload = mu.MustMarshalToBytes(mu.MakeRaw(handles), uint32(len(aBytes)), mu.MakeRaw(aBytes), mu.MakeRaw(parameters))
 	case len(authArea) == 0:
 		header.Tag = TagNoSessions
 
-		payload = mu.MustMarshalToBytes(mu.Raw(handles), mu.Raw(parameters))
+		payload = mu.MustMarshalToBytes(mu.MakeRaw(handles), mu.MakeRaw(parameters))
 	}
 
 	if int64(len(payload)) > math.MaxUint32-int64(binary.Size(header)) {
@@ -120,7 +120,7 @@ func MarshalCommandPacket(command CommandCode, handles HandleList, authArea []Au
 
 	header.CommandSize = uint32(binary.Size(header) + len(payload))
 
-	return mu.MustMarshalToBytes(header, mu.Raw(payload)), nil
+	return mu.MustMarshalToBytes(header, mu.MakeRaw(payload)), nil
 }
 
 // MustMarshalCommandPacket serializes a complete TPM packet from the provided arguments.

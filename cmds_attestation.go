@@ -47,7 +47,7 @@ func (t *TPMContext) Certify(objectContext, signContext ResourceContext, qualify
 		AddHandles(UseResourceContextWithAuth(objectContext, objectContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession)).
 		AddParams(qualifyingData, inScheme).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&certifyInfo), &signature); err != nil {
+		Run(nil, mu.MakeSizedDest(&certifyInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -95,7 +95,7 @@ func (t *TPMContext) CertifyCreation(signContext, objectContext ResourceContext,
 		AddHandles(UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(objectContext)).
 		AddParams(qualifyingData, creationHash, inScheme, creationTicket).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&certifyInfo), &signature); err != nil {
+		Run(nil, mu.MakeSizedDest(&certifyInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -140,7 +140,7 @@ func (t *TPMContext) Quote(signContext ResourceContext, qualifyingData Data, inS
 		AddHandles(UseResourceContextWithAuth(signContext, signContextAuthSession)).
 		AddParams(qualifyingData, inScheme, pcrs.WithMinSelectSize(t.properties.minPcrSelectSize)).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&quoted), &signature); err != nil {
+		Run(nil, mu.MakeSizedDest(&quoted), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -184,7 +184,7 @@ func (t *TPMContext) GetSessionAuditDigest(privacyAdminContext, signContext Reso
 		AddHandles(UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession), UseHandleContext(sessionContext)).
 		AddParams(qualifyingData, inScheme).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&auditInfo), &signature); err != nil {
+		Run(nil, mu.MakeSizedDest(&auditInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -228,7 +228,7 @@ func (t *TPMContext) GetCommandAuditDigest(privacyContext, signContext ResourceC
 		AddHandles(UseResourceContextWithAuth(privacyContext, privacyContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession)).
 		AddParams(qualifyingData, inScheme).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&auditInfo), &signature); err != nil {
+		Run(nil, mu.MakeSizedDest(&auditInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 
@@ -272,7 +272,7 @@ func (t *TPMContext) GetTime(privacyAdminContext, signContext ResourceContext, q
 		AddHandles(UseResourceContextWithAuth(privacyAdminContext, privacyAdminContextAuthSession), UseResourceContextWithAuth(signContext, signContextAuthSession)).
 		AddParams(qualifyingData, inScheme).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&timeInfo), &signature); err != nil {
+		Run(nil, mu.MakeSizedDest(&timeInfo), &signature); err != nil {
 		return nil, nil, err
 	}
 

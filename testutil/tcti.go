@@ -312,14 +312,14 @@ func (t *TCTI) processCommandDone() error {
 		case tpm2.CommandCreatePrimary:
 			var inSensitive []byte
 			var inPublic *tpm2.Public
-			if _, err := mu.UnmarshalFromBytes(cpBytes, &inSensitive, mu.Sized(&inPublic)); err != nil {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inSensitive, mu.MakeSizedDest(&inPublic)); err != nil {
 				return fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
 		case tpm2.CommandLoad:
 			var inPrivate tpm2.Private
 			var inPublic *tpm2.Public
-			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.MakeSizedDest(&inPublic)); err != nil {
 				return fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
@@ -340,7 +340,7 @@ func (t *TCTI) processCommandDone() error {
 		case tpm2.CommandLoadExternal:
 			var inPrivate []byte
 			var inPublic *tpm2.Public
-			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
+			if _, err := mu.UnmarshalFromBytes(cpBytes, &inPrivate, mu.MakeSizedDest(&inPublic)); err != nil {
 				return fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
@@ -417,7 +417,7 @@ func (t *TCTI) processCommandDone() error {
 		// Record newly defined NV index
 		var auth tpm2.Auth
 		var nvPublic *tpm2.NVPublic
-		if _, err := mu.UnmarshalFromBytes(cpBytes, &auth, mu.Sized(&nvPublic)); err != nil {
+		if _, err := mu.UnmarshalFromBytes(cpBytes, &auth, mu.MakeSizedDest(&nvPublic)); err != nil {
 			return fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		index := nvPublic.Index
@@ -454,7 +454,7 @@ func (t *TCTI) processCommandDone() error {
 		if !hasEncryptSession(authArea) {
 			nvIndex := cmdHandles[0]
 			var nvPublic *tpm2.NVPublic
-			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&nvPublic)); err != nil {
+			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.MakeSizedDest(&nvPublic)); err != nil {
 				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[nvIndex]; !ok {
@@ -466,7 +466,7 @@ func (t *TCTI) processCommandDone() error {
 		if !hasEncryptSession(authArea) {
 			object := cmdHandles[0]
 			var outPublic *tpm2.Public
-			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&outPublic)); err != nil {
+			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.MakeSizedDest(&outPublic)); err != nil {
 				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[object]; !ok {

@@ -138,7 +138,7 @@ func NewPolicySignedAuthorization(sessionAlg tpm2.HashAlgorithmId, nonceTPM tpm2
 //
 // This will panic if the requested digest algorithm is not available.
 func (a *PolicySignedAuthorization) Sign(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
-	msg := mu.MustMarshalToBytes(mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash))
+	msg := mu.MustMarshalToBytes(mu.MakeRaw(a.NonceTPM), a.Expiration, mu.MakeRaw(a.CpHash))
 	auth, err := SignPolicyAuthorization(rand, msg, authKey, policyRef, signer, opts)
 	if err != nil {
 		return err
@@ -152,7 +152,7 @@ func (a *PolicySignedAuthorization) Verify() (ok bool, err error) {
 	if a.Authorization == nil {
 		return false, errors.New("authorization is not signed")
 	}
-	msg := mu.MustMarshalToBytes(mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash))
+	msg := mu.MustMarshalToBytes(mu.MakeRaw(a.NonceTPM), a.Expiration, mu.MakeRaw(a.CpHash))
 	return a.Authorization.Verify(msg)
 }
 
@@ -186,6 +186,6 @@ func (a *PolicySignedAuthorization) Verify() (ok bool, err error) {
 // This will panic if the requested digest algorithm is not available.
 func SignPolicySignedAuthorization(rand io.Reader, signer crypto.Signer, nonceTPM tpm2.Nonce, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, opts crypto.SignerOpts) (*tpm2.Signature, error) {
 	h := opts.HashFunc().New()
-	mu.MustMarshalToWriter(h, mu.Raw(nonceTPM), expiration, mu.Raw(cpHashA), mu.Raw(policyRef))
+	mu.MustMarshalToWriter(h, mu.MakeRaw(nonceTPM), expiration, mu.MakeRaw(cpHashA), mu.MakeRaw(policyRef))
 	return cryptutil.Sign(rand, signer, h.Sum(nil), opts)
 }

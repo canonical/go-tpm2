@@ -221,18 +221,18 @@ func (s *muSuite) TestMarshalAndUnmarshlRaw(c *C) {
 	ua := make([]byte, len(a))
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Raw(a)},
+		values:                []interface{}{MakeRaw(a)},
 		expected:              a,
-		unmarshalDests:        []interface{}{Raw(&ua)},
-		unmarshalExpectedVals: []interface{}{*Raw(&a)}})
+		unmarshalDests:        []interface{}{MakeRaw(ua)},
+		unmarshalExpectedVals: []interface{}{*MakeRaw(a)}})
 
 	ua = make([]byte, len(a))
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Raw(a)},
+		values:                []interface{}{MakeRaw(a)},
 		expected:              a,
-		unmarshalDests:        []interface{}{Raw(&ua)},
-		unmarshalExpectedVals: []interface{}{*Raw(&a)}})
+		unmarshalDests:        []interface{}{MakeRaw(ua)},
+		unmarshalExpectedVals: []interface{}{*MakeRaw(a)}})
 }
 
 func (s *muSuite) TestMarshalAndUnmarshalSizedBuffer(c *C) {
@@ -290,19 +290,19 @@ func (s *muSuite) TestMarshalAndUnmarshalSized(c *C) {
 	var ua *testStruct
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 
 	ua = &testStruct{}
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 }
 
@@ -315,19 +315,19 @@ func (s *muSuite) TestMarshalAndUnmarshalSized2(c *C) {
 	var ua *testStructWithSizedField
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 
 	ua = &testStructWithSizedField{}
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 }
 
@@ -339,19 +339,19 @@ func (s *muSuite) TestMarshalAndUnmarshalSized3(c *C) {
 	var ua *testStructWithImplicitSizedField
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 
 	ua = &testStructWithImplicitSizedField{}
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 }
 
@@ -363,19 +363,19 @@ func (s *muSuite) TestSizedMarshalAndUnmarshalSized4(c *C) {
 	var ua *testTaggedUnion
 
 	s.testMarshalAndUnmarshalBytes(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 
 	ua = &testTaggedUnion{}
 
 	s.testMarshalAndUnmarshalIO(c, &testMarshalAndUnmarshalData{
-		values:                []interface{}{Sized(a)},
+		values:                []interface{}{MakeSizedSource(a)},
 		expected:              expected,
-		unmarshalExpectedVals: []interface{}{*Sized(&a)},
-		unmarshalDests:        []interface{}{Sized(&ua)}})
+		unmarshalExpectedVals: []interface{}{*MakeSizedDest(&a)},
+		unmarshalDests:        []interface{}{MakeSizedDest(&ua)}})
 	c.Check(ua, DeepEquals, a)
 }
 
@@ -644,7 +644,7 @@ func (s *muSuite) TestIsSizedSized1(c *C) {
 }
 
 func (s *muSuite) TestIsSizedSized2(c *C) {
-	s.testIsSized(c, Sized(&testStruct{}), true)
+	s.testIsSized(c, MakeSizedSource(&testStruct{}), true)
 }
 
 func (s *muSuite) TestIsSizedList(c *C) {
@@ -672,7 +672,7 @@ func (s *muSuite) TestIsSizedRaw1(c *C) {
 }
 
 func (s *muSuite) TestIsSizedRaw2(c *C) {
-	s.testIsSized(c, Raw(testSizedBuffer{}), false)
+	s.testIsSized(c, MakeRaw(testSizedBuffer{}), false)
 }
 
 func (s *muSuite) TestErrorSimple(c *C) {
@@ -921,12 +921,6 @@ func (s *muSuite) TestUnmarshalNilInterface(c *C) {
 func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 	var a *uint16
 	c.Check(func() { UnmarshalFromBytes([]byte{}, a) }, PanicMatches, "cannot unmarshal to nil pointer of type \\*uint16")
-}
-
-func (s *muSuite) TestMarshalSizedAndRaw(c *C) {
-	a := Sized(Raw([]byte{}))
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)")
-	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
 
 func (s *muSuite) TestMarshalUnaddressableCustom(c *C) {
@@ -1283,48 +1277,6 @@ func (s *muSuite) TestCopyValueToInterface(c *C) {
 	var dst emptyInterface
 	c.Check(CopyValue(&dst, src), IsNil)
 	c.Check(dst, DeepEquals, testStruct{A: 10, B: new(uint32), C: true, D: []uint32{54353, 431}})
-}
-
-func (s *muSuite) TestCopyValueSized(c *C) {
-	src := &testStruct{A: 10, C: true, D: []uint32{54353, 431}}
-	var dst *testStruct
-	c.Check(CopyValue(&dst, Sized(src)), IsNil)
-	c.Check(dst, DeepEquals, &testStruct{A: 10, B: new(uint32), C: true, D: []uint32{54353, 431}})
-}
-
-func (s *muSuite) TestCopyValueZeroSized(c *C) {
-	var src *testStruct
-	var dst *testStruct
-	c.Check(CopyValue(&dst, Sized(src)), IsNil)
-	c.Check(dst, IsNil)
-}
-
-func (s *muSuite) TestCopyValueSizedToInterface(c *C) {
-	src := &testStruct{A: 10, C: true, D: []uint32{54353, 431}}
-	var dst emptyInterface
-	c.Check(CopyValue(&dst, Sized(src)), IsNil)
-	c.Check(dst, DeepEquals, &testStruct{A: 10, B: new(uint32), C: true, D: []uint32{54353, 431}})
-}
-
-func (s *muSuite) TestCopyValueZeroSizedToInterface(c *C) {
-	var src *testStruct
-	var dst emptyInterface
-	c.Check(CopyValue(&dst, Sized(src)), IsNil)
-	c.Check(dst, IsNil)
-}
-
-func (s *muSuite) TestCopyValueRaw(c *C) {
-	src := []uint8{1, 2, 3, 4}
-	dst := make([]uint8, len(src))
-	c.Check(CopyValue(&dst, Raw(src)), IsNil)
-	c.Check(dst, DeepEquals, src)
-}
-
-func (s *muSuite) TestCopyValueRawiTruncated(c *C) {
-	src := []uint8{1, 2, 3, 4}
-	dst := make([]uint8, 3)
-	c.Check(CopyValue(&dst, Raw(src)), IsNil)
-	c.Check(dst, DeepEquals, []uint8{1, 2, 3})
 }
 
 func (s *muSuite) TestCopyValueToNonPointer(c *C) {

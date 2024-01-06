@@ -187,11 +187,11 @@ func (s *computePolicySession) mustUpdateForCommand(command tpm2.CommandCode, pa
 }
 
 func (s *computePolicySession) policyUpdate(command tpm2.CommandCode, name tpm2.Name, policyRef tpm2.Nonce) {
-	s.mustUpdateForCommand(command, mu.Raw(name))
+	s.mustUpdateForCommand(command, mu.MakeRaw(name))
 
 	h := s.digest.HashAlg.NewHash()
 	h.Write(s.digest.Digest)
-	mu.MustMarshalToWriter(h, mu.Raw(policyRef))
+	mu.MustMarshalToWriter(h, mu.MakeRaw(policyRef))
 	s.digest.Digest = h.Sum(nil)
 }
 
@@ -242,12 +242,12 @@ func (s *computePolicySession) PolicyOR(pHashList tpm2.DigestList) error {
 		}
 		digests.Write(digest)
 	}
-	s.mustUpdateForCommand(tpm2.CommandPolicyOR, mu.Raw(digests.Bytes()))
+	s.mustUpdateForCommand(tpm2.CommandPolicyOR, mu.MakeRaw(digests.Bytes()))
 	return nil
 }
 
 func (s *computePolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
-	return s.updateForCommand(tpm2.CommandPolicyPCR, pcrs, mu.Raw(pcrDigest))
+	return s.updateForCommand(tpm2.CommandPolicyPCR, pcrs, mu.MakeRaw(pcrDigest))
 }
 
 func (s *computePolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
@@ -255,17 +255,17 @@ func (s *computePolicySession) PolicyNV(auth, index tpm2.ResourceContext, operan
 		return errors.New("invalid index name")
 	}
 	h := s.digest.HashAlg.NewHash()
-	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
+	mu.MustMarshalToWriter(h, mu.MakeRaw(operandB), offset, operation)
 
-	s.mustUpdateForCommand(tpm2.CommandPolicyNV, mu.Raw(h.Sum(nil)), mu.Raw(index.Name()))
+	s.mustUpdateForCommand(tpm2.CommandPolicyNV, mu.MakeRaw(h.Sum(nil)), mu.MakeRaw(index.Name()))
 	return nil
 }
 
 func (s *computePolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
 	h := s.digest.HashAlg.NewHash()
-	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
+	mu.MustMarshalToWriter(h, mu.MakeRaw(operandB), offset, operation)
 
-	s.mustUpdateForCommand(tpm2.CommandPolicyCounterTimer, mu.Raw(h.Sum(nil)))
+	s.mustUpdateForCommand(tpm2.CommandPolicyCounterTimer, mu.MakeRaw(h.Sum(nil)))
 	return nil
 }
 
@@ -275,12 +275,12 @@ func (s *computePolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
 }
 
 func (s *computePolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyCpHash, mu.Raw(cpHashA))
+	s.mustUpdateForCommand(tpm2.CommandPolicyCpHash, mu.MakeRaw(cpHashA))
 	return nil
 }
 
 func (s *computePolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
-	s.mustUpdateForCommand(tpm2.CommandPolicyNameHash, mu.Raw(nameHash))
+	s.mustUpdateForCommand(tpm2.CommandPolicyNameHash, mu.MakeRaw(nameHash))
 	return nil
 }
 
@@ -292,9 +292,9 @@ func (s *computePolicySession) PolicyDuplicationSelect(objectName, newParentName
 		if !objectName.IsValid() {
 			return errors.New("invalid object name")
 		}
-		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.Raw(objectName), mu.Raw(newParentName), includeObject)
+		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.MakeRaw(objectName), mu.MakeRaw(newParentName), includeObject)
 	} else {
-		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.Raw(newParentName), includeObject)
+		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.MakeRaw(newParentName), includeObject)
 	}
 	return nil
 }

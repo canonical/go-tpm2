@@ -98,7 +98,7 @@ import (
 func (t *TPMContext) NVDefineSpaceRaw(authContext ResourceContext, auth Auth, publicInfo *NVPublic, authContextAuthSession SessionContext, sessions ...SessionContext) error {
 	return t.StartCommand(CommandNVDefineSpace).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession)).
-		AddParams(auth, mu.Sized(publicInfo)).
+		AddParams(auth, mu.MakeSizedSource(publicInfo)).
 		AddExtraSessions(sessions...).
 		Run(nil)
 }
@@ -276,7 +276,7 @@ func (t *TPMContext) NVReadPublic(nvIndex HandleContext, sessions ...SessionCont
 	if err := t.StartCommand(CommandNVReadPublic).
 		AddHandles(UseHandleContext(nvIndex)).
 		AddExtraSessions(sessions...).
-		Run(nil, mu.Sized(&nvPublic), &nvName); err != nil {
+		Run(nil, mu.MakeSizedDest(&nvPublic), &nvName); err != nil {
 		return nil, nil, err
 	}
 	return nvPublic, nvName, nil

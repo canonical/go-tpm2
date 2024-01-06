@@ -62,7 +62,7 @@ func duplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg t
 		}
 	}
 
-	if _, err := mu.UnmarshalFromBytes(duplicate, mu.Sized(&sensitive)); err != nil {
+	if _, err := mu.UnmarshalFromBytes(duplicate, mu.MakeSizedDest(&sensitive)); err != nil {
 		return nil, fmt.Errorf("cannot unmarhsal sensitive: %w", err)
 	}
 
@@ -127,7 +127,7 @@ func sensitiveToDuplicate(sensitive *tpm2.Sensitive, name tpm2.Name, outerHashAl
 		applyOuterWrapper = true
 	}
 
-	duplicate, err = mu.MarshalToBytes(mu.Sized(sensitive))
+	duplicate, err = mu.MarshalToBytes(mu.MakeSizedSource(sensitive))
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot marshal sensitive: %w", err)
 	}

@@ -390,32 +390,32 @@ func (s *builderSuite) TestPolicyCpHash(c *C) {
 	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
 		code:    tpm2.CommandLoad,
 		handles: []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}},
-		params:  []interface{}{tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())}})
+		params:  []interface{}{tpm2.Private{1, 2, 3, 4}, mu.MakeSizedSource(objectutil.NewRSAStorageKeyTemplate())}})
 }
 
 func (s *builderSuite) TestPolicyCpHashDifferentParams(c *C) {
 	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
 		code:    tpm2.CommandLoad,
 		handles: []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}},
-		params:  []interface{}{tpm2.Private{1, 2, 3, 4, 5}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())}})
+		params:  []interface{}{tpm2.Private{1, 2, 3, 4, 5}, mu.MakeSizedSource(objectutil.NewRSAStorageKeyTemplate())}})
 }
 
 func (s *builderSuite) TestPolicyCpHashDifferentHandles(c *C) {
 	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
 		code:    tpm2.CommandLoad,
 		handles: []Named{tpm2.Name{0x40, 0x00, 0x00, 0x0b}},
-		params:  []interface{}{tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())}})
+		params:  []interface{}{tpm2.Private{1, 2, 3, 4}, mu.MakeSizedSource(objectutil.NewRSAStorageKeyTemplate())}})
 }
 
 func (s *builderSuite) TestPolicyCpHashDifferentCommand(c *C) {
 	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
 		code:   tpm2.CommandLoadExternal,
-		params: []interface{}{mu.Sized((*tpm2.Sensitive)(nil)), mu.Sized(objectutil.NewRSAStorageKeyTemplate()), tpm2.HandleOwner}})
+		params: []interface{}{mu.MakeSizedSource((*tpm2.Sensitive)(nil)), mu.MakeSizedSource(objectutil.NewRSAStorageKeyTemplate()), tpm2.HandleOwner}})
 }
 
 func (s *builderSuite) TestPolicyCpHashInvalidName(c *C) {
 	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0, 0}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())), ErrorMatches,
+	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0, 0}}, tpm2.Private{1, 2, 3, 4}, mu.MakeSizedSource(objectutil.NewRSAStorageKeyTemplate())), ErrorMatches,
 		`invalid name at handle 0`)
 	_, err := builder.Policy()
 	c.Check(err, ErrorMatches,
@@ -589,11 +589,11 @@ func (s *builderSuite) testPolicyDuplicationSelect(c *C, data *testBuildPolicyDu
 func (s *builderSuite) TestPolicyDuplicationSelect(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
-	object := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+	object := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
 
 	h = crypto.SHA256.New()
 	io.WriteString(h, "bar")
-	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
 
 	s.testPolicyDuplicationSelect(c, &testBuildPolicyDuplicationSelectData{
 		object:        object,
@@ -604,11 +604,11 @@ func (s *builderSuite) TestPolicyDuplicationSelect(c *C) {
 func (s *builderSuite) TestPolicyDuplicationSelectNoIncludeObject(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
-	object := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+	object := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
 
 	h = crypto.SHA256.New()
 	io.WriteString(h, "bar")
-	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
 
 	s.testPolicyDuplicationSelect(c, &testBuildPolicyDuplicationSelectData{
 		object:        object,
@@ -619,11 +619,11 @@ func (s *builderSuite) TestPolicyDuplicationSelectNoIncludeObject(c *C) {
 func (s *builderSuite) TestPolicyDuplicationSelectDifferentNames(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "bar")
-	object := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+	object := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
 
 	h = crypto.SHA256.New()
 	io.WriteString(h, "foo")
-	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
 
 	s.testPolicyDuplicationSelect(c, &testBuildPolicyDuplicationSelectData{
 		object:        object,

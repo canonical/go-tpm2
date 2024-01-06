@@ -167,7 +167,7 @@ func (t *TPMContext) Import(parentContext ResourceContext, encryptionKey Data, o
 
 	if err := t.StartCommand(CommandImport).
 		AddHandles(UseResourceContextWithAuth(parentContext, parentContextAuthSession)).
-		AddParams(encryptionKey, mu.Sized(objectPublic), duplicate, inSymSeed, symmetricAlg).
+		AddParams(encryptionKey, mu.MakeSizedSource(objectPublic), duplicate, inSymSeed, symmetricAlg).
 		AddExtraSessions(sessions...).
 		Run(nil, &outPrivate); err != nil {
 		return nil, err

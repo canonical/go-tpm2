@@ -87,30 +87,30 @@ type RawBytes []byte
 // field.
 type Sized1Bytes []byte
 
-type wrappedValue struct {
-	value interface{}
-	opts  *options
+type rawType[T ~[]E, E any] struct {
+	Value T `tpm2:"raw"`
 }
 
-// Raw converts the supplied value, which should be a slice, to a raw slice.
-// A raw slice is one that is marshalled without a corresponding size or
-// length field.
-//
-// To unmarshal a raw slice, the supplied value must be a pointer to the
-// preallocated destination slice.
-func Raw(val interface{}) *wrappedValue {
-	return &wrappedValue{value: val, opts: &options{raw: true}}
+// MakeRaw converts the supplied slice to a raw type so that it is marshalled and
+// unmarshalled without a size or length field.
+func MakeRaw[T ~[]E, E any](val T) *rawType[T, E] {
+	return &rawType[T, E]{Value: val}
 }
 
-// Sized converts the supplied value to a sized value.
-//
-// To marshal a sized value, the supplied value must be a pointer to the actual
-// value.
-//
-// To unmarshal a sized value, the supplied value must be a pointer to the
-// destination pointer that will point to the unmarshalled value.
-func Sized(val interface{}) *wrappedValue {
-	return &wrappedValue{value: val, opts: &options{sized: true}}
+type sizedType[P *T, T *E, E any] struct {
+	Value P `_tpm2:"_sized"`
+}
+
+// MakeSizedSource converts the supplied pointer to a sized type so that it is
+// marshalled as a TPM2B type with a size field.
+func MakeSizedSource[P *T, T *E, E any](val T) sizedType[P, T, E] {
+	return sizedType[P, T, E]{Value: &val}
+}
+
+// MakeSizedDest converts the supplied pointer to a sized type so that it is
+// unmarshalled as a TPM2B type with a size field.
+func MakeSizedDest[P *T, T *E, E any](val P) *sizedType[P, T, E] {
+	return &sizedType[P, T, E]{Value: val}
 }
 
 type unionMarshalIface interface {
@@ -276,6 +276,8 @@ type options struct {
 	raw      bool
 	ignore   bool
 	sized1   bool
+
+	indirectSized bool
 }
 
 func (o *options) enterSizedType(v reflect.Value) (exit func()) {
@@ -289,25 +291,43 @@ func (o *options) enterSizedType(v reflect.Value) (exit func()) {
 	}
 }
 
-func parseStructFieldMuOptions(f reflect.StructField) (out *options) {
-	out = new(options)
+func (o *options) enterIndirectSizedType() (exit func()) {
+	orig := *o
+	o.indirectSized = false
+	o.sized = true
+	return func() {
+		*o = orig
+	}
+}
 
+func (o *options) parseFromStructField(f reflect.StructField) {
 	s := f.Tag.Get("tpm2")
 	for _, part := range strings.Split(s, ",") {
 		switch {
 		case strings.HasPrefix(part, "selector:"):
-			out.selector = part[9:]
+			o.selector = part[9:]
 		case part == "sized":
-			out.sized = true
+			o.sized = true
 		case part == "raw":
-			out.raw = true
+			o.raw = true
 		case part == "ignore":
-			out.ignore = true
+			o.ignore = true
 		case part == "sized1":
-			out.sized1 = true
+			o.sized1 = true
 		}
 	}
+	s = f.Tag.Get("_tpm2")
+	for _, part := range strings.Split(s, ",") {
+		switch {
+		case part == "_sized":
+			o.indirectSized = true
+		}
+	}
+}
 
+func newOptionsFromStructField(f reflect.StructField) (out *options) {
+	out = new(options)
+	out.parseFromStructField(f)
 	return out
 }
 
@@ -361,6 +381,8 @@ const (
 
 	kindNeedsDeref
 
+	kindIndirectSized
+
 	kindIgnore
 )
 
@@ -379,11 +401,6 @@ func isUnion(t reflect.Type) bool {
 }
 
 func classifyKind(t reflect.Type, o *options) (kind, error) {
-	if o == nil {
-		var def options
-		o = &def
-	}
-
 	if o.ignore {
 		return kindIgnore, nil
 	}
@@ -396,6 +413,9 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		sizeSpecifiers += 1
 	}
 	if o.sized1 {
+		sizeSpecifiers += 1
+	}
+	if o.indirectSized {
 		sizeSpecifiers += 1
 	}
 	if sizeSpecifiers > 1 {
@@ -417,10 +437,8 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		return kindPrimitive, nil
 	case reflect.Ptr:
 		switch {
-		case t.Elem().Kind() != reflect.Struct:
-			// Ignore "sized" for pointers to non-structures. If this parameter is
-			// present, we'll return an error after dereferencing.
-			return kindNeedsDeref, nil
+		case o.indirectSized:
+			return kindIndirectSized, nil
 		case o.sized:
 			return kindSized, nil
 		default:
@@ -428,7 +446,7 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		}
 	case reflect.Slice:
 		switch {
-		case o.sized || o.selector != "":
+		case o.sized || o.selector != "" || o.indirectSized:
 			return kindUnsupported, errors.New("invalid options for slice type")
 		case o.raw && t == sized1BytesType:
 			return kindUnsupported, errors.New(`"raw" option is invalid with Sized1Bytes type`)
@@ -495,16 +513,8 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 // IsSized indicates that the supplied value is a TPM2B type. This will
 // automatically dereference pointer types.
 func IsSized(i interface{}) bool {
-	var t reflect.Type
-	var o *options
-
-	switch v := i.(type) {
-	case *wrappedValue:
-		t = reflect.TypeOf(v.value)
-		o = v.opts
-	default:
-		t = reflect.TypeOf(i)
-	}
+	t := reflect.TypeOf(i)
+	o := new(options)
 
 	for {
 		k, err := classifyKind(t, o)
@@ -513,6 +523,16 @@ func IsSized(i interface{}) bool {
 			return false
 		case k == kindNeedsDeref:
 			t = t.Elem()
+		case k == kindIndirectSized:
+			t = t.Elem()
+			o.enterIndirectSizedType()
+		case k == kindStruct:
+			if t.NumField() != 1 {
+				return false
+			}
+			f := t.Field(0)
+			t = f.Type
+			o.parseFromStructField(f)
 		default:
 			return k == kindSized
 		}
@@ -567,7 +587,7 @@ func (c *context) unionSelectorValue(u reflect.Value, opts *options) any {
 	}
 
 	var selectorVal reflect.Value
-	if opts == nil || opts.selector == "" {
+	if opts.selector == "" {
 		selectorVal = c.stack.top().value.Field(0)
 	} else {
 		selectorVal = c.stack.top().value.FieldByName(opts.selector)
@@ -682,9 +702,6 @@ func (m *marshaller) marshalSized(v reflect.Value, opts *options) error {
 		return nil
 	}
 
-	if opts == nil {
-		opts = new(options)
-	}
 	exit := opts.enterSizedType(v)
 	defer exit()
 
@@ -703,6 +720,13 @@ func (m *marshaller) marshalSized(v reflect.Value, opts *options) error {
 		return m.newError(v, err)
 	}
 	return nil
+}
+
+func (m *marshaller) marshalIndirectSized(v reflect.Value, opts *options) error {
+	exit := opts.enterIndirectSizedType()
+	defer exit()
+
+	return m.marshalPtr(v, opts)
 }
 
 func (m *marshaller) marshalSized1Bytes(v reflect.Value) error {
@@ -764,7 +788,7 @@ func (m *marshaller) marshalList(v reflect.Value) error {
 
 func (m *marshaller) marshalStruct(v reflect.Value) error {
 	for i := 0; i < v.NumField(); i++ {
-		opts := parseStructFieldMuOptions(v.Type().Field(i))
+		opts := newOptionsFromStructField(v.Type().Field(i))
 		exit := m.enterStructField(v, i, opts)
 		if err := m.marshalValue(v.Field(i), opts); err != nil {
 			exit()
@@ -807,6 +831,11 @@ func (m *marshaller) marshalCustom(v reflect.Value) error {
 }
 
 func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
+	if opts == nil {
+		var def options
+		opts = &def
+	}
+
 	kind, err := classifyKind(v.Type(), opts)
 	if err != nil {
 		panic(fmt.Sprintf("cannot marshal unsupported type %s (%v)", v.Type(), err))
@@ -833,6 +862,8 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 		return m.marshalSized1Bytes(v)
 	case kindNeedsDeref:
 		return m.marshalPtr(v, opts)
+	case kindIndirectSized:
+		return m.marshalIndirectSized(v, opts)
 	case kindIgnore:
 		return nil
 	}
@@ -849,16 +880,7 @@ func (m *marshaller) marshal(vals ...interface{}) (int, error) {
 
 	for i, v := range vals {
 		m.index = i
-
-		var opts *options
-		switch w := v.(type) {
-		case *wrappedValue:
-			v = w.value
-			opts = w.opts
-		default:
-		}
-
-		if err := m.marshalValue(reflect.ValueOf(v), opts); err != nil {
+		if err := m.marshalValue(reflect.ValueOf(v), nil); err != nil {
 			return m.nbytes, err
 		}
 	}
@@ -916,14 +938,18 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value, opts *options) error {
 		v.SetLen(int(size))
 	}
 
-	if opts == nil {
-		opts = new(options)
-	}
 	exit := opts.enterSizedType(v)
 	defer exit()
 
 	su := &unmarshaller{context: u.context, r: io.LimitReader(u, int64(size))}
 	return su.unmarshalValue(v, opts)
+}
+
+func (u *unmarshaller) unmarshalIndirectSized(v reflect.Value, opts *options) error {
+	exit := opts.enterIndirectSizedType()
+	defer exit()
+
+	return u.unmarshalPtr(v, opts)
 }
 
 func (u *unmarshaller) unmarshalSized1Bytes(v reflect.Value) error {
@@ -1012,7 +1038,7 @@ func (u *unmarshaller) unmarshalList(v reflect.Value) error {
 
 func (u *unmarshaller) unmarshalStruct(v reflect.Value) error {
 	for i := 0; i < v.NumField(); i++ {
-		opts := parseStructFieldMuOptions(v.Type().Field(i))
+		opts := newOptionsFromStructField(v.Type().Field(i))
 		exit := u.enterStructField(v, i, opts)
 		if err := u.unmarshalValue(v.Field(i), opts); err != nil {
 			exit()
@@ -1050,6 +1076,11 @@ func (u *unmarshaller) unmarshalCustom(v reflect.Value) error {
 }
 
 func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
+	if opts == nil {
+		var def options
+		opts = &def
+	}
+
 	kind, err := classifyKind(v.Type(), opts)
 	if err != nil {
 		panic(fmt.Sprintf("cannot unmarshal unsupported type %s (%v)", v.Type(), err))
@@ -1077,6 +1108,8 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 		return u.unmarshalSized1Bytes(v)
 	case kindNeedsDeref:
 		return u.unmarshalPtr(v, opts)
+	case kindIndirectSized:
+		return u.unmarshalIndirectSized(v, opts)
 	case kindIgnore:
 		return nil
 	}
@@ -1094,14 +1127,6 @@ func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 	for i, v := range vals {
 		u.index = i
 
-		var opts *options
-		switch w := v.(type) {
-		case *wrappedValue:
-			v = w.value
-			opts = w.opts
-		default:
-		}
-
 		val := reflect.ValueOf(v)
 		if val.Kind() != reflect.Ptr {
 			panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", reflect.TypeOf(v)))
@@ -1111,7 +1136,7 @@ func (u *unmarshaller) unmarshal(vals ...interface{}) (int, error) {
 			panic(fmt.Sprintf("cannot unmarshal to nil pointer of type %s", val.Type()))
 		}
 
-		if err := u.unmarshalValue(val.Elem(), opts); err != nil {
+		if err := u.unmarshalValue(val.Elem(), nil); err != nil {
 			return u.nbytes, err
 		}
 	}
@@ -1263,20 +1288,6 @@ func UnmarshalFromBytes(b []byte, vals ...interface{}) (int, error) {
 }
 
 func copyValue(skip int, dst, src interface{}) error {
-	var wrappedSrc *wrappedValue
-	switch s := src.(type) {
-	case *wrappedValue:
-		wrappedSrc = s
-	default:
-		wrappedSrc = &wrappedValue{value: s}
-	}
-
-	switch d := dst.(type) {
-	case *wrappedValue:
-		_ = d
-		panic("can only pass options to the source")
-	}
-
 	dstV := reflect.ValueOf(dst)
 	if dstV.Kind() != reflect.Ptr {
 		panic(fmt.Sprintf("cannot unmarshal to non-pointer type %s", reflect.TypeOf(dst)))
@@ -1289,20 +1300,18 @@ func copyValue(skip int, dst, src interface{}) error {
 
 	isInterface := false
 	if dstV.Elem().Kind() == reflect.Interface {
-		if !reflect.TypeOf(wrappedSrc.value).Implements(dstV.Elem().Type()) {
+		if !reflect.TypeOf(src).Implements(dstV.Elem().Type()) {
 			panic(fmt.Sprintf("type %s does not implement destination interface %s", reflect.TypeOf(src), dstV.Elem().Type()))
 		}
-		dstLocal = reflect.New(reflect.TypeOf(wrappedSrc.value)).Interface()
+		dstLocal = reflect.New(reflect.TypeOf(src)).Interface()
 		isInterface = true
 	}
 
-	wrappedDst := &wrappedValue{value: dstLocal, opts: wrappedSrc.opts}
-
 	buf := new(bytes.Buffer)
-	if _, err := marshalToWriter(skip+1, buf, wrappedSrc); err != nil {
+	if _, err := marshalToWriter(skip+1, buf, src); err != nil {
 		return err
 	}
-	if _, err := unmarshalFromReader(skip+1, buf, wrappedDst); err != nil {
+	if _, err := unmarshalFromReader(skip+1, buf, dstLocal); err != nil {
 		return err
 	}
 
