@@ -46,7 +46,7 @@ var (
 
 type tpmDevices struct {
 	once    sync.Once
-	devices []*TPMDeviceRaw
+	devices []*RawDevice
 	err     error
 }
 
@@ -66,13 +66,18 @@ const (
 )
 
 // TPMDevice represents a Linux TPM character device.
-type TPMDevice struct {
+//
+// Deprecated: use [Device].
+type TPMDevice = Device
+
+// Device represents a Linux TPM character device.
+type Device struct {
 	path      string
 	sysfsPath string
 	version   TPMMajorVersion
 }
 
-func (d *TPMDevice) openInternal() (*Transport, error) {
+func (d *Device) openInternal() (*Transport, error) {
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
@@ -82,38 +87,43 @@ func (d *TPMDevice) openInternal() (*Transport, error) {
 }
 
 // Path returns the path of the character device.
-func (d *TPMDevice) Path() string {
+func (d *Device) Path() string {
 	return d.path
 }
 
 // SysfsPath returns the path of the device in sysfs.
-func (d *TPMDevice) SysfsPath() string {
+func (d *Device) SysfsPath() string {
 	return d.sysfsPath
 }
 
 // MajorVersion indicates the TPM version.
-func (d *TPMDevice) MajorVersion() TPMMajorVersion {
+func (d *Device) MajorVersion() TPMMajorVersion {
 	return d.version
 }
 
 // Open implements [tpm2.TPMDevice.Open].
-func (d *TPMDevice) Open() (tpm2.Transport, error) {
+func (d *Device) Open() (tpm2.Transport, error) {
 	return d.openInternal()
 }
 
 // ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
-func (d *TPMDevice) ShouldRetry() bool {
+func (d *Device) ShouldRetry() bool {
 	return false
 }
 
 // String implements [fmt.Stringer].
-func (d *TPMDevice) String() string {
+func (d *Device) String() string {
 	return "linux TPM character device: " + d.path
 }
 
 // TPMDeviceRaw represents a raw Linux TPM character device.
-type TPMDeviceRaw struct {
-	TPMDevice
+//
+// Deprecated: use [RawDevice].
+type TPMDeviceRaw = RawDevice
+
+// RawDevice represents a raw Linux TPM character device.
+type RawDevice struct {
+	Device
 	devno int
 
 	ppiOnce sync.Once
@@ -121,13 +131,13 @@ type TPMDeviceRaw struct {
 	ppiErr  error
 
 	rmOnce sync.Once
-	rm     *TPMDeviceRM
+	rm     *RMDevice
 	rmErr  error
 }
 
 // PhysicalPresenceInterface returns the physical presence interface associated
 // with this device.
-func (d *TPMDeviceRaw) PhysicalPresenceInterface() (ppi.PPI, error) {
+func (d *RawDevice) PhysicalPresenceInterface() (ppi.PPI, error) {
 	d.ppiOnce.Do(func() {
 		d.ppi, d.ppiErr = func() (ppi.PPI, error) {
 			backend, err := newSysfsPpi(filepath.Join(d.sysfsPath, "ppi"))
@@ -146,9 +156,9 @@ func (d *TPMDeviceRaw) PhysicalPresenceInterface() (ppi.PPI, error) {
 
 // ResourceManagedDevice returns the corresponding resource managed device if one
 // is available.
-func (d *TPMDeviceRaw) ResourceManagedDevice() (*TPMDeviceRM, error) {
+func (d *RawDevice) ResourceManagedDevice() (*RMDevice, error) {
 	d.rmOnce.Do(func() {
-		d.rm, d.rmErr = func() (*TPMDeviceRM, error) {
+		d.rm, d.rmErr = func() (*RMDevice, error) {
 			if d.version != TPMVersion2 {
 				// the kernel resource manager is only available for TPM2 devices.
 				return nil, ErrNoResourceManagedDevice
@@ -163,8 +173,8 @@ func (d *TPMDeviceRaw) ResourceManagedDevice() (*TPMDeviceRM, error) {
 			case err != nil:
 				return nil, err
 			default:
-				return &TPMDeviceRM{
-					TPMDevice: TPMDevice{
+				return &RMDevice{
+					Device: Device{
 						path:      filepath.Join(devPath, base),
 						sysfsPath: sysfsPath,
 						version:   d.version},
@@ -177,13 +187,19 @@ func (d *TPMDeviceRaw) ResourceManagedDevice() (*TPMDeviceRM, error) {
 
 // TPMDeviceRM represents a Linux TPM character device that makes use of the kernel
 // resource manager.
-type TPMDeviceRM struct {
-	TPMDevice
-	raw *TPMDeviceRaw
+//
+// Deprecated: use [RMDevice].
+type TPMDeviceRM = RMDevice
+
+// RMDevice represents a Linux TPM character device that makes use of the kernel
+// resource manager.
+type RMDevice struct {
+	Device
+	raw *RawDevice
 }
 
 // RawDevice returns the corresponding raw device.
-func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
+func (d *RMDevice) RawDevice() *RawDevice {
 	return d.raw
 }
 
@@ -192,9 +208,9 @@ func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
 // can be passed to tpm2.NewTPMContext. Failure to open the TPM character device
 // will result in a *os.PathError being returned.
 //
-// Deprecated: Use [TPMDeviceRaw] and [TPMDeviceRM].
+// Deprecated: Use [RawDevice] and [RMDevice].
 func OpenDevice(path string) (*Transport, error) {
-	device := &TPMDevice{path: path}
+	device := &Device{path: path}
 	tcti, err := device.openInternal()
 	if err != nil {
 		return nil, err
@@ -249,7 +265,7 @@ func tpmDeviceVersion(path string) (TPMMajorVersion, error) {
 	}
 }
 
-func probeTpmDevices() (out []*TPMDeviceRaw, err error) {
+func probeTpmDevices() (out []*RawDevice, err error) {
 	class := filepath.Join(sysfsPath, "class/tpm")
 
 	f, err := os.Open(class)
@@ -282,8 +298,8 @@ func probeTpmDevices() (out []*TPMDeviceRaw, err error) {
 			return nil, fmt.Errorf("cannot determine version of TPM device at %s: %w", sysfsPath, err)
 		}
 
-		out = append(out, &TPMDeviceRaw{
-			TPMDevice: TPMDevice{
+		out = append(out, &RawDevice{
+			Device: Device{
 				path:      filepath.Join(devPath, entry.Name()),
 				sysfsPath: sysfsPath,
 				version:   version},
@@ -299,7 +315,7 @@ func probeTpmDevices() (out []*TPMDeviceRaw, err error) {
 
 // ListTPMDevices returns a list of all TPM devices. Note that this returns
 // all devices, regardless of version.
-func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
+func ListTPMDevices() (out []*RawDevice, err error) {
 	devices.once.Do(func() {
 		devices.devices, devices.err = probeTpmDevices()
 	})
@@ -307,7 +323,7 @@ func ListTPMDevices() (out []*TPMDeviceRaw, err error) {
 }
 
 // ListTPMDevices returns a list of all TPM2 devices.
-func ListTPM2Devices() (out []*TPMDeviceRaw, err error) {
+func ListTPM2Devices() (out []*RawDevice, err error) {
 	candidates, err := ListTPMDevices()
 	if err != nil {
 		return nil, err
@@ -324,7 +340,7 @@ func ListTPM2Devices() (out []*TPMDeviceRaw, err error) {
 
 // DefaultTPMDevice returns the default TPM device. If there are no devices
 // available, then [ErrNoTPMDevices] is returned.
-func DefaultTPMDevice() (*TPMDeviceRaw, error) {
+func DefaultTPMDevice() (*RawDevice, error) {
 	devices, err := ListTPMDevices()
 	if err != nil {
 		return nil, err
@@ -338,7 +354,7 @@ func DefaultTPMDevice() (*TPMDeviceRaw, error) {
 // DefaultTPM2Device returns the default TPM2 device. If there are no devices
 // available, then [ErrNoTPMDevices] is returned. If the default TPM device is
 // not a TPM2 device, then [ErrDefaultNotTPM2Device] is returned.
-func DefaultTPM2Device() (*TPMDeviceRaw, error) {
+func DefaultTPM2Device() (*RawDevice, error) {
 	device, err := DefaultTPMDevice()
 	if err != nil {
 		return nil, err
