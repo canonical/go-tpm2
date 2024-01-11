@@ -168,7 +168,7 @@ var (
 	// MssimPort defines the port number of the TPM simulator command port where TPMBackend is TPMBackendMssim.
 	MssimPort uint = 2321
 
-	wrapMssimTCTI = WrapTCTI
+	wrapMssimTransport = WrapTransport
 )
 
 type tpmBackendFlag TPMBackendType
@@ -471,7 +471,7 @@ func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 		return fmt.Errorf("cannot start simulator: %w", err)
 	}
 
-	var tcti *mssim.Tcti
+	var tcti *mssim.Transport
 	// Give the simulator 5 seconds to start up
 Loop:
 	for i := 0; ; i++ {
@@ -556,7 +556,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	}, nil
 }
 
-func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
+func newTransport(features TPMFeatureFlags) (*Transport, error) {
 	switch TPMBackend {
 	case TPMBackendNone:
 		return nil, nil
@@ -564,57 +564,87 @@ func newTCTI(features TPMFeatureFlags) (*TCTI, error) {
 		if features&PermittedTPMFeatures != features {
 			return nil, nil
 		}
-		tcti, err := linux.OpenDevice(TPMDevicePath)
+		transport, err := linux.OpenDevice(TPMDevicePath)
 		if err != nil {
 			return nil, err
 		}
-		return WrapTCTI(tcti, features)
+		return WrapTransport(transport, features)
 	case TPMBackendMssim:
-		tcti, err := mssim.OpenConnection("", MssimPort)
+		transport, err := mssim.OpenConnection("", MssimPort)
 		if err != nil {
 			return nil, err
 		}
-		return WrapTCTI(tcti, features)
+		return WrapTransport(transport, features)
 	}
 	panic("not reached")
 }
 
-// NewTCTI returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
+// NewTCTI returns a new Transport for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
-// the returned TCTI will wrap a *mssim.Tcti and will correspond to a connection to the TPM simulator on the port
-// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will wrap a
-// *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
-// this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
+// the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
+// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
+// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
-// The returned TCTI must be closed when it is no longer required.
-func NewTCTI(c *C, features TPMFeatureFlags) *TCTI {
-	tcti, err := newTCTI(features)
-	c.Assert(err, IsNil)
-	if tcti == nil {
-		c.Skip("no TPM available for the test")
-	}
-	return tcti
+// The returned Transport must be closed when it is no longer required.
+//
+// Deprecated: Use [NewTransport].
+func NewTCTI(c *C, features TPMFeatureFlags) *Transport {
+	return NewTransport(c, features)
 }
 
-// NewTCTIT returns a new TCTI for testing, for integration with test suites that might have a custom way to create a
+// NewTransport returns a new Transport for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
-// the returned TCTI will wrap a *mssim.Tcti and will correspond to a connection to the TPM simulator on the port
-// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned TCTI will wrap a
-// *tpm2.TctiDeviceLinux if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
-// this case, the TCTI will correspond to a connection to the Linux character device at the path specified by the
+// the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
+// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
+// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
-// The returned TCTI must be closed when it is no longer required.
-func NewTCTIT(t *testing.T, features TPMFeatureFlags) *TCTI {
-	tcti, err := newTCTI(features)
+// The returned Transport must be closed when it is no longer required.
+func NewTransport(c *C, features TPMFeatureFlags) *Transport {
+	transport, err := newTransport(features)
+	c.Assert(err, IsNil)
+	if transport == nil {
+		c.Skip("no TPM available for the test")
+	}
+	return transport
+}
+
+// NewTCTIT returns a new Transport for testing, for integration with test suites that might have a custom way to create a
+// TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
+// the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
+// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
+// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
+// TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+//
+// The returned Transport must be closed when it is no longer required.
+//
+// Deprecated: Use [NewTransportT].
+func NewTCTIT(t *testing.T, features TPMFeatureFlags) *Transport {
+	return NewTransportT(t, features)
+}
+
+// NewTransportT returns a new Transport for testing, for integration with test suites that might have a custom way to create a
+// TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
+// the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
+// specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
+// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
+// TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
+//
+// The returned Transport must be closed when it is no longer required.
+func NewTransportT(t *testing.T, features TPMFeatureFlags) *Transport {
+	transport, err := newTransport(features)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if tcti == nil {
+	if transport == nil {
 		t.SkipNow()
 	}
-	return tcti
+	return transport
 }
 
 // NewTPMContext returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
@@ -625,10 +655,10 @@ func NewTCTIT(t *testing.T, features TPMFeatureFlags) *TCTI {
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
 // The returned TPMContext must be closed when it is no longer required.
-func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
-	tcti := NewTCTI(c, features)
-	tpm := tpm2.NewTPMContext(tcti)
-	return tpm, tcti
+func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *Transport) {
+	transport := NewTransport(c, features)
+	tpm := tpm2.NewTPMContext(transport)
+	return tpm, transport
 }
 
 // NewTPMContextT returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
@@ -640,17 +670,17 @@ func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *TCTI) {
 //
 // The returned TPMContext must be closed when it is no longer required. This can be done with the returned
 // close callback, which will cause the test to fail if closing doesn't succeed.
-func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (tpm *tpm2.TPMContext, tcti *TCTI, close func()) {
-	tcti = NewTCTIT(t, features)
-	tpm = tpm2.NewTPMContext(tcti)
-	return tpm, tcti, func() {
+func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (tpm *tpm2.TPMContext, transport *Transport, close func()) {
+	transport = NewTransportT(t, features)
+	tpm = tpm2.NewTPMContext(transport)
+	return tpm, transport, func() {
 		if err := tpm.Close(); err != nil {
 			t.Errorf("close failed: %v", err)
 		}
 	}
 }
 
-func newSimulatorTCTI() (*TCTI, error) {
+func newSimulatorTransport() (*Transport, error) {
 	if TPMBackend != TPMBackendMssim {
 		return nil, nil
 	}
@@ -660,37 +690,57 @@ func newSimulatorTCTI() (*TCTI, error) {
 		return nil, err
 	}
 
-	return wrapMssimTCTI(mssim, TPMFeatureFlags(math.MaxUint32))
+	return wrapMssimTransport(mssim, TPMFeatureFlags(math.MaxUint32))
 }
 
-// NewSimulatorTCTI returns a new TCTI for testing that corresponds to a connection to the TPM simulator
+// NewSimulatorTCTI returns a new Transport for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
 // will be skipped.
 //
-// The returned TCTI must be closed when it is no longer required.
-func NewSimulatorTCTI(c *C) *TCTI {
-	tcti, err := newSimulatorTCTI()
+// The returned Transport must be closed when it is no longer required.
+//
+// Deprecated: Use [NewSimulatorTransport].
+func NewSimulatorTCTI(c *C) *Transport {
+	return NewSimulatorTransport(c)
+}
+
+// NewSimulatorTransport returns a new Transport for testing that corresponds to a connection to the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
+// will be skipped.
+//
+// The returned Transport must be closed when it is no longer required.
+func NewSimulatorTransport(c *C) *Transport {
+	transport, err := newSimulatorTransport()
 	c.Assert(err, IsNil)
-	if tcti == nil {
+	if transport == nil {
 		c.Skip("no TPM available for the test")
 	}
-	return tcti
+	return transport
 }
 
-// NewSimulatorTCTIT returns a new TCTI for testing that corresponds to a connection to the TPM simulator
+// NewSimulatorTCTIT returns a new Transport for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
 // will be skipped.
 //
-// The returned TCTI must be closed when it is no longer required.
-func NewSimulatorTCTIT(t *testing.T) *TCTI {
-	tcti, err := newSimulatorTCTI()
+// The returned Transport must be closed when it is no longer required.
+func NewSimulatorTCTIT(t *testing.T) *Transport {
+	return NewSimulatorTransportT(t)
+}
+
+// NewSimulatorTransportT returns a new Transport for testing that corresponds to a connection to the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
+// will be skipped.
+//
+// The returned Transport must be closed when it is no longer required.
+func NewSimulatorTransportT(t *testing.T) *Transport {
+	transport, err := newSimulatorTransport()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if tcti == nil {
+	if transport == nil {
 		t.SkipNow()
 	}
-	return tcti
+	return transport
 }
 
 // NewTPMSimulatorContext returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
@@ -698,10 +748,10 @@ func NewSimulatorTCTIT(t *testing.T) *TCTI {
 // skipped.
 //
 // The returned TPMContext must be closed when it is no longer required.
-func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
-	tcti := NewSimulatorTCTI(c)
-	tpm := tpm2.NewTPMContext(tcti)
-	return tpm, tcti
+func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *Transport) {
+	transport := NewSimulatorTransport(c)
+	tpm := tpm2.NewTPMContext(transport)
+	return tpm, transport
 }
 
 // NewTPMSimulatorContextT returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
@@ -710,10 +760,10 @@ func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *TCTI) {
 //
 // The returned TPMContext must be closed when it is no longer required. This can be done with the returned
 // close callback, which will cause the test to fail if closing doesn't succeed.
-func NewTPMSimulatorContextT(t *testing.T) (tpm *tpm2.TPMContext, tcti *TCTI, close func()) {
-	tcti = NewSimulatorTCTIT(t)
-	tpm = tpm2.NewTPMContext(tcti)
-	return tpm, tcti, func() {
+func NewTPMSimulatorContextT(t *testing.T) (tpm *tpm2.TPMContext, transport *Transport, close func()) {
+	transport = NewSimulatorTransportT(t)
+	tpm = tpm2.NewTPMContext(transport)
+	return tpm, transport, func() {
 		if err := tpm.Close(); err != nil {
 			t.Errorf("close failed: %v", err)
 		}
@@ -735,19 +785,19 @@ func ClearTPMUsingPlatformHierarchyT(t *testing.T, tpm *tpm2.TPMContext) {
 	}
 }
 
-func resetTPMSimulator(tpm *tpm2.TPMContext, tcti *mssim.Tcti) error {
+func resetTPMSimulator(tpm *tpm2.TPMContext, transport *mssim.Transport) error {
 	if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
 		return err
 	}
-	if err := tcti.Reset(); err != nil {
+	if err := transport.Reset(); err != nil {
 		return fmt.Errorf("resetting the simulator failed: %v", err)
 	}
 	return tpm.Startup(tpm2.StartupClear)
 }
 
 // ResetTPMSimulatorT issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
-func ResetTPMSimulatorT(t *testing.T, tpm *tpm2.TPMContext, tcti *TCTI) {
-	mssim, ok := tcti.Unwrap().(*mssim.Tcti)
+func ResetTPMSimulatorT(t *testing.T, tpm *tpm2.TPMContext, transport *Transport) {
+	mssim, ok := transport.Unwrap().(*mssim.Transport)
 	if !ok {
 		t.Fatal("not a simulator")
 	}

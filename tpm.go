@@ -6,12 +6,15 @@ package tpm2
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"time"
 
 	"github.com/canonical/go-tpm2/mu"
+	"gopkg.in/tomb.v2"
 )
 
 func makeInvalidArgError(name, msg string) error {
@@ -76,6 +79,190 @@ func isSessionAllowed(commandCode CommandCode) bool {
 	default:
 		return true
 	}
+}
+
+type tpmRetryParameters struct {
+	maxRetries     uint
+	initialBackoff time.Duration
+	backoffRate    uint
+}
+
+type retrierTransport struct {
+	transport Transport
+	params    *tpmRetryParameters
+
+	tomb tomb.Tomb
+
+	w    io.WriteCloser // write channel
+	wErr <-chan error   // write errors
+
+	r    io.ReadCloser // read channel
+	rLen <-chan int64  // next response length, used to demarcate response bytes with io.EOF.
+	rErr <-chan error  // read errors.
+	lr   io.Reader     // current response reader, limited by the last value read from rLen.
+}
+
+func newRetrierTransport(transport Transport, params *tpmRetryParameters) *retrierTransport {
+	t := &retrierTransport{
+		transport: transport,
+		params:    params,
+	}
+
+	// Construct the write channel
+	wr, ww := io.Pipe()
+	t.w = ww
+	wErr := make(chan error)
+	t.wErr = wErr
+
+	// Construct the read channel
+	rr, rw := io.Pipe()
+	t.r = rr
+	rLen := make(chan int64)
+	t.rLen = rLen
+	rErr := make(chan error)
+	t.rErr = rErr
+
+	// Run the transport routine
+	t.tomb.Go(func() error {
+		err := t.run(wr, wErr, rw, rLen, rErr)
+		// Ensure the calling routine gets unblocked.
+		wr.Close()
+		rw.Close()
+		return err
+	})
+	return t
+}
+
+func (t *retrierTransport) runCommand(commandCode CommandCode, data []byte) ([]byte, error) {
+	retryDelay := t.params.initialBackoff
+
+	for retries := t.params.maxRetries; ; retries-- {
+		// Send the command.
+		if _, err := t.transport.Write(data); err != nil {
+			return nil, fmt.Errorf("cannot send command: %w", err)
+		}
+
+		rsp := new(bytes.Buffer)
+		tr := io.TeeReader(t.transport, rsp)
+
+		// Wait for the response header
+		var hdr ResponseHeader
+		if _, err := mu.UnmarshalFromReader(tr, &hdr); err != nil {
+			return nil, fmt.Errorf("cannot unmarshal response header: %w", err)
+		}
+
+		// Read the rest of the response
+		if _, err := io.Copy(io.Discard, tr); err != nil {
+			return nil, err
+		}
+
+		err := DecodeResponseCode(commandCode, hdr.ResponseCode)
+		if retries > 0 && (IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
+			time.Sleep(retryDelay)
+			retryDelay *= time.Duration(t.params.backoffRate)
+			continue
+		}
+
+		return rsp.Bytes(), nil
+	}
+}
+
+func (t *retrierTransport) run(r io.Reader, rErr chan<- error, w io.Writer, wLen chan<- int64, wErr chan<- error) (err error) {
+Next:
+	for {
+		cmd := new(bytes.Buffer)
+		tr := io.TeeReader(r, cmd)
+
+		// Wait for the next command header
+		var hdr CommandHeader
+		_, err := mu.UnmarshalFromReader(tr, &hdr)
+		switch {
+		case errors.Is(err, io.ErrUnexpectedEOF):
+			// We were closed
+			return nil
+		case err != nil:
+			// Send an error to the writer
+			rErr <- fmt.Errorf("cannot send command: %w", err)
+			continue Next
+		}
+
+		// Read the rest of the command
+		_, err = io.CopyN(io.Discard, tr, int64(hdr.CommandSize)-int64(binary.Size(hdr)))
+		switch {
+		case err == io.EOF:
+			// We were closed
+			return nil
+		case err != nil:
+			// Send an error to the writer
+			rErr <- fmt.Errorf("cannot send command: %w", err)
+			continue Next
+		}
+
+		// Unblock the writer
+		rErr <- nil
+
+		rsp, err := t.runCommand(hdr.CommandCode, cmd.Bytes())
+		switch {
+		case err != nil:
+			// Command dispatch failed, send an error to the reader
+			wErr <- err
+		default:
+			// Command was executed, send the response to the reader
+			wLen <- int64(len(rsp))
+			_, err := io.Copy(w, bytes.NewReader(rsp))
+			wErr <- err
+		}
+	}
+}
+
+func (t *retrierTransport) Read(data []byte) (int, error) {
+	if t.lr == nil {
+		// Wait for the next response, or an error.
+		select {
+		case n := <-t.rLen:
+			t.lr = io.LimitReader(t.r, n)
+		case err := <-t.rErr:
+			return 0, err
+		}
+	}
+
+	n, err := t.lr.Read(data)
+	if err == io.EOF {
+		// This response is finished. Return io.EOF or an
+		// error from the transport routine if there is one.
+		t.lr = nil
+		select {
+		case err := <-t.rErr:
+			if err != nil {
+				return n, err
+			}
+		}
+	}
+	return n, err
+}
+
+func (t *retrierTransport) Write(data []byte) (n int, err error) {
+	n, err = t.w.Write(data)
+	if err != nil {
+		return n, err
+	}
+
+	// Wait for a response from the transport routine
+	return n, <-t.wErr
+}
+
+func (t *retrierTransport) Close() error {
+	// Close the pipes and transport to unblock the transport routine.
+	t.w.Close()
+	t.r.Close()
+	err := t.transport.Close()
+
+	// Wait for everything to die.
+	t.tomb.Kill(nil)
+	if err := t.tomb.Wait(); err != nil {
+		return err
+	}
+	return err
 }
 
 type execContextDispatcher interface {
@@ -212,12 +399,6 @@ type tpmDeviceProperties struct {
 	maxNVBufferSize  uint16
 }
 
-type tpmRetryParameters struct {
-	maxRetries     uint
-	initialBackoff time.Duration
-	backoffRate    uint
-}
-
 // TODO: Implement commands from the following sections of part 3 of the TPM library spec:
 // Section 14 - Asymmetric Primitives
 // Section 15 - Symmetric Primitives
@@ -284,7 +465,7 @@ type tpmRetryParameters struct {
 // sessions may be used for the purposes of session based parameter encryption or command auditing.
 type TPMContext struct {
 	device             TPMDevice
-	tcti               TCTI
+	transport          Transport
 	permanentResources map[Handle]*permanentContext
 	retryParams        tpmRetryParameters
 	properties         *tpmDeviceProperties
@@ -293,8 +474,8 @@ type TPMContext struct {
 
 // Close calls Close on the transmission interface.
 func (t *TPMContext) Close() error {
-	if err := t.tcti.Close(); err != nil {
-		return &TctiError{"close", err}
+	if err := t.transport.Close(); err != nil {
+		return &TransportError{"close", err}
 	}
 
 	return nil
@@ -310,13 +491,13 @@ func (t *TPMContext) Close() error {
 // Most users will want to use one of the many convenience functions provided by TPMContext
 // instead, or [TPMContext.StartCommand] if one doesn't already exist.
 func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, error) {
-	if _, err := t.tcti.Write(packet); err != nil {
-		return nil, &TctiError{"write", err}
+	if _, err := t.transport.Write(packet); err != nil {
+		return nil, &TransportError{"write", err}
 	}
 
-	resp, err := ioutil.ReadAll(t.tcti)
+	resp, err := ioutil.ReadAll(t.transport)
 	if err != nil {
-		return nil, &TctiError{"read", err}
+		return nil, &TransportError{"read", err}
 	}
 
 	return ResponsePacket(resp), nil
@@ -332,7 +513,7 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 // retry up to a maximum number of times defined by the number supplied to
 // [TPMContext.SetMaxSubmissions], if required by the underlying [TPMDevice].
 //
-// A *[TctiError] will be returned if the transmission interface returns an error.
+// A *[TransportError] will be returned if the transmission interface returns an error.
 //
 // One of *[TPMWarning], *[TPMError], *[TPMParameterError], *[TPMHandleError] or
 // *[TPMSessionError] will be returned if the TPM returns a response code other than
@@ -347,40 +528,24 @@ func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cA
 		return nil, nil, fmt.Errorf("cannot serialize command packet: %w", err)
 	}
 
-	retryDelay := t.retryParams.initialBackoff
+	resp, err := t.RunCommandBytes(cmd)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	for retries := t.retryParams.maxRetries; ; retries-- {
-		var err error
-		resp, err := t.RunCommandBytes(cmd)
-		if err != nil {
-			return nil, nil, err
-		}
+	rc, rpBytes, rAuthArea, err := resp.Unmarshal(rHandle)
+	if err != nil {
+		return nil, nil, &InvalidResponseError{commandCode, fmt.Errorf("cannot unmarshal response packet: %w", err)}
+	}
 
-		var rc ResponseCode
-		rc, rpBytes, rAuthArea, err = resp.Unmarshal(rHandle)
-		if err != nil {
-			return nil, nil, &InvalidResponseError{commandCode, fmt.Errorf("cannot unmarshal response packet: %w", err)}
-		}
-
-		err = DecodeResponseCode(commandCode, rc)
-		if err == nil {
-			return rpBytes, rAuthArea, nil
-		}
+	if err := DecodeResponseCode(commandCode, rc); err != nil {
 		if _, isInvalidRc := err.(InvalidResponseCodeError); isInvalidRc {
 			return nil, nil, &InvalidResponseError{commandCode, err}
 		}
-
-		if !t.device.ShouldRetry() || retries == 0 {
-			return nil, nil, err
-		}
-		if !(IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
-			return nil, nil, err
-		}
-
-		time.Sleep(retryDelay)
-
-		retryDelay *= time.Duration(t.retryParams.backoffRate)
+		return nil, nil, err
 	}
+
+	return rpBytes, rAuthArea, nil
 }
 
 // StartCommand is the high-level function for beginning the process of executing a command. It
@@ -436,9 +601,9 @@ func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
 	return ErrTimeoutNotSupported
 }
 
-// TCTI returns the underlying transmission channel for this context.
-func (t *TPMContext) TCTI() TCTI {
-	return t.tcti
+// Transport returns the underlying transmission channel for this context.
+func (t *TPMContext) Transport() Transport {
+	return t.transport
 }
 
 // InitProperties executes one or more TPM2_GetCapability commands to initialize properties used
@@ -478,7 +643,7 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 // TPMDevice corresponds a TPM device.
 type TPMDevice interface {
 	// Open opens a communication channel with the TPM device.
-	Open() (TCTI, error)
+	Open() (Transport, error)
 
 	// ShouldRetry indicates whether TPMContext should resubmit commands
 	// when the TPM response indicates that a command should be retried.
@@ -496,14 +661,14 @@ func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
 		return nil, errors.New("no device")
 	}
 
-	tcti, err := device.Open()
+	transport, err := device.Open()
 	if err != nil {
 		return nil, err
 	}
 
 	tpm := &TPMContext{
 		device:             device,
-		tcti:               tcti,
+		transport:          transport,
 		permanentResources: make(map[Handle]*permanentContext),
 		retryParams: tpmRetryParameters{
 			maxRetries:     4,
@@ -512,15 +677,20 @@ func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
 		},
 	}
 	tpm.execContext.dispatcher = tpm
+
+	if device.ShouldRetry() {
+		tpm.transport = newRetrierTransport(tpm.transport, &tpm.retryParams)
+	}
+
 	return tpm, nil
 }
 
 type dummyTPMDevice struct {
-	tcti TCTI
+	transport Transport
 }
 
-func (d *dummyTPMDevice) Open() (TCTI, error) {
-	return d.tcti, nil
+func (d *dummyTPMDevice) Open() (Transport, error) {
+	return d.transport, nil
 }
 
 func (d *dummyTPMDevice) ShouldRetry() bool {
@@ -532,17 +702,17 @@ func (d *dummyTPMDevice) String() string {
 }
 
 // NewTPMContext creates a new instance of TPMContext, which communicates with the TPM using the
-// transmission interface provided via the tcti parameter. The transmission interface must not be
+// transmission interface provided via the transport parameter. The transmission interface must not be
 // nil - it is expected that the caller checks the error returned from the function that is/ used
 // to create it.
 //
 // Deprecated: Use [OpenTPMDevice] instead.
-func NewTPMContext(tcti TCTI) *TPMContext {
-	if tcti == nil {
+func NewTPMContext(transport Transport) *TPMContext {
+	if transport == nil {
 		panic("nil transmission interface")
 	}
 
-	device := &dummyTPMDevice{tcti: tcti}
+	device := &dummyTPMDevice{transport: transport}
 	tpm, err := OpenTPMDevice(device)
 	if err != nil {
 		panic(err)

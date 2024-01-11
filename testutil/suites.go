@@ -108,7 +108,7 @@ type TPMTest struct {
 	BaseTest
 
 	TPM         *tpm2.TPMContext // The TPM context for the test
-	TCTI        *TCTI            // The TPM transmission interface for the test
+	TCTI        *Transport       // The TPM transmission interface for the test
 	TPMFeatures TPMFeatureFlags  // TPM features required by tests in this suite
 }
 
@@ -382,7 +382,7 @@ func (b *TPMSimulatorTest) SetUpTest(c *C) {
 }
 
 // Mssim returns the underlying simulator connection.
-func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Tcti {
+func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Transport {
 	var tcti tpm2.TCTI = b.TCTI
 	for {
 		wrapper, isWrapper := tcti.(TCTIWrapper)
@@ -391,8 +391,8 @@ func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Tcti {
 		}
 		tcti = wrapper.Unwrap()
 	}
-	c.Assert(tcti, internal_testutil.ConvertibleTo, &mssim.Tcti{})
-	return tcti.(*mssim.Tcti)
+	c.Assert(tcti, internal_testutil.ConvertibleTo, &mssim.Transport{})
+	return tcti.(*mssim.Transport)
 }
 
 // ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator

@@ -8,10 +8,10 @@ import (
 	"github.com/canonical/go-tpm2"
 )
 
-func MockWrapMssimTCTI(fn func(tpm2.TCTI, TPMFeatureFlags) (*TCTI, error)) (restore func()) {
-	origWrapMssimTCTI := wrapMssimTCTI
-	wrapMssimTCTI = fn
+func MockWrapMssimTransport(fn func(tpm2.Transport, TPMFeatureFlags) (*Transport, error)) (restore func()) {
+	origWrapMssimTransport := wrapMssimTransport
+	wrapMssimTransport = fn
 	return func() {
-		wrapMssimTCTI = origWrapMssimTCTI
+		wrapMssimTransport = origWrapMssimTransport
 	}
 }

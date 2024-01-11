@@ -54,8 +54,8 @@ var devices tpmDevices
 
 // TctiDevice represents a connection to a Linux TPM character device.
 //
-// Deprecated: Use Tcti
-type TctiDevice = Tcti
+// Deprecated: Use Transport
+type TctiDevice = Transport
 
 // TPMMajorVersion describes the major version of a TPM device.
 type TPMMajorVersion int
@@ -72,13 +72,13 @@ type TPMDevice struct {
 	version   TPMMajorVersion
 }
 
-func (d *TPMDevice) openInternal() (*Tcti, error) {
+func (d *TPMDevice) openInternal() (*Transport, error) {
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Tcti{file: &tpmFile{file: f}}, nil
+	return &Transport{file: &tpmFile{file: f}}, nil
 }
 
 // Path returns the path of the character device.
@@ -97,7 +97,7 @@ func (d *TPMDevice) MajorVersion() TPMMajorVersion {
 }
 
 // Open implements [tpm2.TPMDevice.Open].
-func (d *TPMDevice) Open() (tpm2.TCTI, error) {
+func (d *TPMDevice) Open() (tpm2.Transport, error) {
 	return d.openInternal()
 }
 
@@ -188,12 +188,12 @@ func (d *TPMDeviceRM) RawDevice() *TPMDeviceRaw {
 }
 
 // OpenDevice attempts to open a connection to the Linux TPM character device at
-// the specified path. If successful, it returns a new TctiDevice instance which
+// the specified path. If successful, it returns a new Transport instance which
 // can be passed to tpm2.NewTPMContext. Failure to open the TPM character device
 // will result in a *os.PathError being returned.
 //
 // Deprecated: Use [TPMDeviceRaw] and [TPMDeviceRM].
-func OpenDevice(path string) (*Tcti, error) {
+func OpenDevice(path string) (*Transport, error) {
 	device := &TPMDevice{path: path}
 	tcti, err := device.openInternal()
 	if err != nil {

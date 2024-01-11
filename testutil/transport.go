@@ -15,9 +15,11 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-type TCTIWrapper interface {
-	tpm2.TCTI
-	Unwrap() tpm2.TCTI
+type TCTIWrapper = TransportWrapper
+
+type TransportWrapper interface {
+	tpm2.Transport
+	Unwrap() tpm2.Transport
 }
 
 func hasDecryptSession(authArea []tpm2.AuthCommand) bool {
@@ -207,7 +209,7 @@ type cmdAuditStatus struct {
 var savedObjects []*savedObject
 
 // CommandRecord provides information about a command executed via
-// the TCTI interface.
+// the Transport interface.
 type CommandRecord struct {
 	cmdInfo        *commandInfo
 	commandPacket  tpm2.CommandPacket
@@ -248,8 +250,16 @@ func (r *CommandRecord) UnmarshalResponse() (rc tpm2.ResponseCode, handle tpm2.H
 // It tracks changes to the TPM state and restores it when the connection is closed,
 // and also performs some permission checks to ensure that a test does not access
 // functionality that it has not declared as permitted.
-type TCTI struct {
-	tcti              tpm2.TCTI
+//
+// Deprecated: Use [Transport].
+type TCTI = Transport
+
+// Transport is a special proxy inteface used for testing, which wraps a real interface.
+// It tracks changes to the TPM state and restores it when the connection is closed,
+// and also performs some permission checks to ensure that a test does not access
+// functionality that it has not declared as permitted.
+type Transport struct {
+	transport         tpm2.Transport
 	permittedFeatures TPMFeatureFlags
 
 	restorePermanentAttrs tpm2.PermanentAttributes
@@ -273,7 +283,7 @@ type TCTI struct {
 	disableCommandLogging bool
 }
 
-func (t *TCTI) processCommandDone() error {
+func (t *Transport) processCommandDone() error {
 	currentCmd := t.currentCmd
 	t.currentCmd = nil
 
@@ -479,8 +489,8 @@ func (t *TCTI) processCommandDone() error {
 	return nil
 }
 
-func (t *TCTI) Read(data []byte) (int, error) {
-	r := io.TeeReader(t.tcti, t.currentCmd.response)
+func (t *Transport) Read(data []byte) (int, error) {
+	r := io.TeeReader(t.transport, t.currentCmd.response)
 	n, err := r.Read(data)
 
 	if err == io.EOF {
@@ -492,7 +502,7 @@ func (t *TCTI) Read(data []byte) (int, error) {
 	return n, err
 }
 
-func (t *TCTI) isDAExcempt(handle tpm2.Handle) (bool, error) {
+func (t *Transport) isDAExcempt(handle tpm2.Handle) (bool, error) {
 	switch handle.Type() {
 	case tpm2.HandleTypePCR:
 		return true, nil
@@ -518,7 +528,7 @@ func (t *TCTI) isDAExcempt(handle tpm2.Handle) (bool, error) {
 	}
 }
 
-func (t *TCTI) Write(data []byte) (int, error) {
+func (t *Transport) Write(data []byte) (int, error) {
 	cmd := tpm2.CommandPacket(data)
 
 	commandCode, err := cmd.GetCommandCode()
@@ -672,14 +682,14 @@ func (t *TCTI) Write(data []byte) (int, error) {
 		command:  cmd,
 		response: new(bytes.Buffer)}
 
-	n, err := t.tcti.Write(data)
+	n, err := t.transport.Write(data)
 	if err != nil {
 		t.currentCmd = nil
 	}
 	return n, err
 }
 
-func (t *TCTI) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
+func (t *Transport) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
 	auth, changed := t.hierarchyAuths[tpm2.HandlePlatform]
 	if !changed {
 		return nil
@@ -700,7 +710,7 @@ func (t *TCTI) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
 	return nil
 }
 
-func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
+func (t *Transport) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 	if !t.didHierarchyControl {
 		return errs
 	}
@@ -736,7 +746,7 @@ func (t *TCTI) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []error {
 	return errs
 }
 
-func (t *TCTI) restoreHierarchyAuths(errs []error, tpm *tpm2.TPMContext) []error {
+func (t *Transport) restoreHierarchyAuths(errs []error, tpm *tpm2.TPMContext) []error {
 	for hierarchy, auth := range t.hierarchyAuths {
 		rc := tpm.GetPermanentContext(hierarchy)
 		rc.SetAuthValue(auth)
@@ -748,7 +758,7 @@ func (t *TCTI) restoreHierarchyAuths(errs []error, tpm *tpm2.TPMContext) []error
 	return errs
 }
 
-func (t *TCTI) restoreDisableClear(tpm *tpm2.TPMContext) error {
+func (t *Transport) restoreDisableClear(tpm *tpm2.TPMContext) error {
 	if !t.didClearControl {
 		return nil
 	}
@@ -770,7 +780,7 @@ func (t *TCTI) restoreDisableClear(tpm *tpm2.TPMContext) error {
 	return nil
 }
 
-func (t *TCTI) restoreDA(errs []error, tpm *tpm2.TPMContext) []error {
+func (t *Transport) restoreDA(errs []error, tpm *tpm2.TPMContext) []error {
 	if t.permittedFeatures&TPMFeatureLockoutHierarchy == 0 {
 		// If the test is not permitted to use the lockout hierarchy, it was not permitted to
 		// make changes to the DA settings.
@@ -790,7 +800,7 @@ func (t *TCTI) restoreDA(errs []error, tpm *tpm2.TPMContext) []error {
 	return errs
 }
 
-func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
+func (t *Transport) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 	for _, info := range t.handles {
 		if !info.created {
 			continue
@@ -832,7 +842,7 @@ func (t *TCTI) removeResources(errs []error, tpm *tpm2.TPMContext) []error {
 	return errs
 }
 
-func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
+func (t *Transport) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 	if !t.didSetCmdAuditStatus {
 		return nil
 	}
@@ -935,8 +945,8 @@ func (t *TCTI) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 // can't be undone because, eg, the endorsement hierarchy was disabled and cannot
 // be reenabled, and TPMFeatureSetCommandCodeAuditStatus is not permitted, then an
 // error will be returned.
-func (t *TCTI) Close() error {
-	tpm := tpm2.NewTPMContext(t.tcti)
+func (t *Transport) Close() error {
+	tpm := tpm2.NewTPMContext(t.transport)
 
 	var errs []error
 
@@ -963,7 +973,7 @@ func (t *TCTI) Close() error {
 		errs = append(errs, err)
 	}
 
-	if err := t.tcti.Close(); err != nil {
+	if err := t.transport.Close(); err != nil {
 		return err
 	}
 
@@ -979,17 +989,28 @@ func (t *TCTI) Close() error {
 }
 
 // Unwrap returns the real interface that this one wraps.
-func (t *TCTI) Unwrap() tpm2.TCTI {
-	return t.tcti
+func (t *Transport) Unwrap() tpm2.Transport {
+	return t.transport
 }
 
-// WrapTCTI wraps the supplied TCTI and authorizes it to use the specified features. If
-// the supplied TCTI corresponds to a real TPM device, the caller should verify that the
+// WrapTCTI wraps the supplied transport and authorizes it to use the specified features. If
+// the supplied Transport corresponds to a real TPM device, the caller should verify that the
 // specified features are permitted by the current test environment by checking the value
 // of the PermittedTPMFeatures variable before calling this, and should skip the current
 // test if it needs to use features that are not permitted.
-func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) {
-	tpm := tpm2.NewTPMContext(tcti)
+//
+// Deprecated: Use [WrapTransport].
+func WrapTCTI(transport tpm2.Transport, permittedFeatures TPMFeatureFlags) (*Transport, error) {
+	return WrapTransport(transport, permittedFeatures)
+}
+
+// WrapTransport wraps the supplied transport and authorizes it to use the specified features. If
+// the supplied Transport corresponds to a real TPM device, the caller should verify that the
+// specified features are permitted by the current test environment by checking the value
+// of the PermittedTPMFeatures variable before calling this, and should skip the current
+// test if it needs to use features that are not permitted.
+func WrapTransport(transport tpm2.Transport, permittedFeatures TPMFeatureFlags) (*Transport, error) {
+	tpm := tpm2.NewTPMContext(transport)
 
 	props, err := tpm.GetCapabilityTPMProperties(tpm2.PropertyPermanent, tpm2.CapabilityMaxProperties)
 	if err != nil {
@@ -1029,8 +1050,8 @@ func WrapTCTI(tcti tpm2.TCTI, permittedFeatures TPMFeatureFlags) (*TCTI, error) 
 		cmdAuditStatus.commands = commands
 	}
 
-	return &TCTI{
-		tcti:                  tcti,
+	return &Transport{
+		transport:             transport,
 		permittedFeatures:     permittedFeatures,
 		restorePermanentAttrs: permanentAttrs,
 		restoreStClearAttrs:   stClearAttrs,

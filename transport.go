@@ -12,26 +12,17 @@ import (
 // InfiniteTimeout can be used to configure an infinite timeout.
 const InfiniteTimeout = -1 * time.Millisecond
 
-// ErrTimeoutNotSupported indicates that a [TCTI] implementation does not support
+// ErrTimeoutNotSupported indicates that a [Transport] implementation does not support
 // configuring the command timeout.
 var ErrTimeoutNotSupported = errors.New("configurable command timeouts are not supported")
 
-// XXX: Note that the "TCG TSS 2.0 TPM Command Transmission Interface (TCTI) API Specification"
-// defines the following callbacks:
-// - transmit, which is equivalent to io.Writer.
-// - receive, which is equivalent to io.Reader, although that lacks the ability to specify
-//   a timeout. Timing out after a command is submitted is problematic because our API is
-//   synchronous and there isn't a way to resume a command.
-// - finalize, which is equivalent to io.Closer.
-// - cancel, which we don't implement at the moment, and the Linux character device doesn't
-//   support cancellation anyway.
-// - getPollHandles, doesn't really make sense here because go's runtime does the polling on
-//   Read.
-// - setLocality, makes no sense in this package.
-// - makeSticky, not implemented yet by any TCTI implementation in tss2 AFAICT.
-
 // TCTI represents a communication channel to a TPM implementation.
-type TCTI interface {
+//
+// Deprecated: use [Transport] instead.
+type TCTI = Transport
+
+// Transport represents a communication channel to a TPM implementation.
+type Transport interface {
 	// Read is used to receive a response to a previously transmitted command. The implementation
 	// must support partial reading of a response, and must return io.EOF when there are no more
 	// bytes of a response left to read.

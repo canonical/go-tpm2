@@ -65,38 +65,38 @@ func (d *Device) Port() uint {
 	return d.port
 }
 
-func (d *Device) openInternal() (*Tcti, error) {
+func (d *Device) openInternal() (*Transport, error) {
 	tpmAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port())
 	platformAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port()+1)
 
-	tcti := new(Tcti)
-	tcti.locality = 3
+	transport := new(Transport)
+	transport.locality = 3
 
 	tpm, err := net.Dial("tcp", tpmAddress)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to TPM socket: %w", err)
 	}
-	tcti.tpm = tpm
+	transport.tpm = tpm
 
 	platform, err := net.Dial("tcp", platformAddress)
 	if err != nil {
-		tcti.tpm.Close()
+		transport.tpm.Close()
 		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
 	}
-	tcti.platform = platform
+	transport.platform = platform
 
-	if err := tcti.platformCommand(cmdPowerOn); err != nil {
+	if err := transport.platformCommand(cmdPowerOn); err != nil {
 		return nil, fmt.Errorf("cannot complete power on command: %w", err)
 	}
-	if err := tcti.platformCommand(cmdNVOn); err != nil {
+	if err := transport.platformCommand(cmdNVOn); err != nil {
 		return nil, fmt.Errorf("cannot complete NV on command: %w", err)
 	}
 
-	return tcti, nil
+	return transport, nil
 }
 
 // Open implements [tpm2.TPMDevice.Open].
-func (d *Device) Open() (tpm2.TCTI, error) {
+func (d *Device) Open() (tpm2.Transport, error) {
 	return d.openInternal()
 }
 
@@ -112,7 +112,13 @@ func (d *Device) String() string {
 
 // Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2
 // simulator interface.
-type Tcti struct {
+//
+// Deprecated: Use [Transport].
+type Tcti = Transport
+
+// Transport represents a connection to a TPM simulator that implements the Microsoft TPM2
+// simulator interface.
+type Transport struct {
 	tpm      net.Conn
 	platform net.Conn
 
@@ -123,8 +129,8 @@ type Tcti struct {
 	r                 io.Reader
 }
 
-// Read implmements [tpm2.TCTI.Read].
-func (t *Tcti) Read(data []byte) (int, error) {
+// Read implmements [tpm2.Transport.Read].
+func (t *Transport) Read(data []byte) (int, error) {
 	if t.r == nil {
 		var size uint32
 		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
@@ -148,8 +154,8 @@ func (t *Tcti) Read(data []byte) (int, error) {
 	return n, err
 }
 
-// Write implmements [tpm2.TCTI.Write].
-func (t *Tcti) Write(data []byte) (int, error) {
+// Write implmements [tpm2.Transport.Write].
+func (t *Transport) Write(data []byte) (int, error) {
 	if t.commandInProgress || t.r != nil {
 		return 0, errors.New("command in progress or unread bytes from previous response")
 	}
@@ -167,8 +173,8 @@ func (t *Tcti) Write(data []byte) (int, error) {
 	return n, err
 }
 
-// Close implements [tpm2.TCTI.Close].
-func (t *Tcti) Close() (err error) {
+// Close implements [tpm2.Transport.Close].
+func (t *Transport) Close() (err error) {
 	binary.Write(t.platform, binary.BigEndian, cmdSessionEnd)
 	binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd)
 	if e := t.platform.Close(); e != nil {
@@ -180,7 +186,7 @@ func (t *Tcti) Close() (err error) {
 	return err
 }
 
-func (t *Tcti) platformCommand(cmd uint32) error {
+func (t *Transport) platformCommand(cmd uint32) error {
 	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
 		return fmt.Errorf("cannot send command: %w", err)
 	}
@@ -199,13 +205,13 @@ func (t *Tcti) platformCommand(cmd uint32) error {
 // Reset submits the reset command on the platform connection, which
 // initiates a reset of the TPM simulator and results in the execution
 // of _TPM_Init().
-func (t *Tcti) Reset() error {
+func (t *Transport) Reset() error {
 	return t.platformCommand(cmdReset)
 }
 
 // Stop submits a stop command on both the TPM command and platform
 // channels, which initiates a shutdown of the TPM simulator.
-func (t *Tcti) Stop() (out error) {
+func (t *Transport) Stop() (out error) {
 	if err := binary.Write(t.platform, binary.BigEndian, cmdStop); err != nil {
 		return err
 	}
@@ -228,11 +234,11 @@ func NewDevice(host string, port uint) *Device {
 // command server. The simulator will also provide a platform server on
 // port+1. If host is an empty string, it defaults to "localhost".
 //
-// If successful, it returns a new Tcti instance which can be passed to
+// If successful, it returns a new Transport instance which can be passed to
 // tpm2.NewTPMContext.
 //
 // Deprecated: Use [NewDevice], [NewLocalDevice] or [DefaultDevice].
-func OpenConnection(host string, port uint) (*Tcti, error) {
+func OpenConnection(host string, port uint) (*Transport, error) {
 	device := NewDevice(host, port)
 	return device.openInternal()
 }
