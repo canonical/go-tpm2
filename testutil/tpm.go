@@ -254,17 +254,17 @@ func (c *tpmSimulatorLaunchContext) stopAndTerminate() (err error) {
 		c.captureErr("terminate", c.terminateFn(stopOk))
 	}()
 
-	tcti, err := mssim.OpenConnection("", c.port)
+	transport, err := mssim.OpenConnection("", c.port)
 	if err != nil {
 		return fmt.Errorf("cannot open simulator connection for stop: %w", err)
 	}
 
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm := tpm2.NewTPMContext(transport)
 
 	c.captureErr("shutdown", func() error {
 		return tpm.Shutdown(tpm2.StartupClear)
 	})
-	if err := tcti.Stop(); err != nil {
+	if err := transport.Stop(); err != nil {
 		return fmt.Errorf("cannot stop simulator: %w", err)
 	}
 	if err := tpm.Close(); err != nil {
@@ -470,12 +470,12 @@ func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 		return fmt.Errorf("cannot start simulator: %w", err)
 	}
 
-	var tcti *mssim.Transport
+	var transport *mssim.Transport
 	// Give the simulator 5 seconds to start up
 Loop:
 	for i := 0; ; i++ {
 		var err error
-		tcti, err = mssim.OpenConnection("", c.port)
+		transport, err = mssim.OpenConnection("", c.port)
 		switch {
 		case err != nil && i == 4:
 			return fmt.Errorf("cannot open simulator connection: %w", err)
@@ -486,7 +486,7 @@ Loop:
 		}
 	}
 
-	tpm := tpm2.NewTPMContext(tcti)
+	tpm := tpm2.NewTPMContext(transport)
 	defer tpm.Close()
 
 	if err := tpm.Startup(tpm2.StartupClear); err != nil {
