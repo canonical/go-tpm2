@@ -351,7 +351,7 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) {
 		// TPMTest.SetUpTest will create a TPMContext.
 	default:
 		// No connection was created prior to calling SetUpTest.
-		b.TCTI = NewSimulatorTCTI(c)
+		b.TCTI = NewSimulatorTransport(c)
 		// TPMTest.SetUpTest will create a TPMContext.
 	}
 }
@@ -383,16 +383,16 @@ func (b *TPMSimulatorTest) SetUpTest(c *C) {
 
 // Mssim returns the underlying simulator connection.
 func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Transport {
-	var tcti tpm2.TCTI = b.TCTI
+	var transport tpm2.Transport = b.TCTI
 	for {
-		wrapper, isWrapper := tcti.(TCTIWrapper)
+		wrapper, isWrapper := transport.(TransportWrapper)
 		if !isWrapper {
 			break
 		}
-		tcti = wrapper.Unwrap()
+		transport = wrapper.Unwrap()
 	}
-	c.Assert(tcti, internal_testutil.ConvertibleTo, &mssim.Transport{})
-	return tcti.(*mssim.Transport)
+	c.Assert(transport, internal_testutil.ConvertibleTo, &mssim.Transport{})
+	return transport.(*mssim.Transport)
 }
 
 // ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator

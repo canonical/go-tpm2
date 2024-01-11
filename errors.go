@@ -109,6 +109,8 @@ func (e *InvalidAuthResponseError) Error() string {
 // Deprecated: Use [TransportError].
 type TctiError = TransportError
 
+// TransportError is returned from any [TPMContext] method if the underlying [Transport] returns an error.
+// If this error occurs, the underlying connection will generally be unusable for subsequent commands.
 type TransportError struct {
 	Op  string // The operation that caused the error
 	err error

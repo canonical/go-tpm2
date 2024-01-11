@@ -15,6 +15,7 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+// Deprecated: use [TransportWrapper].
 type TCTIWrapper = TransportWrapper
 
 type TransportWrapper interface {
