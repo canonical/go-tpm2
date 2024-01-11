@@ -83,7 +83,7 @@ func (d *Device) openInternal() (*Transport, error) {
 		return nil, err
 	}
 
-	return &Transport{file: &tpmFile{file: f}}, nil
+	return newTransport(&tpmFile{file: f}), nil
 }
 
 // Path returns the path of the character device.
@@ -216,7 +216,7 @@ func OpenDevice(path string) (*Transport, error) {
 		return nil, err
 	}
 
-	s, err := tcti.file.Stat()
+	s, err := tcti.statter.Stat()
 	if err != nil {
 		tcti.Close()
 		return nil, err

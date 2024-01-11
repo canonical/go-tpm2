@@ -9,13 +9,13 @@ package mssim
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"time"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/internal/transportutil"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -28,6 +28,8 @@ const (
 	cmdStop           uint32 = 21
 
 	DefaultPort uint = 2321
+
+	maxCommandSize = 4096
 )
 
 var (
@@ -43,6 +45,21 @@ type PlatformCommandError struct {
 
 func (e *PlatformCommandError) Error() string {
 	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
+}
+
+type commandSender struct {
+	transport *Transport
+}
+
+func (s *commandSender) Write(data []byte) (int, error) {
+	buf := mu.MustMarshalToBytes(cmdTPMSendCommand, s.transport.locality, uint32(len(data)), mu.RawBytes(data))
+
+	n, err := s.transport.tpm.Write(buf)
+	n -= (len(buf) - len(data))
+	if n < 0 {
+		n = 0
+	}
+	return n, err
 }
 
 // Device describes a TPM simulator device.
@@ -92,6 +109,8 @@ func (d *Device) openInternal() (*Transport, error) {
 		return nil, fmt.Errorf("cannot complete NV on command: %w", err)
 	}
 
+	transport.w = transportutil.BufferCommands(&commandSender{transport: transport}, maxCommandSize)
+
 	return transport, nil
 }
 
@@ -125,8 +144,8 @@ type Transport struct {
 	timeout  time.Duration
 	locality uint8 // Locality of commands submitted to the simulator on this interface
 
-	commandInProgress bool
-	r                 io.Reader
+	w io.Writer
+	r io.Reader
 }
 
 // Read implmements [tpm2.Transport.Read].
@@ -137,7 +156,6 @@ func (t *Transport) Read(data []byte) (int, error) {
 			return 0, err
 		}
 
-		t.commandInProgress = false
 		t.r = io.LimitReader(t.tpm, int64(size))
 	}
 
@@ -156,21 +174,7 @@ func (t *Transport) Read(data []byte) (int, error) {
 
 // Write implmements [tpm2.Transport.Write].
 func (t *Transport) Write(data []byte) (int, error) {
-	if t.commandInProgress || t.r != nil {
-		return 0, errors.New("command in progress or unread bytes from previous response")
-	}
-
-	buf := mu.MustMarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
-
-	n, err := t.tpm.Write(buf)
-	n -= (len(buf) - len(data))
-	if n < 0 {
-		n = 0
-	}
-	if err == nil {
-		t.commandInProgress = true
-	}
-	return n, err
+	return t.w.Write(data)
 }
 
 // Close implements [tpm2.Transport.Close].
