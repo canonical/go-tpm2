@@ -375,7 +375,7 @@ func (c *CommandContext) AddExtraSessions(sessions ...SessionContext) *CommandCo
 // change an authorization value, where the response HMAC is computed with a key based on the new
 // value.
 //
-// A *[TctiError] will be returned if the transmission interface returns an error.
+// A *[TransportError] will be returned if the transmission interface returns an error.
 //
 // One of *[TPMWarning], *[TPMError], *[TPMParameterError], *[TPMHandleError] or *[TPMSessionError]
 // will be returned if the TPM returns a response code other than [ResponseSuccess].
@@ -406,7 +406,7 @@ func (c *CommandContext) RunWithoutProcessingResponse(responseHandle *Handle) (*
 // This performs validation of the response auth area and updates internal SessionContext state.
 // If a response HMAC is invalid, an error will be returned.
 //
-// A *[TctiError] will be returned if the transmission interface returns an error.
+// A *[TransportError] will be returned if the transmission interface returns an error.
 //
 // One of *[TPMWarning], *[TPMError], *[TPMParameterError], *[TPMHandleError] or *[TPMSessionError]
 // will be returned if the TPM returns a response code other than [ResponseSuccess].

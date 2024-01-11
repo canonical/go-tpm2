@@ -168,15 +168,15 @@ func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
 		`.*file already closed$`})
 }
 
-func (s *tpmTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
+func (s *tpmTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	suite := new(TPMTest)
 
-	tcti := NewTCTI(c, 0)
-	suite.TCTI = tcti
+	transport := NewTransport(c, 0)
+	suite.TCTI = transport
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
-	c.Check(suite.TCTI, Equals, tcti)
+	c.Check(suite.TCTI, Equals, transport)
 
 	tpm := suite.TPM
 
@@ -191,13 +191,13 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
 func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
 	suite := new(TPMTest)
 
-	tpm, tcti := NewTPMContext(c, 0)
+	tpm, transport := NewTPMContext(c, 0)
 	suite.TPM = tpm
-	suite.TCTI = tcti
+	suite.TCTI = transport
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, Equals, tpm)
-	c.Check(suite.TCTI, Equals, tcti)
+	c.Check(suite.TCTI, Equals, transport)
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
@@ -464,7 +464,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
 	c.Assert(suite.TCTI, NotNil)
-	c.Check(suite.TCTI.Unwrap(), internal_testutil.ConvertibleTo, &mssim.Tcti{})
+	c.Check(suite.TCTI.Unwrap(), internal_testutil.ConvertibleTo, &mssim.Transport{})
 
 	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
 	c.Check(suite.TPM.ClearControl(suite.TPM.PlatformHandleContext(), true, nil), IsNil)
@@ -487,15 +487,15 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	c.Check(currentTime.ClockInfo.ResetCount, Equals, uint32(0))
 }
 
-func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTCTI(c *C) {
+func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	suite := new(TPMSimulatorTest)
 
-	tcti := NewSimulatorTCTI(c)
-	suite.TCTI = tcti
+	transport := NewSimulatorTransport(c)
+	suite.TCTI = transport
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
-	c.Check(suite.TCTI, Equals, tcti)
+	c.Check(suite.TCTI, Equals, transport)
 
 	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
 	c.Check(suite.TPM.ClearControl(suite.TPM.PlatformHandleContext(), true, nil), IsNil)

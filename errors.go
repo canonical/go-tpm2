@@ -102,19 +102,18 @@ func (e *InvalidAuthResponseError) Error() string {
 	return fmt.Sprintf("encountered an error whilst processing the auth response for session %d: %s", e.Index, e.msg)
 }
 
-// TctiError is returned from any [TPMContext] method if the underlying [TCTI] returns an error.
-// If this error occurs, the underlying connection will generally be unusable for subsequent
-// commands.
-type TctiError struct {
+// TransportError is returned from any [TPMContext] method if the underlying [Transport] returns an error.
+// If this error occurs, the underlying connection will generally be unusable for subsequent commands.
+type TransportError struct {
 	Op  string // The operation that caused the error
 	err error
 }
 
-func (e *TctiError) Error() string {
-	return fmt.Sprintf("cannot complete %s operation on TCTI: %v", e.Op, e.err)
+func (e *TransportError) Error() string {
+	return fmt.Sprintf("cannot complete %s operation on Transport: %v", e.Op, e.err)
 }
 
-func (e *TctiError) Unwrap() error {
+func (e *TransportError) Unwrap() error {
 	return e.err
 }
 

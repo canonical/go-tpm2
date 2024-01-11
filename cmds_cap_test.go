@@ -5,6 +5,7 @@
 package tpm2_test
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -642,23 +643,30 @@ func (s *capabilitiesSuite) TestGetCapabilityPCRProperties3(c *C) {
 			{Tag: PropertyPCRSave, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}}}})
 }
 
-// We don't have a TPM1.2 simulator, so create a mock TCTI that just returns
+// We don't have a TPM1.2 simulator, so create a mock Transport that just returns
 // a TPM_BAD_ORDINAL error
-type mockTPM12Tcti struct{}
+type mockTPM12Transport struct {
+	rsp io.Reader
+}
 
-func (t *mockTPM12Tcti) Read(data []byte) (int, error) {
+func (t *mockTPM12Transport) Read(data []byte) (int, error) {
+	if t.rsp == nil {
+		return 0, io.EOF
+	}
+	return t.rsp.Read(data)
+}
+
+func (t *mockTPM12Transport) Write(data []byte) (int, error) {
+	buf := new(bytes.Buffer)
 	// tag = TPM_TAG_RSP_COMMAND (0xc4)
 	// paramSize = 10
 	// returnCode = TPM_BAD_ORDINAL (10)
-	b := mu.MustMarshalToBytes(TagRspCommand, uint32(10), ResponseBadTag)
-	return copy(data, b), io.EOF
-}
-
-func (t *mockTPM12Tcti) Write(data []byte) (int, error) {
+	mu.MustMarshalToWriter(buf, TagRspCommand, uint32(10), ResponseBadTag)
+	t.rsp = buf
 	return len(data), nil
 }
 
-func (t *mockTPM12Tcti) Close() error {
+func (t *mockTPM12Transport) Close() error {
 	return nil
 }
 
@@ -669,7 +677,7 @@ type capabilitiesMockTPM12Suite struct {
 
 func (s *capabilitiesMockTPM12Suite) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
-	s.tpm = NewTPMContext(&mockTPM12Tcti{})
+	s.tpm = NewTPMContext(&mockTPM12Transport{})
 }
 
 var _ = Suite(&capabilitiesMockTPM12Suite{})

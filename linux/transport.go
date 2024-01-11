@@ -14,13 +14,13 @@ const (
 	maxCommandSize int = 4096
 )
 
-// Tcti represents a connection to a Linux TPM character device.
-type Tcti struct {
+// Transport represents a connection to a Linux TPM character device.
+type Transport struct {
 	file *tpmFile
 	rsp  *bytes.Reader
 }
 
-func (d *Tcti) readNextResponse() error {
+func (d *Transport) readNextResponse() error {
 	buf := make([]byte, maxCommandSize)
 	n, err := d.file.Read(buf)
 	if err != nil {
@@ -31,8 +31,8 @@ func (d *Tcti) readNextResponse() error {
 	return nil
 }
 
-// Read implmements [tpm2.TCTI].
-func (d *Tcti) Read(data []byte) (int, error) {
+// Read implmements [tpm2.Transport].
+func (d *Transport) Read(data []byte) (int, error) {
 	// TODO: Support for partial reads on newer kernels
 	if d.rsp == nil {
 		if err := d.readNextResponse(); err != nil {
@@ -47,8 +47,8 @@ func (d *Tcti) Read(data []byte) (int, error) {
 	return n, err
 }
 
-// Write implmements [tpm2.TCTI].
-func (d *Tcti) Write(data []byte) (int, error) {
+// Write implmements [tpm2.Transport].
+func (d *Transport) Write(data []byte) (int, error) {
 	if d.rsp != nil {
 		// Don't start a new command before the previous response has been fully read.
 		// This doesn't catch the case where we haven't fetched the previous response
@@ -59,7 +59,7 @@ func (d *Tcti) Write(data []byte) (int, error) {
 	return d.file.Write(data)
 }
 
-// Close implements [tpm2.TCTI.Close].
-func (d *Tcti) Close() error {
+// Close implements [tpm2.Transport.Close].
+func (d *Transport) Close() error {
 	return d.file.Close()
 }

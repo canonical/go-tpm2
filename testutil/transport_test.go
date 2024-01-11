@@ -19,26 +19,26 @@ import (
 	"github.com/canonical/go-tpm2/util"
 )
 
-type ignoreCloseTcti struct {
-	tcti   tpm2.TCTI
-	closed bool
+type ignoreCloseTransport struct {
+	transport tpm2.Transport
+	closed    bool
 }
 
-func (t *ignoreCloseTcti) Read(data []byte) (int, error) {
+func (t *ignoreCloseTransport) Read(data []byte) (int, error) {
 	if t.closed {
 		return 0, errors.New("already closed")
 	}
-	return t.tcti.Read(data)
+	return t.transport.Read(data)
 }
 
-func (t *ignoreCloseTcti) Write(data []byte) (int, error) {
+func (t *ignoreCloseTransport) Write(data []byte) (int, error) {
 	if t.closed {
 		return 0, errors.New("already closed")
 	}
-	return t.tcti.Write(data)
+	return t.transport.Write(data)
 }
 
-func (t *ignoreCloseTcti) Close() error {
+func (t *ignoreCloseTransport) Close() error {
 	if t.closed {
 		return errors.New("already closed")
 	}
@@ -46,24 +46,24 @@ func (t *ignoreCloseTcti) Close() error {
 	return nil
 }
 
-func (t *ignoreCloseTcti) Unwrap() tpm2.TCTI {
-	return t.tcti
+func (t *ignoreCloseTransport) Unwrap() tpm2.Transport {
+	return t.transport
 }
 
-type tctiSuite struct {
+type transportSuite struct {
 	TPMSimulatorTest
 }
 
-func (s *tctiSuite) SetUpTest(c *C) {
+func (s *transportSuite) SetUpTest(c *C) {
 	// Skip TPMSimulatorTest.SetUpTest and TPMTest.SetUpTest
 	s.BaseTest.SetUpTest(c)
 	c.Assert(s.TCTI, IsNil)
 	c.Assert(s.TPM, IsNil)
 }
 
-func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
-	restore := MockWrapMssimTCTI(func(tcti tpm2.TCTI, _ TPMFeatureFlags) (*TCTI, error) {
-		return WrapTCTI(&ignoreCloseTcti{tcti: tcti}, permittedFeatures)
+func (s *transportSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
+	restore := MockWrapMssimTransport(func(transport tpm2.Transport, _ TPMFeatureFlags) (*Transport, error) {
+		return WrapTransport(&ignoreCloseTransport{transport: transport}, permittedFeatures)
 	})
 	defer restore()
 
@@ -71,32 +71,32 @@ func (s *tctiSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 
 	s.AddCleanup(func() {
 		// The test has to call Close()
-		c.Check(s.TCTI.Unwrap().(*ignoreCloseTcti).closed, internal_testutil.IsTrue)
+		c.Check(s.TCTI.Unwrap().(*ignoreCloseTransport).closed, internal_testutil.IsTrue)
 
 		s.TPM = tpm2.NewTPMContext(s.Mssim(c))
 
 		s.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
-		c.Check(s.TCTI.Unwrap().(TCTIWrapper).Unwrap().Close(), IsNil)
+		c.Check(s.TCTI.Unwrap().(TransportWrapper).Unwrap().Close(), IsNil)
 
 		s.TPM = nil
 		s.TCTI = nil
 	})
 }
 
-func (s *tctiSuite) rawTpm(c *C) *tpm2.TPMContext {
+func (s *transportSuite) rawTpm(c *C) *tpm2.TPMContext {
 	c.Assert(s.TCTI, NotNil)
 	return tpm2.NewTPMContext(s.Mssim(c))
 }
 
-var _ = Suite(&tctiSuite{})
+var _ = Suite(&transportSuite{})
 
-func (s *tctiSuite) deferCloseTpm(c *C) {
+func (s *transportSuite) deferCloseTpm(c *C) {
 	s.AddCleanup(func() {
 		c.Check(s.TPM.Close(), IsNil)
 	})
 }
 
-func (s *tctiSuite) TestCommandLog(c *C) {
+func (s *transportSuite) TestCommandLog(c *C) {
 	s.initTPMContext(c, 0)
 	s.deferCloseTpm(c)
 
@@ -192,7 +192,7 @@ type testHierarchyAllowedData struct {
 	permittedFeatures TPMFeatureFlags
 }
 
-func (s *tctiSuite) testHierarchyAllowed(c *C, data *testHierarchyAllowedData) {
+func (s *transportSuite) testHierarchyAllowed(c *C, data *testHierarchyAllowedData) {
 	s.initTPMContext(c, data.permittedFeatures)
 	s.deferCloseTpm(c)
 
@@ -200,15 +200,15 @@ func (s *tctiSuite) testHierarchyAllowed(c *C, data *testHierarchyAllowedData) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestOwnerHierarchyAllowed(c *C) {
+func (s *transportSuite) TestOwnerHierarchyAllowed(c *C) {
 	s.testHierarchyAllowed(c, &testHierarchyAllowedData{hierarchy: tpm2.HandleOwner, permittedFeatures: TPMFeatureOwnerHierarchy})
 }
 
-func (s *tctiSuite) TestEndorsementHierarchyAllowed(c *C) {
+func (s *transportSuite) TestEndorsementHierarchyAllowed(c *C) {
 	s.testHierarchyAllowed(c, &testHierarchyAllowedData{hierarchy: tpm2.HandleEndorsement, permittedFeatures: TPMFeatureEndorsementHierarchy})
 }
 
-func (s *tctiSuite) TestPlatformHierarchyAllowed(c *C) {
+func (s *transportSuite) TestPlatformHierarchyAllowed(c *C) {
 	s.testHierarchyAllowed(c, &testHierarchyAllowedData{hierarchy: tpm2.HandlePlatform, permittedFeatures: TPMFeaturePlatformHierarchy})
 }
 
@@ -218,7 +218,7 @@ type testHierarchyDisallowedData struct {
 	err string
 }
 
-func (s *tctiSuite) testHierarchyDisallowed(c *C, data *testHierarchyDisallowedData) {
+func (s *transportSuite) testHierarchyDisallowed(c *C, data *testHierarchyDisallowedData) {
 	s.initTPMContext(c, 0)
 	s.deferCloseTpm(c)
 
@@ -226,40 +226,40 @@ func (s *tctiSuite) testHierarchyDisallowed(c *C, data *testHierarchyDisallowedD
 	c.Check(err, ErrorMatches, data.err)
 }
 
-func (s *tctiSuite) TestOwnerHierarchyDisallowed(c *C) {
+func (s *transportSuite) TestOwnerHierarchyDisallowed(c *C) {
 	s.testHierarchyDisallowed(c, &testHierarchyDisallowedData{
 		hierarchy: tpm2.HandleOwner,
-		err:       `cannot complete write operation on TCTI: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000001\)`})
+		err:       `cannot complete read operation on Transport: cannot send command: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000001\)`})
 }
 
-func (s *tctiSuite) TestEndorsementHierarchyDisallowed(c *C) {
+func (s *transportSuite) TestEndorsementHierarchyDisallowed(c *C) {
 	s.testHierarchyDisallowed(c, &testHierarchyDisallowedData{
 		hierarchy: tpm2.HandleEndorsement,
-		err:       `cannot complete write operation on TCTI: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000002\)`})
+		err:       `cannot complete read operation on Transport: cannot send command: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000002\)`})
 }
 
-func (s *tctiSuite) TestPlatformHierarchyDisallowed(c *C) {
+func (s *transportSuite) TestPlatformHierarchyDisallowed(c *C) {
 	s.testHierarchyDisallowed(c, &testHierarchyDisallowedData{
 		hierarchy: tpm2.HandlePlatform,
-		err:       `cannot complete write operation on TCTI: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000008\)`})
+		err:       `cannot complete read operation on Transport: cannot send command: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000008\)`})
 }
 
-func (s *tctiSuite) TestLockoutHierarchyAllowed(c *C) {
+func (s *transportSuite) TestLockoutHierarchyAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.DictionaryAttackLockReset(s.TPM.LockoutHandleContext(), nil), IsNil)
 }
 
-func (s *tctiSuite) TestLockoutHierarchyDisallowed(c *C) {
+func (s *transportSuite) TestLockoutHierarchyDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.DictionaryAttackLockReset(s.TPM.LockoutHandleContext(), nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_DictionaryAttackLockReset is trying to use a non-requested feature \(missing: 0x00000804\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_DictionaryAttackLockReset is trying to use a non-requested feature \(missing: 0x00000804\)`)
 }
 
-func (s *tctiSuite) TestPCRAllowed(c *C) {
+func (s *transportSuite) TestPCRAllowed(c *C) {
 	s.initTPMContext(c, TPMFeaturePCR|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -269,39 +269,39 @@ func (s *tctiSuite) TestPCRAllowed(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestPCRDisallowed(c *C) {
+func (s *transportSuite) TestPCRDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	_, _, err := s.TPM.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0}}})
 	c.Check(err, IsNil)
 	_, err = s.TPM.PCREvent(s.TPM.PCRHandleContext(0), []byte("foo"), nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_PCR_Event is trying to use a non-requested feature \(missing: 0x00000010\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_PCR_Event is trying to use a non-requested feature \(missing: 0x00000010\)`)
 }
 
-func (s *tctiSuite) TestHierarchyControlAllowed(c *C) {
+func (s *transportSuite) TestHierarchyControlAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 }
 
-func (s *tctiSuite) TestHierarchyControlDisallowed(c *C) {
+func (s *transportSuite) TestHierarchyControlDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_HierarchyControl is trying to use a non-requested feature \(missing: 0x00000020\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_HierarchyControl is trying to use a non-requested feature \(missing: 0x00000020\)`)
 }
 
-func (s *tctiSuite) TestHierarchyControlAllowedWithPlatform(c *C) {
+func (s *transportSuite) TestHierarchyControlAllowedWithPlatform(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVReadLockAllowed(c *C) {
+func (s *transportSuite) TestNVReadLockAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -315,7 +315,7 @@ func (s *tctiSuite) TestNVReadLockAllowed(c *C) {
 	c.Check(s.TPM.NVReadLock(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVReadLockNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVReadLockNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -333,7 +333,7 @@ func (s *tctiSuite) TestNVReadLockNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVReadLock(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVReadLockNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVReadLockNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -349,10 +349,10 @@ func (s *tctiSuite) TestNVReadLockNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVReadLock(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_ReadLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_ReadLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
 }
 
-func (s *tctiSuite) TestNVWriteLockStClearAllowed(c *C) {
+func (s *transportSuite) TestNVWriteLockStClearAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -366,7 +366,7 @@ func (s *tctiSuite) TestNVWriteLockStClearAllowed(c *C) {
 	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVWriteLockStClearNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVWriteLockStClearNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -384,7 +384,7 @@ func (s *tctiSuite) TestNVWriteLockStClearNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVWriteLockStClearNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVWriteLockStClearNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -400,136 +400,136 @@ func (s *tctiSuite) TestNVWriteLockStClearNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWriteLock(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
 }
 
-func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowed(c *C) {
+func (s *transportSuite) TestSetCommandCodeAuditStatusAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureSetCommandCodeAuditStatus)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestSetCommandCodeAuditStatusDisallowed(c *C) {
+func (s *transportSuite) TestSetCommandCodeAuditStatusDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001040\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001040\)`)
 }
 
-func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner1(c *C) {
+func (s *transportSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner1(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureEndorsementHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner2(c *C) {
+func (s *transportSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner2(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureEndorsementHierarchy|TPMFeatureSetCommandCodeAuditStatus)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndPlatform(c *C) {
+func (s *transportSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndPlatform(c *C) {
 	s.initTPMContext(c, TPMFeatureEndorsementHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.SetCommandCodeAuditStatus(s.TPM.PlatformHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestSetCommandCodeAuditStatusWithEndorsementAndOwnerRequiresNV(c *C) {
+func (s *transportSuite) TestSetCommandCodeAuditStatusWithEndorsementAndOwnerRequiresNV(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureEndorsementHierarchy)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001000\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001000\)`)
 }
 
-func (s *tctiSuite) TestClearAllowed(c *C) {
+func (s *transportSuite) TestClearAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureClear)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.Clear(s.TPM.LockoutHandleContext(), nil), IsNil)
 }
 
-func (s *tctiSuite) TestClearDisallowed(c *C) {
+func (s *transportSuite) TestClearDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.Clear(s.TPM.LockoutHandleContext(), nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Clear is trying to use a non-requested feature \(missing: 0x00000080\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Clear is trying to use a non-requested feature \(missing: 0x00000080\)`)
 }
 
-func (s *tctiSuite) TestClearControlAllowed(c *C) {
+func (s *transportSuite) TestClearControlAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureClearControl)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil), IsNil)
 }
 
-func (s *tctiSuite) TestClearControlDisallowed(c *C) {
+func (s *transportSuite) TestClearControlDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001100\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001100\)`)
 }
 
-func (s *tctiSuite) TestClearControlAllowedWithPlatform1(c *C) {
+func (s *transportSuite) TestClearControlAllowedWithPlatform1(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil), IsNil)
 }
 
-func (s *tctiSuite) TestClearControlAllowedWithPlatform2(c *C) {
+func (s *transportSuite) TestClearControlAllowedWithPlatform2(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureClearControl)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil), IsNil)
 }
 
-func (s *tctiSuite) TestClearControlWithPlatformRequiresNV(c *C) {
+func (s *transportSuite) TestClearControlWithPlatformRequiresNV(c *C) {
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001000\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001000\)`)
 }
 
-func (s *tctiSuite) TestFeatureShutdownAllowed(c *C) {
+func (s *transportSuite) TestFeatureShutdownAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureShutdown)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.Shutdown(tpm2.StartupState), IsNil)
 }
 
-func (s *tctiSuite) TestFeatureShutdownDisallowed(c *C) {
+func (s *transportSuite) TestFeatureShutdownDisallowed(c *C) {
 	s.initTPMContext(c, 0)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.Shutdown(tpm2.StartupState)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Shutdown is trying to use a non-requested feature \(missing: 0x00000200\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Shutdown is trying to use a non-requested feature \(missing: 0x00000200\)`)
 }
 
-func (s *tctiSuite) TestNVGlobalWriteLockAllowed(c *C) {
+func (s *transportSuite) TestNVGlobalWriteLockAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNVGlobalWriteLock)
 	s.deferCloseTpm(c)
 
 	c.Check(s.TPM.NVGlobalWriteLock(s.TPM.OwnerHandleContext(), nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVGlobalWriteLockDisllowed(c *C) {
+func (s *transportSuite) TestNVGlobalWriteLockDisllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
 	err := s.TPM.NVGlobalWriteLock(s.TPM.OwnerHandleContext(), nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_NV_GlobalWriteLock is trying to use a non-requested feature \(missing: 0x00000400\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_GlobalWriteLock is trying to use a non-requested feature \(missing: 0x00000400\)`)
 }
 
-func (s *tctiSuite) TestDAProtectedCapabilityAllowed(c *C) {
+func (s *transportSuite) TestDAProtectedCapabilityAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -544,7 +544,7 @@ func (s *tctiSuite) TestDAProtectedCapabilityAllowed(c *C) {
 	c.Check(s.TPM.NVWrite(index, index, []byte("foo"), 0, nil), IsNil)
 }
 
-func (s *tctiSuite) TestDAProtectedCapabilityDisallowed(c *C) {
+func (s *transportSuite) TestDAProtectedCapabilityDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -557,10 +557,10 @@ func (s *tctiSuite) TestDAProtectedCapabilityDisallowed(c *C) {
 	c.Check(err, IsNil)
 
 	err = s.TPM.NVWrite(index, index, []byte("foo"), 0, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_NV_Write is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_Write is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
-func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVUndefineSpaceSpecialNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV|TPMFeaturePersistent)
 	s.deferCloseTpm(c)
 
@@ -588,7 +588,7 @@ func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVUndefineSpaceSpecialNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -623,10 +623,10 @@ func (s *tctiSuite) TestNVUndefineSpaceSpecialNotCreatedDisallowed(c *C) {
 	c.Check(s.TPM.PolicyCommandCode(session, tpm2.CommandNVUndefineSpaceSpecial), IsNil)
 
 	err = s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_UndefineSpaceSpecial is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_UndefineSpaceSpecial is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
-func (s *tctiSuite) TestEvictControlNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestEvictControlNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
 	s.deferCloseTpm(c)
 
@@ -643,7 +643,7 @@ func (s *tctiSuite) TestEvictControlNotCreatedAllowed(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestEvictControlNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestEvictControlNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -657,10 +657,10 @@ func (s *tctiSuite) TestEvictControlNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), persistent, persistent.Handle(), nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_EvictControl is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_EvictControl is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
-func (s *tctiSuite) TestNVUndefineSpaceNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVUndefineSpaceNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
 	s.deferCloseTpm(c)
 
@@ -678,7 +678,7 @@ func (s *tctiSuite) TestNVUndefineSpaceNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVUndefineSpaceNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVUndefineSpaceNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -694,10 +694,10 @@ func (s *tctiSuite) TestNVUndefineSpaceNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_UndefineSpace is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_UndefineSpace is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
-func (s *tctiSuite) TestNVWriteLockDefineAllowed(c *C) {
+func (s *transportSuite) TestNVWriteLockDefineAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -711,7 +711,7 @@ func (s *tctiSuite) TestNVWriteLockDefineAllowed(c *C) {
 	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVWriteLockDefineNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVWriteLockDefineNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
 	s.deferCloseTpm(c)
 
@@ -729,7 +729,7 @@ func (s *tctiSuite) TestNVWriteLockDefineNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVWriteLock(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVWriteLockDefineNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVWriteLockDefineNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -745,10 +745,10 @@ func (s *tctiSuite) TestNVWriteLockDefineNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWriteLock(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
-func (s *tctiSuite) TestNVIncrementAllowed(c *C) {
+func (s *transportSuite) TestNVIncrementAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -762,7 +762,7 @@ func (s *tctiSuite) TestNVIncrementAllowed(c *C) {
 	c.Check(s.TPM.NVIncrement(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVIncrementNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVIncrementNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
 	s.deferCloseTpm(c)
 
@@ -780,7 +780,7 @@ func (s *tctiSuite) TestNVIncrementNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVIncrement(index, index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVIncrementNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVIncrementNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -796,10 +796,10 @@ func (s *tctiSuite) TestNVIncrementNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVIncrement(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_Increment is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_Increment is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
-func (s *tctiSuite) TestNVSetBitsAllowed(c *C) {
+func (s *transportSuite) TestNVSetBitsAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -813,7 +813,7 @@ func (s *tctiSuite) TestNVSetBitsAllowed(c *C) {
 	c.Check(s.TPM.NVSetBits(index, index, 0, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVSetBitsNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVSetBitsNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
 	s.deferCloseTpm(c)
 
@@ -831,7 +831,7 @@ func (s *tctiSuite) TestNVSetBitsNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVSetBits(index, index, 0, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVSetBitsNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVSetBitsNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -847,10 +847,10 @@ func (s *tctiSuite) TestNVSetBitsNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVSetBits(index, index, 0, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_SetBits is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_SetBits is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
-func (s *tctiSuite) TestNVWriteAllowed(c *C) {
+func (s *transportSuite) TestNVWriteAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -864,7 +864,7 @@ func (s *tctiSuite) TestNVWriteAllowed(c *C) {
 	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVWriteNotCreatedAllowed(c *C) {
+func (s *transportSuite) TestNVWriteNotCreatedAllowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV|TPMFeaturePersistent)
 	s.deferCloseTpm(c)
 
@@ -882,7 +882,7 @@ func (s *tctiSuite) TestNVWriteNotCreatedAllowed(c *C) {
 	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNVWriteNotCreatedDisallowed(c *C) {
+func (s *transportSuite) TestNVWriteNotCreatedDisallowed(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
 
@@ -898,10 +898,10 @@ func (s *tctiSuite) TestNVWriteNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWrite(index, index, nil, 0, nil)
-	c.Check(err, ErrorMatches, "cannot complete write operation on TCTI: command TPM_CC_NV_Write is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_Write is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
-func (s *tctiSuite) TestRestorePlatformHierarchyAuth(c *C) {
+func (s *transportSuite) TestRestorePlatformHierarchyAuth(c *C) {
 	// Test that changes to the platform hierarchy authorization value are undone.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
@@ -912,7 +912,7 @@ func (s *tctiSuite) TestRestorePlatformHierarchyAuth(c *C) {
 	c.Check(s.rawTpm(c).HierarchyChangeAuth(s.rawTpm(c).PlatformHandleContext(), nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestRestorePlatformHierarchyAuthAfterDisablePlatform(c *C) {
+func (s *transportSuite) TestRestorePlatformHierarchyAuthAfterDisablePlatform(c *C) {
 	// Test that Close() succeeds if we can't restore the platform hierarchy
 	// authorization value because the platform hierarchy was disabled.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
@@ -930,7 +930,7 @@ type testRestoreHierarchyControlData struct {
 	attr              tpm2.StartupClearAttributes
 }
 
-func (s *tctiSuite) testRestoreHierarchyControl(c *C, data *testRestoreHierarchyControlData) {
+func (s *transportSuite) testRestoreHierarchyControl(c *C, data *testRestoreHierarchyControlData) {
 	s.initTPMContext(c, data.permittedFeatures|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
 	c.Check(s.TPM.HierarchyControl(s.TPM.GetPermanentContext(data.auth), data.enable, false, nil), IsNil)
@@ -956,7 +956,7 @@ func (s *tctiSuite) testRestoreHierarchyControl(c *C, data *testRestoreHierarchy
 	c.Check(enabled, internal_testutil.IsTrue)
 }
 
-func (s *tctiSuite) TestRestoreHierarchyControlOwner(c *C) {
+func (s *transportSuite) TestRestoreHierarchyControlOwner(c *C) {
 	// Test that the owner hierarchy is reenabled if the test disables it.
 	s.testRestoreHierarchyControl(c, &testRestoreHierarchyControlData{
 		permittedFeatures: TPMFeatureOwnerHierarchy,
@@ -965,7 +965,7 @@ func (s *tctiSuite) TestRestoreHierarchyControlOwner(c *C) {
 		attr:              tpm2.AttrShEnable})
 }
 
-func (s *tctiSuite) TestRestoreHierarchyControlEndorsement(c *C) {
+func (s *transportSuite) TestRestoreHierarchyControlEndorsement(c *C) {
 	// Test that the endorsement hierarchy is reenabled if the test disables it.
 	s.testRestoreHierarchyControl(c, &testRestoreHierarchyControlData{
 		permittedFeatures: TPMFeatureEndorsementHierarchy,
@@ -974,7 +974,7 @@ func (s *tctiSuite) TestRestoreHierarchyControlEndorsement(c *C) {
 		attr:              tpm2.AttrEhEnable})
 }
 
-func (s *tctiSuite) TestRestoreHierarchyControlPlatformNV(c *C) {
+func (s *transportSuite) TestRestoreHierarchyControlPlatformNV(c *C) {
 	// Test that the platformNV hierarchy is reenabled if the test disables it.
 	s.testRestoreHierarchyControl(c, &testRestoreHierarchyControlData{
 		auth:   tpm2.HandlePlatform,
@@ -982,7 +982,7 @@ func (s *tctiSuite) TestRestoreHierarchyControlPlatformNV(c *C) {
 		attr:   tpm2.AttrPhEnableNV})
 }
 
-func (s *tctiSuite) testRestoreHierarchyAuth(c *C, handle tpm2.Handle) {
+func (s *transportSuite) testRestoreHierarchyAuth(c *C, handle tpm2.Handle) {
 	s.initTPMContext(c, TPMFeatureFlags(math.MaxUint32))
 
 	c.Check(s.TPM.HierarchyChangeAuth(s.TPM.GetPermanentContext(handle), []byte("foo"), nil), IsNil)
@@ -998,22 +998,22 @@ func (s *tctiSuite) testRestoreHierarchyAuth(c *C, handle tpm2.Handle) {
 	c.Check(s.rawTpm(c).HierarchyChangeAuth(s.rawTpm(c).GetPermanentContext(handle), nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestRestoreOwnerHierarchyAuth(c *C) {
+func (s *transportSuite) TestRestoreOwnerHierarchyAuth(c *C) {
 	// Test that the owner hierarchy auth value is retored.
 	s.testRestoreHierarchyAuth(c, tpm2.HandleOwner)
 }
 
-func (s *tctiSuite) TestRestoreEndorsementHierarchyAuth(c *C) {
+func (s *transportSuite) TestRestoreEndorsementHierarchyAuth(c *C) {
 	// Test that the endorsement hierarchy auth value is retored.
 	s.testRestoreHierarchyAuth(c, tpm2.HandleEndorsement)
 }
 
-func (s *tctiSuite) TestRestoreLockoutHierarchyAuth(c *C) {
+func (s *transportSuite) TestRestoreLockoutHierarchyAuth(c *C) {
 	// Test that the lockout hierarchy auth value is retored.
 	s.testRestoreHierarchyAuth(c, tpm2.HandleLockout)
 }
 
-func (s *tctiSuite) TestManualRestoreHierarchyAuthChangeWithCommandEncrypt(c *C) {
+func (s *transportSuite) TestManualRestoreHierarchyAuthChangeWithCommandEncrypt(c *C) {
 	// Test that Close() succeeds if the hierarchy auth is manually restored
 	// after initially changing it with command encryption.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
@@ -1031,7 +1031,7 @@ func (s *tctiSuite) TestManualRestoreHierarchyAuthChangeWithCommandEncrypt(c *C)
 	c.Check(s.TPM.HierarchyChangeAuth(s.TPM.OwnerHandleContext(), nil, nil), IsNil)
 }
 
-func (s *tctiSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryption(c *C) {
+func (s *transportSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryption(c *C) {
 	// Test that Close() fails if the hierarchy auth is not manually restored
 	// after changing it with command encryption.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
@@ -1045,11 +1045,11 @@ func (s *tctiSuite) TestNoManualRestoreHierarchyAuthChangeWithCommandEncryption(
 	c.Assert(err, IsNil)
 
 	c.Check(s.TPM.HierarchyChangeAuth(s.TPM.OwnerHandleContext(), []byte("foo"), session.WithAttrs(tpm2.AttrCommandEncrypt)), IsNil)
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for session 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_BAD_AUTH \(authorization failure without DA implications\)\n`)
 }
 
-func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
+func (s *transportSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
 	// Test that Close() fails if the owner hierarchy auth cannot be restored
 	// because both it and the platform hierarchy have been disabled.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
@@ -1058,11 +1058,11 @@ func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfPlatformIsDisabled(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
-func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
+func (s *transportSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
 	// Test that Close() fails if the owner hierarchy auth cannot be restored
 	// because it has been disabled and use of the platform hierarchy is not
 	// permitted in order to reenable it.
@@ -1071,11 +1071,11 @@ func (s *tctiSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C) {
 	c.Check(s.TPM.HierarchyChangeAuth(s.TPM.OwnerHandleContext(), []byte("foo"), nil), IsNil)
 	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
-func (s *tctiSuite) TestRestoreDisableClear(c *C) {
+func (s *transportSuite) TestRestoreDisableClear(c *C) {
 	// Test that disableClear is restored correctly if the test can
 	// use the platform hierarchy.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
@@ -1099,7 +1099,7 @@ func (s *tctiSuite) TestRestoreDisableClear(c *C) {
 	c.Check(disabled, internal_testutil.IsFalse)
 }
 
-func (s *tctiSuite) TestRestoreDisableClearFailsIfPlatformIsDisabled(c *C) {
+func (s *transportSuite) TestRestoreDisableClearFailsIfPlatformIsDisabled(c *C) {
 	// Test that Close() fails if it cannot restore disableClear because the
 	// platform hierarchy was disabled and TPMFeatureClearControl isn't defined.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
@@ -1107,11 +1107,11 @@ func (s *tctiSuite) TestRestoreDisableClearFailsIfPlatformIsDisabled(c *C) {
 	c.Check(s.TPM.ClearControl(s.TPM.PlatformHandleContext(), true, nil), IsNil)
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot restore disableClear: TPM returned an error for handle 1 whilst executing command TPM_CC_ClearControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
-func (s *tctiSuite) TestRestoreDisableClearIgnoresErrorWhenPermitted(c *C) {
+func (s *transportSuite) TestRestoreDisableClearIgnoresErrorWhenPermitted(c *C) {
 	// Test that Close() succeeds if it cannot restore disableClear but
 	// TPMFeatureClearControl is defined.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureClearControl|TPMFeatureNV)
@@ -1121,7 +1121,7 @@ func (s *tctiSuite) TestRestoreDisableClearIgnoresErrorWhenPermitted(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 }
 
-func (s *tctiSuite) TestRestoreDACounter(c *C) {
+func (s *transportSuite) TestRestoreDACounter(c *C) {
 	// Test that we can access a DA protected resource and that the DA counter
 	// is reset if we don't have TPMFeatureDAProtectedCapability but we do have
 	// TPMFeatureLockoutHierarchy.
@@ -1155,7 +1155,7 @@ func (s *tctiSuite) TestRestoreDACounter(c *C) {
 	c.Check(props[0].Value, Equals, uint32(0))
 }
 
-func (s *tctiSuite) TestRestoreDAParams(c *C) {
+func (s *transportSuite) TestRestoreDAParams(c *C) {
 	// Test that DA parameters are restored properly.
 	s.initTPMContext(c, TPMFeatureLockoutHierarchy|TPMFeatureNV)
 
@@ -1175,7 +1175,7 @@ func (s *tctiSuite) TestRestoreDAParams(c *C) {
 	c.Check(props, DeepEquals, origProps)
 }
 
-func (s *tctiSuite) TestCreateAndFlushPrimaryObject(c *C) {
+func (s *transportSuite) TestCreateAndFlushPrimaryObject(c *C) {
 	// Test that transient objects created with CreatePrimary are flushed from the TPM.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
@@ -1194,7 +1194,7 @@ func (s *tctiSuite) TestCreateAndFlushPrimaryObject(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
+func (s *transportSuite) TestLoadAndFlushObject(c *C) {
 	// Test that transient objects loaded in to the TPM are flushed.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
@@ -1219,7 +1219,7 @@ func (s *tctiSuite) TestLoadAndFlushObject(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestCreateAndFlushHMACObject(c *C) {
+func (s *transportSuite) TestCreateAndFlushHMACObject(c *C) {
 	// Test that HMAC sequence objects are flushed from the TPM.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
@@ -1256,7 +1256,7 @@ func (s *tctiSuite) TestCreateAndFlushHMACObject(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
+func (s *transportSuite) TestLoadAndFlushRestoredObject(c *C) {
 	// Test that restored transient objects are flushed from the TPM.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 
@@ -1281,7 +1281,7 @@ func (s *tctiSuite) TestLoadAndFlushRestoredObject(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestLoadAndFlushExternalObject(c *C) {
+func (s *transportSuite) TestLoadAndFlushExternalObject(c *C) {
 	// Test that external objects are flushed from the TPM.
 	s.initTPMContext(c, 0)
 
@@ -1317,7 +1317,7 @@ func (s *tctiSuite) TestLoadAndFlushExternalObject(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestCreateAndFlushHashObject(c *C) {
+func (s *transportSuite) TestCreateAndFlushHashObject(c *C) {
 	// Test that has sequence objects are flushed from the TPM.
 	s.initTPMContext(c, 0)
 
@@ -1336,7 +1336,7 @@ func (s *tctiSuite) TestCreateAndFlushHashObject(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestStartAndFlushSession(c *C) {
+func (s *transportSuite) TestStartAndFlushSession(c *C) {
 	// Test that sessions are flushed from the TPM.
 	s.initTPMContext(c, 0)
 
@@ -1355,7 +1355,7 @@ func (s *tctiSuite) TestStartAndFlushSession(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestLoadAndFlushRestoredSession(c *C) {
+func (s *transportSuite) TestLoadAndFlushRestoredSession(c *C) {
 	s.initTPMContext(c, 0)
 
 	session, err := s.TPM.StartAuthSession(nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256)
@@ -1379,7 +1379,7 @@ func (s *tctiSuite) TestLoadAndFlushRestoredSession(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
+func (s *transportSuite) TestEvictPersistentObjects(c *C) {
 	// Test that persistent objects are evicted from the TPM.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
@@ -1406,7 +1406,7 @@ func (s *tctiSuite) TestEvictPersistentObjects(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
+func (s *transportSuite) TestEvictPersistentObjectError(c *C) {
 	// Test that a failure to evict a persistent object results in an error.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
@@ -1420,11 +1420,11 @@ func (s *tctiSuite) TestEvictPersistentObjectError(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot evict 0x81000001: TPM returned an error for handle 1 whilst executing command TPM_CC_EvictControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
-func (s *tctiSuite) TestUndefineNVIndex(c *C) {
+func (s *transportSuite) TestUndefineNVIndex(c *C) {
 	// Test that NV indexes are undefined.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
 
@@ -1453,7 +1453,7 @@ func (s *tctiSuite) TestUndefineNVIndex(c *C) {
 	c.Check(props, internal_testutil.LenEquals, 0)
 }
 
-func (s *tctiSuite) TestUndefineNVIndexError(c *C) {
+func (s *transportSuite) TestUndefineNVIndexError(c *C) {
 	// Test that a failure to undefine a NV index results in an error.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
 
@@ -1469,11 +1469,11 @@ func (s *tctiSuite) TestUndefineNVIndexError(c *C) {
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot undefine 0x01800000: TPM returned an error for handle 1 whilst executing command TPM_CC_NV_UndefineSpace: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
-func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
+func (s *transportSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
 	// Test that Close() fails with an error if a test doesn't undefine a
 	// TPMA_NV_POLICY_DELETE index.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
@@ -1500,11 +1500,11 @@ func (s *tctiSuite) TestUndefinePolicyDeleteNVIndex(c *C) {
 		c.Check(s.rawTpm(c).NVUndefineSpaceSpecial(index, s.rawTpm(c).PlatformHandleContext(), session, nil), IsNil)
 	})
 
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- the test needs to undefine index 0x01800000 which has the TPMA_NV_POLICY_DELETE attribute set\n`)
 }
 
-func (s *tctiSuite) TestNVUndefineSpaceSpecial(c *C) {
+func (s *transportSuite) TestNVUndefineSpaceSpecial(c *C) {
 	// Test that a NV index being undefined by the test is handled correctly.
 	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
@@ -1530,7 +1530,7 @@ func (s *tctiSuite) TestNVUndefineSpaceSpecial(c *C) {
 	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, nil), IsNil)
 }
 
-func (s *tctiSuite) TestEvictControl(c *C) {
+func (s *transportSuite) TestEvictControl(c *C) {
 	// Test that a persistent object being evicted by the test is handled correctly.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
@@ -1545,7 +1545,7 @@ func (s *tctiSuite) TestEvictControl(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestNVUndefineSpace(c *C) {
+func (s *transportSuite) TestNVUndefineSpace(c *C) {
 	// Test that a NV index being undefined by the test is handled correctly.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureNV)
 	s.deferCloseTpm(c)
@@ -1561,7 +1561,7 @@ func (s *tctiSuite) TestNVUndefineSpace(c *C) {
 	c.Check(s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil), IsNil)
 }
 
-func (s *tctiSuite) TestClear(c *C) {
+func (s *transportSuite) TestClear(c *C) {
 	// Test that TPM_CC_Clear works correctly and that the test cleans
 	// up the platform hierarchy at the end of the test.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureLockoutHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureClear|TPMFeatureNV)
@@ -1631,7 +1631,7 @@ type testRestoreCommandCodeAuditStatusData struct {
 	permission       TPMFeatureFlags
 }
 
-func (s *tctiSuite) testRestoreCommandCodeAuditStatus(c *C, data *testRestoreCommandCodeAuditStatusData) {
+func (s *transportSuite) testRestoreCommandCodeAuditStatus(c *C, data *testRestoreCommandCodeAuditStatusData) {
 	s.initTPMContext(c, TPMFeatureEndorsementHierarchy|TPMFeatureNV|data.permission)
 
 	restoreCommands, err := s.TPM.GetCapabilityAuditCommands(tpm2.CommandFirst, tpm2.CapabilityMaxProperties)
@@ -1667,7 +1667,7 @@ func (s *tctiSuite) testRestoreCommandCodeAuditStatus(c *C, data *testRestoreCom
 	c.Check(auditInfo.Attested.CommandAudit().DigestAlg, Equals, restoreAlg)
 }
 
-func (s *tctiSuite) TestRestoreCommandCodeAuditStatusOwner(c *C) {
+func (s *transportSuite) TestRestoreCommandCodeAuditStatusOwner(c *C) {
 	// Test that changes made with TPM2_SetCommandCodeAuditStatus are reverted when use of the owner
 	// hierarchy is permitted.
 	s.testRestoreCommandCodeAuditStatus(c, &testRestoreCommandCodeAuditStatusData{
@@ -1675,7 +1675,7 @@ func (s *tctiSuite) TestRestoreCommandCodeAuditStatusOwner(c *C) {
 		permission: TPMFeatureOwnerHierarchy})
 }
 
-func (s *tctiSuite) TestRestoreCommandCodeAuditStatusPlatform(c *C) {
+func (s *transportSuite) TestRestoreCommandCodeAuditStatusPlatform(c *C) {
 	// Test that changes made with TPM2_SetCommandCodeAuditStatus are reverted when use of the platform
 	// hierarchy is permitted.
 	s.testRestoreCommandCodeAuditStatus(c, &testRestoreCommandCodeAuditStatusData{
@@ -1684,7 +1684,7 @@ func (s *tctiSuite) TestRestoreCommandCodeAuditStatusPlatform(c *C) {
 		permission:       TPMFeaturePlatformHierarchy})
 }
 
-func (s *tctiSuite) TestRestoreCommandCodeAuditStatusFailsIfPlatformIsDisabled(c *C) {
+func (s *transportSuite) TestRestoreCommandCodeAuditStatusFailsIfPlatformIsDisabled(c *C) {
 	// Test that Close() returns an error if changes made with TPM2_SetCommandCodeAuditStatus can't
 	// be reverted because the endorsement hierarchy has been disabled and can't be re-enabled.
 	s.initTPMContext(c, TPMFeatureEndorsementHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
@@ -1695,11 +1695,11 @@ func (s *tctiSuite) TestRestoreCommandCodeAuditStatusFailsIfPlatformIsDisabled(c
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandleEndorsement, false, nil), IsNil)
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
-	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on TCTI: cannot cleanup TPM state because of the following errors:\n`+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:\n`+
 		`- cannot restore command code audit alg: TPM returned an error for handle 1 whilst executing command TPM_CC_SetCommandCodeAuditStatus: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
-func (s *tctiSuite) TestRestoreCommandCodeAuditStatusIgnoresErrorWhenPermitted(c *C) {
+func (s *transportSuite) TestRestoreCommandCodeAuditStatusIgnoresErrorWhenPermitted(c *C) {
 	// Test that Close() succeeds if changes made with TPM2_SetCommandCodeAuditStatus can't
 	// be reverted because the endorsement hierarchy has been disabled and can't be re-enabled,
 	// but TPMFeatureSetCommandCodeAuditStatus is defined.
@@ -1713,7 +1713,7 @@ func (s *tctiSuite) TestRestoreCommandCodeAuditStatusIgnoresErrorWhenPermitted(c
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 }
 
-func (s *tctiSuite) testUseCreatedPrimaryNoDA(c *C, extraFeatures TPMFeatureFlags) {
+func (s *transportSuite) testUseCreatedPrimaryNoDA(c *C, extraFeatures TPMFeatureFlags) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
 	s.deferCloseTpm(c)
 
@@ -1724,15 +1724,15 @@ func (s *tctiSuite) testUseCreatedPrimaryNoDA(c *C, extraFeatures TPMFeatureFlag
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestUseCreatedPrimaryNoDAPermitDA(c *C) {
+func (s *transportSuite) TestUseCreatedPrimaryNoDAPermitDA(c *C) {
 	s.testUseCreatedPrimaryNoDA(c, TPMFeatureDAProtectedCapability)
 }
 
-func (s *tctiSuite) TestUseCreatedPrimaryNoDAForbidDA(c *C) {
+func (s *transportSuite) TestUseCreatedPrimaryNoDAForbidDA(c *C) {
 	s.testUseCreatedPrimaryNoDA(c, 0)
 }
 
-func (s *tctiSuite) TestUseCreatedPrimaryDAPermitted(c *C) {
+func (s *transportSuite) TestUseCreatedPrimaryDAPermitted(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
 	s.deferCloseTpm(c)
 
@@ -1745,7 +1745,7 @@ func (s *tctiSuite) TestUseCreatedPrimaryDAPermitted(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestUseCreatedPrimaryDAForbidden(c *C) {
+func (s *transportSuite) TestUseCreatedPrimaryDAForbidden(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
@@ -1755,10 +1755,10 @@ func (s *tctiSuite) TestUseCreatedPrimaryDAForbidden(c *C) {
 	c.Assert(err, IsNil)
 
 	_, _, _, _, _, err = s.TPM.Create(object, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Create is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Create is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
-func (s *tctiSuite) testUseLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags) {
+func (s *transportSuite) testUseLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
 	s.deferCloseTpm(c)
 
@@ -1786,15 +1786,15 @@ func (s *tctiSuite) testUseLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags)
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestUseLoadedObjectNoDAPermitDA(c *C) {
+func (s *transportSuite) TestUseLoadedObjectNoDAPermitDA(c *C) {
 	s.testUseLoadedObjectNoDA(c, TPMFeatureDAProtectedCapability)
 }
 
-func (s *tctiSuite) TestUseLoadedObjectNoDAForbidDA(c *C) {
+func (s *transportSuite) TestUseLoadedObjectNoDAForbidDA(c *C) {
 	s.testUseLoadedObjectNoDA(c, 0)
 }
 
-func (s *tctiSuite) TestUseLoadedObjectDAPermitted(c *C) {
+func (s *transportSuite) TestUseLoadedObjectDAPermitted(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
 	s.deferCloseTpm(c)
 
@@ -1822,7 +1822,7 @@ func (s *tctiSuite) TestUseLoadedObjectDAPermitted(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestUseLoadedObjectDAForbidden(c *C) {
+func (s *transportSuite) TestUseLoadedObjectDAForbidden(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
@@ -1847,10 +1847,10 @@ func (s *tctiSuite) TestUseLoadedObjectDAForbidden(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.Unseal(object, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
-func (s *tctiSuite) testUseHMACObject(c *C, extraFeatures TPMFeatureFlags) {
+func (s *transportSuite) testUseHMACObject(c *C, extraFeatures TPMFeatureFlags) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
 	s.deferCloseTpm(c)
 
@@ -1878,15 +1878,15 @@ func (s *tctiSuite) testUseHMACObject(c *C, extraFeatures TPMFeatureFlags) {
 	c.Check(s.TPM.SequenceUpdate(seq, []byte("foo"), nil), IsNil)
 }
 
-func (s *tctiSuite) TestUseHMACObjectDAForbidden(c *C) {
+func (s *transportSuite) TestUseHMACObjectDAForbidden(c *C) {
 	s.testUseHMACObject(c, 0)
 }
 
-func (s *tctiSuite) TestUseHMACObjectDAPermitted(c *C) {
+func (s *transportSuite) TestUseHMACObjectDAPermitted(c *C) {
 	s.testUseHMACObject(c, TPMFeatureDAProtectedCapability)
 }
 
-func (s *tctiSuite) testUseHashObject(c *C, extraFeatures TPMFeatureFlags) {
+func (s *transportSuite) testUseHashObject(c *C, extraFeatures TPMFeatureFlags) {
 	s.initTPMContext(c, extraFeatures)
 	s.deferCloseTpm(c)
 
@@ -1896,15 +1896,15 @@ func (s *tctiSuite) testUseHashObject(c *C, extraFeatures TPMFeatureFlags) {
 	c.Check(s.TPM.SequenceUpdate(seq, []byte("foo"), nil), IsNil)
 }
 
-func (s *tctiSuite) TestUseHashObjectDAForbidden(c *C) {
+func (s *transportSuite) TestUseHashObjectDAForbidden(c *C) {
 	s.testUseHashObject(c, 0)
 }
 
-func (s *tctiSuite) TestUseHashObjectDAPermitted(c *C) {
+func (s *transportSuite) TestUseHashObjectDAPermitted(c *C) {
 	s.testUseHashObject(c, TPMFeatureDAProtectedCapability)
 }
 
-func (s *tctiSuite) testUseContextLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags) {
+func (s *transportSuite) testUseContextLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|extraFeatures)
 	s.deferCloseTpm(c)
 
@@ -1938,15 +1938,15 @@ func (s *tctiSuite) testUseContextLoadedObjectNoDA(c *C, extraFeatures TPMFeatur
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestUseContextLoadedObjectNoDAPermitDA(c *C) {
+func (s *transportSuite) TestUseContextLoadedObjectNoDAPermitDA(c *C) {
 	s.testUseContextLoadedObjectNoDA(c, TPMFeatureDAProtectedCapability)
 }
 
-func (s *tctiSuite) TestUseContextLoadedObjectNoDAForbidDA(c *C) {
+func (s *transportSuite) TestUseContextLoadedObjectNoDAForbidDA(c *C) {
 	s.testUseContextLoadedObjectNoDA(c, 0)
 }
 
-func (s *tctiSuite) TestUseContextLoadedObjectDAPermitted(c *C) {
+func (s *transportSuite) TestUseContextLoadedObjectDAPermitted(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeatureDAProtectedCapability)
 	s.deferCloseTpm(c)
 
@@ -1980,7 +1980,7 @@ func (s *tctiSuite) TestUseContextLoadedObjectDAPermitted(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
+func (s *transportSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
 	s.deferCloseTpm(c)
 
@@ -2011,10 +2011,10 @@ func (s *tctiSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.Unseal(o.(tpm2.ResourceContext), nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on TCTI: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
-func (s *tctiSuite) TestUseExistingObject(c *C) {
+func (s *transportSuite) TestUseExistingObject(c *C) {
 	// Test that we can use a persistent object that we didn't create
 	// because TPM2_ReadPublic saves the public area.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
@@ -2033,7 +2033,7 @@ func (s *tctiSuite) TestUseExistingObject(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestDontEvictExistingObject(c *C) {
+func (s *transportSuite) TestDontEvictExistingObject(c *C) {
 	// Test that Close() doesn't evict an object that we didn't create,
 	// but which the fixture is aware of (via TPM2_ReadPublic).
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
@@ -2055,7 +2055,7 @@ func (s *tctiSuite) TestDontEvictExistingObject(c *C) {
 	c.Check(props[0], Equals, persist.Handle())
 }
 
-func (s *tctiSuite) TestUseExistingIndex(c *C) {
+func (s *transportSuite) TestUseExistingIndex(c *C) {
 	// Test that we can use a NV index that we didn't create
 	// because TPM2_NV_ReadPublic saves the public area.
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
@@ -2077,7 +2077,7 @@ func (s *tctiSuite) TestUseExistingIndex(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *tctiSuite) TestDontEvictExistingIndex(c *C) {
+func (s *transportSuite) TestDontEvictExistingIndex(c *C) {
 	// Test that Close() doesn't evict a NV index that we didn't create,
 	// but which the fixture is aware of (via TPM2_NV_ReadPublic).
 	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
