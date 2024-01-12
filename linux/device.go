@@ -5,8 +5,10 @@
 package linux
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	internal_ppi "github.com/canonical/go-tpm2/internal/ppi"
+	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/ppi"
 )
 
@@ -43,6 +46,56 @@ var (
 
 	sysfsPath = "/sys"
 )
+
+type nonBlockingTpmFileReader struct {
+	file *tpmFile
+}
+
+func (r *nonBlockingTpmFileReader) Read(data []byte) (int, error) {
+	n, err := r.file.ReadNonBlocking(data)
+	if n == 0 && err == nil {
+		err = io.EOF
+	}
+	return n, err
+}
+
+func isPartialReadSupported(path string) bool {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+
+	tf := &tpmFile{file: f}
+	defer tf.Close()
+
+	cmd := tpm2.MustMarshalCommandPacket(
+		tpm2.CommandGetCapability, nil, nil,
+		mu.MustMarshalToBytes(tpm2.CapabilityTPMProperties, tpm2.PropertyManufacturer, uint32(1)),
+	)
+	if _, err := tf.Write(cmd); err != nil {
+		return false
+	}
+
+	var rspHdr tpm2.ResponseHeader
+	buf := make([]byte, binary.Size(rspHdr))
+	if _, err := io.ReadFull(tf, buf); err != nil {
+		return false
+	}
+	if _, err := mu.UnmarshalFromBytes(buf, &rspHdr); err != nil {
+		return false
+	}
+	if rspHdr.ResponseCode != tpm2.ResponseSuccess {
+		return false
+	}
+
+	var moreData bool
+	var capabilityData *tpm2.CapabilityData
+	if _, err := mu.UnmarshalFromReader(&nonBlockingTpmFileReader{tf}, &moreData, &capabilityData); err != nil {
+		return false
+	}
+
+	return true
+}
 
 type tpmDevices struct {
 	once    sync.Once
@@ -78,12 +131,14 @@ type Device struct {
 }
 
 func (d *Device) openInternal() (*Transport, error) {
+	partialReadSupported := isPartialReadSupported(d.path)
+
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	return newTransport(&tpmFile{file: f}), nil
+	return newTransport(&tpmFile{file: f}, partialReadSupported), nil
 }
 
 // Path returns the path of the character device.

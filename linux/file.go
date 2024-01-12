@@ -22,18 +22,22 @@ import (
 // a boolean which indicates whether the operation should complete, or whether the operation
 // should block and poll the descriptor to become ready.
 //
-// In the read case, we immediately block and poll the device, before performing the read whenever
-// the device becomes ready in the future. Skipping the initial read and polling immediately works
-// around another issue with the way that the driver works. The read() implementation can block
-// until the current command completes, even in non-blocking mode, if we call it whilst the
-// kernel's TPM async worker is dispatching the command. This is because both reading and command
-// dispatching take a lock on the command/response buffer.
+// In the read case, we perform a read and then block and poll the device if this read returned
+// no errors and zero bytes, before performing another read whenever the device becomes ready in
+// the future.
 //
-// This still doesn't really work properly though, as the poll() implementation can also block
-// for the same reason (the poll implementation also locks the command/response buffer). As the
-// poll() implementation blocks before the system call would normally suspend the current task
-// in the VFS layer, this means that polling can potentially ignore any specified timeout if it
-// is called whilst a TPM command is being dispatched.
+// Note that the read() system call can block until the current command completes, even in
+// non-blocking mode, if we call it whilst the kernel's TPM async worker is dispatching the
+// command. This is because both reading and command dispatching take a lock on the
+// command/response buffer. Ideally we would work around this by polling before reading, but
+// this doesn't work properly because go's netpoller uses epoll with edge-triggered polling,
+// so polling before reading can result in the routine becoming permanently blocked.
+//
+// Polling can also block for the same reason (the poll implementation for the TPM character
+// device also locks the command/response buffer). As the poll implementation blocks before the
+// system call would normally suspend the current task in the VFS layer, this means that polling
+// can potentially ignore any specified timeout if it is called whilst a TPM command is being
+// dispatched.
 //
 // We never block and poll the device in the write case. Although the write() implementation
 // will return -EBUSY if there is a response waiting to be read from the device, it's not
@@ -67,20 +71,14 @@ func (f *tpmFile) wrapErr(op string, err error) error {
 		Err:  err}
 }
 
-func (f *tpmFile) Read(data []byte) (n int, err error) {
+func (f *tpmFile) ReadNonBlocking(data []byte) (n int, err error) {
 	conn, err := f.file.SyscallConn()
 	if err != nil {
 		return 0, err
 	}
 
 	var readErr error
-	polled := false
 	if err := conn.Read(func(fd uintptr) bool {
-		if !polled {
-			// always poll before reading - see the comments above.
-			polled = true
-			return false
-		}
 		n, readErr = ignoringEINTR(func() (int, error) {
 			return syscall.Read(int(fd), data)
 		})
@@ -90,8 +88,25 @@ func (f *tpmFile) Read(data []byte) (n int, err error) {
 		// which is private
 		return 0, f.wrapErr("read", errClosed)
 	}
-	if n == 0 && readErr == nil {
-		readErr = io.EOF
+	return n, f.wrapErr("read", readErr)
+}
+
+func (f *tpmFile) Read(data []byte) (n int, err error) {
+	conn, err := f.file.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+
+	var readErr error
+	if err := conn.Read(func(fd uintptr) bool {
+		n, readErr = ignoringEINTR(func() (int, error) {
+			return syscall.Read(int(fd), data)
+		})
+		return n > 0
+	}); err != nil {
+		// The only error that can be returned from this is poll.ErrFileClosing
+		// which is private
+		return 0, f.wrapErr("read", errClosed)
 	}
 	return n, f.wrapErr("read", readErr)
 }
