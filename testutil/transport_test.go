@@ -127,16 +127,15 @@ func (s *transportSuite) TestCommandLog(c *C) {
 
 	c.Check(s.CommandLog(), internal_testutil.LenEquals, 2)
 
-	cmd := s.CommandLog()[0].GetCommandCode(c)
-	c.Check(cmd, Equals, tpm2.CommandLoadExternal)
-	cmdHandles, cmdAuthArea, cpBytes := s.CommandLog()[0].UnmarshalCommand(c)
-	c.Check(cmdHandles, internal_testutil.LenEquals, 0)
-	c.Check(cmdAuthArea, internal_testutil.LenEquals, 0)
+	cmd := s.CommandLog()[0]
+	c.Check(cmd.CmdCode, Equals, tpm2.CommandLoadExternal)
+	c.Check(cmd.CmdHandles, internal_testutil.LenEquals, 0)
+	c.Check(cmd.CmdAuthArea, internal_testutil.LenEquals, 0)
 
 	var inSensitiveBytes []byte
 	var inPublicBytes []byte
 	var hierarchy tpm2.Handle
-	_, err = mu.UnmarshalFromBytes(cpBytes, &inSensitiveBytes, &inPublicBytes, &hierarchy)
+	_, err = mu.UnmarshalFromBytes(cmd.CpBytes, &inSensitiveBytes, &inPublicBytes, &hierarchy)
 	c.Check(err, IsNil)
 	var inPublic *tpm2.Public
 	_, err = mu.UnmarshalFromBytes(inPublicBytes, &inPublic)
@@ -146,39 +145,36 @@ func (s *transportSuite) TestCommandLog(c *C) {
 	c.Check(inPublic, TPMValueDeepEquals, &public)
 	c.Check(hierarchy, Equals, tpm2.HandleOwner)
 
-	rc, rHandle, rpBytes, rspAuthArea := s.CommandLog()[0].UnmarshalResponse(c)
-	c.Check(rHandle, Equals, object.Handle())
-	c.Check(rc, Equals, tpm2.ResponseSuccess)
-	c.Check(rspAuthArea, internal_testutil.LenEquals, 0)
+	c.Check(cmd.RspHandle, Equals, object.Handle())
+	c.Check(cmd.RspCode, Equals, tpm2.ResponseSuccess)
+	c.Check(cmd.RspAuthArea, internal_testutil.LenEquals, 0)
 
 	var name tpm2.Name
-	_, err = mu.UnmarshalFromBytes(rpBytes, &name)
+	_, err = mu.UnmarshalFromBytes(cmd.RpBytes, &name)
 	c.Check(err, IsNil)
 	c.Check(name, DeepEquals, object.Name())
 
-	cmd = s.CommandLog()[1].GetCommandCode(c)
-	c.Check(cmd, Equals, tpm2.CommandGetCapability)
-	cmdHandles, cmdAuthArea, cpBytes = s.CommandLog()[1].UnmarshalCommand(c)
-	c.Check(cmdHandles, internal_testutil.LenEquals, 0)
-	c.Check(cmdAuthArea, internal_testutil.LenEquals, 0)
+	cmd = s.CommandLog()[1]
+	c.Check(cmd.CmdCode, Equals, tpm2.CommandGetCapability)
+	c.Check(cmd.CmdHandles, internal_testutil.LenEquals, 0)
+	c.Check(cmd.CmdAuthArea, internal_testutil.LenEquals, 0)
 
 	var capability tpm2.Capability
 	var property uint32
 	var propertyCount uint32
-	_, err = mu.UnmarshalFromBytes(cpBytes, &capability, &property, &propertyCount)
+	_, err = mu.UnmarshalFromBytes(cmd.CpBytes, &capability, &property, &propertyCount)
 	c.Check(err, IsNil)
 	c.Check(capability, Equals, tpm2.CapabilityHandles)
 	c.Check(property, Equals, uint32(object.Handle()))
 	c.Check(propertyCount, Equals, uint32(1))
 
-	rc, rHandle, rpBytes, rspAuthArea = s.CommandLog()[1].UnmarshalResponse(c)
-	c.Check(rc, Equals, tpm2.ResponseSuccess)
-	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rspAuthArea, internal_testutil.LenEquals, 0)
+	c.Check(cmd.RspCode, Equals, tpm2.ResponseSuccess)
+	c.Check(cmd.RspHandle, Equals, tpm2.HandleUnassigned)
+	c.Check(cmd.RspAuthArea, internal_testutil.LenEquals, 0)
 
 	var moreData bool
 	var capabilityData tpm2.CapabilityData
-	_, err = mu.UnmarshalFromBytes(rpBytes, &moreData, &capabilityData)
+	_, err = mu.UnmarshalFromBytes(cmd.RpBytes, &moreData, &capabilityData)
 	c.Check(err, IsNil)
 	c.Check(moreData, Equals, false)
 	c.Check(capabilityData, DeepEquals, tpm2.CapabilityData{

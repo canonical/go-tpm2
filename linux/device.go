@@ -59,44 +59,6 @@ func (r *nonBlockingTpmFileReader) Read(data []byte) (int, error) {
 	return n, err
 }
 
-func isPartialReadSupported(path string) bool {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
-	if err != nil {
-		return false
-	}
-
-	tf := &tpmFile{file: f}
-	defer tf.Close()
-
-	cmd := tpm2.MustMarshalCommandPacket(
-		tpm2.CommandGetCapability, nil, nil,
-		mu.MustMarshalToBytes(tpm2.CapabilityTPMProperties, tpm2.PropertyManufacturer, uint32(1)),
-	)
-	if _, err := tf.Write(cmd); err != nil {
-		return false
-	}
-
-	var rspHdr tpm2.ResponseHeader
-	buf := make([]byte, binary.Size(rspHdr))
-	if _, err := io.ReadFull(tf, buf); err != nil {
-		return false
-	}
-	if _, err := mu.UnmarshalFromBytes(buf, &rspHdr); err != nil {
-		return false
-	}
-	if rspHdr.ResponseCode != tpm2.ResponseSuccess {
-		return false
-	}
-
-	var moreData bool
-	var capabilityData *tpm2.CapabilityData
-	if _, err := mu.UnmarshalFromReader(&nonBlockingTpmFileReader{tf}, &moreData, &capabilityData); err != nil {
-		return false
-	}
-
-	return true
-}
-
 type tpmDevices struct {
 	once    sync.Once
 	devices []*RawDevice
@@ -119,14 +81,84 @@ type Device struct {
 	sysfsPath string
 	version   TPMMajorVersion
 
-	partialReadSupportOnce sync.Once
-	partialReadSupported   bool
+	prsOnce              sync.Once
+	partialReadSupported bool
+
+	mrsOnce sync.Once
+	mrs     uint32
 }
 
 func (d *Device) checkPartialReadSupport() {
-	d.partialReadSupportOnce.Do(func() {
-		d.partialReadSupported = isPartialReadSupported(d.path)
+	d.prsOnce.Do(func() {
+		d.partialReadSupported = func() bool {
+			f, err := os.OpenFile(d.path, os.O_RDWR, 0)
+			if err != nil {
+				return false
+			}
+
+			tf := &tpmFile{file: f}
+			defer tf.Close()
+
+			cmd := tpm2.MustMarshalCommandPacket(
+				tpm2.CommandGetCapability, nil, nil,
+				mu.MustMarshalToBytes(tpm2.CapabilityTPMProperties, tpm2.PropertyManufacturer, uint32(1)),
+			)
+			if _, err := tf.Write(cmd); err != nil {
+				return false
+			}
+
+			var rspHdr tpm2.ResponseHeader
+			buf := make([]byte, binary.Size(rspHdr))
+			if _, err := io.ReadFull(tf, buf); err != nil {
+				return false
+			}
+			if _, err := mu.UnmarshalFromBytes(buf, &rspHdr); err != nil {
+				return false
+			}
+			if rspHdr.ResponseCode != tpm2.ResponseSuccess {
+				return false
+			}
+
+			var moreData bool
+			var capabilityData *tpm2.CapabilityData
+			if _, err := mu.UnmarshalFromReader(&nonBlockingTpmFileReader{tf}, &moreData, &capabilityData); err != nil {
+				return false
+			}
+
+			return true
+		}()
 	})
+}
+
+type dummyDevice struct {
+	d *Device
+	f *os.File
+}
+
+func (d *dummyDevice) Open() (tpm2.Transport, error) {
+	return newTransport(&tpmFile{file: d.f}, false, maxResponseSize), nil
+}
+
+func (d *dummyDevice) String() string {
+	return d.d.String()
+}
+
+func (d *Device) maxResponseSize(f *os.File) uint32 {
+	d.mrsOnce.Do(func() {
+		d.mrs = func() uint32 {
+			tpm, err := tpm2.OpenTPMDevice(&dummyDevice{d: d, f: f})
+			if err != nil {
+				return maxResponseSize
+			}
+
+			sz, err := tpm.GetCapabilityTPMProperty(tpm2.PropertyMaxResponseSize)
+			if err != nil {
+				return maxResponseSize
+			}
+			return sz
+		}()
+	})
+	return d.mrs
 }
 
 func (d *Device) openInternal() (*Transport, error) {
@@ -137,7 +169,12 @@ func (d *Device) openInternal() (*Transport, error) {
 		return nil, err
 	}
 
-	return newTransport(&tpmFile{file: f}, d.partialReadSupported), nil
+	var mrs uint32
+	if !d.partialReadSupported {
+		mrs = d.maxResponseSize(f)
+	}
+
+	return newTransport(&tpmFile{file: f}, d.partialReadSupported, mrs), nil
 }
 
 // Path returns the path of the character device.

@@ -28,7 +28,7 @@ type Transport struct {
 	statter fileStatter
 }
 
-func newTransport(file *tpmFile, partialReadSupported bool) *Transport {
+func newTransport(file *tpmFile, partialReadSupported bool, maxResponseSize uint32) *Transport {
 	var r io.Reader = file
 	if !partialReadSupported {
 		r = transportutil.BufferResponses(r, maxResponseSize)
