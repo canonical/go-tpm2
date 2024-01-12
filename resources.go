@@ -130,7 +130,7 @@ type handleContextUnion struct {
 	contents union.Contents
 }
 
-func newHandleContextUnion[T *Public | *NVPublic | *sessionContextDataWrapper | Empty](contents T) *handleContextUnion {
+func newHandleContextUnion[T *Public | NVPublic | sessionContextDataWrapper | Empty](contents T) *handleContextUnion {
 	return &handleContextUnion{contents: union.NewContents(contents)}
 }
 
@@ -139,11 +139,11 @@ func (d *handleContextUnion) Object() *Public {
 }
 
 func (d *handleContextUnion) NV() *NVPublic {
-	return union.ContentsElem[*NVPublic](d.contents)
+	return union.ContentsPtr[NVPublic](d.contents)
 }
 
 func (d *handleContextUnion) Session() *sessionContextDataWrapper {
-	return union.ContentsElem[*sessionContextDataWrapper](d.contents)
+	return union.ContentsPtr[sessionContextDataWrapper](d.contents)
 }
 
 func (d handleContextUnion) SelectMarshal(selector any) any {
@@ -153,9 +153,9 @@ func (d handleContextUnion) SelectMarshal(selector any) any {
 	case handleContextTypeObject:
 		return union.ContentsMarshal[*Public](d.contents)
 	case handleContextTypeNvIndex:
-		return union.ContentsMarshal[*NVPublic](d.contents)
+		return union.ContentsMarshal[NVPublic](d.contents)
 	case handleContextTypeSession:
-		return union.ContentsMarshal[*sessionContextDataWrapper](d.contents)
+		return union.ContentsMarshal[sessionContextDataWrapper](d.contents)
 	default:
 		return nil
 	}
@@ -168,9 +168,9 @@ func (d *handleContextUnion) SelectUnmarshal(selector any) any {
 	case handleContextTypeObject:
 		return union.ContentsUnmarshal[*Public](&d.contents)
 	case handleContextTypeNvIndex:
-		return union.ContentsUnmarshal[*NVPublic](&d.contents)
+		return union.ContentsUnmarshal[NVPublic](&d.contents)
 	case handleContextTypeSession:
-		return union.ContentsUnmarshal[*sessionContextDataWrapper](&d.contents)
+		return union.ContentsUnmarshal[sessionContextDataWrapper](&d.contents)
 	default:
 		return nil
 	}
@@ -350,7 +350,7 @@ func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 				Type: handleContextTypeNvIndex,
 				H:    public.Index,
 				N:    name,
-				Data: newHandleContextUnion(public)}}}
+				Data: newHandleContextUnion(*public)}}}
 }
 
 func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -451,7 +451,7 @@ func newSessionContext(handle Handle, data *sessionContextData) *sessionContext 
 			Type: handleContextTypeSession,
 			H:    handle,
 			N:    name,
-			Data: newHandleContextUnion(&sessionContextDataWrapper{Data: data})}}
+			Data: newHandleContextUnion(sessionContextDataWrapper{Data: data})}}
 }
 
 func pwSession() SessionContext {
