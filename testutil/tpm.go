@@ -686,7 +686,11 @@ func newDevice(features TPMFeatureFlags) (tpm2.TPMDevice, error) {
 	}, nil
 }
 
-func NewWrappedDevice(device tpm2.TPMDevice, features TPMFeatureFlags) tpm2.TPMDevice {
+// WrapDevice wraps the supplied device so that transports created by it are wrapped by [WrapTransport]
+// and authorized to use the specified features. If the test requires features that are not permitted, as
+// defined by the PermittedTPMFeatures variable, the wrapped device will return ErrSkipNoTPM instead of
+// a transport.
+func WrapDevice(device tpm2.TPMDevice, features TPMFeatureFlags) tpm2.TPMDevice {
 	if features&PermittedTPMFeatures != features {
 		device = nil
 	}
