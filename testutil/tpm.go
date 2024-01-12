@@ -26,6 +26,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/linux"
 	"github.com/canonical/go-tpm2/mssim"
 )
@@ -169,6 +170,8 @@ var (
 	MssimPort uint = 2321
 
 	wrapMssimTransport = WrapTransport
+
+	ErrSkipNoTPM = errors.New("no TPM configured for the test")
 )
 
 type tpmBackendFlag TPMBackendType
@@ -555,98 +558,218 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 	}, nil
 }
 
-func newTransport(features TPMFeatureFlags) (*Transport, error) {
-	switch TPMBackend {
-	case TPMBackendNone:
-		return nil, nil
-	case TPMBackendDevice:
-		if features&PermittedTPMFeatures != features {
-			return nil, nil
-		}
-		transport, err := linux.OpenDevice(TPMDevicePath)
-		if err != nil {
-			return nil, err
-		}
-		return WrapTransport(transport, features)
-	case TPMBackendMssim:
-		transport, err := mssim.OpenConnection("", MssimPort)
-		if err != nil {
-			return nil, err
-		}
-		return WrapTransport(transport, features)
-	}
-	panic("not reached")
-}
-
 // NewTransport returns a new Transport for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
 // the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
-// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// *linux.Transport if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In
 // this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
 // The returned Transport must be closed when it is no longer required.
+//
+// Deprecated: Use [NewDevice].
 func NewTransport(c *C, features TPMFeatureFlags) *Transport {
-	transport, err := newTransport(features)
-	c.Assert(err, IsNil)
-	if transport == nil {
+	device := NewDevice(c, features)
+	transport, err := device.Open()
+	if err == ErrSkipNoTPM {
 		c.Skip("no TPM available for the test")
 	}
-	return transport
+	c.Assert(err, IsNil)
+	return transport.(*Transport)
 }
 
 // NewTransportT returns a new Transport for testing, for integration with test suites that might have a custom way to create a
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
 // the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
-// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// *linux.Transport if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In
 // this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
 // The returned Transport must be closed when it is no longer required.
+//
+// Deprecated: Use [NewDeviceT].
 func NewTransportT(t *testing.T, features TPMFeatureFlags) *Transport {
-	transport, err := newTransport(features)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if transport == nil {
+	device := NewDeviceT(t, features)
+	transport, err := device.Open()
+	if err == ErrSkipNoTPM {
 		t.SkipNow()
 	}
-	return transport
+	if err != nil {
+		t.Fatal(err)
+	}
+	return transport.(*Transport)
+}
+
+type openDevice struct {
+	transport *Transport
+}
+
+func newOpenDevice(transport *Transport) tpm2.TPMDevice {
+	return &openDevice{transport: transport}
+}
+
+func (d *openDevice) Open() (tpm2.Transport, error) {
+	return d.transport, nil
+}
+
+func (*openDevice) String() string {
+	return "external test device"
+}
+
+type tpmDevice struct {
+	features TPMFeatureFlags
+	device   tpm2.TPMDevice
+}
+
+func newDevice(features TPMFeatureFlags) (tpm2.TPMDevice, error) {
+	var device tpm2.TPMDevice
+
+	switch TPMBackend {
+	case TPMBackendNone:
+		// nothing to do
+	case TPMBackendDevice:
+		if features&PermittedTPMFeatures == features {
+			devices, err := linux.ListTPM2Devices()
+			if err != nil {
+				return nil, err
+			}
+			for _, d := range devices {
+				if d.Path() == TPMDevicePath {
+					device = d
+					break
+				}
+			}
+			if device == nil {
+				return nil, errors.New("no TPM2 device found")
+			}
+		}
+	case TPMBackendMssim:
+		device = mssim.NewLocalDevice(MssimPort)
+	}
+
+	return &tpmDevice{
+		features: features,
+		device:   device,
+	}, nil
+}
+
+// WrapDevice wraps the supplied device so that transports created by it are wrapped by [WrapTransport]
+// and authorized to use the specified features. If the test requires features that are not permitted, as
+// defined by the [PermittedTPMFeatures] variable, the wrapped device will return [ErrSkipNoTPM] instead of
+// a transport.
+func WrapDevice(device tpm2.TPMDevice, features TPMFeatureFlags) tpm2.TPMDevice {
+	if features&PermittedTPMFeatures != features {
+		device = nil
+	}
+	return &tpmDevice{
+		features: features,
+		device:   device,
+	}
+}
+
+// NewDevice returns a new tpm2.TPMDevice for testing, for integration with test suites that might have a custom way to
+// create a TPMContext. If TPMBackend is TPMBackendNone then the returned device will return [ErrSkipNoTPM] instead
+// of a transport. If TPMBackend is TPMBackendMssim, the returned device will wrap a *[mssim.Device] for the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned device will wrap a
+// *[linux.RawDevice] for the character device at the path specified by the TPMDevicePath variable if the requested features
+// are permitted, as defined by the [PermittedTPMFeatures] variable. If the test requires features that are not permitted,
+// then the device will return [ErrSkipNoTPM] instead of a transport.
+func NewDevice(c *C, features TPMFeatureFlags) tpm2.TPMDevice {
+	device, err := newDevice(features)
+	c.Assert(err, IsNil)
+	return device
+}
+
+// NewDeviceT returns a new tpm2.TPMDevice for testing, for integration with test suites that might have a custom way to
+// create a TPMContext. If TPMBackend is TPMBackendNone then the returned device will return [ErrSkipNoTPM] instead
+// of a transport. If TPMBackend is TPMBackendMssim, the returned device will wrap a *[mssim.Device] for the TPM simulator
+// on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned device will wrap a
+// *[linux.RawDevice] for the character device at the path specified by the TPMDevicePath variable if the requested features
+// are permitted, as defined by the [PermittedTPMFeatures] variable. If the test requires features that are not permitted,
+// then the device will return [ErrSkipNoTPM] instead of a transport.
+func NewDeviceT(t *testing.T, features TPMFeatureFlags) tpm2.TPMDevice {
+	device, err := newDevice(features)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return device
+}
+
+func (d *tpmDevice) Open() (tpm2.Transport, error) {
+	if d.device == nil {
+		return nil, ErrSkipNoTPM
+	}
+
+	transport, err := d.device.Open()
+	if err != nil {
+		return nil, err
+	}
+
+	return WrapTransport(transport, d.features)
+}
+
+func (d *tpmDevice) String() string {
+	return d.device.String()
+}
+
+// OpenTPMDevice opens the supplied device, returning a new TPMContext and transport. If the device returns [ErrSkipNoTPM],
+// then the test will be skipped. If the supplied device returns a transport, it must be wrapped with [WrapTransport].
+func OpenTPMDevice(c *C, device tpm2.TPMDevice) (tpm *tpm2.TPMContext, transport *Transport) {
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if errors.Is(err, ErrSkipNoTPM) {
+		c.Skip("no TPM available for the test")
+	}
+	c.Assert(err, IsNil)
+	c.Assert(tpm.Transport(), internal_testutil.ConvertibleTo, &Transport{})
+	return tpm, tpm.Transport().(*Transport)
+}
+
+// OpenTPMDeviceT opens the supplied device, returning a new TPMContext and transport. If the device returns [ErrSkipNoTPM],
+// then the test will be skipped. If the supplied device returns a transport, it must be wrapped with [WrapTransport].
+func OpenTPMDeviceT(t *testing.T, device tpm2.TPMDevice) (tpm *tpm2.TPMContext, transport *Transport, close func()) {
+	tpm, err := tpm2.OpenTPMDevice(device)
+	if errors.Is(err, ErrSkipNoTPM) {
+		t.SkipNow()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, ok := tpm.Transport().(*Transport)
+	if !ok {
+		t.Fatal("unexpected transport type")
+	}
+	return tpm, transport, func() {
+		if err := tpm.Close(); err != nil {
+			t.Errorf("close failed: %v", err)
+		}
+	}
 }
 
 // NewTPMContext returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
 // skipped. If TPMBackend is TPMBackendMssim, the returned context will correspond to a connection to the TPM
 // simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, a TPMContext will
-// be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
+// be returned if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
 // The returned TPMContext must be closed when it is no longer required.
 func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *Transport) {
-	transport := NewTransport(c, features)
-	tpm := tpm2.NewTPMContext(transport)
-	return tpm, transport
+	return OpenTPMDevice(c, NewDevice(c, features))
 }
 
 // NewTPMContextT returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
 // skipped. If TPMBackend is TPMBackendMssim, the returned context will correspond to a connection to the TPM
 // simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, a TPMContext will
-// be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
+// be returned if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
 // The returned TPMContext must be closed when it is no longer required. This can be done with the returned
 // close callback, which will cause the test to fail if closing doesn't succeed.
 func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (tpm *tpm2.TPMContext, transport *Transport, close func()) {
-	transport = NewTransportT(t, features)
-	tpm = tpm2.NewTPMContext(transport)
-	return tpm, transport, func() {
-		if err := tpm.Close(); err != nil {
-			t.Errorf("close failed: %v", err)
-		}
-	}
+	return OpenTPMDeviceT(t, NewDeviceT(t, features))
 }
 
 func newSimulatorTransport() (*Transport, error) {
@@ -667,13 +790,16 @@ func newSimulatorTransport() (*Transport, error) {
 // will be skipped.
 //
 // The returned Transport must be closed when it is no longer required.
+//
+// Deprecated: Use [NewSimulatorDevice].
 func NewSimulatorTransport(c *C) *Transport {
-	transport, err := newSimulatorTransport()
-	c.Assert(err, IsNil)
-	if transport == nil {
+	device := NewSimulatorDevice()
+	transport, err := device.Open()
+	if err == ErrSkipNoTPM {
 		c.Skip("no TPM available for the test")
 	}
-	return transport
+	c.Assert(err, IsNil)
+	return transport.(*Transport)
 }
 
 // NewSimulatorTransportT returns a new Transport for testing that corresponds to a connection to the TPM simulator
@@ -682,14 +808,48 @@ func NewSimulatorTransport(c *C) *Transport {
 //
 // The returned Transport must be closed when it is no longer required.
 func NewSimulatorTransportT(t *testing.T) *Transport {
-	transport, err := newSimulatorTransport()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-	if transport == nil {
+	device := NewSimulatorDevice()
+	transport, err := device.Open()
+	if err == ErrSkipNoTPM {
 		t.SkipNow()
 	}
-	return transport
+	if err != nil {
+		t.Fatal(err)
+	}
+	return transport.(*Transport)
+}
+
+type simulatorDevice struct {
+	device *mssim.Device
+}
+
+// NewSimulatorDevice returns a new tpm2.TPMDevice that wraps a *[mssim.Device] for the TPM simulator on the port
+// specified by the MssimPort variable. If TPMBackedn is not TPMBackendMssim, then the device will return [ErrSkipNoTPM]
+// instead of a transport.
+func NewSimulatorDevice() tpm2.TPMDevice {
+	var device *mssim.Device
+	if TPMBackend == TPMBackendMssim {
+		device = mssim.NewLocalDevice(MssimPort)
+	}
+
+	return &simulatorDevice{device: device}
+}
+
+func (d *simulatorDevice) Open() (tpm2.Transport, error) {
+	if d.device == nil {
+		return nil, ErrSkipNoTPM
+	}
+
+	transport, err := d.device.Open()
+	if err != nil {
+		return nil, err
+	}
+
+	return wrapMssimTransport(transport, TPMFeatureFlags(math.MaxUint32))
+}
+
+func (d *simulatorDevice) String() string {
+	return d.device.String()
 }
 
 // NewTPMSimulatorContext returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
@@ -698,9 +858,7 @@ func NewSimulatorTransportT(t *testing.T) *Transport {
 //
 // The returned TPMContext must be closed when it is no longer required.
 func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *Transport) {
-	transport := NewSimulatorTransport(c)
-	tpm := tpm2.NewTPMContext(transport)
-	return tpm, transport
+	return OpenTPMDevice(c, NewSimulatorDevice())
 }
 
 // NewTPMSimulatorContextT returns a new TPMContext for testing that corresponds to a connection to the TPM simulator
@@ -710,13 +868,7 @@ func NewTPMSimulatorContext(c *C) (*tpm2.TPMContext, *Transport) {
 // The returned TPMContext must be closed when it is no longer required. This can be done with the returned
 // close callback, which will cause the test to fail if closing doesn't succeed.
 func NewTPMSimulatorContextT(t *testing.T) (tpm *tpm2.TPMContext, transport *Transport, close func()) {
-	transport = NewSimulatorTransportT(t)
-	tpm = tpm2.NewTPMContext(transport)
-	return tpm, transport, func() {
-		if err := tpm.Close(); err != nil {
-			t.Errorf("close failed: %v", err)
-		}
-	}
+	return OpenTPMDeviceT(t, NewSimulatorDevice())
 }
 
 func clearTPMUsingPlatform(tpm *tpm2.TPMContext) error {

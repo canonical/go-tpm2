@@ -1003,7 +1003,7 @@ func (s *commandSender) Write(data []byte) (int, error) {
 // WrapTransport wraps the supplied transport and authorizes it to use the specified features. If
 // the supplied Transport corresponds to a real TPM device, the caller should verify that the
 // specified features are permitted by the current test environment by checking the value
-// of the PermittedTPMFeatures variable before calling this, and should skip the current
+// of the [PermittedTPMFeatures] variable before calling this, and should skip the current
 // test if it needs to use features that are not permitted.
 func WrapTransport(transport tpm2.Transport, permittedFeatures TPMFeatureFlags) (*Transport, error) {
 	tpm := tpm2.NewTPMContext(transport)

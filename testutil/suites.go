@@ -84,9 +84,11 @@ func (b *BaseTest) AddFixtureCleanup(fn func(c *C)) {
 type TPMTest struct {
 	BaseTest
 
-	TPM         *tpm2.TPMContext // The TPM context for the test
-	TCTI        *Transport       // The TPM transmission interface for the test
-	TPMFeatures TPMFeatureFlags  // TPM features required by tests in this suite
+	TPM    *tpm2.TPMContext // The TPM context for the test
+	TCTI   *Transport       // The TPM transmission interface for the test
+	Device tpm2.TPMDevice   // The TPM device that supplies the transmission interface
+
+	TPMFeatures TPMFeatureFlags // TPM features required by tests in this suite
 }
 
 func (b *TPMTest) initTPMContextIfNeeded(c *C) {
@@ -94,21 +96,27 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	case b.TPM != nil:
 		c.Assert(b.TCTI, NotNil)
 	case b.TCTI != nil:
-		// Create a TPMContext from the supplied TCTI
-		b.TPM = tpm2.NewTPMContext(b.TCTI)
+		// Create a TPMContext from the supplied transport
+		b.TPM, _ = OpenTPMDevice(c, newOpenDevice(b.TCTI))
+	case b.Device != nil:
+		// Create a TPMContext and transport from the supplied device
+		b.TPM, b.TCTI = OpenTPMDevice(c, b.Device)
 	default:
-		// Create a new connection
+		// Create a new TPMContext and transport
 		b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
 	}
 }
 
-// SetUpTest is called to set up the test fixture before each test. If the TPM and
-// TCTI members have not been set before this is called, a TPM connection and
-// TPMContext will be created automatically. In this case, the TPMFeatures member
+// SetUpTest is called to set up the test fixture before each test. If the TPM,
+// TCTI and Device members have not been set before this is called, a TPM connection
+// and TPMContext will be created automatically. In this case, the TPMFeatures member
 // should be set prior to calling SetUpTest in order to declare the features that
 // the test will require. If the test requires any features that are not included
 // in PermittedTPMFeatures, the test will be skipped. If TPMBackend is TPMBackendNone,
 // then the test will be skipped.
+//
+// If the Device member is set prior to calling SetUpTest, a TPM connection and
+// TPMContext is created using this.
 //
 // If the TCTI member is set prior to calling SetUpTest, a TPMContext is created
 // using this connection if necessary.
@@ -127,6 +135,7 @@ func (b *TPMTest) SetUpTest(c *C) {
 		}
 		b.TCTI = nil
 		b.TPM = nil
+		b.Device = nil
 	})
 }
 
@@ -318,15 +327,14 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) {
 	switch {
 	case b.TPM != nil:
 		c.Assert(b.TCTI, NotNil)
-		fallthrough
 	case b.TCTI != nil:
-		// Assert that it is a simulator
-		b.Mssim(c)
 		// TPMTest.SetUpTest will create a TPMContext.
+	case b.Device != nil:
+		// Do nothing for now - TPMTest.SetUpTest will create a new
+		// TPMContext and transport
 	default:
-		// No connection was created prior to calling SetUpTest.
-		b.TCTI = NewSimulatorTransport(c)
-		// TPMTest.SetUpTest will create a TPMContext.
+		b.Device = NewSimulatorDevice()
+		// TPMTest.SetUpTest will create a TPMContext and transport
 	}
 }
 
@@ -347,6 +355,10 @@ func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) {
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
 	b.initTPMSimulatorConnectionIfNeeded(c)
 	b.TPMTest.SetUpTest(c)
+
+	// Assert that we have a simulator
+	b.Mssim(c)
+
 	b.AddFixtureCleanup(func(c *C) {
 		if b.TPM == nil {
 			return
