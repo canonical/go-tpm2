@@ -92,7 +92,7 @@ func (s *attestationSuite) testCertify(c *C, data *testCertifyData) {
 	certifyInfo, signature, err := s.TPM.Certify(object, data.sign, data.qualifyingData, data.inScheme, data.objectAuthSession, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
@@ -180,7 +180,7 @@ func (s *attestationSuite) testCertifyCreation(c *C, data *testCertifyCreationDa
 	certifyInfo, signature, err := s.TPM.CertifyCreation(data.sign, object, data.qualifyingData, creationHash, data.inScheme, creationTicket, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -279,7 +279,7 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 	quoted, signature, err := s.TPM.Quote(data.sign, data.qualifyingData, data.inScheme, data.pcrs, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -389,7 +389,7 @@ func (s *attestationSuite) testGetTime(c *C, data *testGetTimeData) {
 	timeInfo, signature, err := s.TPM.GetTime(s.TPM.EndorsementHandleContext(), data.sign, data.qualifyingData, data.inScheme, data.privacyAdminAuthSession, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])

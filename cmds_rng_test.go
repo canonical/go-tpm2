@@ -30,10 +30,8 @@ func (s *rngSuite) testGetRandom(c *C, bytesRequested uint16) {
 	c.Check(err, IsNil)
 	c.Check(data, internal_testutil.LenEquals, int(bytesRequested))
 
-	_, _, rpBytes, _ := s.LastCommand(c).UnmarshalResponse(c)
-
 	var expected Digest
-	_, err = mu.UnmarshalFromBytes(rpBytes, &expected)
+	_, err = mu.UnmarshalFromBytes(s.LastCommand(c).RpBytes, &expected)
 	c.Check(err, IsNil)
 
 	c.Check(data, DeepEquals, expected)
@@ -53,10 +51,8 @@ func (s *rngSuite) TestStirRandom(c *C) {
 
 	c.Check(s.TPM.StirRandom(inData), IsNil)
 
-	_, _, cpBytes := s.LastCommand(c).UnmarshalCommand(c)
-
 	var expected []byte
-	_, err := mu.UnmarshalFromBytes(cpBytes, &expected)
+	_, err := mu.UnmarshalFromBytes(s.LastCommand(c).CpBytes, &expected)
 	c.Check(err, IsNil)
 
 	c.Check(inData, DeepEquals, expected)

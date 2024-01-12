@@ -243,7 +243,7 @@ func (s *resourcesSuite) testNewResourceContextWithSession(c *C, data *testNewRe
 	c.Check(rc.Handle(), Equals, data.handle)
 	c.Check(rc.Name(), DeepEquals, data.name)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, session.Handle())
 }

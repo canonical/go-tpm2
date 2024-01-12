@@ -225,33 +225,6 @@ type CommandRecord struct {
 	RspAuthArea []tpm2.AuthResponse
 }
 
-// GetCommandCode returns the command code associated with this record.
-//
-// Deprecated: use the CmdCode field.
-func (r *CommandRecord) GetCommandCode() (tpm2.CommandCode, error) {
-	return r.CmdCode, nil
-}
-
-// UnmarshalCommand unmarshals the command packet associated with this
-// record, returning the handles, auth area and parameters. The parameters
-// will still be in the TPM wire format.
-//
-// Deprecated: use the CmdHandles, CmdAuthArea and CpBytes fields.
-func (r *CommandRecord) UnmarshalCommand() (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte, err error) {
-	return r.CmdHandles, r.CmdAuthArea, r.CpBytes, nil
-}
-
-// UnmarshalResponse unmarshals the response packet associated with this
-// record, returning the response code, handle, parameters and auth area.
-// The parameters will still be in the TPM wire format. For commands that
-// don't respond with a handle, the returned handle will be
-// tpm2.HandleUnassigned.
-//
-// Deprecated: use the RspCode, RspHandle, RpBytes and RspAuthArea fields.
-func (r *CommandRecord) UnmarshalResponse() (rc tpm2.ResponseCode, handle tpm2.Handle, parameters []byte, authArea []tpm2.AuthResponse, err error) {
-	return r.RspCode, r.RspHandle, r.RpBytes, r.RspAuthArea, nil
-}
-
 // Transport is a special proxy inteface used for testing, which wraps a real interface.
 // It tracks changes to the TPM state and restores it when the connection is closed,
 // and also performs some permission checks to ensure that a test does not access

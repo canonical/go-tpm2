@@ -77,32 +77,6 @@ func (b *BaseTest) AddFixtureCleanup(fn func(c *C)) {
 	b.fixtureCleanupHandlers = append(b.fixtureCleanupHandlers, fn)
 }
 
-// CommandRecordC is a helper for CommandRecord that integrates with *check.C.
-type CommandRecordC struct {
-	*CommandRecord
-}
-
-// Deprecated: use [CommandRecord.CmdCode].
-func (r *CommandRecordC) GetCommandCode(c *C) tpm2.CommandCode {
-	code, err := r.CommandRecord.GetCommandCode()
-	c.Assert(err, IsNil)
-	return code
-}
-
-// Deprecated: use [CommandRecord.CmdHandles], [CommandRecord.CmdAuthArea] and [CommandRecord.CpBytes].
-func (r *CommandRecordC) UnmarshalCommand(c *C) (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte) {
-	handles, authArea, parameters, err := r.CommandRecord.UnmarshalCommand()
-	c.Assert(err, IsNil)
-	return handles, authArea, parameters
-}
-
-// Deprecated: use [CommandRecord.RspCode], [CommandRecord.RspHandle], [CommandRecord.RpBytes] and [CommandRecord.RspAuthArea].
-func (r *CommandRecordC) UnmarshalResponse(c *C) (rc tpm2.ResponseCode, handle tpm2.Handle, parameters []byte, authArea []tpm2.AuthResponse) {
-	rc, handle, parameters, authArea, err := r.CommandRecord.UnmarshalResponse()
-	c.Assert(err, IsNil)
-	return rc, handle, parameters, authArea
-}
-
 // TPMTest is a base test suite for all tests that require a TPM and are able to
 // execute on a real TPM or a simulator. This test suite requires the use of the
 // transmission interface from this package, which takes care of restoring the TPM
@@ -158,18 +132,15 @@ func (b *TPMTest) SetUpTest(c *C) {
 
 // CommandLog returns a log of TPM commands that have been executed since
 // the start of the test, or since the last call to ForgetCommands.
-func (b *TPMTest) CommandLog() (log []*CommandRecordC) {
-	for _, r := range b.TCTI.CommandLog {
-		log = append(log, &CommandRecordC{r})
-	}
-	return log
+func (b *TPMTest) CommandLog() []*CommandRecord {
+	return b.TCTI.CommandLog
 }
 
 // LastCommand returns a record of the last TPM command that was executed.
 // It asserts if no command has been executed.
-func (b *TPMTest) LastCommand(c *C) *CommandRecordC {
+func (b *TPMTest) LastCommand(c *C) *CommandRecord {
 	c.Assert(b.TCTI.CommandLog, Not(internal_testutil.LenEquals), 0)
-	return &CommandRecordC{b.TCTI.CommandLog[len(b.TCTI.CommandLog)-1]}
+	return b.TCTI.CommandLog[len(b.TCTI.CommandLog)-1]
 }
 
 // ForgetCommands forgets the log of TPM commands that have been executed

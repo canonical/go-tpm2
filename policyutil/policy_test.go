@@ -1770,8 +1770,8 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	c.Assert(commands, internal_testutil.LenEquals, data.expectedCommands)
 	policyCommand := commands[len(commands)-2]
-	c.Check(policyCommand.GetCommandCode(c), Equals, tpm2.CommandPolicyNV)
-	_, authArea, _ := policyCommand.UnmarshalCommand(c)
+	c.Check(policyCommand.CmdCode, Equals, tpm2.CommandPolicyNV)
+	authArea := policyCommand.CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle.Type(), Equals, data.expectedSessionType)
 	c.Check(s.TPM.DoesHandleExist(authArea[0].SessionHandle), internal_testutil.IsFalse)
@@ -2115,8 +2115,8 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 
 	c.Assert(commands, internal_testutil.LenEquals, data.expectedCommands)
 	policyCommand := commands[len(commands)-offsetEnd]
-	c.Check(policyCommand.GetCommandCode(c), Equals, tpm2.CommandPolicySecret)
-	_, authArea, cpBytes := policyCommand.UnmarshalCommand(c)
+	c.Check(policyCommand.CmdCode, Equals, tpm2.CommandPolicySecret)
+	authArea := policyCommand.CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle.Type(), Equals, data.expectedSessionType)
 	c.Check(s.TPM.DoesHandleExist(authArea[0].SessionHandle), internal_testutil.IsFalse)
@@ -2126,7 +2126,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 	var cpHashA tpm2.Digest
 	var policyRef tpm2.Nonce
 	var expiration int32
-	_, err = mu.UnmarshalFromBytes(cpBytes, &nonceTPM, &cpHashA, &policyRef, &expiration)
+	_, err = mu.UnmarshalFromBytes(policyCommand.CpBytes, &nonceTPM, &cpHashA, &policyRef, &expiration)
 	c.Check(err, IsNil)
 	c.Check(cpHashA, DeepEquals, tpm2.Digest(nil))
 	c.Check(expiration, Equals, int32(0))
@@ -2892,7 +2892,7 @@ func (s *policySuite) TestPolicyAuthValue(c *C) {
 
 	// TPM2_PolicyPassword and TPM2_PolicyAuthValue have the same digest, so make sure
 	// we executed the correct command.
-	c.Check(s.LastCommand(c).GetCommandCode(c), Equals, tpm2.CommandPolicyAuthValue)
+	c.Check(s.LastCommand(c).CmdCode, Equals, tpm2.CommandPolicyAuthValue)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -3156,7 +3156,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	log := s.CommandLog()
 	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
 	for i := range log {
-		c.Check(log[i].GetCommandCode(c), Equals, data.expectedCommands[i])
+		c.Check(log[i].CmdCode, Equals, data.expectedCommands[i])
 	}
 
 	digest, err := s.TPM.PolicyGetDigest(session)
@@ -3381,13 +3381,11 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 	log := s.CommandLog()
 	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
 	for i := range log {
-		code := log[i].GetCommandCode(c)
+		code := log[i].CmdCode
 		c.Check(code, Equals, data.expectedCommands[i])
 		if code == tpm2.CommandPolicyCommandCode {
-			_, _, cpBytes := log[i].UnmarshalCommand(c)
-
 			var commandCode tpm2.CommandCode
-			_, err = mu.UnmarshalFromBytes(cpBytes, &commandCode)
+			_, err = mu.UnmarshalFromBytes(log[i].CpBytes, &commandCode)
 			c.Check(err, IsNil)
 			c.Check(commandCode, Equals, data.expectedCommandCode)
 		}
@@ -3678,13 +3676,11 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 	log := s.CommandLog()
 	c.Assert(log, internal_testutil.LenEquals, len(data.expectedCommands))
 	for i := range log {
-		code := log[i].GetCommandCode(c)
+		code := log[i].CmdCode
 		c.Check(code, Equals, data.expectedCommands[i])
 		if code == tpm2.CommandPolicyCommandCode {
-			_, _, cpBytes := log[i].UnmarshalCommand(c)
-
 			var commandCode tpm2.CommandCode
-			_, err = mu.UnmarshalFromBytes(cpBytes, &commandCode)
+			_, err = mu.UnmarshalFromBytes(log[i].CpBytes, &commandCode)
 			c.Check(err, IsNil)
 			c.Check(commandCode, Equals, data.expectedCommandCode)
 		}
@@ -4194,7 +4190,7 @@ func (s *policySuite) TestPolicyPassword(c *C) {
 
 	// TPM2_PolicyPassword and TPM2_PolicyAuthValue have the same digest, so make sure
 	// we executed the correct command.
-	c.Check(s.LastCommand(c).GetCommandCode(c), Equals, tpm2.CommandPolicyPassword)
+	c.Check(s.LastCommand(c).CmdCode, Equals, tpm2.CommandPolicyPassword)
 
 	digest, err := s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)

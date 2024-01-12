@@ -124,7 +124,7 @@ func (s *objectSuite) testCreate(c *C, data *testCreateData) (outPrivate Private
 	outPrivate, outPublic, creationData, creationHash, creationTicket, err := s.TPM.Create(data.parent, data.sensitive, data.template, data.outsideInfo, data.creationPCR, data.parentAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -231,13 +231,11 @@ func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
 	object, err := s.TPM.Load(primary, priv, pub, parentAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
-	_, handle, _, _ := s.LastCommand(c).UnmarshalResponse(c)
-
-	c.Check(object.Handle(), Equals, handle)
+	c.Check(object.Handle(), Equals, s.LastCommand(c).RspHandle)
 	c.Check(object.Name(), DeepEquals, expectedName)
 	c.Assert(object, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(object.(*ObjectContext).GetPublic(), DeepEquals, pub)
@@ -285,13 +283,12 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 	object, err := s.TPM.LoadExternal(data.inPrivate, data.inPublic, data.hierarchy)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Check(authArea, internal_testutil.LenEquals, 0)
 
-	_, handle, _, _ := s.LastCommand(c).UnmarshalResponse(c)
 	expectedName := data.inPublic.Name()
 
-	c.Check(object.Handle(), Equals, handle)
+	c.Check(object.Handle(), Equals, s.LastCommand(c).RspHandle)
 	c.Check(object.Name(), DeepEquals, expectedName)
 	c.Assert(object, internal_testutil.ConvertibleTo, &ObjectContext{})
 	c.Check(object.(*ObjectContext).GetPublic(), testutil.TPMValueDeepEquals, data.inPublic)
@@ -347,7 +344,7 @@ func (s *objectSuite) TestLoadExternalWithPrivate(c *C) {
 	c.Check(err, IsNil)
 	c.Check(unsealedKey, DeepEquals, SensitiveData(key))
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].HMAC, DeepEquals, Auth(authValue))
 }
@@ -380,7 +377,7 @@ func (s *objectSuite) testUnseal(c *C, data *testUnsealData) {
 	c.Check(err, IsNil)
 	c.Check(unsealedSecret, DeepEquals, SensitiveData(data.secret))
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 }
@@ -448,7 +445,7 @@ func (s *objectSuite) testObjectChangeAuth(c *C, objectAuthSession SessionContex
 	priv, err = s.TPM.ObjectChangeAuth(object, primary, testAuth, objectAuthSession)
 	c.Check(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -526,7 +523,7 @@ func (s *objectSuite) testActivateCredential(c *C, data *testActivateCredentialD
 	c.Check(err, IsNil)
 	c.Check(certInfo, DeepEquals, Digest(credential))
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])

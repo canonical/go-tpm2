@@ -86,7 +86,7 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 
 	c.Check(index.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, data.publicInfo)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -102,7 +102,7 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	c.Check(s.TPM.NVUndefineSpace(data.authContext, index, data.authContextAuthSession), IsNil)
 	c.Check(index.Handle(), Equals, HandleUnassigned)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	authArea = s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -148,7 +148,7 @@ func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthValue(c *C) {
 		// NVDefineSpace should set the auth value on the returned
 		// context.
 		c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
-		_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+		authArea := s.LastCommand(c).CmdAuthArea
 		c.Assert(authArea, internal_testutil.LenEquals, 1)
 		c.Check(authArea[0].HMAC, DeepEquals, Auth(auth))
 	}
@@ -206,7 +206,7 @@ func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpa
 	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, data.platformAuthSession), IsNil)
 	c.Check(index.Handle(), Equals, HandleUnassigned)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 2)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
 	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
@@ -279,7 +279,7 @@ func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
 
 	c.Check(s.TPM.NVWrite(index, index, data.writeData, data.writeOffset, data.authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -293,7 +293,7 @@ func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
 	c.Check(err, IsNil)
 	c.Check(b, DeepEquals, data.expected)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	authArea = s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 }
@@ -368,7 +368,7 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 
 	c.Check(s.TPM.NVIncrement(index, index, authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -381,7 +381,7 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 	initialValue, err := s.TPM.NVReadCounter(index, index, authSession)
 	c.Check(err, IsNil)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	authArea = s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -418,7 +418,7 @@ func (s *nvSuite) testExtend(c *C, data *testNVExtendData) {
 
 	c.Check(s.TPM.NVExtend(index, index, data.data, data.authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -474,7 +474,7 @@ func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 		expected |= b
 	}
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -488,7 +488,7 @@ func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 	c.Check(err, IsNil)
 	c.Check(value, Equals, expected)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	authArea = s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 }
@@ -516,7 +516,7 @@ func (s *nvSuite) testWriteLock(c *C, authSession SessionContext) {
 
 	c.Check(s.TPM.NVWriteLock(index, index, authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -547,7 +547,7 @@ func (s *nvSuite) testReadLock(c *C, authSession SessionContext) {
 
 	c.Check(s.TPM.NVReadLock(index, index, authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -595,7 +595,7 @@ func (s *nvGlobalLockSuiteBase) testGlobalWriteLock(c *C, data *testNVGlobalWrit
 
 	c.Check(s.TPM.NVGlobalWriteLock(data.auth, data.authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
@@ -647,14 +647,14 @@ func (s *nvSuite) testChangeAuth(c *C, authSession SessionContext) {
 
 	c.Check(s.TPM.NVChangeAuth(index, newAuth, authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
+	authArea := s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
 
 	// NVChangeAuth sets the auth value on index.
 	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
+	authArea = s.LastCommand(c).CmdAuthArea
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
 	c.Check(authArea[0].HMAC, DeepEquals, Auth(newAuth))
 }
