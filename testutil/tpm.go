@@ -257,18 +257,17 @@ func (c *tpmSimulatorLaunchContext) stopAndTerminate() (err error) {
 		c.captureErr("terminate", c.terminateFn(stopOk))
 	}()
 
-	transport, err := mssim.OpenConnection("", c.port)
+	device := mssim.NewLocalDevice(c.port)
+	tpm, err := tpm2.OpenTPMDevice(device)
 	if err != nil {
 		return fmt.Errorf("cannot open simulator connection for stop: %w", err)
 	}
-
-	tpm := tpm2.NewTPMContext(transport)
 	tpm.SetCommandTimeout(5 * time.Second)
 
 	c.captureErr("shutdown", func() error {
 		return tpm.Shutdown(tpm2.StartupClear)
 	})
-	if err := transport.Stop(); err != nil {
+	if err := tpm.Transport().(*mssim.Transport).Stop(); err != nil {
 		return fmt.Errorf("cannot stop simulator: %w", err)
 	}
 	if err := tpm.Close(); err != nil {
