@@ -165,7 +165,8 @@ func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
-		`.*file already closed$`})
+		`.*file already closed$`,
+		`.*transport already closed$`})
 }
 
 func (s *tpmTestSuite) TestTestLifecycleProvidedTransport(c *C) {
@@ -185,7 +186,8 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
-		`.*file already closed$`})
+		`.*file already closed$`,
+		`.*transport already closed$`})
 }
 
 func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
@@ -204,7 +206,8 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
-		`.*file already closed$`})
+		`.*file already closed$`,
+		`.*transport already closed$`})
 }
 
 func (s *tpmTestSuite) TestLifecycleNoCloseTPM(c *C) {
@@ -475,7 +478,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
+	c.Check(tpm.Close(), ErrorMatches, `.*transport already closed$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
 	s.AddCleanup(func() {
@@ -506,7 +509,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
-	c.Check(tpm.Close(), ErrorMatches, `.*use of closed network connection$`)
+	c.Check(tpm.Close(), ErrorMatches, `.*transport already closed$`)
 
 	tpm, _ = NewTPMSimulatorContext(c)
 	s.AddCleanup(func() {

@@ -106,11 +106,6 @@ func (d *Device) Open() (tpm2.Transport, error) {
 	return d.openInternal()
 }
 
-// ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
-func (d *Device) ShouldRetry() bool {
-	return false
-}
-
 // String implements [fmt.Stringer].
 func (d *Device) String() string {
 	return "linux TPM character device: " + d.path

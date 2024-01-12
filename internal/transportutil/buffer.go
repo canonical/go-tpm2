@@ -17,7 +17,8 @@ type commandBuffer struct {
 }
 
 // BufferCommands buffers command packets written to the returned writer and
-// writes complete packets to the supplied writer in a single write.
+// writes complete packets to the supplied writer in a single write. The
+// maxCommandSize argument defines the maximum size of a command.
 func BufferCommands(w io.Writer, maxCommandSize uint32) io.Writer {
 	return &commandBuffer{w: w, maxCommandSize: maxCommandSize}
 }
@@ -73,7 +74,8 @@ type responseBuffer struct {
 
 // BufferResponses reads complete response packets from the supplied reader
 // in a single read and makes them available to the returned reader for partial
-// reading.
+// reading. The maxResponseSize argument defines the size of the read on the
+// supplied reader.
 func BufferResponses(r io.Reader, maxResponseSize uint32) io.Reader {
 	return &responseBuffer{r: r, maxResponseSize: maxResponseSize}
 }
@@ -90,15 +92,21 @@ func (b *responseBuffer) readNextResponse() error {
 }
 
 func (b *responseBuffer) Read(data []byte) (n int, err error) {
-	if b.rsp == nil {
-		if err := b.readNextResponse(); err != nil {
-			return 0, err
+	for {
+		if b.rsp == nil {
+			if err := b.readNextResponse(); err != nil {
+				return 0, err
+			}
 		}
-	}
 
-	n, err = b.rsp.Read(data)
-	if err == io.EOF {
-		b.rsp = nil
+		n, err = b.rsp.Read(data)
+		if err == io.EOF {
+			b.rsp = nil
+			err = nil
+			if n == 0 {
+				continue
+			}
+		}
+		return n, err
 	}
-	return n, err
 }

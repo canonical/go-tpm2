@@ -6,6 +6,7 @@ package tpm2
 
 import (
 	"errors"
+	"io"
 	"time"
 )
 
@@ -23,14 +24,44 @@ type TCTI = Transport
 
 // Transport represents a communication channel to a TPM implementation.
 type Transport interface {
-	// Read is used to receive a response to a previously transmitted command. The implementation
-	// must support partial reading of a response, and must return io.EOF when there are no more
-	// bytes of a response left to read.
+	// Read is used to receive a response to a previously transmitted command.
 	Read(p []byte) (int, error)
 
-	// Write is used to transmit a serialized command to the TPM implementation. The implementation
-	// must support commands being written across multiple writes.
+	// Write is used to transmit a serialized command to the TPM implementation.
 	Write(p []byte) (int, error)
 
+	// Close closes the transport.
 	Close() error
+}
+
+type transportWriter struct {
+	w io.Writer
+}
+
+func (w *transportWriter) Write(data []byte) (int, error) {
+	n, err := w.w.Write(data)
+	if err != nil {
+		return n, &TransportError{"write", err}
+	}
+	return n, nil
+}
+
+func wrapTransportWriteErrors(w io.Writer) io.Writer {
+	return &transportWriter{w: w}
+}
+
+type transportReader struct {
+	r io.Reader
+}
+
+func (r *transportReader) Read(data []byte) (int, error) {
+	n, err := r.r.Read(data)
+	if err != nil {
+		return n, &TransportError{"read", err}
+	}
+	return n, nil
+}
+
+func wrapTransportReadErrors(r io.Reader) io.Reader {
+	return &transportReader{r: r}
 }
