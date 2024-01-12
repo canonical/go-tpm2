@@ -6,15 +6,11 @@ package tpm2
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"time"
 
 	"github.com/canonical/go-tpm2/mu"
-	"gopkg.in/tomb.v2"
 )
 
 func makeInvalidArgError(name, msg string) error {
@@ -79,190 +75,6 @@ func isSessionAllowed(commandCode CommandCode) bool {
 	default:
 		return true
 	}
-}
-
-type tpmRetryParameters struct {
-	maxRetries     uint
-	initialBackoff time.Duration
-	backoffRate    uint
-}
-
-type retrierTransport struct {
-	transport Transport
-	params    *tpmRetryParameters
-
-	tomb tomb.Tomb
-
-	w    io.WriteCloser // write channel
-	wErr <-chan error   // write errors
-
-	r    io.ReadCloser // read channel
-	rLen <-chan int64  // next response length, used to demarcate response bytes with io.EOF.
-	rErr <-chan error  // read errors.
-	lr   io.Reader     // current response reader, limited by the last value read from rLen.
-}
-
-func newRetrierTransport(transport Transport, params *tpmRetryParameters) *retrierTransport {
-	t := &retrierTransport{
-		transport: transport,
-		params:    params,
-	}
-
-	// Construct the write channel
-	wr, ww := io.Pipe()
-	t.w = ww
-	wErr := make(chan error)
-	t.wErr = wErr
-
-	// Construct the read channel
-	rr, rw := io.Pipe()
-	t.r = rr
-	rLen := make(chan int64)
-	t.rLen = rLen
-	rErr := make(chan error)
-	t.rErr = rErr
-
-	// Run the transport routine
-	t.tomb.Go(func() error {
-		err := t.run(wr, wErr, rw, rLen, rErr)
-		// Ensure the calling routine gets unblocked.
-		wr.Close()
-		rw.Close()
-		return err
-	})
-	return t
-}
-
-func (t *retrierTransport) runCommand(commandCode CommandCode, data []byte) ([]byte, error) {
-	retryDelay := t.params.initialBackoff
-
-	for retries := t.params.maxRetries; ; retries-- {
-		// Send the command.
-		if _, err := t.transport.Write(data); err != nil {
-			return nil, fmt.Errorf("cannot send command: %w", err)
-		}
-
-		rsp := new(bytes.Buffer)
-		tr := io.TeeReader(t.transport, rsp)
-
-		// Wait for the response header
-		var hdr ResponseHeader
-		if _, err := mu.UnmarshalFromReader(tr, &hdr); err != nil {
-			return nil, fmt.Errorf("cannot unmarshal response header: %w", err)
-		}
-
-		// Read the rest of the response
-		if _, err := io.Copy(io.Discard, tr); err != nil {
-			return nil, err
-		}
-
-		err := DecodeResponseCode(commandCode, hdr.ResponseCode)
-		if retries > 0 && (IsTPMWarning(err, WarningYielded, commandCode) || IsTPMWarning(err, WarningTesting, commandCode) || IsTPMWarning(err, WarningRetry, commandCode)) {
-			time.Sleep(retryDelay)
-			retryDelay *= time.Duration(t.params.backoffRate)
-			continue
-		}
-
-		return rsp.Bytes(), nil
-	}
-}
-
-func (t *retrierTransport) run(r io.Reader, rErr chan<- error, w io.Writer, wLen chan<- int64, wErr chan<- error) (err error) {
-Next:
-	for {
-		cmd := new(bytes.Buffer)
-		tr := io.TeeReader(r, cmd)
-
-		// Wait for the next command header
-		var hdr CommandHeader
-		_, err := mu.UnmarshalFromReader(tr, &hdr)
-		switch {
-		case errors.Is(err, io.ErrUnexpectedEOF):
-			// We were closed
-			return nil
-		case err != nil:
-			// Send an error to the writer
-			rErr <- fmt.Errorf("cannot send command: %w", err)
-			continue Next
-		}
-
-		// Read the rest of the command
-		_, err = io.CopyN(io.Discard, tr, int64(hdr.CommandSize)-int64(binary.Size(hdr)))
-		switch {
-		case err == io.EOF:
-			// We were closed
-			return nil
-		case err != nil:
-			// Send an error to the writer
-			rErr <- fmt.Errorf("cannot send command: %w", err)
-			continue Next
-		}
-
-		// Unblock the writer
-		rErr <- nil
-
-		rsp, err := t.runCommand(hdr.CommandCode, cmd.Bytes())
-		switch {
-		case err != nil:
-			// Command dispatch failed, send an error to the reader
-			wErr <- err
-		default:
-			// Command was executed, send the response to the reader
-			wLen <- int64(len(rsp))
-			_, err := io.Copy(w, bytes.NewReader(rsp))
-			wErr <- err
-		}
-	}
-}
-
-func (t *retrierTransport) Read(data []byte) (int, error) {
-	if t.lr == nil {
-		// Wait for the next response, or an error.
-		select {
-		case n := <-t.rLen:
-			t.lr = io.LimitReader(t.r, n)
-		case err := <-t.rErr:
-			return 0, err
-		}
-	}
-
-	n, err := t.lr.Read(data)
-	if err == io.EOF {
-		// This response is finished. Return io.EOF or an
-		// error from the transport routine if there is one.
-		t.lr = nil
-		select {
-		case err := <-t.rErr:
-			if err != nil {
-				return n, err
-			}
-		}
-	}
-	return n, err
-}
-
-func (t *retrierTransport) Write(data []byte) (n int, err error) {
-	n, err = t.w.Write(data)
-	if err != nil {
-		return n, err
-	}
-
-	// Wait for a response from the transport routine
-	return n, <-t.wErr
-}
-
-func (t *retrierTransport) Close() error {
-	// Close the pipes and transport to unblock the transport routine.
-	t.w.Close()
-	t.r.Close()
-	err := t.transport.Close()
-
-	// Wait for everything to die.
-	t.tomb.Kill(nil)
-	if err := t.tomb.Wait(); err != nil {
-		return err
-	}
-	return err
 }
 
 type execContextDispatcher interface {
@@ -467,7 +279,6 @@ type TPMContext struct {
 	device             TPMDevice
 	transport          Transport
 	permanentResources map[Handle]*permanentContext
-	retryParams        tpmRetryParameters
 	properties         *tpmDeviceProperties
 	execContext        execContext
 }
@@ -509,10 +320,6 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 // response parameter bytes and response auth area are returned. This function does no checking of
 // the auth response.
 //
-// If the TPM returns a response indicating that the command should be retried, this function will
-// retry up to a maximum number of times defined by the number supplied to
-// [TPMContext.SetMaxSubmissions], if required by the underlying [TPMDevice].
-//
 // A *[TransportError] will be returned if the transmission interface returns an error.
 //
 // One of *[TPMWarning], *[TPMError], *[TPMParameterError], *[TPMHandleError] or
@@ -523,18 +330,20 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 // of the many convenience functions provided by TPMContext instead, or [TPMContext.StartCommand]
 // if one doesn't already exist.
 func (t *TPMContext) RunCommand(commandCode CommandCode, cHandles HandleList, cAuthArea []AuthCommand, cpBytes []byte, rHandle *Handle) (rpBytes []byte, rAuthArea []AuthResponse, err error) {
-	cmd, err := MarshalCommandPacket(commandCode, cHandles, cAuthArea, cpBytes)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot serialize command packet: %w", err)
+	if err := WriteCommandPacket(wrapTransportWriteErrors(t.transport), commandCode, cHandles, cAuthArea, cpBytes); err != nil {
+		var te *TransportError
+		if errors.As(err, &te) {
+			return nil, nil, te
+		}
+		return nil, nil, fmt.Errorf("cannot send command: %w", err)
 	}
 
-	resp, err := t.RunCommandBytes(cmd)
+	rc, rpBytes, rAuthArea, err := ReadResponsePacket(wrapTransportReadErrors(t.transport), rHandle)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	rc, rpBytes, rAuthArea, err := resp.Unmarshal(rHandle)
-	if err != nil {
+		var te *TransportError
+		if errors.As(err, &te) {
+			return nil, nil, te
+		}
 		return nil, nil, &InvalidResponseError{commandCode, fmt.Errorf("cannot unmarshal response packet: %w", err)}
 	}
 
@@ -558,18 +367,6 @@ func (t *TPMContext) StartCommand(commandCode CommandCode) *CommandContext {
 	return &CommandContext{
 		dispatcher: &t.execContext,
 		cmd:        cmdContext{CommandCode: commandCode}}
-}
-
-// SetRetryParams customizes how commands will be retries before failing with an error. The maxRetries
-// argument specifies the maximum amount of retries. The initialBackoff argument specifies the time to
-// wait before submitting the first retry. The backoffRate argument specifies how much more time to wait
-// for each retry. The default values are 4 for maxRetries, 20ms for initialBackoff and 2 for backoffRate.
-// This means that the first retry will be attempted after a delay of 20ms, the second retry after 40ms,
-// the third retry after 80ms and the fourth retry after 160ms.
-func (t *TPMContext) SetRetryParameters(maxRetries uint, initialBackoff time.Duration, backoffRate uint) {
-	t.retryParams.maxRetries = maxRetries
-	t.retryParams.initialBackoff = initialBackoff
-	t.retryParams.backoffRate = backoffRate
 }
 
 // Transport returns the underlying transmission channel for this context.
@@ -613,14 +410,11 @@ func (t *TPMContext) initPropertiesIfNeeded() error {
 
 // TPMDevice corresponds a TPM device.
 type TPMDevice interface {
-	// Open opens a communication channel with the TPM device.
+	// Open opens a communication channel with the TPM device. The returned
+	// channel will only be used from the same goroutine that TPMContext is
+	// used from. Implementations must handle command reads and writes that
+	// are split across multiple calls.
 	Open() (Transport, error)
-
-	// ShouldRetry indicates whether TPMContext should resubmit commands
-	// when the TPM response indicates that a command should be retried.
-	// Some backends may have already retried, in which case TPMContext
-	// should not retry.
-	ShouldRetry() bool
 
 	fmt.Stringer
 }
@@ -641,17 +435,8 @@ func OpenTPMDevice(device TPMDevice) (*TPMContext, error) {
 		device:             device,
 		transport:          transport,
 		permanentResources: make(map[Handle]*permanentContext),
-		retryParams: tpmRetryParameters{
-			maxRetries:     4,
-			initialBackoff: 20 * time.Millisecond,
-			backoffRate:    2,
-		},
 	}
 	tpm.execContext.dispatcher = tpm
-
-	if device.ShouldRetry() {
-		tpm.transport = newRetrierTransport(tpm.transport, &tpm.retryParams)
-	}
 
 	return tpm, nil
 }
@@ -662,10 +447,6 @@ type dummyTPMDevice struct {
 
 func (d *dummyTPMDevice) Open() (Transport, error) {
 	return d.transport, nil
-}
-
-func (d *dummyTPMDevice) ShouldRetry() bool {
-	return true
 }
 
 func (d *dummyTPMDevice) String() string {

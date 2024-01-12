@@ -5,8 +5,10 @@
 package linux
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	internal_ppi "github.com/canonical/go-tpm2/internal/ppi"
+	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/ppi"
 )
 
@@ -44,6 +47,56 @@ var (
 	sysfsPath = "/sys"
 )
 
+type nonBlockingTpmFileReader struct {
+	file *tpmFile
+}
+
+func (r *nonBlockingTpmFileReader) Read(data []byte) (int, error) {
+	n, err := r.file.ReadNonBlocking(data)
+	if n == 0 && err == nil {
+		err = io.EOF
+	}
+	return n, err
+}
+
+func isPartialReadSupported(path string) bool {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+
+	tf := &tpmFile{file: f}
+	defer tf.Close()
+
+	cmd := tpm2.MustMarshalCommandPacket(
+		tpm2.CommandGetCapability, nil, nil,
+		mu.MustMarshalToBytes(tpm2.CapabilityTPMProperties, tpm2.PropertyManufacturer, uint32(1)),
+	)
+	if _, err := tf.Write(cmd); err != nil {
+		return false
+	}
+
+	var rspHdr tpm2.ResponseHeader
+	buf := make([]byte, binary.Size(rspHdr))
+	if _, err := io.ReadFull(tf, buf); err != nil {
+		return false
+	}
+	if _, err := mu.UnmarshalFromBytes(buf, &rspHdr); err != nil {
+		return false
+	}
+	if rspHdr.ResponseCode != tpm2.ResponseSuccess {
+		return false
+	}
+
+	var moreData bool
+	var capabilityData *tpm2.CapabilityData
+	if _, err := mu.UnmarshalFromReader(&nonBlockingTpmFileReader{tf}, &moreData, &capabilityData); err != nil {
+		return false
+	}
+
+	return true
+}
+
 type tpmDevices struct {
 	once    sync.Once
 	devices []*RawDevice
@@ -65,15 +118,26 @@ type Device struct {
 	path      string
 	sysfsPath string
 	version   TPMMajorVersion
+
+	partialReadSupportOnce sync.Once
+	partialReadSupported   bool
+}
+
+func (d *Device) checkPartialReadSupport() {
+	d.partialReadSupportOnce.Do(func() {
+		d.partialReadSupported = isPartialReadSupported(d.path)
+	})
 }
 
 func (d *Device) openInternal() (*Transport, error) {
+	d.checkPartialReadSupport()
+
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Transport{file: &tpmFile{file: f}}, nil
+	return newTransport(&tpmFile{file: f}, d.partialReadSupported), nil
 }
 
 // Path returns the path of the character device.
@@ -91,14 +155,16 @@ func (d *Device) MajorVersion() TPMMajorVersion {
 	return d.version
 }
 
+// PartialReadSupported indicates whether the TPM character device supports
+// partial reads.
+func (d *Device) PartialReadSupported() bool {
+	d.checkPartialReadSupport()
+	return d.partialReadSupported
+}
+
 // Open implements [tpm2.TPMDevice.Open].
 func (d *Device) Open() (tpm2.Transport, error) {
 	return d.openInternal()
-}
-
-// ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
-func (d *Device) ShouldRetry() bool {
-	return false
 }
 
 // String implements [fmt.Stringer].
@@ -195,7 +261,7 @@ func OpenDevice(path string) (*Transport, error) {
 		return nil, err
 	}
 
-	s, err := tcti.file.Stat()
+	s, err := tcti.statter.Stat()
 	if err != nil {
 		tcti.Close()
 		return nil, err

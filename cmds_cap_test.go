@@ -650,10 +650,17 @@ type mockTPM12Transport struct {
 }
 
 func (t *mockTPM12Transport) Read(data []byte) (int, error) {
-	if t.rsp == nil {
-		return 0, io.EOF
+	for {
+		n, err := t.rsp.Read(data)
+		if err == io.EOF {
+			t.rsp = nil
+			err = nil
+			if n == 0 {
+				continue
+			}
+		}
+		return n, err
 	}
-	return t.rsp.Read(data)
 }
 
 func (t *mockTPM12Transport) Write(data []byte) (int, error) {

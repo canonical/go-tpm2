@@ -9,13 +9,14 @@ package mssim
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/internal/transportutil"
 	"github.com/canonical/go-tpm2/mu"
 )
 
@@ -28,6 +29,8 @@ const (
 	cmdStop           uint32 = 21
 
 	DefaultPort uint = 2321
+
+	maxCommandSize = 4096
 )
 
 var (
@@ -69,40 +72,49 @@ func (d *Device) openInternal() (*Transport, error) {
 	tpmAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port())
 	platformAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port()+1)
 
-	transport := new(Transport)
-	transport.locality = 3
+	internal := &internalTransport{
+		locality: 3,
+	}
 
 	tpm, err := net.Dial("tcp", tpmAddress)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to TPM socket: %w", err)
 	}
-	transport.tpm = tpm
+	internal.tpm = tpm
 
 	platform, err := net.Dial("tcp", platformAddress)
 	if err != nil {
-		transport.tpm.Close()
+		internal.tpm.Close()
 		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
 	}
-	transport.platform = platform
+	internal.platform = platform
 
-	if err := transport.platformCommand(cmdPowerOn); err != nil {
+	if err := internal.platformCommand(cmdPowerOn); err != nil {
 		return nil, fmt.Errorf("cannot complete power on command: %w", err)
 	}
-	if err := transport.platformCommand(cmdNVOn); err != nil {
+	if err := internal.platformCommand(cmdNVOn); err != nil {
 		return nil, fmt.Errorf("cannot complete NV on command: %w", err)
 	}
 
-	return transport, nil
+	internal.w = transportutil.BufferCommands(&commandSender{transport: internal}, maxCommandSize)
+
+	return &Transport{
+		retrier: transportutil.NewRetrierTransport(internal, transportutil.RetryParams{
+			MaxRetries:     4,
+			InitialBackoff: 20 * time.Millisecond,
+			BackoffRate:    2,
+		}),
+		internal: internal,
+	}, nil
 }
 
 // Open implements [tpm2.TPMDevice.Open].
+//
+// The returned transport will automatically retry commands that fail with TPM_RC_RETRY or
+// TPM_RC_YIELDED. It will also retry commands that fail with TPM_RC_TESTING if the command
+// wasn't TPM_CC_SELF_TEST.
 func (d *Device) Open() (tpm2.Transport, error) {
 	return d.openInternal()
-}
-
-// ShouldRetry implements [tpm2.TPMDevice.ShouldRetry].
-func (d *Device) ShouldRetry() bool {
-	return true
 }
 
 // String implements [fmt.Stringer].
@@ -113,64 +125,109 @@ func (d *Device) String() string {
 // Transport represents a connection to a TPM simulator that implements the Microsoft TPM2
 // simulator interface.
 type Transport struct {
+	retrier  tpm2.Transport
+	internal *internalTransport
+}
+
+// Read implements [tpm2.Transport.Read].
+func (t *Transport) Read(data []byte) (int, error) {
+	return t.retrier.Read(data)
+}
+
+// Write implements [tpm2.Transport.Write].
+func (t *Transport) Write(data []byte) (int, error) {
+	return t.retrier.Write(data)
+}
+
+// Close implements [tpm2.Transport.Close].
+func (t *Transport) Close() (err error) {
+	return t.retrier.Close()
+}
+
+// Reset submits the reset command on the platform connection, which
+// initiates a reset of the TPM simulator and results in the execution
+// of _TPM_Init().
+func (t *Transport) Reset() error {
+	return t.internal.platformCommand(cmdReset)
+}
+
+// Stop submits a stop command on both the TPM command and platform
+// channels, which initiates a shutdown of the TPM simulator.
+func (t *Transport) Stop() (out error) {
+	if err := t.internal.sendPlatformCommand(cmdStop); err != nil {
+		return fmt.Errorf("cannot send platform command: %w", err)
+	}
+	if _, err := t.internal.sendTpmCommand(cmdStop); err != nil {
+		return fmt.Errorf("cannot send TPM command: %w", err)
+	}
+	return nil
+}
+
+type commandSender struct {
+	transport *internalTransport
+}
+
+func (s *commandSender) Write(data []byte) (int, error) {
+	n, err := s.transport.sendTpmCommand(cmdTPMSendCommand, s.transport.locality, uint32(len(data)), mu.RawBytes(data))
+	n -= (n - len(data))
+	if n < 0 {
+		n = 0
+	}
+	if n < len(data) && err == nil {
+		err = io.ErrShortWrite
+	}
+	return n, err
+}
+
+type internalTransport struct {
 	tpm      net.Conn
 	platform net.Conn
 
 	timeout  time.Duration
 	locality uint8 // Locality of commands submitted to the simulator on this interface
 
-	commandInProgress bool
-	r                 io.Reader
+	w io.Writer
+	r io.Reader
+
+	tpmSenderMu sync.Mutex
 }
 
-// Read implmements [tpm2.Transport.Read].
-func (t *Transport) Read(data []byte) (int, error) {
-	if t.r == nil {
-		var size uint32
-		if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
-			return 0, err
+func (t *internalTransport) Read(data []byte) (int, error) {
+	for {
+		if t.r == nil {
+			var size uint32
+			if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
+				return 0, err
+			}
+
+			t.r = io.LimitReader(t.tpm, int64(size))
 		}
 
-		t.commandInProgress = false
-		t.r = io.LimitReader(t.tpm, int64(size))
-	}
+		n, err := t.r.Read(data)
+		if err == io.EOF {
+			t.r = nil
+			err = nil
 
-	n, err := t.r.Read(data)
-	if err == io.EOF {
-		var trash uint32
-		if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
-			return 0, err
+			var trash uint32
+			if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
+				return 0, err
+			}
+
+			if n == 0 {
+				continue
+			}
 		}
-		t.r = nil
-
+		return n, err
 	}
-
-	return n, err
 }
 
-// Write implmements [tpm2.Transport.Write].
-func (t *Transport) Write(data []byte) (int, error) {
-	if t.commandInProgress || t.r != nil {
-		return 0, errors.New("command in progress or unread bytes from previous response")
-	}
-
-	buf := mu.MustMarshalToBytes(cmdTPMSendCommand, t.locality, uint32(len(data)), mu.RawBytes(data))
-
-	n, err := t.tpm.Write(buf)
-	n -= (len(buf) - len(data))
-	if n < 0 {
-		n = 0
-	}
-	if err == nil {
-		t.commandInProgress = true
-	}
-	return n, err
+func (t *internalTransport) Write(data []byte) (int, error) {
+	return t.w.Write(data)
 }
 
-// Close implements [tpm2.Transport.Close].
-func (t *Transport) Close() (err error) {
-	binary.Write(t.platform, binary.BigEndian, cmdSessionEnd)
-	binary.Write(t.tpm, binary.BigEndian, cmdSessionEnd)
+func (t *internalTransport) Close() (err error) {
+	t.sendPlatformCommand(cmdSessionEnd)
+	t.sendTpmCommand(cmdSessionEnd)
 	if e := t.platform.Close(); e != nil {
 		err = fmt.Errorf("cannot close platform channel: %w", e)
 	}
@@ -180,13 +237,33 @@ func (t *Transport) Close() (err error) {
 	return err
 }
 
-func (t *Transport) platformCommand(cmd uint32) error {
-	if err := binary.Write(t.platform, binary.BigEndian, cmd); err != nil {
+func (t *internalTransport) sendTpmCommand(cmd uint32, args ...interface{}) (int, error) {
+	t.tpmSenderMu.Lock()
+	defer t.tpmSenderMu.Unlock()
+
+	args = append([]interface{}{cmd}, args...)
+	n, err := mu.MarshalToWriter(t.tpm, args...)
+	if err != nil {
+		return n, fmt.Errorf("cannot send command: %w", err)
+	}
+	return n, nil
+}
+
+func (t *internalTransport) sendPlatformCommand(cmd uint32, args ...interface{}) error {
+	args = append([]interface{}{cmd}, args...)
+	if _, err := mu.MarshalToWriter(t.platform, args...); err != nil {
+		return fmt.Errorf("cannot send command: %w", err)
+	}
+	return nil
+}
+
+func (t *internalTransport) platformCommand(cmd uint32, args ...interface{}) error {
+	if err := t.sendPlatformCommand(cmd, args...); err != nil {
 		return fmt.Errorf("cannot send command: %w", err)
 	}
 
 	var resp uint32
-	if err := binary.Read(t.platform, binary.BigEndian, &resp); err != nil {
+	if _, err := mu.UnmarshalFromReader(t.platform, &resp); err != nil {
 		return fmt.Errorf("cannot read response to command: %w", err)
 	}
 	if resp != 0 {
@@ -194,22 +271,6 @@ func (t *Transport) platformCommand(cmd uint32) error {
 	}
 
 	return nil
-}
-
-// Reset submits the reset command on the platform connection, which
-// initiates a reset of the TPM simulator and results in the execution
-// of _TPM_Init().
-func (t *Transport) Reset() error {
-	return t.platformCommand(cmdReset)
-}
-
-// Stop submits a stop command on both the TPM command and platform
-// channels, which initiates a shutdown of the TPM simulator.
-func (t *Transport) Stop() (out error) {
-	if err := binary.Write(t.platform, binary.BigEndian, cmdStop); err != nil {
-		return err
-	}
-	return binary.Write(t.tpm, binary.BigEndian, cmdStop)
 }
 
 // NewLocalDevice returns a new device structure for the specified port on the

@@ -229,19 +229,19 @@ func (s *transportSuite) testHierarchyDisallowed(c *C, data *testHierarchyDisall
 func (s *transportSuite) TestOwnerHierarchyDisallowed(c *C) {
 	s.testHierarchyDisallowed(c, &testHierarchyDisallowedData{
 		hierarchy: tpm2.HandleOwner,
-		err:       `cannot complete read operation on Transport: cannot send command: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000001\)`})
+		err:       `cannot complete write operation on Transport: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000001\)`})
 }
 
 func (s *transportSuite) TestEndorsementHierarchyDisallowed(c *C) {
 	s.testHierarchyDisallowed(c, &testHierarchyDisallowedData{
 		hierarchy: tpm2.HandleEndorsement,
-		err:       `cannot complete read operation on Transport: cannot send command: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000002\)`})
+		err:       `cannot complete write operation on Transport: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000002\)`})
 }
 
 func (s *transportSuite) TestPlatformHierarchyDisallowed(c *C) {
 	s.testHierarchyDisallowed(c, &testHierarchyDisallowedData{
 		hierarchy: tpm2.HandlePlatform,
-		err:       `cannot complete read operation on Transport: cannot send command: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000008\)`})
+		err:       `cannot complete write operation on Transport: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000008\)`})
 }
 
 func (s *transportSuite) TestLockoutHierarchyAllowed(c *C) {
@@ -256,7 +256,7 @@ func (s *transportSuite) TestLockoutHierarchyDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.DictionaryAttackLockReset(s.TPM.LockoutHandleContext(), nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_DictionaryAttackLockReset is trying to use a non-requested feature \(missing: 0x00000804\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_DictionaryAttackLockReset is trying to use a non-requested feature \(missing: 0x00000804\)`)
 }
 
 func (s *transportSuite) TestPCRAllowed(c *C) {
@@ -276,7 +276,7 @@ func (s *transportSuite) TestPCRDisallowed(c *C) {
 	_, _, err := s.TPM.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0}}})
 	c.Check(err, IsNil)
 	_, err = s.TPM.PCREvent(s.TPM.PCRHandleContext(0), []byte("foo"), nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_PCR_Event is trying to use a non-requested feature \(missing: 0x00000010\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_PCR_Event is trying to use a non-requested feature \(missing: 0x00000010\)`)
 }
 
 func (s *transportSuite) TestHierarchyControlAllowed(c *C) {
@@ -291,7 +291,7 @@ func (s *transportSuite) TestHierarchyControlDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_HierarchyControl is trying to use a non-requested feature \(missing: 0x00000020\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_HierarchyControl is trying to use a non-requested feature \(missing: 0x00000020\)`)
 }
 
 func (s *transportSuite) TestHierarchyControlAllowedWithPlatform(c *C) {
@@ -349,7 +349,7 @@ func (s *transportSuite) TestNVReadLockNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVReadLock(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_ReadLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_ReadLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
 }
 
 func (s *transportSuite) TestNVWriteLockStClearAllowed(c *C) {
@@ -400,7 +400,7 @@ func (s *transportSuite) TestNVWriteLockStClearNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWriteLock(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00000020\\)")
 }
 
 func (s *transportSuite) TestSetCommandCodeAuditStatusAllowed(c *C) {
@@ -415,7 +415,7 @@ func (s *transportSuite) TestSetCommandCodeAuditStatusDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001040\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001040\)`)
 }
 
 func (s *transportSuite) TestSetCommandCodeAuditStatusAllowedWithEndorsementAndOwner1(c *C) {
@@ -444,7 +444,7 @@ func (s *transportSuite) TestSetCommandCodeAuditStatusWithEndorsementAndOwnerReq
 	s.deferCloseTpm(c)
 
 	err := s.TPM.SetCommandCodeAuditStatus(s.TPM.OwnerHandleContext(), tpm2.HashAlgorithmSHA256, nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001000\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_SetCommandCodeAuditStatus is trying to use a non-requested feature \(missing: 0x00001000\)`)
 }
 
 func (s *transportSuite) TestClearAllowed(c *C) {
@@ -459,7 +459,7 @@ func (s *transportSuite) TestClearDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.Clear(s.TPM.LockoutHandleContext(), nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Clear is trying to use a non-requested feature \(missing: 0x00000080\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_Clear is trying to use a non-requested feature \(missing: 0x00000080\)`)
 }
 
 func (s *transportSuite) TestClearControlAllowed(c *C) {
@@ -474,7 +474,7 @@ func (s *transportSuite) TestClearControlDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001100\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001100\)`)
 }
 
 func (s *transportSuite) TestClearControlAllowedWithPlatform1(c *C) {
@@ -496,7 +496,7 @@ func (s *transportSuite) TestClearControlWithPlatformRequiresNV(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.ClearControl(s.TPM.LockoutHandleContext(), true, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001000\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_ClearControl is trying to use a non-requested feature \(missing: 0x00001000\)`)
 }
 
 func (s *transportSuite) TestFeatureShutdownAllowed(c *C) {
@@ -511,7 +511,7 @@ func (s *transportSuite) TestFeatureShutdownDisallowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.Shutdown(tpm2.StartupState)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Shutdown is trying to use a non-requested feature \(missing: 0x00000200\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_Shutdown is trying to use a non-requested feature \(missing: 0x00000200\)`)
 }
 
 func (s *transportSuite) TestNVGlobalWriteLockAllowed(c *C) {
@@ -526,7 +526,7 @@ func (s *transportSuite) TestNVGlobalWriteLockDisllowed(c *C) {
 	s.deferCloseTpm(c)
 
 	err := s.TPM.NVGlobalWriteLock(s.TPM.OwnerHandleContext(), nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_GlobalWriteLock is trying to use a non-requested feature \(missing: 0x00000400\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_NV_GlobalWriteLock is trying to use a non-requested feature \(missing: 0x00000400\)`)
 }
 
 func (s *transportSuite) TestDAProtectedCapabilityAllowed(c *C) {
@@ -557,7 +557,7 @@ func (s *transportSuite) TestDAProtectedCapabilityDisallowed(c *C) {
 	c.Check(err, IsNil)
 
 	err = s.TPM.NVWrite(index, index, []byte("foo"), 0, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_Write is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_NV_Write is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
 func (s *transportSuite) TestNVUndefineSpaceSpecialNotCreatedAllowed(c *C) {
@@ -623,7 +623,7 @@ func (s *transportSuite) TestNVUndefineSpaceSpecialNotCreatedDisallowed(c *C) {
 	c.Check(s.TPM.PolicyCommandCode(session, tpm2.CommandNVUndefineSpaceSpecial), IsNil)
 
 	err = s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_UndefineSpaceSpecial is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_UndefineSpaceSpecial is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *transportSuite) TestEvictControlNotCreatedAllowed(c *C) {
@@ -657,7 +657,7 @@ func (s *transportSuite) TestEvictControlNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.EvictControl(s.TPM.OwnerHandleContext(), persistent, persistent.Handle(), nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_EvictControl is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_EvictControl is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *transportSuite) TestNVUndefineSpaceNotCreatedAllowed(c *C) {
@@ -694,7 +694,7 @@ func (s *transportSuite) TestNVUndefineSpaceNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVUndefineSpace(s.TPM.OwnerHandleContext(), index, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_UndefineSpace is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_UndefineSpace is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *transportSuite) TestNVWriteLockDefineAllowed(c *C) {
@@ -745,7 +745,7 @@ func (s *transportSuite) TestNVWriteLockDefineNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWriteLock(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_WriteLock is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *transportSuite) TestNVIncrementAllowed(c *C) {
@@ -796,7 +796,7 @@ func (s *transportSuite) TestNVIncrementNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVIncrement(index, index, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_Increment is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_Increment is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *transportSuite) TestNVSetBitsAllowed(c *C) {
@@ -847,7 +847,7 @@ func (s *transportSuite) TestNVSetBitsNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVSetBits(index, index, 0, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_SetBits is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_SetBits is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *transportSuite) TestNVWriteAllowed(c *C) {
@@ -898,7 +898,7 @@ func (s *transportSuite) TestNVWriteNotCreatedDisallowed(c *C) {
 	c.Assert(err, IsNil)
 
 	err = s.TPM.NVWrite(index, index, nil, 0, nil)
-	c.Check(err, ErrorMatches, "cannot complete read operation on Transport: cannot send command: command TPM_CC_NV_Write is trying to use a non-requested feature \\(missing: 0x00002000\\)")
+	c.Check(err, ErrorMatches, "cannot complete write operation on Transport: command TPM_CC_NV_Write is trying to use a non-requested feature \\(missing: 0x00002000\\)")
 }
 
 func (s *transportSuite) TestRestorePlatformHierarchyAuth(c *C) {
@@ -1755,7 +1755,7 @@ func (s *transportSuite) TestUseCreatedPrimaryDAForbidden(c *C) {
 	c.Assert(err, IsNil)
 
 	_, _, _, _, _, err = s.TPM.Create(object, nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Create is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_Create is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
 func (s *transportSuite) testUseLoadedObjectNoDA(c *C, extraFeatures TPMFeatureFlags) {
@@ -1847,7 +1847,7 @@ func (s *transportSuite) TestUseLoadedObjectDAForbidden(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.Unseal(object, nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
 func (s *transportSuite) testUseHMACObject(c *C, extraFeatures TPMFeatureFlags) {
@@ -2011,7 +2011,7 @@ func (s *transportSuite) TestUseContextLoadedObjectDAForbidden(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = s.TPM.Unseal(o.(tpm2.ResourceContext), nil)
-	c.Check(err, ErrorMatches, `cannot complete read operation on Transport: cannot send command: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_Unseal is trying to use a non-requested feature \(missing: 0x00000800\)`)
 }
 
 func (s *transportSuite) TestUseExistingObject(c *C) {
