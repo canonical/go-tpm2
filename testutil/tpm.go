@@ -257,17 +257,16 @@ func (c *tpmSimulatorLaunchContext) stopAndTerminate() (err error) {
 		c.captureErr("terminate", c.terminateFn(stopOk))
 	}()
 
-	transport, err := mssim.OpenConnection("", c.port)
+	device := mssim.NewLocalDevice(c.port)
+	tpm, err := tpm2.OpenTPMDevice(device)
 	if err != nil {
 		return fmt.Errorf("cannot open simulator connection for stop: %w", err)
 	}
 
-	tpm := tpm2.NewTPMContext(transport)
-
 	c.captureErr("shutdown", func() error {
 		return tpm.Shutdown(tpm2.StartupClear)
 	})
-	if err := transport.Stop(); err != nil {
+	if err := tpm.Transport().(*mssim.Transport).Stop(); err != nil {
 		return fmt.Errorf("cannot stop simulator: %w", err)
 	}
 	if err := tpm.Close(); err != nil {
@@ -770,19 +769,6 @@ func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *Transport
 // close callback, which will cause the test to fail if closing doesn't succeed.
 func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (tpm *tpm2.TPMContext, transport *Transport, close func()) {
 	return OpenTPMDeviceT(t, NewDeviceT(t, features))
-}
-
-func newSimulatorTransport() (*Transport, error) {
-	if TPMBackend != TPMBackendMssim {
-		return nil, nil
-	}
-
-	mssim, err := mssim.OpenConnection("", MssimPort)
-	if err != nil {
-		return nil, err
-	}
-
-	return wrapMssimTransport(mssim, TPMFeatureFlags(math.MaxUint32))
 }
 
 // NewSimulatorTransport returns a new Transport for testing that corresponds to a connection to the TPM simulator
