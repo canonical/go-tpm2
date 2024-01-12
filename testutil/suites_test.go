@@ -367,36 +367,34 @@ func (s *tpmTestSuiteProper) TestCommandLog(c *C) {
 
 	c.Assert(s.CommandLog(), internal_testutil.LenEquals, 2)
 
-	c.Check(s.CommandLog()[0].GetCommandCode(c), Equals, tpm2.CommandSelfTest)
-	cHandles, cAuthArea, cpBytes := s.CommandLog()[0].UnmarshalCommand(c)
-	c.Check(cHandles, internal_testutil.LenEquals, 0)
-	c.Check(cAuthArea, internal_testutil.LenEquals, 0)
+	cmd := s.CommandLog()[0]
+	c.Check(cmd.CmdCode, Equals, tpm2.CommandSelfTest)
+	c.Check(cmd.CmdHandles, internal_testutil.LenEquals, 0)
+	c.Check(cmd.CmdAuthArea, internal_testutil.LenEquals, 0)
 
 	var fullTest bool
-	_, err = mu.UnmarshalFromBytes(cpBytes, &fullTest)
+	_, err = mu.UnmarshalFromBytes(cmd.CpBytes, &fullTest)
 	c.Check(err, IsNil)
 	c.Check(fullTest, internal_testutil.IsTrue)
 
-	rc, rHandle, rpBytes, rAuthArea := s.CommandLog()[0].UnmarshalResponse(c)
-	c.Check(rc, Equals, tpm2.ResponseSuccess)
-	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rpBytes, internal_testutil.LenEquals, 0)
-	c.Check(rAuthArea, internal_testutil.LenEquals, 0)
+	c.Check(cmd.RspCode, Equals, tpm2.ResponseSuccess)
+	c.Check(cmd.RspHandle, Equals, tpm2.HandleUnassigned)
+	c.Check(cmd.RpBytes, internal_testutil.LenEquals, 0)
+	c.Check(cmd.RspAuthArea, internal_testutil.LenEquals, 0)
 
-	c.Check(s.CommandLog()[1].GetCommandCode(c), Equals, tpm2.CommandGetTestResult)
-	cHandles, cAuthArea, cpBytes = s.CommandLog()[1].UnmarshalCommand(c)
-	c.Check(cHandles, internal_testutil.LenEquals, 0)
-	c.Check(cAuthArea, internal_testutil.LenEquals, 0)
-	c.Check(cpBytes, internal_testutil.LenEquals, 0)
+	cmd = s.CommandLog()[1]
+	c.Check(cmd.CmdCode, Equals, tpm2.CommandGetTestResult)
+	c.Check(cmd.CmdHandles, internal_testutil.LenEquals, 0)
+	c.Check(cmd.CmdAuthArea, internal_testutil.LenEquals, 0)
+	c.Check(cmd.CpBytes, internal_testutil.LenEquals, 0)
 
-	rc, rHandle, rpBytes, rAuthArea = s.CommandLog()[1].UnmarshalResponse(c)
-	c.Check(rc, Equals, tpm2.ResponseSuccess)
-	c.Check(rHandle, Equals, tpm2.HandleUnassigned)
-	c.Check(rAuthArea, internal_testutil.LenEquals, 0)
+	c.Check(cmd.RspCode, Equals, tpm2.ResponseSuccess)
+	c.Check(cmd.RspHandle, Equals, tpm2.HandleUnassigned)
+	c.Check(cmd.RspAuthArea, internal_testutil.LenEquals, 0)
 
 	var outData2 tpm2.MaxBuffer
 	var testResult2 tpm2.ResponseCode
-	_, err = mu.UnmarshalFromBytes(rpBytes, &outData2, &testResult2)
+	_, err = mu.UnmarshalFromBytes(cmd.RpBytes, &outData2, &testResult2)
 	c.Check(err, IsNil)
 	c.Check(outData2, DeepEquals, outData)
 	c.Check(testResult2, Equals, testResult)
@@ -407,7 +405,7 @@ func (s *tpmTestSuiteProper) TestLastCommand(c *C) {
 	_, _, err := s.TPM.GetTestResult()
 	c.Check(err, IsNil)
 
-	c.Check(s.LastCommand(c).GetCommandCode(c), Equals, tpm2.CommandGetTestResult)
+	c.Check(s.LastCommand(c).CmdCode, Equals, tpm2.CommandGetTestResult)
 }
 
 func (s *tpmTestSuiteProper) TestForgetCommands(c *C) {

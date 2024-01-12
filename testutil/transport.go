@@ -200,7 +200,6 @@ type daParams struct {
 
 type cmdContext struct {
 	info     *commandInfo
-	command  []byte
 	code     tpm2.CommandCode
 	handles  tpm2.HandleList
 	authArea []tpm2.AuthCommand
@@ -218,21 +217,31 @@ var savedObjects []*savedObject
 // CommandRecord provides information about a command executed via
 // the Transport interface.
 type CommandRecord struct {
-	cmdInfo        *commandInfo
-	commandPacket  tpm2.CommandPacket
-	responsePacket tpm2.ResponsePacket
+	CmdCode     tpm2.CommandCode
+	CmdHandles  tpm2.HandleList
+	CmdAuthArea []tpm2.AuthCommand
+	CpBytes     []byte
+
+	RspCode     tpm2.ResponseCode
+	RspHandle   tpm2.Handle // Will be tpm2.HandleUnassigned if no handle was returned
+	RpBytes     []byte
+	RspAuthArea []tpm2.AuthResponse
 }
 
 // GetCommandCode returns the command code associated with this record.
+//
+// Deprecated: use the CmdCode field.
 func (r *CommandRecord) GetCommandCode() (tpm2.CommandCode, error) {
-	return r.commandPacket.GetCommandCode()
+	return r.CmdCode, nil
 }
 
 // UnmarshalCommand unmarshals the command packet associated with this
 // record, returning the handles, auth area and parameters. The parameters
 // will still be in the TPM wire format.
+//
+// Deprecated: use the CmdHandles, CmdAuthArea and CpBytes fields.
 func (r *CommandRecord) UnmarshalCommand() (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte, err error) {
-	return r.commandPacket.Unmarshal(r.cmdInfo.cmdHandles)
+	return r.CmdHandles, r.CmdAuthArea, r.CpBytes, nil
 }
 
 // UnmarshalResponse unmarshals the response packet associated with this
@@ -240,17 +249,10 @@ func (r *CommandRecord) UnmarshalCommand() (handles tpm2.HandleList, authArea []
 // The parameters will still be in the TPM wire format. For commands that
 // don't respond with a handle, the returned handle will be
 // tpm2.HandleUnassigned.
+//
+// Deprecated: use the RspCode, RspHandle, RpBytes and RspAuthArea fields.
 func (r *CommandRecord) UnmarshalResponse() (rc tpm2.ResponseCode, handle tpm2.Handle, parameters []byte, authArea []tpm2.AuthResponse, err error) {
-	handle = tpm2.HandleUnassigned
-	var pHandle *tpm2.Handle
-	if r.cmdInfo.rspHandle {
-		pHandle = &handle
-	}
-	rc, parameters, authArea, err = r.responsePacket.Unmarshal(pHandle)
-	if err != nil {
-		return 0, handle, nil, nil, err
-	}
-	return rc, handle, parameters, authArea, nil
+	return r.RspCode, r.RspHandle, r.RpBytes, r.RspAuthArea, nil
 }
 
 // TCTI is a special proxy inteface used for testing, which wraps a real interface.
@@ -310,14 +312,14 @@ func (t *Transport) processCommandDoneIfPossible() error {
 		return nil
 	}
 
-	var rHandle tpm2.Handle
+	rHandle := tpm2.HandleUnassigned
 	var pHandle *tpm2.Handle
 
 	// Try to unpack the response packet
 	if cmd.info.rspHandle {
 		pHandle = &rHandle
 	}
-	rc, rpBytes, _, err := tpm2.ReadResponsePacket(bytes.NewReader(cmd.response.Bytes()), pHandle)
+	rc, rpBytes, rAuthArea, err := tpm2.ReadResponsePacket(bytes.NewReader(cmd.response.Bytes()), pHandle)
 	if err != nil {
 		return fmt.Errorf("cannot unmarshal response: %w", err)
 	}
@@ -325,7 +327,16 @@ func (t *Transport) processCommandDoneIfPossible() error {
 	t.currentCmd = nil
 
 	if !t.disableCommandLogging {
-		t.CommandLog = append(t.CommandLog, &CommandRecord{cmd.info, cmd.command, cmd.response.Bytes()})
+		t.CommandLog = append(t.CommandLog, &CommandRecord{
+			CmdCode:     cmd.code,
+			CmdHandles:  cmd.handles,
+			CmdAuthArea: cmd.authArea,
+			CpBytes:     cmd.pBytes,
+			RspCode:     rc,
+			RspHandle:   rHandle,
+			RpBytes:     rpBytes,
+			RspAuthArea: rAuthArea,
+		})
 	}
 
 	if rc != tpm2.ResponseSuccess {
@@ -697,7 +708,6 @@ func (t *Transport) sendCommand(data []byte) (int, error) {
 
 	t.currentCmd = &cmdContext{
 		info:     &cmdInfo,
-		command:  data,
 		code:     hdr.CommandCode,
 		handles:  handles,
 		authArea: authArea,
