@@ -563,7 +563,7 @@ func LaunchTPMSimulator(opts *TPMSimulatorOptions) (stop func(), err error) {
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
 // the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
-// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// *linux.Transport if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In
 // this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
@@ -578,7 +578,7 @@ func NewTCTI(c *C, features TPMFeatureFlags) *Transport {
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
 // the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
-// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// *linux.Transport if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In
 // this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
@@ -599,7 +599,7 @@ func NewTransport(c *C, features TPMFeatureFlags) *Transport {
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
 // the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
-// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// *linux.Transport if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In
 // this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
@@ -614,7 +614,7 @@ func NewTCTIT(t *testing.T, features TPMFeatureFlags) *Transport {
 // TPMContext. If TPMBackend is TPMBackendNone then the current test will be skipped. If TPMBackend is TPMBackendMssim,
 // the returned Transport will wrap a *mssim.Transport and will correspond to a connection to the TPM simulator on the port
 // specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned Transport will wrap a
-// *linux.Transport if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In
+// *linux.Transport if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In
 // this case, the Transport will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
@@ -688,7 +688,7 @@ func newDevice(features TPMFeatureFlags) (tpm2.TPMDevice, error) {
 
 // WrapDevice wraps the supplied device so that transports created by it are wrapped by [WrapTransport]
 // and authorized to use the specified features. If the test requires features that are not permitted, as
-// defined by the PermittedTPMFeatures variable, the wrapped device will return ErrSkipNoTPM instead of
+// defined by the [PermittedTPMFeatures] variable, the wrapped device will return [ErrSkipNoTPM] instead of
 // a transport.
 func WrapDevice(device tpm2.TPMDevice, features TPMFeatureFlags) tpm2.TPMDevice {
 	if features&PermittedTPMFeatures != features {
@@ -701,12 +701,12 @@ func WrapDevice(device tpm2.TPMDevice, features TPMFeatureFlags) tpm2.TPMDevice 
 }
 
 // NewDevice returns a new tpm2.TPMDevice for testing, for integration with test suites that might have a custom way to
-// create a TPMContext. If TPMBackend is TPMBackendNone then the returned device will return ErrSkipNoTPM instead
+// create a TPMContext. If TPMBackend is TPMBackendNone then the returned device will return [ErrSkipNoTPM] instead
 // of a transport. If TPMBackend is TPMBackendMssim, the returned device will wrap a *[mssim.Device] for the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned device will wrap a
 // *[linux.RawDevice] for the character device at the path specified by the TPMDevicePath variable if the requested features
-// are permitted, as defined by the PermittedTPMFeatures variable. If the test requires features that are not permitted,
-// then the device will return ErrSkipNoTPM instead of a transport.
+// are permitted, as defined by the [PermittedTPMFeatures] variable. If the test requires features that are not permitted,
+// then the device will return [ErrSkipNoTPM] instead of a transport.
 func NewDevice(c *C, features TPMFeatureFlags) tpm2.TPMDevice {
 	device, err := newDevice(features)
 	c.Assert(err, IsNil)
@@ -714,12 +714,12 @@ func NewDevice(c *C, features TPMFeatureFlags) tpm2.TPMDevice {
 }
 
 // NewDeviceT returns a new tpm2.TPMDevice for testing, for integration with test suites that might have a custom way to
-// create a TPMContext. If TPMBackend is TPMBackendNone then the returned device will return ErrSkipNoTPM instead
+// create a TPMContext. If TPMBackend is TPMBackendNone then the returned device will return [ErrSkipNoTPM] instead
 // of a transport. If TPMBackend is TPMBackendMssim, the returned device will wrap a *[mssim.Device] for the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned device will wrap a
 // *[linux.RawDevice] for the character device at the path specified by the TPMDevicePath variable if the requested features
-// are permitted, as defined by the PermittedTPMFeatures variable. If the test requires features that are not permitted,
-// then the device will return ErrSkipNoTPM instead of a transport.
+// are permitted, as defined by the [PermittedTPMFeatures] variable. If the test requires features that are not permitted,
+// then the device will return [ErrSkipNoTPM] instead of a transport.
 func NewDeviceT(t *testing.T, features TPMFeatureFlags) tpm2.TPMDevice {
 	device, err := newDevice(features)
 	if err != nil {
@@ -745,7 +745,7 @@ func (d *tpmDevice) String() string {
 	return d.device.String()
 }
 
-// OpenTPMDevice opens the supplied device, returning a new TPMContext and transport. If the device returns ErrSkipNoTPM,
+// OpenTPMDevice opens the supplied device, returning a new TPMContext and transport. If the device returns [ErrSkipNoTPM],
 // then the test will be skipped. If the supplied device returns a transport, it must be wrapped with [WrapTransport].
 func OpenTPMDevice(c *C, device tpm2.TPMDevice) (tpm *tpm2.TPMContext, transport *Transport) {
 	tpm, err := tpm2.OpenTPMDevice(device)
@@ -757,7 +757,7 @@ func OpenTPMDevice(c *C, device tpm2.TPMDevice) (tpm *tpm2.TPMContext, transport
 	return tpm, tpm.Transport().(*Transport)
 }
 
-// OpenTPMDeviceT opens the supplied device, returning a new TPMContext and transport. If the device returns ErrSkipNoTPM,
+// OpenTPMDeviceT opens the supplied device, returning a new TPMContext and transport. If the device returns [ErrSkipNoTPM],
 // then the test will be skipped. If the supplied device returns a transport, it must be wrapped with [WrapTransport].
 func OpenTPMDeviceT(t *testing.T, device tpm2.TPMDevice) (tpm *tpm2.TPMContext, transport *Transport, close func()) {
 	tpm, err := tpm2.OpenTPMDevice(device)
@@ -781,7 +781,7 @@ func OpenTPMDeviceT(t *testing.T, device tpm2.TPMDevice) (tpm *tpm2.TPMContext, 
 // NewTPMContext returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
 // skipped. If TPMBackend is TPMBackendMssim, the returned context will correspond to a connection to the TPM
 // simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, a TPMContext will
-// be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
+// be returned if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //
@@ -793,7 +793,7 @@ func NewTPMContext(c *C, features TPMFeatureFlags) (*tpm2.TPMContext, *Transport
 // NewTPMContextT returns a new TPMContext for testing. If TPMBackend is TPMBackendNone then the current test will be
 // skipped. If TPMBackend is TPMBackendMssim, the returned context will correspond to a connection to the TPM
 // simulator on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, a TPMContext will
-// be returned if the requested features are permitted, as defined by the PermittedTPMFeatures variable. In this
+// be returned if the requested features are permitted, as defined by the [PermittedTPMFeatures] variable. In this
 // case, the TPMContext will correspond to a connection to the Linux character device at the path specified by the
 // TPMDevicePath variable. If the test requires features that are not permitted, the test will be skipped.
 //

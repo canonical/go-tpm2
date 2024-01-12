@@ -82,21 +82,21 @@ type CommandRecordC struct {
 	*CommandRecord
 }
 
-// Deprecated: use [CommandRecord.CmdCode].
+// Deprecated: use CommandRecord.CmdCode.
 func (r *CommandRecordC) GetCommandCode(c *C) tpm2.CommandCode {
 	code, err := r.CommandRecord.GetCommandCode()
 	c.Assert(err, IsNil)
 	return code
 }
 
-// Deprecated: use [CommandRecord.CmdHandles], [CommandRecord.CmdAuthArea] and [CommandRecord.CpBytes].
+// Deprecated: use CommandRecord.CmdHandles, CommandRecord.CmdAuthArea and CommandRecord.CpBytes.
 func (r *CommandRecordC) UnmarshalCommand(c *C) (handles tpm2.HandleList, authArea []tpm2.AuthCommand, parameters []byte) {
 	handles, authArea, parameters, err := r.CommandRecord.UnmarshalCommand()
 	c.Assert(err, IsNil)
 	return handles, authArea, parameters
 }
 
-// Deprecated: use [CommandRecord.RspCode], [CommandRecord.RspHandle], [CommandRecord.RpBytes] and [CommandRecord.RspAuthArea].
+// Deprecated: use CommandRecord.RspCode, CommandRecord.RspHandle, CommandRecord.RpBytes and CommandRecord.RspAuthArea.
 func (r *CommandRecordC) UnmarshalResponse(c *C) (rc tpm2.ResponseCode, handle tpm2.Handle, parameters []byte, authArea []tpm2.AuthResponse) {
 	rc, handle, parameters, authArea, err := r.CommandRecord.UnmarshalResponse()
 	c.Assert(err, IsNil)
