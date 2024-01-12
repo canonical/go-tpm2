@@ -13,6 +13,8 @@ import (
 	"gopkg.in/tomb.v2"
 )
 
+var ErrClosed = errors.New("transport already closed")
+
 type RetryParams struct {
 	// MaxRetries is the maximum number of times a command is retried.
 	MaxRetries uint
@@ -88,7 +90,7 @@ func (t *retrierTransport) runCommand(commandCode tpm2.CommandCode, data []byte)
 
 	for retries := t.params.MaxRetries; ; retries-- {
 		if !t.tomb.Alive() {
-			return nil, errors.New("transport is closing")
+			return nil, ErrClosed
 		}
 
 		// Send the command.
@@ -97,7 +99,7 @@ func (t *retrierTransport) runCommand(commandCode tpm2.CommandCode, data []byte)
 		}
 
 		if !t.tomb.Alive() {
-			return nil, errors.New("transport is closing")
+			return nil, ErrClosed
 		}
 
 		rsp := new(bytes.Buffer)
@@ -115,7 +117,9 @@ func (t *retrierTransport) runCommand(commandCode tpm2.CommandCode, data []byte)
 		}
 
 		err := tpm2.DecodeResponseCode(commandCode, hdr.ResponseCode)
-		if retries > 0 && (tpm2.IsTPMWarning(err, tpm2.WarningYielded, commandCode) || tpm2.IsTPMWarning(err, tpm2.WarningTesting, commandCode) || tpm2.IsTPMWarning(err, tpm2.WarningRetry, commandCode)) {
+		if retries > 0 && (tpm2.IsTPMWarning(err, tpm2.WarningYielded, commandCode) ||
+			tpm2.IsTPMWarning(err, tpm2.WarningTesting, commandCode) ||
+			tpm2.IsTPMWarning(err, tpm2.WarningRetry, commandCode)) {
 			time.Sleep(retryDelay)
 			retryDelay *= time.Duration(t.params.BackoffRate)
 			continue
@@ -178,9 +182,15 @@ func (t *retrierTransport) Read(data []byte) (int, error) {
 		if t.lr == nil {
 			// Wait for the next response, or an error.
 			select {
-			case n := <-t.rLen:
+			case n, ok := <-t.rLen:
+				if !ok {
+					return 0, ErrClosed
+				}
 				t.lr = io.LimitReader(t.r, n)
-			case err := <-t.rErr:
+			case err, ok := <-t.rErr:
+				if !ok {
+					return 0, ErrClosed
+				}
 				return 0, err
 			}
 		}
@@ -199,20 +209,26 @@ func (t *retrierTransport) Read(data []byte) (int, error) {
 }
 
 func (t *retrierTransport) Write(data []byte) (n int, err error) {
-	return t.w.Write(data)
+	n, err = t.w.Write(data)
+	if errors.Is(err, io.ErrClosedPipe) {
+		err = ErrClosed
+	}
+	return n, err
 }
 
 func (t *retrierTransport) Close() error {
-	// Close the pipes and transport to unblock the transport routine.
+	// Close pipes to unblock I/O on the transport side.
 	t.w.Close()
 	t.r.Close()
 
+	// Mark dying so the retry loop exits.
 	t.tomb.Kill(nil)
 
 	var closeErr error
 	var wasOpen bool
 
-	// Wait for everything to die.
+	// Unblock senders on the transport side and wait for everything
+	// to die.
 Loop:
 	for {
 		select {
@@ -220,7 +236,7 @@ Loop:
 		case <-t.rLen:
 		case closeErr, wasOpen = <-t.closeErr:
 			if !wasOpen {
-				closeErr = errors.New("transport already closed")
+				closeErr = ErrClosed
 			}
 			break Loop
 		}
