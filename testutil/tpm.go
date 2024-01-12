@@ -472,12 +472,14 @@ func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 		return fmt.Errorf("cannot start simulator: %w", err)
 	}
 
-	var transport *mssim.Transport
+	device := mssim.NewLocalDevice(c.port)
+	var tpm *tpm2.TPMContext
+
 	// Give the simulator 5 seconds to start up
 Loop:
 	for i := 0; ; i++ {
 		var err error
-		transport, err = mssim.OpenConnection("", c.port)
+		tpm, err = tpm2.OpenTPMDevice(device)
 		switch {
 		case err != nil && i == 4:
 			return fmt.Errorf("cannot open simulator connection: %w", err)
@@ -487,8 +489,6 @@ Loop:
 			break Loop
 		}
 	}
-
-	tpm := tpm2.NewTPMContext(transport)
 	defer tpm.Close()
 
 	if err := tpm.Startup(tpm2.StartupClear); err != nil {
