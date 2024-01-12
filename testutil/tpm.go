@@ -803,19 +803,6 @@ func NewTPMContextT(t *testing.T, features TPMFeatureFlags) (tpm *tpm2.TPMContex
 	return OpenTPMDeviceT(t, NewDeviceT(t, features))
 }
 
-func newSimulatorTransport() (*Transport, error) {
-	if TPMBackend != TPMBackendMssim {
-		return nil, nil
-	}
-
-	mssim, err := mssim.OpenConnection("", MssimPort)
-	if err != nil {
-		return nil, err
-	}
-
-	return wrapMssimTransport(mssim, TPMFeatureFlags(math.MaxUint32))
-}
-
 // NewSimulatorTCTI returns a new Transport for testing that corresponds to a connection to the TPM simulator
 // on the port specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim then the test
 // will be skipped.
