@@ -128,17 +128,26 @@ type Device struct {
 	path      string
 	sysfsPath string
 	version   TPMMajorVersion
+
+	partialReadSupportOnce sync.Once
+	partialReadSupported   bool
+}
+
+func (d *Device) checkPartialReadSupport() {
+	d.partialReadSupportOnce.Do(func() {
+		d.partialReadSupported = isPartialReadSupported(d.path)
+	})
 }
 
 func (d *Device) openInternal() (*Transport, error) {
-	partialReadSupported := isPartialReadSupported(d.path)
+	d.checkPartialReadSupport()
 
 	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	return newTransport(&tpmFile{file: f}, partialReadSupported), nil
+	return newTransport(&tpmFile{file: f}, d.partialReadSupported), nil
 }
 
 // Path returns the path of the character device.
@@ -154,6 +163,13 @@ func (d *Device) SysfsPath() string {
 // MajorVersion indicates the TPM version.
 func (d *Device) MajorVersion() TPMMajorVersion {
 	return d.version
+}
+
+// PartialReadSupported indicates whether the TPM character device supports
+// partial reads.
+func (d *Device) PartialReadSupported() bool {
+	d.checkPartialReadSupport()
+	return d.partialReadSupported
 }
 
 // Open implements [tpm2.TPMDevice.Open].
