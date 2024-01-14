@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"time"
 
 	"github.com/canonical/go-tpm2/mu"
@@ -307,7 +307,7 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 		return nil, &TransportError{"write", err}
 	}
 
-	resp, err := ioutil.ReadAll(t.transport)
+	resp, err := io.ReadAll(t.transport)
 	if err != nil {
 		return nil, &TransportError{"read", err}
 	}
