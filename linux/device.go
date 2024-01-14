@@ -161,22 +161,6 @@ func (d *Device) maxResponseSize(f *os.File) uint32 {
 	return d.mrs
 }
 
-func (d *Device) openInternal() (*Transport, error) {
-	d.checkPartialReadSupport()
-
-	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	var mrs uint32
-	if !d.partialReadSupported {
-		mrs = d.maxResponseSize(f)
-	}
-
-	return newTransport(&tpmFile{file: f}, d.partialReadSupported, mrs), nil
-}
-
 // Path returns the path of the character device.
 func (d *Device) Path() string {
 	return d.path
@@ -201,7 +185,19 @@ func (d *Device) PartialReadSupported() bool {
 
 // Open implements [tpm2.TPMDevice.Open].
 func (d *Device) Open() (tpm2.Transport, error) {
-	return d.openInternal()
+	d.checkPartialReadSupport()
+
+	f, err := os.OpenFile(d.path, os.O_RDWR, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	var mrs uint32
+	if !d.partialReadSupported {
+		mrs = d.maxResponseSize(f)
+	}
+
+	return newTransport(&tpmFile{file: f}, d.partialReadSupported, mrs), nil
 }
 
 // String implements [fmt.Stringer].
@@ -283,33 +279,6 @@ type RMDevice struct {
 // RawDevice returns the corresponding raw device.
 func (d *RMDevice) RawDevice() *RawDevice {
 	return d.raw
-}
-
-// OpenDevice attempts to open a connection to the Linux TPM character device at
-// the specified path. If successful, it returns a new Transport instance which
-// can be passed to tpm2.NewTPMContext. Failure to open the TPM character device
-// will result in a *os.PathError being returned.
-//
-// Deprecated: Use [RawDevice] and [RMDevice].
-func OpenDevice(path string) (*Transport, error) {
-	device := &Device{path: path}
-	tcti, err := device.openInternal()
-	if err != nil {
-		return nil, err
-	}
-
-	s, err := tcti.statter.Stat()
-	if err != nil {
-		tcti.Close()
-		return nil, err
-	}
-
-	if s.Mode()&os.ModeDevice == 0 {
-		tcti.Close()
-		return nil, fmt.Errorf("unsupported file mode %v", s.Mode())
-	}
-
-	return tcti, nil
 }
 
 func tpmDeviceVersion(path string) (TPMMajorVersion, error) {

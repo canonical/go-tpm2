@@ -283,17 +283,3 @@ func NewLocalDevice(port uint) *Device {
 func NewDevice(host string, port uint) *Device {
 	return &Device{host: host, port: port}
 }
-
-// OpenConnection attempts to open a connection to a TPM simulator on the
-// specified host and port. The port argument corresponds to the TPM
-// command server. The simulator will also provide a platform server on
-// port+1. If host is an empty string, it defaults to "localhost".
-//
-// If successful, it returns a new Transport instance which can be passed to
-// tpm2.NewTPMContext.
-//
-// Deprecated: Use [NewDevice], [NewLocalDevice] or [DefaultDevice].
-func OpenConnection(host string, port uint) (*Transport, error) {
-	device := NewDevice(host, port)
-	return device.openInternal()
-}

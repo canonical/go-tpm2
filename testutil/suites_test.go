@@ -172,7 +172,7 @@ func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
 func (s *tpmTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	suite := new(TPMTest)
 
-	transport := NewTransport(c, 0)
+	transport := OpenTransport(c, NewDevice(c, 0))
 	suite.TCTI = transport
 
 	suite.SetUpTest(c)
@@ -491,7 +491,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	suite := new(TPMSimulatorTest)
 
-	transport := NewSimulatorTransport(c)
+	transport := OpenTransport(c, NewSimulatorDevice())
 	suite.TCTI = transport
 
 	suite.SetUpTest(c)
