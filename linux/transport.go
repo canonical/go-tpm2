@@ -20,20 +20,20 @@ type fileStatter interface {
 	Stat() (os.FileInfo, error)
 }
 
-// Transport represents a connection to a Linux TPM character device.
-type Transport struct {
+// transport represents a connection to a Linux TPM character device.
+type transport struct {
 	r       io.Reader
 	w       io.Writer
 	closer  io.Closer
 	statter fileStatter
 }
 
-func newTransport(file *tpmFile, partialReadSupported bool, maxResponseSize uint32) *Transport {
+func newTransport(file *tpmFile, partialReadSupported bool, maxResponseSize uint32) *transport {
 	var r io.Reader = file
 	if !partialReadSupported {
 		r = transportutil.BufferResponses(r, maxResponseSize)
 	}
-	return &Transport{
+	return &transport{
 		r:       r,
 		w:       transportutil.BufferCommands(file, maxCommandSize),
 		closer:  file,
@@ -41,17 +41,17 @@ func newTransport(file *tpmFile, partialReadSupported bool, maxResponseSize uint
 	}
 }
 
-// Read implmements [tpm2.Transport].
-func (d *Transport) Read(data []byte) (int, error) {
+// Read implmements [tpm2.transport].
+func (d *transport) Read(data []byte) (int, error) {
 	return d.r.Read(data)
 }
 
-// Write implmements [tpm2.Transport].
-func (d *Transport) Write(data []byte) (int, error) {
+// Write implmements [tpm2.transport].
+func (d *transport) Write(data []byte) (int, error) {
 	return d.w.Write(data)
 }
 
-// Close implements [tpm2.Transport.Close].
-func (d *Transport) Close() error {
+// Close implements [tpm2.transport.Close].
+func (d *transport) Close() error {
 	return d.closer.Close()
 }
