@@ -104,9 +104,14 @@ func (b *PolicyBuilderBranch) commitBranches(branches []*policyBranch) error {
 		return err
 	}
 
-	switch {
-	case len(branches) == 0:
+	switch len(branches) {
+	case 0:
 		// elide the branch node
+	// case 1:
+	// Whilst it makes sense to elide the branch node in this case
+	// and then copy the sub-branch into this branch, the caller may
+	// expect to be able to still address the single sub-branch by
+	// name when executing the policy.
 	default:
 		element := &policyElement{
 			Type: tpm2.CommandPolicyOR,
