@@ -89,8 +89,7 @@ func (r *mockSessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContex
 func (r *mockSessionContext) Dispose()                  { r.handle = HandleUnassigned }
 func (r *mockSessionContext) Attrs() SessionAttributes  { return r.attrs }
 func (r *mockSessionContext) Data() *SessionContextData { return r.data }
-func (r *mockSessionContext) Unload()                   { r.unloaded = true }
-func (r *mockSessionContext) SetHandle(handle Handle)   { panic("invalid") }
+func (r *mockSessionContext) Saved()                    { r.unloaded = true }
 
 func authSessionHandle(sc SessionContext) Handle {
 	if sc == nil {

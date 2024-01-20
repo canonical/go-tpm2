@@ -52,7 +52,7 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 
 	switch c := saveContext.(type) {
 	case sessionContextInternal:
-		c.Unload()
+		c.Saved()
 	}
 
 	return context, nil

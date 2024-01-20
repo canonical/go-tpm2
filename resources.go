@@ -62,7 +62,7 @@ type sessionContextInternal interface {
 	handleContextInternalMixin
 
 	Data() *sessionContextData
-	Unload()
+	Saved()
 }
 
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
@@ -473,7 +473,7 @@ func (r *sessionContext) Data() *sessionContextData {
 	return r.handleContext.Data.Session.Data
 }
 
-func (r *sessionContext) Unload() {
+func (r *sessionContext) Saved() {
 	r.handleContext.Data.Session.Data = nil
 }
 
