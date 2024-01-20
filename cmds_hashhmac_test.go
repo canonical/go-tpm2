@@ -63,6 +63,9 @@ func TestHMACSequence(t *testing.T) {
 		if err != nil {
 			t.Fatalf("HMACStart failed: %v", err)
 		}
+		if _, ok := seq.(ObjectContext); !ok {
+			t.Errorf("HMACStart returned invalid resource type")
+		}
 		return seq
 	}
 
@@ -163,6 +166,9 @@ func TestHashSequence(t *testing.T) {
 		seq, err := tpm.HashSequenceStart(auth, hashAlg)
 		if err != nil {
 			t.Fatalf("HashSequenceStart failed: %v", err)
+		}
+		if _, ok := seq.(ObjectContext); !ok {
+			t.Errorf("HashSequenceStart returned invalid resource type")
 		}
 		return seq
 	}

@@ -105,7 +105,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var encryptedSalt EncryptedSecret
 	tpmKeyHandle := HandleNull
 	if tpmKey != nil {
-		object, isObject := tpmKey.(objectContextInternal)
+		object, isObject := tpmKey.(ObjectContext)
 		if !isObject {
 			return nil, makeInvalidArgError("tpmKey", "resource context is not an object")
 		}
@@ -113,7 +113,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		tpmKeyHandle = tpmKey.Handle()
 
 		var err error
-		encryptedSalt, salt, err = cryptSecretEncrypt(object.GetPublic(), []byte(SecretKey))
+		encryptedSalt, salt, err = cryptSecretEncrypt(object.Public(), []byte(SecretKey))
 		if err != nil {
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}

@@ -133,7 +133,7 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		hc = newObjectContext(loadedHandle, hc.Name(), hc.(objectContextInternal).GetPublic())
+		hc = newObjectContext(loadedHandle, hc.Name(), hc.(ObjectContext).Public())
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
@@ -209,8 +209,8 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	var public *Public
 	if object != nil && object.Handle() != persistentHandle {
 		// We are persisting an object
-		if obj, isObj := object.(objectContextInternal); isObj {
-			if err := mu.CopyValue(&public, mu.Sized(obj.GetPublic())); err != nil {
+		if obj, isObj := object.(ObjectContext); isObj {
+			if err := mu.CopyValue(&public, mu.Sized(obj.Public())); err != nil {
 				return nil, fmt.Errorf("cannot copy public area of object: %v", err)
 			}
 		}

@@ -19,7 +19,6 @@ const (
 
 type CmdContext = cmdContext
 type NvIndexContext = nvIndexContext
-type ObjectContext = objectContext
 type PolicyHMACType = policyHMACType
 type ResourceContextInternal = resourceContextInternal
 type RspContext = rspContext

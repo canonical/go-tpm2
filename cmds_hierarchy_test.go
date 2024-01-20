@@ -21,6 +21,9 @@ func TestCreatePrimary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
+		if _, ok := objectContext.(ObjectContext); !ok {
+			t.Errorf("CreatePrimary return an invalid resource type")
+		}
 
 		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("CreatePrimary returned an invalid handle 0x%08x", objectContext.Handle())

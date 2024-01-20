@@ -83,10 +83,13 @@ type resourceContextInternal interface {
 	handleContextInternalMixin
 }
 
-type objectContextInternal interface {
-	resourceContextInternal
+// ObjectContext is a ResourceContext that corresponds to an object on the TPM.
+type ObjectContext interface {
+	ResourceContext
 
-	GetPublic() *Public
+	// Public is the public area associated with the object. This can be nil,
+	// depending on how the context was created.
+	Public() *Public
 }
 
 type nvIndexContextInternal interface {
@@ -312,9 +315,9 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 	return newObjectContext(context.Handle(), name, pub), nil
 }
 
-var _ objectContextInternal = (*objectContext)(nil)
+var _ ObjectContext = (*objectContext)(nil)
 
-func (r *objectContext) GetPublic() *Public {
+func (r *objectContext) Public() *Public {
 	return r.Data.Object.Data
 }
 

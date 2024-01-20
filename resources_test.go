@@ -37,15 +37,17 @@ func (s *resourcesSuite) testNewObjectResourceContextFromTPM(c *C, data *testNew
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, data.handle)
 	c.Check(rc.Name(), DeepEquals, data.name)
-	c.Assert(rc, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(rc.(*ObjectContext).GetPublic(), DeepEquals, data.public)
+
+	var sample ObjectContext
+	c.Assert(rc, Implements, &sample)
+	c.Check(rc.(ObjectContext).Public(), DeepEquals, data.public)
 }
 
 func (s *resourcesSuite) TestNewResourceContextTransient(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	s.testNewObjectResourceContextFromTPM(c, &testNewObjectResourceContextFromTPMData{
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -54,7 +56,7 @@ func (s *resourcesSuite) TestNewResourceContextPersistent(c *C) {
 	rc = s.EvictControl(c, HandleOwner, rc, s.NextAvailableHandle(c, 0x81000008))
 	s.testNewObjectResourceContextFromTPM(c, &testNewObjectResourceContextFromTPMData{
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -152,8 +154,10 @@ func (s *resourcesSuite) testNewObjectHandleContextFromBytes(c *C, data *testNew
 
 	c.Check(context.Handle(), Equals, data.handle)
 	c.Check(context.Name(), DeepEquals, data.name)
-	c.Assert(context, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(context.(*ObjectContext).GetPublic(), DeepEquals, data.public)
+
+	var sample ObjectContext
+	c.Assert(context, Implements, &sample)
+	c.Check(context.(ObjectContext).Public(), DeepEquals, data.public)
 }
 
 func (s *resourcesSuite) TestNewHandleContextFromBytesTransient(c *C) {
@@ -161,7 +165,7 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesTransient(c *C) {
 	s.testNewObjectHandleContextFromBytes(c, &testNewObjectHandleContextFromBytesData{
 		b:      rc.SerializeToBytes(),
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -171,7 +175,7 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesPersistent(c *C) {
 	s.testNewObjectHandleContextFromBytes(c, &testNewObjectHandleContextFromBytesData{
 		b:      rc.SerializeToBytes(),
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -313,8 +317,10 @@ func (s *resourcesSuite) TestNewObjectResourceContextFromPub(c *C) {
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Check(rc2, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
+
+	var sample ObjectContext
+	c.Assert(rc2, Implements, &sample)
+	c.Check(rc2.(ObjectContext).Public(), DeepEquals, pub)
 }
 
 func (s *resourcesSuite) TestNewObjectResourceContext(c *C) {
@@ -327,8 +333,10 @@ func (s *resourcesSuite) TestNewObjectResourceContext(c *C) {
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Check(rc2, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
+
+	var sample ObjectContext
+	c.Assert(rc2, Implements, &sample)
+	c.Check(rc2.(ObjectContext).Public(), DeepEquals, pub)
 }
 
 func (s *resourcesSuite) SessionContextImplSetAttrs(c *C) {

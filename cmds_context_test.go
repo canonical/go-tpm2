@@ -33,8 +33,9 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	c.Check(persist.Handle(), Equals, data.handle)
 	c.Check(persist.Name(), DeepEquals, object.Name())
 
-	c.Check(persist, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(persist.(*ObjectContext).GetPublic(), DeepEquals, object.(*ObjectContext).GetPublic())
+	var sample ObjectContext
+	c.Check(persist, Implements, &sample)
+	c.Check(persist.(ObjectContext).Public(), DeepEquals, object.(ObjectContext).Public())
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
@@ -42,7 +43,7 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 
 	pub, name, _, err := s.TPM.ReadPublic(persist)
 	c.Assert(err, IsNil)
-	c.Check(pub, DeepEquals, object.(*ObjectContext).GetPublic())
+	c.Check(pub, DeepEquals, object.(ObjectContext).Public())
 	c.Check(name, DeepEquals, object.Name())
 
 	persist2, err := s.TPM.EvictControl(data.auth, persist, data.handle, nil)
@@ -170,19 +171,17 @@ func (s *contextSuite) TestContextSaveAndLoadTransient(c *C) {
 	restored, err := s.TPM.ContextLoad(context)
 	c.Assert(err, IsNil)
 
-	var sample ResourceContext
+	var sample ObjectContext
 	c.Check(restored, Implements, &sample)
 
 	c.Check(restored.Handle().Type(), Equals, HandleTypeTransient)
 	c.Check(restored.Handle(), Not(Equals), object.Handle())
 	c.Check(restored.Name(), DeepEquals, object.Name())
-
-	c.Assert(restored, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(restored.(*ObjectContext).GetPublic(), DeepEquals, object.(*ObjectContext).GetPublic())
+	c.Check(restored.(ObjectContext).Public(), DeepEquals, object.(ObjectContext).Public())
 
 	pub, name, _, err := s.TPM.ReadPublic(restored)
 	c.Assert(err, IsNil)
-	c.Check(pub, DeepEquals, object.(*ObjectContext).GetPublic())
+	c.Check(pub, DeepEquals, object.(ObjectContext).Public())
 	c.Check(name, DeepEquals, object.Name())
 }
 
