@@ -69,6 +69,9 @@ type sessionContextInternal interface {
 type ResourceContext interface {
 	HandleContext
 
+	// AuthValue returns the authorization value previously set by SetAuthValue.
+	AuthValue() []byte
+
 	// SetAuthValue sets the authorization value that will be used in authorization roles where
 	// knowledge of the authorization value is required. Functions that create resources on the TPM
 	// and return a ResourceContext will set this automatically, else it will need to be set manually.
@@ -78,8 +81,6 @@ type ResourceContext interface {
 type resourceContextInternal interface {
 	ResourceContext
 	handleContextInternalMixin
-
-	GetAuthValue() []byte
 }
 
 type objectContextInternal interface {
@@ -254,7 +255,7 @@ func (r *resourceContext) Dispose() {
 	r.handleContext.Dispose()
 }
 
-func (r *resourceContext) GetAuthValue() []byte {
+func (r *resourceContext) AuthValue() []byte {
 	return bytes.TrimRight(r.authValue, "\x00")
 }
 

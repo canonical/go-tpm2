@@ -12,6 +12,10 @@ import (
 	"hash"
 )
 
+func trimAuthValue(value []byte) []byte {
+	return bytes.TrimRight(value, "\x00")
+}
+
 type policyHMACType uint8
 
 const (
@@ -23,9 +27,9 @@ const (
 )
 
 type sessionParam struct {
-	Session            sessionContextInternal  // The session instance used for this session parameter
-	AssociatedResource resourceContextInternal // The resource associated with an authorization
-	IncludeAuthValue   bool                    // Whether the authorization value of associatedResource is included in the HMAC key
+	Session            sessionContextInternal // The session instance used for this session parameter
+	AssociatedResource ResourceContext        // The resource associated with an authorization
+	IncludeAuthValue   bool                   // Whether the authorization value of associatedResource is included in the HMAC key
 
 	DecryptNonce Nonce
 	EncryptNonce Nonce
@@ -48,7 +52,7 @@ func newExtraSessionParam(session SessionContext) (*sessionParam, error) {
 func newSessionParamForAuth(session SessionContext, resource ResourceContext) (*sessionParam, error) {
 	s := &sessionParam{
 		Session:            session.(sessionContextInternal),
-		AssociatedResource: resource.(resourceContextInternal)}
+		AssociatedResource: resource}
 
 	data := s.Session.Data()
 	if data == nil {
@@ -65,7 +69,7 @@ func newSessionParamForAuth(session SessionContext, resource ResourceContext) (*
 	case data.SessionType == SessionTypeHMAC:
 		// A bound HMAC session. Include the auth value of the associated
 		// context only if it is not the bind entity.
-		bindName := computeBindName(s.AssociatedResource.Name(), s.AssociatedResource.GetAuthValue())
+		bindName := computeBindName(s.AssociatedResource.Name(), trimAuthValue(s.AssociatedResource.AuthValue()))
 		s.IncludeAuthValue = !bytes.Equal(bindName, data.BoundEntity)
 	case data.SessionType == SessionTypePolicy:
 		// A policy session. Include the auth value of the associated context
@@ -91,7 +95,7 @@ func (s *sessionParam) ComputeSessionHMACKey() []byte {
 	var key []byte
 	key = append(key, s.Session.Data().SessionKey...)
 	if s.IncludeAuthValue {
-		key = append(key, s.AssociatedResource.GetAuthValue()...)
+		key = append(key, trimAuthValue(s.AssociatedResource.AuthValue())...)
 	}
 	return key
 }
@@ -128,7 +132,7 @@ func (s *sessionParam) BuildCommandAuth(commandCode CommandCode, commandHandles 
 
 	var hmac []byte
 	if s.IsPassword() {
-		hmac = s.AssociatedResource.GetAuthValue()
+		hmac = s.AssociatedResource.AuthValue()
 	} else {
 		hmac = s.ComputeCommandHMAC(commandCode, commandHandles, cpBytes)
 	}

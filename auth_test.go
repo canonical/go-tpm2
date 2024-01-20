@@ -1266,7 +1266,7 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 
 		var expectedHmac Auth
 		if sessions[i].IsPassword() {
-			expectedHmac = data.resources[i].(ResourceContextInternal).GetAuthValue()
+			expectedHmac = data.resources[i].AuthValue()
 		} else {
 			expectedHmac = sessions[i].ComputeCommandHMAC(data.commandCode, data.commandHandles, cpBytes)
 		}

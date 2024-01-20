@@ -373,11 +373,11 @@ func (s *resourcesSuite) SessionContextImplExcludeAttrs(c *C) {
 func (s *resourcesSuite) TestResourceContextGetAuth(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	rc.SetAuthValue([]byte("foo"))
-	c.Check(rc.(ResourceContextInternal).GetAuthValue(), DeepEquals, []byte("foo"))
+	c.Check(rc.AuthValue(), DeepEquals, []byte("foo"))
 }
 
 func (s *resourcesSuite) TestResourceContextGetAuthWithTrailingZeroes(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	rc.SetAuthValue([]byte("foo\x00bar\x00\x00"))
-	c.Check(rc.(ResourceContextInternal).GetAuthValue(), DeepEquals, []byte("foo\x00bar"))
+	c.Check(rc.AuthValue(), DeepEquals, []byte("foo\x00bar"))
 }
