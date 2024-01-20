@@ -125,7 +125,9 @@ func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer Ma
 		validation = nil
 	}
 
-	sequenceContext.(handleContextInternal).Invalidate()
+	if hc, ok := sequenceContext.(handleContextInternal); ok {
+		hc.Dispose()
+	}
 	return result, validation, nil
 }
 
@@ -155,7 +157,9 @@ func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceC
 		return nil, err
 	}
 
-	sequenceContext.(handleContextInternal).Invalidate()
+	if hc, ok := sequenceContext.(handleContextInternal); ok {
+		hc.Dispose()
+	}
 	return results, nil
 }
 

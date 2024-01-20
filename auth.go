@@ -270,7 +270,7 @@ func (p *sessionParams) InvalidateSessionContexts(authResponses []AuthResponse) 
 		if resp.SessionAttributes&AttrContinueSession != 0 {
 			continue
 		}
-		session.Invalidate()
+		session.Dispose()
 	}
 }
 

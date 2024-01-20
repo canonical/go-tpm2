@@ -31,7 +31,7 @@ type HandleContext interface {
 }
 
 type handleContextInternalMixin interface {
-	Invalidate()
+	Dispose()
 }
 
 type handleContextInternal interface {
@@ -176,10 +176,9 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 	return err
 }
 
-func (h *handleContext) Invalidate() {
+func (h *handleContext) Dispose() {
 	h.H = HandleUnassigned
-	h.N = make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(h.N, uint32(h.H))
+	h.N = mu.MustMarshalToBytes(h.H)
 }
 
 func (h *handleContext) checkValid() error {
@@ -250,6 +249,11 @@ func (r *resourceContext) SetAuthValue(authValue []byte) {
 	r.authValue = authValue
 }
 
+func (r *resourceContext) Dispose() {
+	r.authValue = nil
+	r.handleContext.Dispose()
+}
+
 func (r *resourceContext) GetAuthValue() []byte {
 	return bytes.TrimRight(r.authValue, "\x00")
 }
@@ -277,7 +281,7 @@ func newPermanentContext(handle Handle) *permanentContext {
 
 var _ resourceContextInternal = (*permanentContext)(nil)
 
-func (r *permanentContext) Invalidate() {}
+func (r *permanentContext) Dispose() {}
 
 func nullResource() ResourceContext {
 	return newPermanentContext(HandleNull)

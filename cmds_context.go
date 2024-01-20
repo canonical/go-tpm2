@@ -163,7 +163,9 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 		return err
 	}
 
-	flushContext.(handleContextInternal).Invalidate()
+	if hc, ok := flushContext.(handleContextInternal); ok {
+		hc.Dispose()
+	}
 	return nil
 }
 
@@ -208,8 +210,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	if object != nil && object.Handle() != persistentHandle {
 		// We are persisting an object
 		if obj, isObj := object.(objectContextInternal); isObj {
-			// This is not a limited ResourceContext - copy the public area
-			if err := mu.CopyValue(&public, obj.GetPublic()); err != nil {
+			if err := mu.CopyValue(&public, mu.Sized(obj.GetPublic())); err != nil {
 				return nil, fmt.Errorf("cannot copy public area of object: %v", err)
 			}
 		}
@@ -230,7 +231,9 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 
 	switch {
 	case object.Handle() == persistentHandle:
-		object.(handleContextInternal).Invalidate()
+		if hc, ok := object.(handleContextInternal); ok {
+			hc.Dispose()
+		}
 		return nil, nil
 	case public != nil:
 		return newObjectContext(persistentHandle, name, public), nil

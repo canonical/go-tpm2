@@ -49,7 +49,7 @@ func (r *mockResourceContext) SerializeToWriter(w io.Writer) error { return nil 
 func (r *mockResourceContext) SetAuthValue(authValue []byte)       { r.authValue = authValue }
 func (r *mockResourceContext) GetAuthValue() []byte                { return r.authValue }
 func (r *mockResourceContext) SetHandle(handle Handle)             { r.handle = handle }
-func (r *mockResourceContext) Invalidate()                         {}
+func (r *mockResourceContext) Dispose()                            {}
 
 type mockSessionContext struct {
 	handle   Handle
@@ -86,7 +86,7 @@ func (r *mockSessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContex
 	return &mockSessionContext{handle: r.handle, data: r.data, attrs: r.attrs &^ attrs}
 }
 
-func (r *mockSessionContext) Invalidate()               { r.handle = HandleUnassigned }
+func (r *mockSessionContext) Dispose()                  { r.handle = HandleUnassigned }
 func (r *mockSessionContext) Attrs() SessionAttributes  { return r.attrs }
 func (r *mockSessionContext) Data() *SessionContextData { return r.data }
 func (r *mockSessionContext) Unload()                   { r.unloaded = true }

@@ -237,7 +237,9 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authC
 		return err
 	}
 
-	nvIndex.(handleContextInternal).Invalidate()
+	if hc, ok := nvIndex.(handleContextInternal); ok {
+		hc.Dispose()
+	}
 	return nil
 }
 
@@ -266,7 +268,9 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 	nvIndex.SetAuthValue(nil)
 
 	err = r.Complete()
-	nvIndex.(handleContextInternal).Invalidate()
+	if hc, ok := nvIndex.(handleContextInternal); ok {
+		hc.Dispose()
+	}
 	return err
 }
 
