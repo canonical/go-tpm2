@@ -87,8 +87,7 @@ type resourceContextInternal interface {
 type ObjectContext interface {
 	ResourceContext
 
-	// Public is the public area associated with the object. This can be nil,
-	// depending on how the context was created.
+	// Public is the public area associated with the object.
 	Public() *Public
 }
 
@@ -294,6 +293,9 @@ func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 		// ok
 	default:
 		panic("invalid handle type")
+	}
+	if public == nil {
+		panic("nil public area")
 	}
 
 	return &objectContext{
@@ -685,7 +687,12 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		hc = &sessionContext{handleContext: data}
 	case HandleTypeTransient, HandleTypePersistent:
-		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
+		obj := &objectContext{resourceContext: resourceContext{handleContext: *data}}
+		if data.Data.Object.Data != nil {
+			hc = obj
+		} else {
+			hc = &obj.resourceContext
+		}
 	default:
 		panic("not reached")
 	}
