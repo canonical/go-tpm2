@@ -32,7 +32,6 @@ type HandleContext interface {
 
 type handleContextInternalMixin interface {
 	Invalidate()
-	SetHandle(handle Handle)
 }
 
 type handleContextInternal interface {
@@ -181,10 +180,6 @@ func (h *handleContext) Invalidate() {
 	h.H = HandleUnassigned
 	h.N = make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(h.N, uint32(h.H))
-}
-
-func (h *handleContext) SetHandle(handle Handle) {
-	h.H = handle
 }
 
 func (h *handleContext) checkValid() error {
@@ -475,10 +470,6 @@ func (r *sessionContext) Data() *sessionContextData {
 
 func (r *sessionContext) Unload() {
 	r.handleContext.Data.Session.Data = nil
-}
-
-func (r *sessionContext) SetHandle(handle Handle) {
-	panic("calling SetHandle on sessionContext is invalid")
 }
 
 func pwSession() SessionContext {
