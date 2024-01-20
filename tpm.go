@@ -35,12 +35,7 @@ func execMultipleHelper(action execMultipleHelperAction, sessions ...SessionCont
 			continue
 		}
 
-		sessionData := sessions[i].(sessionContextInternal).Data()
-		if sessionData == nil {
-			return errors.New("unusable session context")
-		}
-
-		if sessionData.SessionType == SessionTypePolicy {
+		if sessions[i].Handle().Type() == HandleTypePolicySession {
 			hasPolicySession = true
 		}
 

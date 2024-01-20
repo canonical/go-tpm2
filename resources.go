@@ -101,7 +101,6 @@ type sessionContextData struct {
 	IsAudit        bool
 	IsExclusive    bool
 	HashAlg        HashAlgorithmId
-	SessionType    SessionType
 	PolicyHMACType policyHMACType
 	IsBound        bool
 	BoundEntity    Name
@@ -193,11 +192,6 @@ func (h *handleContext) checkValid() error {
 		}
 		if !data.HashAlg.Available() {
 			return errors.New("digest algorithm for session context is not available")
-		}
-		switch data.SessionType {
-		case SessionTypeHMAC, SessionTypePolicy, SessionTypeTrial:
-		default:
-			return errors.New("invalid session type for session context")
 		}
 		if data.PolicyHMACType > policyHMACTypeMax {
 			return errors.New("invalid policy session HMAC type for session context")

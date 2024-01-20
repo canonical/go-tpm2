@@ -42,7 +42,7 @@ func newExtraSessionParam(session SessionContext) (*sessionParam, error) {
 	if data == nil {
 		return nil, errors.New("incomplete session can only be used in TPMContext.FlushContext")
 	}
-	if data.SessionType != SessionTypeHMAC {
+	if session.Handle().Type() != HandleTypeHMACSession {
 		return nil, errors.New("invalid session type")
 	}
 
@@ -62,21 +62,19 @@ func newSessionParamForAuth(session SessionContext, resource ResourceContext) (*
 	switch {
 	case s.Session.Handle() == HandlePW:
 		// Passphrase session
-	case data.SessionType == SessionTypeHMAC && !data.IsBound:
-		// A non-bound HMAC session. Include the auth value of the associated
-		// context in the HMAC key
-		s.IncludeAuthValue = true
-	case data.SessionType == SessionTypeHMAC:
+	case s.Session.Handle().Type() == HandleTypePolicySession:
+		// A policy session. Include the auth value of the associated context
+		// if the session includes a TPM2_PolicyAuthValue assertion.
+		s.IncludeAuthValue = data.PolicyHMACType == policyHMACTypeAuth
+	case data.IsBound:
 		// A bound HMAC session. Include the auth value of the associated
 		// context only if it is not the bind entity.
 		bindName := computeBindName(s.AssociatedResource.Name(), trimAuthValue(s.AssociatedResource.AuthValue()))
 		s.IncludeAuthValue = !bytes.Equal(bindName, data.BoundEntity)
-	case data.SessionType == SessionTypePolicy:
-		// A policy session. Include the auth value of the associated context
-		// if the session includes a TPM2_PolicyAuthValue assertion.
-		s.IncludeAuthValue = data.PolicyHMACType == policyHMACTypeAuth
 	default:
-		return nil, errors.New("invalid context for session: invalid session type")
+		// A non-bound HMAC session. Include the auth value of the associated
+		// context in the HMAC key
+		s.IncludeAuthValue = true
 	}
 
 	return s, nil
@@ -88,7 +86,7 @@ func (s *sessionParam) IsAuth() bool {
 
 func (s *sessionParam) IsPassword() bool {
 	data := s.Session.Data()
-	return s.Session.Handle() == HandlePW || (data.SessionType == SessionTypePolicy && data.PolicyHMACType == policyHMACTypePassword)
+	return s.Session.Handle() == HandlePW || (s.Session.Handle().Type() == HandleTypePolicySession && data.PolicyHMACType == policyHMACTypePassword)
 }
 
 func (s *sessionParam) ComputeSessionHMACKey() []byte {

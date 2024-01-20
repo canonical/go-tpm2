@@ -158,7 +158,6 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 
 	data := &sessionContextData{
 		HashAlg:        authHash,
-		SessionType:    sessionType,
 		PolicyHMACType: policyHMACTypeNoAuth,
 		IsBound:        isBound,
 		BoundEntity:    boundEntity,
