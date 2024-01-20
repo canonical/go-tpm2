@@ -97,17 +97,6 @@ type nvIndexContextInternal interface {
 	Attrs() NVAttributes
 }
 
-type handleContextType uint8
-
-const (
-	handleContextTypeLimited handleContextType = iota
-	handleContextTypePermanent
-	handleContextTypeObject
-	handleContextTypeNvIndex
-	handleContextTypeSession
-	handleContextTypeLimitedResource
-)
-
 type sessionContextData struct {
 	IsAudit        bool
 	IsExclusive    bool
@@ -122,25 +111,33 @@ type sessionContextData struct {
 	Symmetric      *SymDef
 }
 
-type sessionContextDataWrapper struct {
+type publicSized struct {
+	Data *Public `tpm2:"sized"`
+}
+
+type nvPublicSized struct {
+	Data *NVPublic `tpm2:"sized"`
+}
+
+type sessionContextDataSized struct {
 	Data *sessionContextData `tpm2:"sized"`
 }
 
 type handleContextU struct {
-	Object  *Public
-	NV      *NVPublic
-	Session *sessionContextDataWrapper
+	Object  *publicSized
+	NV      *nvPublicSized
+	Session *sessionContextDataSized
 }
 
 func (d *handleContextU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(handleContextType) {
-	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeLimitedResource:
+	switch selector.Interface().(Handle).Type() {
+	case HandleTypePCR, HandleTypePermanent:
 		return mu.NilUnionValue
-	case handleContextTypeObject:
+	case HandleTypeTransient, HandleTypePersistent:
 		return &d.Object
-	case handleContextTypeNvIndex:
+	case HandleTypeNVIndex:
 		return &d.NV
-	case handleContextTypeSession:
+	case HandleTypeHMACSession, HandleTypePolicySession:
 		return &d.Session
 	default:
 		return nil
@@ -148,11 +145,12 @@ func (d *handleContextU) Select(selector reflect.Value) interface{} {
 }
 
 type handleContext struct {
-	Type handleContextType
 	H    Handle
 	N    Name
 	Data *handleContextU
 }
+
+var _ handleContextInternal = (*handleContext)(nil)
 
 func (h *handleContext) Handle() Handle {
 	return h.H
@@ -190,10 +188,10 @@ func (h *handleContext) SetHandle(handle Handle) {
 }
 
 func (h *handleContext) checkValid() error {
-	switch h.Type {
-	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeObject, handleContextTypeNvIndex, handleContextTypeLimitedResource:
+	switch h.H.Type() {
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
 		return nil
-	case handleContextTypeSession:
+	case HandleTypeHMACSession, HandleTypePolicySession:
 		data := h.Data.Session.Data
 		if data == nil {
 			return nil
@@ -217,12 +215,19 @@ func (h *handleContext) checkValid() error {
 }
 
 func newLimitedHandleContext(handle Handle) *handleContext {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
+
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
 	return &handleContext{
-		Type: handleContextTypeLimited,
 		H:    handle,
-		N:    name}
+		N:    name,
+		Data: new(handleContextU)}
 }
 
 type resourceContext struct {
@@ -231,12 +236,20 @@ type resourceContext struct {
 }
 
 func newLimitedResourceContext(handle Handle, name Name) *resourceContext {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
 	return &resourceContext{
 		handleContext: handleContext{
-			Type: handleContextTypeLimitedResource,
 			H:    handle,
-			N:    name}}
+			N:    name,
+			Data: new(handleContextU)}}
 }
+
+var _ resourceContextInternal = (*resourceContext)(nil)
 
 func (r *resourceContext) SetAuthValue(authValue []byte) {
 	r.authValue = authValue
@@ -250,18 +263,26 @@ type permanentContext struct {
 	resourceContext
 }
 
-func (r *permanentContext) Invalidate() {}
-
 func newPermanentContext(handle Handle) *permanentContext {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypePermanent:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
+
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
 	return &permanentContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
-				Type: handleContextTypePermanent,
-				H:    handle,
-				N:    name}}}
+				H: handle,
+				N: name}}}
 }
+
+var _ resourceContextInternal = (*permanentContext)(nil)
+
+func (r *permanentContext) Invalidate() {}
 
 func nullResource() ResourceContext {
 	return newPermanentContext(HandleNull)
@@ -271,18 +292,20 @@ type objectContext struct {
 	resourceContext
 }
 
-func (r *objectContext) GetPublic() *Public {
-	return r.Data.Object
-}
-
 func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
+	switch handle.Type() {
+	case HandleTypeTransient, HandleTypePersistent:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
+
 	return &objectContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
-				Type: handleContextTypeObject,
 				H:    handle,
 				N:    name,
-				Data: &handleContextU{Object: public}}}}
+				Data: &handleContextU{Object: &publicSized{Data: public}}}}}
 }
 
 func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -296,32 +319,30 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 	return newObjectContext(context.Handle(), name, pub), nil
 }
 
+var _ objectContextInternal = (*objectContext)(nil)
+
+func (r *objectContext) GetPublic() *Public {
+	return r.Data.Object.Data
+}
+
 type nvIndexContext struct {
 	resourceContext
 }
 
-func (r *nvIndexContext) SetAttr(a NVAttributes) {
-	r.Data.NV.Attrs |= a
-	r.N = r.Data.NV.Name()
-}
-
-func (r *nvIndexContext) ClearAttr(a NVAttributes) {
-	r.Data.NV.Attrs &= ^a
-	r.N = r.Data.NV.Name()
-}
-
-func (r *nvIndexContext) Attrs() NVAttributes {
-	return r.Data.NV.Attrs
-}
-
 func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
+	switch public.Index.Type() {
+	case HandleTypeNVIndex:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
+
 	return &nvIndexContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
-				Type: handleContextTypeNvIndex,
 				H:    public.Index,
 				N:    name,
-				Data: &handleContextU{NV: public}}}}
+				Data: &handleContextU{NV: &nvPublicSized{Data: public}}}}}
 }
 
 func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -338,10 +359,56 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 	return newNVIndexContext(name, pub), nil
 }
 
+var _ nvIndexContextInternal = (*nvIndexContext)(nil)
+
+func (r *nvIndexContext) SetAttr(a NVAttributes) {
+	if r.Data.NV.Data == nil {
+		return
+	}
+	r.Data.NV.Data.Attrs |= a
+	r.N = r.Data.NV.Data.Name()
+}
+
+func (r *nvIndexContext) ClearAttr(a NVAttributes) {
+	if r.Data.NV.Data == nil {
+		return
+	}
+	r.Data.NV.Data.Attrs &= ^a
+	r.N = r.Data.NV.Data.Name()
+}
+
+func (r *nvIndexContext) Attrs() NVAttributes {
+	if r.Data.NV.Data == nil {
+		return 0
+	}
+	return r.Data.NV.Data.Attrs
+}
+
 type sessionContext struct {
 	*handleContext
 	attrs SessionAttributes
 }
+
+func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
+	switch handle.Type() {
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		// ok
+	default:
+		if handle != HandlePW {
+			panic("invalid handle type")
+		}
+	}
+
+	name := make(Name, binary.Size(Handle(0)))
+	binary.BigEndian.PutUint32(name, uint32(handle))
+	return &sessionContext{
+		handleContext: &handleContext{
+			H:    handle,
+			N:    name,
+			Data: &handleContextU{Session: &sessionContextDataSized{Data: data}}}}
+}
+
+var _ sessionContextInternal = (*sessionContext)(nil)
 
 func (r *sessionContext) HashAlg() HashAlgorithmId {
 	d := r.Data()
@@ -412,17 +479,6 @@ func (r *sessionContext) Unload() {
 
 func (r *sessionContext) SetHandle(handle Handle) {
 	panic("calling SetHandle on sessionContext is invalid")
-}
-
-func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &sessionContext{
-		handleContext: &handleContext{
-			Type: handleContextTypeSession,
-			H:    handle,
-			N:    name,
-			Data: &handleContextU{Session: &sessionContextDataWrapper{Data: data}}}}
 }
 
 func pwSession() SessionContext {
@@ -629,7 +685,8 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 		return nil, errors.New("context blob contains trailing bytes")
 	}
 
-	if data.Type == handleContextTypePermanent {
+	switch data.Handle().Type() {
+	case HandleTypePCR, HandleTypePermanent:
 		return nil, errors.New("cannot create a permanent context from serialized data")
 	}
 
@@ -638,17 +695,13 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	}
 
 	var hc HandleContext
-	switch data.Type {
-	case handleContextTypeLimited:
-		hc = data
-	case handleContextTypeObject:
-		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
-	case handleContextTypeNvIndex:
+	switch data.Handle().Type() {
+	case HandleTypeNVIndex:
 		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
-	case handleContextTypeSession:
+	case HandleTypeHMACSession, HandleTypePolicySession:
 		hc = &sessionContext{handleContext: data}
-	case handleContextTypeLimitedResource:
-		hc = &resourceContext{handleContext: *data}
+	case HandleTypeTransient, HandleTypePersistent:
+		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
 	default:
 		panic("not reached")
 	}

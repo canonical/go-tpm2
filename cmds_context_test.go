@@ -222,10 +222,12 @@ func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
 	c.Assert(err, IsNil)
 
 	var sample SessionContext
-	c.Check(restored, Not(Implements), &sample)
+	c.Check(restored, Implements, &sample)
 
 	c.Check(restored.Handle(), Equals, lh.Handle())
 	c.Check(restored.Name(), DeepEquals, lh.Name())
+	c.Assert(restored, internal_testutil.ConvertibleTo, &SessionContextImpl{})
+	c.Check(restored.(SessionContextInternal).Data(), IsNil)
 
 	c.Check(s.TPM.DoesHandleExist(restored.Handle()), internal_testutil.IsTrue)
 }
@@ -265,7 +267,7 @@ func (s *contextSuite) TestContextSaveAndLoadTransientLimitedHandle(c *C) {
 	c.Assert(err, IsNil)
 
 	var sample ResourceContext
-	c.Check(restored, Not(Implements), &sample)
+	c.Check(restored, Implements, &sample)
 
 	c.Check(restored.Handle().Type(), Equals, HandleTypeTransient)
 	c.Check(restored.Handle(), Not(Equals), lh.Handle())

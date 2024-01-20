@@ -138,7 +138,7 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
 		}
-		if sc, isSession := hc.(sessionContextInternal); isSession {
+		if sc, isSession := hc.(sessionContextInternal); isSession && sc.Data() != nil {
 			sc.Data().IsExclusive = false
 		}
 	default:
