@@ -73,9 +73,12 @@ func (s *resourcesSuite) TestNewResourceContextNV(c *C) {
 	c.Assert(rc, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Assert(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
 
-	c.Check(rc2.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, &pub)
+	var sample NVIndexContext
+	c.Assert(rc, Implements, &sample)
+
+	c.Assert(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc2.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, &pub)
 }
 
 func (s *resourcesSuite) testNewResourceContextUnavailable(c *C, handle Handle) {
@@ -195,9 +198,12 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesNV(c *C) {
 
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Assert(rc2, internal_testutil.ConvertibleTo, &NvIndexContext{})
 
-	c.Check(rc2.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, &pub)
+	var sample NVIndexContext
+	c.Assert(rc2, Implements, &sample)
+
+	c.Assert(rc2, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc2.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, &pub)
 }
 
 func (s *resourcesSuite) TestNewHandleContextFromBytesSession(c *C) {
@@ -285,8 +291,12 @@ func (s *resourcesSuite) TestNewNVIndexResourceContextFromPub(c *C) {
 	name := pub.Name()
 
 	c.Check(rc.Name(), DeepEquals, name)
-	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
-	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+
+	var sample NVIndexContext
+	c.Assert(rc, Implements, &sample)
+
+	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc.(*NvIndexContextImpl).Public(), DeepEquals, &pub)
 }
 
 func (s *resourcesSuite) TestNewNVIndexResourceContext(c *C) {
@@ -302,8 +312,12 @@ func (s *resourcesSuite) TestNewNVIndexResourceContext(c *C) {
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, pub.Index)
 	c.Check(rc.Name(), DeepEquals, name)
-	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
-	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+
+	var sample NVIndexContext
+	c.Assert(rc, Implements, &sample)
+
+	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc.(*NvIndexContextImpl).Public(), DeepEquals, &pub)
 }
 
 func (s *resourcesSuite) TestNewObjectResourceContextFromPub(c *C) {

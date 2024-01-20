@@ -18,7 +18,7 @@ const (
 )
 
 type CmdContext = cmdContext
-type NvIndexContext = nvIndexContext
+type NvIndexContextImpl = nvIndexContext
 type PolicyHMACType = policyHMACType
 type ResourceContextInternal = resourceContextInternal
 type RspContext = rspContext
@@ -39,7 +39,7 @@ func (c *CommandContext) Cmd() *CmdContext {
 	return &c.cmd
 }
 
-func (c *NvIndexContext) GetPublic() *NVPublic {
+func (c *NvIndexContextImpl) Public() *NVPublic {
 	return c.Data.NV.Data
 }
 

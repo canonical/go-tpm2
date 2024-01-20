@@ -91,11 +91,16 @@ type ObjectContext interface {
 	Public() *Public
 }
 
-type nvIndexContextInternal interface {
-	resourceContextInternal
+// NVIndexContext is a ResourceContext that corresponds to a NV index.
+type NVIndexContext interface {
+	ResourceContext
 
+	// Type returns the type of the index
+	Type() NVType
+
+	// SetAttr is called when an attribute is set so that the context
+	// can update its name.
 	SetAttr(a NVAttributes)
-	Attrs() NVAttributes
 }
 
 type sessionContextData struct {
@@ -334,6 +339,9 @@ func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 	default:
 		panic("invalid handle type")
 	}
+	if public == nil {
+		panic("nil public area")
+	}
 
 	return &nvIndexContext{
 		resourceContext: resourceContext{
@@ -357,21 +365,15 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 	return newNVIndexContext(name, pub), nil
 }
 
-var _ nvIndexContextInternal = (*nvIndexContext)(nil)
+var _ NVIndexContext = (*nvIndexContext)(nil)
 
-func (r *nvIndexContext) SetAttr(a NVAttributes) {
-	if r.Data.NV.Data == nil {
-		return
-	}
-	r.Data.NV.Data.Attrs |= a
-	r.N = r.Data.NV.Data.Name()
+func (r *nvIndexContext) Type() NVType {
+	return r.Data.NV.Data.Attrs.Type()
 }
 
-func (r *nvIndexContext) Attrs() NVAttributes {
-	if r.Data.NV.Data == nil {
-		return 0
-	}
-	return r.Data.NV.Data.Attrs
+func (r *nvIndexContext) SetAttr(a NVAttributes) {
+	r.Data.NV.Data.Attrs |= a
+	r.N = r.Data.NV.Data.Name()
 }
 
 type sessionContext struct {
@@ -683,7 +685,12 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var hc HandleContext
 	switch data.Handle().Type() {
 	case HandleTypeNVIndex:
-		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
+		nv := &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
+		if data.Data.NV.Data != nil {
+			hc = nv
+		} else {
+			hc = &nv.resourceContext
+		}
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		hc = &sessionContext{handleContext: data}
 	case HandleTypeTransient, HandleTypePersistent:

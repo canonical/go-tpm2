@@ -82,9 +82,11 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	expectedName := data.publicInfo.Name()
 	c.Check(index.Name(), DeepEquals, expectedName)
 
-	c.Assert(index, internal_testutil.ConvertibleTo, &NvIndexContext{})
+	var sample NVIndexContext
+	c.Assert(index, Implements, &sample)
 
-	c.Check(index.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, data.publicInfo)
+	c.Assert(index, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(index.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, data.publicInfo)
 
 	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
 	c.Assert(authArea, internal_testutil.LenEquals, 1)
@@ -286,7 +288,7 @@ func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
 	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
-	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.(*NvIndexContextImpl).Public(), DeepEquals, pub)
 	c.Check(index.Name(), DeepEquals, name)
 
 	b, err := s.TPM.NVRead(index, index, data.readSize, data.readOffset, data.authSession)
@@ -375,7 +377,7 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
 	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
-	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.(*NvIndexContextImpl).Public(), DeepEquals, pub)
 	c.Check(index.Name(), DeepEquals, name)
 
 	initialValue, err := s.TPM.NVReadCounter(index, index, authSession)
@@ -425,7 +427,7 @@ func (s *nvSuite) testExtend(c *C, data *testNVExtendData) {
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
 	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
-	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.(*NvIndexContextImpl).Public(), DeepEquals, pub)
 	c.Check(index.Name(), DeepEquals, name)
 
 	h := crypto.SHA256.New()
@@ -481,7 +483,7 @@ func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
 	c.Check(pub.Attrs&AttrNVWritten, Equals, AttrNVWritten)
-	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.(*NvIndexContextImpl).Public(), DeepEquals, pub)
 	c.Check(index.Name(), DeepEquals, name)
 
 	value, err := s.TPM.NVReadBits(index, index, data.authSession)
@@ -523,7 +525,7 @@ func (s *nvSuite) testWriteLock(c *C, authSession SessionContext) {
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
 	c.Check(pub.Attrs&AttrNVWriteLocked, Equals, AttrNVWriteLocked)
-	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.(*NvIndexContextImpl).Public(), DeepEquals, pub)
 	c.Check(index.Name(), DeepEquals, name)
 }
 
@@ -554,7 +556,7 @@ func (s *nvSuite) testReadLock(c *C, authSession SessionContext) {
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
 	c.Check(pub.Attrs&AttrNVReadLocked, Equals, AttrNVReadLocked)
-	c.Check(index.(*NvIndexContext).GetPublic(), DeepEquals, pub)
+	c.Check(index.(*NvIndexContextImpl).Public(), DeepEquals, pub)
 	c.Check(index.Name(), DeepEquals, name)
 }
 
