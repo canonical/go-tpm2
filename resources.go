@@ -93,7 +93,6 @@ type nvIndexContextInternal interface {
 	resourceContextInternal
 
 	SetAttr(a NVAttributes)
-	ClearAttr(a NVAttributes)
 	Attrs() NVAttributes
 }
 
@@ -360,14 +359,6 @@ func (r *nvIndexContext) SetAttr(a NVAttributes) {
 		return
 	}
 	r.Data.NV.Data.Attrs |= a
-	r.N = r.Data.NV.Data.Name()
-}
-
-func (r *nvIndexContext) ClearAttr(a NVAttributes) {
-	if r.Data.NV.Data == nil {
-		return
-	}
-	r.Data.NV.Data.Attrs &= ^a
 	r.N = r.Data.NV.Data.Name()
 }
 
