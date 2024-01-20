@@ -62,7 +62,7 @@ func (s *authSuite) TestNewExtraSessionParam(c *C) {
 func (s *authSuite) TestNewExtraSessionParamUnloaded(c *C) {
 	session := &mockSessionContext{handle: 0x02000000}
 	_, err := NewExtraSessionParam(session)
-	c.Check(err, ErrorMatches, "incomplete session can only be used in TPMContext.FlushContext")
+	c.Check(err, ErrorMatches, "saved or flushed session")
 }
 
 func (s *authSuite) TestNewExtraSessionParamWrongType(c *C) {
@@ -1733,7 +1733,7 @@ func TestHMACSessions(t *testing.T) {
 					t.Errorf("Subsequent session usage failed: %v", err)
 				}
 			} else {
-				if !IsTPMSessionError(err, ErrorValue, CommandCreate, 1) {
+				if err.Error() != "cannot process HandleContext for command TPM_CC_Create at index 1: invalid context for session: saved or flushed session" {
 					t.Errorf("Unexpected error: %v", err)
 				}
 			}
@@ -1830,7 +1830,7 @@ func TestPolicySessions(t *testing.T) {
 					t.Errorf("Subsequent usage of the session failed: %v", err)
 				}
 			} else {
-				if !IsTPMSessionError(err, ErrorValue, CommandUnseal, 1) {
+				if err.Error() != "cannot process HandleContext for command TPM_CC_Unseal at index 1: invalid context for session: saved or flushed session" {
 					t.Errorf("Unexpected error: %v", err)
 				}
 			}

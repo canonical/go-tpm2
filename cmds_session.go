@@ -109,6 +109,9 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		if !isObject {
 			return nil, makeInvalidArgError("tpmKey", "resource context is not an object")
 		}
+		if object.Public() == nil {
+			return nil, makeInvalidArgError("tpmKey", "no public area")
+		}
 
 		tpmKeyHandle = tpmKey.Handle()
 

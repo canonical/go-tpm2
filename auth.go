@@ -40,7 +40,7 @@ func newExtraSessionParam(session SessionContext) (*sessionParam, error) {
 
 	data := s.Session.Data()
 	if data == nil {
-		return nil, errors.New("incomplete session can only be used in TPMContext.FlushContext")
+		return nil, errors.New("saved or flushed session")
 	}
 	if session.Handle().Type() != HandleTypeHMACSession {
 		return nil, errors.New("invalid session type")
@@ -56,7 +56,7 @@ func newSessionParamForAuth(session SessionContext, resource ResourceContext) (*
 
 	data := s.Session.Data()
 	if data == nil {
-		return nil, errors.New("invalid context for session: incomplete session can only be used in TPMContext.FlushContext")
+		return nil, errors.New("invalid context for session: saved or flushed session")
 	}
 
 	switch {

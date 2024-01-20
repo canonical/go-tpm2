@@ -213,7 +213,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	var public *Public
 	if object != nil && object.Handle() != persistentHandle {
 		// We are persisting an object
-		if obj, isObj := object.(ObjectContext); isObj {
+		if obj, isObj := object.(ObjectContext); isObj && obj.Public() != nil {
 			if err := mu.CopyValue(&public, obj.Public()); err != nil {
 				return nil, fmt.Errorf("cannot copy public area of object: %v", err)
 			}

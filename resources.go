@@ -185,6 +185,7 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 func (h *handleContext) Dispose() {
 	h.H = HandleUnassigned
 	h.N = mu.MustMarshalToBytes(h.H)
+	h.Data = new(handleContextU)
 }
 
 func (h *handleContext) checkValid() error {
@@ -325,6 +326,10 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 var _ ObjectContext = (*objectContext)(nil)
 
 func (r *objectContext) Public() *Public {
+	if r.Data.Object == nil {
+		// This context was disposed.
+		return nil
+	}
 	return r.Data.Object.Data
 }
 
@@ -368,10 +373,18 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 var _ NVIndexContext = (*nvIndexContext)(nil)
 
 func (r *nvIndexContext) Type() NVType {
+	if r.Data.NV == nil {
+		// This context was disposed
+		return 0
+	}
 	return r.Data.NV.Data.Attrs.Type()
 }
 
 func (r *nvIndexContext) SetAttr(a NVAttributes) {
+	if r.Data.NV == nil {
+		// This context was disposed
+		return
+	}
 	r.Data.NV.Data.Attrs |= a
 	r.N = r.Data.NV.Data.Name()
 }
@@ -462,10 +475,18 @@ func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
 }
 
 func (r *sessionContext) Data() *sessionContextData {
+	if r.handleContext.Data.Session == nil {
+		// This handle context was disposed
+		return nil
+	}
 	return r.handleContext.Data.Session.Data
 }
 
 func (r *sessionContext) Saved() {
+	if r.handleContext.Data.Session == nil {
+		// This handle context was disposed
+		return
+	}
 	r.handleContext.Data.Session.Data = nil
 }
 
