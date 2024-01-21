@@ -24,20 +24,12 @@ type authSuite struct {
 
 var _ = Suite(&authSuite{})
 
-func newMockSessionParam(session SessionContext, associatedResource ResourceContext, includeAuthValue bool, decryptNonce, encryptNonce Nonce) *SessionParam {
-	var r ResourceContextInternal
-	if associatedResource != nil {
-		r = associatedResource.(ResourceContextInternal)
-	}
-	var s SessionContextInternal
-	if session != nil {
-		s = session.(SessionContextInternal)
-	}
-
+func newMockSessionParam(session SessionContext, associatedResource ResourceContext, includeAuthValue bool, nonceCaller, decryptNonce, encryptNonce Nonce) *SessionParam {
 	return &SessionParam{
-		Session:            s,
-		AssociatedResource: r,
+		Session:            session,
+		AssociatedResource: associatedResource,
 		IncludeAuthValue:   includeAuthValue,
+		NonceCaller:        nonceCaller,
 		DecryptNonce:       decryptNonce,
 		EncryptNonce:       encryptNonce}
 }
@@ -56,11 +48,11 @@ func (s *authSuite) TestNewExtraSessionParam(c *C) {
 		data:   new(SessionContextData)}
 	p, err := NewExtraSessionParam(session)
 	c.Assert(err, IsNil)
-	c.Check(p, DeepEquals, newMockSessionParam(session, nil, false, nil, nil))
+	c.Check(p, DeepEquals, newMockSessionParam(session, nil, false, nil, nil, nil))
 }
 
 func (s *authSuite) TestNewExtraSessionParamUnloaded(c *C) {
-	session := &mockSessionContext{handle: 0x02000000}
+	session := &mockSessionContext{handle: 0x02000000, unloaded: true}
 	_, err := NewExtraSessionParam(session)
 	c.Check(err, ErrorMatches, "saved or flushed session")
 }
@@ -80,7 +72,7 @@ func (s *authSuite) TestNewSessionParamForAuthPW(c *C) {
 	resource := &mockResourceContext{handle: HandleOwner}
 	p, err := NewSessionParamForAuth(session, resource)
 	c.Assert(err, IsNil)
-	c.Check(p, DeepEquals, newMockSessionParam(session, resource, false, nil, nil))
+	c.Check(p, DeepEquals, newMockSessionParam(session, resource, false, nil, nil, nil))
 }
 
 func (s *authSuite) TestNewSessionParamForAuthUnboundHMAC(c *C) {
@@ -90,7 +82,7 @@ func (s *authSuite) TestNewSessionParamForAuthUnboundHMAC(c *C) {
 	resource := &mockResourceContext{handle: HandleOwner}
 	p, err := NewSessionParamForAuth(session, resource)
 	c.Assert(err, IsNil)
-	c.Check(p, DeepEquals, newMockSessionParam(session, resource, true, nil, nil))
+	c.Check(p, DeepEquals, newMockSessionParam(session, resource, true, nil, nil, nil))
 }
 
 func (s *authSuite) TestNewSessionParamForAuthBoundHMAC1(c *C) {
@@ -105,7 +97,7 @@ func (s *authSuite) TestNewSessionParamForAuthBoundHMAC1(c *C) {
 		authValue: []byte{0x55, 0x55}}
 	p, err := NewSessionParamForAuth(session, resource)
 	c.Assert(err, IsNil)
-	c.Check(p, DeepEquals, newMockSessionParam(session, resource, false, nil, nil))
+	c.Check(p, DeepEquals, newMockSessionParam(session, resource, false, nil, nil, nil))
 }
 
 func (s *authSuite) TestNewSessionParamForAuthBoundHMAC2(c *C) {
@@ -120,7 +112,7 @@ func (s *authSuite) TestNewSessionParamForAuthBoundHMAC2(c *C) {
 		authValue: []byte{0x55, 0x55}}
 	p, err := NewSessionParamForAuth(session, resource)
 	c.Assert(err, IsNil)
-	c.Check(p, DeepEquals, newMockSessionParam(session, resource, true, nil, nil))
+	c.Check(p, DeepEquals, newMockSessionParam(session, resource, true, nil, nil, nil))
 }
 
 func (s *authSuite) TestNewSessionParamForAuthPolicy(c *C) {
@@ -130,7 +122,7 @@ func (s *authSuite) TestNewSessionParamForAuthPolicy(c *C) {
 	resource := &mockResourceContext{handle: HandleOwner}
 	p, err := NewSessionParamForAuth(session, resource)
 	c.Assert(err, IsNil)
-	c.Check(p, DeepEquals, newMockSessionParam(session, resource, false, nil, nil))
+	c.Check(p, DeepEquals, newMockSessionParam(session, resource, false, nil, nil, nil))
 }
 
 func (s *authSuite) TestNewSessionParamForAuthPolicyAuth(c *C) {
@@ -141,22 +133,22 @@ func (s *authSuite) TestNewSessionParamForAuthPolicyAuth(c *C) {
 	resource := &mockResourceContext{handle: HandleOwner}
 	p, err := NewSessionParamForAuth(session, resource)
 	c.Assert(err, IsNil)
-	c.Check(p, DeepEquals, newMockSessionParam(session, resource, true, nil, nil))
+	c.Check(p, DeepEquals, newMockSessionParam(session, resource, true, nil, nil, nil))
 }
 
 func (s *authSuite) TestSessionParamIsAuthFalse(c *C) {
-	p := newMockSessionParam(nil, nil, false, nil, nil)
+	p := newMockSessionParam(nil, nil, false, nil, nil, nil)
 	c.Check(p.IsAuth(), internal_testutil.IsFalse)
 }
 
 func (s *authSuite) TestSessionParamIsAuthTrue(c *C) {
-	p := newMockSessionParam(nil, new(mockResourceContext), false, nil, nil)
+	p := newMockSessionParam(nil, new(mockResourceContext), false, nil, nil, nil)
 	c.Check(p.IsAuth(), internal_testutil.IsTrue)
 }
 
 func (s *authSuite) TestSessionParamIsPasswordTruePwSession(c *C) {
 	session := &mockSessionContext{handle: HandlePW, data: &SessionContextData{}}
-	p := newMockSessionParam(session, nil, false, nil, nil)
+	p := newMockSessionParam(session, nil, false, nil, nil, nil)
 	c.Check(p.IsPassword(), internal_testutil.IsTrue)
 }
 
@@ -165,7 +157,7 @@ func (s *authSuite) TestSessionParamIsPasswordTruePolicySession(c *C) {
 		handle: 0x03000000,
 		data: &SessionContextData{
 			PolicyHMACType: PolicyHMACTypePassword}}
-	p := newMockSessionParam(session, nil, false, nil, nil)
+	p := newMockSessionParam(session, nil, false, nil, nil, nil)
 	c.Check(p.IsPassword(), internal_testutil.IsTrue)
 }
 
@@ -173,7 +165,7 @@ func (s *authSuite) TestSessionParamIsPasswordFalsePolicySession(c *C) {
 	session := &mockSessionContext{
 		handle: 0x03000000,
 		data:   new(SessionContextData)}
-	p := newMockSessionParam(session, nil, false, nil, nil)
+	p := newMockSessionParam(session, nil, false, nil, nil, nil)
 	c.Check(p.IsPassword(), internal_testutil.IsFalse)
 }
 
@@ -181,7 +173,7 @@ func (s *authSuite) TestSessionParamIsPasswordFalseHMACSession(c *C) {
 	session := &mockSessionContext{
 		handle: 0x02000000,
 		data:   new(SessionContextData)}
-	p := newMockSessionParam(session, nil, false, nil, nil)
+	p := newMockSessionParam(session, nil, false, nil, nil, nil)
 	c.Check(p.IsPassword(), internal_testutil.IsFalse)
 }
 
@@ -194,7 +186,7 @@ type testSessionParamComputeSessionHMACKeyData struct {
 
 func (s *authSuite) testSessionParamComputeSessionHMACKey(c *C, data *testSessionParamComputeSessionHMACKeyData) {
 	session := &mockSessionContext{data: &SessionContextData{SessionKey: data.sessionKey}}
-	p := newMockSessionParam(session, data.resource, data.includeAuthValue, nil, nil)
+	p := newMockSessionParam(session, data.resource, data.includeAuthValue, nil, nil, nil)
 	c.Check(p.ComputeSessionHMACKey(), DeepEquals, data.expected)
 }
 
@@ -263,11 +255,10 @@ type testSessionParamComputeCommandHMACData struct {
 
 func (s *authSuite) testSessionParamComputeCommandHMAC(c *C, data *testSessionParamComputeCommandHMACData) {
 	session := &mockSessionContext{data: &SessionContextData{
-		HashAlg:     data.hashAlg,
-		SessionKey:  data.sessionKey,
-		NonceCaller: data.nonceCaller,
-		NonceTPM:    data.nonceTPM}, attrs: data.attrs}
-	p := newMockSessionParam(session, data.resource, data.includeAuthValue, data.decryptNonce, data.encryptNonce)
+		HashAlg:    data.hashAlg,
+		SessionKey: data.sessionKey,
+		NonceTPM:   data.nonceTPM}, attrs: data.attrs}
+	p := newMockSessionParam(session, data.resource, data.includeAuthValue, data.nonceCaller, data.decryptNonce, data.encryptNonce)
 
 	h := p.ComputeCommandHMAC(data.commandCode, data.commandHandles, data.cpBytes)
 	c.Check(h, DeepEquals, data.expected)
@@ -504,11 +495,10 @@ type testSessionParamComputeResponseHMACData struct {
 
 func (s *authSuite) testSessionParamComputeResponseHMAC(c *C, data *testSessionParamComputeResponseHMACData) {
 	session := &mockSessionContext{data: &SessionContextData{
-		HashAlg:     data.hashAlg,
-		SessionKey:  data.sessionKey,
-		NonceCaller: data.nonceCaller,
-		NonceTPM:    data.nonceTPM}}
-	p := newMockSessionParam(session, data.resource, data.includeAuthValue, data.decryptNonce, data.encryptNonce)
+		HashAlg:    data.hashAlg,
+		SessionKey: data.sessionKey,
+		NonceTPM:   data.nonceTPM}}
+	p := newMockSessionParam(session, data.resource, data.includeAuthValue, data.nonceCaller, data.decryptNonce, data.encryptNonce)
 
 	h, required := p.ComputeResponseHMAC(AuthResponse{SessionAttributes: data.attrs}, data.commandCode, data.rpBytes)
 	c.Check(h, DeepEquals, data.expected)
@@ -716,7 +706,7 @@ func (s *authSuite) TestSessionParamBuildCommandAuthPW(c *C) {
 		handle: HandlePW,
 		data:   new(SessionContextData),
 		attrs:  AttrContinueSession}
-	p := newMockSessionParam(session, resource, false, nil, nil)
+	p := newMockSessionParam(session, resource, false, nil, nil, nil)
 
 	auth := p.BuildCommandAuth(CommandClearControl, []Name{internal_testutil.DecodeHexString(c, "0400000a")}, []byte{0x01})
 	c.Check(auth, DeepEquals, &AuthCommand{
@@ -733,7 +723,7 @@ func (s *authSuite) TestSessionParamBuildCommandAuthPolicyPW(c *C) {
 		data: &SessionContextData{
 			PolicyHMACType: PolicyHMACTypePassword},
 		attrs: AttrContinueSession}
-	p := newMockSessionParam(session, resource, false, nil, nil)
+	p := newMockSessionParam(session, resource, false, nil, nil, nil)
 
 	auth := p.BuildCommandAuth(CommandClearControl, []Name{internal_testutil.DecodeHexString(c, "0400000a")}, []byte{0x01})
 	c.Check(auth, DeepEquals, &AuthCommand{
@@ -763,10 +753,9 @@ func (s *authSuite) testSessionParamBuildCommandAuth(c *C, data *testSessionPara
 			HashAlg:        HashAlgorithmSHA256,
 			PolicyHMACType: data.policyHMACType,
 			SessionKey:     internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-			NonceCaller:    data.nonceCaller,
 			NonceTPM:       internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")},
 		attrs: data.attrs}
-	p := newMockSessionParam(session, data.resource, data.includeAuthValue, nil, nil)
+	p := newMockSessionParam(session, data.resource, data.includeAuthValue, data.nonceCaller, nil, nil)
 
 	expectedHmac := p.ComputeCommandHMAC(data.commandCode, data.commandHandles, data.cpBytes)
 
@@ -862,7 +851,7 @@ func (s *authSuite) TestSessionParamProcessResponseAuthPW(c *C) {
 		handle: HandlePW,
 		data:   new(SessionContextData),
 		attrs:  AttrContinueSession}
-	p := newMockSessionParam(session, new(mockResourceContext), false, nil, nil)
+	p := newMockSessionParam(session, new(mockResourceContext), false, nil, nil, nil)
 
 	c.Check(p.ProcessResponseAuth(AuthResponse{}, CommandUnseal, []byte{0, 0}), IsNil)
 }
@@ -873,7 +862,7 @@ func (s *authSuite) TestSessionParamProcessResponseAuthPolicyPW(c *C) {
 		data: &SessionContextData{
 			PolicyHMACType: PolicyHMACTypePassword},
 		attrs: AttrContinueSession}
-	p := newMockSessionParam(session, new(mockResourceContext), false, nil, nil)
+	p := newMockSessionParam(session, new(mockResourceContext), false, nil, nil, nil)
 
 	c.Check(p.ProcessResponseAuth(AuthResponse{}, CommandUnseal, []byte{0, 0}), IsNil)
 }
@@ -899,9 +888,9 @@ func (s *authSuite) testSessionParamProcessResponseAuth(c *C, data *testSessionP
 		data: &SessionContextData{
 			HashAlg:        HashAlgorithmSHA256,
 			PolicyHMACType: data.policyHMACType,
-			SessionKey:     internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-			NonceCaller:    internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")}}
-	p := newMockSessionParam(session, data.resource, data.includeAuthValue, nil, nil)
+			SessionKey:     internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}
+	nonceCaller := internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")
+	p := newMockSessionParam(session, data.resource, data.includeAuthValue, nonceCaller, nil, nil)
 
 	resp := AuthResponse{
 		Nonce:             data.nonce,
@@ -1078,7 +1067,7 @@ func (s *authSuite) testSessionParamsAppendExtraSessions(c *C, data *testSession
 		data:   new(SessionContextData),
 		attrs:  AttrContinueSession}
 
-	expectedParams := []*SessionParam{newMockSessionParam(session, resource, false, nil, nil)}
+	expectedParams := []*SessionParam{newMockSessionParam(session, resource, false, nil, nil, nil)}
 	params := newMockSessionParams(0, []*SessionParam{expectedParams[0]}, -1, -1)
 
 	c.Check(params.AppendExtraSessions(data.sessions...), IsNil)
@@ -1150,16 +1139,16 @@ func (s *authSuite) TestSessionParamsComputeCallerNonces(c *C) {
 	s.AddCleanup(MockRandReader(bytes.NewReader(b)))
 
 	sessions := []*mockSessionContext{
-		&mockSessionContext{data: &SessionContextData{NonceCaller: make([]byte, 20)}},
-		&mockSessionContext{data: &SessionContextData{NonceCaller: make([]byte, 32)}}}
+		&mockSessionContext{data: &SessionContextData{HashAlg: HashAlgorithmSHA1}},
+		&mockSessionContext{data: &SessionContextData{HashAlg: HashAlgorithmSHA256}}}
 	params := newMockSessionParams(0, []*SessionParam{
-		newMockSessionParam(sessions[0], nil, false, nil, nil),
-		newMockSessionParam(sessions[1], nil, false, nil, nil),
+		newMockSessionParam(sessions[0], nil, false, nil, nil, nil),
+		newMockSessionParam(sessions[1], nil, false, nil, nil, nil),
 	}, -1, -1)
 
 	c.Check(params.ComputeCallerNonces(), IsNil)
-	c.Check(sessions[0].data.NonceCaller, DeepEquals, Nonce(internal_testutil.DecodeHexString(c, "1111111122222222333333334444444455555555")))
-	c.Check(sessions[1].data.NonceCaller, DeepEquals, Nonce(internal_testutil.DecodeHexString(c, "66666666777777778888888899999999aaaaaaaabbbbbbbbccccccccdddddddd")))
+	c.Check(params.Sessions[0].NonceCaller, DeepEquals, Nonce(internal_testutil.DecodeHexString(c, "1111111122222222333333334444444455555555")))
+	c.Check(params.Sessions[1].NonceCaller, DeepEquals, Nonce(internal_testutil.DecodeHexString(c, "66666666777777778888888899999999aaaaaaaabbbbbbbbccccccccdddddddd")))
 }
 
 type testSessionParamsBuildCommandAuthAreaData struct {
@@ -1189,7 +1178,7 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 		if i < len(data.resources) {
 			r = data.resources[i]
 		}
-		sessions = append(sessions, newMockSessionParam(s, r, false, nil, nil))
+		sessions = append(sessions, newMockSessionParam(s, r, false, nil, nil, nil))
 	}
 
 	params := newMockSessionParams(0, sessions, data.encryptSessionIndex, data.decryptSessionIndex)
@@ -1209,11 +1198,11 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 	c.Check(params.CommandCode, Equals, data.commandCode)
 
 	// check caller nonces
-	for i, s := range data.sessions {
+	for i, s := range sessions {
 		if i >= len(data.expectedCallerNonces) {
 			break
 		}
-		c.Check(s.(SessionContextInternal).Data().NonceCaller, DeepEquals, data.expectedCallerNonces[i])
+		c.Check(s.NonceCaller, DeepEquals, data.expectedCallerNonces[i])
 	}
 
 	recovered := make([]byte, len(cpBytes))
@@ -1221,20 +1210,20 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 
 	// check command encryption
 	if data.decryptSessionIndex >= 0 {
-		sessionData := data.sessions[data.decryptSessionIndex].(SessionContextInternal).Data()
 		param := sessions[data.decryptSessionIndex]
+		session := param.Session
 
 		n := int(binary.BigEndian.Uint16(recovered))
 
-		switch sessionData.Symmetric.Algorithm {
+		switch session.Symmetric().Algorithm {
 		case SymAlgorithmAES:
-			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), sessionData.NonceCaller, sessionData.NonceTPM, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
-			offset := (sessionData.Symmetric.KeyBits.Sym + 7) / 8
+			k := internal_crypt.KDFa(session.HashAlg().GetHash(), param.ComputeSessionValue(), []byte(CFBKey), param.NonceCaller, session.NonceTPM(), int(session.Symmetric().KeyBits.Sym)+(aes.BlockSize*8))
+			offset := (session.Symmetric().KeyBits.Sym + 7) / 8
 			symKey := k[0:offset]
 			iv := k[offset:]
-			c.Check(internal_crypt.SymmetricDecrypt(sessionData.Symmetric.Algorithm, symKey, iv, recovered[2:n+2]), IsNil)
+			c.Check(internal_crypt.SymmetricDecrypt(session.Symmetric().Algorithm, symKey, iv, recovered[2:n+2]), IsNil)
 		case SymAlgorithmXOR:
-			internal_crypt.XORObfuscation(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), sessionData.NonceCaller, sessionData.NonceTPM, recovered[2:n+2])
+			internal_crypt.XORObfuscation(session.HashAlg().GetHash(), param.ComputeSessionValue(), param.NonceCaller, session.NonceTPM(), recovered[2:n+2])
 		}
 	}
 	c.Check(recovered, DeepEquals, origCpBytes)
@@ -1247,8 +1236,8 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 	c.Assert(authArea, HasLen, len(sessions))
 	for i, a := range authArea {
 		c.Check(a.SessionHandle, Equals, data.sessions[i].Handle())
-		c.Check(a.Nonce, DeepEquals, data.sessions[i].(SessionContextInternal).Data().NonceCaller)
-		c.Check(a.SessionAttributes, Equals, data.sessions[i].(SessionContextInternal).Attrs())
+		c.Check(a.Nonce, DeepEquals, sessions[i].NonceCaller)
+		c.Check(a.SessionAttributes, Equals, data.sessions[i].Attrs())
 
 		var expectedHmac Auth
 		if sessions[i].IsPassword() {
@@ -1262,7 +1251,7 @@ func (s *authSuite) testSessionParamsBuildCommandAuthArea(c *C, data *testSessio
 
 func (s *authSuite) TestSessionParamsBuildCommandAuthAreaPW(c *C) {
 	s.testSessionParamsBuildCommandAuthArea(c, &testSessionParamsBuildCommandAuthAreaData{
-		sessions:            []SessionContext{&mockSessionContext{handle: HandlePW, data: new(SessionContextData), attrs: AttrContinueSession}},
+		sessions:            []SessionContext{&mockSessionContext{handle: HandlePW, data: &SessionContextData{HashAlg: HashAlgorithmNull}, attrs: AttrContinueSession}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
 		commandCode:         CommandUnseal,
 		encryptSessionIndex: -1,
@@ -1277,10 +1266,9 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaHMAC(c *C) {
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: make([]byte, 32),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")},
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")},
 				attrs: AttrContinueSession}},
 		resources:            []ResourceContext{new(mockResourceContext)},
 		commandCode:          CommandUnseal,
@@ -1297,10 +1285,9 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaWithDecryptSession(c *C
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: make([]byte, 32),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 256},
@@ -1324,19 +1311,17 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaWithExtraDecryptSession
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: make([]byte, 32),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
 				},
 				attrs: AttrContinueSession},
 			&mockSessionContext{
 				handle: 0x02000001,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
-					NonceCaller: make([]byte, 32),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"),
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 256},
@@ -1363,10 +1348,9 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaWithEncryptSession(c *C
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: make([]byte, 32),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")},
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")},
 				attrs: AttrContinueSession | AttrResponseEncrypt}},
 		resources:            []ResourceContext{new(mockResourceContext)},
 		commandCode:          CommandUnseal,
@@ -1383,18 +1367,16 @@ func (s *authSuite) TestSessionParamsBuildCommandAuthAreaWithExtraEncryptSession
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: make([]byte, 32),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")},
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")},
 				attrs: AttrContinueSession},
 			&mockSessionContext{
 				handle: 0x02000001,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
-					NonceCaller: make([]byte, 32),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"),
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 256},
@@ -1415,9 +1397,9 @@ func (s *authSuite) TestSessionParamsInvalidateSessionContexts(c *C) {
 		&mockSessionContext{handle: 0x03000001},
 		&mockSessionContext{handle: 0x02000002}}
 	params := newMockSessionParams(0, []*SessionParam{
-		newMockSessionParam(sessions[0], nil, false, nil, nil),
-		newMockSessionParam(sessions[1], nil, false, nil, nil),
-		newMockSessionParam(sessions[2], nil, false, nil, nil),
+		newMockSessionParam(sessions[0], nil, false, nil, nil, nil),
+		newMockSessionParam(sessions[1], nil, false, nil, nil, nil),
+		newMockSessionParam(sessions[2], nil, false, nil, nil, nil),
 	}, -1, -1)
 
 	params.InvalidateSessionContexts([]AuthResponse{
@@ -1432,6 +1414,7 @@ func (s *authSuite) TestSessionParamsInvalidateSessionContexts(c *C) {
 type testSessionParamsProcessResponseAuthAreaData struct {
 	sessions     []SessionContext
 	resources    []ResourceContext
+	callerNonces []Nonce
 	encryptNonce Nonce
 
 	commandCode         CommandCode
@@ -1448,11 +1431,15 @@ func (s *authSuite) testSessionParamsProcessResponseAuthArea(c *C, data *testSes
 		if i < len(data.resources) {
 			r = data.resources[i]
 		}
+		var nonceCaller Nonce
+		if i < len(data.callerNonces) {
+			nonceCaller = data.callerNonces[i]
+		}
 		var encryptNonce Nonce
 		if i == 0 {
 			encryptNonce = data.encryptNonce
 		}
-		sessions = append(sessions, newMockSessionParam(s, r, false, nil, encryptNonce))
+		sessions = append(sessions, newMockSessionParam(s, r, false, nonceCaller, nil, encryptNonce))
 	}
 
 	params := newMockSessionParams(data.commandCode, sessions, data.encryptSessionIndex, -1)
@@ -1461,21 +1448,21 @@ func (s *authSuite) testSessionParamsProcessResponseAuthArea(c *C, data *testSes
 	copy(rpBytes, data.rpBytes)
 
 	if data.encryptSessionIndex >= 0 {
-		sessionData := data.sessions[data.encryptSessionIndex].(SessionContextInternal).Data()
 		param := sessions[data.encryptSessionIndex]
+		session := param.Session
 		auth := data.responseAuth[data.encryptSessionIndex]
 
 		n := int(binary.BigEndian.Uint16(rpBytes))
 
-		switch sessionData.Symmetric.Algorithm {
+		switch session.Symmetric().Algorithm {
 		case SymAlgorithmAES:
-			k := internal_crypt.KDFa(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), []byte(CFBKey), auth.Nonce, sessionData.NonceCaller, int(sessionData.Symmetric.KeyBits.Sym)+(aes.BlockSize*8))
-			offset := (sessionData.Symmetric.KeyBits.Sym + 7) / 8
+			k := internal_crypt.KDFa(session.HashAlg().GetHash(), param.ComputeSessionValue(), []byte(CFBKey), auth.Nonce, param.NonceCaller, int(session.Symmetric().KeyBits.Sym)+(aes.BlockSize*8))
+			offset := (session.Symmetric().KeyBits.Sym + 7) / 8
 			symKey := k[0:offset]
 			iv := k[offset:]
-			c.Check(internal_crypt.SymmetricEncrypt(sessionData.Symmetric.Algorithm, symKey, iv, rpBytes[2:n+2]), IsNil)
+			c.Check(internal_crypt.SymmetricEncrypt(session.Symmetric().Algorithm, symKey, iv, rpBytes[2:n+2]), IsNil)
 		case SymAlgorithmXOR:
-			internal_crypt.XORObfuscation(sessionData.HashAlg.GetHash(), param.ComputeSessionValue(), auth.Nonce, sessionData.NonceCaller, rpBytes[2:n+2])
+			internal_crypt.XORObfuscation(session.HashAlg().GetHash(), param.ComputeSessionValue(), auth.Nonce, param.NonceCaller, rpBytes[2:n+2])
 		}
 	}
 
@@ -1485,12 +1472,11 @@ func (s *authSuite) testSessionParamsProcessResponseAuthArea(c *C, data *testSes
 
 	// check sessions
 	for i, s := range data.sessions {
-		sessionData := s.(SessionContextInternal).Data()
 		auth := data.responseAuth[i]
 
-		c.Check(sessionData.NonceTPM, DeepEquals, auth.Nonce)
-		c.Check(sessionData.IsAudit, Equals, auth.SessionAttributes&AttrAudit > 0)
-		c.Check(sessionData.IsExclusive, Equals, auth.SessionAttributes&AttrAuditExclusive > 0)
+		c.Check(s.NonceTPM(), DeepEquals, auth.Nonce)
+		c.Check(s.IsAudit(), Equals, auth.SessionAttributes&AttrAudit > 0)
+		c.Check(s.IsExclusive(), Equals, auth.SessionAttributes&AttrAuditExclusive > 0)
 
 		if auth.SessionAttributes&AttrContinueSession == 0 {
 			c.Check(s.Handle(), Equals, HandleUnassigned)
@@ -1519,10 +1505,10 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaHMAC(c *C) {
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")}}},
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
+		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		commandCode:         CommandUnseal,
 		encryptSessionIndex: -1,
 		responseAuth: []AuthResponse{
@@ -1540,10 +1526,10 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaInvalidHMAC(c *C) {
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")}}},
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
+		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		commandCode:         CommandUnseal,
 		encryptSessionIndex: -1,
 		responseAuth: []AuthResponse{
@@ -1568,10 +1554,10 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaFlushSession(c *C) {
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")}}},
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
+		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		commandCode:         CommandUnseal,
 		encryptSessionIndex: -1,
 		responseAuth: []AuthResponse{
@@ -1588,14 +1574,14 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaWithDecryptSession(c
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"),
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 256},
 						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
+		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		commandCode:         CommandUnseal,
 		encryptSessionIndex: 0,
 		responseAuth: []AuthResponse{
@@ -1613,21 +1599,22 @@ func (s *authSuite) TestSessionParamsProcessResponseAuthAreaWithExtraDecryptSess
 			&mockSessionContext{
 				handle: 0x02000000,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceCaller: internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")}},
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c")}},
 			&mockSessionContext{
 				handle: 0x02000001,
 				data: &SessionContextData{
-					HashAlg:     HashAlgorithmSHA256,
-					SessionKey:  internal_testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
-					NonceCaller: internal_testutil.DecodeHexString(c, "1121cfccd5913f0a63fec40a6ffd44ea64f9dc135c66634ba001d10bcf4302a2"),
-					NonceTPM:    internal_testutil.DecodeHexString(c, "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"),
+					HashAlg:    HashAlgorithmSHA256,
+					SessionKey: internal_testutil.DecodeHexString(c, "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730"),
+					NonceTPM:   internal_testutil.DecodeHexString(c, "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"),
 					Symmetric: &SymDef{
 						Algorithm: SymAlgorithmAES,
 						KeyBits:   &SymKeyBitsU{Sym: 256},
 						Mode:      &SymModeU{Sym: SymModeCFB}}}}},
-		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
+		resources: []ResourceContext{&mockResourceContext{authValue: []byte("foo")}},
+		callerNonces: []Nonce{
+			internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"),
+			internal_testutil.DecodeHexString(c, "1121cfccd5913f0a63fec40a6ffd44ea64f9dc135c66634ba001d10bcf4302a2")},
 		encryptNonce:        internal_testutil.DecodeHexString(c, "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"),
 		commandCode:         CommandUnseal,
 		encryptSessionIndex: 1,

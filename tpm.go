@@ -95,7 +95,7 @@ type rspContext struct {
 
 type execContext struct {
 	dispatcher           execContextDispatcher
-	lastExclusiveSession sessionContextInternal
+	lastExclusiveSession SessionContext
 	pendingResponse      *rspContext
 }
 
@@ -111,10 +111,7 @@ func (e *execContext) processResponseAuth(r *rspContext) (err error) {
 	e.pendingResponse = nil
 
 	if isSessionAllowed(r.CommandCode) && e.lastExclusiveSession != nil {
-		data := e.lastExclusiveSession.Data()
-		if data != nil {
-			data.IsExclusive = false
-		}
+		e.lastExclusiveSession.Update(e.lastExclusiveSession.NonceTPM(), e.lastExclusiveSession.IsAudit(), false)
 		e.lastExclusiveSession = nil
 	}
 

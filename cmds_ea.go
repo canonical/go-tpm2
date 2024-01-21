@@ -465,11 +465,6 @@ func (t *TPMContext) PolicyAuthorize(policySession SessionContext, approvedPolic
 // When using policySession in a subsequent authorization, the authorization value of the entity
 // being authorized must be provided by calling [ResourceContext].SetAuthValue.
 func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...SessionContext) error {
-	sessionData := policySession.(sessionContextInternal).Data()
-	if sessionData == nil {
-		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
-	}
-
 	if err := t.StartCommand(CommandPolicyAuthValue).
 		AddHandles(UseHandleContext(policySession)).
 		AddExtraSessions(sessions...).
@@ -477,7 +472,7 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 		return err
 	}
 
-	sessionData.PolicyHMACType = policyHMACTypeAuth
+	policySession.SetNeedsAuthValue()
 	return nil
 }
 
@@ -492,11 +487,6 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 // When using policySession in a subsequent authorization, the authorization value of the entity
 // being authorized must be provided by calling [ResourceContext].SetAuthValue.
 func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...SessionContext) error {
-	sessionData := policySession.(sessionContextInternal).Data()
-	if sessionData == nil {
-		return makeInvalidArgError("policySession", "incomplete session can only be used in TPMContext.FlushContext")
-	}
-
 	if err := t.StartCommand(CommandPolicyPassword).
 		AddHandles(UseHandleContext(policySession)).
 		AddExtraSessions(sessions...).
@@ -504,7 +494,7 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 		return err
 	}
 
-	sessionData.PolicyHMACType = policyHMACTypePassword
+	policySession.SetNeedsPassword()
 	return nil
 }
 

@@ -51,8 +51,8 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 	context.Blob = blob
 
 	switch c := saveContext.(type) {
-	case sessionContextInternal:
-		c.Saved()
+	case SessionContext:
+		c.SetSaved()
 	}
 
 	return context, nil
@@ -141,9 +141,6 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
-		}
-		if sc, isSession := hc.(sessionContextInternal); isSession && sc.Data() != nil {
-			sc.Data().IsExclusive = false
 		}
 	default:
 		panic("not reached")

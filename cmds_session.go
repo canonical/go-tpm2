@@ -164,7 +164,6 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 		PolicyHMACType: policyHMACTypeNoAuth,
 		IsBound:        isBound,
 		BoundEntity:    boundEntity,
-		NonceCaller:    nonceCaller,
 		NonceTPM:       nonceTPM,
 		Symmetric:      symmetric}
 

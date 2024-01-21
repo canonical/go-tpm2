@@ -132,20 +132,22 @@ func TestStartAuthSession(t *testing.T) {
 					t.Errorf("StartAuthSession returned a handle of the wrong type")
 				}
 
-				scData := sc.(SessionContextInternal).Data()
-				if scData.HashAlg != data.alg {
-					t.Errorf("The returned session context has the wrong algorithm (got %v)", scData.HashAlg)
+				if !sc.Available() {
+					t.Errorf("The returned session is unavailable")
+				}
+				if sc.HashAlg() != data.alg {
+					t.Errorf("The returned session context has the wrong algorithm (got %v)", sc.HashAlg())
 				}
 				if data.bind == nil || data.sessionType != SessionTypeHMAC {
-					if scData.IsBound {
+					if sc.IsBound() {
 						t.Errorf("The returned session context should not be bound")
 					}
 				} else {
-					if !scData.IsBound {
+					if !sc.IsBound() {
 						t.Errorf("The returned session context should be bound")
 					}
 					boundEntity := ComputeBindName(data.bind.Name(), data.bindAuth)
-					if !bytes.Equal(boundEntity, scData.BoundEntity) {
+					if !bytes.Equal(boundEntity, sc.BoundEntity()) {
 						t.Errorf("The returned session context has the wrong bound resource")
 					}
 				}
@@ -154,14 +156,11 @@ func TestStartAuthSession(t *testing.T) {
 				if data.bind == nil && data.tpmKey == nil {
 					sessionKeySize = 0
 				}
-				if len(scData.SessionKey) != sessionKeySize {
-					t.Errorf("The returned session key has the wrong length (got %d)", len(scData.SessionKey))
+				if len(sc.SessionKey()) != sessionKeySize {
+					t.Errorf("The returned session key has the wrong length (got %d)", len(sc.SessionKey()))
 				}
-				if len(scData.NonceCaller) != int(digestSize) {
-					t.Errorf("The returned caller nonce has the wrong length (got %d)", len(scData.NonceCaller))
-				}
-				if len(scData.NonceTPM) != int(digestSize) {
-					t.Errorf("The returned TPM nonce has the wrong length (got %d)", len(scData.NonceTPM))
+				if len(sc.NonceTPM()) != int(digestSize) {
+					t.Errorf("The returned TPM nonce has the wrong length (got %d)", len(sc.NonceTPM()))
 				}
 			} else {
 				if err == nil {

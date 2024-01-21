@@ -24,7 +24,6 @@ type ResourceContextInternal = resourceContextInternal
 type RspContext = rspContext
 type SessionContextData = sessionContextData
 type SessionContextImpl = sessionContext // We already have a SessionContext interface
-type SessionContextInternal = sessionContextInternal
 type SessionParam = sessionParam
 type SessionParams = sessionParams
 
