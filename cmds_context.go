@@ -164,9 +164,7 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 		return err
 	}
 
-	if hc, ok := flushContext.(handleContextInternal); ok {
-		hc.Dispose()
-	}
+	flushContext.Dispose()
 	return nil
 }
 
@@ -232,9 +230,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 
 	switch {
 	case object.Handle() == persistentHandle:
-		if hc, ok := object.(handleContextInternal); ok {
-			hc.Dispose()
-		}
+		object.Dispose()
 		return nil, nil
 	case public != nil:
 		return newObjectContext(persistentHandle, name, public), nil

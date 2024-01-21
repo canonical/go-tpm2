@@ -20,7 +20,6 @@ const (
 type CmdContext = cmdContext
 type NvIndexContextImpl = nvIndexContext
 type PolicyHMACType = policyHMACType
-type ResourceContextInternal = resourceContextInternal
 type RspContext = rspContext
 type SessionContextData = sessionContextData
 type SessionContextImpl = sessionContext // We already have a SessionContext interface

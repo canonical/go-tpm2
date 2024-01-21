@@ -265,9 +265,7 @@ func (p *sessionParams) InvalidateSessionContexts(authResponses []AuthResponse) 
 		if resp.SessionAttributes&AttrContinueSession != 0 {
 			continue
 		}
-		if sc, ok := session.(sessionContextInternal); ok {
-			sc.Dispose()
-		}
+		session.Dispose()
 	}
 }
 

@@ -22,29 +22,21 @@ import (
 // invalidated when used in a command that results in the entity being flushed or evicted from the
 // TPM. Once invalidated, they can no longer be used.
 type HandleContext interface {
-	// Handle returns the handle of the corresponding entity on the TPM. If the HandleContext has been
-	// invalidated then this will return HandleUnassigned.
+	// Handle returns the handle of the corresponding entity on the TPM. If Dispose has been called
+	// then this will return HandleUnassigned.
 	Handle() Handle
-	Name() Name                        // The name of the entity
+	Name() Name                        // The name of the entity. This will be empty if there isn't one or Dispose has been called.
 	SerializeToBytes() []byte          // Return a byte slice containing the serialized form of this HandleContext
 	SerializeToWriter(io.Writer) error // Write the serialized form of this HandleContext to the supplied io.Writer
-}
-
-type handleContextInternalMixin interface {
-	Dispose()
-}
-
-type handleContextInternal interface {
-	HandleContext
-	handleContextInternalMixin
+	Dispose()                          // Called when the corresponding resource has been flushed or evicted from the TPM
 }
 
 // SessionContext is a HandleContext that corresponds to a session on the TPM.
 type SessionContext interface {
 	HandleContext
-	HashAlg() HashAlgorithmId // The session's digest algorithm. Will be HashAlgorithmNul if the context corresponds to a saved session.
+	Available() bool          // Whether this context represents a session that is available. Will be false for flushed or saved sessions.
+	HashAlg() HashAlgorithmId // The session's digest algorithm. Will be HashAlgorithmNull if Available is false.
 	NonceTPM() Nonce          // The most recent TPM nonce value. Will be empty if Available is false.
-	Available() bool          // Whether this context represents a session that is available. Will be false for flushed or saved session.
 	IsAudit() bool            // Whether the session has been used for audit
 	IsExclusive() bool        // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
 
@@ -75,11 +67,6 @@ type SessionContext interface {
 	SetSaved() // Marks the session as being saved. Available should return false after this.
 }
 
-type sessionContextInternal interface {
-	SessionContext
-	handleContextInternalMixin
-}
-
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
 type ResourceContext interface {
 	HandleContext
@@ -91,11 +78,6 @@ type ResourceContext interface {
 	// knowledge of the authorization value is required. Functions that create resources on the TPM
 	// and return a ResourceContext will set this automatically, else it will need to be set manually.
 	SetAuthValue([]byte)
-}
-
-type resourceContextInternal interface {
-	ResourceContext
-	handleContextInternalMixin
 }
 
 // ObjectContext is a ResourceContext that corresponds to an object on the TPM.
@@ -169,7 +151,7 @@ type handleContext struct {
 	Data *handleContextU
 }
 
-var _ handleContextInternal = (*handleContext)(nil)
+var _ HandleContext = (*handleContext)(nil)
 
 func (h *handleContext) Handle() Handle {
 	return h.H
@@ -198,7 +180,7 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 
 func (h *handleContext) Dispose() {
 	h.H = HandleUnassigned
-	h.N = mu.MustMarshalToBytes(h.H)
+	h.N = nil
 	h.Data = new(handleContextU)
 }
 
@@ -268,7 +250,7 @@ func newLimitedResourceContext(handle Handle, name Name) *resourceContext {
 			Data: new(handleContextU)}}
 }
 
-var _ resourceContextInternal = (*resourceContext)(nil)
+var _ ResourceContext = (*resourceContext)(nil)
 
 func (r *resourceContext) SetAuthValue(authValue []byte) {
 	r.authValue = authValue
@@ -304,7 +286,7 @@ func newPermanentContext(handle Handle) *permanentContext {
 				N: name}}}
 }
 
-var _ resourceContextInternal = (*permanentContext)(nil)
+var _ ResourceContext = (*permanentContext)(nil)
 
 func (r *permanentContext) Dispose() {}
 
@@ -438,6 +420,10 @@ func newSessionContext(handle Handle, data *sessionContextData) *sessionContext 
 
 var _ SessionContext = (*sessionContext)(nil)
 
+func (r *sessionContext) Available() bool {
+	return r.Data() != nil
+}
+
 func (r *sessionContext) HashAlg() HashAlgorithmId {
 	d := r.Data()
 	if d == nil {
@@ -452,10 +438,6 @@ func (r *sessionContext) NonceTPM() Nonce {
 		return nil
 	}
 	return d.NonceTPM
-}
-
-func (r *sessionContext) Available() bool {
-	return r.Data() != nil
 }
 
 func (r *sessionContext) IsAudit() bool {
