@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 
 	"github.com/canonical/go-tpm2/mu"
@@ -98,7 +97,7 @@ func ReadCommandPacket(r io.Reader, numHandles int) (command CommandCode, handle
 		return 0, nil, nil, nil, fmt.Errorf("invalid tag: %v", header.Tag)
 	}
 
-	parameters, err = ioutil.ReadAll(lr)
+	parameters, err = io.ReadAll(lr)
 	if err != nil {
 		return 0, nil, nil, nil, fmt.Errorf("cannot read parameters: %w", err)
 	}
@@ -234,7 +233,7 @@ func ReadResponsePacket(r io.Reader, handle *Handle) (rc ResponseCode, parameter
 			authArea = append(authArea, auth)
 		}
 	case TagNoSessions:
-		parameters, err = ioutil.ReadAll(lr)
+		parameters, err = io.ReadAll(lr)
 		if err != nil || lr.N > 0 {
 			if err == nil {
 				err = io.ErrUnexpectedEOF

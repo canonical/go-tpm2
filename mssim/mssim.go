@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -69,8 +70,8 @@ func (d *Device) Port() uint {
 }
 
 func (d *Device) openInternal() (*Transport, error) {
-	tpmAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port())
-	platformAddress := fmt.Sprintf("%s:%d", d.Host(), d.Port()+1)
+	tpmAddress := net.JoinHostPort(d.Host(), strconv.FormatUint(uint64(d.Port()), 10))
+	platformAddress := net.JoinHostPort(d.Host(), strconv.FormatUint(uint64(d.Port())+1, 10))
 
 	internal := &internalTransport{
 		locality: 3,

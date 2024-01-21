@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"os/exec"
@@ -422,7 +421,7 @@ func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 		if err := os.MkdirAll(workDirRoot, 0755); err != nil {
 			return fmt.Errorf("cannot create workdir root: %w", err)
 		}
-		workDir, err := ioutil.TempDir(workDirRoot, workDirPrefix)
+		workDir, err := os.MkdirTemp(workDirRoot, workDirPrefix)
 		if err != nil {
 			return fmt.Errorf("cannot create workdir for simulator: %w", err)
 		}

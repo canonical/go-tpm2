@@ -105,15 +105,18 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	var encryptedSalt EncryptedSecret
 	tpmKeyHandle := HandleNull
 	if tpmKey != nil {
-		object, isObject := tpmKey.(objectContextInternal)
+		object, isObject := tpmKey.(ObjectContext)
 		if !isObject {
 			return nil, makeInvalidArgError("tpmKey", "resource context is not an object")
+		}
+		if object.Public() == nil {
+			return nil, makeInvalidArgError("tpmKey", "no public area")
 		}
 
 		tpmKeyHandle = tpmKey.Handle()
 
 		var err error
-		encryptedSalt, salt, err = cryptSecretEncrypt(object.GetPublic(), []byte(SecretKey))
+		encryptedSalt, salt, err = cryptSecretEncrypt(object.Public(), []byte(SecretKey))
 		if err != nil {
 			return nil, fmt.Errorf("cannot compute encrypted salt: %v", err)
 		}
@@ -123,7 +126,7 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	bindHandle := HandleNull
 	if bind != nil {
 		bindHandle = bind.Handle()
-		authValue = bind.(resourceContextInternal).GetAuthValue()
+		authValue = trimAuthValue(bind.AuthValue())
 	}
 
 	var isBound bool = false
@@ -158,11 +161,9 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 
 	data := &sessionContextData{
 		HashAlg:        authHash,
-		SessionType:    sessionType,
 		PolicyHMACType: policyHMACTypeNoAuth,
 		IsBound:        isBound,
 		BoundEntity:    boundEntity,
-		NonceCaller:    nonceCaller,
 		NonceTPM:       nonceTPM,
 		Symmetric:      symmetric}
 

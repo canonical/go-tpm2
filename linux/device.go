@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -284,7 +283,7 @@ func (d *RMDevice) RawDevice() *RawDevice {
 func tpmDeviceVersion(path string) (TPMMajorVersion, error) {
 	versionPath := filepath.Join(path, "tpm_version_major")
 
-	versionBytes, err := ioutil.ReadFile(versionPath)
+	versionBytes, err := os.ReadFile(versionPath)
 	switch {
 	case os.IsNotExist(err):
 		// Handle older kernels that didn't have this attribute file. There were no other
@@ -328,7 +327,7 @@ func probeTpmDevices() (out []*RawDevice, err error) {
 	}
 	defer f.Close()
 
-	entries, err := f.Readdir(0)
+	entries, err := f.ReadDir(0)
 	if err != nil {
 		return nil, err
 	}

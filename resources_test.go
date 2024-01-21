@@ -37,15 +37,17 @@ func (s *resourcesSuite) testNewObjectResourceContextFromTPM(c *C, data *testNew
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, data.handle)
 	c.Check(rc.Name(), DeepEquals, data.name)
-	c.Assert(rc, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(rc.(*ObjectContext).GetPublic(), DeepEquals, data.public)
+
+	var sample ObjectContext
+	c.Assert(rc, Implements, &sample)
+	c.Check(rc.(ObjectContext).Public(), DeepEquals, data.public)
 }
 
 func (s *resourcesSuite) TestNewResourceContextTransient(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	s.testNewObjectResourceContextFromTPM(c, &testNewObjectResourceContextFromTPMData{
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -54,7 +56,7 @@ func (s *resourcesSuite) TestNewResourceContextPersistent(c *C) {
 	rc = s.EvictControl(c, HandleOwner, rc, s.NextAvailableHandle(c, 0x81000008))
 	s.testNewObjectResourceContextFromTPM(c, &testNewObjectResourceContextFromTPMData{
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -71,9 +73,12 @@ func (s *resourcesSuite) TestNewResourceContextNV(c *C) {
 	c.Assert(rc, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Assert(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
 
-	c.Check(rc2.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, &pub)
+	var sample NVIndexContext
+	c.Assert(rc, Implements, &sample)
+
+	c.Assert(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc2.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, &pub)
 }
 
 func (s *resourcesSuite) testNewResourceContextUnavailable(c *C, handle Handle) {
@@ -152,8 +157,10 @@ func (s *resourcesSuite) testNewObjectHandleContextFromBytes(c *C, data *testNew
 
 	c.Check(context.Handle(), Equals, data.handle)
 	c.Check(context.Name(), DeepEquals, data.name)
-	c.Assert(context, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(context.(*ObjectContext).GetPublic(), DeepEquals, data.public)
+
+	var sample ObjectContext
+	c.Assert(context, Implements, &sample)
+	c.Check(context.(ObjectContext).Public(), DeepEquals, data.public)
 }
 
 func (s *resourcesSuite) TestNewHandleContextFromBytesTransient(c *C) {
@@ -161,7 +168,7 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesTransient(c *C) {
 	s.testNewObjectHandleContextFromBytes(c, &testNewObjectHandleContextFromBytesData{
 		b:      rc.SerializeToBytes(),
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -171,7 +178,7 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesPersistent(c *C) {
 	s.testNewObjectHandleContextFromBytes(c, &testNewObjectHandleContextFromBytesData{
 		b:      rc.SerializeToBytes(),
 		handle: rc.Handle(),
-		public: rc.(*ObjectContext).GetPublic(),
+		public: rc.(ObjectContext).Public(),
 		name:   rc.Name()})
 }
 
@@ -191,9 +198,12 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesNV(c *C) {
 
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Assert(rc2, internal_testutil.ConvertibleTo, &NvIndexContext{})
 
-	c.Check(rc2.(*NvIndexContext).GetPublic(), testutil.TPMValueDeepEquals, &pub)
+	var sample NVIndexContext
+	c.Assert(rc2, Implements, &sample)
+
+	c.Assert(rc2, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc2.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, &pub)
 }
 
 func (s *resourcesSuite) TestNewHandleContextFromBytesSession(c *C) {
@@ -207,13 +217,18 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesSession(c *C) {
 
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
+
+	var sample SessionContext
+	c.Assert(session2, Implements, &sample)
+	c.Check(session2.(SessionContext).Available(), internal_testutil.IsTrue)
+
 	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 
-	c.Check(session2.(SessionContextInternal).Data(), testutil.TPMValueDeepEquals, session.(SessionContextInternal).Data())
+	c.Check(session2.(*SessionContextImpl).Data(), testutil.TPMValueDeepEquals, session.(*SessionContextImpl).Data())
 
 	_, err = s.TPM.ContextSave(session)
 	c.Check(err, IsNil)
-	c.Check(session.(SessionContextInternal).Data(), IsNil)
+	c.Check(session.(*SessionContextImpl).Data(), IsNil)
 
 	b = session.SerializeToBytes()
 
@@ -224,9 +239,11 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesSession(c *C) {
 
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
+	c.Assert(session2, Implements, &sample)
+	c.Check(session2.(SessionContext).Available(), internal_testutil.IsFalse)
 	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 
-	c.Check(session2.(SessionContextInternal).Data(), IsNil)
+	c.Check(session2.(*SessionContextImpl).Data(), IsNil)
 }
 
 type testNewResourceContextWithSessionData struct {
@@ -281,8 +298,12 @@ func (s *resourcesSuite) TestNewNVIndexResourceContextFromPub(c *C) {
 	name := pub.Name()
 
 	c.Check(rc.Name(), DeepEquals, name)
-	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
-	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+
+	var sample NVIndexContext
+	c.Assert(rc, Implements, &sample)
+
+	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc.(*NvIndexContextImpl).Public(), DeepEquals, &pub)
 }
 
 func (s *resourcesSuite) TestNewNVIndexResourceContext(c *C) {
@@ -298,8 +319,12 @@ func (s *resourcesSuite) TestNewNVIndexResourceContext(c *C) {
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, pub.Index)
 	c.Check(rc.Name(), DeepEquals, name)
-	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContext{})
-	c.Check(rc.(*NvIndexContext).GetPublic(), DeepEquals, &pub)
+
+	var sample NVIndexContext
+	c.Assert(rc, Implements, &sample)
+
+	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
+	c.Check(rc.(*NvIndexContextImpl).Public(), DeepEquals, &pub)
 }
 
 func (s *resourcesSuite) TestNewObjectResourceContextFromPub(c *C) {
@@ -313,8 +338,10 @@ func (s *resourcesSuite) TestNewObjectResourceContextFromPub(c *C) {
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Check(rc2, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
+
+	var sample ObjectContext
+	c.Assert(rc2, Implements, &sample)
+	c.Check(rc2.(ObjectContext).Public(), DeepEquals, pub)
 }
 
 func (s *resourcesSuite) TestNewObjectResourceContext(c *C) {
@@ -327,15 +354,17 @@ func (s *resourcesSuite) TestNewObjectResourceContext(c *C) {
 	c.Assert(rc2, NotNil)
 	c.Check(rc2.Handle(), Equals, rc.Handle())
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
-	c.Check(rc2, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(rc2.(*ObjectContext).GetPublic(), DeepEquals, pub)
+
+	var sample ObjectContext
+	c.Assert(rc2, Implements, &sample)
+	c.Check(rc2.(ObjectContext).Public(), DeepEquals, pub)
 }
 
 func (s *resourcesSuite) SessionContextImplSetAttrs(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 
 	session.SetAttrs(AttrContinueSession)
-	c.Check(session.(SessionContextInternal).Attrs(), Equals, AttrContinueSession)
+	c.Check(session.Attrs(), Equals, AttrContinueSession)
 }
 
 func (s *resourcesSuite) SessionContextImplWithAttrs(c *C) {
@@ -344,8 +373,8 @@ func (s *resourcesSuite) SessionContextImplWithAttrs(c *C) {
 	session2 := session.WithAttrs(AttrAudit)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(SessionContextInternal).Attrs(), Equals, SessionAttributes(0))
-	c.Check(session2.(SessionContextInternal).Attrs(), Equals, AttrAudit)
+	c.Check(session.Attrs(), Equals, SessionAttributes(0))
+	c.Check(session2.Attrs(), Equals, AttrAudit)
 }
 
 func (s *resourcesSuite) SessionContextImplIncludeAttrs(c *C) {
@@ -355,8 +384,8 @@ func (s *resourcesSuite) SessionContextImplIncludeAttrs(c *C) {
 	session2 := session.IncludeAttrs(AttrResponseEncrypt)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(SessionContextInternal).Attrs(), Equals, AttrContinueSession)
-	c.Check(session2.(SessionContextInternal).Attrs(), Equals, AttrContinueSession|AttrResponseEncrypt)
+	c.Check(session.Attrs(), Equals, AttrContinueSession)
+	c.Check(session2.Attrs(), Equals, AttrContinueSession|AttrResponseEncrypt)
 }
 
 func (s *resourcesSuite) SessionContextImplExcludeAttrs(c *C) {
@@ -366,18 +395,18 @@ func (s *resourcesSuite) SessionContextImplExcludeAttrs(c *C) {
 	session2 := session.ExcludeAttrs(AttrAudit)
 	c.Check(session2.Handle(), Equals, session.Handle())
 	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Check(session.(SessionContextInternal).Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
-	c.Check(session2.(SessionContextInternal).Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
+	c.Check(session.Attrs(), Equals, AttrAudit|AttrContinueSession|AttrCommandEncrypt)
+	c.Check(session2.Attrs(), Equals, AttrContinueSession|AttrCommandEncrypt)
 }
 
 func (s *resourcesSuite) TestResourceContextGetAuth(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	rc.SetAuthValue([]byte("foo"))
-	c.Check(rc.(ResourceContextInternal).GetAuthValue(), DeepEquals, []byte("foo"))
+	c.Check(rc.AuthValue(), DeepEquals, []byte("foo"))
 }
 
 func (s *resourcesSuite) TestResourceContextGetAuthWithTrailingZeroes(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	rc.SetAuthValue([]byte("foo\x00bar\x00\x00"))
-	c.Check(rc.(ResourceContextInternal).GetAuthValue(), DeepEquals, []byte("foo\x00bar"))
+	c.Check(rc.AuthValue(), DeepEquals, []byte("foo\x00bar"))
 }

@@ -237,8 +237,10 @@ func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
 
 	c.Check(object.Handle(), Equals, s.LastCommand(c).RspHandle)
 	c.Check(object.Name(), DeepEquals, expectedName)
-	c.Assert(object, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(object.(*ObjectContext).GetPublic(), DeepEquals, pub)
+
+	var sample ObjectContext
+	c.Assert(object, Implements, &sample)
+	c.Check(object.(ObjectContext).Public(), DeepEquals, pub)
 
 	pub2, name, _, err := s.TPM.ReadPublic(object)
 	c.Assert(err, IsNil)
@@ -290,8 +292,10 @@ func (s *objectSuite) testLoadExternal(c *C, data *testLoadExternalData) Resourc
 
 	c.Check(object.Handle(), Equals, s.LastCommand(c).RspHandle)
 	c.Check(object.Name(), DeepEquals, expectedName)
-	c.Assert(object, internal_testutil.ConvertibleTo, &ObjectContext{})
-	c.Check(object.(*ObjectContext).GetPublic(), testutil.TPMValueDeepEquals, data.inPublic)
+
+	var sample ObjectContext
+	c.Assert(object, Implements, &sample)
+	c.Check(object.(ObjectContext).Public(), testutil.TPMValueDeepEquals, data.inPublic)
 
 	pub, name, _, err := s.TPM.ReadPublic(object)
 	c.Assert(err, IsNil)

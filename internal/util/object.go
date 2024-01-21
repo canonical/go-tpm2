@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io/ioutil"
+	"io"
 
 	"github.com/canonical/go-tpm2"
 	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
@@ -41,7 +41,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 		return nil, fmt.Errorf("cannot unmarshal integrity digest: %w", err)
 	}
 
-	data, _ = ioutil.ReadAll(r)
+	data, _ = io.ReadAll(r)
 
 	hmacKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.IntegrityKey), nil, nil, hashAlg.Size()*8)
 	h := hmac.New(func() hash.Hash { return hashAlg.NewHash() }, hmacKey)
@@ -64,7 +64,7 @@ func UnwrapOuter(hashAlg tpm2.HashAlgorithmId, symmetricAlg *tpm2.SymDefObject, 
 		}
 	}
 
-	data, _ = ioutil.ReadAll(r)
+	data, _ = io.ReadAll(r)
 
 	symKey := internal_crypt.KDFa(hashAlg.GetHash(), seed, []byte(tpm2.StorageKey), name, nil, int(symmetricAlg.KeyBits.Sym()))
 

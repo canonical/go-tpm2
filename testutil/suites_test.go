@@ -5,7 +5,7 @@
 package testutil_test
 
 import (
-	"io/ioutil"
+	"io"
 
 	. "gopkg.in/check.v1"
 
@@ -53,7 +53,7 @@ func (s *baseTestSuite) TestCleanup(c *C) {
 		suite.AddCleanup(func() { suite.log = append(suite.log, c.TestName()+".test2") })
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 2 passed")
 	c.Check(suite.log, DeepEquals, []string{
 		"mockBaseTestCleanupSuite.Test1.test2",
@@ -79,7 +79,7 @@ func (s *baseTestSuite) TestSkipTests(c *C) {
 		c.Skip("test skipped")
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 2 skipped")
 	c.Check(suite.log, DeepEquals, []string{
 		"mockBaseTestCleanupSuite.Test1.test1",
@@ -98,7 +98,7 @@ func (s *baseTestSuite) TestSkipTestsFromFixture(c *C) {
 	}
 	suite.testCb = func(c *C) {}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 2 skipped")
 	c.Check(suite.log, DeepEquals, []string(nil))
 }
@@ -117,7 +117,7 @@ func (s *baseTestSuite) TestFixtureCleanupError(c *C) {
 		c.Skip("test skipped")
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 2 MISSED")
 	c.Check(suite.log, DeepEquals, []string{"mockBaseTestCleanupSuite.Test1.test1", "mockBaseTestCleanupSuite.Test1.fixture1"})
 }
@@ -134,7 +134,7 @@ func (s *baseTestSuite) TestSkipTestFromFixtureAfterAddCleanup(c *C) {
 	}
 	suite.testCb = func(c *C) {}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 skipped, 2 FAILED, 1 MISSED")
 	c.Check(suite.log, DeepEquals, []string(nil))
 }
@@ -243,7 +243,7 @@ func (s *tpmTestSuite) TestSkipNoTPM(c *C) {
 	TPMBackend = TPMBackendNone
 	defer func() { TPMBackend = origBackend }()
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
@@ -256,7 +256,7 @@ func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
 	})
 	suite.TPM = tpm
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 1 MISSED")
 }
 
@@ -266,7 +266,7 @@ func (s *tpmTestSuite) TestLastCommandWithNoCommands(c *C) {
 		suite.LastCommand(c)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED")
 }
 
@@ -276,7 +276,7 @@ func (s *tpmTestSuite) TestRequireAlgorithm(c *C) {
 		suite.RequireAlgorithm(c, tpm2.AlgorithmRSA)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 1 passed")
 }
 
@@ -286,7 +286,7 @@ func (s *tpmTestSuite) TestRequireMissingAlgorithm(c *C) {
 		suite.RequireAlgorithm(c, tpm2.AlgorithmError)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
@@ -296,7 +296,7 @@ func (s *tpmTestSuite) TestRequireRSAKeySize(c *C) {
 		suite.RequireRSAKeySize(c, 2048)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 1 passed")
 }
 
@@ -306,7 +306,7 @@ func (s *tpmTestSuite) TestRequireMissingRSAKeySize(c *C) {
 		suite.RequireRSAKeySize(c, 2047)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
@@ -316,7 +316,7 @@ func (s *tpmTestSuite) TestRequireECCCurve(c *C) {
 		suite.RequireECCCurve(c, tpm2.ECCCurveNIST_P256)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 1 passed")
 }
 
@@ -326,7 +326,7 @@ func (s *tpmTestSuite) TestRequireMissingECCCurve(c *C) {
 		suite.RequireECCCurve(c, tpm2.ECCCurve(0))
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
@@ -336,7 +336,7 @@ func (s *tpmTestSuite) TestRequireSymmetricAlgorithm(c *C) {
 		suite.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmAES, 128)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 1 passed")
 }
 
@@ -346,7 +346,7 @@ func (s *tpmTestSuite) TestRequireMissingSymmetricAlgorithm(c *C) {
 		suite.RequireSymmetricAlgorithm(c, tpm2.SymObjectAlgorithmId(tpm2.AlgorithmError), 128)
 	}
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
@@ -545,7 +545,7 @@ func (s *tpmSimulatorTestSuite) TestSkipNoTPM(c *C) {
 	TPMBackend = TPMBackendNone
 	defer func() { TPMBackend = origBackend }()
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
@@ -558,7 +558,7 @@ func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
 	})
 	suite.TPM = tpm
 
-	result := Run(suite, &RunConf{Output: ioutil.Discard})
+	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OOPS: 0 passed, 2 FAILED, 1 MISSED")
 }
 

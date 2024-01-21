@@ -22,29 +22,21 @@ import (
 // invalidated when used in a command that results in the entity being flushed or evicted from the
 // TPM. Once invalidated, they can no longer be used.
 type HandleContext interface {
-	// Handle returns the handle of the corresponding entity on the TPM. If the HandleContext has been
-	// invalidated then this will return HandleUnassigned.
+	// Handle returns the handle of the corresponding entity on the TPM. If Dispose has been called
+	// then this will return HandleUnassigned.
 	Handle() Handle
-	Name() Name                        // The name of the entity
+	Name() Name                        // The name of the entity. This will be empty if there isn't one or Dispose has been called.
 	SerializeToBytes() []byte          // Return a byte slice containing the serialized form of this HandleContext
 	SerializeToWriter(io.Writer) error // Write the serialized form of this HandleContext to the supplied io.Writer
-}
-
-type handleContextInternalMixin interface {
-	Invalidate()
-	SetHandle(handle Handle)
-}
-
-type handleContextInternal interface {
-	HandleContext
-	handleContextInternalMixin
+	Dispose()                          // Called when the corresponding resource has been flushed or evicted from the TPM
 }
 
 // SessionContext is a HandleContext that corresponds to a session on the TPM.
 type SessionContext interface {
 	HandleContext
-	HashAlg() HashAlgorithmId // The session's digest algorithm. Will be HashAlgorithmNul if the context corresponds to a saved session.
-	NonceTPM() Nonce          // The most recent TPM nonce value. Can be empty if this context corresponds to a saved session.
+	Available() bool          // Whether this context represents a session that is available. Will be false for flushed or saved sessions.
+	HashAlg() HashAlgorithmId // The session's digest algorithm. Will be HashAlgorithmNull if Available is false.
+	NonceTPM() Nonce          // The most recent TPM nonce value. Will be empty if Available is false.
 	IsAudit() bool            // Whether the session has been used for audit
 	IsExclusive() bool        // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
 
@@ -56,19 +48,31 @@ type SessionContext interface {
 	IncludeAttrs(attrs SessionAttributes) SessionContext
 	// ExcludeAttrs returns a duplicate of this SessionContext and its attributes with the specified attributes excluded.
 	ExcludeAttrs(attrs SessionAttributes) SessionContext
-}
 
-type sessionContextInternal interface {
-	SessionContext
-	handleContextInternalMixin
+	SessionKey() []byte // The session key. Will be empty if Available is false.
 
-	Data() *sessionContextData
-	Unload()
+	IsBound() bool     // Whether the session is bound. Will be false if Available is false.
+	BoundEntity() Name // The bound entity. Will be false it Available is false.
+
+	Symmetric() *SymDef // The symmetric algorithm if one is set. Will be nil if Available is false.
+
+	NeedsPassword() bool // Whether a policy session includes the TPM2_PolicyPassword assertion. Will be false if Available is false.
+	SetNeedsPassword()   // This should be called when adding a TPM2_PolicyPassword assertion to a policy session.
+
+	NeedsAuthValue() bool // Whether a policy session includes the TPM2_PolicyAuthValue assertion. Will be false if Available is false.
+	SetNeedsAuthValue()   // This should be called when adding a TPM2_PolicyAuthValue assertion to a policy session.
+
+	Update(nonce Nonce, isAudit, isExclusive bool) // Updates the session context based on a response.
+
+	SetSaved() // Marks the session as being saved. Available should return false after this.
 }
 
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
 type ResourceContext interface {
 	HandleContext
+
+	// AuthValue returns the authorization value previously set by SetAuthValue.
+	AuthValue() []byte
 
 	// SetAuthValue sets the authorization value that will be used in authorization roles where
 	// knowledge of the authorization value is required. Functions that create resources on the TPM
@@ -76,53 +80,47 @@ type ResourceContext interface {
 	SetAuthValue([]byte)
 }
 
-type resourceContextInternal interface {
+// ObjectContext is a ResourceContext that corresponds to an object on the TPM.
+type ObjectContext interface {
 	ResourceContext
-	handleContextInternalMixin
 
-	GetAuthValue() []byte
+	// Public is the public area associated with the object.
+	Public() *Public
 }
 
-type objectContextInternal interface {
-	resourceContextInternal
+// NVIndexContext is a ResourceContext that corresponds to a NV index.
+type NVIndexContext interface {
+	ResourceContext
 
-	GetPublic() *Public
-}
+	// Type returns the type of the index
+	Type() NVType
 
-type nvIndexContextInternal interface {
-	resourceContextInternal
-
+	// SetAttr is called when an attribute is set so that the context
+	// can update its name.
 	SetAttr(a NVAttributes)
-	ClearAttr(a NVAttributes)
-	Attrs() NVAttributes
 }
-
-type handleContextType uint8
-
-const (
-	handleContextTypeLimited handleContextType = iota
-	handleContextTypePermanent
-	handleContextTypeObject
-	handleContextTypeNvIndex
-	handleContextTypeSession
-	handleContextTypeLimitedResource
-)
 
 type sessionContextData struct {
 	IsAudit        bool
 	IsExclusive    bool
 	HashAlg        HashAlgorithmId
-	SessionType    SessionType
 	PolicyHMACType policyHMACType
 	IsBound        bool
 	BoundEntity    Name
 	SessionKey     []byte
-	NonceCaller    Nonce
 	NonceTPM       Nonce
 	Symmetric      *SymDef
 }
 
-type sessionContextDataWrapper struct {
+type publicSized struct {
+	Data *Public `tpm2:"sized"`
+}
+
+type nvPublicSized struct {
+	Data *NVPublic `tpm2:"sized"`
+}
+
+type sessionContextDataSized struct {
 	Data *sessionContextData `tpm2:"sized"`
 }
 
@@ -130,58 +128,59 @@ type handleContextUnion struct {
 	contents union.Contents
 }
 
-func newHandleContextUnion[T *Public | NVPublic | sessionContextDataWrapper | Empty](contents T) *handleContextUnion {
+func newHandleContextUnion[T publicSized | nvPublicSized | sessionContextDataSized | Empty](contents T) *handleContextUnion {
 	return &handleContextUnion{contents: union.NewContents(contents)}
 }
 
-func (d *handleContextUnion) Object() *Public {
-	return union.ContentsElem[*Public](d.contents)
+func (d *handleContextUnion) Object() *publicSized {
+	return union.ContentsPtr[publicSized](d.contents)
 }
 
-func (d *handleContextUnion) NV() *NVPublic {
-	return union.ContentsPtr[NVPublic](d.contents)
+func (d *handleContextUnion) NV() *nvPublicSized {
+	return union.ContentsPtr[nvPublicSized](d.contents)
 }
 
-func (d *handleContextUnion) Session() *sessionContextDataWrapper {
-	return union.ContentsPtr[sessionContextDataWrapper](d.contents)
+func (d *handleContextUnion) Session() *sessionContextDataSized {
+	return union.ContentsPtr[sessionContextDataSized](d.contents)
 }
 
 func (d handleContextUnion) SelectMarshal(selector any) any {
-	switch selector.(handleContextType) {
-	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeLimitedResource:
+	switch selector.(Handle).Type() {
+	case HandleTypePCR, HandleTypePermanent:
 		return union.ContentsMarshal[Empty](d.contents)
-	case handleContextTypeObject:
-		return union.ContentsMarshal[*Public](d.contents)
-	case handleContextTypeNvIndex:
-		return union.ContentsMarshal[NVPublic](d.contents)
-	case handleContextTypeSession:
-		return union.ContentsMarshal[sessionContextDataWrapper](d.contents)
+	case HandleTypeTransient, HandleTypePersistent:
+		return union.ContentsMarshal[publicSized](d.contents)
+	case HandleTypeNVIndex:
+		return union.ContentsMarshal[nvPublicSized](d.contents)
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		return union.ContentsMarshal[sessionContextDataSized](d.contents)
 	default:
 		return nil
 	}
 }
 
 func (d *handleContextUnion) SelectUnmarshal(selector any) any {
-	switch selector.(handleContextType) {
-	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeLimitedResource:
+	switch selector.(Handle).Type() {
+	case HandleTypePCR, HandleTypePermanent:
 		return union.ContentsUnmarshal[Empty](&d.contents)
-	case handleContextTypeObject:
-		return union.ContentsUnmarshal[*Public](&d.contents)
-	case handleContextTypeNvIndex:
-		return union.ContentsUnmarshal[NVPublic](&d.contents)
-	case handleContextTypeSession:
-		return union.ContentsUnmarshal[sessionContextDataWrapper](&d.contents)
+	case HandleTypeTransient, HandleTypePersistent:
+		return union.ContentsUnmarshal[publicSized](&d.contents)
+	case HandleTypeNVIndex:
+		return union.ContentsUnmarshal[nvPublicSized](&d.contents)
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		return union.ContentsUnmarshal[sessionContextDataSized](&d.contents)
 	default:
 		return nil
 	}
 }
 
 type handleContext struct {
-	Type handleContextType
 	H    Handle
 	N    Name
 	Data *handleContextUnion
 }
+
+var _ HandleContext = (*handleContext)(nil)
 
 func (h *handleContext) Handle() Handle {
 	return h.H
@@ -208,21 +207,17 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 	return err
 }
 
-func (h *handleContext) Invalidate() {
+func (h *handleContext) Dispose() {
 	h.H = HandleUnassigned
-	h.N = make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(h.N, uint32(h.H))
-}
-
-func (h *handleContext) SetHandle(handle Handle) {
-	h.H = handle
+	h.N = nil
+	h.Data = newHandleContextUnion(EmptyValue)
 }
 
 func (h *handleContext) checkValid() error {
-	switch h.Type {
-	case handleContextTypeLimited, handleContextTypePermanent, handleContextTypeObject, handleContextTypeNvIndex, handleContextTypeLimitedResource:
+	switch h.H.Type() {
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
 		return nil
-	case handleContextTypeSession:
+	case HandleTypeHMACSession, HandleTypePolicySession:
 		data := h.Data.Session().Data
 		if data == nil {
 			return nil
@@ -230,13 +225,17 @@ func (h *handleContext) checkValid() error {
 		if !data.HashAlg.Available() {
 			return errors.New("digest algorithm for session context is not available")
 		}
-		switch data.SessionType {
-		case SessionTypeHMAC, SessionTypePolicy, SessionTypeTrial:
+		switch h.H.Type() {
+		case HandleTypeHMACSession:
+			if data.PolicyHMACType != policyHMACTypeNoAuth {
+				return errors.New("invalid policy session HMAC type for HMAC session context")
+			}
+		case HandleTypePolicySession:
+			if data.PolicyHMACType > policyHMACTypeMax {
+				return errors.New("invalid policy session HMAC type for policy session context")
+			}
 		default:
-			return errors.New("invalid session type for session context")
-		}
-		if data.PolicyHMACType > policyHMACTypeMax {
-			return errors.New("invalid policy session HMAC type for session context")
+			panic("not reached")
 		}
 		return nil
 	default:
@@ -245,13 +244,26 @@ func (h *handleContext) checkValid() error {
 	}
 }
 
-func newLimitedHandleContext(handle Handle) *handleContext {
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &handleContext{
-		Type: handleContextTypeLimited,
-		H:    handle,
-		N:    name}
+func newLimitedHandleContext(handle Handle) HandleContext {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypePermanent:
+		return newPermanentContext(handle)
+	case HandleTypeNVIndex:
+		name := make(Name, binary.Size(Handle(0)))
+		binary.BigEndian.PutUint32(name, uint32(handle))
+
+		return newNVIndexContext(handle, name, nil)
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		return newSessionContext(handle, nil)
+	case HandleTypeTransient, HandleTypePersistent:
+		name := make(Name, binary.Size(Handle(0)))
+		binary.BigEndian.PutUint32(name, uint32(handle))
+
+		return newObjectContext(handle, name, nil)
+	default:
+		panic("invalid handle type")
+	}
+
 }
 
 type resourceContext struct {
@@ -259,19 +271,29 @@ type resourceContext struct {
 	authValue []byte
 }
 
-func newLimitedResourceContext(handle Handle, name Name) *resourceContext {
-	return &resourceContext{
-		handleContext: handleContext{
-			Type: handleContextTypeLimitedResource,
-			H:    handle,
-			N:    name}}
+func newLimitedResourceContext(handle Handle, name Name) ResourceContext {
+	switch handle.Type() {
+	case HandleTypeNVIndex:
+		return newNVIndexContext(handle, name, nil)
+	case HandleTypeTransient, HandleTypePersistent:
+		return newObjectContext(handle, name, nil)
+	default:
+		panic("invalid handle type")
+	}
 }
+
+var _ ResourceContext = (*resourceContext)(nil)
 
 func (r *resourceContext) SetAuthValue(authValue []byte) {
 	r.authValue = authValue
 }
 
-func (r *resourceContext) GetAuthValue() []byte {
+func (r *resourceContext) Dispose() {
+	r.authValue = nil
+	r.handleContext.Dispose()
+}
+
+func (r *resourceContext) AuthValue() []byte {
 	return bytes.TrimRight(r.authValue, "\x00")
 }
 
@@ -279,18 +301,27 @@ type permanentContext struct {
 	resourceContext
 }
 
-func (r *permanentContext) Invalidate() {}
-
 func newPermanentContext(handle Handle) *permanentContext {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypePermanent:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
+
 	name := make(Name, binary.Size(Handle(0)))
 	binary.BigEndian.PutUint32(name, uint32(handle))
 	return &permanentContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
-				Type: handleContextTypePermanent,
 				H:    handle,
-				N:    name}}}
+				N:    name,
+				Data: newHandleContextUnion(EmptyValue)}}}
 }
+
+var _ ResourceContext = (*permanentContext)(nil)
+
+func (r *permanentContext) Dispose() {}
 
 func nullResource() ResourceContext {
 	return newPermanentContext(HandleNull)
@@ -300,18 +331,20 @@ type objectContext struct {
 	resourceContext
 }
 
-func (r *objectContext) GetPublic() *Public {
-	return r.Data.Object()
-}
-
 func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
+	switch handle.Type() {
+	case HandleTypeTransient, HandleTypePersistent:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
+
 	return &objectContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
-				Type: handleContextTypeObject,
 				H:    handle,
 				N:    name,
-				Data: newHandleContextUnion(public)}}}
+				Data: newHandleContextUnion(publicSized{public})}}}
 }
 
 func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -325,32 +358,34 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 	return newObjectContext(context.Handle(), name, pub), nil
 }
 
+var _ ObjectContext = (*objectContext)(nil)
+
+func (r *objectContext) Public() *Public {
+	if _, ok := r.Data.contents.(*publicSized); !ok {
+		// This context was disposed.
+		return nil
+	}
+	return r.Data.Object().Data
+}
+
 type nvIndexContext struct {
 	resourceContext
 }
 
-func (r *nvIndexContext) SetAttr(a NVAttributes) {
-	r.Data.NV().Attrs |= a
-	r.N = r.Data.NV().Name()
-}
+func newNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexContext {
+	switch handle.Type() {
+	case HandleTypeNVIndex:
+		// ok
+	default:
+		panic("invalid handle type")
+	}
 
-func (r *nvIndexContext) ClearAttr(a NVAttributes) {
-	r.Data.NV().Attrs &= ^a
-	r.N = r.Data.NV().Name()
-}
-
-func (r *nvIndexContext) Attrs() NVAttributes {
-	return r.Data.NV().Attrs
-}
-
-func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
 	return &nvIndexContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
-				Type: handleContextTypeNvIndex,
-				H:    public.Index,
+				H:    handle,
 				N:    name,
-				Data: newHandleContextUnion(*public)}}}
+				Data: newHandleContextUnion(nvPublicSized{public})}}}
 }
 
 func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -364,12 +399,56 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 	if pub.Index != context.Handle() {
 		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("unexpected index in public area")}
 	}
-	return newNVIndexContext(name, pub), nil
+	return newNVIndexContext(context.Handle(), name, pub), nil
+}
+
+var _ NVIndexContext = (*nvIndexContext)(nil)
+
+func (r *nvIndexContext) Type() NVType {
+	if _, ok := r.Data.contents.(*nvPublicSized); !ok || r.Data.NV().Data == nil {
+		// This context was disposed or is limited
+		return 0
+	}
+	return r.Data.NV().Data.Attrs.Type()
+}
+
+func (r *nvIndexContext) SetAttr(a NVAttributes) {
+	if _, ok := r.Data.contents.(*nvPublicSized); !ok || r.Data.NV().Data == nil {
+		// This context was disposed or is limited
+		return
+	}
+	r.Data.NV().Data.Attrs |= a
+	r.N = r.Data.NV().Data.Name()
 }
 
 type sessionContext struct {
 	*handleContext
 	attrs SessionAttributes
+}
+
+func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
+	switch handle.Type() {
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		// ok
+	default:
+		if handle != HandlePW {
+			panic("invalid handle type")
+		}
+	}
+
+	name := make(Name, binary.Size(Handle(0)))
+	binary.BigEndian.PutUint32(name, uint32(handle))
+	return &sessionContext{
+		handleContext: &handleContext{
+			H:    handle,
+			N:    name,
+			Data: newHandleContextUnion(sessionContextDataSized{data})}}
+}
+
+var _ SessionContext = (*sessionContext)(nil)
+
+func (r *sessionContext) Available() bool {
+	return r.Data() != nil
 }
 
 func (r *sessionContext) HashAlg() HashAlgorithmId {
@@ -432,30 +511,106 @@ func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
 }
 
 func (r *sessionContext) Data() *sessionContextData {
+	if _, ok := r.handleContext.Data.contents.(*sessionContextDataSized); !ok {
+		// This handle context was disposed
+		return nil
+	}
 	return r.handleContext.Data.Session().Data
 }
 
-func (r *sessionContext) Unload() {
+func (r *sessionContext) SessionKey() []byte {
+	d := r.Data()
+	if d == nil {
+		return nil
+	}
+	return d.SessionKey
+}
+
+func (r *sessionContext) IsBound() bool {
+	d := r.Data()
+	if d == nil {
+		return false
+	}
+	return d.IsBound
+}
+
+func (r *sessionContext) BoundEntity() Name {
+	d := r.Data()
+	if d == nil {
+		return nil
+	}
+	return d.BoundEntity
+}
+
+func (r *sessionContext) Symmetric() *SymDef {
+	d := r.Data()
+	if d == nil {
+		return nil
+	}
+	return d.Symmetric
+}
+
+func (r *sessionContext) NeedsPassword() bool {
+	d := r.Data()
+	if d == nil {
+		return false
+	}
+	return d.PolicyHMACType == policyHMACTypePassword
+}
+
+func (r *sessionContext) SetNeedsPassword() {
+	if r.Handle().Type() != HandleTypePolicySession {
+		return
+	}
+	d := r.Data()
+	if d == nil {
+		return
+	}
+	d.PolicyHMACType = policyHMACTypePassword
+}
+
+func (r *sessionContext) NeedsAuthValue() bool {
+	d := r.Data()
+	if d == nil {
+		return false
+	}
+	return d.PolicyHMACType == policyHMACTypeAuth
+}
+
+func (r *sessionContext) SetNeedsAuthValue() {
+	if r.Handle().Type() != HandleTypePolicySession {
+		return
+	}
+	d := r.Data()
+	if d == nil {
+		return
+	}
+	d.PolicyHMACType = policyHMACTypeAuth
+}
+
+func (r *sessionContext) Update(nonce Nonce, isAudit, isExclusive bool) {
+	d := r.Data()
+	if d == nil {
+		return
+	}
+	d.NonceTPM = nonce
+	d.IsAudit = isAudit
+	d.IsExclusive = isExclusive
+	d.PolicyHMACType = policyHMACTypeNoAuth
+}
+
+func (r *sessionContext) SetSaved() {
+	if _, ok := r.handleContext.Data.contents.(*sessionContextDataSized); !ok {
+		// This handle context was disposed
+		return
+	}
 	r.handleContext.Data.Session().Data = nil
 }
 
-func (r *sessionContext) SetHandle(handle Handle) {
-	panic("calling SetHandle on sessionContext is invalid")
-}
-
-func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &sessionContext{
-		handleContext: &handleContext{
-			Type: handleContextTypeSession,
-			H:    handle,
-			N:    name,
-			Data: newHandleContextUnion(sessionContextDataWrapper{Data: data})}}
-}
-
 func pwSession() SessionContext {
-	return newSessionContext(HandlePW, new(sessionContextData)).WithAttrs(AttrContinueSession)
+	return newSessionContext(HandlePW, &sessionContextData{
+		HashAlg: HashAlgorithmNull,
+	}).WithAttrs(AttrContinueSession)
 }
 
 func (t *TPMContext) newResourceContextFromTPM(handle HandleContext, sessions ...SessionContext) (rc ResourceContext, err error) {
@@ -623,7 +778,8 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 		return nil, errors.New("context blob contains trailing bytes")
 	}
 
-	if data.Type == handleContextTypePermanent {
+	switch data.Handle().Type() {
+	case HandleTypePCR, HandleTypePermanent:
 		return nil, errors.New("cannot create a permanent context from serialized data")
 	}
 
@@ -632,17 +788,16 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	}
 
 	var hc HandleContext
-	switch data.Type {
-	case handleContextTypeLimited:
-		hc = data
-	case handleContextTypeObject:
-		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
-	case handleContextTypeNvIndex:
+	switch data.Handle().Type() {
+	case HandleTypeNVIndex:
 		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
-	case handleContextTypeSession:
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		if data.Data.Session().Data != nil {
+			data.Data.Session().Data.IsExclusive = false
+		}
 		hc = &sessionContext{handleContext: data}
-	case handleContextTypeLimitedResource:
-		hc = &resourceContext{handleContext: *data}
+	case HandleTypeTransient, HandleTypePersistent:
+		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
 	default:
 		panic("not reached")
 	}
@@ -696,7 +851,7 @@ func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
-	return newNVIndexContext(name, pub), nil
+	return newNVIndexContext(pub.Index, name, pub), nil
 }
 
 // NewNVIndexResourceContext returns a new ResourceContext created from the provided public area
@@ -705,7 +860,7 @@ func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
 // knowledge of the authorization value of the corresponding TPM resource, this should be provided
 // by calling [ResourceContext].SetAuthValue.
 func NewNVIndexResourceContext(pub *NVPublic, name Name) ResourceContext {
-	return newNVIndexContext(name, pub)
+	return newNVIndexContext(pub.Index, name, pub)
 }
 
 // NewObjectResourceContextFromPub returns a new ResourceContext created from the provided

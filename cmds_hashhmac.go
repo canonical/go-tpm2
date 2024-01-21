@@ -43,9 +43,10 @@ func (t *TPMContext) HMACStart(context ResourceContext, auth Auth, hashAlg HashA
 		return nil, err
 	}
 
-	rc := newObjectContext(sequenceHandle, nil, nil)
-	rc.authValue = make([]byte, len(auth))
-	copy(rc.authValue, auth)
+	rc := newLimitedResourceContext(sequenceHandle, nil)
+	authValue := make([]byte, len(auth))
+	copy(authValue, auth)
+	rc.SetAuthValue(authValue)
 	return rc, nil
 }
 
@@ -70,9 +71,10 @@ func (t *TPMContext) HashSequenceStart(auth Auth, hashAlg HashAlgorithmId, sessi
 		return nil, err
 	}
 
-	rc := newObjectContext(sequenceHandle, nil, nil)
-	rc.authValue = make([]byte, len(auth))
-	copy(rc.authValue, auth)
+	rc := newLimitedResourceContext(sequenceHandle, nil)
+	authValue := make([]byte, len(auth))
+	copy(authValue, auth)
+	rc.SetAuthValue(authValue)
 	return rc, nil
 }
 
@@ -125,7 +127,7 @@ func (t *TPMContext) SequenceComplete(sequenceContext ResourceContext, buffer Ma
 		validation = nil
 	}
 
-	sequenceContext.(handleContextInternal).Invalidate()
+	sequenceContext.Dispose()
 	return result, validation, nil
 }
 
@@ -155,7 +157,7 @@ func (t *TPMContext) EventSequenceComplete(pcrContext, sequenceContext ResourceC
 		return nil, err
 	}
 
-	sequenceContext.(handleContextInternal).Invalidate()
+	sequenceContext.Dispose()
 	return results, nil
 }
 

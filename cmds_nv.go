@@ -207,7 +207,7 @@ func (t *TPMContext) NVDefineSpace(authContext ResourceContext, auth Auth, publi
 	// publicInfo already marshalled correctly, so this can't fail.
 	mu.MustCopyValue(&public, publicInfo)
 
-	rc := newNVIndexContext(name, public)
+	rc := newNVIndexContext(publicInfo.Index, name, public)
 	rc.authValue = make([]byte, len(auth))
 	copy(rc.authValue, auth)
 
@@ -237,7 +237,7 @@ func (t *TPMContext) NVUndefineSpace(authContext, nvIndex ResourceContext, authC
 		return err
 	}
 
-	nvIndex.(handleContextInternal).Invalidate()
+	nvIndex.Dispose()
 	return nil
 }
 
@@ -266,7 +266,7 @@ func (t *TPMContext) NVUndefineSpaceSpecial(nvIndex, platform ResourceContext, n
 	nvIndex.SetAuthValue(nil)
 
 	err = r.Complete()
-	nvIndex.(handleContextInternal).Invalidate()
+	nvIndex.Dispose()
 	return err
 }
 
@@ -328,7 +328,7 @@ func (t *TPMContext) NVWriteRaw(authContext, nvIndex ResourceContext, data MaxNV
 		return err
 	}
 
-	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+	if nv, isNv := nvIndex.(NVIndexContext); isNv {
 		nv.SetAttr(AttrNVWritten)
 	}
 	return nil
@@ -448,11 +448,11 @@ func (t *TPMContext) NVWrite(authContext, nvIndex ResourceContext, data []byte, 
 // On successful completion, the [AttrNVWritten] flag will be set if this is the first time that
 // the index has been written to.
 func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext, params *NVPinCounterParams, authContextAuthSession SessionContext, sessions ...SessionContext) error {
-	context, isNv := nvIndex.(nvIndexContextInternal)
+	context, isNv := nvIndex.(NVIndexContext)
 	if !isNv {
 		return errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Attrs().Type() != NVTypePinPass && context.Attrs().Type() != NVTypePinFail {
+	if context.Type() != NVTypePinPass && context.Type() != NVTypePinFail {
 		return errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data := mu.MustMarshalToBytes(params)
@@ -496,7 +496,7 @@ func (t *TPMContext) NVIncrement(authContext, nvIndex ResourceContext, authConte
 		return err
 	}
 
-	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+	if nv, isNv := nvIndex.(NVIndexContext); isNv {
 		nv.SetAttr(AttrNVWritten)
 	}
 	return nil
@@ -540,7 +540,7 @@ func (t *TPMContext) NVExtend(authContext, nvIndex ResourceContext, data MaxNVBu
 		return err
 	}
 
-	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+	if nv, isNv := nvIndex.(NVIndexContext); isNv {
 		nv.SetAttr(AttrNVWritten)
 	}
 	return nil
@@ -584,7 +584,7 @@ func (t *TPMContext) NVSetBits(authContext, nvIndex ResourceContext, bits uint64
 		return err
 	}
 
-	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+	if nv, isNv := nvIndex.(NVIndexContext); isNv {
 		nv.SetAttr(AttrNVWritten)
 	}
 	return nil
@@ -627,7 +627,7 @@ func (t *TPMContext) NVWriteLock(authContext, nvIndex ResourceContext, authConte
 		return err
 	}
 
-	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+	if nv, isNv := nvIndex.(NVIndexContext); isNv {
 		nv.SetAttr(AttrNVWriteLocked)
 	}
 	return nil
@@ -836,11 +836,11 @@ func (t *TPMContext) nvReadUint64(authContext, nvIndex ResourceContext, authCont
 //
 // On successful completion, the current bitfield value will be returned.
 func (t *TPMContext) NVReadBits(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
-	context, isNv := nvIndex.(nvIndexContextInternal)
+	context, isNv := nvIndex.(NVIndexContext)
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Attrs().Type() != NVTypeBits {
+	if context.Type() != NVTypeBits {
 		return 0, errors.New("nvIndex does not correspond to a bit field")
 	}
 	return t.nvReadUint64(authContext, nvIndex, authContextAuthSession, sessions...)
@@ -876,11 +876,11 @@ func (t *TPMContext) NVReadBits(authContext, nvIndex ResourceContext, authContex
 //
 // On successful completion, the current counter value will be returned.
 func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (uint64, error) {
-	context, isNv := nvIndex.(nvIndexContextInternal)
+	context, isNv := nvIndex.(NVIndexContext)
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Attrs().Type() != NVTypeCounter {
+	if context.Type() != NVTypeCounter {
 		return 0, errors.New("nvIndex does not correspond to a counter")
 	}
 	return t.nvReadUint64(authContext, nvIndex, authContextAuthSession, sessions...)
@@ -916,11 +916,11 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 //
 // On successful completion, the current PIN count and limit will be returned.
 func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (*NVPinCounterParams, error) {
-	context, isNv := nvIndex.(nvIndexContextInternal)
+	context, isNv := nvIndex.(NVIndexContext)
 	if !isNv {
 		return nil, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Attrs().Type() != NVTypePinPass && context.Attrs().Type() != NVTypePinFail {
+	if context.Type() != NVTypePinPass && context.Type() != NVTypePinFail {
 		return nil, errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
@@ -969,7 +969,7 @@ func (t *TPMContext) NVReadLock(authContext, nvIndex ResourceContext, authContex
 		return err
 	}
 
-	if nv, isNv := nvIndex.(nvIndexContextInternal); isNv {
+	if nv, isNv := nvIndex.(NVIndexContext); isNv {
 		nv.SetAttr(AttrNVReadLocked)
 	}
 	return nil

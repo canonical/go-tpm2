@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	"github.com/canonical/go-tpm2/mu"
 )
@@ -34,12 +34,7 @@ func execMultipleHelper(action execMultipleHelperAction, sessions ...SessionCont
 			continue
 		}
 
-		sessionData := sessions[i].(sessionContextInternal).Data()
-		if sessionData == nil {
-			return errors.New("unusable session context")
-		}
-
-		if sessionData.SessionType == SessionTypePolicy {
+		if sessions[i].Handle().Type() == HandleTypePolicySession {
 			hasPolicySession = true
 		}
 
@@ -99,7 +94,7 @@ type rspContext struct {
 
 type execContext struct {
 	dispatcher           execContextDispatcher
-	lastExclusiveSession sessionContextInternal
+	lastExclusiveSession SessionContext
 	pendingResponse      *rspContext
 }
 
@@ -115,10 +110,7 @@ func (e *execContext) processResponseAuth(r *rspContext) (err error) {
 	e.pendingResponse = nil
 
 	if isSessionAllowed(r.CommandCode) && e.lastExclusiveSession != nil {
-		data := e.lastExclusiveSession.Data()
-		if data != nil {
-			data.IsExclusive = false
-		}
+		e.lastExclusiveSession.Update(e.lastExclusiveSession.NonceTPM(), e.lastExclusiveSession.IsAudit(), false)
 		e.lastExclusiveSession = nil
 	}
 
@@ -306,7 +298,7 @@ func (t *TPMContext) RunCommandBytes(packet CommandPacket) (ResponsePacket, erro
 		return nil, &TransportError{"write", err}
 	}
 
-	resp, err := ioutil.ReadAll(t.transport)
+	resp, err := io.ReadAll(t.transport)
 	if err != nil {
 		return nil, &TransportError{"read", err}
 	}

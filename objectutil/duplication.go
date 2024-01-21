@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/canonical/go-tpm2"
 	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
@@ -51,7 +50,7 @@ func duplicateToSensitive(duplicate tpm2.Private, name tpm2.Name, outerHashAlg t
 			return nil, fmt.Errorf("cannot unmarshal inner integrity digest: %w", err)
 		}
 
-		duplicate, _ = ioutil.ReadAll(r)
+		duplicate, _ = io.ReadAll(r)
 
 		h := name.Algorithm().NewHash()
 		h.Write(duplicate)

@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -56,7 +55,7 @@ func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
 }
 
 func (p *sysfsPpiImpl) StateTransitionAction() (ppi.StateTransitionAction, error) {
-	actionBytes, err := ioutil.ReadFile(filepath.Join(p.sysfsPath, "transition_action"))
+	actionBytes, err := os.ReadFile(filepath.Join(p.sysfsPath, "transition_action"))
 	if err != nil {
 		return 0, err
 	}
@@ -118,7 +117,7 @@ func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus,
 }
 
 func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
-	rspBytes, err := ioutil.ReadFile(filepath.Join(p.sysfsPath, "response"))
+	rspBytes, err := os.ReadFile(filepath.Join(p.sysfsPath, "response"))
 	switch {
 	case errors.Is(err, syscall.EFAULT):
 		return nil, ppi.ErrOperationFailed
@@ -148,7 +147,7 @@ func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 }
 
 func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
-	versionBytes, err := ioutil.ReadFile(filepath.Join(path, "version"))
+	versionBytes, err := os.ReadFile(filepath.Join(path, "version"))
 	if err != nil {
 		return nil, err
 	}

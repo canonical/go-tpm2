@@ -18,14 +18,11 @@ const (
 )
 
 type CmdContext = cmdContext
-type NvIndexContext = nvIndexContext
-type ObjectContext = objectContext
+type NvIndexContextImpl = nvIndexContext
 type PolicyHMACType = policyHMACType
-type ResourceContextInternal = resourceContextInternal
 type RspContext = rspContext
 type SessionContextData = sessionContextData
 type SessionContextImpl = sessionContext // We already have a SessionContext interface
-type SessionContextInternal = sessionContextInternal
 type SessionParam = sessionParam
 type SessionParams = sessionParams
 
@@ -40,8 +37,8 @@ func (c *CommandContext) Cmd() *CmdContext {
 	return &c.cmd
 }
 
-func (c *NvIndexContext) GetPublic() *NVPublic {
-	return c.Data.NV()
+func (c *NvIndexContextImpl) Public() *NVPublic {
+	return c.Data.NV().Data
 }
 
 func (c *ResponseContext) Dispatcher() commandDispatcher {

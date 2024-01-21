@@ -21,6 +21,9 @@ func TestCreatePrimary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreatePrimary failed: %v", err)
 		}
+		if _, ok := objectContext.(ObjectContext); !ok {
+			t.Errorf("CreatePrimary return an invalid resource type")
+		}
 
 		if objectContext.Handle().Type() != HandleTypeTransient {
 			t.Errorf("CreatePrimary returned an invalid handle 0x%08x", objectContext.Handle())
@@ -374,10 +377,10 @@ func TestClear(t *testing.T) {
 			t.Errorf("Clear didn't evict owner object")
 		}
 
-		if tpm.EndorsementHandleContext().(ResourceContextInternal).GetAuthValue() != nil {
+		if tpm.EndorsementHandleContext().AuthValue() != nil {
 			t.Errorf("Clear didn't reset the authorization value for the EH ResourceContext")
 		}
-		if !bytes.Equal(tpm.PlatformHandleContext().(ResourceContextInternal).GetAuthValue(), testAuth) {
+		if !bytes.Equal(tpm.PlatformHandleContext().AuthValue(), testAuth) {
 			t.Errorf("Clear reset the authorization value for the PH ResourceContext")
 		}
 	}

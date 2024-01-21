@@ -46,9 +46,9 @@ func (r *mockResourceContext) Name() Name                          { return r.na
 func (r *mockResourceContext) SerializeToBytes() []byte            { return nil }
 func (r *mockResourceContext) SerializeToWriter(w io.Writer) error { return nil }
 func (r *mockResourceContext) SetAuthValue(authValue []byte)       { r.authValue = authValue }
-func (r *mockResourceContext) GetAuthValue() []byte                { return r.authValue }
+func (r *mockResourceContext) AuthValue() []byte                   { return r.authValue }
 func (r *mockResourceContext) SetHandle(handle Handle)             { r.handle = handle }
-func (r *mockResourceContext) Invalidate()                         {}
+func (r *mockResourceContext) Dispose()                            {}
 
 type mockSessionContext struct {
 	handle   Handle
@@ -69,27 +69,45 @@ func (s *mockSessionContext) SerializeToBytes() []byte            { return nil }
 func (s *mockSessionContext) SerializeToWriter(w io.Writer) error { return nil }
 func (s *mockSessionContext) HashAlg() HashAlgorithmId            { return s.data.HashAlg }
 func (s *mockSessionContext) NonceTPM() Nonce                     { return s.data.NonceTPM }
+func (s *mockSessionContext) Available() bool                     { return !s.unloaded }
 func (s *mockSessionContext) IsAudit() bool                       { return s.data.IsAudit }
 func (s *mockSessionContext) IsExclusive() bool                   { return s.data.IsExclusive }
+func (s *mockSessionContext) Attrs() SessionAttributes            { return s.attrs }
 func (s *mockSessionContext) SetAttrs(attrs SessionAttributes)    { s.attrs = attrs }
 
-func (r *mockSessionContext) WithAttrs(attrs SessionAttributes) SessionContext {
-	return &mockSessionContext{handle: r.handle, data: r.data, attrs: attrs}
+func (s *mockSessionContext) WithAttrs(attrs SessionAttributes) SessionContext {
+	return &mockSessionContext{handle: s.handle, data: s.data, attrs: attrs}
 }
 
-func (r *mockSessionContext) IncludeAttrs(attrs SessionAttributes) SessionContext {
-	return &mockSessionContext{handle: r.handle, data: r.data, attrs: r.attrs | attrs}
+func (s *mockSessionContext) IncludeAttrs(attrs SessionAttributes) SessionContext {
+	return &mockSessionContext{handle: s.handle, data: s.data, attrs: s.attrs | attrs}
 }
 
-func (r *mockSessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
-	return &mockSessionContext{handle: r.handle, data: r.data, attrs: r.attrs &^ attrs}
+func (s *mockSessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
+	return &mockSessionContext{handle: s.handle, data: s.data, attrs: s.attrs &^ attrs}
 }
 
-func (r *mockSessionContext) Invalidate()               { r.handle = HandleUnassigned }
-func (r *mockSessionContext) Attrs() SessionAttributes  { return r.attrs }
-func (r *mockSessionContext) Data() *SessionContextData { return r.data }
-func (r *mockSessionContext) Unload()                   { r.unloaded = true }
-func (r *mockSessionContext) SetHandle(handle Handle)   { panic("invalid") }
+func (s *mockSessionContext) SessionKey() []byte { return s.data.SessionKey }
+func (s *mockSessionContext) IsBound() bool      { return s.data.IsBound }
+func (s *mockSessionContext) BoundEntity() Name  { return s.data.BoundEntity }
+func (s *mockSessionContext) Symmetric() *SymDef { return s.data.Symmetric }
+func (s *mockSessionContext) NeedsPassword() bool {
+	return s.data.PolicyHMACType == PolicyHMACTypePassword
+}
+func (s *mockSessionContext) SetNeedsPassword() { s.data.PolicyHMACType = PolicyHMACTypePassword }
+func (s *mockSessionContext) NeedsAuthValue() bool {
+	return s.data.PolicyHMACType == PolicyHMACTypeAuth
+}
+func (s *mockSessionContext) SetNeedsAuthValue() { s.data.PolicyHMACType = PolicyHMACTypeAuth }
+
+func (s *mockSessionContext) Update(nonce Nonce, isAudit, isExclusive bool) {
+	s.data.NonceTPM = nonce
+	s.data.IsAudit = isAudit
+	s.data.IsExclusive = isExclusive
+}
+
+func (s *mockSessionContext) SetSaved() { s.unloaded = true }
+func (s *mockSessionContext) Dispose()  { s.handle = HandleUnassigned }
 
 func authSessionHandle(sc SessionContext) Handle {
 	if sc == nil {

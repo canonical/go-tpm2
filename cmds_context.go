@@ -51,8 +51,8 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 	context.Blob = blob
 
 	switch c := saveContext.(type) {
-	case sessionContextInternal:
-		c.Unload()
+	case SessionContext:
+		c.SetSaved()
 	}
 
 	return context, nil
@@ -133,13 +133,10 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		hc.(handleContextInternal).SetHandle(loadedHandle)
+		hc = newObjectContext(loadedHandle, hc.Name(), hc.(ObjectContext).Public())
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
-		}
-		if sc, isSession := hc.(sessionContextInternal); isSession {
-			sc.Data().IsExclusive = false
 		}
 	default:
 		panic("not reached")
@@ -163,7 +160,7 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 		return err
 	}
 
-	flushContext.(handleContextInternal).Invalidate()
+	flushContext.Dispose()
 	return nil
 }
 
@@ -207,9 +204,8 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	var public *Public
 	if object != nil && object.Handle() != persistentHandle {
 		// We are persisting an object
-		if obj, isObj := object.(objectContextInternal); isObj {
-			// This is not a limited ResourceContext - copy the public area
-			if err := mu.CopyValue(&public, obj.GetPublic()); err != nil {
+		if obj, isObj := object.(ObjectContext); isObj && obj.Public() != nil {
+			if err := mu.CopyValue(&public, obj.Public()); err != nil {
 				return nil, fmt.Errorf("cannot copy public area of object: %v", err)
 			}
 		}
@@ -230,7 +226,7 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 
 	switch {
 	case object.Handle() == persistentHandle:
-		object.(handleContextInternal).Invalidate()
+		object.Dispose()
 		return nil, nil
 	case public != nil:
 		return newObjectContext(persistentHandle, name, public), nil
