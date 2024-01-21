@@ -215,20 +215,26 @@ func (h *handleContext) checkValid() error {
 	}
 }
 
-func newLimitedHandleContext(handle Handle) *handleContext {
+func newLimitedHandleContext(handle Handle) HandleContext {
 	switch handle.Type() {
-	case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
-		// ok
+	case HandleTypePCR, HandleTypePermanent:
+		return newPermanentContext(handle)
+	case HandleTypeNVIndex:
+		name := make(Name, binary.Size(Handle(0)))
+		binary.BigEndian.PutUint32(name, uint32(handle))
+
+		return newNVIndexContext(handle, name, nil)
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		return newSessionContext(handle, nil)
+	case HandleTypeTransient, HandleTypePersistent:
+		name := make(Name, binary.Size(Handle(0)))
+		binary.BigEndian.PutUint32(name, uint32(handle))
+
+		return newObjectContext(handle, name, nil)
 	default:
 		panic("invalid handle type")
 	}
 
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &handleContext{
-		H:    handle,
-		N:    name,
-		Data: new(handleContextU)}
 }
 
 type resourceContext struct {
@@ -236,18 +242,15 @@ type resourceContext struct {
 	authValue []byte
 }
 
-func newLimitedResourceContext(handle Handle, name Name) *resourceContext {
+func newLimitedResourceContext(handle Handle, name Name) ResourceContext {
 	switch handle.Type() {
-	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
-		// ok
+	case HandleTypeNVIndex:
+		return newNVIndexContext(handle, name, nil)
+	case HandleTypeTransient, HandleTypePersistent:
+		return newObjectContext(handle, name, nil)
 	default:
 		panic("invalid handle type")
 	}
-	return &resourceContext{
-		handleContext: handleContext{
-			H:    handle,
-			N:    name,
-			Data: new(handleContextU)}}
 }
 
 var _ ResourceContext = (*resourceContext)(nil)
@@ -305,9 +308,6 @@ func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 	default:
 		panic("invalid handle type")
 	}
-	if public == nil {
-		panic("nil public area")
-	}
 
 	return &objectContext{
 		resourceContext: resourceContext{
@@ -342,21 +342,18 @@ type nvIndexContext struct {
 	resourceContext
 }
 
-func newNVIndexContext(name Name, public *NVPublic) *nvIndexContext {
-	switch public.Index.Type() {
+func newNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexContext {
+	switch handle.Type() {
 	case HandleTypeNVIndex:
 		// ok
 	default:
 		panic("invalid handle type")
 	}
-	if public == nil {
-		panic("nil public area")
-	}
 
 	return &nvIndexContext{
 		resourceContext: resourceContext{
 			handleContext: handleContext{
-				H:    public.Index,
+				H:    handle,
 				N:    name,
 				Data: &handleContextU{NV: &nvPublicSized{Data: public}}}}}
 }
@@ -372,22 +369,22 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 	if pub.Index != context.Handle() {
 		return nil, &InvalidResponseError{CommandNVReadPublic, errors.New("unexpected index in public area")}
 	}
-	return newNVIndexContext(name, pub), nil
+	return newNVIndexContext(context.Handle(), name, pub), nil
 }
 
 var _ NVIndexContext = (*nvIndexContext)(nil)
 
 func (r *nvIndexContext) Type() NVType {
-	if r.Data.NV == nil {
-		// This context was disposed
+	if r.Data.NV == nil || r.Data.NV.Data == nil {
+		// This context was disposed or is limited
 		return 0
 	}
 	return r.Data.NV.Data.Attrs.Type()
 }
 
 func (r *nvIndexContext) SetAttr(a NVAttributes) {
-	if r.Data.NV == nil {
-		// This context was disposed
+	if r.Data.NV == nil || r.Data.NV.Data == nil {
+		// This context was disposed or is limited
 		return
 	}
 	r.Data.NV.Data.Attrs |= a
@@ -798,24 +795,14 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 	var hc HandleContext
 	switch data.Handle().Type() {
 	case HandleTypeNVIndex:
-		nv := &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
-		if data.Data.NV.Data != nil {
-			hc = nv
-		} else {
-			hc = &nv.resourceContext
-		}
+		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if data.Data.Session.Data != nil {
 			data.Data.Session.Data.IsExclusive = false
 		}
 		hc = &sessionContext{handleContext: data}
 	case HandleTypeTransient, HandleTypePersistent:
-		obj := &objectContext{resourceContext: resourceContext{handleContext: *data}}
-		if data.Data.Object.Data != nil {
-			hc = obj
-		} else {
-			hc = &obj.resourceContext
-		}
+		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
 	default:
 		panic("not reached")
 	}
@@ -901,7 +888,7 @@ func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
 	}
-	return newNVIndexContext(name, pub), nil
+	return newNVIndexContext(pub.Index, name, pub), nil
 }
 
 // NewNVIndexResourceContext returns a new ResourceContext created from the provided public area
@@ -910,7 +897,7 @@ func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
 // knowledge of the authorization value of the corresponding TPM resource, this should be provided
 // by calling [ResourceContext].SetAuthValue.
 func NewNVIndexResourceContext(pub *NVPublic, name Name) ResourceContext {
-	return newNVIndexContext(name, pub)
+	return newNVIndexContext(pub.Index, name, pub)
 }
 
 // CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided

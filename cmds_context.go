@@ -133,11 +133,7 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		if obj, isObj := hc.(ObjectContext); isObj {
-			hc = newObjectContext(loadedHandle, hc.Name(), obj.Public())
-		} else {
-			hc = newLimitedResourceContext(loadedHandle, hc.Name())
-		}
+		hc = newObjectContext(loadedHandle, hc.Name(), hc.(ObjectContext).Public())
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
