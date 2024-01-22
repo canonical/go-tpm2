@@ -76,7 +76,7 @@ package tpm2
 func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession SessionContext, includeNonceTPM bool, cpHashA Digest, policyRef Nonce, expiration int32, auth *Signature, sessions ...SessionContext) (timeout Timeout, policyTicket *TkAuth, err error) {
 	var nonceTPM Nonce
 	if includeNonceTPM {
-		nonceTPM = policySession.NonceTPM()
+		nonceTPM = policySession.State().NonceTPM
 	}
 
 	if err := t.StartCommand(CommandPolicySigned).
@@ -136,7 +136,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 func (t *TPMContext) PolicySecret(authContext ResourceContext, policySession SessionContext, cpHashA Digest, policyRef Nonce, expiration int32, authContextAuthSession SessionContext, sessions ...SessionContext) (timeout Timeout, policyTicket *TkAuth, err error) {
 	if err := t.StartCommand(CommandPolicySecret).
 		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(policySession)).
-		AddParams(policySession.NonceTPM(), cpHashA, policyRef, expiration).
+		AddParams(policySession.State().NonceTPM, cpHashA, policyRef, expiration).
 		AddExtraSessions(sessions...).
 		Run(nil, &timeout, &policyTicket); err != nil {
 		return nil, nil, err
@@ -472,7 +472,8 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 		return err
 	}
 
-	policySession.SetNeedsAuthValue()
+	policySession.State().NeedsPassword = false
+	policySession.State().NeedsAuthValue = true
 	return nil
 }
 
@@ -494,7 +495,8 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 		return err
 	}
 
-	policySession.SetNeedsPassword()
+	policySession.State().NeedsPassword = true
+	policySession.State().NeedsAuthValue = false
 	return nil
 }
 

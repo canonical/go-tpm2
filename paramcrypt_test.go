@@ -27,8 +27,8 @@ type testSessionParamComputeSessionValueData struct {
 }
 
 func (s *paramcryptSuite) testSessionParamComputeSessionValue(c *C, data *testSessionParamComputeSessionValueData) {
-	session := &mockSessionContext{data: &SessionContextData{SessionKey: data.sessionKey}}
-	p := newMockSessionParam(session, data.resource, data.includeAuthValue, nil, nil, nil)
+	session := &mockSessionContext{data: SessionContextData{Params: SessionContextParams{SessionKey: data.sessionKey}}}
+	p := newMockSessionParam(session, data.resource, false, data.includeAuthValue, nil, nil, nil)
 	c.Check(p.ComputeSessionValue(), DeepEquals, data.expected)
 }
 
@@ -81,17 +81,17 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceNoEncrypt(c *C) {
 	sessions := []*mockSessionContext{new(mockSessionContext)}
 	resources := []*mockResourceContext{new(mockResourceContext)}
 	params := []*SessionParam{
-		newMockSessionParam(sessions[0], resources[0], false, nil, nil, nil)}
+		newMockSessionParam(sessions[0], resources[0], false, false, nil, nil, nil)}
 
 	newMockSessionParams(0, params, -1, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
 }
 
 func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncrypt(c *C) {
-	sessions := []*mockSessionContext{&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("foo")}}}
+	sessions := []*mockSessionContext{&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("foo")}}}}
 	resources := []*mockResourceContext{new(mockResourceContext)}
 	params := []*SessionParam{
-		newMockSessionParam(sessions[0], resources[0], false, nil, nil, nil)}
+		newMockSessionParam(sessions[0], resources[0], false, false, nil, nil, nil)}
 
 	newMockSessionParams(0, params, 0, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
@@ -99,12 +99,12 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncrypt(c *C) 
 
 func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithExtraEncrypt(c *C) {
 	sessions := []*mockSessionContext{
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("foo")}},
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("bar")}}}
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("foo")}}},
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("bar")}}}}
 	resources := []*mockResourceContext{new(mockResourceContext)}
 	params := []*SessionParam{
-		newMockSessionParam(sessions[0], resources[0], false, nil, nil, nil),
-		newMockSessionParam(sessions[1], nil, false, nil, nil, nil)}
+		newMockSessionParam(sessions[0], resources[0], false, false, nil, nil, nil),
+		newMockSessionParam(sessions[1], nil, false, false, nil, nil, nil)}
 
 	newMockSessionParams(0, params, 1, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, DeepEquals, Nonce("bar"))
@@ -112,11 +112,11 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithExtraEncrypt(c
 
 func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithExtraEncryptNoAuth(c *C) {
 	sessions := []*mockSessionContext{
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("foo")}},
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("bar")}}}
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("foo")}}},
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("bar")}}}}
 	params := []*SessionParam{
-		newMockSessionParam(sessions[0], nil, false, nil, nil, nil),
-		newMockSessionParam(sessions[1], nil, false, nil, nil, nil)}
+		newMockSessionParam(sessions[0], nil, false, false, nil, nil, nil),
+		newMockSessionParam(sessions[1], nil, false, false, nil, nil, nil)}
 
 	newMockSessionParams(0, params, 1, -1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
@@ -124,14 +124,14 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithExtraEncryptNo
 
 func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncryptAndDecrypt(c *C) {
 	sessions := []*mockSessionContext{
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("foo")}},
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("xxx")}},
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("bar")}}}
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("foo")}}},
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("xxx")}}},
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("bar")}}}}
 	resources := []*mockResourceContext{new(mockResourceContext)}
 	params := []*SessionParam{
-		newMockSessionParam(sessions[0], resources[0], false, nil, nil, nil),
-		newMockSessionParam(sessions[1], nil, false, nil, nil, nil),
-		newMockSessionParam(sessions[2], nil, false, nil, nil, nil)}
+		newMockSessionParam(sessions[0], resources[0], false, false, nil, nil, nil),
+		newMockSessionParam(sessions[1], nil, false, false, nil, nil, nil),
+		newMockSessionParam(sessions[2], nil, false, false, nil, nil, nil)}
 
 	newMockSessionParams(0, params, 2, 1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, DeepEquals, Nonce("bar"))
@@ -139,12 +139,12 @@ func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncryptAndDecr
 
 func (s *paramcryptSuite) TestSessionParamsComputeEncryptNonceWithEncryptAndDecryptSameSession(c *C) {
 	sessions := []*mockSessionContext{
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("foo")}},
-		&mockSessionContext{data: &SessionContextData{NonceTPM: []byte("bar")}}}
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("foo")}}},
+		&mockSessionContext{data: SessionContextData{State: SessionContextState{NonceTPM: []byte("bar")}}}}
 	resources := []*mockResourceContext{new(mockResourceContext)}
 	params := []*SessionParam{
-		newMockSessionParam(sessions[0], resources[0], false, nil, nil, nil),
-		newMockSessionParam(sessions[1], nil, false, nil, nil, nil)}
+		newMockSessionParam(sessions[0], resources[0], false, false, nil, nil, nil),
+		newMockSessionParam(sessions[1], nil, false, false, nil, nil, nil)}
 
 	newMockSessionParams(0, params, 1, 1).ComputeEncryptNonce()
 	c.Check(params[0].EncryptNonce, HasLen, 0)
@@ -171,7 +171,7 @@ func (s *paramcryptSuite) testEncryptCommandParameter(c *C, data *testEncryptCom
 		if i < len(data.callerNonces) {
 			nonceCaller = data.callerNonces[i]
 		}
-		sessions = append(sessions, newMockSessionParam(s, r, false, nonceCaller, nil, nil))
+		sessions = append(sessions, newMockSessionParam(s, r, s.Handle() == HandlePW, false, nonceCaller, nil, nil))
 	}
 
 	params := newMockSessionParams(0, sessions, -1, data.decryptSessionIndex)
@@ -208,7 +208,7 @@ func (s *paramcryptSuite) testEncryptCommandParameter(c *C, data *testEncryptCom
 
 	var expectedDecryptNonce Nonce
 	if data.decryptSessionIndex > 0 && sessions[0].IsAuth() {
-		expectedDecryptNonce = data.sessions[data.decryptSessionIndex].NonceTPM()
+		expectedDecryptNonce = data.sessions[data.decryptSessionIndex].State().NonceTPM
 	}
 	c.Check(sessions[0].DecryptNonce, DeepEquals, expectedDecryptNonce)
 }
@@ -226,14 +226,15 @@ func (s *paramcryptSuite) TestEncryptCommandParameterAES(c *C) {
 	s.testEncryptCommandParameter(c, &testEncryptCommandParameterData{
 		sessions: []SessionContext{
 			&mockSessionContext{
-				data: &SessionContextData{
-					HashAlg:    HashAlgorithmSHA256,
-					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
-					Symmetric: &SymDef{
-						Algorithm: SymAlgorithmAES,
-						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
-						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
+				data: SessionContextData{
+					Params: SessionContextParams{
+						HashAlg:    HashAlgorithmSHA256,
+						SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+						Symmetric: SymDef{
+							Algorithm: SymAlgorithmAES,
+							KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+							Mode:      MakeSymModeUnion(SymModeCFB)}},
+					State: SessionContextState{NonceTPM: internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")}}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("1234")}},
 		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		decryptSessionIndex: 0,
@@ -245,13 +246,14 @@ func (s *paramcryptSuite) TestEncryptCommandParameterXOR(c *C) {
 	s.testEncryptCommandParameter(c, &testEncryptCommandParameterData{
 		sessions: []SessionContext{
 			&mockSessionContext{
-				data: &SessionContextData{
-					HashAlg:    HashAlgorithmSHA256,
-					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
-					Symmetric: &SymDef{
-						Algorithm: SymAlgorithmXOR,
-						KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)}}}},
+				data: SessionContextData{
+					Params: SessionContextParams{
+						HashAlg:    HashAlgorithmSHA256,
+						SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+						Symmetric: SymDef{
+							Algorithm: SymAlgorithmXOR,
+							KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)}},
+					State: SessionContextState{NonceTPM: internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		decryptSessionIndex: 0,
@@ -264,14 +266,15 @@ func (s *paramcryptSuite) TestEncryptCommandParameterExtra(c *C) {
 		sessions: []SessionContext{
 			new(mockSessionContext),
 			&mockSessionContext{
-				data: &SessionContextData{
-					HashAlg:    HashAlgorithmSHA256,
-					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
-					Symmetric: &SymDef{
-						Algorithm: SymAlgorithmAES,
-						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
-						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
+				data: SessionContextData{
+					Params: SessionContextParams{
+						HashAlg:    HashAlgorithmSHA256,
+						SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+						Symmetric: SymDef{
+							Algorithm: SymAlgorithmAES,
+							KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+							Mode:      MakeSymModeUnion(SymModeCFB)}},
+					State: SessionContextState{NonceTPM: internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		callerNonces:        []Nonce{nil, internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		decryptSessionIndex: 1,
@@ -284,14 +287,15 @@ func (s *paramcryptSuite) TestEncryptCommandParameterExtraNoAuth(c *C) {
 		sessions: []SessionContext{
 			new(mockSessionContext),
 			&mockSessionContext{
-				data: &SessionContextData{
-					HashAlg:    HashAlgorithmSHA256,
-					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
-					Symmetric: &SymDef{
-						Algorithm: SymAlgorithmAES,
-						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
-						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
+				data: SessionContextData{
+					Params: SessionContextParams{
+						HashAlg:    HashAlgorithmSHA256,
+						SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+						Symmetric: SymDef{
+							Algorithm: SymAlgorithmAES,
+							KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+							Mode:      MakeSymModeUnion(SymModeCFB)}},
+					State: SessionContextState{NonceTPM: internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")}}}},
 		callerNonces:        []Nonce{nil, internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		decryptSessionIndex: 1,
 		cpBytes:             append([]byte{0, 6}, []byte("foobar")...),
@@ -319,7 +323,7 @@ func (s *paramcryptSuite) testDecryptResponseParameter(c *C, data *testDecryptRe
 		if i < len(data.callerNonces) {
 			nonceCaller = data.callerNonces[i]
 		}
-		sessions = append(sessions, newMockSessionParam(s, r, false, nonceCaller, nil, nil))
+		sessions = append(sessions, newMockSessionParam(s, r, s.Handle() == HandlePW, false, nonceCaller, nil, nil))
 	}
 
 	rpBytes := make([]byte, len(data.rpBytes))
@@ -369,14 +373,15 @@ func (s *paramcryptSuite) TestDecryptResponseParameterAES(c *C) {
 	s.testDecryptResponseParameter(c, &testDecryptResponseParameterData{
 		sessions: []SessionContext{
 			&mockSessionContext{
-				data: &SessionContextData{
-					HashAlg:    HashAlgorithmSHA256,
-					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
-					Symmetric: &SymDef{
-						Algorithm: SymAlgorithmAES,
-						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
-						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
+				data: SessionContextData{
+					Params: SessionContextParams{
+						HashAlg:    HashAlgorithmSHA256,
+						SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+						Symmetric: SymDef{
+							Algorithm: SymAlgorithmAES,
+							KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+							Mode:      MakeSymModeUnion(SymModeCFB)}},
+					State: SessionContextState{NonceTPM: internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")}}}},
 		resources:           []ResourceContext{&mockResourceContext{authValue: []byte("1234")}},
 		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		encryptSessionIndex: 0,
@@ -388,13 +393,14 @@ func (s *paramcryptSuite) TestDecryptResponseParameterXOR(c *C) {
 	s.testDecryptResponseParameter(c, &testDecryptResponseParameterData{
 		sessions: []SessionContext{
 			&mockSessionContext{
-				data: &SessionContextData{
-					HashAlg:    HashAlgorithmSHA256,
-					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
-					Symmetric: &SymDef{
-						Algorithm: SymAlgorithmXOR,
-						KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)}}}},
+				data: SessionContextData{
+					Params: SessionContextParams{
+						HashAlg:    HashAlgorithmSHA256,
+						SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+						Symmetric: SymDef{
+							Algorithm: SymAlgorithmXOR,
+							KeyBits:   MakeSymKeyBitsUnion(HashAlgorithmSHA256)}},
+					State: SessionContextState{NonceTPM: internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		callerNonces:        []Nonce{internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		encryptSessionIndex: 0,
@@ -407,14 +413,15 @@ func (s *paramcryptSuite) TestDecryptResponseParameterExtra(c *C) {
 		sessions: []SessionContext{
 			new(mockSessionContext),
 			&mockSessionContext{
-				data: &SessionContextData{
-					HashAlg:    HashAlgorithmSHA256,
-					SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-					NonceTPM:   internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"),
-					Symmetric: &SymDef{
-						Algorithm: SymAlgorithmAES,
-						KeyBits:   MakeSymKeyBitsUnion[uint16](256),
-						Mode:      MakeSymModeUnion(SymModeCFB)}}}},
+				data: SessionContextData{
+					Params: SessionContextParams{
+						HashAlg:    HashAlgorithmSHA256,
+						SessionKey: internal_testutil.DecodeHexString(c, "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+						Symmetric: SymDef{
+							Algorithm: SymAlgorithmAES,
+							KeyBits:   MakeSymKeyBitsUnion[uint16](256),
+							Mode:      MakeSymModeUnion(SymModeCFB)}},
+					State: SessionContextState{NonceTPM: internal_testutil.DecodeHexString(c, "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3")}}}},
 		resources:           []ResourceContext{new(mockResourceContext)},
 		callerNonces:        []Nonce{nil, internal_testutil.DecodeHexString(c, "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865")},
 		encryptSessionIndex: 1,

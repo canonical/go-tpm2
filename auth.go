@@ -16,19 +16,10 @@ func trimAuthValue(value []byte) []byte {
 	return bytes.TrimRight(value, "\x00")
 }
 
-type policyHMACType uint8
-
-const (
-	policyHMACTypeNoAuth policyHMACType = iota
-	policyHMACTypeAuth
-	policyHMACTypePassword
-
-	policyHMACTypeMax = policyHMACTypePassword
-)
-
 type sessionParam struct {
 	Session            SessionContext  // The session instance used for this session parameter
 	AssociatedResource ResourceContext // The resource associated with an authorization
+	IsPassword         bool            // Whether the command auth will contain a password
 	IncludeAuthValue   bool            // Whether the authorization value of associatedResource is included in the HMAC key
 
 	NonceCaller  Nonce
@@ -37,8 +28,8 @@ type sessionParam struct {
 }
 
 func newExtraSessionParam(session SessionContext) (*sessionParam, error) {
-	if !session.Available() {
-		return nil, errors.New("saved or flushed session")
+	if session.Params().HashAlg == HashAlgorithmNull || session.State() == nil {
+		return nil, errors.New("limited context or flushed session")
 	}
 	if session.Handle().Type() != HandleTypeHMACSession {
 		return nil, errors.New("invalid session type")
@@ -48,8 +39,8 @@ func newExtraSessionParam(session SessionContext) (*sessionParam, error) {
 }
 
 func newSessionParamForAuth(session SessionContext, resource ResourceContext) (*sessionParam, error) {
-	if !session.Available() {
-		return nil, errors.New("invalid context for session: saved or flushed session")
+	if session.Handle() != HandlePW && (session.Params().HashAlg == HashAlgorithmNull || session.State() == nil) {
+		return nil, errors.New("invalid context for session: limited context or flushed session")
 	}
 
 	s := &sessionParam{
@@ -59,15 +50,20 @@ func newSessionParamForAuth(session SessionContext, resource ResourceContext) (*
 	switch {
 	case s.Session.Handle() == HandlePW:
 		// Passphrase session
+		s.IsPassword = true
 	case s.Session.Handle().Type() == HandleTypePolicySession:
 		// A policy session. Include the auth value of the associated context
 		// if the session includes a TPM2_PolicyAuthValue assertion.
-		s.IncludeAuthValue = s.Session.NeedsAuthValue()
-	case s.Session.IsBound():
+		if s.Session.State().NeedsPassword && s.Session.State().NeedsAuthValue {
+			return nil, errors.New("invalid session context state")
+		}
+		s.IsPassword = s.Session.State().NeedsPassword
+		s.IncludeAuthValue = s.Session.State().NeedsAuthValue
+	case s.Session.Params().IsBound:
 		// A bound HMAC session. Include the auth value of the associated
 		// context only if it is not the bind entity.
 		bindName := computeBindName(s.AssociatedResource.Name(), trimAuthValue(s.AssociatedResource.AuthValue()))
-		s.IncludeAuthValue = !bytes.Equal(bindName, s.Session.BoundEntity())
+		s.IncludeAuthValue = !bytes.Equal(bindName, s.Session.Params().BoundEntity)
 	default:
 		// A non-bound HMAC session. Include the auth value of the associated
 		// context in the HMAC key
@@ -81,13 +77,9 @@ func (s *sessionParam) IsAuth() bool {
 	return s.AssociatedResource != nil
 }
 
-func (s *sessionParam) IsPassword() bool {
-	return s.Session.Handle() == HandlePW || (s.Session.Handle().Type() == HandleTypePolicySession && s.Session.NeedsPassword())
-}
-
 func (s *sessionParam) ComputeSessionHMACKey() []byte {
 	var key []byte
-	key = append(key, s.Session.SessionKey()...)
+	key = append(key, s.Session.Params().SessionKey...)
 	if s.IncludeAuthValue {
 		key = append(key, trimAuthValue(s.AssociatedResource.AuthValue())...)
 	}
@@ -96,7 +88,7 @@ func (s *sessionParam) ComputeSessionHMACKey() []byte {
 
 func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce, attrs SessionAttributes) ([]byte, bool) {
 	key := s.ComputeSessionHMACKey()
-	h := hmac.New(func() hash.Hash { return s.Session.HashAlg().NewHash() }, key)
+	h := hmac.New(func() hash.Hash { return s.Session.Params().HashAlg.NewHash() }, key)
 
 	h.Write(pHash)
 	h.Write(nonceNewer)
@@ -109,19 +101,19 @@ func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDe
 }
 
 func (s *sessionParam) ComputeCommandHMAC(commandCode CommandCode, commandHandles []Name, cpBytes []byte) []byte {
-	cpHash := cryptComputeCpHash(s.Session.HashAlg(), commandCode, commandHandles, cpBytes)
-	h, _ := s.computeHMAC(cpHash, s.NonceCaller, s.Session.NonceTPM(), s.DecryptNonce, s.EncryptNonce, s.Session.Attrs())
+	cpHash := cryptComputeCpHash(s.Session.Params().HashAlg, commandCode, commandHandles, cpBytes)
+	h, _ := s.computeHMAC(cpHash, s.NonceCaller, s.Session.State().NonceTPM, s.DecryptNonce, s.EncryptNonce, s.Session.Attrs())
 	return h
 }
 
 func (s *sessionParam) ComputeResponseHMAC(resp AuthResponse, commandCode CommandCode, rpBytes []byte) ([]byte, bool) {
-	rpHash := cryptComputeRpHash(s.Session.HashAlg(), ResponseSuccess, commandCode, rpBytes)
-	return s.computeHMAC(rpHash, s.Session.NonceTPM(), s.NonceCaller, nil, nil, resp.SessionAttributes)
+	rpHash := cryptComputeRpHash(s.Session.Params().HashAlg, ResponseSuccess, commandCode, rpBytes)
+	return s.computeHMAC(rpHash, s.Session.State().NonceTPM, s.NonceCaller, nil, nil, resp.SessionAttributes)
 }
 
 func (s *sessionParam) BuildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *AuthCommand {
 	var hmac []byte
-	if s.IsPassword() {
+	if s.IsPassword {
 		hmac = s.AssociatedResource.AuthValue()
 	} else {
 		hmac = s.ComputeCommandHMAC(commandCode, commandHandles, cpBytes)
@@ -135,9 +127,14 @@ func (s *sessionParam) BuildCommandAuth(commandCode CommandCode, commandHandles 
 }
 
 func (s *sessionParam) ProcessResponseAuth(resp AuthResponse, commandCode CommandCode, rpBytes []byte) error {
-	s.Session.Update(resp.Nonce, resp.SessionAttributes&AttrAudit > 0, resp.SessionAttributes&AttrAuditExclusive > 0)
+	state := s.Session.State()
+	state.NonceTPM = resp.Nonce
+	state.IsAudit = resp.SessionAttributes&AttrAudit > 0
+	state.IsExclusive = resp.SessionAttributes&AttrAuditExclusive > 0
+	state.NeedsPassword = false
+	state.NeedsAuthValue = false
 
-	if s.IsPassword() {
+	if s.IsPassword {
 		if len(resp.HMAC) != 0 {
 			return errors.New("unexpected HMAC")
 		}
@@ -226,10 +223,10 @@ func (p *sessionParams) AppendExtraSessions(sessions ...SessionContext) error {
 
 func (p *sessionParams) ComputeCallerNonces() error {
 	for _, s := range p.Sessions {
-		if s.Session.HashAlg() == HashAlgorithmNull {
+		if s.Session.Params().HashAlg == HashAlgorithmNull {
 			continue
 		}
-		s.NonceCaller = make(Nonce, s.Session.HashAlg().Size())
+		s.NonceCaller = make(Nonce, s.Session.Params().HashAlg.Size())
 		if err := cryptComputeNonce(s.NonceCaller); err != nil {
 			return fmt.Errorf("cannot compute new caller nonce: %v", err)
 		}

@@ -20,7 +20,7 @@ func isParamEncryptable(param interface{}) bool {
 
 func (s *sessionParam) ComputeSessionValue() []byte {
 	var key []byte
-	key = append(key, s.Session.SessionKey()...)
+	key = append(key, s.Session.Params().SessionKey...)
 	if s.IsAuth() {
 		key = append(key, trimAuthValue(s.AssociatedResource.AuthValue())...)
 	}
@@ -55,7 +55,7 @@ func (p *sessionParams) ComputeEncryptNonce() {
 		return
 	}
 
-	p.Sessions[0].EncryptNonce = s.Session.NonceTPM()
+	p.Sessions[0].EncryptNonce = s.Session.State().NonceTPM
 }
 
 func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
@@ -64,21 +64,21 @@ func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
 		return nil
 	}
 
-	hashAlg := s.Session.HashAlg()
+	hashAlg := s.Session.Params().HashAlg
 
 	sessionValue := s.ComputeSessionValue()
 
 	size := binary.BigEndian.Uint16(cpBytes)
 	data := cpBytes[2 : size+2]
 
-	symmetric := s.Session.Symmetric()
+	symmetric := s.Session.Params().Symmetric
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
 		if symmetric.Mode.Sym() != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
-		k := internal_crypt.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), s.NonceCaller, s.Session.NonceTPM(),
+		k := internal_crypt.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), s.NonceCaller, s.Session.State().NonceTPM,
 			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
@@ -87,13 +87,13 @@ func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		internal_crypt.XORObfuscation(hashAlg.GetHash(), sessionValue, s.NonceCaller, s.Session.NonceTPM(), data)
+		internal_crypt.XORObfuscation(hashAlg.GetHash(), sessionValue, s.NonceCaller, s.Session.State().NonceTPM, data)
 	default:
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}
 
 	if i > 0 && p.Sessions[0].IsAuth() {
-		p.Sessions[0].DecryptNonce = s.Session.NonceTPM()
+		p.Sessions[0].DecryptNonce = s.Session.State().NonceTPM
 	}
 
 	return nil
@@ -105,21 +105,21 @@ func (p *sessionParams) DecryptResponseParameter(rpBytes []byte) error {
 		return nil
 	}
 
-	hashAlg := s.Session.HashAlg()
+	hashAlg := s.Session.Params().HashAlg
 
 	sessionValue := s.ComputeSessionValue()
 
 	size := binary.BigEndian.Uint16(rpBytes)
 	data := rpBytes[2 : size+2]
 
-	symmetric := s.Session.Symmetric()
+	symmetric := s.Session.Params().Symmetric
 
 	switch symmetric.Algorithm {
 	case SymAlgorithmAES:
 		if symmetric.Mode.Sym() != SymModeCFB {
 			return errors.New("unsupported cipher mode")
 		}
-		k := internal_crypt.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), s.Session.NonceTPM(), s.NonceCaller,
+		k := internal_crypt.KDFa(hashAlg.GetHash(), sessionValue, []byte(CFBKey), s.Session.State().NonceTPM, s.NonceCaller,
 			int(symmetric.KeyBits.Sym())+(aes.BlockSize*8))
 		offset := (symmetric.KeyBits.Sym() + 7) / 8
 		symKey := k[0:offset]
@@ -128,7 +128,7 @@ func (p *sessionParams) DecryptResponseParameter(rpBytes []byte) error {
 			return fmt.Errorf("AES encryption failed: %v", err)
 		}
 	case SymAlgorithmXOR:
-		internal_crypt.XORObfuscation(hashAlg.GetHash(), sessionValue, s.Session.NonceTPM(), s.NonceCaller, data)
+		internal_crypt.XORObfuscation(hashAlg.GetHash(), sessionValue, s.Session.State().NonceTPM, s.NonceCaller, data)
 	default:
 		return fmt.Errorf("unknown symmetric algorithm: %v", symmetric.Algorithm)
 	}

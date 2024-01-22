@@ -31,14 +31,49 @@ type HandleContext interface {
 	Dispose()                          // Called when the corresponding resource has been flushed or evicted from the TPM
 }
 
+// SessionContextParams corresponds to the parameters of a session.
+type SessionContextParams struct {
+	HashAlg     HashAlgorithmId // The session's digest algorithm
+	IsBound     bool            // Whether the session is bound.
+	BoundEntity Name            // The bound entity
+	Symmetric   SymDef          // The session's symmetric algorithm
+	SessionKey  []byte          // The session key
+}
+
+// SessionContextState corresponds to the state of a session.
+type SessionContextState struct {
+	NonceTPM       Nonce // The most recent TPM nonce value
+	IsAudit        bool  // Whether the session is currently an audit session
+	IsExclusive    bool  // Whether the session is currently an exclusive audit session
+	NeedsPassword  bool  // Whether a policy session includes the TPM2_PolicyPassword assertion
+	NeedsAuthValue bool  // Whether a policy session includes the TPM2_PolicyAuthValue assertion
+}
+
 // SessionContext is a HandleContext that corresponds to a session on the TPM.
 type SessionContext interface {
 	HandleContext
-	Available() bool          // Whether this context represents a session that is available. Will be false for flushed or saved sessions.
-	HashAlg() HashAlgorithmId // The session's digest algorithm. Will be HashAlgorithmNull if Available is false.
-	NonceTPM() Nonce          // The most recent TPM nonce value. Will be empty if Available is false.
-	IsAudit() bool            // Whether the session has been used for audit
-	IsExclusive() bool        // Whether the most recent response from the TPM indicated that the session is exclusive for audit purposes
+
+	// Params returns a copy of the session parameters. This will return a default
+	// value (with HashAlg == HashAlgorithmNull) if the context was created via
+	// [NewLimitedHandleContext] or [HandleContext.Dispose] was called.
+	Params() SessionContextParams
+
+	// State provides access to read and modify the session state. This will return
+	// nil if the context was created via [NewLimitedHandleContext] or
+	// [HandleContext.Dispose] was called.
+	State() *SessionContextState
+
+	// Deprecated: Use Params
+	HashAlg() HashAlgorithmId
+
+	// Deprecated: Use State
+	NonceTPM() Nonce
+
+	// Deprecated: Use State
+	IsAudit() bool
+
+	// Deprecated: Use State
+	IsExclusive() bool
 
 	Attrs() SessionAttributes                         // The attributes associated with this session
 	SetAttrs(attrs SessionAttributes)                 // Set the attributes that will be used for this SessionContext
@@ -48,23 +83,6 @@ type SessionContext interface {
 	IncludeAttrs(attrs SessionAttributes) SessionContext
 	// ExcludeAttrs returns a duplicate of this SessionContext and its attributes with the specified attributes excluded.
 	ExcludeAttrs(attrs SessionAttributes) SessionContext
-
-	SessionKey() []byte // The session key. Will be empty if Available is false.
-
-	IsBound() bool     // Whether the session is bound. Will be false if Available is false.
-	BoundEntity() Name // The bound entity. Will be false it Available is false.
-
-	Symmetric() *SymDef // The symmetric algorithm if one is set. Will be nil if Available is false.
-
-	NeedsPassword() bool // Whether a policy session includes the TPM2_PolicyPassword assertion. Will be false if Available is false.
-	SetNeedsPassword()   // This should be called when adding a TPM2_PolicyPassword assertion to a policy session.
-
-	NeedsAuthValue() bool // Whether a policy session includes the TPM2_PolicyAuthValue assertion. Will be false if Available is false.
-	SetNeedsAuthValue()   // This should be called when adding a TPM2_PolicyAuthValue assertion to a policy session.
-
-	Update(nonce Nonce, isAudit, isExclusive bool) // Updates the session context based on a response.
-
-	SetSaved() // Marks the session as being saved. Available should return false after this.
 }
 
 // ResourceContext is a HandleContext that corresponds to a non-session entity on the TPM.
@@ -84,7 +102,9 @@ type ResourceContext interface {
 type ObjectContext interface {
 	ResourceContext
 
-	// Public is the public area associated with the object.
+	// Public is the public area associated with the object. This will return nil
+	// if the context was created via [NewLimitedHandleContext] or
+	// [NewLimitedResourceContext], or [HandleContext.Dispose] was called.
 	Public() *Public
 }
 
@@ -101,15 +121,8 @@ type NVIndexContext interface {
 }
 
 type sessionContextData struct {
-	IsAudit        bool
-	IsExclusive    bool
-	HashAlg        HashAlgorithmId
-	PolicyHMACType policyHMACType
-	IsBound        bool
-	BoundEntity    Name
-	SessionKey     []byte
-	NonceTPM       Nonce
-	Symmetric      *SymDef
+	Params SessionContextParams
+	State  SessionContextState
 }
 
 type publicSized struct {
@@ -222,18 +235,16 @@ func (h *handleContext) checkValid() error {
 		if data == nil {
 			return nil
 		}
-		if !data.HashAlg.Available() {
+		if !data.Params.HashAlg.Available() {
 			return errors.New("digest algorithm for session context is not available")
 		}
 		switch h.H.Type() {
 		case HandleTypeHMACSession:
-			if data.PolicyHMACType != policyHMACTypeNoAuth {
+			if data.State.NeedsPassword || data.State.NeedsAuthValue {
 				return errors.New("invalid policy session HMAC type for HMAC session context")
 			}
 		case HandleTypePolicySession:
-			if data.PolicyHMACType > policyHMACTypeMax {
-				return errors.New("invalid policy session HMAC type for policy session context")
-			}
+			// ok
 		default:
 			panic("not reached")
 		}
@@ -451,36 +462,52 @@ func (r *sessionContext) Available() bool {
 	return r.Data() != nil
 }
 
-func (r *sessionContext) HashAlg() HashAlgorithmId {
+func (r *sessionContext) Params() SessionContextParams {
 	d := r.Data()
 	if d == nil {
-		return HashAlgorithmNull
+		return SessionContextParams{
+			HashAlg:   HashAlgorithmNull,
+			Symmetric: SymDef{Algorithm: SymAlgorithmNull},
+		}
 	}
-	return d.HashAlg
+
+	return d.Params
 }
 
-func (r *sessionContext) NonceTPM() Nonce {
+func (r *sessionContext) State() *SessionContextState {
 	d := r.Data()
 	if d == nil {
 		return nil
 	}
-	return d.NonceTPM
+	return &d.State
+}
+
+func (r *sessionContext) HashAlg() HashAlgorithmId {
+	return r.Params().HashAlg
+}
+
+func (r *sessionContext) NonceTPM() Nonce {
+	state := r.State()
+	if state == nil {
+		return nil
+	}
+	return state.NonceTPM
 }
 
 func (r *sessionContext) IsAudit() bool {
-	d := r.Data()
-	if d == nil {
+	state := r.State()
+	if state == nil {
 		return false
 	}
-	return d.IsAudit
+	return state.IsAudit
 }
 
 func (r *sessionContext) IsExclusive() bool {
-	d := r.Data()
-	if d == nil {
+	state := r.State()
+	if state == nil {
 		return false
 	}
-	return d.IsExclusive
+	return state.IsExclusive
 }
 
 func (r *sessionContext) Attrs() SessionAttributes {
@@ -518,98 +545,12 @@ func (r *sessionContext) Data() *sessionContextData {
 	return r.handleContext.Data.Session().Data
 }
 
-func (r *sessionContext) SessionKey() []byte {
-	d := r.Data()
-	if d == nil {
-		return nil
-	}
-	return d.SessionKey
-}
-
-func (r *sessionContext) IsBound() bool {
-	d := r.Data()
-	if d == nil {
-		return false
-	}
-	return d.IsBound
-}
-
-func (r *sessionContext) BoundEntity() Name {
-	d := r.Data()
-	if d == nil {
-		return nil
-	}
-	return d.BoundEntity
-}
-
-func (r *sessionContext) Symmetric() *SymDef {
-	d := r.Data()
-	if d == nil {
-		return nil
-	}
-	return d.Symmetric
-}
-
-func (r *sessionContext) NeedsPassword() bool {
-	d := r.Data()
-	if d == nil {
-		return false
-	}
-	return d.PolicyHMACType == policyHMACTypePassword
-}
-
-func (r *sessionContext) SetNeedsPassword() {
-	if r.Handle().Type() != HandleTypePolicySession {
-		return
-	}
-	d := r.Data()
-	if d == nil {
-		return
-	}
-	d.PolicyHMACType = policyHMACTypePassword
-}
-
-func (r *sessionContext) NeedsAuthValue() bool {
-	d := r.Data()
-	if d == nil {
-		return false
-	}
-	return d.PolicyHMACType == policyHMACTypeAuth
-}
-
-func (r *sessionContext) SetNeedsAuthValue() {
-	if r.Handle().Type() != HandleTypePolicySession {
-		return
-	}
-	d := r.Data()
-	if d == nil {
-		return
-	}
-	d.PolicyHMACType = policyHMACTypeAuth
-}
-
-func (r *sessionContext) Update(nonce Nonce, isAudit, isExclusive bool) {
-	d := r.Data()
-	if d == nil {
-		return
-	}
-	d.NonceTPM = nonce
-	d.IsAudit = isAudit
-	d.IsExclusive = isExclusive
-	d.PolicyHMACType = policyHMACTypeNoAuth
-}
-
-func (r *sessionContext) SetSaved() {
-	if _, ok := r.handleContext.Data.contents.(*sessionContextDataSized); !ok {
-		// This handle context was disposed
-		return
-	}
-	r.handleContext.Data.Session().Data = nil
-}
-
 func pwSession() SessionContext {
 	return newSessionContext(HandlePW, &sessionContextData{
-		HashAlg: HashAlgorithmNull,
+		Params: SessionContextParams{
+			HashAlg:   HashAlgorithmNull,
+			Symmetric: SymDef{Algorithm: SymAlgorithmNull},
+		},
 	}).WithAttrs(AttrContinueSession)
 }
 
@@ -793,7 +734,7 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if data.Data.Session().Data != nil {
-			data.Data.Session().Data.IsExclusive = false
+			data.Data.Session().Data.State.IsExclusive = false
 		}
 		hc = &sessionContext{handleContext: data}
 	case HandleTypeTransient, HandleTypePersistent:

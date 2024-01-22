@@ -26,8 +26,7 @@ import (
 //
 // If saveContext corresponds to a session, then TPM2_ContextSave also removes resources associated
 // with the session from the TPM (it becomes a saved session rather than a loaded session). In this
-// case, saveContext is marked as not loaded and can only be used as an argument to
-// [TPMContext.FlushContext].
+// case, saveContext can only be used as an argument to [TPMContext.FlushContext].
 //
 // If saveContext corresponds to a session and no more contexts can be saved, a *[TPMError] error
 // will be returned with an error code of [ErrorTooManyContexts]. If a context ID cannot be
@@ -49,11 +48,6 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 		return nil, fmt.Errorf("cannot wrap context blob: %w", err)
 	}
 	context.Blob = blob
-
-	switch c := saveContext.(type) {
-	case SessionContext:
-		c.SetSaved()
-	}
 
 	return context, nil
 }

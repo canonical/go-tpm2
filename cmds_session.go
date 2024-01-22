@@ -160,19 +160,22 @@ func (t *TPMContext) StartAuthSession(tpmKey, bind ResourceContext, sessionType 
 	}
 
 	data := &sessionContextData{
-		HashAlg:        authHash,
-		PolicyHMACType: policyHMACTypeNoAuth,
-		IsBound:        isBound,
-		BoundEntity:    boundEntity,
-		NonceTPM:       nonceTPM,
-		Symmetric:      symmetric}
+		Params: SessionContextParams{
+			HashAlg:     authHash,
+			IsBound:     isBound,
+			BoundEntity: boundEntity,
+			Symmetric:   *symmetric,
+		},
+		State: SessionContextState{
+			NonceTPM: nonceTPM,
+		}}
 
 	if tpmKeyHandle != HandleNull || bindHandle != HandleNull {
 		key := make([]byte, len(authValue)+len(salt))
 		copy(key, authValue)
 		copy(key[len(authValue):], salt)
 
-		data.SessionKey = internal_crypt.KDFa(authHash.GetHash(), key, []byte(SessionKey), []byte(nonceTPM), nonceCaller, digestSize*8)
+		data.Params.SessionKey = internal_crypt.KDFa(authHash.GetHash(), key, []byte(SessionKey), []byte(nonceTPM), nonceCaller, digestSize*8)
 	}
 
 	return newSessionContext(sessionHandle, data), nil
