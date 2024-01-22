@@ -441,9 +441,7 @@ func (r *sessionContext) Params() SessionContextParams {
 		}
 	}
 
-	var out SessionContextParams
-	mu.MustCopyValue(&out, d.Params)
-	return out
+	return d.Params
 }
 
 func (r *sessionContext) State() *SessionContextState {
