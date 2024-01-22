@@ -75,7 +75,7 @@ func (s *resourcesSuite) TestNewResourceContextNV(c *C) {
 	c.Check(rc2.Name(), DeepEquals, rc.Name())
 
 	var sample NVIndexContext
-	c.Assert(rc, Implements, &sample)
+	c.Check(rc, Implements, &sample)
 
 	c.Assert(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
 	c.Check(rc2.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, &pub)
@@ -219,31 +219,11 @@ func (s *resourcesSuite) TestNewHandleContextFromBytesSession(c *C) {
 	c.Check(session2.Name(), DeepEquals, session.Name())
 
 	var sample SessionContext
-	c.Assert(session2, Implements, &sample)
-	c.Check(session2.(SessionContext).Available(), internal_testutil.IsTrue)
+	c.Check(session2, Implements, &sample)
 
 	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 
 	c.Check(session2.(*SessionContextImpl).Data(), testutil.TPMValueDeepEquals, session.(*SessionContextImpl).Data())
-
-	_, err = s.TPM.ContextSave(session)
-	c.Check(err, IsNil)
-	c.Check(session.(*SessionContextImpl).Data(), IsNil)
-
-	b = session.SerializeToBytes()
-
-	session2, n, err = NewHandleContextFromBytes(b)
-	c.Assert(err, IsNil)
-	c.Check(n, Equals, len(b))
-	c.Assert(session2, NotNil)
-
-	c.Check(session2.Handle(), Equals, session.Handle())
-	c.Check(session2.Name(), DeepEquals, session.Name())
-	c.Assert(session2, Implements, &sample)
-	c.Check(session2.(SessionContext).Available(), internal_testutil.IsFalse)
-	c.Assert(session2, internal_testutil.ConvertibleTo, &SessionContextImpl{})
-
-	c.Check(session2.(*SessionContextImpl).Data(), IsNil)
 }
 
 type testNewResourceContextWithSessionData struct {
@@ -300,7 +280,7 @@ func (s *resourcesSuite) TestNewNVIndexResourceContextFromPub(c *C) {
 	c.Check(rc.Name(), DeepEquals, name)
 
 	var sample NVIndexContext
-	c.Assert(rc, Implements, &sample)
+	c.Check(rc, Implements, &sample)
 
 	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
 	c.Check(rc.(*NvIndexContextImpl).Public(), DeepEquals, &pub)
@@ -321,7 +301,7 @@ func (s *resourcesSuite) TestNewNVIndexResourceContext(c *C) {
 	c.Check(rc.Name(), DeepEquals, name)
 
 	var sample NVIndexContext
-	c.Assert(rc, Implements, &sample)
+	c.Check(rc, Implements, &sample)
 
 	c.Check(rc, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
 	c.Check(rc.(*NvIndexContextImpl).Public(), DeepEquals, &pub)

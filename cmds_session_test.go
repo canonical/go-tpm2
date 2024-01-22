@@ -132,22 +132,19 @@ func TestStartAuthSession(t *testing.T) {
 					t.Errorf("StartAuthSession returned a handle of the wrong type")
 				}
 
-				if !sc.Available() {
-					t.Errorf("The returned session is unavailable")
-				}
-				if sc.HashAlg() != data.alg {
+				if sc.Params().HashAlg != data.alg {
 					t.Errorf("The returned session context has the wrong algorithm (got %v)", sc.HashAlg())
 				}
 				if data.bind == nil || data.sessionType != SessionTypeHMAC {
-					if sc.IsBound() {
+					if sc.Params().IsBound {
 						t.Errorf("The returned session context should not be bound")
 					}
 				} else {
-					if !sc.IsBound() {
+					if !sc.Params().IsBound {
 						t.Errorf("The returned session context should be bound")
 					}
 					boundEntity := ComputeBindName(data.bind.Name(), data.bindAuth)
-					if !bytes.Equal(boundEntity, sc.BoundEntity()) {
+					if !bytes.Equal(boundEntity, sc.Params().BoundEntity) {
 						t.Errorf("The returned session context has the wrong bound resource")
 					}
 				}
@@ -156,11 +153,11 @@ func TestStartAuthSession(t *testing.T) {
 				if data.bind == nil && data.tpmKey == nil {
 					sessionKeySize = 0
 				}
-				if len(sc.SessionKey()) != sessionKeySize {
-					t.Errorf("The returned session key has the wrong length (got %d)", len(sc.SessionKey()))
+				if len(sc.Params().SessionKey) != sessionKeySize {
+					t.Errorf("The returned session key has the wrong length (got %d)", len(sc.Params().SessionKey))
 				}
-				if len(sc.NonceTPM()) != int(digestSize) {
-					t.Errorf("The returned TPM nonce has the wrong length (got %d)", len(sc.NonceTPM()))
+				if len(sc.State().NonceTPM) != int(digestSize) {
+					t.Errorf("The returned TPM nonce has the wrong length (got %d)", len(sc.State().NonceTPM))
 				}
 			} else {
 				if err == nil {

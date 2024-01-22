@@ -52,10 +52,10 @@ func (r *mockResourceContext) SetHandle(handle Handle)             { r.handle = 
 func (r *mockResourceContext) Dispose()                            {}
 
 type mockSessionContext struct {
-	handle   Handle
-	data     *SessionContextData
-	attrs    SessionAttributes
-	unloaded bool
+	handle  Handle
+	data    SessionContextData
+	attrs   SessionAttributes
+	limited bool
 }
 
 func (s *mockSessionContext) Handle() Handle { return s.handle }
@@ -68,13 +68,19 @@ func (s *mockSessionContext) Name() Name {
 
 func (s *mockSessionContext) SerializeToBytes() []byte            { return nil }
 func (s *mockSessionContext) SerializeToWriter(w io.Writer) error { return nil }
-func (s *mockSessionContext) HashAlg() HashAlgorithmId            { return s.data.HashAlg }
-func (s *mockSessionContext) NonceTPM() Nonce                     { return s.data.NonceTPM }
-func (s *mockSessionContext) Available() bool                     { return !s.unloaded }
-func (s *mockSessionContext) IsAudit() bool                       { return s.data.IsAudit }
-func (s *mockSessionContext) IsExclusive() bool                   { return s.data.IsExclusive }
-func (s *mockSessionContext) Attrs() SessionAttributes            { return s.attrs }
-func (s *mockSessionContext) SetAttrs(attrs SessionAttributes)    { s.attrs = attrs }
+func (s *mockSessionContext) Params() SessionContextParams        { return s.data.Params }
+func (s *mockSessionContext) State() *SessionContextState {
+	if s.limited {
+		return nil
+	}
+	return &s.data.State
+}
+func (s *mockSessionContext) HashAlg() HashAlgorithmId         { return s.data.Params.HashAlg }
+func (s *mockSessionContext) NonceTPM() Nonce                  { return s.data.State.NonceTPM }
+func (s *mockSessionContext) IsAudit() bool                    { return s.data.State.IsAudit }
+func (s *mockSessionContext) IsExclusive() bool                { return s.data.State.IsExclusive }
+func (s *mockSessionContext) Attrs() SessionAttributes         { return s.attrs }
+func (s *mockSessionContext) SetAttrs(attrs SessionAttributes) { s.attrs = attrs }
 
 func (s *mockSessionContext) WithAttrs(attrs SessionAttributes) SessionContext {
 	return &mockSessionContext{handle: s.handle, data: s.data, attrs: attrs}
@@ -88,27 +94,7 @@ func (s *mockSessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContex
 	return &mockSessionContext{handle: s.handle, data: s.data, attrs: s.attrs &^ attrs}
 }
 
-func (s *mockSessionContext) SessionKey() []byte { return s.data.SessionKey }
-func (s *mockSessionContext) IsBound() bool      { return s.data.IsBound }
-func (s *mockSessionContext) BoundEntity() Name  { return s.data.BoundEntity }
-func (s *mockSessionContext) Symmetric() *SymDef { return s.data.Symmetric }
-func (s *mockSessionContext) NeedsPassword() bool {
-	return s.data.PolicyHMACType == PolicyHMACTypePassword
-}
-func (s *mockSessionContext) SetNeedsPassword() { s.data.PolicyHMACType = PolicyHMACTypePassword }
-func (s *mockSessionContext) NeedsAuthValue() bool {
-	return s.data.PolicyHMACType == PolicyHMACTypeAuth
-}
-func (s *mockSessionContext) SetNeedsAuthValue() { s.data.PolicyHMACType = PolicyHMACTypeAuth }
-
-func (s *mockSessionContext) Update(nonce Nonce, isAudit, isExclusive bool) {
-	s.data.NonceTPM = nonce
-	s.data.IsAudit = isAudit
-	s.data.IsExclusive = isExclusive
-}
-
-func (s *mockSessionContext) SetSaved() { s.unloaded = true }
-func (s *mockSessionContext) Dispose()  { s.handle = HandleUnassigned }
+func (s *mockSessionContext) Dispose() { s.handle = HandleUnassigned }
 
 func authSessionHandle(sc SessionContext) Handle {
 	if sc == nil {

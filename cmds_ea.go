@@ -472,7 +472,8 @@ func (t *TPMContext) PolicyAuthValue(policySession SessionContext, sessions ...S
 		return err
 	}
 
-	policySession.SetNeedsAuthValue()
+	policySession.State().NeedsPassword = false
+	policySession.State().NeedsAuthValue = true
 	return nil
 }
 
@@ -494,7 +495,8 @@ func (t *TPMContext) PolicyPassword(policySession SessionContext, sessions ...Se
 		return err
 	}
 
-	policySession.SetNeedsPassword()
+	policySession.State().NeedsPassword = true
+	policySession.State().NeedsAuthValue = false
 	return nil
 }
 

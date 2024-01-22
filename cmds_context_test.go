@@ -119,8 +119,6 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 	c.Check(context.Hierarchy, Equals, HandleNull)
 	c.Check(context.Blob, NotNil)
 
-	c.Check(session.Available(), internal_testutil.IsFalse)
-
 	c.Check(s.TPM.DoesHandleExist(session.Handle()), internal_testutil.IsFalse)
 	c.Check(s.TPM.DoesSavedSessionExist(session.Handle()), internal_testutil.IsTrue)
 }
@@ -193,7 +191,6 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 
 	context, err := s.TPM.ContextSave(session)
 	c.Assert(err, IsNil)
-	c.Check(session.Available(), internal_testutil.IsFalse)
 
 	restored, err := s.TPM.ContextLoad(context)
 	c.Assert(err, IsNil)
@@ -203,7 +200,6 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 
 	c.Check(restored.Handle(), Equals, session.Handle())
 	c.Check(restored.Name(), DeepEquals, session.Name())
-	c.Check(restored.(SessionContext).Available(), internal_testutil.IsTrue)
 
 	c.Assert(restored, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 	c.Check(restored.(*SessionContextImpl).Data(), DeepEquals, origData)
@@ -227,7 +223,6 @@ func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
 
 	c.Check(restored.Handle(), Equals, lh.Handle())
 	c.Check(restored.Name(), DeepEquals, lh.Name())
-	c.Check(restored.(SessionContext).Available(), internal_testutil.IsFalse)
 	c.Assert(restored, internal_testutil.ConvertibleTo, &SessionContextImpl{})
 	c.Check(restored.(*SessionContextImpl).Data(), IsNil)
 
