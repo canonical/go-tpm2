@@ -12,14 +12,8 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-const (
-	PolicyHMACTypeAuth     = policyHMACTypeAuth
-	PolicyHMACTypePassword = policyHMACTypePassword
-)
-
 type CmdContext = cmdContext
 type NvIndexContextImpl = nvIndexContext
-type PolicyHMACType = policyHMACType
 type RspContext = rspContext
 type SessionContextData = sessionContextData
 type SessionContextImpl = sessionContext // We already have a SessionContext interface

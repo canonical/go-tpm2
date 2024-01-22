@@ -16,16 +16,6 @@ func trimAuthValue(value []byte) []byte {
 	return bytes.TrimRight(value, "\x00")
 }
 
-type policyHMACType uint8
-
-const (
-	policyHMACTypeNoAuth policyHMACType = iota
-	policyHMACTypeAuth
-	policyHMACTypePassword
-
-	policyHMACTypeMax = policyHMACTypePassword
-)
-
 type sessionParam struct {
 	Session            SessionContext  // The session instance used for this session parameter
 	AssociatedResource ResourceContext // The resource associated with an authorization
