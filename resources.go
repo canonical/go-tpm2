@@ -132,15 +132,15 @@ func newHandleContextUnion[T publicSized | nvPublicSized | sessionContextDataSiz
 	return &handleContextUnion{contents: union.NewContents(contents)}
 }
 
-func (d *handleContextUnion) Object() *publicSized {
+func (d handleContextUnion) Object() *publicSized {
 	return union.ContentsPtr[publicSized](d.contents)
 }
 
-func (d *handleContextUnion) NV() *nvPublicSized {
+func (d handleContextUnion) NV() *nvPublicSized {
 	return union.ContentsPtr[nvPublicSized](d.contents)
 }
 
-func (d *handleContextUnion) Session() *sessionContextDataSized {
+func (d handleContextUnion) Session() *sessionContextDataSized {
 	return union.ContentsPtr[sessionContextDataSized](d.contents)
 }
 

@@ -50,35 +50,35 @@ func MakeTaggedHashUnion[T TaggedHashUnionConstraint](contents T) TaggedHashUnio
 	return TaggedHashUnion{contents: union.NewContents(contents)}
 }
 
-func (u *TaggedHashUnion) SHA1() [20]byte {
+func (u TaggedHashUnion) SHA1() [20]byte {
 	return union.ContentsElem[[20]byte](u.contents)
 }
 
-func (u *TaggedHashUnion) SHA256() [32]byte {
+func (u TaggedHashUnion) SHA256() [32]byte {
 	return union.ContentsElem[[32]byte](u.contents)
 }
 
-func (u *TaggedHashUnion) SHA384() [48]byte {
+func (u TaggedHashUnion) SHA384() [48]byte {
 	return union.ContentsElem[[48]byte](u.contents)
 }
 
-func (u *TaggedHashUnion) SHA512() [64]byte {
+func (u TaggedHashUnion) SHA512() [64]byte {
 	return union.ContentsElem[[64]byte](u.contents)
 }
 
-func (u *TaggedHashUnion) SM3_256() [32]byte {
+func (u TaggedHashUnion) SM3_256() [32]byte {
 	return union.ContentsElem[[32]byte](u.contents)
 }
 
-func (u *TaggedHashUnion) SHA3_256() [32]byte {
+func (u TaggedHashUnion) SHA3_256() [32]byte {
 	return union.ContentsElem[[32]byte](u.contents)
 }
 
-func (u *TaggedHashUnion) SHA3_384() [48]byte {
+func (u TaggedHashUnion) SHA3_384() [48]byte {
 	return union.ContentsElem[[48]byte](u.contents)
 }
 
-func (u *TaggedHashUnion) SHA3_512() [64]byte {
+func (u TaggedHashUnion) SHA3_512() [64]byte {
 	return union.ContentsElem[[64]byte](u.contents)
 }
 
@@ -824,43 +824,43 @@ func MakeCapabilitiesUnion[T CapabilitiesUnionConstraint](contents T) Capabiliti
 	return CapabilitiesUnion{contents: union.NewContents(contents)}
 }
 
-func (c *CapabilitiesUnion) Algorithms() AlgorithmPropertyList {
+func (c CapabilitiesUnion) Algorithms() AlgorithmPropertyList {
 	return union.ContentsElem[AlgorithmPropertyList](c.contents)
 }
 
-func (c *CapabilitiesUnion) Handles() HandleList {
+func (c CapabilitiesUnion) Handles() HandleList {
 	return union.ContentsElem[HandleList](c.contents)
 }
 
-func (c *CapabilitiesUnion) Command() CommandAttributesList {
+func (c CapabilitiesUnion) Command() CommandAttributesList {
 	return union.ContentsElem[CommandAttributesList](c.contents)
 }
 
-func (c *CapabilitiesUnion) PPCommands() CommandCodeList {
+func (c CapabilitiesUnion) PPCommands() CommandCodeList {
 	return union.ContentsElem[CommandCodeList](c.contents)
 }
 
-func (c *CapabilitiesUnion) AuditCommands() CommandCodeList {
+func (c CapabilitiesUnion) AuditCommands() CommandCodeList {
 	return union.ContentsElem[CommandCodeList](c.contents)
 }
 
-func (c *CapabilitiesUnion) AssignedPCR() PCRSelectionList {
+func (c CapabilitiesUnion) AssignedPCR() PCRSelectionList {
 	return union.ContentsElem[PCRSelectionList](c.contents)
 }
 
-func (c *CapabilitiesUnion) TPMProperties() TaggedTPMPropertyList {
+func (c CapabilitiesUnion) TPMProperties() TaggedTPMPropertyList {
 	return union.ContentsElem[TaggedTPMPropertyList](c.contents)
 }
 
-func (c *CapabilitiesUnion) PCRProperties() TaggedPCRPropertyList {
+func (c CapabilitiesUnion) PCRProperties() TaggedPCRPropertyList {
 	return union.ContentsElem[TaggedPCRPropertyList](c.contents)
 }
 
-func (c *CapabilitiesUnion) ECCCurves() ECCCurveList {
+func (c CapabilitiesUnion) ECCCurves() ECCCurveList {
 	return union.ContentsElem[ECCCurveList](c.contents)
 }
 
-func (c *CapabilitiesUnion) AuthPolicies() TaggedPolicyList {
+func (c CapabilitiesUnion) AuthPolicies() TaggedPolicyList {
 	return union.ContentsElem[TaggedPolicyList](c.contents)
 }
 
@@ -1021,31 +1021,31 @@ func MakeAttestUnion[T AttestUnionConstraint](contents T) AttestUnion {
 	return AttestUnion{contents: union.NewContents(contents)}
 }
 
-func (a *AttestUnion) Certify() *CertifyInfo {
+func (a AttestUnion) Certify() *CertifyInfo {
 	return union.ContentsPtr[CertifyInfo](a.contents)
 }
 
-func (a *AttestUnion) Creation() *CreationInfo {
+func (a AttestUnion) Creation() *CreationInfo {
 	return union.ContentsPtr[CreationInfo](a.contents)
 }
 
-func (a *AttestUnion) Quote() *QuoteInfo {
+func (a AttestUnion) Quote() *QuoteInfo {
 	return union.ContentsPtr[QuoteInfo](a.contents)
 }
 
-func (a *AttestUnion) CommandAudit() *CommandAuditInfo {
+func (a AttestUnion) CommandAudit() *CommandAuditInfo {
 	return union.ContentsPtr[CommandAuditInfo](a.contents)
 }
 
-func (a *AttestUnion) SessionAudit() *SessionAuditInfo {
+func (a AttestUnion) SessionAudit() *SessionAuditInfo {
 	return union.ContentsPtr[SessionAuditInfo](a.contents)
 }
 
-func (a *AttestUnion) Time() *TimeAttestInfo {
+func (a AttestUnion) Time() *TimeAttestInfo {
 	return union.ContentsPtr[TimeAttestInfo](a.contents)
 }
 
-func (a *AttestUnion) NV() *NVCertifyInfo {
+func (a AttestUnion) NV() *NVCertifyInfo {
 	return union.ContentsPtr[NVCertifyInfo](a.contents)
 }
 

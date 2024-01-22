@@ -36,23 +36,23 @@ func MakeSymKeyBitsUnion[T SymKeyBitsUnionConstraint](contents T) SymKeyBitsUnio
 	return SymKeyBitsUnion{contents: union.NewContents(contents)}
 }
 
-func (b *SymKeyBitsUnion) AES() uint16 {
+func (b SymKeyBitsUnion) AES() uint16 {
 	return union.ContentsElem[uint16](b.contents)
 }
 
-func (b *SymKeyBitsUnion) SM4() uint16 {
+func (b SymKeyBitsUnion) SM4() uint16 {
 	return union.ContentsElem[uint16](b.contents)
 }
 
-func (b *SymKeyBitsUnion) Camellia() uint16 {
+func (b SymKeyBitsUnion) Camellia() uint16 {
 	return union.ContentsElem[uint16](b.contents)
 }
 
-func (b *SymKeyBitsUnion) XOR() HashAlgorithmId {
+func (b SymKeyBitsUnion) XOR() HashAlgorithmId {
 	return union.ContentsElem[HashAlgorithmId](b.contents)
 }
 
-func (b *SymKeyBitsUnion) Sym() uint16 {
+func (b SymKeyBitsUnion) Sym() uint16 {
 	return union.ContentsElem[uint16](b.contents)
 }
 
@@ -103,19 +103,19 @@ func MakeSymModeUnion[T SymModeUnionConstraint](contents T) SymModeUnion {
 	return SymModeUnion{contents: union.NewContents(contents)}
 }
 
-func (m *SymModeUnion) AES() SymModeId {
+func (m SymModeUnion) AES() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
 
-func (m *SymModeUnion) SM4() SymModeId {
+func (m SymModeUnion) SM4() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
 
-func (m *SymModeUnion) Camellia() SymModeId {
+func (m SymModeUnion) Camellia() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
 
-func (m *SymModeUnion) Sym() SymModeId {
+func (m SymModeUnion) Sym() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
 
@@ -236,11 +236,11 @@ func MakeSchemeKeyedHashUnion[T SchemeKeyedHashUnionConstraint](contents T) Sche
 	return SchemeKeyedHashUnion{contents: union.NewContents(contents)}
 }
 
-func (d *SchemeKeyedHashUnion) HMAC() *SchemeHMAC {
+func (d SchemeKeyedHashUnion) HMAC() *SchemeHMAC {
 	return union.ContentsPtr[SchemeHMAC](d.contents)
 }
 
-func (d *SchemeKeyedHashUnion) XOR() *SchemeXOR {
+func (d SchemeKeyedHashUnion) XOR() *SchemeXOR {
 	return union.ContentsPtr[SchemeXOR](d.contents)
 }
 
@@ -311,31 +311,31 @@ func MakeSigSchemeUnion[T SigSchemeUnionConstraint](contents T) SigSchemeUnion {
 	return SigSchemeUnion{contents: union.NewContents(contents)}
 }
 
-func (s *SigSchemeUnion) RSASSA() *SigSchemeRSASSA {
+func (s SigSchemeUnion) RSASSA() *SigSchemeRSASSA {
 	return union.ContentsPtr[SigSchemeRSASSA](s.contents)
 }
 
-func (s *SigSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
+func (s SigSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
 	return union.ContentsPtr[SigSchemeRSAPSS](s.contents)
 }
 
-func (s *SigSchemeUnion) ECDSA() *SigSchemeECDSA {
+func (s SigSchemeUnion) ECDSA() *SigSchemeECDSA {
 	return union.ContentsPtr[SigSchemeECDSA](s.contents)
 }
 
-func (s *SigSchemeUnion) ECDAA() *SigSchemeECDAA {
+func (s SigSchemeUnion) ECDAA() *SigSchemeECDAA {
 	return union.ContentsPtr[SigSchemeECDAA](s.contents)
 }
 
-func (s *SigSchemeUnion) SM2() *SigSchemeSM2 {
+func (s SigSchemeUnion) SM2() *SigSchemeSM2 {
 	return union.ContentsPtr[SigSchemeSM2](s.contents)
 }
 
-func (s *SigSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
+func (s SigSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
 	return union.ContentsPtr[SigSchemeECSchnorr](s.contents)
 }
 
-func (s *SigSchemeUnion) HMAC() *SchemeHMAC {
+func (s SigSchemeUnion) HMAC() *SchemeHMAC {
 	return union.ContentsPtr[SchemeHMAC](s.contents)
 }
 
@@ -440,19 +440,19 @@ func MakeKDFSchemeUnion[T KDFSchemeUnionConstraint](contents T) KDFSchemeUnion {
 	return KDFSchemeUnion{contents: union.NewContents(contents)}
 }
 
-func (s *KDFSchemeUnion) MGF1() *SchemeMGF1 {
+func (s KDFSchemeUnion) MGF1() *SchemeMGF1 {
 	return union.ContentsPtr[SchemeMGF1](s.contents)
 }
 
-func (s *KDFSchemeUnion) KDF1_SP800_56A() *SchemeKDF1_SP800_56A {
+func (s KDFSchemeUnion) KDF1_SP800_56A() *SchemeKDF1_SP800_56A {
 	return union.ContentsPtr[SchemeKDF1_SP800_56A](s.contents)
 }
 
-func (s *KDFSchemeUnion) KDF2() *SchemeKDF2 {
+func (s KDFSchemeUnion) KDF2() *SchemeKDF2 {
 	return union.ContentsPtr[SchemeKDF2](s.contents)
 }
 
-func (s *KDFSchemeUnion) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
+func (s KDFSchemeUnion) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
 	return union.ContentsPtr[SchemeKDF1_SP800_108](s.contents)
 }
 
@@ -578,49 +578,49 @@ func MakeAsymSchemeUnion[T AsymSchemeUnionConstraint](contents T) AsymSchemeUnio
 	return AsymSchemeUnion{contents: union.NewContents(contents)}
 }
 
-func (s *AsymSchemeUnion) RSASSA() *SigSchemeRSASSA {
+func (s AsymSchemeUnion) RSASSA() *SigSchemeRSASSA {
 	return union.ContentsPtr[SigSchemeRSASSA](s.contents)
 }
 
-func (s *AsymSchemeUnion) RSAES() *EncSchemeRSAES {
+func (s AsymSchemeUnion) RSAES() *EncSchemeRSAES {
 	return union.ContentsPtr[EncSchemeRSAES](s.contents)
 }
 
-func (s *AsymSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
+func (s AsymSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
 	return union.ContentsPtr[SigSchemeRSAPSS](s.contents)
 }
 
-func (s *AsymSchemeUnion) OAEP() *EncSchemeOAEP {
+func (s AsymSchemeUnion) OAEP() *EncSchemeOAEP {
 	return union.ContentsPtr[EncSchemeOAEP](s.contents)
 }
 
-func (s *AsymSchemeUnion) ECDSA() *SigSchemeECDSA {
+func (s AsymSchemeUnion) ECDSA() *SigSchemeECDSA {
 	return union.ContentsPtr[SigSchemeECDSA](s.contents)
 }
 
-func (s *AsymSchemeUnion) ECDH() *KeySchemeECDH {
+func (s AsymSchemeUnion) ECDH() *KeySchemeECDH {
 	return union.ContentsPtr[KeySchemeECDH](s.contents)
 }
 
-func (s *AsymSchemeUnion) ECDAA() *SigSchemeECDAA {
+func (s AsymSchemeUnion) ECDAA() *SigSchemeECDAA {
 	return union.ContentsPtr[SigSchemeECDAA](s.contents)
 }
 
-func (s *AsymSchemeUnion) SM2() *SigSchemeSM2 {
+func (s AsymSchemeUnion) SM2() *SigSchemeSM2 {
 	return union.ContentsPtr[SigSchemeSM2](s.contents)
 }
 
-func (s *AsymSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
+func (s AsymSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
 	return union.ContentsPtr[SigSchemeECSchnorr](s.contents)
 }
 
-func (s *AsymSchemeUnion) ECMQV() *KeySchemeECMQV {
+func (s AsymSchemeUnion) ECMQV() *KeySchemeECMQV {
 	return union.ContentsPtr[KeySchemeECMQV](s.contents)
 }
 
 // Any returns the asymmetric scheme associated with scheme as a *SchemeHash.
 // It panics if the specified scheme does not have an associated digest algorithm
-func (s *AsymSchemeUnion) Any() *SchemeHash {
+func (s AsymSchemeUnion) Any() *SchemeHash {
 	switch ptr := s.contents.(type) {
 	case *SchemeHash:
 		return ptr
@@ -797,36 +797,36 @@ func MakeSignatureUnion[T SignatureUnionConstraint](contents T) SignatureUnion {
 	return SignatureUnion{contents: union.NewContents(contents)}
 }
 
-func (s *SignatureUnion) RSASSA() *SignatureRSASSA {
+func (s SignatureUnion) RSASSA() *SignatureRSASSA {
 	return union.ContentsPtr[SignatureRSASSA](s.contents)
 }
 
-func (s *SignatureUnion) RSAPSS() *SignatureRSAPSS {
+func (s SignatureUnion) RSAPSS() *SignatureRSAPSS {
 	return union.ContentsPtr[SignatureRSAPSS](s.contents)
 }
 
-func (s *SignatureUnion) ECDSA() *SignatureECDSA {
+func (s SignatureUnion) ECDSA() *SignatureECDSA {
 	return union.ContentsPtr[SignatureECDSA](s.contents)
 }
 
-func (s *SignatureUnion) ECDAA() *SignatureECDAA {
+func (s SignatureUnion) ECDAA() *SignatureECDAA {
 	return union.ContentsPtr[SignatureECDAA](s.contents)
 }
 
-func (s *SignatureUnion) SM2() *SignatureSM2 {
+func (s SignatureUnion) SM2() *SignatureSM2 {
 	return union.ContentsPtr[SignatureSM2](s.contents)
 }
 
-func (s *SignatureUnion) ECSchnorr() *SignatureECSchnorr {
+func (s SignatureUnion) ECSchnorr() *SignatureECSchnorr {
 	return union.ContentsPtr[SignatureECSchnorr](s.contents)
 }
 
-func (s *SignatureUnion) HMAC() *TaggedHash {
+func (s SignatureUnion) HMAC() *TaggedHash {
 	return union.ContentsPtr[TaggedHash](s.contents)
 }
 
 // Any returns the signature associated with scheme as a *SchemeHash.
-func (s *SignatureUnion) Any() *SchemeHash {
+func (s SignatureUnion) Any() *SchemeHash {
 	switch ptr := s.contents.(type) {
 	case *SignatureRSA:
 		return *(**SchemeHash)(unsafe.Pointer(&ptr))

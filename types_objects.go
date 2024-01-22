@@ -54,19 +54,19 @@ func MakePublicIDUnion[T PublicIDUnionConstraint](contents T) PublicIDUnion {
 	return PublicIDUnion{contents: union.NewContents(contents)}
 }
 
-func (p *PublicIDUnion) KeyedHash() Digest {
+func (p PublicIDUnion) KeyedHash() Digest {
 	return union.ContentsElem[Digest](p.contents)
 }
 
-func (p *PublicIDUnion) Sym() Digest {
+func (p PublicIDUnion) Sym() Digest {
 	return union.ContentsElem[Digest](p.contents)
 }
 
-func (p *PublicIDUnion) RSA() PublicKeyRSA {
+func (p PublicIDUnion) RSA() PublicKeyRSA {
 	return union.ContentsElem[PublicKeyRSA](p.contents)
 }
 
-func (p *PublicIDUnion) ECC() *ECCPoint {
+func (p PublicIDUnion) ECC() *ECCPoint {
 	return union.ContentsPtr[ECCPoint](p.contents)
 }
 
@@ -162,19 +162,19 @@ func MakePublicParamsUnion[T PublicParamsUnionConstraint](contents T) PublicPara
 	return PublicParamsUnion{contents: union.NewContents(contents)}
 }
 
-func (p *PublicParamsUnion) KeyedHashDetail() *KeyedHashParams {
+func (p PublicParamsUnion) KeyedHashDetail() *KeyedHashParams {
 	return union.ContentsPtr[KeyedHashParams](p.contents)
 }
 
-func (p *PublicParamsUnion) SymDetail() *SymCipherParams {
+func (p PublicParamsUnion) SymDetail() *SymCipherParams {
 	return union.ContentsPtr[SymCipherParams](p.contents)
 }
 
-func (p *PublicParamsUnion) RSADetail() *RSAParams {
+func (p PublicParamsUnion) RSADetail() *RSAParams {
 	return union.ContentsPtr[RSAParams](p.contents)
 }
 
-func (p *PublicParamsUnion) ECCDetail() *ECCParams {
+func (p PublicParamsUnion) ECCDetail() *ECCParams {
 	return union.ContentsPtr[ECCParams](p.contents)
 }
 
@@ -416,25 +416,25 @@ func MakeSensitiveCompositeUnion[T SensitiveCompositeUnionConstraint](contents T
 	return SensitiveCompositeUnion{contents: union.NewContents(contents)}
 }
 
-func (s *SensitiveCompositeUnion) RSA() PrivateKeyRSA {
+func (s SensitiveCompositeUnion) RSA() PrivateKeyRSA {
 	return union.ContentsElem[PrivateKeyRSA](s.contents)
 }
 
-func (s *SensitiveCompositeUnion) ECC() ECCParameter {
+func (s SensitiveCompositeUnion) ECC() ECCParameter {
 	return union.ContentsElem[ECCParameter](s.contents)
 }
 
-func (s *SensitiveCompositeUnion) Bits() SensitiveData {
+func (s SensitiveCompositeUnion) Bits() SensitiveData {
 	return union.ContentsElem[SensitiveData](s.contents)
 }
 
-func (s *SensitiveCompositeUnion) Sym() SymKey {
+func (s SensitiveCompositeUnion) Sym() SymKey {
 	return union.ContentsElem[SymKey](s.contents)
 }
 
 // Any returns the value associated with the specified object type as
 // PrivateVendorSpecific.
-func (s *SensitiveCompositeUnion) Any() PrivateVendorSpecific {
+func (s SensitiveCompositeUnion) Any() PrivateVendorSpecific {
 	switch ptr := s.contents.(type) {
 	case *PrivateKeyRSA:
 		return PrivateVendorSpecific(*ptr)

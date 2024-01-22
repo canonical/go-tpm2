@@ -776,59 +776,59 @@ func makePolicyElementDetails[T policyElementConstraint](contents T) policyEleme
 	return policyElementDetails{contents: union.NewContents(contents)}
 }
 
-func (d *policyElementDetails) NV() *policyNVElement {
+func (d policyElementDetails) NV() *policyNVElement {
 	return union.ContentsPtr[policyNVElement](d.contents)
 }
 
-func (d *policyElementDetails) Secret() *policySecretElement {
+func (d policyElementDetails) Secret() *policySecretElement {
 	return union.ContentsPtr[policySecretElement](d.contents)
 }
 
-func (d *policyElementDetails) Signed() *policySignedElement {
+func (d policyElementDetails) Signed() *policySignedElement {
 	return union.ContentsPtr[policySignedElement](d.contents)
 }
 
-func (d *policyElementDetails) Authorize() *policyAuthorizeElement {
+func (d policyElementDetails) Authorize() *policyAuthorizeElement {
 	return union.ContentsPtr[policyAuthorizeElement](d.contents)
 }
 
-func (d *policyElementDetails) AuthValue() *policyAuthValueElement {
+func (d policyElementDetails) AuthValue() *policyAuthValueElement {
 	return union.ContentsPtr[policyAuthValueElement](d.contents)
 }
 
-func (d *policyElementDetails) CommandCode() *policyCommandCodeElement {
+func (d policyElementDetails) CommandCode() *policyCommandCodeElement {
 	return union.ContentsPtr[policyCommandCodeElement](d.contents)
 }
 
-func (d *policyElementDetails) CounterTimer() *policyCounterTimerElement {
+func (d policyElementDetails) CounterTimer() *policyCounterTimerElement {
 	return union.ContentsPtr[policyCounterTimerElement](d.contents)
 }
 
-func (d *policyElementDetails) CpHash() *policyCpHashElement {
+func (d policyElementDetails) CpHash() *policyCpHashElement {
 	return union.ContentsPtr[policyCpHashElement](d.contents)
 }
 
-func (d *policyElementDetails) NameHash() *policyNameHashElement {
+func (d policyElementDetails) NameHash() *policyNameHashElement {
 	return union.ContentsPtr[policyNameHashElement](d.contents)
 }
 
-func (d *policyElementDetails) OR() *policyORElement {
+func (d policyElementDetails) OR() *policyORElement {
 	return union.ContentsPtr[policyORElement](d.contents)
 }
 
-func (d *policyElementDetails) PCR() *policyPCRElement {
+func (d policyElementDetails) PCR() *policyPCRElement {
 	return union.ContentsPtr[policyPCRElement](d.contents)
 }
 
-func (d *policyElementDetails) DuplicationSelect() *policyDuplicationSelectElement {
+func (d policyElementDetails) DuplicationSelect() *policyDuplicationSelectElement {
 	return union.ContentsPtr[policyDuplicationSelectElement](d.contents)
 }
 
-func (d *policyElementDetails) Password() *policyPasswordElement {
+func (d policyElementDetails) Password() *policyPasswordElement {
 	return union.ContentsPtr[policyPasswordElement](d.contents)
 }
 
-func (d *policyElementDetails) NvWritten() *policyNvWrittenElement {
+func (d policyElementDetails) NvWritten() *policyNvWrittenElement {
 	return union.ContentsPtr[policyNvWrittenElement](d.contents)
 }
 
