@@ -133,7 +133,7 @@ func TestStartAuthSession(t *testing.T) {
 				}
 
 				if sc.Params().HashAlg != data.alg {
-					t.Errorf("The returned session context has the wrong algorithm (got %v)", sc.HashAlg())
+					t.Errorf("The returned session context has the wrong algorithm (got %v)", sc.Params().HashAlg)
 				}
 				if data.bind == nil || data.sessionType != SessionTypeHMAC {
 					if sc.Params().IsBound {

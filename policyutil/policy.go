@@ -1031,12 +1031,13 @@ type policyExecuteRunner struct {
 }
 
 func newPolicyExecuteRunner(tpm TPMConnection, session tpm2.SessionContext, tickets *executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
+	sessionAlg := session.Params().HashAlg
 	return &policyExecuteRunner{
 		tpm:        tpm,
-		sessionAlg: session.HashAlg(),
+		sessionAlg: sessionAlg,
 		policySession: newTeePolicySession(
 			newTpmPolicySession(tpm, session),
-			newBranchDetailsCollector(session.HashAlg(), details),
+			newBranchDetailsCollector(sessionAlg, details),
 		),
 		policyTickets:        tickets,
 		policyResources:      resources,
@@ -1526,7 +1527,7 @@ func (p *Policy) Execute(tpm TPMConnection, session tpm2.SessionContext, resourc
 		params = new(PolicyExecuteParams)
 	}
 
-	tickets, err := newExecutePolicyTickets(session.HashAlg(), params.Tickets, params.Usage)
+	tickets, err := newExecutePolicyTickets(session.Params().HashAlg, params.Tickets, params.Usage)
 	if err != nil {
 		return nil, err
 	}

@@ -344,7 +344,7 @@ func (s *signaturesSuite) testSignPolicyAuthorization(c *C, data *testSignPolicy
 
 	var nonceTPM tpm2.Nonce
 	if data.includeNonce {
-		nonceTPM = session.NonceTPM()
+		nonceTPM = session.State().NonceTPM
 	}
 
 	sig, err := SignPolicyAuthorization(data.key, data.scheme, nonceTPM, data.cpHashA, data.policyRef, data.expiration)

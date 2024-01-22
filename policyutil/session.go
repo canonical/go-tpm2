@@ -57,11 +57,11 @@ func (s *tpmPolicySession) Name() tpm2.Name {
 }
 
 func (s *tpmPolicySession) HashAlg() tpm2.HashAlgorithmId {
-	return s.session.HashAlg()
+	return s.session.Params().HashAlg
 }
 
 func (s *tpmPolicySession) NonceTPM() tpm2.Nonce {
-	return s.session.NonceTPM()
+	return s.session.State().NonceTPM
 }
 
 func (s *tpmPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {

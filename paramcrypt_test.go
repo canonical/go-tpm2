@@ -208,7 +208,7 @@ func (s *paramcryptSuite) testEncryptCommandParameter(c *C, data *testEncryptCom
 
 	var expectedDecryptNonce Nonce
 	if data.decryptSessionIndex > 0 && sessions[0].IsAuth() {
-		expectedDecryptNonce = data.sessions[data.decryptSessionIndex].NonceTPM()
+		expectedDecryptNonce = data.sessions[data.decryptSessionIndex].State().NonceTPM
 	}
 	c.Check(sessions[0].DecryptNonce, DeepEquals, expectedDecryptNonce)
 }

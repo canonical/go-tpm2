@@ -120,7 +120,7 @@ func (e *execContext) processResponseAuth(r *rspContext) (err error) {
 	}
 
 	for _, s := range r.SessionParams.Sessions {
-		if s.Session.IsExclusive() {
+		if s.Session.State() != nil && s.Session.State().IsExclusive {
 			e.lastExclusiveSession = s.Session
 			break
 		}

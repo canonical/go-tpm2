@@ -49,7 +49,7 @@ func (s *authSuite) testPolicySignedAuthorization(c *C, data *testPolicySignedAu
 
 	var nonceTPM tpm2.Nonce
 	if data.includeNonceTPM {
-		nonceTPM = session.NonceTPM()
+		nonceTPM = session.State().NonceTPM
 	}
 	var expectedCpHash tpm2.Digest
 	if data.cpHashA != nil {
@@ -262,7 +262,7 @@ func (s *authSuite) testSignPolicySignedAuthorization(c *C, data *testSignPolicy
 
 	var nonceTPM tpm2.Nonce
 	if data.includeNonceTPM {
-		nonceTPM = session.NonceTPM()
+		nonceTPM = session.State().NonceTPM
 	}
 
 	auth, err := SignPolicySignedAuthorization(rand.Reader, data.signer, nonceTPM, data.cpHashA, data.policyRef, data.expiration, data.signerOpts)

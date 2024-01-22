@@ -88,7 +88,7 @@ func (s *sessionParam) ComputeSessionHMACKey() []byte {
 
 func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDecrypt, nonceEncrypt Nonce, attrs SessionAttributes) ([]byte, bool) {
 	key := s.ComputeSessionHMACKey()
-	h := hmac.New(func() hash.Hash { return s.Session.HashAlg().NewHash() }, key)
+	h := hmac.New(func() hash.Hash { return s.Session.Params().HashAlg.NewHash() }, key)
 
 	h.Write(pHash)
 	h.Write(nonceNewer)
@@ -101,14 +101,14 @@ func (s *sessionParam) computeHMAC(pHash []byte, nonceNewer, nonceOlder, nonceDe
 }
 
 func (s *sessionParam) ComputeCommandHMAC(commandCode CommandCode, commandHandles []Name, cpBytes []byte) []byte {
-	cpHash := cryptComputeCpHash(s.Session.HashAlg(), commandCode, commandHandles, cpBytes)
-	h, _ := s.computeHMAC(cpHash, s.NonceCaller, s.Session.NonceTPM(), s.DecryptNonce, s.EncryptNonce, s.Session.Attrs())
+	cpHash := cryptComputeCpHash(s.Session.Params().HashAlg, commandCode, commandHandles, cpBytes)
+	h, _ := s.computeHMAC(cpHash, s.NonceCaller, s.Session.State().NonceTPM, s.DecryptNonce, s.EncryptNonce, s.Session.Attrs())
 	return h
 }
 
 func (s *sessionParam) ComputeResponseHMAC(resp AuthResponse, commandCode CommandCode, rpBytes []byte) ([]byte, bool) {
-	rpHash := cryptComputeRpHash(s.Session.HashAlg(), ResponseSuccess, commandCode, rpBytes)
-	return s.computeHMAC(rpHash, s.Session.NonceTPM(), s.NonceCaller, nil, nil, resp.SessionAttributes)
+	rpHash := cryptComputeRpHash(s.Session.Params().HashAlg, ResponseSuccess, commandCode, rpBytes)
+	return s.computeHMAC(rpHash, s.Session.State().NonceTPM, s.NonceCaller, nil, nil, resp.SessionAttributes)
 }
 
 func (s *sessionParam) BuildCommandAuth(commandCode CommandCode, commandHandles []Name, cpBytes []byte) *AuthCommand {
@@ -223,10 +223,10 @@ func (p *sessionParams) AppendExtraSessions(sessions ...SessionContext) error {
 
 func (p *sessionParams) ComputeCallerNonces() error {
 	for _, s := range p.Sessions {
-		if s.Session.HashAlg() == HashAlgorithmNull {
+		if s.Session.Params().HashAlg == HashAlgorithmNull {
 			continue
 		}
-		s.NonceCaller = make(Nonce, s.Session.HashAlg().Size())
+		s.NonceCaller = make(Nonce, s.Session.Params().HashAlg.Size())
 		if err := cryptComputeNonce(s.NonceCaller); err != nil {
 			return fmt.Errorf("cannot compute new caller nonce: %v", err)
 		}

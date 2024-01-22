@@ -2405,11 +2405,11 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 
 	authorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-			c.Check(sessionNonce, DeepEquals, session.NonceTPM())
+			c.Check(sessionNonce, DeepEquals, session.State().NonceTPM)
 			c.Check(authKey, DeepEquals, data.authKey.Name())
 			c.Check(policyRef, DeepEquals, data.policyRef)
 
-			auth, err := NewPolicySignedAuthorization(session.HashAlg(), sessionNonce, data.cpHashA, data.expiration)
+			auth, err := NewPolicySignedAuthorization(session.Params().HashAlg, sessionNonce, data.cpHashA, data.expiration)
 			c.Assert(err, IsNil)
 			c.Check(auth.Sign(rand.Reader, data.authKey, policyRef, data.signer, data.signerOpts), IsNil)
 
@@ -2422,7 +2422,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		return err
 	}
 	if data.expiration < 0 && err == nil {
-		expectedCpHash, err := data.cpHashA.Digest(session.HashAlg())
+		expectedCpHash, err := data.cpHashA.Digest(session.Params().HashAlg)
 		c.Check(err, IsNil)
 
 		c.Assert(result.NewTickets, internal_testutil.LenEquals, 1)
@@ -2589,11 +2589,11 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 
 	authorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKeyName tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-			c.Check(sessionNonce, DeepEquals, session.NonceTPM())
+			c.Check(sessionNonce, DeepEquals, session.State().NonceTPM)
 			c.Check(authKeyName, DeepEquals, authKey.Name())
 			c.Check(policyRef, IsNil)
 
-			auth, err := NewPolicySignedAuthorization(session.HashAlg(), sessionNonce, nil, -100)
+			auth, err := NewPolicySignedAuthorization(session.Params().HashAlg, sessionNonce, nil, -100)
 			c.Assert(err, IsNil)
 			c.Check(auth.Sign(rand.Reader, authKey, policyRef, key, tpm2.HashAlgorithmSHA256), IsNil)
 
@@ -3136,7 +3136,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	}
 	signedAuthorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-			auth, err := NewPolicySignedAuthorization(session.HashAlg(), nil, nil, 0)
+			auth, err := NewPolicySignedAuthorization(session.Params().HashAlg, nil, nil, 0)
 			c.Assert(err, IsNil)
 			c.Check(auth.Sign(rand.Reader, pubKey, policyRef, key, crypto.SHA256), IsNil)
 

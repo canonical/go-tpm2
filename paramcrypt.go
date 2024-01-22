@@ -55,7 +55,7 @@ func (p *sessionParams) ComputeEncryptNonce() {
 		return
 	}
 
-	p.Sessions[0].EncryptNonce = s.Session.NonceTPM()
+	p.Sessions[0].EncryptNonce = s.Session.State().NonceTPM
 }
 
 func (p *sessionParams) EncryptCommandParameter(cpBytes []byte) error {
