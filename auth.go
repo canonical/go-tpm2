@@ -28,7 +28,7 @@ type sessionParam struct {
 }
 
 func newExtraSessionParam(session SessionContext) (*sessionParam, error) {
-	if session.State() == nil {
+	if session.Params().HashAlg == HashAlgorithmNull || session.State() == nil {
 		return nil, errors.New("limited context or flushed session")
 	}
 	if session.Handle().Type() != HandleTypeHMACSession {
@@ -39,7 +39,7 @@ func newExtraSessionParam(session SessionContext) (*sessionParam, error) {
 }
 
 func newSessionParamForAuth(session SessionContext, resource ResourceContext) (*sessionParam, error) {
-	if session.State() == nil {
+	if session.Handle() != HandlePW && (session.Params().HashAlg == HashAlgorithmNull || session.State() == nil) {
 		return nil, errors.New("invalid context for session: limited context or flushed session")
 	}
 
