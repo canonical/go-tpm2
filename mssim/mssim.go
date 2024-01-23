@@ -235,8 +235,12 @@ func (t *internalTransport) Write(data []byte) (int, error) {
 }
 
 func (t *internalTransport) Close() (err error) {
-	t.sendPlatformCommand(cmdSessionEnd)
-	t.sendTpmCommand(cmdSessionEnd)
+	if e := t.sendPlatformCommand(cmdSessionEnd); e != nil {
+		err = fmt.Errorf("cannot send session end command on platform channel: %w", e)
+	}
+	if _, e := t.sendTpmCommand(cmdSessionEnd); e != nil {
+		err = fmt.Errorf("cannot send session end command on TPM channel: %w", e)
+	}
 	if e := t.platform.Close(); e != nil {
 		err = fmt.Errorf("cannot close platform channel: %w", e)
 	}
