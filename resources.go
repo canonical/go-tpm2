@@ -63,18 +63,6 @@ type SessionContext interface {
 	// [HandleContext.Dispose] was called.
 	State() *SessionContextState
 
-	// Deprecated: Use Params
-	HashAlg() HashAlgorithmId
-
-	// Deprecated: Use State
-	NonceTPM() Nonce
-
-	// Deprecated: Use State
-	IsAudit() bool
-
-	// Deprecated: Use State
-	IsExclusive() bool
-
 	Attrs() SessionAttributes                         // The attributes associated with this session
 	SetAttrs(attrs SessionAttributes)                 // Set the attributes that will be used for this SessionContext
 	WithAttrs(attrs SessionAttributes) SessionContext // Return a duplicate of this SessionContext with the specified attributes
@@ -480,34 +468,6 @@ func (r *sessionContext) State() *SessionContextState {
 		return nil
 	}
 	return &d.State
-}
-
-func (r *sessionContext) HashAlg() HashAlgorithmId {
-	return r.Params().HashAlg
-}
-
-func (r *sessionContext) NonceTPM() Nonce {
-	state := r.State()
-	if state == nil {
-		return nil
-	}
-	return state.NonceTPM
-}
-
-func (r *sessionContext) IsAudit() bool {
-	state := r.State()
-	if state == nil {
-		return false
-	}
-	return state.IsAudit
-}
-
-func (r *sessionContext) IsExclusive() bool {
-	state := r.State()
-	if state == nil {
-		return false
-	}
-	return state.IsExclusive
 }
 
 func (r *sessionContext) Attrs() SessionAttributes {
