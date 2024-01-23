@@ -32,52 +32,61 @@ type TaggedHashUnionConstraint interface {
 	[20]byte | [32]byte | [48]byte | [64]byte | Empty
 }
 
-// TaggedHashUnion is a union type that corresponds to the TPMU_HA type. The
-// selector type is [HashAlgorithmId]. Mapping of selector values to fields is
-// as follows:
-//   - HashAlgorithmSHA1: SHA1
-//   - HashAlgorithmSHA256: SHA256
-//   - HashAlgorithmSHA384: SHA384
-//   - HashAlgorithmSHA512: SHA512
-//   - HashAlgorithmSHA3_256: SHA3_256
-//   - HashAlgorithmSHA3_384: SHA3_384
-//   - HashAlgorithmSHA3_512: SHA3_512
+// TaggedHashUnion is a union type that corresponds to the TPMU_HA type. It stores a pointer
+// to the underlying value. The selector type is [HashAlgorithmId].
 type TaggedHashUnion struct {
 	contents union.Contents
 }
 
+// MakeTaggedHashUnion returns a TaggedHashUnion containing the supplied value.
 func MakeTaggedHashUnion[T TaggedHashUnionConstraint](contents T) TaggedHashUnion {
 	return TaggedHashUnion{contents: union.NewContents(contents)}
 }
 
+// SHA1 returns the value associated with the selector value HashAlgorithmSHA1. It
+// will panic if the underlying type is not [20]byte.
 func (u TaggedHashUnion) SHA1() [20]byte {
 	return union.ContentsElem[[20]byte](u.contents)
 }
 
+// SHA256 returns the value associated with the selector value HashAlgorithmSHA256. It
+// will panic if the underlying type is not [32]byte.
 func (u TaggedHashUnion) SHA256() [32]byte {
 	return union.ContentsElem[[32]byte](u.contents)
 }
 
+// SHA384 returns the value associated with the selector value HashAlgorithmSHA384. It
+// will panic if the underlying type is not [48]byte.
 func (u TaggedHashUnion) SHA384() [48]byte {
 	return union.ContentsElem[[48]byte](u.contents)
 }
 
+// SHA512 returns the value associated with the selector value HashAlgorithmSHA512. It
+// will panic if the underlying type is not [64]byte.
 func (u TaggedHashUnion) SHA512() [64]byte {
 	return union.ContentsElem[[64]byte](u.contents)
 }
 
+// SM3_256 returns the value associated with the selector value HashAlgorithmSM3_256. It
+// will panic if the underlying type is not [32]byte.
 func (u TaggedHashUnion) SM3_256() [32]byte {
 	return union.ContentsElem[[32]byte](u.contents)
 }
 
+// SHA3_256 returns the value associated with the selector value HashAlgorithmSHA3_256. It
+// will panic if the underlying type is not [32]byte.
 func (u TaggedHashUnion) SHA3_256() [32]byte {
 	return union.ContentsElem[[32]byte](u.contents)
 }
 
+// SHA3_384 returns the value associated with the selector value HashAlgorithmSHA3_384. It
+// will panic if the underlying type is not [48]byte.
 func (u TaggedHashUnion) SHA3_384() [48]byte {
 	return union.ContentsElem[[48]byte](u.contents)
 }
 
+// SHA3_512 returns the value associated with the selector value HashAlgorithmSHA3_512. It
+// will panic if the underlying type is not [64]byte.
 func (u TaggedHashUnion) SHA3_512() [64]byte {
 	return union.ContentsElem[[64]byte](u.contents)
 }
@@ -804,62 +813,73 @@ type CapabilitiesUnionConstraint interface {
 	AlgorithmPropertyList | HandleList | CommandAttributesList | CommandCodeList | PCRSelectionList | TaggedTPMPropertyList | TaggedPCRPropertyList | ECCCurveList | TaggedPolicyList
 }
 
-// CapabilitiesUnion is a union type that corresponds to the TPMU_CAPABILITIES type. The
-// selector type is Capability. Mapping of selector values to fields is as follows:
-//   - CapabilityAlgs: Algorithms
-//   - CapabilityHandles: Handles
-//   - CapabilityCommands: Command
-//   - CapabilityPPCommands: PPCommands
-//   - CapabilityAuditCommands: AuditCommands
-//   - CapabilityPCRs: AssignedPCR
-//   - CapabilityTPMProperties: TPMProperties
-//   - CapabilityPCRProperties: PCRProperties
-//   - CapabilityECCCurves: ECCCurves
-//   - CapabilityAuthPolicies: AuthPolicies
+// CapabilitiesUnion is a union type that corresponds to the TPMU_CAPABILITIES type. It
+// stores a pointer to the underlying value. The selector type is [Capability].
 type CapabilitiesUnion struct {
 	contents union.Contents
 }
 
+// MakeCapabilitiesUnion returns a CapabilitiesUnion containing the supplied value.
 func MakeCapabilitiesUnion[T CapabilitiesUnionConstraint](contents T) CapabilitiesUnion {
 	return CapabilitiesUnion{contents: union.NewContents(contents)}
 }
 
+// Algorithms returns the value associated with the selector value CapabilityAlgs. It
+// will panic if the underlying type is not AlgorithmPropertyList.
 func (c CapabilitiesUnion) Algorithms() AlgorithmPropertyList {
 	return union.ContentsElem[AlgorithmPropertyList](c.contents)
 }
 
+// Handles returns the value associated with the selector value CapabilityHandles. It
+// will panic if the underlying type is not HandleList.
 func (c CapabilitiesUnion) Handles() HandleList {
 	return union.ContentsElem[HandleList](c.contents)
 }
 
+// Command returns the value associated with the selector value CapabilityCommands. It
+// will panic if the underlying type is not CommandAttributeList.
 func (c CapabilitiesUnion) Command() CommandAttributesList {
 	return union.ContentsElem[CommandAttributesList](c.contents)
 }
 
+// PPCommands returns the value associated with the selector value CapabilityPPCommands. It
+// will panic if the underlying type is not CommandCodeList.
 func (c CapabilitiesUnion) PPCommands() CommandCodeList {
 	return union.ContentsElem[CommandCodeList](c.contents)
 }
 
+// AuditCommands returns the value associated with the selector value CapabilityAuditCommands. It
+// will panic if the underlying type is not CommandCodeList.
 func (c CapabilitiesUnion) AuditCommands() CommandCodeList {
 	return union.ContentsElem[CommandCodeList](c.contents)
 }
 
+// AssignedPCR returns the value associated with the selector value CapabilityPCRs. It
+// will panic if the underlying type is not PCRSelectionList.
 func (c CapabilitiesUnion) AssignedPCR() PCRSelectionList {
 	return union.ContentsElem[PCRSelectionList](c.contents)
 }
 
+// TPMProperties returns the value associated with the selector value CapabilityTPMProperties. It
+// will panic if the underlying type is not TaggedTPMPropertyList.
 func (c CapabilitiesUnion) TPMProperties() TaggedTPMPropertyList {
 	return union.ContentsElem[TaggedTPMPropertyList](c.contents)
 }
 
+// PCRProperties returns the value associated with the selector value CapabilityPCRProperties. It
+// will panic if the underlying type is not TaggedPCRPropertyList.
 func (c CapabilitiesUnion) PCRProperties() TaggedPCRPropertyList {
 	return union.ContentsElem[TaggedPCRPropertyList](c.contents)
 }
 
+// ECCCurves returns the value associated with the selector value CapabilityECCCurves. It
+// will panic if the underlying type is not ECCCurveList.
 func (c CapabilitiesUnion) ECCCurves() ECCCurveList {
 	return union.ContentsElem[ECCCurveList](c.contents)
 }
 
+// AuthPolicies returns the value associated with the selector value CapabilityAuthPolicies. It
+// will panic if the underlying type is not TaggedPolicyList.
 func (c CapabilitiesUnion) AuthPolicies() TaggedPolicyList {
 	return union.ContentsElem[TaggedPolicyList](c.contents)
 }
@@ -1004,47 +1024,55 @@ type AttestUnionConstraint interface {
 	CertifyInfo | CreationInfo | QuoteInfo | CommandAuditInfo | SessionAuditInfo | TimeAttestInfo | NVCertifyInfo
 }
 
-// AttestUnion is a union type that corresponds to the TPMU_ATTEST type. The selector type is StructTag.
-// Mapping of selector values to fields is as follows:
-//   - TagAttestNV: NV
-//   - TagAttestCommandAudit: CommandAudit
-//   - TagAttestSessionAudit: SessionAudit
-//   - TagAttestCertify: Certify
-//   - TagAttestQuote: Quote
-//   - TagAttestTime: Time
-//   - TagAttestCreation: Creation
+// AttestUnion is a union type that corresponds to the TPMU_ATTEST type. It stores a
+// pointer to the underlying value. The selector type is StructTag.
 type AttestUnion struct {
 	contents union.Contents
 }
 
+// MakeAttestUnion returns a AttestUnion containing the supplied value.
 func MakeAttestUnion[T AttestUnionConstraint](contents T) AttestUnion {
 	return AttestUnion{contents: union.NewContents(contents)}
 }
 
+// Certify returns a pointer to the value associated with the selector value TagAttestCertify.
+// It will panic if the underlying type is not CertifyInfo.
 func (a AttestUnion) Certify() *CertifyInfo {
 	return union.ContentsPtr[CertifyInfo](a.contents)
 }
 
+// Creation returns a pointer to the value associated with the selector value TagAttestCreation.
+// It will panic if the underlying type is not CreationInfo.
 func (a AttestUnion) Creation() *CreationInfo {
 	return union.ContentsPtr[CreationInfo](a.contents)
 }
 
+// Quote returns a pointer to the value associated with the selector value TagAttestQuote.
+// It will panic if the underlying type is not QuoteInfo.
 func (a AttestUnion) Quote() *QuoteInfo {
 	return union.ContentsPtr[QuoteInfo](a.contents)
 }
 
+// CommandAuditInfo returns a pointer to the value associated with the selector value TagAttestCommandAudit.
+// It will panic if the underlying type is not CommandAuditInfo.
 func (a AttestUnion) CommandAudit() *CommandAuditInfo {
 	return union.ContentsPtr[CommandAuditInfo](a.contents)
 }
 
+// SessionAuditInfo returns a pointer to the value associated with the selector value TagAttestSessionAudit.
+// It will panic if the underlying type is not SessionAuditInfo.
 func (a AttestUnion) SessionAudit() *SessionAuditInfo {
 	return union.ContentsPtr[SessionAuditInfo](a.contents)
 }
 
+// Time returns a pointer to the value associated with the selector value TagAttestTime.
+// It will panic if the underlying type is not TimeAttestInfo.
 func (a AttestUnion) Time() *TimeAttestInfo {
 	return union.ContentsPtr[TimeAttestInfo](a.contents)
 }
 
+// NV returns a pointer to the value associated with the selector value TagAttestNV.
+// It will panic if the underlying type is not NVCertifyInfo.
 func (a AttestUnion) NV() *NVCertifyInfo {
 	return union.ContentsPtr[NVCertifyInfo](a.contents)
 }
