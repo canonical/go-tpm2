@@ -55,12 +55,12 @@ type SessionContext interface {
 
 	// Params returns a copy of the session parameters. This will return a default
 	// value (with HashAlg == HashAlgorithmNull) if the context was created via
-	// [NewLimitedHandleContext] or [HandleContext.Dispose] was called.
+	// NewLimitedHandleContext or HandleContext.Dispose was called.
 	Params() SessionContextParams
 
 	// State provides access to read and modify the session state. This will return
-	// nil if the context was created via [NewLimitedHandleContext] or
-	// [HandleContext.Dispose] was called.
+	// nil if the context was created via NewLimitedHandleContext or
+	// HandleContext.Dispose was called.
 	State() *SessionContextState
 
 	// Deprecated: Use Params
@@ -103,8 +103,8 @@ type ObjectContext interface {
 	ResourceContext
 
 	// Public is the public area associated with the object. This will return nil
-	// if the context was created via [NewLimitedHandleContext] or
-	// [NewLimitedResourceContext], or [HandleContext.Dispose] was called.
+	// if the context was created via NewLimitedHandleContext or
+	// NewLimitedResourceContext, or HandleContext.Dispose was called.
 	Public() *Public
 }
 
