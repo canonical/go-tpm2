@@ -51,25 +51,25 @@ func MakePublicIDUnion[T PublicIDUnionConstraint](contents T) PublicIDUnion {
 	return PublicIDUnion{contents: union.NewContents(contents)}
 }
 
-// KeyedHash returns the value associated with the selector value ObjectTypeKeyedHash.
+// KeyedHash returns the value associated with the selector value [ObjectTypeKeyedHash].
 // It will panic if the underlying type is not Digest.
 func (p PublicIDUnion) KeyedHash() Digest {
 	return union.ContentsElem[Digest](p.contents)
 }
 
-// Sym returns the value associated with the selector value ObjectTypeSymCipher.
+// Sym returns the value associated with the selector value [ObjectTypeSymCipher].
 // It will panic if the underlying type is not Digest.
 func (p PublicIDUnion) Sym() Digest {
 	return union.ContentsElem[Digest](p.contents)
 }
 
-// RSA returns the value associated with the selector value ObjectTypeRSA.
+// RSA returns the value associated with the selector value [ObjectTypeRSA].
 // It will panic if the underlying type is not PublicKeyRSA.
 func (p PublicIDUnion) RSA() PublicKeyRSA {
 	return union.ContentsElem[PublicKeyRSA](p.contents)
 }
 
-// ECC returns a pointer to the value associated with the selector value ObjectTypeECC.
+// ECC returns a pointer to the value associated with the selector value [ObjectTypeECC].
 // It will panic if the underlying type is not ECCPoint.
 func (p PublicIDUnion) ECC() *ECCPoint {
 	return union.ContentsPtr[ECCPoint](p.contents)
@@ -163,25 +163,25 @@ func MakePublicParamsUnion[T PublicParamsUnionConstraint](contents T) PublicPara
 	return PublicParamsUnion{contents: union.NewContents(contents)}
 }
 
-// KeyedHashDetail returns a pointer to the value associated with the selector value ObjectTypeKeyedHash.
+// KeyedHashDetail returns a pointer to the value associated with the selector value [ObjectTypeKeyedHash].
 // It will panic if the underlying type is not KeyedHashParams.
 func (p PublicParamsUnion) KeyedHashDetail() *KeyedHashParams {
 	return union.ContentsPtr[KeyedHashParams](p.contents)
 }
 
-// SymDetail returns a pointer to the value associated with the selector value ObjectTypeSymCipher.
+// SymDetail returns a pointer to the value associated with the selector value [ObjectTypeSymCipher].
 // It will panic if the underlying type is not SymCipherParams.
 func (p PublicParamsUnion) SymDetail() *SymCipherParams {
 	return union.ContentsPtr[SymCipherParams](p.contents)
 }
 
-// RSADetail returns a pointer to the value associated with the selector value ObjectTypeRSA.
+// RSADetail returns a pointer to the value associated with the selector value [ObjectTypeRSA].
 // It will panic if the underlying type is not RSAParams.
 func (p PublicParamsUnion) RSADetail() *RSAParams {
 	return union.ContentsPtr[RSAParams](p.contents)
 }
 
-// ECCDetail returns a pointer to the value associated with the selector value ObjectTypeECC.
+// ECCDetail returns a pointer to the value associated with the selector value [ObjectTypeECC].
 // It will panic if the underlying type is not ECCParams.
 func (p PublicParamsUnion) ECCDetail() *ECCParams {
 	return union.ContentsPtr[ECCParams](p.contents)
@@ -421,25 +421,25 @@ func MakeSensitiveCompositeUnion[T SensitiveCompositeUnionConstraint](contents T
 	return SensitiveCompositeUnion{contents: union.NewContents(contents)}
 }
 
-// RSA returns the value associated with the selector value ObjectTypeRSA. It will
+// RSA returns the value associated with the selector value [ObjectTypeRSA]. It will
 // panic if the underlying type is not PrivateKeyRSA.
 func (s SensitiveCompositeUnion) RSA() PrivateKeyRSA {
 	return union.ContentsElem[PrivateKeyRSA](s.contents)
 }
 
-// ECC returns the value associated with the selector value ObjectTypeECC. It will
+// ECC returns the value associated with the selector value [ObjectTypeECC]. It will
 // panic if the underlying type is not ECCParameter.
 func (s SensitiveCompositeUnion) ECC() ECCParameter {
 	return union.ContentsElem[ECCParameter](s.contents)
 }
 
-// Bits returns the value associated with the selector value ObjectTypeKeyedHash. It will
+// Bits returns the value associated with the selector value [ObjectTypeKeyedHash]. It will
 // panic if the underlying type is not SensitiveData.
 func (s SensitiveCompositeUnion) Bits() SensitiveData {
 	return union.ContentsElem[SensitiveData](s.contents)
 }
 
-// Sym returns the value associated with the selector value ObjectTypeSymCipher. It will
+// Sym returns the value associated with the selector value [ObjectTypeSymCipher]. It will
 // panic if the underlying type is not SymKey.
 func (s SensitiveCompositeUnion) Sym() SymKey {
 	return union.ContentsElem[SymKey](s.contents)

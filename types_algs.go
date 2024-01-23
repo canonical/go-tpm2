@@ -22,7 +22,7 @@ type SymKeyBitsUnionConstraint interface {
 
 // SymKeyBitsUnion is a union type that corresponds to the TPMU_SYM_KEY_BITS type and is used to
 // specify symmetric encryption key sizes. It stores a pointer to the underlying value. The selector
-// type is [AlgorithmId]. The selector value AlgorithmNull is mapped to an empty value.
+// type is [AlgorithmId]. The selector value [AlgorithmNull] is mapped to an empty value.
 type SymKeyBitsUnion struct {
 	contents union.Contents
 }
@@ -32,32 +32,32 @@ func MakeSymKeyBitsUnion[T SymKeyBitsUnionConstraint](contents T) SymKeyBitsUnio
 	return SymKeyBitsUnion{contents: union.NewContents(contents)}
 }
 
-// AES returns the value associated with selector value AlgorithmAES. It will panic if
+// AES returns the value associated with selector value [AlgorithmAES]. It will panic if
 // the underlying type is not uint16.
 func (b SymKeyBitsUnion) AES() uint16 {
 	return union.ContentsElem[uint16](b.contents)
 }
 
-// SM4 returns the value associated with selector value AlgorithmSM4. It will panic if
+// SM4 returns the value associated with selector value [AlgorithmSM4]. It will panic if
 // the underlying type is not uint16.
 func (b SymKeyBitsUnion) SM4() uint16 {
 	return union.ContentsElem[uint16](b.contents)
 }
 
-// Camellia returns the value associated with selector value AlgorithmCamellia. It will panic if
+// Camellia returns the value associated with selector value [AlgorithmCamellia]. It will panic if
 // the underlying type is not uint16.
 func (b SymKeyBitsUnion) Camellia() uint16 {
 	return union.ContentsElem[uint16](b.contents)
 }
 
-// XOR returns the value associated with selector value AlgorithmXOR. It will panic if
+// XOR returns the value associated with selector value [AlgorithmXOR]. It will panic if
 // the underlying type is not HashAlgorithmId.
 func (b SymKeyBitsUnion) XOR() HashAlgorithmId {
 	return union.ContentsElem[HashAlgorithmId](b.contents)
 }
 
-// Sym returns the value associated with selector values AlgorithmAES,
-// AlgorithmSM4 and AlgorithmCamellia. It will panic if the underlying type is not
+// Sym returns the value associated with selector values [AlgorithmAES],
+// [AlgorithmSM4] and [AlgorithmCamellia]. It will panic if the underlying type is not
 // uint16.
 func (b SymKeyBitsUnion) Sym() uint16 {
 	return union.ContentsElem[uint16](b.contents)
@@ -96,8 +96,8 @@ type SymModeUnionConstraint interface {
 }
 
 // SymModeUnion is a union type that corresponds to the TPMU_SYM_MODE type. It stores a pointer
-// to the underlying value. The selector type is [AlgorithmId]. The selector values AlgorithmXOR
-// and AlgorithmNull are mapped to an empty value.
+// to the underlying value. The selector type is [AlgorithmId]. The selector values [AlgorithmXOR]
+// and [AlgorithmNull] are mapped to an empty value.
 type SymModeUnion struct {
 	contents union.Contents
 }
@@ -107,26 +107,26 @@ func MakeSymModeUnion[T SymModeUnionConstraint](contents T) SymModeUnion {
 	return SymModeUnion{contents: union.NewContents(contents)}
 }
 
-// AES returns the value associated with selector value AlgorithmAES. It will panic if
+// AES returns the value associated with selector value [AlgorithmAES]. It will panic if
 // the underlying type is not SymModeId.
 func (m SymModeUnion) AES() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
 
-// SM4 returns the value associated with selector value AlgorithmSM4. It will panic if
+// SM4 returns the value associated with selector value [AlgorithmSM4]. It will panic if
 // the underlying type is not SymModeId.
 func (m SymModeUnion) SM4() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
 
-// Camellia returns the value associated with selector value AlgorithmCamellia. It will
+// Camellia returns the value associated with selector value [AlgorithmCamellia]. It will
 // panic if the underlying type is not SymModeId.
 func (m SymModeUnion) Camellia() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
 
-// Sym returns the value associated with selector values AlgorithmAES, AlgorithmSM4 and
-// AlgorithmCamellia.  It will panic if the underlying type is not SymModeId.
+// Sym returns the value associated with selector values [AlgorithmAES], [AlgorithmSM4] and
+// [AlgorithmCamellia].  It will panic if the underlying type is not SymModeId.
 func (m SymModeUnion) Sym() SymModeId {
 	return union.ContentsElem[SymModeId](m.contents)
 }
@@ -236,7 +236,7 @@ type SchemeKeyedHashUnionConstraint interface {
 
 // SchemeKeyedHashUnion is a union type that corresponds to the TPMU_SCHEME_KEYED_HASH type.
 // It stores a pointer to the underlying value. The selector type is [KeyedHashSchemeId]. The
-// selector value KeyedHashSchemeNull is mapped to an empty value.
+// selector value [KeyedHashSchemeNull] is mapped to an empty value.
 type SchemeKeyedHashUnion struct {
 	contents union.Contents
 }
@@ -246,13 +246,13 @@ func MakeSchemeKeyedHashUnion[T SchemeKeyedHashUnionConstraint](contents T) Sche
 	return SchemeKeyedHashUnion{contents: union.NewContents(contents)}
 }
 
-// HMAC returns a pointer to the value associated with the selector value KeyedHashSchemeHMAC.
+// HMAC returns a pointer to the value associated with the selector value [KeyedHashSchemeHMAC].
 // It panics if the underlying type is not SchemeHMAC.
 func (d SchemeKeyedHashUnion) HMAC() *SchemeHMAC {
 	return union.ContentsPtr[SchemeHMAC](d.contents)
 }
 
-// XOR returns a pointer to the value associated with the selector value KeyedHashSchemeXOR.
+// XOR returns a pointer to the value associated with the selector value [KeyedHashSchemeXOR].
 // It panics if the underlying type is not SchemeXOR.
 func (d SchemeKeyedHashUnion) XOR() *SchemeXOR {
 	return union.ContentsPtr[SchemeXOR](d.contents)
@@ -309,7 +309,7 @@ type SigSchemeUnionConstraint interface {
 
 // SigSchemeUnion is a union type that corresponds to the TPMU_SIG_SCHEME type. It stores
 // a pointer to the underlying value. The selector type is [SigSchemeId]. The selector value
-// SigSchemeAlgNull is mapped to an empty value.
+// [SigSchemeAlgNull] is mapped to an empty value.
 type SigSchemeUnion struct {
 	contents union.Contents
 }
@@ -319,43 +319,43 @@ func MakeSigSchemeUnion[T SigSchemeUnionConstraint](contents T) SigSchemeUnion {
 	return SigSchemeUnion{contents: union.NewContents(contents)}
 }
 
-// RSASSA returns a pointer to the value associated with the selector value SigSchemeAlgRSASSA.
+// RSASSA returns a pointer to the value associated with the selector value [SigSchemeAlgRSASSA].
 // It will panic if the underlying type is not SigSchemeRSASSA.
 func (s SigSchemeUnion) RSASSA() *SigSchemeRSASSA {
 	return union.ContentsPtr[SigSchemeRSASSA](s.contents)
 }
 
-// RSAPSS returns a pointer to the value associated with the selector value SigSchemeAlgRSAPSS.
+// RSAPSS returns a pointer to the value associated with the selector value [SigSchemeAlgRSAPSS].
 // It will panic if the underlying type is not SigSchemeRSAPSS.
 func (s SigSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
 	return union.ContentsPtr[SigSchemeRSAPSS](s.contents)
 }
 
-// ECDSA returns a pointer to the value associated with the selector value SigSchemeAlgECDSA.
+// ECDSA returns a pointer to the value associated with the selector value [SigSchemeAlgECDSA].
 // It will panic if the underlying type is not SigSchemeECDSA.
 func (s SigSchemeUnion) ECDSA() *SigSchemeECDSA {
 	return union.ContentsPtr[SigSchemeECDSA](s.contents)
 }
 
-// ECDAA returns a pointer to the value associated with the selector value SigSchemeAlgECDAA.
+// ECDAA returns a pointer to the value associated with the selector value [SigSchemeAlgECDAA].
 // It will panic if the underlying type is not SigSchemeECDAA.
 func (s SigSchemeUnion) ECDAA() *SigSchemeECDAA {
 	return union.ContentsPtr[SigSchemeECDAA](s.contents)
 }
 
-// SM2 returns a pointer to the value associated with the selector value SigSchemeAlgSM2.
+// SM2 returns a pointer to the value associated with the selector value [SigSchemeAlgSM2].
 // It will panic if the underlying type is not SigSchemeSM2.
 func (s SigSchemeUnion) SM2() *SigSchemeSM2 {
 	return union.ContentsPtr[SigSchemeSM2](s.contents)
 }
 
-// ECSchnorr returns a pointer to the value associated with the selector value SigSchemeAlgECSchnorr.
+// ECSchnorr returns a pointer to the value associated with the selector value [SigSchemeAlgECSchnorr].
 // It will panic if the underlying type is not SigSchemeECSchnorr.
 func (s SigSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
 	return union.ContentsPtr[SigSchemeECSchnorr](s.contents)
 }
 
-// HMAC returns a pointer to the value associated with the selector value SigSchemeAlgHMAC.
+// HMAC returns a pointer to the value associated with the selector value [SigSchemeAlgHMAC].
 // It will panic if the underlying type is not SchemeHMAC.
 func (s SigSchemeUnion) HMAC() *SchemeHMAC {
 	return union.ContentsPtr[SchemeHMAC](s.contents)
@@ -449,7 +449,7 @@ type KDFSchemeUnionConstraint interface {
 
 // KDFSchemeUnion is a union type that corresponds to the TPMU_KDF_SCHEME type. It
 // stores a pointer to the underlying value. The selector type is [KDFAlgorithmId]. The
-// selector value KDFAlgorithmNull is mapped to an empty value.
+// selector value [KDFAlgorithmNull] is mapped to an empty value.
 type KDFSchemeUnion struct {
 	contents union.Contents
 }
@@ -459,25 +459,25 @@ func MakeKDFSchemeUnion[T KDFSchemeUnionConstraint](contents T) KDFSchemeUnion {
 	return KDFSchemeUnion{contents: union.NewContents(contents)}
 }
 
-// MGF1 returns a pointer to the value associated with the selector value KDFAlgorithmMGF1.
+// MGF1 returns a pointer to the value associated with the selector value [KDFAlgorithmMGF1].
 // It will panic if the underlying type is not SchemeMGF1.
 func (s KDFSchemeUnion) MGF1() *SchemeMGF1 {
 	return union.ContentsPtr[SchemeMGF1](s.contents)
 }
 
-// KDF1_SP800_56A returns a pointer to the value associated with the selector value KDFAlgorithmKDF1_SP800_56A.
+// KDF1_SP800_56A returns a pointer to the value associated with the selector value [KDFAlgorithmKDF1_SP800_56A].
 // It will panic if the underlying type is not SchemeKDF1_SP800_56A.
 func (s KDFSchemeUnion) KDF1_SP800_56A() *SchemeKDF1_SP800_56A {
 	return union.ContentsPtr[SchemeKDF1_SP800_56A](s.contents)
 }
 
-// KDF2 returns a pointer to the value associated with the selector value KDFAlgorithmKDF2.
+// KDF2 returns a pointer to the value associated with the selector value [KDFAlgorithmKDF2].
 // It will panic if the underlying type is not SchemeKDF2.
 func (s KDFSchemeUnion) KDF2() *SchemeKDF2 {
 	return union.ContentsPtr[SchemeKDF2](s.contents)
 }
 
-// KDF1_SP800_108 returns a pointer to the value associated with the selector value KDFAlgorithmKDF1_SP800_108.
+// KDF1_SP800_108 returns a pointer to the value associated with the selector value [KDFAlgorithmKDF1_SP800_108].
 // It will panic if the underlying type is not SchemeKDF1_SP800_108.
 func (s KDFSchemeUnion) KDF1_SP800_108() *SchemeKDF1_SP800_108 {
 	return union.ContentsPtr[SchemeKDF1_SP800_108](s.contents)
@@ -586,7 +586,7 @@ type AsymSchemeUnionConstraint interface {
 
 // AsymSchemeUnion is a union type that corresponds to the TPMU_ASYM_SCHEME type. It stores
 // a pointer to the underlying value. The selector type is [AsymSchemeId]. The selector value
-// AsymSchemeNull is mapped to an empty value.
+// [AsymSchemeNull] is mapped to an empty value.
 type AsymSchemeUnion struct {
 	contents union.Contents
 }
@@ -596,61 +596,61 @@ func MakeAsymSchemeUnion[T AsymSchemeUnionConstraint](contents T) AsymSchemeUnio
 	return AsymSchemeUnion{contents: union.NewContents(contents)}
 }
 
-// RSASSA returns a pointer to the value associated with the selector value AsymSchemeRSASSA.
+// RSASSA returns a pointer to the value associated with the selector value [AsymSchemeRSASSA].
 // It will panic if the underlying type is not SigSchemeRSASSA.
 func (s AsymSchemeUnion) RSASSA() *SigSchemeRSASSA {
 	return union.ContentsPtr[SigSchemeRSASSA](s.contents)
 }
 
-// RSAES returns a pointer to the value associated with the selector value AsymSchemeRSAES.
+// RSAES returns a pointer to the value associated with the selector value [AsymSchemeRSAES].
 // It will panic if the underlying type is not EncSchemeRSAES.
 func (s AsymSchemeUnion) RSAES() *EncSchemeRSAES {
 	return union.ContentsPtr[EncSchemeRSAES](s.contents)
 }
 
-// RSAPSS returns a pointer to the value associated with the selector value AsymSchemeRSAPSS.
+// RSAPSS returns a pointer to the value associated with the selector value [AsymSchemeRSAPSS].
 // It will panic if the underlying type is not SigSchemeRSAPSS.
 func (s AsymSchemeUnion) RSAPSS() *SigSchemeRSAPSS {
 	return union.ContentsPtr[SigSchemeRSAPSS](s.contents)
 }
 
-// OAEP returns a pointer to the value associated with the selector value AsymSchemeOAEP.
+// OAEP returns a pointer to the value associated with the selector value [AsymSchemeOAEP].
 // It will panic if the underlying type is not EncSchemeOAEP.
 func (s AsymSchemeUnion) OAEP() *EncSchemeOAEP {
 	return union.ContentsPtr[EncSchemeOAEP](s.contents)
 }
 
-// ECDSA returns a pointer to the value associated with the selector value AsymSchemeECDSA.
+// ECDSA returns a pointer to the value associated with the selector value [AsymSchemeECDSA].
 // It will panic if the underlying type is not SigSchemeECDSA.
 func (s AsymSchemeUnion) ECDSA() *SigSchemeECDSA {
 	return union.ContentsPtr[SigSchemeECDSA](s.contents)
 }
 
-// ECDH returns a pointer to the value associated with the selector value AsymSchemeECDH.
+// ECDH returns a pointer to the value associated with the selector value [AsymSchemeECDH].
 // It will panic if the underlying type is not KeySchemeECDH.
 func (s AsymSchemeUnion) ECDH() *KeySchemeECDH {
 	return union.ContentsPtr[KeySchemeECDH](s.contents)
 }
 
-// ECDAA returns a pointer to the value associated with the selector value AsymSchemeECDAA.
+// ECDAA returns a pointer to the value associated with the selector value [AsymSchemeECDAA].
 // It will panic if the underlying type is not SigSchemeECDAA.
 func (s AsymSchemeUnion) ECDAA() *SigSchemeECDAA {
 	return union.ContentsPtr[SigSchemeECDAA](s.contents)
 }
 
-// SM2 returns a pointer to the value associated with the selector value AsymSchemeSM2.
+// SM2 returns a pointer to the value associated with the selector value [AsymSchemeSM2].
 // It will panic if the underlying type is not SigSchemeSM2.
 func (s AsymSchemeUnion) SM2() *SigSchemeSM2 {
 	return union.ContentsPtr[SigSchemeSM2](s.contents)
 }
 
-// ECSchnorr returns a pointer to the value associated with the selector value AsymSchemeECSchnorr.
+// ECSchnorr returns a pointer to the value associated with the selector value [AsymSchemeECSchnorr].
 // It will panic if the underlying type is not SigSchemeECSchnorr.
 func (s AsymSchemeUnion) ECSchnorr() *SigSchemeECSchnorr {
 	return union.ContentsPtr[SigSchemeECSchnorr](s.contents)
 }
 
-// ECMQV returns a pointer to the value associated with the selector value AsymSchemeECMQV.
+// ECMQV returns a pointer to the value associated with the selector value [AsymSchemeECMQV].
 // It will panic if the underlying type is not KeySchemeECMQV.
 func (s AsymSchemeUnion) ECMQV() *KeySchemeECMQV {
 	return union.ContentsPtr[KeySchemeECMQV](s.contents)
@@ -818,7 +818,7 @@ type SignatureUnionConstraint interface {
 }
 
 // SignatureUnion is a union type that corresponds to TPMU_SIGNATURE. It stores a pointer
-// to the underlying value. The selector type is [SigSchemeId]. The selector value SigSchemeAlgNull
+// to the underlying value. The selector type is [SigSchemeId]. The selector value [SigSchemeAlgNull]
 // is mapped to an empty value.
 type SignatureUnion struct {
 	contents union.Contents
@@ -829,43 +829,43 @@ func MakeSignatureUnion[T SignatureUnionConstraint](contents T) SignatureUnion {
 	return SignatureUnion{contents: union.NewContents(contents)}
 }
 
-// RSASSA returns a pointer to the value associated with the selector value SigSchemeAlgRSASSA.
+// RSASSA returns a pointer to the value associated with the selector value [SigSchemeAlgRSASSA].
 // It will panic if the underlying type is not SigSchemeRSASSA.
 func (s SignatureUnion) RSASSA() *SignatureRSASSA {
 	return union.ContentsPtr[SignatureRSASSA](s.contents)
 }
 
-// RSAPSS returns a pointer to the value associated with the selector value SigSchemeAlgRSAPSS.
+// RSAPSS returns a pointer to the value associated with the selector value [SigSchemeAlgRSAPSS].
 // It will panic if the underlying type is not SigSchemeRSAPSS.
 func (s SignatureUnion) RSAPSS() *SignatureRSAPSS {
 	return union.ContentsPtr[SignatureRSAPSS](s.contents)
 }
 
-// ECDSA returns a pointer to the value associated with the selector value SigSchemeAlgECDSA.
+// ECDSA returns a pointer to the value associated with the selector value [SigSchemeAlgECDSA].
 // It will panic if the underlying type is not SigSchemeECDSA.
 func (s SignatureUnion) ECDSA() *SignatureECDSA {
 	return union.ContentsPtr[SignatureECDSA](s.contents)
 }
 
-// ECDAA returns a pointer to the value associated with the selector value SigSchemeAlgECDAA.
+// ECDAA returns a pointer to the value associated with the selector value [SigSchemeAlgECDAA].
 // It will panic if the underlying type is not SigSchemeECDAA.
 func (s SignatureUnion) ECDAA() *SignatureECDAA {
 	return union.ContentsPtr[SignatureECDAA](s.contents)
 }
 
-// SM2 returns a pointer to the value associated with the selector value SigSchemeAlgSM2.
+// SM2 returns a pointer to the value associated with the selector value [SigSchemeAlgSM2].
 // It will panic if the underlying type is not SigSchemeSM2.
 func (s SignatureUnion) SM2() *SignatureSM2 {
 	return union.ContentsPtr[SignatureSM2](s.contents)
 }
 
-// ECSchnorr returns a pointer to the value associated with the selector value SigSchemeAlgECSchnorr.
+// ECSchnorr returns a pointer to the value associated with the selector value [SigSchemeAlgECSchnorr].
 // It will panic if the underlying type is not SigSchemeECSchnorr.
 func (s SignatureUnion) ECSchnorr() *SignatureECSchnorr {
 	return union.ContentsPtr[SignatureECSchnorr](s.contents)
 }
 
-// HMAC returns a pointer to the value associated with the selector value SigSchemeAlgHMAC.
+// HMAC returns a pointer to the value associated with the selector value [SigSchemeAlgHMAC].
 // It will panic if the underlying type is not TaggedHash.
 func (s SignatureUnion) HMAC() *TaggedHash {
 	return union.ContentsPtr[TaggedHash](s.contents)
