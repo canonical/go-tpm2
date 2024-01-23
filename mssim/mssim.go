@@ -40,6 +40,8 @@ var (
 
 // PlatformCommandError corresponds to an error code in response to a platform command
 // executed on a TPM simulator.
+//
+// Deprecated: This never returned.
 type PlatformCommandError struct {
 	commandCode uint32
 	Code        uint32
@@ -90,10 +92,10 @@ func (d *Device) openInternal() (*Transport, error) {
 	}
 	internal.platform = platform
 
-	if err := internal.platformCommand(cmdPowerOn); err != nil {
+	if err := internal.runPlatformCommand(cmdPowerOn); err != nil {
 		return nil, fmt.Errorf("cannot complete power on command: %w", err)
 	}
-	if err := internal.platformCommand(cmdNVOn); err != nil {
+	if err := internal.runPlatformCommand(cmdNVOn); err != nil {
 		return nil, fmt.Errorf("cannot complete NV on command: %w", err)
 	}
 
@@ -155,7 +157,7 @@ func (t *Transport) Close() (err error) {
 // initiates a reset of the TPM simulator and results in the execution
 // of _TPM_Init().
 func (t *Transport) Reset() error {
-	return t.internal.platformCommand(cmdReset)
+	return t.internal.runPlatformCommand(cmdReset)
 }
 
 // Stop submits a stop command on both the TPM command and platform
@@ -264,17 +266,14 @@ func (t *internalTransport) sendPlatformCommand(cmd uint32, args ...interface{})
 	return nil
 }
 
-func (t *internalTransport) platformCommand(cmd uint32, args ...interface{}) error {
+func (t *internalTransport) runPlatformCommand(cmd uint32, args ...interface{}) error {
 	if err := t.sendPlatformCommand(cmd, args...); err != nil {
 		return fmt.Errorf("cannot send command: %w", err)
 	}
 
-	var resp uint32
-	if _, err := mu.UnmarshalFromReader(t.platform, &resp); err != nil {
+	var trash uint32
+	if _, err := mu.UnmarshalFromReader(t.platform, &trash); err != nil {
 		return fmt.Errorf("cannot read response to command: %w", err)
-	}
-	if resp != 0 {
-		return &PlatformCommandError{cmd, resp}
 	}
 
 	return nil
