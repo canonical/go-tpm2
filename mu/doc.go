@@ -60,8 +60,6 @@ Pointers are automatically dererenced during marshalling and unmarshalling.
 
 The marshalling code parses the "tpm2" tag on struct fields, the value of which is a comma
 separated list of options. These options are:
-  - sized1 - the field is a variable sized buffer with a single byte size field, used
-    to support the TPMS_PCR_SELECT type. This is only valid for byte slice fields.
   - ignore - the field is ignored by this package.
   - selector:<field_name> - override the default selector field on a field to a structure
     that represents a union. The default behaviour without this option is to use the
@@ -73,5 +71,12 @@ separated list of options. These options are:
   - raw - turns a slice into a raw type so that it is marshalled and unmarshalled without
     a size or length field. The slice must be pre-allocated to the correct length by the
     caller during unmarshalling. This is only valid for slice fields.
+  - sized1 - the field is a variable sized buffer with a single byte size field, used
+    to support the TPMS_PCR_SELECT type. This is only valid for byte slice fields.
+  - sized4 - turns a pointer to a structure or a byte slice into a sized type with a
+    4-byte size field, like TPML types. This isn't used by the TPM specification, but may
+    be useful in order to encapsulate other TPM2B types where a size field is required to
+    indicate presence but where the overall size may not fit into 2 bytes. This is only
+    valid for pointer and byte slice fields.
 */
 package mu

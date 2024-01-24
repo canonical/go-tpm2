@@ -13,6 +13,7 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -27,6 +28,7 @@ const (
 
 var (
 	sized1BytesType        reflect.Type = reflect.TypeOf(Sized1Bytes(nil))
+	sized4BytesType        reflect.Type = reflect.TypeOf(Sized4Bytes(nil))
 	customMarshallerType   reflect.Type = reflect.TypeOf((*customMarshallerIface)(nil)).Elem()
 	customUnmarshallerType reflect.Type = reflect.TypeOf((*customUnmarshallerIface)(nil)).Elem()
 	rawBytesType           reflect.Type = reflect.TypeOf(RawBytes(nil))
@@ -76,9 +78,21 @@ var _ CustomMarshaller = struct {
 }{}
 
 // RawBytes is a special byte slice type which is marshalled and unmarshalled without a
-// size field. The slice must be pre-allocated to the correct length by the caller during
+// size field. The slice must be pre-allocated to the expected length by the caller during
 // unmarshalling.
 type RawBytes []byte
+
+type rawType[T ~[]E, E any] struct {
+	Value T `tpm2:"raw"`
+}
+
+// MakeRaw converts the supplied slice to a raw type so that it is marshalled and
+// unmarshalled without a size or length field. The slice must be pre-allocated to
+// the expected length by the caller during unmarshalling. The caller supplies the slice
+// by value for both marshalling and unmarshalling.
+func MakeRaw[T ~[]E, E any](val T) *rawType[T, E] {
+	return &rawType[T, E]{Value: val}
+}
 
 // Sized1Bytes is a special byte slice which is marshalled and unmarhalled with a
 // single byte size field. This is to faciliate the TPMS_PCR_SELECT type, which
@@ -87,18 +101,35 @@ type RawBytes []byte
 // field.
 type Sized1Bytes []byte
 
-type rawType[T ~[]E, E any] struct {
-	Value T `tpm2:"raw"`
+// Sized4Bytes is a special byte slice which is marshalled and unmarshalled with
+// a 4 byte size field, like a TPML type. This isn't used in the TPM specification,
+// but is used in the [github.com/canonical/go-tpm2/mssim].
+type Sized4Bytes []byte
+
+type sized4Type[P *T, T *E, E any] struct {
+	Value P `_tpm2:"indirect-sized:4"`
 }
 
-// MakeRaw converts the supplied slice to a raw type so that it is marshalled and
-// unmarshalled without a size or length field.
-func MakeRaw[T ~[]E, E any](val T) *rawType[T, E] {
-	return &rawType[T, E]{Value: val}
+// MakeSized4Source coverts the supplied pointer to a sized type that is marshalled
+// with a 4-byte size field. This isn't a type that is used in the TPM specification,
+// but may be useful for encapsulating types that contain other TPM2B types where
+// a size field is required to indicate presence and where the overall size may not
+// fit into 2 bytes.
+func MakeSized4Source[P *T, T *E, E any](val T) sized4Type[P, T, E] {
+	return sized4Type[P, T, E]{Value: &val}
+}
+
+// MakeSized4Dest converts the supplied pointer to a sized type that is unmarshalled
+// with a 4-byte size field. The caller supplies the address of the pointer. This isn't
+// a type that is used in the TPM specification, but may be useful for encapsulating
+// types that contain other TPM2B types where a size field is required to indicate
+// presence and where the overall size may not fit into 2 bytes.
+func MakeSized4Dest[P *T, T *E, E any](val P) *sized4Type[P, T, E] {
+	return &sized4Type[P, T, E]{Value: val}
 }
 
 type sizedType[P *T, T *E, E any] struct {
-	Value P `_tpm2:"_sized"`
+	Value P `_tpm2:"indirect-sized:2"`
 }
 
 // MakeSizedSource converts the supplied pointer to a sized type so that it is
@@ -108,7 +139,8 @@ func MakeSizedSource[P *T, T *E, E any](val T) sizedType[P, T, E] {
 }
 
 // MakeSizedDest converts the supplied pointer to a sized type so that it is
-// unmarshalled as a TPM2B type with a size field.
+// unmarshalled as a TPM2B type with a size field. The caller supplies the
+// address of the pointer.
 func MakeSizedDest[P *T, T *E, E any](val P) *sizedType[P, T, E] {
 	return &sizedType[P, T, E]{Value: val}
 }
@@ -271,21 +303,22 @@ func (e *fatalError) Error() string {
 }
 
 type options struct {
-	selector string
-	sized    bool
-	raw      bool
-	ignore   bool
-	sized1   bool
+	selector      string
+	sized         bool
+	raw           bool
+	ignore        bool
+	sized1        bool
+	sized4        bool
+	indirectSized int
 
-	indirectSized bool
+	skipSizeLength bool
 }
 
 func (o *options) enterSizedType(v reflect.Value) (exit func()) {
 	orig := *o
 	o.sized = false
-	if v.Kind() == reflect.Slice {
-		o.raw = true
-	}
+	o.sized4 = false
+	o.skipSizeLength = true
 	return func() {
 		*o = orig
 	}
@@ -293,8 +326,13 @@ func (o *options) enterSizedType(v reflect.Value) (exit func()) {
 
 func (o *options) enterIndirectSizedType() (exit func()) {
 	orig := *o
-	o.indirectSized = false
-	o.sized = true
+	switch o.indirectSized {
+	case 2:
+		o.sized = true
+	case 4:
+		o.sized4 = true
+	}
+	o.indirectSized = 0
 	return func() {
 		*o = orig
 	}
@@ -314,13 +352,24 @@ func (o *options) parseFromStructField(f reflect.StructField) {
 			o.ignore = true
 		case part == "sized1":
 			o.sized1 = true
+		case part == "sized4":
+			o.sized4 = true
 		}
 	}
 	s = f.Tag.Get("_tpm2")
 	for _, part := range strings.Split(s, ",") {
 		switch {
-		case part == "_sized":
-			o.indirectSized = true
+		case part == "indirect-sized":
+			o.indirectSized = 2
+		case strings.HasPrefix(part, "indirect-sized:"):
+			n, err := strconv.Atoi(part[15:])
+			if err != nil {
+				panic(err)
+			}
+			if n != 2 && n != 4 {
+				panic("invalid value for indirect-sized tag")
+			}
+			o.indirectSized = n
 		}
 	}
 }
@@ -379,8 +428,8 @@ const (
 	// and is a special type used to support TPMS_PCR_SELECT.
 	kindSized1Bytes
 
+	kindSized4
 	kindNeedsDeref
-
 	kindIndirectSized
 
 	kindIgnore
@@ -415,11 +464,14 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 	if o.sized1 {
 		sizeSpecifiers += 1
 	}
-	if o.indirectSized {
+	if o.sized4 {
+		sizeSpecifiers += 1
+	}
+	if o.indirectSized > 0 {
 		sizeSpecifiers += 1
 	}
 	if sizeSpecifiers > 1 {
-		return kindUnsupported, errors.New(`only one of "sized", "raw" and "sized1" may be specified`)
+		return kindUnsupported, errors.New(`only one of "sized", "raw", "sized1" and "sized4" may be specified`)
 	}
 
 	if t.Kind() != reflect.Ptr && isCustom(t) {
@@ -437,8 +489,10 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		return kindPrimitive, nil
 	case reflect.Ptr:
 		switch {
-		case o.indirectSized:
+		case o.indirectSized > 0:
 			return kindIndirectSized, nil
+		case o.sized4:
+			return kindSized4, nil
 		case o.sized:
 			return kindSized, nil
 		default:
@@ -446,17 +500,23 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		}
 	case reflect.Slice:
 		switch {
-		case o.sized || o.selector != "" || o.indirectSized:
+		case o.sized || o.selector != "" || o.indirectSized > 0:
 			return kindUnsupported, errors.New("invalid options for slice type")
+		case o.raw && t == sized4BytesType:
+			return kindUnsupported, errors.New(`"raw" option is invalid with Sized4Bytes type`)
+		case o.sized4 && t.Elem().Kind() != reflect.Uint8:
+			return kindUnsupported, errors.New(`"sized4" option is only valid with byte slices`)
 		case o.raw && t == sized1BytesType:
 			return kindUnsupported, errors.New(`"raw" option is invalid with Sized1Bytes type`)
-		case o.sized && t.Elem().Kind() != reflect.Uint8:
+		case o.sized1 && t.Elem().Kind() != reflect.Uint8:
 			return kindUnsupported, errors.New(`"sized1" option is only valid with byte slices`)
-		case t == sized1BytesType || o.sized1:
+		case (t == sized4BytesType && !o.skipSizeLength) || o.sized4:
+			return kindSized4, nil
+		case (t == sized1BytesType && !o.skipSizeLength) || o.sized1:
 			return kindSized1Bytes, nil
-		case t == rawBytesType || (o.raw && t.Elem().Kind() == reflect.Uint8):
+		case t == rawBytesType || (t.Elem().Kind() == reflect.Uint8 && o.raw || o.skipSizeLength):
 			return kindRawBytes, nil
-		case o.raw:
+		case o.raw || o.skipSizeLength:
 			return kindRawList, nil
 		case t.Elem().Kind() == reflect.Uint8:
 			return kindSized, nil
@@ -722,6 +782,34 @@ func (m *marshaller) marshalSized(v reflect.Value, opts *options) error {
 	return nil
 }
 
+func (m *marshaller) marshalSized4(v reflect.Value, opts *options) error {
+	if v.IsNil() {
+		if err := binary.Write(m, binary.BigEndian, uint32(0)); err != nil {
+			return m.newError(v, err)
+		}
+		return nil
+	}
+
+	exit := opts.enterSizedType(v)
+	defer exit()
+
+	tmpBuf := new(bytes.Buffer)
+	sm := &marshaller{context: m.context, w: tmpBuf}
+	if err := sm.marshalValue(v, opts); err != nil {
+		return err
+	}
+	if tmpBuf.Len() > maxListLength {
+		return m.newError(v, fmt.Errorf("value size of %d is out of range", tmpBuf.Len()))
+	}
+	if err := binary.Write(m, binary.BigEndian, uint32(tmpBuf.Len())); err != nil {
+		return m.newError(v, err)
+	}
+	if _, err := tmpBuf.WriteTo(m); err != nil {
+		return m.newError(v, err)
+	}
+	return nil
+}
+
 func (m *marshaller) marshalIndirectSized(v reflect.Value, opts *options) error {
 	exit := opts.enterIndirectSizedType()
 	defer exit()
@@ -736,7 +824,8 @@ func (m *marshaller) marshalSized1Bytes(v reflect.Value) error {
 	if err := binary.Write(m, binary.BigEndian, uint8(v.Len())); err != nil {
 		return m.newError(v, err)
 	}
-	return m.marshalRawBytes(v)
+
+	return m.marshalValue(v, &options{skipSizeLength: true})
 }
 
 func (m *marshaller) marshalRawList(v reflect.Value) error {
@@ -862,6 +951,8 @@ func (m *marshaller) marshalValue(v reflect.Value, opts *options) error {
 		return m.marshalSized1Bytes(v)
 	case kindNeedsDeref:
 		return m.marshalPtr(v, opts)
+	case kindSized4:
+		return m.marshalSized4(v, opts)
 	case kindIndirectSized:
 		return m.marshalIndirectSized(v, opts)
 	case kindIgnore:
@@ -925,13 +1016,15 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value, opts *options) error {
 	//   is the sized buffer case.
 	switch {
 	case size == 0:
-		// zero sized structure. Clear the pointer if it was pre-set and
+		// zero sized structure. Clear the value in case it was pre-set and
 		// then return early.
 		v.Set(reflect.Zero(v.Type()))
 		return nil
 	case v.Kind() == reflect.Slice && (v.IsNil() || v.Cap() < int(size)):
 		// sized buffer with no pre-allocated buffer or a pre-allocated
-		// buffer that isn't large enough. Allocate a new one.
+		// buffer that isn't large enough. Allocate a new one. It's ok to
+		// do this in one go because the maximum allocation here is
+		// UINT16_MAX.
 		v.Set(reflect.MakeSlice(v.Type(), int(size), int(size)))
 	case v.Kind() == reflect.Slice:
 		// sized buffer with pre-allocated buffer that is large enough.
@@ -943,6 +1036,53 @@ func (u *unmarshaller) unmarshalSized(v reflect.Value, opts *options) error {
 
 	su := &unmarshaller{context: u.context, r: io.LimitReader(u, int64(size))}
 	return su.unmarshalValue(v, opts)
+}
+
+func (u *unmarshaller) unmarshalSized4(v reflect.Value, opts *options) error {
+	var size uint32
+	if err := binary.Read(u, binary.BigEndian, &size); err != nil {
+		return u.newError(v, err)
+	}
+
+	// v is either:
+	// - a pointer kind, in which case it is a pointer to a struct.
+	// - a slice kind, in which case the slice is always a byte slice.
+	switch {
+	case size > maxListLength:
+		return u.newError(v, fmt.Errorf("value size of %d is out of range", size))
+	case size == 0:
+		// zero sized structure. Clear the value in case it was pre-set and
+		// then return early.
+		v.Set(reflect.Zero(v.Type()))
+		return nil
+	case v.Kind() == reflect.Slice:
+		// a byte slice. We don't do the same as unmarshalSized here, which allocates
+		// a buffer, sets options.skipSizeLength and then calls back into the
+		// unmarshalling code, because we could allocate a buffer that is INT32_MAX
+		// in size. Instead, if a buffer is supplied, we check if it has a large enough
+		// capacity and use that, else create an empty one. Then we wrap it with
+		// bytes.Buffer and io.Copy into it. Then we assign the final buffer to the
+		// value. That way, we don't preallocate an amount of memory that would result
+		// in a DoS if we read a malicious payload.
+		var buf []byte
+		if !v.IsNil() && v.Cap() >= int(size) {
+			buf = v.Bytes()[:0]
+		}
+		w := bytes.NewBuffer(buf)
+		if _, err := io.CopyN(w, u, int64(size)); err != nil {
+			return u.newError(v, err)
+		}
+		v.Set(reflect.ValueOf(w.Bytes()))
+		return nil
+	default:
+		// this is not a slice so it must be a pointer to a structure. Run it through
+		// the unmarshalling in the normal way.
+		exit := opts.enterSizedType(v)
+		defer exit()
+
+		su := &unmarshaller{context: u.context, r: io.LimitReader(u, int64(size))}
+		return su.unmarshalValue(v, opts)
+	}
 }
 
 func (u *unmarshaller) unmarshalIndirectSized(v reflect.Value, opts *options) error {
@@ -972,7 +1112,7 @@ func (u *unmarshaller) unmarshalSized1Bytes(v reflect.Value) error {
 		v.SetLen(int(size))
 	}
 
-	return u.unmarshalRawBytes(v)
+	return u.unmarshalValue(v, &options{skipSizeLength: true})
 }
 
 func (u *unmarshaller) unmarshalRawList(v reflect.Value, n int) (reflect.Value, error) {
@@ -1106,6 +1246,8 @@ func (u *unmarshaller) unmarshalValue(v reflect.Value, opts *options) error {
 		return u.unmarshalRawBytes(v)
 	case kindSized1Bytes:
 		return u.unmarshalSized1Bytes(v)
+	case kindSized4:
+		return u.unmarshalSized4(v, opts)
 	case kindNeedsDeref:
 		return u.unmarshalPtr(v, opts)
 	case kindIndirectSized:

@@ -8,7 +8,7 @@ Package mssim provides an interface for communicating with a TPM simulator
 package mssim
 
 import (
-	"encoding/binary"
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -37,19 +37,6 @@ const (
 var (
 	DefaultDevice *Device = &Device{port: DefaultPort}
 )
-
-// PlatformCommandError corresponds to an error code in response to a platform command
-// executed on a TPM simulator.
-//
-// Deprecated: This never returned.
-type PlatformCommandError struct {
-	commandCode uint32
-	Code        uint32
-}
-
-func (e *PlatformCommandError) Error() string {
-	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
-}
 
 // Device describes a TPM simulator device.
 type Device struct {
@@ -198,23 +185,18 @@ type internalTransport struct {
 func (t *internalTransport) Read(data []byte) (int, error) {
 	for {
 		if t.r == nil {
-			var size uint32
-			if err := binary.Read(t.tpm, binary.BigEndian, &size); err != nil {
+			var rsp mu.Sized4Bytes
+			if err := t.receiveTpmResponse(&rsp); err != nil {
 				return 0, err
 			}
 
-			t.r = io.LimitReader(t.tpm, int64(size))
+			t.r = bytes.NewReader(rsp)
 		}
 
 		n, err := t.r.Read(data)
 		if err == io.EOF {
 			t.r = nil
 			err = nil
-
-			var trash uint32
-			if err := binary.Read(t.tpm, binary.BigEndian, &trash); err != nil {
-				return 0, err
-			}
 
 			if n == 0 {
 				continue
@@ -242,6 +224,15 @@ func (t *internalTransport) Close() (err error) {
 		err = fmt.Errorf("cannot close TPM command channel: %w", e)
 	}
 	return err
+}
+
+func (t *internalTransport) receiveTpmResponse(args ...interface{}) error {
+	var trash uint32
+	args = append(args, &trash)
+	if _, err := mu.UnmarshalFromReader(t.tpm, args...); err != nil {
+		return fmt.Errorf("cannot receive response: %w", err)
+	}
+	return nil
 }
 
 func (t *internalTransport) sendTpmCommand(cmd uint32, args ...interface{}) (int, error) {
