@@ -159,8 +159,7 @@ type unionUnmarshalIface interface {
 // `tpm2:"selector:<field_name>"` tag.
 //
 // Go doesn't have support for unions - TPMU types are implemented by any type that
-// implements this interface. They should use the [UnionContents] helper for storing
-// the value of the union.
+// implements this interface.
 type Union interface {
 	// SelectMarshal is called by this package to map the supplied selector
 	// value to a union value.
