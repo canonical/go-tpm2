@@ -569,6 +569,12 @@ func (c *context) enterUnionElem(u reflect.Value, opts *options) (elem reflect.V
 				opts.selector, u.Type()))
 		}
 	}
+	switch selectorVal.Kind() {
+	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		// ok
+	default:
+		panic(fmt.Sprintf("selector for union type %s has an invalid type (%s)", u.Type(), selectorVal.Type()))
+	}
 
 	if !u.CanAddr() {
 		panic(fmt.Sprintf("union type %s needs to be addressable", u.Type()))
