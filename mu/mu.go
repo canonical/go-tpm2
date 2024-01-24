@@ -270,11 +270,10 @@ func (e *Error) Depth() int {
 // If the returned type is a slice, the returned index corresponds to
 // the index in that slice.
 //
-// If the returned type implements the [CustomMarshaller] and
-// [CustomUnmarshaller] interfaces, the returned index corresponds to
-// the argument index in the recursive call in to one of the marshalling
-// or unmarshalling APIs. The returned frame indicates where this
-// recursive call originated from.
+// If the returned type implements the [CustomMarshaller] interface, the
+// returned index corresponds to the argument index in the recursive call
+// in to one of the marshalling or unmarshalling APIs. The returned frame
+// indicates where this recursive call originated from.
 func (e *Error) Container(depth int) (containerType reflect.Type, index int, entry runtime.Frame) {
 	var frame runtime.Frame
 	if e.stack[depth].entry != [1]uintptr{0} {
@@ -654,6 +653,12 @@ func (c *context) unionSelectorValue(u reflect.Value, opts *options) any {
 			panic(fmt.Sprintf("selector name %s for union type %s does not reference a valid field",
 				opts.selector, u.Type()))
 		}
+	}
+	switch selectorVal.Kind() {
+	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		// ok
+	default:
+		panic(fmt.Sprintf("selector for union type %s has an invalid type (%s)", u.Type(), selectorVal.Type()))
 	}
 
 	return selectorVal.Interface()
