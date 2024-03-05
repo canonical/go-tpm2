@@ -190,11 +190,13 @@ func (p PublicParamsUnion) ECCDetail() *ECCParams {
 // AsymParams returns the parameters as *AsymParams. It panics if the underlying type is not
 // a superset of this.
 func (p PublicParamsUnion) AsymDetail() *AsymParams {
-	switch ptr := p.contents.(type) {
-	case *RSAParams:
-		return *(**AsymParams)(unsafe.Pointer(&ptr))
-	case *ECCParams:
-		return *(**AsymParams)(unsafe.Pointer(&ptr))
+	switch {
+	case union.ContentsIs[RSAParams](p.contents):
+		params := union.ContentsPtr[RSAParams](p.contents)
+		return *(**AsymParams)(unsafe.Pointer(&params))
+	case union.ContentsIs[ECCParams](p.contents):
+		params := union.ContentsPtr[ECCParams](p.contents)
+		return *(**AsymParams)(unsafe.Pointer(&params))
 	default:
 		panic("invalid type")
 	}
@@ -448,15 +450,15 @@ func (s SensitiveCompositeUnion) Sym() SymKey {
 // Any returns the sensitive data as PrivateVendorSpecific. It will panic if the
 // underlying type cannot be converted to this.
 func (s SensitiveCompositeUnion) Any() PrivateVendorSpecific {
-	switch ptr := s.contents.(type) {
-	case *PrivateKeyRSA:
-		return PrivateVendorSpecific(*ptr)
-	case *ECCParameter:
-		return PrivateVendorSpecific(*ptr)
-	case *SensitiveData:
-		return PrivateVendorSpecific(*ptr)
-	case *SymKey:
-		return PrivateVendorSpecific(*ptr)
+	switch {
+	case union.ContentsIs[PrivateKeyRSA](s.contents):
+		return PrivateVendorSpecific(union.ContentsElem[PrivateKeyRSA](s.contents))
+	case union.ContentsIs[ECCParameter](s.contents):
+		return PrivateVendorSpecific(union.ContentsElem[ECCParameter](s.contents))
+	case union.ContentsIs[SensitiveData](s.contents):
+		return PrivateVendorSpecific(union.ContentsElem[SensitiveData](s.contents))
+	case union.ContentsIs[SymKey](s.contents):
+		return PrivateVendorSpecific(union.ContentsElem[SymKey](s.contents))
 	default:
 		panic("invalid type")
 	}

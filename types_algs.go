@@ -364,11 +364,12 @@ func (s SigSchemeUnion) HMAC() *SchemeHMAC {
 // Any returns the signature scheme as a *SchemeHash. It will panic if the underlying type
 // is not a superset this.
 func (s *SigSchemeUnion) Any() *SchemeHash {
-	switch ptr := s.contents.(type) {
-	case *SchemeHash:
-		return ptr
-	case *SigSchemeECDAA:
-		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	switch {
+	case union.ContentsIs[SchemeHash](s.contents):
+		return union.ContentsPtr[SchemeHash](s.contents)
+	case union.ContentsIs[SigSchemeECDAA](s.contents):
+		scheme := union.ContentsPtr[SigSchemeECDAA](s.contents)
+		return *(**SchemeHash)(unsafe.Pointer(&scheme))
 	default:
 		panic("invalid type")
 	}
@@ -659,11 +660,12 @@ func (s AsymSchemeUnion) ECMQV() *KeySchemeECMQV {
 // Any returns the asymmetric scheme as a *SchemeHash. It panics if the underlying type
 // is not a superset of this.
 func (s AsymSchemeUnion) Any() *SchemeHash {
-	switch ptr := s.contents.(type) {
-	case *SchemeHash:
-		return ptr
-	case *SigSchemeECDAA:
-		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	switch {
+	case union.ContentsIs[SchemeHash](s.contents):
+		return union.ContentsPtr[SchemeHash](s.contents)
+	case union.ContentsIs[SigSchemeECDAA](s.contents):
+		scheme := union.ContentsPtr[SigSchemeECDAA](s.contents)
+		return *(**SchemeHash)(unsafe.Pointer(&scheme))
 	default:
 		panic("invalid type")
 	}
@@ -874,13 +876,16 @@ func (s SignatureUnion) HMAC() *TaggedHash {
 // Any returns the signature as a *SchemeHash. It will panic if the underlying type is not a
 // superset of this.
 func (s SignatureUnion) Any() *SchemeHash {
-	switch ptr := s.contents.(type) {
-	case *SignatureRSA:
-		return *(**SchemeHash)(unsafe.Pointer(&ptr))
-	case *SignatureECC:
-		return *(**SchemeHash)(unsafe.Pointer(&ptr))
-	case *TaggedHash:
-		return *(**SchemeHash)(unsafe.Pointer(&ptr))
+	switch {
+	case union.ContentsIs[SignatureRSA](s.contents):
+		sig := union.ContentsPtr[SignatureRSA](s.contents)
+		return *(**SchemeHash)(unsafe.Pointer(&sig))
+	case union.ContentsIs[SignatureECC](s.contents):
+		sig := union.ContentsPtr[SignatureECC](s.contents)
+		return *(**SchemeHash)(unsafe.Pointer(&sig))
+	case union.ContentsIs[TaggedHash](s.contents):
+		sig := union.ContentsPtr[TaggedHash](s.contents)
+		return *(**SchemeHash)(unsafe.Pointer(&sig))
 	default:
 		panic("invalid type")
 	}

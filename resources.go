@@ -360,7 +360,7 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 var _ ObjectContext = (*objectContext)(nil)
 
 func (r *objectContext) Public() *Public {
-	if _, ok := r.Data.contents.(*publicSized); !ok {
+	if !union.ContentsIs[publicSized](r.Data.contents) {
 		// This context was disposed.
 		return nil
 	}
@@ -404,7 +404,7 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 var _ NVIndexContext = (*nvIndexContext)(nil)
 
 func (r *nvIndexContext) Type() NVType {
-	if _, ok := r.Data.contents.(*nvPublicSized); !ok || r.Data.NV().Data == nil {
+	if !union.ContentsIs[nvPublicSized](r.Data.contents) || r.Data.NV().Data == nil {
 		// This context was disposed or is limited
 		return 0
 	}
@@ -412,7 +412,7 @@ func (r *nvIndexContext) Type() NVType {
 }
 
 func (r *nvIndexContext) SetAttr(a NVAttributes) {
-	if _, ok := r.Data.contents.(*nvPublicSized); !ok || r.Data.NV().Data == nil {
+	if !union.ContentsIs[nvPublicSized](r.Data.contents) || r.Data.NV().Data == nil {
 		// This context was disposed or is limited
 		return
 	}
@@ -498,7 +498,7 @@ func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
 }
 
 func (r *sessionContext) Data() *sessionContextData {
-	if _, ok := r.handleContext.Data.contents.(*sessionContextDataSized); !ok {
+	if !union.ContentsIs[sessionContextDataSized](r.handleContext.Data.contents) {
 		// This handle context was disposed
 		return nil
 	}
