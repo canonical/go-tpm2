@@ -729,7 +729,7 @@ func (s *recorderPolicySession) PolicyDuplicationSelect(objectName, newParentNam
 	if err := s.PolicyNameHash(nameHash); err != nil {
 		return err
 	}
-	return s.PolicyCommandCode(tpm2.CommandPolicyDuplicationSelect)
+	return s.PolicyCommandCode(tpm2.CommandDuplicate)
 }
 
 func (s *recorderPolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {

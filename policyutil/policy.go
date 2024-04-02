@@ -1440,6 +1440,46 @@ type PolicyExecuteResult struct {
 
 	// Path indicates the executed path.
 	Path string
+
+	policyCommandCode *tpm2.CommandCode
+	policyCpHash      tpm2.Digest
+	policyNameHash    tpm2.Digest
+	policyNvWritten   *bool
+}
+
+// CommandCode returns the command code if a TPM2_PolicyCommandCode assertion
+// was executed.
+func (r *PolicyExecuteResult) CommandCode() (code tpm2.CommandCode, set bool) {
+	if r.policyCommandCode == nil {
+		return 0, false
+	}
+	return *r.policyCommandCode, true
+}
+
+// CpHash returns the command parameter hash if a TPM2_PolicyCpHash assertion
+// was executed.
+func (r *PolicyExecuteResult) CpHash() (cpHashA tpm2.Digest, set bool) {
+	if len(r.policyCpHash) == 0 {
+		return nil, false
+	}
+	return r.policyCpHash, true
+}
+
+// CpHash returns the name hash if a TPM2_PolicyNameHash assertion was executed.
+func (r *PolicyExecuteResult) NameHash() (nameHash tpm2.Digest, set bool) {
+	if len(r.policyNameHash) == 0 {
+		return nil, false
+	}
+	return r.policyNameHash, true
+}
+
+// NvWritten returns the nvWrittenSet value if a TPM2_PolicyNvWritten assertion
+// was executed.
+func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
+	if r.policyNvWritten == nil {
+		return false, false
+	}
+	return *r.policyNvWritten, true
 }
 
 // Execute runs this policy using the supplied TPM context and on the supplied policy session.
@@ -1535,6 +1575,18 @@ func (p *Policy) Execute(session PolicySession, resources PolicyResources, tpm T
 	result = &PolicyExecuteResult{
 		AuthValueNeeded: details.AuthValueNeeded,
 		Path:            string(runner.currentPath),
+	}
+	if commandCode, set := details.CommandCode(); set {
+		result.policyCommandCode = &commandCode
+	}
+	if cpHash, set := details.CpHash(); set {
+		result.policyCpHash = cpHash
+	}
+	if nameHash, set := details.NameHash(); set {
+		result.policyNameHash = nameHash
+	}
+	if nvWritten, set := details.NvWritten(); set {
+		result.policyNvWritten = &nvWritten
 	}
 
 	for _, ticket := range tickets.newTickets {
