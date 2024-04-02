@@ -400,12 +400,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 			err:       &ResourceLoadError{Name: e.AuthObjectName, err: err},
 		}
 	}
-	defer func() {
-		if authObject.Resource().Handle().Type() != tpm2.HandleTypeTransient {
-			return
-		}
-		authObject.Flush()
-	}()
+	defer authObject.Flush()
 
 	usage := NewPolicySessionUsage(
 		tpm2.CommandPolicySecret,

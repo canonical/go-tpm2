@@ -32,8 +32,8 @@ type LoadPolicyParams struct {
 // are required by a policy.
 type PolicyResources interface {
 	// LoadedResource loads the resource with the specified name if required, and returns
-	// a context. If the name corresponds to a transient object, the Flush method of the
-	// returned context will be called once the resource is no longer needed.
+	// a context. The Flush method of the returned context will be called once the resource
+	// is no longer needed.
 	//
 	// This should return an error if no resource can be returned.
 	LoadedResource(name tpm2.Name, policyParams *LoadPolicyParams) (resource ResourceContext, policy *Policy, newTickets []*PolicyTicket, invalidTickets []*PolicyTicket, err error)
