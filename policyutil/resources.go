@@ -419,6 +419,8 @@ func makeNameMapKey(name tpm2.Name) nameMapKey {
 }
 
 type executePolicyResources struct {
+	session SessionContext
+
 	resources PolicyResources
 	tickets   *executePolicyTickets
 
@@ -429,8 +431,9 @@ type executePolicyResources struct {
 	cachedAuthorizedPolicies map[authMapKey][]*Policy
 }
 
-func newExecutePolicyResources(resources PolicyResources, tickets *executePolicyTickets, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *executePolicyResources {
+func newExecutePolicyResources(session SessionContext, resources PolicyResources, tickets *executePolicyTickets, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *executePolicyResources {
 	return &executePolicyResources{
+		session:                  session,
 		resources:                resources,
 		tickets:                  tickets,
 		ignoreAuthorizations:     ignoreAuthorizations,
@@ -438,6 +441,12 @@ func newExecutePolicyResources(resources PolicyResources, tickets *executePolicy
 		cachedResources:          make(map[nameMapKey]cachedResource),
 		cachedAuthorizedPolicies: make(map[authMapKey][]*Policy),
 	}
+}
+
+func (r *executePolicyResources) forSession(session SessionContext) *executePolicyResources {
+	out := *r
+	out.session = session
+	return &out
 }
 
 func (r *executePolicyResources) loadedResource(name tpm2.Name) (ResourceContext, *Policy, error) {
@@ -458,6 +467,17 @@ func (r *executePolicyResources) loadedResource(name tpm2.Name) (ResourceContext
 			}
 		}
 	}
+
+	// Save the current policy session to make space for others that might be loaded
+	restore, err := r.session.Save()
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot save session: %w", err)
+	}
+	defer func() {
+		if restoreErr := restore(); restoreErr != nil && err == nil {
+			err = fmt.Errorf("cannot restore saved session: %w", restoreErr)
+		}
+	}()
 
 	params := &LoadPolicyParams{
 		Tickets:              r.tickets.currentTickets(),

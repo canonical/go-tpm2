@@ -10,11 +10,6 @@ import (
 	"github.com/canonical/go-tpm2"
 )
 
-type SessionContext interface {
-	Session() tpm2.SessionContext
-	Flush()
-}
-
 // TPMHelper provides a way for [Policy.Execute] to communicate with a TPM.
 type TPMHelper interface {
 	// StartAuthSession returns an authorization session with the specified type and
@@ -55,26 +50,6 @@ type TPMHelper interface {
 	NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error)
 }
 
-type tpmSessionContext struct {
-	tpm     *tpm2.TPMContext
-	session tpm2.SessionContext
-}
-
-func newTpmSessionContext(tpm *tpm2.TPMContext, session tpm2.SessionContext) *tpmSessionContext {
-	return &tpmSessionContext{
-		tpm:     tpm,
-		session: session,
-	}
-}
-
-func (s *tpmSessionContext) Session() tpm2.SessionContext {
-	return s.session
-}
-
-func (s *tpmSessionContext) Flush() {
-	s.tpm.FlushContext(s.session)
-}
-
 type onlineTpmHelper struct {
 	tpm      *tpm2.TPMContext
 	sessions []tpm2.SessionContext
@@ -92,7 +67,16 @@ func (h *onlineTpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm
 	if err != nil {
 		return nil, nil, err
 	}
-	return newTpmSessionContext(h.tpm, session), NewTPMPolicySession(h.tpm, session, h.sessions...), nil
+
+	switch sessionType {
+	case tpm2.SessionTypeHMAC:
+		return newTpmSessionContext(h.tpm, session), nil, nil
+	case tpm2.SessionTypePolicy:
+		policySession := NewTPMPolicySession(h.tpm, session, h.sessions...)
+		return policySession.Context(), policySession, nil
+	default:
+		panic("not reached")
+	}
 }
 
 func (h *onlineTpmHelper) LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2.Public, hierarchy tpm2.Handle) (ResourceContext, error) {

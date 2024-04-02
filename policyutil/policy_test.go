@@ -1896,7 +1896,7 @@ func (s *policySuite) TestPolicyNVDifferentAuth(c *C) {
 		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
 		offset:              4,
 		operation:           tpm2.OpEq,
-		expectedCommands:    5,
+		expectedCommands:    7,
 		expectedAuthorize:   true,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
@@ -2071,6 +2071,7 @@ type testExecutePolicySecretData struct {
 
 	expectedFlush       bool
 	expectedCommands    int
+	expectedAuth        int
 	expectedSessionType tpm2.HandleType
 }
 
@@ -2084,11 +2085,15 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
+	nAuths := 0
 	var authObjectHandle tpm2.Handle
 	authorizer := &mockAuthorizer{
 		authorizeFn: func(resource tpm2.ResourceContext) error {
-			c.Check(resource.Name(), DeepEquals, data.authObject.Name())
-			authObjectHandle = resource.Handle()
+			if nAuths == data.expectedAuth {
+				c.Check(resource.Name(), DeepEquals, data.authObject.Name())
+				authObjectHandle = resource.Handle()
+			}
+			nAuths++
 			return nil
 		},
 	}
@@ -2148,7 +2153,7 @@ func (s *policySuite) TestPolicySecret(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject:          s.TPM.OwnerHandleContext(),
 		policyRef:           []byte("foo"),
-		expectedCommands:    5,
+		expectedCommands:    7,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
@@ -2156,12 +2161,12 @@ func (s *policySuite) TestPolicySecret(c *C) {
 func (s *policySuite) TestPolicySecretNoPolicyRef(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject:          s.TPM.OwnerHandleContext(),
-		expectedCommands:    5,
+		expectedCommands:    7,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
 
-func (s *policySuite) TestPolicySecretWithWithTransient(c *C) {
+func (s *policySuite) TestPolicySecretWithTransientLoadRequiresPolicy(c *C) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandLoad), IsNil)
 	policy, err := builder.Policy()
@@ -2198,7 +2203,86 @@ func (s *policySuite) TestPolicySecretWithWithTransient(c *C) {
 			},
 		},
 		expectedFlush:       true,
-		expectedCommands:    13,
+		expectedCommands:    15,
+		expectedSessionType: tpm2.HandleTypeHMACSession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicySecretWithTransientPolicySession(c *C) {
+	parent := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAStorageKeyTemplate())
+	persistent := s.NextAvailableHandle(c, 0x81000008)
+	s.EvictControl(c, tpm2.HandleOwner, parent, persistent)
+
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+	policyDigest, err := policy.Compute(tpm2.HashAlgorithmSHA256)
+
+	template := objectutil.NewRSAStorageKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+		objectutil.WithUserAuthMode(objectutil.RequirePolicy),
+		objectutil.WithAuthPolicy(policyDigest),
+	)
+
+	priv, pub, _, _, _, err := s.TPM.Create(parent, nil, template, nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	err = s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject: pub,
+		policyRef:  []byte("foo"),
+		resources: &PolicyResourcesData{
+			Persistent: []PersistentResource{
+				{
+					Name:   parent.Name(),
+					Handle: persistent,
+				},
+			},
+			Transient: []TransientResource{
+				{
+					ParentName: parent.Name(),
+					Private:    priv,
+					Public:     pub,
+					Policy:     policy,
+				},
+			},
+		},
+		expectedFlush:       true,
+		expectedCommands:    15,
+		expectedAuth:        1,
+		expectedSessionType: tpm2.HandleTypePolicySession})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicySecretWithTransient(c *C) {
+	parent := s.CreatePrimary(c, tpm2.HandleOwner, testutil.NewRSAStorageKeyTemplate())
+	persistent := s.NextAvailableHandle(c, 0x81000008)
+	s.EvictControl(c, tpm2.HandleOwner, parent, persistent)
+
+	priv, pub, _, _, _, err := s.TPM.Create(parent, nil, testutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	err = s.testPolicySecret(c, &testExecutePolicySecretData{
+		authObject: pub,
+		policyRef:  []byte("foo"),
+		resources: &PolicyResourcesData{
+			Persistent: []PersistentResource{
+				{
+					Name:   parent.Name(),
+					Handle: persistent,
+				},
+			},
+			Transient: []TransientResource{
+				{
+					ParentName: parent.Name(),
+					Private:    priv,
+					Public:     pub,
+				},
+			},
+		},
+		expectedFlush:       true,
+		expectedCommands:    14,
+		expectedAuth:        1,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
@@ -2262,7 +2346,7 @@ func (s *policySuite) TestPolicySecretWithNV(c *C) {
 	err = s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject:          nvPub,
 		policyRef:           []byte("foo"),
-		expectedCommands:    9,
+		expectedCommands:    11,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
@@ -2299,7 +2383,7 @@ func (s *policySuite) TestPolicySecretWithNVPolicySession(c *C) {
 				},
 			},
 		},
-		expectedCommands:    8,
+		expectedCommands:    10,
 		expectedSessionType: tpm2.HandleTypePolicySession})
 	c.Check(err, IsNil)
 }
@@ -2336,7 +2420,7 @@ func (s *policySuite) TestPolicySecretWithNVPreferHMACSession(c *C) {
 				},
 			},
 		},
-		expectedCommands:    7,
+		expectedCommands:    9,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
@@ -3196,6 +3280,8 @@ func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
+			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
 			tpm2.CommandPolicySecret,
@@ -3212,6 +3298,8 @@ func (s *policySuite) TestPolicyBranchesNumericSelectorDifferentBranchIndex(c *C
 		path: "$[1]",
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -3254,6 +3342,8 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
 		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -3449,6 +3539,8 @@ func (s *policySuite) TestPolicyBranchesMultipleNodes3(c *C) {
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
+			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
 			tpm2.CommandPolicySecret,
@@ -3527,6 +3619,8 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage3(c *C) 
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
+			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
 			tpm2.CommandPolicySecret,
@@ -3546,6 +3640,8 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C
 		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...), append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -3582,6 +3678,8 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard2(c *C) {
 		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -3746,6 +3844,8 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodes3(c *C) {
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
+			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
 			tpm2.CommandPolicySecret,
@@ -3764,6 +3864,8 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodes4(c *C) {
 		path: "branch4/branch6",
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -3814,6 +3916,8 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneWithUsage(c *C
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
+			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
 			tpm2.CommandPolicySecret,
@@ -3863,6 +3967,8 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3(c *C) 
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
+			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
 			tpm2.CommandPolicySecret,
@@ -3898,6 +4004,8 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard2(c *C) {
 		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}, tpm2.Auth("foo")).NoAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
+			tpm2.CommandContextSave,
+			tpm2.CommandContextLoad,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,

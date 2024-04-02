@@ -514,7 +514,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 				runner := newPolicyExecuteRunner(
 					policySession,
 					tickets,
-					newExecutePolicyResources(resources, tickets, nil, nil),
+					newExecutePolicyResources(session, resources, tickets, nil, nil),
 					resources,
 					s.tpm,
 					params,
@@ -637,7 +637,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	makeBeginBranchFn = func(parentPath policyBranchPath, details *pathSelectorBranchDetails) treeWalkerBeginBranchFn {
 		nodeDetails := *details
 
-		return func(name policyBranchPath) (PolicySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			branchPath := parentPath.Concat(name)
 			branchDetails := nodeDetails
 
@@ -740,7 +740,7 @@ var errTreeWalkerSkipBranch = errors.New("")
 
 type (
 	treeWalkerBeginBranchNodeFn  func() (treeWalkerBeginBranchFn, error)
-	treeWalkerBeginBranchFn      func(policyBranchPath) (PolicySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error)
+	treeWalkerBeginBranchFn      func(policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error)
 	treeWalkerCompleteFullPathFn func() error
 )
 
@@ -749,7 +749,7 @@ type treeWalker struct {
 	policyResources   policyResources
 	beginRootBranchFn treeWalkerBeginBranchFn
 
-	policySession       PolicySession
+	policySession       policySession
 	beginBranchNodeFn   treeWalkerBeginBranchNodeFn
 	completeFullPathFn  treeWalkerCompleteFullPathFn
 	ranCompleteFullPath bool
@@ -798,7 +798,7 @@ func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int
 	return w.runInternal(append(branch.Policy, remaining...))
 }
 
-func (w *treeWalker) session() PolicySession {
+func (w *treeWalker) session() policySession {
 	return w.policySession
 }
 

@@ -261,7 +261,7 @@ type policyTickets interface {
 }
 
 type policyRunner interface {
-	session() PolicySession
+	session() policySession
 	tickets() policyTickets
 	resources() policyResources
 
@@ -348,12 +348,6 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 		e.OperandB, e.Offset, e.Operation,
 	)
 
-	restoreSession, err := runner.session().Save()
-	if err != nil {
-		return fmt.Errorf("cannot save session: %w", err)
-	}
-	defer restoreSession()
-
 	authSession, err := runner.authorize(auth.Resource(), policy, usage, tpm2.SessionTypePolicy)
 	if err != nil {
 		return &PolicyNVError{
@@ -363,10 +357,6 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 		}
 	}
 	defer authSession.Flush()
-
-	if err := restoreSession(); err != nil {
-		return fmt.Errorf("cannot restore session: %w", err)
-	}
 
 	if err := runner.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, authSession.Session()); err != nil {
 		return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: err}
@@ -402,13 +392,6 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 		}
 	}
 
-	// LoadName can create additional sessions, so save the current one now.
-	restoreSession, err := runner.session().Save()
-	if err != nil {
-		return fmt.Errorf("cannot save session: %w", err)
-	}
-	defer restoreSession()
-
 	authObject, policy, err := runner.resources().loadedResource(e.AuthObjectName)
 	if err != nil {
 		return &PolicyAuthorizationError{
@@ -439,10 +422,6 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 		}
 	}
 	defer authSession.Flush()
-
-	if err := restoreSession(); err != nil {
-		return fmt.Errorf("cannot restore session: %w", err)
-	}
 
 	timeout, ticket, err := runner.session().PolicySecret(authObject.Resource(), e.CpHashA, e.PolicyRef, e.Expiration, authSession.Session())
 	if err != nil {
@@ -1015,9 +994,10 @@ func (t *executePolicyTickets) currentTickets() (out []*PolicyTicket) {
 type policyExecuteRunner struct {
 	sessionAlg tpm2.HashAlgorithmId
 
-	policySession   *teePolicySession
-	policyTickets   *executePolicyTickets
-	policyResources *executePolicyResources
+	policySessionContext SessionContext
+	policySession        *teePolicySession
+	policyTickets        *executePolicyTickets
+	policyResources      *executePolicyResources
 
 	authorizer Authorizer
 	tpm        TPMHelper
@@ -1033,7 +1013,8 @@ type policyExecuteRunner struct {
 func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, tpm TPMHelper, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
 	sessionAlg := session.HashAlg()
 	return &policyExecuteRunner{
-		sessionAlg: sessionAlg,
+		sessionAlg:           sessionAlg,
+		policySessionContext: session.Context(),
 		policySession: newTeePolicySession(
 			session,
 			newBranchDetailsCollector(sessionAlg, details),
@@ -1049,7 +1030,7 @@ func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets
 	}
 }
 
-func (r *policyExecuteRunner) session() PolicySession {
+func (r *policyExecuteRunner) session() policySession {
 	return r.policySession
 }
 
@@ -1073,7 +1054,7 @@ func (r *policyExecuteRunner) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error) {
+func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
 	sessionType := prefer
 	alg := auth.Name().Algorithm()
 
@@ -1109,6 +1090,17 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 		sessionType = tpm2.SessionTypeHMAC
 	}
 
+	// Save the current policy session to make space for others that might be loaded
+	restore, err := r.policySessionContext.Save()
+	if err != nil {
+		return nil, fmt.Errorf("cannot save session: %w", err)
+	}
+	defer func() {
+		if restoreErr := restore(); restoreErr != nil && err == nil {
+			err = fmt.Errorf("cannot restore saved session: %w", restoreErr)
+		}
+	}()
+
 	session, policySession, err := r.tpm.StartAuthSession(sessionType, alg)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create session to authorize auth object: %w", err)
@@ -1133,7 +1125,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 		}
 
 		var details PolicyBranchDetails
-		runner := newPolicyExecuteRunner(policySession, r.policyTickets, r.policyResources, r.authorizer, r.tpm, params, &details)
+		runner := newPolicyExecuteRunner(policySession, r.policyTickets, r.policyResources.forSession(session), r.authorizer, r.tpm, params, &details)
 		if err := runner.run(policy.policy.Policy); err != nil {
 			return nil, err
 		}
@@ -1535,7 +1527,7 @@ func (p *Policy) Execute(session PolicySession, resources PolicyResources, tpm T
 	runner := newPolicyExecuteRunner(
 		session,
 		tickets,
-		newExecutePolicyResources(resources, tickets, params.IgnoreAuthorizations, params.IgnoreNV),
+		newExecutePolicyResources(session.Context(), resources, tickets, params.IgnoreAuthorizations, params.IgnoreNV),
 		resources,
 		tpm,
 		params,
@@ -1569,14 +1561,6 @@ func (*nullTickets) ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTick
 func (*nullTickets) addTicket(ticket *PolicyTicket)     {}
 func (*nullTickets) invalidTicket(ticket *PolicyTicket) {}
 
-type mockSessionContext struct{}
-
-func (*mockSessionContext) Session() tpm2.SessionContext {
-	return nil
-}
-
-func (*mockSessionContext) Flush() {}
-
 type policyComputeRunner struct {
 	policySession   *computePolicySession
 	policyTickets   nullTickets
@@ -1592,7 +1576,7 @@ func newPolicyComputeRunner(digest *taggedHash) *policyComputeRunner {
 	}
 }
 
-func (r *policyComputeRunner) session() PolicySession {
+func (r *policyComputeRunner) session() policySession {
 	return r.policySession
 }
 
@@ -1839,7 +1823,7 @@ func newPolicyValidateRunner(digest *taggedHash) *policyValidateRunner {
 	}
 }
 
-func (r *policyValidateRunner) session() PolicySession {
+func (r *policyValidateRunner) session() policySession {
 	return r.policySession
 }
 
@@ -1990,7 +1974,7 @@ func (p *Policy) Branches() ([]string, error) {
 
 	var makeBeginBranchFn func(policyBranchPath) treeWalkerBeginBranchFn
 	makeBeginBranchFn = func(parentPath policyBranchPath) treeWalkerBeginBranchFn {
-		return func(name policyBranchPath) (PolicySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			branchPath := parentPath.Concat(name)
 
 			session := newNullPolicySession(tpm2.HashAlgorithmSHA256)
@@ -2148,7 +2132,7 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 		nodeDetails := *details
 		explicitlyHandledNode := false
 
-		return func(name policyBranchPath) (PolicySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			if explicitlyHandledNode {
 				return nil, nil, nil, errTreeWalkerSkipBranch
 			}
