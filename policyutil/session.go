@@ -13,8 +13,8 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-// policySession corresponds to a policy session
-type policySession interface {
+// PolicySession corresponds to a policy session
+type PolicySession interface {
 	Name() tpm2.Name
 	HashAlg() tpm2.HashAlgorithmId
 	NonceTPM() tpm2.Nonce
@@ -41,95 +41,97 @@ type policySession interface {
 
 // tpmPolicySession is an implementation of policySession that runs on a TPM
 type tpmPolicySession struct {
-	tpm     TPMConnection
-	session tpm2.SessionContext
+	tpm           *tpm2.TPMContext
+	policySession tpm2.SessionContext
+	sessions      []tpm2.SessionContext
 }
 
-func newTpmPolicySession(tpm TPMConnection, session tpm2.SessionContext) policySession {
+func NewTPMPolicySession(tpm *tpm2.TPMContext, policySession tpm2.SessionContext, sessions ...tpm2.SessionContext) PolicySession {
 	return &tpmPolicySession{
-		tpm:     tpm,
-		session: session,
+		tpm:           tpm,
+		policySession: policySession,
+		sessions:      sessions,
 	}
 }
 
 func (s *tpmPolicySession) Name() tpm2.Name {
-	return s.session.Name()
+	return s.policySession.Name()
 }
 
 func (s *tpmPolicySession) HashAlg() tpm2.HashAlgorithmId {
-	return s.session.Params().HashAlg
+	return s.policySession.Params().HashAlg
 }
 
 func (s *tpmPolicySession) NonceTPM() tpm2.Nonce {
-	return s.session.State().NonceTPM
+	return s.policySession.State().NonceTPM
 }
 
 func (s *tpmPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	return s.tpm.PolicySigned(authKey, s.session, includeNonceTPM, cpHashA, policyRef, expiration, auth)
+	return s.tpm.PolicySigned(authKey, s.policySession, includeNonceTPM, cpHashA, policyRef, expiration, auth, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	return s.tpm.PolicySecret(authObject, s.session, cpHashA, policyRef, expiration, authObjectAuthSession)
+	return s.tpm.PolicySecret(authObject, s.policySession, cpHashA, policyRef, expiration, authObjectAuthSession, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
-	return s.tpm.PolicyTicket(s.session, timeout, cpHashA, policyRef, authName, ticket)
+	return s.tpm.PolicyTicket(s.policySession, timeout, cpHashA, policyRef, authName, ticket, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyOR(pHashList tpm2.DigestList) error {
-	return s.tpm.PolicyOR(s.session, pHashList)
+	return s.tpm.PolicyOR(s.policySession, pHashList, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
-	return s.tpm.PolicyPCR(s.session, pcrDigest, pcrs)
+	return s.tpm.PolicyPCR(s.policySession, pcrDigest, pcrs, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
-	return s.tpm.PolicyNV(auth, index, s.session, operandB, offset, operation, authAuthSession)
+	return s.tpm.PolicyNV(auth, index, s.policySession, operandB, offset, operation, authAuthSession, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
-	return s.tpm.PolicyCounterTimer(s.session, operandB, offset, operation)
+	return s.tpm.PolicyCounterTimer(s.policySession, operandB, offset, operation, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
-	return s.tpm.PolicyCommandCode(s.session, code)
+	return s.tpm.PolicyCommandCode(s.policySession, code, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
-	return s.tpm.PolicyCpHash(s.session, cpHashA)
+	return s.tpm.PolicyCpHash(s.policySession, cpHashA, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
-	return s.tpm.PolicyNameHash(s.session, nameHash)
+	return s.tpm.PolicyNameHash(s.policySession, nameHash, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	return s.tpm.PolicyDuplicationSelect(s.session, objectName, newParentName, includeObject)
+	return s.tpm.PolicyDuplicationSelect(s.policySession, objectName, newParentName, includeObject, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
-	return s.tpm.PolicyAuthorize(s.session, approvedPolicy, policyRef, keySign, verified)
+	return s.tpm.PolicyAuthorize(s.policySession, approvedPolicy, policyRef, keySign, verified, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyAuthValue() error {
-	return s.tpm.PolicyAuthValue(s.session)
+	return s.tpm.PolicyAuthValue(s.policySession, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyPassword() error {
-	return s.tpm.PolicyPassword(s.session)
+	return s.tpm.PolicyPassword(s.policySession, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
-	return s.tpm.PolicyGetDigest(s.session)
+	return s.tpm.PolicyGetDigest(s.policySession, s.sessions...)
 }
 
 func (s *tpmPolicySession) PolicyNvWritten(writtenSet bool) error {
-	return s.tpm.PolicyNvWritten(s.session, writtenSet)
+	return s.tpm.PolicyNvWritten(s.policySession, writtenSet, s.sessions...)
 }
 
 func (c *tpmPolicySession) Save() (restore func() error, err error) {
-	context, err := c.tpm.ContextSave(c.session)
+	context, err := c.tpm.ContextSave(c.policySession)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +152,7 @@ func (c *tpmPolicySession) Save() (restore func() error, err error) {
 		if !ok {
 			return errors.New("internal error: invalid context type")
 		}
-		c.session = sc
+		c.policySession = sc
 		return nil
 	}, nil
 }
@@ -416,11 +418,11 @@ func (*nullPolicySession) Save() (restore func() error, err error) {
 }
 
 type teePolicySession struct {
-	target  policySession
-	monitor policySession
+	target  PolicySession
+	monitor PolicySession
 }
 
-func newTeePolicySession(target policySession, monitor policySession) *teePolicySession {
+func newTeePolicySession(target PolicySession, monitor PolicySession) *teePolicySession {
 	return &teePolicySession{
 		target:  target,
 		monitor: monitor,

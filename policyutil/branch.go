@@ -125,7 +125,7 @@ type policyPathSelector struct {
 
 	sessionAlg           tpm2.HashAlgorithmId
 	resources            *executePolicyResources
-	tpm                  TPMConnection
+	tpm                  TPMHelper
 	usage                *PolicySessionUsage
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
@@ -135,7 +135,7 @@ type policyPathSelector struct {
 	nvOk       map[nvAssertionMapKey]struct{}
 }
 
-func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMConnection, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
+func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMHelper, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
 	return &policyPathSelector{
 		sessionAlg:           sessionAlg,
 		resources:            resources,
@@ -242,7 +242,7 @@ func (s *policyPathSelector) filterUsageIncompatibleBranches() error {
 
 		nvWritten, set := d.NvWritten()
 		if set && s.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
-			pub, _, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(s.usage.nvHandle))
+			pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(s.usage.nvHandle))
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
@@ -459,7 +459,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 
 			info, exists := nvInfo[nv.Index]
 			if !exists {
-				pub, name, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(nv.Index))
+				pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(nv.Index))
 				if tpm2.IsTPMHandleError(err, tpm2.ErrorHandle, tpm2.AnyCommandCode, tpm2.AnyHandleIndex) {
 					// if no NV index exists, then this branch won't work.
 					incompatible = true
@@ -468,6 +468,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 				if err != nil {
 					return err
 				}
+				name := pub.Name()
 				if !bytes.Equal(name, nv.Name) {
 					// if the NV index doesn't have the expected name, then this
 					// branch won't work.
@@ -498,11 +499,11 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 
 			// Run the policy session and read the NV index
 			err := func() error {
-				session, err := s.tpm.StartAuthSession(tpm2.SessionTypePolicy, nv.Name.Algorithm())
+				session, policySession, err := s.tpm.StartAuthSession(tpm2.SessionTypePolicy, nv.Name.Algorithm())
 				if err != nil {
 					return err
 				}
-				defer s.tpm.FlushContext(session)
+				defer session.Flush()
 
 				params := &PolicyExecuteParams{
 					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []Named{nv.Name, nv.Name}, uint16(len(nv.OperandB)), nv.Offset).NoAuthValue(),
@@ -511,11 +512,11 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 				resources := new(nullPolicyResources)
 				tickets, _ := newExecutePolicyTickets(s.sessionAlg, nil, nil)
 				runner := newPolicyExecuteRunner(
-					s.tpm,
-					session,
+					policySession,
 					tickets,
-					newExecutePolicyResources(s.tpm, resources, tickets, nil, nil),
+					newExecutePolicyResources(resources, tickets, nil, nil),
 					resources,
+					s.tpm,
 					params,
 					new(PolicyBranchDetails),
 				)
@@ -524,7 +525,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 					return nil
 				}
 
-				data, err := s.tpm.NVRead(info.resource, info.resource, uint16(len(nv.OperandB)), nv.Offset, session)
+				data, err := s.tpm.NVRead(info.resource, info.resource, uint16(len(nv.OperandB)), nv.Offset, session.Session())
 				if err != nil {
 					// ignore NVRead error
 					return nil
@@ -636,7 +637,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	makeBeginBranchFn = func(parentPath policyBranchPath, details *pathSelectorBranchDetails) treeWalkerBeginBranchFn {
 		nodeDetails := *details
 
-		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name policyBranchPath) (PolicySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			branchPath := parentPath.Concat(name)
 			branchDetails := nodeDetails
 
@@ -739,7 +740,7 @@ var errTreeWalkerSkipBranch = errors.New("")
 
 type (
 	treeWalkerBeginBranchNodeFn  func() (treeWalkerBeginBranchFn, error)
-	treeWalkerBeginBranchFn      func(policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error)
+	treeWalkerBeginBranchFn      func(policyBranchPath) (PolicySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error)
 	treeWalkerCompleteFullPathFn func() error
 )
 
@@ -748,7 +749,7 @@ type treeWalker struct {
 	policyResources   policyResources
 	beginRootBranchFn treeWalkerBeginBranchFn
 
-	policySession       policySession
+	policySession       PolicySession
 	beginBranchNodeFn   treeWalkerBeginBranchNodeFn
 	completeFullPathFn  treeWalkerCompleteFullPathFn
 	ranCompleteFullPath bool
@@ -797,7 +798,7 @@ func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int
 	return w.runInternal(append(branch.Policy, remaining...))
 }
 
-func (w *treeWalker) session() policySession {
+func (w *treeWalker) session() PolicySession {
 	return w.policySession
 }
 
@@ -812,7 +813,7 @@ func (w *treeWalker) resources() policyResources {
 func (w *treeWalker) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
-	return newResourceContextFlushable(resource, nil), nil
+	return newResourceContext(resource), nil
 }
 
 func (w *treeWalker) cpHash(cpHash *policyCpHashElement) error {
@@ -823,8 +824,8 @@ func (w *treeWalker) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (w *treeWalker) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (tpm2.SessionContext, func(), error) {
-	return nil, func() {}, nil
+func (w *treeWalker) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error) {
+	return new(mockSessionContext), nil
 }
 
 func (w *treeWalker) runBranch(branches policyBranches) (int, error) {
