@@ -473,12 +473,12 @@ func newTeePolicySession(outputs ...policySession) *teePolicySession {
 	return &teePolicySession{outputs: outputs}
 }
 
-func (s *teePolicySession) tail() policySession {
-	return s.outputs[len(s.outputs)-1]
+func (s *teePolicySession) head() policySession {
+	return s.outputs[0]
 }
 
-func (s *teePolicySession) forEachExceptTail(fn func(policySession) error) error {
-	for _, session := range s.outputs[:len(s.outputs)-1] {
+func (s *teePolicySession) forEachExceptHead(fn func(policySession) error) error {
+	for _, session := range s.outputs[1:] {
 		if err := fn(session); err != nil {
 			return err
 		}
@@ -496,35 +496,43 @@ func (s *teePolicySession) forEach(fn func(policySession) error) error {
 }
 
 func (s *teePolicySession) Name() tpm2.Name {
-	return s.tail().Name()
+	return s.head().Name()
 }
 
 func (s *teePolicySession) HashAlg() tpm2.HashAlgorithmId {
-	return s.tail().HashAlg()
+	return s.head().HashAlg()
 }
 
 func (s *teePolicySession) NonceTPM() tpm2.Nonce {
-	return s.tail().NonceTPM()
+	return s.head().NonceTPM()
 }
 
 func (s *teePolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if err := s.forEachExceptTail(func(session policySession) error {
+	timeout, ticket, err := s.head().PolicySigned(authKey, includeNonceTPM, cpHashA, policyRef, expiration, auth)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.forEachExceptHead(func(session policySession) error {
 		_, _, err := session.PolicySigned(authKey, includeNonceTPM, cpHashA, policyRef, expiration, auth)
 		return err
 	}); err != nil {
 		return nil, nil, err
 	}
-	return s.tail().PolicySigned(authKey, includeNonceTPM, cpHashA, policyRef, expiration, auth)
+	return timeout, ticket, nil
 }
 
 func (s *teePolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if err := s.forEachExceptTail(func(session policySession) error {
+	timeout, ticket, err := s.head().PolicySecret(authObject, cpHashA, policyRef, expiration, authObjectAuthSession)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.forEachExceptHead(func(session policySession) error {
 		_, _, err := session.PolicySecret(authObject, cpHashA, policyRef, expiration, authObjectAuthSession)
 		return err
 	}); err != nil {
 		return nil, nil, err
 	}
-	return s.tail().PolicySecret(authObject, cpHashA, policyRef, expiration, authObjectAuthSession)
+	return timeout, ticket, nil
 }
 
 func (s *teePolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
@@ -600,7 +608,7 @@ func (s *teePolicySession) PolicyPassword() error {
 }
 
 func (s *teePolicySession) PolicyGetDigest() (tpm2.Digest, error) {
-	return s.tail().PolicyGetDigest()
+	return s.head().PolicyGetDigest()
 }
 
 func (s *teePolicySession) PolicyNvWritten(writtenSet bool) error {
