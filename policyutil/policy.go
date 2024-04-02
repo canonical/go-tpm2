@@ -1575,9 +1575,7 @@ func (*mockSessionContext) Session() tpm2.SessionContext {
 	return nil
 }
 
-func (*mockSessionContext) Flush() error {
-	return nil
-}
+func (*mockSessionContext) Flush() {}
 
 type policyComputeRunner struct {
 	policySession   *computePolicySession

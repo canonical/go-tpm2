@@ -17,7 +17,7 @@ import (
 // ResourceContext corresponds to a resource on the TPM.
 type ResourceContext interface {
 	Resource() tpm2.ResourceContext // The actual resource
-	Flush() error                   // Flush the resource once it's no longer needed
+	Flush()                         // Flush the resource once it's no longer needed
 }
 
 // LoadPolicyParams contains parameters for policy sessions that are required to execute
@@ -133,9 +133,7 @@ func (r *resourceContext) Resource() tpm2.ResourceContext {
 	return r.resource
 }
 
-func (r *resourceContext) Flush() error {
-	return nil
-}
+func (r *resourceContext) Flush() {}
 
 type resourceContextFlushFn func(tpm2.HandleContext) error
 
@@ -151,8 +149,8 @@ func newResourceContextFlushable(resource tpm2.ResourceContext, flush resourceCo
 	}
 }
 
-func (r *resourceContextFlushable) Flush() error {
-	return r.flush(r.resource)
+func (r *resourceContextFlushable) Flush() {
+	r.flush(r.resource)
 }
 
 type tpmPolicyResources struct {

@@ -12,7 +12,7 @@ import (
 
 type SessionContext interface {
 	Session() tpm2.SessionContext
-	Flush() error
+	Flush()
 }
 
 // TPMHelper provides a way for [Policy.Execute] to communicate with a TPM.
@@ -71,8 +71,8 @@ func (s *tpmSessionContext) Session() tpm2.SessionContext {
 	return s.session
 }
 
-func (s *tpmSessionContext) Flush() error {
-	return s.tpm.FlushContext(s.session)
+func (s *tpmSessionContext) Flush() {
+	s.tpm.FlushContext(s.session)
 }
 
 type onlineTpmHelper struct {
