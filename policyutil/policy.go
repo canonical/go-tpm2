@@ -1011,8 +1011,8 @@ func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets
 		sessionAlg:           sessionAlg,
 		policySessionContext: session.Context(),
 		policySession: newTeePolicySession(
-			session,
 			newBranchDetailsCollector(sessionAlg, details),
+			session,
 		),
 		policyTickets:        tickets,
 		policyResources:      resources,

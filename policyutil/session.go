@@ -466,136 +466,147 @@ func (*nullPolicySession) PolicyNvWritten(writtenSet bool) error {
 }
 
 type teePolicySession struct {
-	target  policySession
-	monitor policySession
+	outputs []policySession
 }
 
-func newTeePolicySession(target policySession, monitor policySession) *teePolicySession {
-	return &teePolicySession{
-		target:  target,
-		monitor: monitor,
+func newTeePolicySession(outputs ...policySession) *teePolicySession {
+	return &teePolicySession{outputs: outputs}
+}
+
+func (s *teePolicySession) tail() policySession {
+	return s.outputs[len(s.outputs)-1]
+}
+
+func (s *teePolicySession) forEachExceptTail(fn func(policySession) error) error {
+	for _, session := range s.outputs[:len(s.outputs)-1] {
+		if err := fn(session); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+func (s *teePolicySession) forEach(fn func(policySession) error) error {
+	for _, session := range s.outputs {
+		if err := fn(session); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *teePolicySession) Name() tpm2.Name {
-	return s.target.Name()
+	return s.tail().Name()
 }
 
 func (s *teePolicySession) HashAlg() tpm2.HashAlgorithmId {
-	return s.target.HashAlg()
+	return s.tail().HashAlg()
 }
 
 func (s *teePolicySession) NonceTPM() tpm2.Nonce {
-	return s.target.NonceTPM()
+	return s.tail().NonceTPM()
 }
 
 func (s *teePolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if _, _, err := s.monitor.PolicySigned(authKey, includeNonceTPM, cpHashA, policyRef, expiration, auth); err != nil {
+	if err := s.forEachExceptTail(func(session policySession) error {
+		_, _, err := session.PolicySigned(authKey, includeNonceTPM, cpHashA, policyRef, expiration, auth)
+		return err
+	}); err != nil {
 		return nil, nil, err
 	}
-	return s.target.PolicySigned(authKey, includeNonceTPM, cpHashA, policyRef, expiration, auth)
+	return s.tail().PolicySigned(authKey, includeNonceTPM, cpHashA, policyRef, expiration, auth)
 }
 
 func (s *teePolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if _, _, err := s.monitor.PolicySecret(authObject, cpHashA, policyRef, expiration, authObjectAuthSession); err != nil {
+	if err := s.forEachExceptTail(func(session policySession) error {
+		_, _, err := session.PolicySecret(authObject, cpHashA, policyRef, expiration, authObjectAuthSession)
+		return err
+	}); err != nil {
 		return nil, nil, err
 	}
-	return s.target.PolicySecret(authObject, cpHashA, policyRef, expiration, authObjectAuthSession)
+	return s.tail().PolicySecret(authObject, cpHashA, policyRef, expiration, authObjectAuthSession)
 }
 
 func (s *teePolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
-	if err := s.monitor.PolicyTicket(timeout, cpHashA, policyRef, authName, ticket); err != nil {
-		return err
-	}
-	return s.target.PolicyTicket(timeout, cpHashA, policyRef, authName, ticket)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyTicket(timeout, cpHashA, policyRef, authName, ticket)
+	})
 }
 
 func (s *teePolicySession) PolicyOR(pHashList tpm2.DigestList) error {
-	if err := s.monitor.PolicyOR(pHashList); err != nil {
-		return err
-	}
-	return s.target.PolicyOR(pHashList)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyOR(pHashList)
+	})
 }
 
 func (s *teePolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
-	if err := s.monitor.PolicyPCR(pcrDigest, pcrs); err != nil {
-		return err
-	}
-	return s.target.PolicyPCR(pcrDigest, pcrs)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyPCR(pcrDigest, pcrs)
+	})
 }
 
 func (s *teePolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
-	if err := s.monitor.PolicyNV(auth, index, operandB, offset, operation, authAuthSession); err != nil {
-		return err
-	}
-	return s.target.PolicyNV(auth, index, operandB, offset, operation, authAuthSession)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyNV(auth, index, operandB, offset, operation, authAuthSession)
+	})
 }
 
 func (s *teePolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
-	if err := s.monitor.PolicyCounterTimer(operandB, offset, operation); err != nil {
-		return err
-	}
-	return s.target.PolicyCounterTimer(operandB, offset, operation)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyCounterTimer(operandB, offset, operation)
+	})
 }
 
 func (s *teePolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
-	if err := s.monitor.PolicyCommandCode(code); err != nil {
-		return err
-	}
-	return s.target.PolicyCommandCode(code)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyCommandCode(code)
+	})
 }
 
 func (s *teePolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
-	if err := s.monitor.PolicyCpHash(cpHashA); err != nil {
-		return err
-	}
-	return s.target.PolicyCpHash(cpHashA)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyCpHash(cpHashA)
+	})
 }
 
 func (s *teePolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
-	if err := s.monitor.PolicyNameHash(nameHash); err != nil {
-		return err
-	}
-	return s.target.PolicyNameHash(nameHash)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyNameHash(nameHash)
+	})
 }
 
 func (s *teePolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	if err := s.monitor.PolicyDuplicationSelect(objectName, newParentName, includeObject); err != nil {
-		return err
-	}
-	return s.target.PolicyDuplicationSelect(objectName, newParentName, includeObject)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyDuplicationSelect(objectName, newParentName, includeObject)
+	})
 }
 
 func (s *teePolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
-	if err := s.monitor.PolicyAuthorize(approvedPolicy, policyRef, keySign, verified); err != nil {
-		return err
-	}
-	return s.target.PolicyAuthorize(approvedPolicy, policyRef, keySign, verified)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyAuthorize(approvedPolicy, policyRef, keySign, verified)
+	})
 }
 
 func (s *teePolicySession) PolicyAuthValue() error {
-	if err := s.monitor.PolicyAuthValue(); err != nil {
-		return err
-	}
-	return s.target.PolicyAuthValue()
+	return s.forEach(func(session policySession) error {
+		return session.PolicyAuthValue()
+	})
 }
 
 func (s *teePolicySession) PolicyPassword() error {
-	if err := s.monitor.PolicyPassword(); err != nil {
-		return err
-	}
-	return s.target.PolicyPassword()
+	return s.forEach(func(session policySession) error {
+		return session.PolicyPassword()
+	})
 }
 
 func (s *teePolicySession) PolicyGetDigest() (tpm2.Digest, error) {
-	return s.target.PolicyGetDigest()
+	return s.tail().PolicyGetDigest()
 }
 
 func (s *teePolicySession) PolicyNvWritten(writtenSet bool) error {
-	if err := s.monitor.PolicyNvWritten(writtenSet); err != nil {
-		return err
-	}
-	return s.target.PolicyNvWritten(writtenSet)
+	return s.forEach(func(session policySession) error {
+		return session.PolicyNvWritten(writtenSet)
+	})
 }
 
 type branchDetailsCollector struct {
