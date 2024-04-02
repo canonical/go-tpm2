@@ -135,22 +135,20 @@ func (r *resourceContext) Resource() tpm2.ResourceContext {
 
 func (r *resourceContext) Flush() {}
 
-type resourceContextFlushFn func(tpm2.HandleContext) error
-
-type resourceContextFlushable struct {
+type tpmResourceContextFlushable struct {
 	resourceContext
-	flush resourceContextFlushFn
+	tpm *tpm2.TPMContext
 }
 
-func newResourceContextFlushable(resource tpm2.ResourceContext, flush resourceContextFlushFn) *resourceContextFlushable {
-	return &resourceContextFlushable{
+func newTpmResourceContextFlushable(tpm *tpm2.TPMContext, resource tpm2.ResourceContext) *tpmResourceContextFlushable {
+	return &tpmResourceContextFlushable{
 		resourceContext: resourceContext{resource: resource},
-		flush:           flush,
+		tpm:             tpm,
 	}
 }
 
-func (r *resourceContextFlushable) Flush() {
-	r.flush(r.resource)
+func (r *tpmResourceContextFlushable) Flush() {
+	r.tpm.FlushContext(r.resource)
 }
 
 type tpmPolicyResources struct {
@@ -276,7 +274,7 @@ func (r *tpmPolicyResources) LoadedResource(name tpm2.Name, policyParams *LoadPo
 			return nil, nil, nil, nil, err
 		}
 
-		return newResourceContextFlushable(resource, r.tpm.FlushContext), object.Policy, newTickets, invalidTickets, nil
+		return newTpmResourceContextFlushable(r.tpm, resource), object.Policy, newTickets, invalidTickets, nil
 	}
 
 	// Search persistent and NV index handles
@@ -358,7 +356,7 @@ func (r *tpmPolicyResources) ContextLoad(context *tpm2.Context) ResourceContext 
 	if !ok {
 		return nil
 	}
-	return newResourceContextFlushable(rc, r.tpm.FlushContext)
+	return newTpmResourceContextFlushable(r.tpm, rc)
 }
 
 type nullPolicyResources struct{}

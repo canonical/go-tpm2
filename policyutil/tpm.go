@@ -84,7 +84,7 @@ func (h *onlineTpmHelper) LoadExternal(inPrivate *tpm2.Sensitive, inPublic *tpm2
 	if err != nil {
 		return nil, err
 	}
-	return newResourceContextFlushable(rc, h.tpm.FlushContext), nil
+	return newTpmResourceContextFlushable(h.tpm, rc), nil
 }
 
 func (h *onlineTpmHelper) ReadPublic(handle tpm2.HandleContext) (*tpm2.Public, error) {
