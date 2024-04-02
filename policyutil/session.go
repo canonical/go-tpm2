@@ -609,55 +609,55 @@ func (s *teePolicySession) PolicyNvWritten(writtenSet bool) error {
 	})
 }
 
-type branchDetailsCollector struct {
+type recorderPolicySession struct {
 	alg     tpm2.HashAlgorithmId
 	details *PolicyBranchDetails
 }
 
-func newBranchDetailsCollector(alg tpm2.HashAlgorithmId, details *PolicyBranchDetails) *branchDetailsCollector {
-	return &branchDetailsCollector{
+func newRecorderPolicySession(alg tpm2.HashAlgorithmId, details *PolicyBranchDetails) *recorderPolicySession {
+	return &recorderPolicySession{
 		alg:     alg,
 		details: details,
 	}
 }
 
-func (*branchDetailsCollector) Name() tpm2.Name {
-	return tpm2.Name{}
-}
-
-func (c *branchDetailsCollector) HashAlg() tpm2.HashAlgorithmId {
-	return c.alg
-}
-
-func (*branchDetailsCollector) NonceTPM() tpm2.Nonce {
+func (*recorderPolicySession) Name() tpm2.Name {
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	c.details.Signed = append(c.details.Signed, PolicyAuthorizationDetails{
+func (s *recorderPolicySession) HashAlg() tpm2.HashAlgorithmId {
+	return s.alg
+}
+
+func (*recorderPolicySession) NonceTPM() tpm2.Nonce {
+	return nil
+}
+
+func (s *recorderPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	s.details.Signed = append(s.details.Signed, PolicyAuthorizationDetails{
 		AuthName:  authKey.Name(),
 		PolicyRef: policyRef,
 	})
 	return nil, nil, nil
 }
 
-func (c *branchDetailsCollector) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	c.details.Secret = append(c.details.Secret, PolicyAuthorizationDetails{
+func (s *recorderPolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	s.details.Secret = append(s.details.Secret, PolicyAuthorizationDetails{
 		AuthName:  authObject.Name(),
 		PolicyRef: policyRef,
 	})
 	return nil, nil, nil
 }
 
-func (c *branchDetailsCollector) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
+func (s *recorderPolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
 	switch ticket.Tag {
 	case tpm2.TagAuthSecret:
-		c.details.Secret = append(c.details.Secret, PolicyAuthorizationDetails{
+		s.details.Secret = append(s.details.Secret, PolicyAuthorizationDetails{
 			AuthName:  authName,
 			PolicyRef: policyRef,
 		})
 	case tpm2.TagAuthSigned:
-		c.details.Signed = append(c.details.Signed, PolicyAuthorizationDetails{
+		s.details.Signed = append(s.details.Signed, PolicyAuthorizationDetails{
 			AuthName:  authName,
 			PolicyRef: policyRef,
 		})
@@ -665,20 +665,20 @@ func (c *branchDetailsCollector) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2
 	return nil
 }
 
-func (*branchDetailsCollector) PolicyOR(pHashList tpm2.DigestList) error {
+func (*recorderPolicySession) PolicyOR(pHashList tpm2.DigestList) error {
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
-	c.details.PCR = append(c.details.PCR, PolicyPCRDetails{
+func (s *recorderPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+	s.details.PCR = append(s.details.PCR, PolicyPCRDetails{
 		PCRDigest: pcrDigest,
 		PCRs:      pcrs,
 	})
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
-	c.details.NV = append(c.details.NV, PolicyNVDetails{
+func (s *recorderPolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
+	s.details.NV = append(s.details.NV, PolicyNVDetails{
 		Auth:      auth.Handle(),
 		Index:     index.Handle(),
 		Name:      index.Name(),
@@ -689,8 +689,8 @@ func (c *branchDetailsCollector) PolicyNV(auth, index tpm2.ResourceContext, oper
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
-	c.details.CounterTimer = append(c.details.CounterTimer, PolicyCounterTimerDetails{
+func (s *recorderPolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+	s.details.CounterTimer = append(s.details.CounterTimer, PolicyCounterTimerDetails{
 		OperandB:  operandB,
 		Offset:    offset,
 		Operation: operation,
@@ -698,56 +698,56 @@ func (c *branchDetailsCollector) PolicyCounterTimer(operandB tpm2.Operand, offse
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyCommandCode(code tpm2.CommandCode) error {
-	c.details.policyCommandCode = append(c.details.policyCommandCode, code)
+func (s *recorderPolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
+	s.details.policyCommandCode = append(s.details.policyCommandCode, code)
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyCpHash(cpHashA tpm2.Digest) error {
-	c.details.policyCpHash = append(c.details.policyCpHash, cpHashA)
+func (s *recorderPolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
+	s.details.policyCpHash = append(s.details.policyCpHash, cpHashA)
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyNameHash(nameHash tpm2.Digest) error {
-	c.details.policyNameHash = append(c.details.policyNameHash, nameHash)
+func (s *recorderPolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
+	s.details.policyNameHash = append(s.details.policyNameHash, nameHash)
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	nameHash, err := ComputeNameHash(c.alg, objectName, newParentName)
+func (s *recorderPolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
+	nameHash, err := ComputeNameHash(s.alg, objectName, newParentName)
 	if err != nil {
 		return err
 	}
-	if err := c.PolicyNameHash(nameHash); err != nil {
+	if err := s.PolicyNameHash(nameHash); err != nil {
 		return err
 	}
-	return c.PolicyCommandCode(tpm2.CommandPolicyDuplicationSelect)
+	return s.PolicyCommandCode(tpm2.CommandPolicyDuplicationSelect)
 }
 
-func (c *branchDetailsCollector) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
-	c.details.Authorize = append(c.details.Authorize, PolicyAuthorizationDetails{
+func (s *recorderPolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+	s.details.Authorize = append(s.details.Authorize, PolicyAuthorizationDetails{
 		AuthName:  keySign,
 		PolicyRef: policyRef,
 	})
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyAuthValue() error {
-	c.details.AuthValueNeeded = true
+func (s *recorderPolicySession) PolicyAuthValue() error {
+	s.details.AuthValueNeeded = true
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyPassword() error {
-	c.details.AuthValueNeeded = true
+func (s *recorderPolicySession) PolicyPassword() error {
+	s.details.AuthValueNeeded = true
 	return nil
 }
 
-func (c *branchDetailsCollector) PolicyGetDigest() (tpm2.Digest, error) {
+func (s *recorderPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 	return nil, errors.New("not supported")
 }
 
-func (c *branchDetailsCollector) PolicyNvWritten(writtenSet bool) error {
-	c.details.policyNvWritten = append(c.details.policyNvWritten, writtenSet)
+func (s *recorderPolicySession) PolicyNvWritten(writtenSet bool) error {
+	s.details.policyNvWritten = append(s.details.policyNvWritten, writtenSet)
 	return nil
 }
 

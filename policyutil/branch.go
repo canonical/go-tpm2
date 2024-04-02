@@ -645,7 +645,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 				branchDetails.missingAuthorized = true
 			}
 
-			session := newBranchDetailsCollector(s.sessionAlg, &branchDetails.PolicyBranchDetails)
+			session := newRecorderPolicySession(s.sessionAlg, &branchDetails.PolicyBranchDetails)
 
 			beginBranchNodeFn := func() (treeWalkerBeginBranchFn, error) {
 				return makeBeginBranchFn(branchPath, &branchDetails), nil

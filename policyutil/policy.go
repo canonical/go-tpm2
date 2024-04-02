@@ -1011,7 +1011,7 @@ func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets
 		sessionAlg:           sessionAlg,
 		policySessionContext: session.Context(),
 		policySession: newTeePolicySession(
-			newBranchDetailsCollector(sessionAlg, details),
+			newRecorderPolicySession(sessionAlg, details),
 			session,
 		),
 		policyTickets:        tickets,
@@ -2144,7 +2144,7 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 			branchPath := parentPath.Concat(name)
 			branchDetails := nodeDetails
 
-			session := newBranchDetailsCollector(alg, &branchDetails)
+			session := newRecorderPolicySession(alg, &branchDetails)
 
 			beginBranchNodeFn := func() (treeWalkerBeginBranchFn, error) {
 				remaining := remaining
