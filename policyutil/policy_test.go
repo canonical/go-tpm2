@@ -1265,13 +1265,13 @@ func (s *policySuiteNoTPM) TestMarshalUnmarshalPolicyBranchName2(c *C) {
 }
 
 func (s *policySuiteNoTPM) TestMarshalInvalidPolicyBranchName(c *C) {
-	_, err := mu.MarshalToBytes(PolicyBranchName("$foo"))
+	_, err := mu.MarshalToBytes(PolicyBranchName("{foo}"))
 	c.Check(err, ErrorMatches, `cannot marshal argument 0 whilst processing element of type policyutil.policyBranchName: invalid name`)
 }
 
 func (s *policySuiteNoTPM) TestUnmarshalInvalidPolicyBranchName(c *C) {
 	var name PolicyBranchName
-	_, err := mu.UnmarshalFromBytes([]byte{0x00, 0x04, 0x24, 0x66, 0x6f, 0x6f}, &name)
+	_, err := mu.UnmarshalFromBytes([]byte{0x00, 0x05, 0x7b, 0x66, 0x6f, 0x6f, 0x7d}, &name)
 	c.Check(err, ErrorMatches, `cannot unmarshal argument 0 whilst processing element of type policyutil.policyBranchName: invalid name`)
 }
 
@@ -1628,7 +1628,7 @@ func (s *policySuiteNoTPM) TestPolicyBranchesWithMultipleBranchNodes(c *C) {
 
 	branches, err := policy.Branches()
 	c.Check(err, IsNil)
-	c.Check(branches, DeepEquals, []string{"branch1/branch3", "branch1/$[1]", "branch2/branch3", "branch2/$[1]"})
+	c.Check(branches, DeepEquals, []string{"branch1/branch3", "branch1/{1}", "branch2/branch3", "branch2/{1}"})
 }
 
 func (s *policySuiteNoTPM) TestPolicyDigest1(c *C) {
@@ -3380,7 +3380,7 @@ func (s *policySuite) TestPolicyBranches(c *C) {
 
 func (s *policySuite) TestPolicyBranchesNumericSelector(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		path: "$[0]",
+		path: "{0}",
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3412,7 +3412,7 @@ func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
 
 func (s *policySuite) TestPolicyBranchesNumericSelectorDifferentBranchIndex(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		path: "$[1]",
+		path: "{1}",
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3642,7 +3642,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodes1(c *C) {
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesNumericSelectors(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
-		path: "$[0]/$[0]",
+		path: "{0}/{0}",
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -3957,7 +3957,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodes1(c *C) {
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesNumericSelectors(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
-		path: "$[0]/$[0]",
+		path: "{0}/{0}",
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandPolicyAuthValue,
@@ -4189,7 +4189,7 @@ func (s *policySuite) TestPolicyBranchesSelectorOutOfRange(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		Path: "$[2]",
+		Path: "{2}",
 	}
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, params)
@@ -4222,11 +4222,11 @@ func (s *policySuite) TestPolicyBranchesInvalidSelector(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	params := &PolicyExecuteParams{
-		Path: "$foo",
+		Path: "{foo}",
 	}
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, params)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select branch: badly formatted path component "\$foo": input does not match format`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot select branch: badly formatted path component "{foo}": expected integer`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -4748,7 +4748,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelected(c *C) {
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
-	c.Check(result.Path, Equals, "$[1]")
+	c.Check(result.Path, Equals, "{1}")
 
 	digest, err = s.TPM.PolicyGetDigest(session)
 	c.Check(err, IsNil)
@@ -4848,7 +4848,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelected(c *C) {
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
-	c.Check(result.Path, Equals, "$[1]")
+	c.Check(result.Path, Equals, "{1}")
 	_, set := result.CommandCode()
 	c.Check(set, internal_testutil.IsFalse)
 	_, set = result.CpHash()

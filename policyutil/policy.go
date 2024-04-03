@@ -19,6 +19,10 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+const (
+	pathForbiddenChars = "{}*…"
+)
+
 var (
 	// ErrMissingDigest is returned from [Policy.Execute] when a TPM2_PolicyCpHash or
 	// TPM2_PolicyNameHash assertion is missing a digest for the selected session algorithm.
@@ -197,7 +201,7 @@ func (n policyBranchName) isValid() bool {
 	if !utf8.ValidString(string(n)) {
 		return false
 	}
-	if (len(n) > 0 && (n[0] == '$' || n[0] == '*')) || strings.HasPrefix(string(n), "…") {
+	if strings.ContainsAny(string(n), pathForbiddenChars) {
 		return false
 	}
 	return true
@@ -254,6 +258,11 @@ func (p policyBranchPath) Concat(path policyBranchPath) policyBranchPath {
 	return policyBranchPath(strings.Join(pathElements, "/"))
 }
 
+type authorizedPolicy struct {
+	policyBranch
+	authorization *PolicyAuthorization
+}
+
 type policyTickets interface {
 	ticket(authName tpm2.Name, policyRef tpm2.Nonce) *PolicyTicket
 	addTicket(ticket *PolicyTicket)
@@ -270,7 +279,7 @@ type policyRunner interface {
 	nameHash(nameHash *policyNameHashElement) error
 	authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
-	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
+	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
 }
 
 type taggedHash struct {
@@ -517,18 +526,48 @@ func (e *policyAuthorizeElement) run(runner policyRunner) error {
 		return &PolicyAuthorizationError{AuthName: keySignName, PolicyRef: e.PolicyRef, err: err}
 	}
 
-	// Filter out policies that aren't computed for the current session algorithm.
-	var candidatePolicies []*Policy
+	// Filter out policies that aren't computed for the current session algorithm or
+	// don't have a matching authorization, although we shouldn't really have any
+	// without a matching authorization.
+	var candidatePolicies []*authorizedPolicy
 	for _, policy := range policies {
-		_, err := policy.Digest(runner.session().HashAlg())
+		digest, err := policy.Digest(runner.session().HashAlg())
 		if err == ErrMissingDigest {
+			// no suitable digest
 			continue
 		}
 		if err != nil {
 			return err
 		}
 
-		candidatePolicies = append(candidatePolicies, policy)
+		// Find the signed authorization
+		var policyAuth *PolicyAuthorization
+		for _, auth := range policy.policy.PolicyAuthorizations {
+			if auth.Signature == nil {
+				continue
+			}
+			if !bytes.Equal(auth.AuthKey.Name(), keySignName) {
+				continue
+			}
+			if !bytes.Equal(auth.PolicyRef, e.PolicyRef) {
+				continue
+			}
+			policyAuth = &auth
+			break
+		}
+		if policyAuth == nil {
+			// no matching authorization - this shouldn't really happen.
+			continue
+		}
+
+		candidatePolicies = append(candidatePolicies, &authorizedPolicy{
+			policyBranch: policyBranch{
+				Name:          policyBranchName(fmt.Sprintf("%x", digest)),
+				Policy:        policy.policy.Policy,
+				PolicyDigests: taggedHashList{{HashAlg: runner.session().HashAlg(), Digest: digest}},
+			},
+			authorization: policyAuth,
+		})
 	}
 
 	approvedPolicy, checkTicket, err := runner.runAuthorizedPolicy(e.KeySign, e.PolicyRef, candidatePolicies)
@@ -622,18 +661,18 @@ type policyBranches []*policyBranch
 
 func (b policyBranches) selectBranch(next policyBranchPath) (int, error) {
 	switch {
-	case strings.HasPrefix(string(next), "…"):
-		return 0, fmt.Errorf("cannot select branch: invalid component \"%s\"", next)
-	case next[0] == '$':
+	case next[0] == '{':
 		// select branch by index
 		var selected int
-		if _, err := fmt.Sscanf(string(next), "$[%d]", &selected); err != nil {
+		if _, err := fmt.Sscanf(string(next), "{%d}", &selected); err != nil {
 			return 0, fmt.Errorf("cannot select branch: badly formatted path component \"%s\": %w", next, err)
 		}
 		if selected < 0 || selected >= len(b) {
 			return 0, fmt.Errorf("cannot select branch: selected path %d out of range", selected)
 		}
 		return selected, nil
+	case strings.ContainsAny(string(next), pathForbiddenChars):
+		return 0, fmt.Errorf("cannot select branch: invalid component \"%s\"", next)
 	default:
 		// select branch by name
 		for i, branch := range b {
@@ -1250,25 +1289,14 @@ func (r *policyExecuteRunner) runBranch(branches policyBranches) (selected int, 
 	return selected, nil
 }
 
-func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
+func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
 	if len(policies) == 0 {
 		return nil, nil, errors.New("no policies")
 	}
 
 	var branches policyBranches
 	for _, policy := range policies {
-		digest, err := policy.Digest(r.sessionAlg)
-		if err == ErrMissingDigest {
-			continue
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-
-		branches = append(branches, &policyBranch{
-			Name:   policyBranchName(fmt.Sprintf("%x", digest)),
-			Policy: policy.policy.Policy,
-		})
+		branches = append(branches, &policy.policyBranch)
 	}
 
 	next, remaining := r.remaining.PopNextComponent()
@@ -1313,29 +1341,9 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 
 	policy := policies[selected]
 
-	// Find the approved digest
-	approvedPolicy, err = policy.Digest(r.sessionAlg)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Find the signed authorization
-	var policyAuth *PolicyAuthorization
-	for _, auth := range policy.policy.PolicyAuthorizations {
-		if !bytes.Equal(auth.AuthKey.Name(), keySign.Name()) {
-			continue
-		}
-		if !bytes.Equal(auth.PolicyRef, policyRef) {
-			continue
-		}
-		policyAuth = &auth
-		break
-	}
-	if policyAuth == nil || policyAuth.Signature == nil {
-		// this should only happen if the caller supplied policies without
-		// a valid authorization
-		return nil, nil, errors.New("missing policy authorization")
-	}
+	// The approved digest and authorization
+	approvedPolicy = policy.PolicyDigests[0].Digest
+	auth := policy.authorization
 
 	// Verify the signature
 	authKey, err := r.tpm.LoadExternal(nil, keySign, tpm2.HandleOwner)
@@ -1345,14 +1353,14 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	defer authKey.Flush()
 
 	tbs := ComputePolicyAuthorizationTBSDigest(keySign.Name().Algorithm().GetHash(), approvedPolicy, policyRef)
-	ticket, err := r.tpm.VerifySignature(authKey.Resource(), tbs, policyAuth.Signature)
+	ticket, err := r.tpm.VerifySignature(authKey.Resource(), tbs, auth.Signature)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Run the policy
 	r.currentPath = r.currentPath.Concat(next)
-	if err := r.run(policy.policy.Policy); err != nil {
+	if err := r.run(policy.Policy); err != nil {
 		return nil, nil, err
 	}
 
@@ -1431,7 +1439,7 @@ type PolicyExecuteParams struct {
 	// execution in the original branch.
 	//
 	// When selecting a branch, a component can either identify a branch by its
-	// name (if it has one), or it can be a numeric identifier of the form "$[n]"
+	// name (if it has one), or it can be a numeric identifier of the form "{n}"
 	// which selects the branch at index n.
 	//
 	// When selecting an authorized policy, a component identifies the policy by
@@ -1739,7 +1747,7 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 
 		name := policyBranchPath(branch.Name)
 		if len(name) == 0 {
-			name = policyBranchPath(fmt.Sprintf("$[%d]", i))
+			name = policyBranchPath(fmt.Sprintf("{%d}", i))
 		}
 
 		err := func() error {
@@ -1777,7 +1785,7 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 	return 0, nil
 }
 
-func (r *policyComputeRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
+func (r *policyComputeRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
 	return nil, nil, nil
 }
 
@@ -1972,7 +1980,7 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 
 		name := policyBranchPath(branch.Name)
 		if len(name) == 0 {
-			name = policyBranchPath(fmt.Sprintf("$[%d]", i))
+			name = policyBranchPath(fmt.Sprintf("{%d}", i))
 		}
 
 		err := func() error {
@@ -2012,7 +2020,7 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 	return 0, nil
 }
 
-func (r *policyValidateRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
+func (r *policyValidateRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
 	return nil, nil, nil
 }
 

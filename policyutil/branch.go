@@ -767,7 +767,7 @@ func newTreeWalker(resources policyResources, beginRootBranchFn treeWalkerBeginB
 func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int, branch *policyBranch, remaining policyElements) error {
 	name := policyBranchPath(branch.Name)
 	if len(name) == 0 {
-		name = policyBranchPath(fmt.Sprintf("$[%d]", index))
+		name = policyBranchPath(fmt.Sprintf("{%d}", index))
 	}
 
 	session, beginBranchNodeFn, completeFullPathFn, err := beginBranchFn(name)
@@ -850,7 +850,7 @@ func (w *treeWalker) runBranch(branches policyBranches) (int, error) {
 	return 0, nil
 }
 
-func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (tpm2.Digest, *tpm2.TkVerified, error) {
+func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (tpm2.Digest, *tpm2.TkVerified, error) {
 	remaining := w.remaining
 	w.remaining = nil
 
@@ -861,20 +861,8 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 
 	if len(policies) > 0 {
 		for i, policy := range policies {
-			for _, digest := range policy.policy.PolicyDigests {
-				if digest.HashAlg != w.session().HashAlg() {
-					continue
-				}
-
-				branch := &policyBranch{
-					Name:   policyBranchName(fmt.Sprintf("%x", digest.Digest)),
-					Policy: policy.policy.Policy,
-				}
-				if err := w.walkBranch(beginBranchFn, i, branch, remaining); err != nil {
-					return nil, nil, fmt.Errorf("cannot walk policy: %w", err)
-				}
-
-				break
+			if err := w.walkBranch(beginBranchFn, i, &policy.policyBranch, remaining); err != nil {
+				return nil, nil, fmt.Errorf("cannot walk policy: %w", err)
 			}
 		}
 	} else {
