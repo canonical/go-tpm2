@@ -87,24 +87,6 @@ type ExternalSensitiveResources interface {
 	ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error)
 }
 
-type nullAuthorizer struct{}
-
-func (*nullAuthorizer) Authorize(resource tpm2.ResourceContext) error {
-	return errors.New("no Authorizer")
-}
-
-type nullSignedAuthorizer struct{}
-
-func (*nullSignedAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return nil, errors.New("no SignedAuthorizer")
-}
-
-type nullExternalSensitiveResources struct{}
-
-func (*nullExternalSensitiveResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error) {
-	return nil, errors.New("no ExternalSensitiveResources")
-}
-
 // PersistentResource contains details associated with a persistent object or
 // NV index.
 type PersistentResource struct {
@@ -178,9 +160,10 @@ func (r *tpmResourceContextFlushable) Flush() {
 }
 
 type tpmPolicyResources struct {
-	Authorizer
-	SignedAuthorizer
-	ExternalSensitiveResources
+	authorizer                 Authorizer
+	signedAuthorizer           SignedAuthorizer
+	externalSensitiveResources ExternalSensitiveResources
+
 	newTPMHelper     NewTPMHelperFn
 	newPolicySession NewPolicySessionFn
 	tpm              *tpm2.TPMContext
@@ -214,18 +197,6 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, para
 	if params == nil {
 		params = new(TPMPolicyResourcesParams)
 	}
-	authorizer := params.Authorizer
-	if authorizer == nil {
-		authorizer = new(nullAuthorizer)
-	}
-	signedAuthorizer := params.SignedAuthorizer
-	if signedAuthorizer == nil {
-		signedAuthorizer = new(nullSignedAuthorizer)
-	}
-	externalSensitiveResources := params.ExternalSensitiveResources
-	if externalSensitiveResources == nil {
-		externalSensitiveResources = new(nullExternalSensitiveResources)
-	}
 
 	newPolicySession := params.NewPolicySessionFn
 	if newPolicySession == nil {
@@ -239,9 +210,9 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, para
 	}
 
 	return &tpmPolicyResources{
-		Authorizer:                 authorizer,
-		SignedAuthorizer:           signedAuthorizer,
-		ExternalSensitiveResources: externalSensitiveResources,
+		authorizer:                 params.Authorizer,
+		signedAuthorizer:           params.SignedAuthorizer,
+		externalSensitiveResources: params.ExternalSensitiveResources,
 		newTPMHelper:               newTPMHelper,
 		newPolicySession:           newPolicySession,
 		tpm:                        tpm,
@@ -437,6 +408,20 @@ func (r *tpmPolicyResources) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm
 	return out, nil
 }
 
+func (r *tpmPolicyResources) Authorize(resource tpm2.ResourceContext) error {
+	if r.authorizer == nil {
+		return errors.New("no Authorizer")
+	}
+	return r.authorizer.Authorize(resource)
+}
+
+func (r *tpmPolicyResources) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	if r.signedAuthorizer == nil {
+		return nil, errors.New("no SignedAuthorizer")
+	}
+	return r.signedAuthorizer.SignedAuthorization(sessionNonce, authKey, policyRef)
+}
+
 func (r *tpmPolicyResources) ContextSave(resource tpm2.ResourceContext) *tpm2.Context {
 	context, _ := r.tpm.ContextSave(resource)
 	return context
@@ -452,6 +437,13 @@ func (r *tpmPolicyResources) ContextLoad(context *tpm2.Context, policy *Policy) 
 		return nil
 	}
 	return newTpmResourceContextFlushable(r.tpm, rc, policy)
+}
+
+func (r *tpmPolicyResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error) {
+	if r.externalSensitiveResources == nil {
+		return nil, errors.New("no ExternalSensitiveResources")
+	}
+	return r.externalSensitiveResources.ExternalSensitive(name)
 }
 
 type nullPolicyResources struct{}
