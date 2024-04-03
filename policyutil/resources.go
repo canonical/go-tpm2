@@ -221,25 +221,38 @@ func (r *tpmPolicyResources) LoadedResource(name tpm2.Name, policyParams *LoadPo
 			continue
 		}
 
+		// After this point, the loop always exits and we return.
+
 		parent, newTickets, invalidTickets, err := r.LoadedResource(object.ParentName, policyParams)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("cannot load parent with name %#x: %w", object.ParentName, err)
 		}
 		defer parent.Flush()
 
-		ticketMap := make(map[ticketMapKey]*PolicyTicket)
-		for _, ticket := range policyParams.Tickets {
-			ticketMap[makeTicketMapKey(ticket)] = ticket
-		}
+		// Build a map of new and invalid tickets
+		newTicketMap := make(map[*PolicyTicket]struct{})
+		invalidTicketMap := make(map[*PolicyTicket]struct{})
 		for _, ticket := range newTickets {
-			ticketMap[makeTicketMapKey(ticket)] = ticket
+			newTicketMap[ticket] = struct{}{}
 		}
 		for _, ticket := range invalidTickets {
-			delete(ticketMap, makeTicketMapKey(ticket))
+			invalidTicketMap[ticket] = struct{}{}
+		}
+
+		// Filter the originally supplied tickets to supply to the policy session below
+		ticketMap := make(map[*PolicyTicket]struct{})
+		for _, ticket := range policyParams.Tickets {
+			ticketMap[ticket] = struct{}{}
+		}
+		for ticket := range newTicketMap {
+			ticketMap[ticket] = struct{}{}
+		}
+		for ticket := range invalidTicketMap {
+			delete(ticketMap, ticket)
 		}
 
 		var tickets []*PolicyTicket
-		for _, ticket := range ticketMap {
+		for ticket := range ticketMap {
 			tickets = append(tickets, ticket)
 		}
 
@@ -267,10 +280,23 @@ func (r *tpmPolicyResources) LoadedResource(name tpm2.Name, policyParams *LoadPo
 				return nil, nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
 			}
 			requireAuthValue = result.AuthValueNeeded
+
+			// Add new and invalid tickets to the ones collected earlier, noting
+			// that this may have marked a previously new ticket as invalid
 			for _, ticket := range result.NewTickets {
-				newTickets = append(newTickets, ticket)
+				newTicketMap[ticket] = struct{}{}
 			}
 			for _, ticket := range result.InvalidTickets {
+				invalidTicketMap[ticket] = struct{}{}
+				delete(newTicketMap, ticket)
+			}
+
+			newTickets = nil
+			for ticket := range newTicketMap {
+				newTickets = append(newTickets, ticket)
+			}
+			invalidTickets = nil
+			for ticket := range invalidTicketMap {
 				invalidTickets = append(invalidTickets, ticket)
 			}
 		}

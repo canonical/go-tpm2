@@ -895,8 +895,8 @@ type executePolicyTickets struct {
 	usageCpHash tpm2.Digest
 
 	tickets        map[authMapKey][]*PolicyTicket
-	newTickets     map[ticketMapKey]*PolicyTicket
-	invalidTickets map[ticketMapKey]*PolicyTicket
+	newTickets     map[*PolicyTicket]struct{}
+	invalidTickets map[*PolicyTicket]struct{}
 }
 
 func newExecutePolicyTickets(alg tpm2.HashAlgorithmId, tickets []*PolicyTicket, usage *PolicySessionUsage) (*executePolicyTickets, error) {
@@ -910,8 +910,18 @@ func newExecutePolicyTickets(alg tpm2.HashAlgorithmId, tickets []*PolicyTicket, 
 
 	}
 
-	ticketMap := make(map[authMapKey][]*PolicyTicket)
+	// Drop any tickets with the duplicate authName, policyRef and cpHash
+	ticketsFiltered := make(map[ticketMapKey]*PolicyTicket)
 	for _, ticket := range tickets {
+		key := makeTicketMapKey(ticket)
+		if _, exists := ticketsFiltered[key]; exists {
+			continue
+		}
+		ticketsFiltered[key] = ticket
+	}
+
+	ticketMap := make(map[authMapKey][]*PolicyTicket)
+	for _, ticket := range ticketsFiltered {
 		key := makeAuthMapKey(ticket.AuthName, ticket.PolicyRef)
 		if _, exists := ticketMap[key]; !exists {
 			ticketMap[key] = []*PolicyTicket{}
@@ -922,8 +932,8 @@ func newExecutePolicyTickets(alg tpm2.HashAlgorithmId, tickets []*PolicyTicket, 
 	return &executePolicyTickets{
 		usageCpHash:    usageCpHash,
 		tickets:        ticketMap,
-		newTickets:     make(map[ticketMapKey]*PolicyTicket),
-		invalidTickets: make(map[ticketMapKey]*PolicyTicket),
+		newTickets:     make(map[*PolicyTicket]struct{}),
+		invalidTickets: make(map[*PolicyTicket]struct{}),
 	}, nil
 }
 
@@ -956,9 +966,9 @@ func (t *executePolicyTickets) addTicket(ticket *PolicyTicket) {
 	if _, exists := t.tickets[key]; !exists {
 		t.tickets[key] = []*PolicyTicket{}
 	}
-	t.tickets[key] = append(t.tickets[key], ticket)
+	t.tickets[key] = append([]*PolicyTicket{ticket}, t.tickets[key]...)
 
-	t.newTickets[makeTicketMapKey(ticket)] = ticket
+	t.newTickets[ticket] = struct{}{}
 }
 
 func (t *executePolicyTickets) invalidTicket(ticket *PolicyTicket) {
@@ -973,7 +983,11 @@ func (t *executePolicyTickets) invalidTicket(ticket *PolicyTicket) {
 	}
 	t.tickets[key] = tickets
 
-	t.invalidTickets[makeTicketMapKey(ticket)] = ticket
+	if _, exists := t.newTickets[ticket]; exists {
+		delete(t.newTickets, ticket)
+	} else {
+		t.invalidTickets[ticket] = struct{}{}
+	}
 }
 
 func (t *executePolicyTickets) currentTickets() (out []*PolicyTicket) {
@@ -1511,7 +1525,7 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 	return *r.policyNvWritten, true
 }
 
-// Execute runs this policy using the supplied TPM context and on the supplied policy session.
+// Execute runs this policy using the supplied policy session.
 //
 // The caller may supply additional parameters via the PolicyExecuteParams struct, which is an
 // optional argument.
@@ -1525,6 +1539,15 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 // TPM2_PolicyNV, TPM2_PolicySecret, TPM2_PolicySigned, or TPM2_PolicyAuthorize assertions, or
 // any policy that contains branches with TPM2_PolicyPCR or TPM2_PolicyCounterTimer assertions
 // where branches aren't selected explicitly.
+//
+// TPM2_PolicyNV assertions will create a session for authorizing the associated NV index. The
+// auth type is determined automatically from the NV index attributes, but where both HMAC and
+// policy auth is supported, policy auth is used.
+//
+// TPM2_PolicySecret assertions will create a session for authorizing the associated resource.
+// The auth type is determined automatically based on the public attributes for NV indices and
+// ordinary objects, but where both HMAC and policy auth is supported, HMAC auth is used. If the
+// resource is a permanent resource, then only HMAC auth is used.
 //
 // The caller may explicitly select branches and authorized policies to execute via the Path
 // argument of [PolicyExecuteParams]. Alternatively, if a path is not specified explicitly,
@@ -1618,10 +1641,10 @@ func (p *Policy) Execute(session PolicySession, resources PolicyResources, tpm T
 		result.policyNvWritten = &nvWritten
 	}
 
-	for _, ticket := range tickets.newTickets {
+	for ticket := range tickets.newTickets {
 		result.NewTickets = append(result.NewTickets, ticket)
 	}
-	for _, ticket := range tickets.invalidTickets {
+	for ticket := range tickets.invalidTickets {
 		result.InvalidTickets = append(result.InvalidTickets, ticket)
 	}
 
