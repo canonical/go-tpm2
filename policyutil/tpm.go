@@ -51,14 +51,32 @@ type TPMHelper interface {
 }
 
 type onlineTpmHelper struct {
-	tpm      *tpm2.TPMContext
-	sessions []tpm2.SessionContext
+	newPolicySession NewPolicySessionFn
+	tpm              *tpm2.TPMContext
+	sessions         []tpm2.SessionContext
 }
 
-func NewTPMHelper(tpm *tpm2.TPMContext, sessions ...tpm2.SessionContext) TPMHelper {
+// TPMHelperParams provides parameters to [NewTPMHelper].
+type TPMHelperParams struct {
+	// NewPolicySessionFn allows the function used to create a new PolicySession
+	// in StartAuthSession to be overridden. The default is NewTPMPolicySession.
+	NewPolicySessionFn NewPolicySessionFn
+}
+
+// NewTPMHelper returns an implementation of TPMHelper that uses the supplied TPM context.
+func NewTPMHelper(tpm *tpm2.TPMContext, params *TPMHelperParams, sessions ...tpm2.SessionContext) TPMHelper {
+	if params == nil {
+		params = new(TPMHelperParams)
+	}
+	newPolicySession := params.NewPolicySessionFn
+	if newPolicySession == nil {
+		newPolicySession = NewTPMPolicySession
+	}
+
 	return &onlineTpmHelper{
-		tpm:      tpm,
-		sessions: sessions,
+		newPolicySession: newPolicySession,
+		tpm:              tpm,
+		sessions:         sessions,
 	}
 }
 
@@ -72,7 +90,7 @@ func (h *onlineTpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm
 	case tpm2.SessionTypeHMAC:
 		return newTpmSessionContext(h.tpm, session), nil, nil
 	case tpm2.SessionTypePolicy:
-		policySession := NewTPMPolicySession(h.tpm, session, h.sessions...)
+		policySession := h.newPolicySession(h.tpm, session, h.sessions...)
 		return policySession.Context(), policySession, nil
 	default:
 		panic("not reached")

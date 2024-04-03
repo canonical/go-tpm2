@@ -166,15 +166,27 @@ func (r *tpmResourceContextFlushable) Flush() {
 type tpmPolicyResources struct {
 	Authorizer
 	SignedAuthorizer
-	tpm      *tpm2.TPMContext
-	data     *PolicyResourcesData
-	sessions []tpm2.SessionContext
+	newTPMHelper     NewTPMHelperFn
+	newPolicySession NewPolicySessionFn
+	tpm              *tpm2.TPMContext
+	data             *PolicyResourcesData
+	sessions         []tpm2.SessionContext
 }
+
+type NewTPMHelperFn func(*tpm2.TPMContext, ...tpm2.SessionContext) TPMHelper
 
 // TPMPolicyResourcesParams provides parameters to [NewTPMPolicyResources].
 type TPMPolicyResourcesParams struct {
 	Authorizer       Authorizer       // Provide a way to authorize resources
 	SignedAuthorizer SignedAuthorizer // Provide a way to obtain signed authorizations
+
+	// NewTPMHelperFn allows the function used to create a TPMHelper in order to
+	// execute policies to be overridden. The default is NewTPMHelper.
+	NewTPMHelperFn NewTPMHelperFn
+
+	// NewPolicySessionFn allows the function used to create a new PolicySession
+	// in order to execute policies to be overridden. The default is NewTPMPolicySession.
+	NewPolicySessionFn NewPolicySessionFn
 }
 
 // NewTPMPolicyResources returns a PolicyResources implementation that uses
@@ -194,10 +206,22 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, para
 	if signedAuthorizer == nil {
 		signedAuthorizer = new(nullSignedAuthorizer)
 	}
+	newPolicySession := params.NewPolicySessionFn
+	if newPolicySession == nil {
+		newPolicySession = NewTPMPolicySession
+	}
+	newTPMHelper := params.NewTPMHelperFn
+	if newTPMHelper == nil {
+		newTPMHelper = func(tpm *tpm2.TPMContext, sessions ...tpm2.SessionContext) TPMHelper {
+			return NewTPMHelper(tpm, &TPMHelperParams{NewPolicySessionFn: newPolicySession}, sessions...)
+		}
+	}
 
 	return &tpmPolicyResources{
 		Authorizer:       authorizer,
 		SignedAuthorizer: signedAuthorizer,
+		newTPMHelper:     newTPMHelper,
+		newPolicySession: newPolicySession,
 		tpm:              tpm,
 		data:             data,
 		sessions:         sessions,
@@ -286,7 +310,7 @@ func (r *tpmPolicyResources) LoadedResource(name tpm2.Name, policyParams *LoadPo
 				IgnoreAuthorizations: policyParams.IgnoreAuthorizations,
 				IgnoreNV:             policyParams.IgnoreNV,
 			}
-			result, err := parent.Policy().Execute(NewTPMPolicySession(r.tpm, session, r.sessions...), r, NewTPMHelper(r.tpm, r.sessions...), params)
+			result, err := parent.Policy().Execute(r.newPolicySession(r.tpm, session, r.sessions...), r, r.newTPMHelper(r.tpm, r.sessions...), params)
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("cannot execute policy session to authorize parent with name %#x: %w", parent.Resource().Name(), err)
 			}

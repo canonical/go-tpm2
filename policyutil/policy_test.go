@@ -1781,7 +1781,7 @@ func (s *policySuite) testPolicyNV(c *C, data *testExecutePolicyNVData) error {
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM), nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM, nil), nil)
 	if err != nil {
 		return err
 	}
@@ -2134,7 +2134,7 @@ func (s *policySuite) testPolicySecret(c *C, data *testExecutePolicySecretData) 
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, data.resources, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM), nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, data.resources, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM, nil), nil)
 	if err != nil {
 		return err
 	}
@@ -2543,7 +2543,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		},
 	}
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{SignedAuthorizer: authorizer}), NewTPMHelper(s.TPM), nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{SignedAuthorizer: authorizer}), NewTPMHelper(s.TPM, nil), nil)
 	if err != nil {
 		return err
 	}
@@ -2735,7 +2735,7 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 		},
 	}
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{SignedAuthorizer: authorizer}), NewTPMHelper(s.TPM), nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{SignedAuthorizer: authorizer}), NewTPMHelper(s.TPM, nil), nil)
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 1)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -2754,7 +2754,7 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 
 	params := &PolicyExecuteParams{Tickets: result.NewTickets}
 
-	result, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, NewTPMHelper(s.TPM), params)
+	result, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, NewTPMHelper(s.TPM, nil), params)
 	c.Check(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -2807,7 +2807,7 @@ func (s *policySuite) testPolicyAuthorize(c *C, data *testExecutePolicyAuthorize
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, &TPMPolicyResourcesParams{Authorizer: new(mockAuthorizer)}), NewTPMHelper(s.TPM), params)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, &TPMPolicyResourcesParams{Authorizer: new(mockAuthorizer)}), NewTPMHelper(s.TPM, nil), params)
 	if err != nil {
 		return err
 	}
@@ -3363,7 +3363,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 
 	s.ForgetCommands()
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{Authorizer: authorizer, SignedAuthorizer: signedAuthorizer}), NewTPMHelper(s.TPM), params)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{Authorizer: authorizer, SignedAuthorizer: signedAuthorizer}), NewTPMHelper(s.TPM, nil), params)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -3614,7 +3614,7 @@ func (s *policySuite) testPolicyBranchesMultipleNodes(c *C, data *testExecutePol
 		},
 	}
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM), params)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM, nil), params)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -3929,7 +3929,7 @@ func (s *policySuite) testPolicyBranchesEmbeddedNodes(c *C, data *testExecutePol
 		},
 	}
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM), params)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{Authorizer: authorizer}), NewTPMHelper(s.TPM, nil), params)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -4769,7 +4769,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelected(c *C) {
 		},
 	}
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, nil), NewTPMHelper(s.TPM), nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, nil), NewTPMHelper(s.TPM, nil), nil)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -4827,7 +4827,7 @@ func (s *policySuite) TestPolicyBranchesNVAutoSelectedFail(c *C) {
 		},
 	}
 
-	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, nil), NewTPMHelper(s.TPM), nil)
+	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, resources, nil), NewTPMHelper(s.TPM, nil), nil)
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
 
 	var pe *PolicyError
@@ -4869,7 +4869,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelected(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, NewTPMHelper(s.TPM), nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, NewTPMHelper(s.TPM, nil), nil)
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -4916,7 +4916,7 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, NewTPMHelper(s.TPM), nil)
+	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, NewTPMHelper(s.TPM, nil), nil)
 	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: cannot automatically select branch: no appropriate paths found`)
 
 	var pe *PolicyError

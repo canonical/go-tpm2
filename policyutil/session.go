@@ -118,6 +118,8 @@ func (s *tpmSessionContext) Flush() {
 	s.tpm.FlushContext(s.session)
 }
 
+type NewPolicySessionFn func(*tpm2.TPMContext, tpm2.SessionContext, ...tpm2.SessionContext) PolicySession
+
 // tpmPolicySession is an implementation of policySession that runs on a TPM
 type tpmPolicySession struct {
 	tpm           *tpm2.TPMContext
