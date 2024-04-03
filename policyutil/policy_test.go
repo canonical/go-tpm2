@@ -21,6 +21,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/cryptutil"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/objectutil"
@@ -1240,6 +1241,17 @@ func (h *mockSignedAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, auth
 		return nil, errors.New("not implemented")
 	}
 	return h.signAuthorization(sessionNonce, authKey, policyRef)
+}
+
+type mockExternalSensitiveResources struct {
+	externalSensitive func(tpm2.Name) (*tpm2.Sensitive, error)
+}
+
+func (h *mockExternalSensitiveResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error) {
+	if h.externalSensitive == nil {
+		return nil, errors.New("not implemented")
+	}
+	return h.externalSensitive(name)
 }
 
 type policySuiteNoTPM struct{}
@@ -2512,11 +2524,12 @@ type testExecutePolicySignedData struct {
 	authKey   *tpm2.Public
 	policyRef tpm2.Nonce
 
-	signer          crypto.Signer
-	includeNonceTPM bool
-	cpHashA         CpHash
-	expiration      int32
-	signerOpts      crypto.SignerOpts
+	signer            crypto.Signer
+	includeNonceTPM   bool
+	cpHashA           CpHash
+	expiration        int32
+	signerOpts        crypto.SignerOpts
+	externalSensitive *tpm2.Sensitive
 }
 
 func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) error {
@@ -2542,8 +2555,15 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 			return auth, nil
 		},
 	}
+	externalSensitiveResources := &mockExternalSensitiveResources{
+		externalSensitive: func(name tpm2.Name) (*tpm2.Sensitive, error) {
+			c.Check(data.externalSensitive, NotNil)
+			c.Check(name, DeepEquals, data.authKey.Name())
+			return data.externalSensitive, nil
+		},
+	}
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{SignedAuthorizer: authorizer}), NewTPMHelper(s.TPM, nil), nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), NewTPMPolicyResources(s.TPM, nil, &TPMPolicyResourcesParams{SignedAuthorizer: authorizer, ExternalSensitiveResources: externalSensitiveResources}), NewTPMHelper(s.TPM, nil), nil)
 	if err != nil {
 		return err
 	}
@@ -2670,6 +2690,24 @@ func (s *policySuite) TestPolicySignedWithRequestedTicket(c *C) {
 		cpHashA:    CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
 		expiration: -100,
 		signerOpts: tpm2.HashAlgorithmSHA256})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuite) TestPolicySignedHMAC(c *C) {
+	hmacKey := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, hmacKey)
+	c.Assert(err, IsNil)
+
+	pubKey, sensitive, err := objectutil.NewHMACKey(rand.Reader, hmacKey, nil, objectutil.WithoutDictionaryAttackProtection())
+	c.Assert(err, IsNil)
+
+	err = s.testPolicySigned(c, &testExecutePolicySignedData{
+		authKey:           pubKey,
+		policyRef:         []byte("foo"),
+		signer:            cryptutil.HMACKey(hmacKey),
+		signerOpts:        crypto.SHA256,
+		externalSensitive: sensitive,
+	})
 	c.Check(err, IsNil)
 }
 

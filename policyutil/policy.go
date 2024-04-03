@@ -1090,7 +1090,19 @@ func (r *policyExecuteRunner) resources() policyResources {
 }
 
 func (r *policyExecuteRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
-	return r.tpm.LoadExternal(nil, public, tpm2.HandleOwner)
+	if public.IsAsymmetric() {
+		return r.tpm.LoadExternal(nil, public, tpm2.HandleOwner)
+	}
+
+	if !public.Name().IsValid() {
+		return nil, errors.New("invalid name")
+	}
+	sensitive, err := r.policyResources.externalSensitive(public.Name())
+	if err != nil {
+		return nil, fmt.Errorf("cannot obtain external sensitive area: %w", err)
+	}
+
+	return r.tpm.LoadExternal(sensitive, public, tpm2.HandleNull)
 }
 
 func (r *policyExecuteRunner) cpHash(cpHash *policyCpHashElement) error {

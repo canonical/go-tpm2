@@ -62,6 +62,10 @@ type PolicyResources interface {
 	// ContextLoad loads the supplied context and returns a transient handle. This will return
 	// nil if the context can't be loaded or isn't a transient resource.
 	ContextLoad(context *tpm2.Context, policy *Policy) ResourceContext
+
+	// ExternalSensitive returns the sensitive area associated with the supplied name, to be
+	// loaded with TPM2_LoadExternal.
+	ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error)
 }
 
 // Authorizer provides a way for an implementation to provide authorizations
@@ -79,6 +83,10 @@ type SignedAuthorizer interface {
 	SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
+type ExternalSensitiveResources interface {
+	ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error)
+}
+
 type nullAuthorizer struct{}
 
 func (*nullAuthorizer) Authorize(resource tpm2.ResourceContext) error {
@@ -89,6 +97,12 @@ type nullSignedAuthorizer struct{}
 
 func (*nullSignedAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	return nil, errors.New("no SignedAuthorizer")
+}
+
+type nullExternalSensitiveResources struct{}
+
+func (*nullExternalSensitiveResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error) {
+	return nil, errors.New("no ExternalSensitiveResources")
 }
 
 // PersistentResource contains details associated with a persistent object or
@@ -166,6 +180,7 @@ func (r *tpmResourceContextFlushable) Flush() {
 type tpmPolicyResources struct {
 	Authorizer
 	SignedAuthorizer
+	ExternalSensitiveResources
 	newTPMHelper     NewTPMHelperFn
 	newPolicySession NewPolicySessionFn
 	tpm              *tpm2.TPMContext
@@ -177,8 +192,9 @@ type NewTPMHelperFn func(*tpm2.TPMContext, ...tpm2.SessionContext) TPMHelper
 
 // TPMPolicyResourcesParams provides parameters to [NewTPMPolicyResources].
 type TPMPolicyResourcesParams struct {
-	Authorizer       Authorizer       // Provide a way to authorize resources
-	SignedAuthorizer SignedAuthorizer // Provide a way to obtain signed authorizations
+	Authorizer                 Authorizer                 // Provide a way to authorize resources
+	SignedAuthorizer           SignedAuthorizer           // Provide a way to obtain signed authorizations
+	ExternalSensitiveResources ExternalSensitiveResources // Provide a way to obtain sensitive areas to load with TPM2_LoadExternal
 
 	// NewTPMHelperFn allows the function used to create a TPMHelper in order to
 	// execute policies to be overridden. The default is NewTPMHelper.
@@ -206,6 +222,11 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, para
 	if signedAuthorizer == nil {
 		signedAuthorizer = new(nullSignedAuthorizer)
 	}
+	externalSensitiveResources := params.ExternalSensitiveResources
+	if externalSensitiveResources == nil {
+		externalSensitiveResources = new(nullExternalSensitiveResources)
+	}
+
 	newPolicySession := params.NewPolicySessionFn
 	if newPolicySession == nil {
 		newPolicySession = NewTPMPolicySession
@@ -218,13 +239,14 @@ func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, para
 	}
 
 	return &tpmPolicyResources{
-		Authorizer:       authorizer,
-		SignedAuthorizer: signedAuthorizer,
-		newTPMHelper:     newTPMHelper,
-		newPolicySession: newPolicySession,
-		tpm:              tpm,
-		data:             data,
-		sessions:         sessions,
+		Authorizer:                 authorizer,
+		SignedAuthorizer:           signedAuthorizer,
+		ExternalSensitiveResources: externalSensitiveResources,
+		newTPMHelper:               newTPMHelper,
+		newPolicySession:           newPolicySession,
+		tpm:                        tpm,
+		data:                       data,
+		sessions:                   sessions,
 	}
 }
 
@@ -462,6 +484,10 @@ func (*nullPolicyResources) ContextLoad(context *tpm2.Context, policy *Policy) R
 	return nil
 }
 
+func (*nullPolicyResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error) {
+	return nil, errors.New("no PolicyResources")
+}
+
 type policyResources interface {
 	loadedResource(name tpm2.Name) (ResourceContext, error)
 	authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
@@ -517,6 +543,10 @@ func (r *executePolicyResources) forSession(session SessionContext) *executePoli
 	out := *r
 	out.session = session
 	return &out
+}
+
+func (r *executePolicyResources) externalSensitive(name tpm2.Name) (*tpm2.Sensitive, error) {
+	return r.resources.ExternalSensitive(name)
 }
 
 func (r *executePolicyResources) policy(name tpm2.Name) (*Policy, error) {
