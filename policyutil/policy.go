@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	pathForbiddenChars = "{}*…"
+	pathForbiddenChars = "{}*<>"
 )
 
 var (
@@ -2074,8 +2074,7 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	return expectedDigest, nil
 }
 
-// Branches returns the path of every branch in this policy. A TPM2_PolicyAuthorize assertion
-// is represented by a "…" component in a path.
+// Branches returns the path of every branch in this policy.
 func (p *Policy) Branches() ([]string, error) {
 	var result []string
 

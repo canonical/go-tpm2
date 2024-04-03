@@ -641,7 +641,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 			branchPath := parentPath.Concat(name)
 			branchDetails := nodeDetails
 
-			if name == "…" {
+			if name != "" && name[0] == '<' {
 				branchDetails.missingAuthorized = true
 			}
 
@@ -866,7 +866,7 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 			}
 		}
 	} else {
-		if err := w.walkBranch(beginBranchFn, 0, &policyBranch{Name: "…"}, remaining); err != nil {
+		if err := w.walkBranch(beginBranchFn, 0, &policyBranch{Name: policyBranchName(fmt.Sprintf("<authorize:key:%x,policyRef:%x>", keySign.Name(), policyRef))}, remaining); err != nil {
 			return nil, nil, fmt.Errorf("cannot walk missing policy: %w", err)
 		}
 	}
