@@ -189,7 +189,30 @@ type TPMPolicyResourcesParams struct {
 }
 
 // NewTPMPolicyResources returns a PolicyResources implementation that uses
-// the supplied data.
+// the supplied data and communicates with the supplied TPM.
+//
+// The supplied data provides information about persistent resources, NV indexes,
+// loadable objects and authorized policies that might be used when executing a
+// policy. The supplied information can associate resources with policies so that
+// these can be executed automatically when executing a policy that makes use of
+// these resources.
+//
+// Information about persistent resources and NV indexes doesn't need to be supplied
+// explicitly if there is no need to associate a policy with them. The returned
+// TPMHelper implementation will query TPM handles whenever a policy requires a
+// persistent resource or NV index for which there is no information.
+//
+// The returned TPMHelper implementation doesn't support associating policies
+// with permanent resources - policies that use permanent resources will only use
+// HMAC authorization.
+//
+// When loading transient objects to use for a policy, the returned TPMHelper
+// implementation will automatically load any prerequisite parent objects first, as
+// long as the details of these are supplied.
+//
+// Authorization values for resources, or signed authorizations or external sensitive
+// areas for TPM2_PolicySigned assertions are requested using interfaces supplied via
+// the optional parameters.
 func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, params *TPMPolicyResourcesParams, sessions ...tpm2.SessionContext) PolicyResources {
 	if data == nil {
 		data = new(PolicyResourcesData)
