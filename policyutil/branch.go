@@ -637,7 +637,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 	makeBeginBranchFn = func(parentPath policyBranchPath, details *pathSelectorBranchDetails) treeWalkerBeginBranchFn {
 		nodeDetails := *details
 
-		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			branchPath := parentPath.Concat(name)
 			branchDetails := nodeDetails
 
@@ -740,7 +740,7 @@ var errTreeWalkerSkipBranch = errors.New("")
 
 type (
 	treeWalkerBeginBranchNodeFn  func() (treeWalkerBeginBranchFn, error)
-	treeWalkerBeginBranchFn      func(policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error)
+	treeWalkerBeginBranchFn      func(string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error)
 	treeWalkerCompleteFullPathFn func() error
 )
 
@@ -765,9 +765,9 @@ func newTreeWalker(resources policyResources, beginRootBranchFn treeWalkerBeginB
 }
 
 func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int, branch *policyBranch, remaining policyElements) error {
-	name := policyBranchPath(branch.Name)
+	name := string(branch.Name)
 	if len(name) == 0 {
-		name = policyBranchPath(fmt.Sprintf("{%d}", index))
+		name = fmt.Sprintf("{%d}", index)
 	}
 
 	session, beginBranchNodeFn, completeFullPathFn, err := beginBranchFn(name)

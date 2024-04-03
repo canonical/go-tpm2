@@ -1290,42 +1290,42 @@ func (s *policySuiteNoTPM) TestUnmarshalInvalidPolicyBranchName(c *C) {
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponent(c *C) {
 	path := PolicyBranchPath("foo/bar")
 	next, remaining := path.PopNextComponent()
-	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(next, Equals, "foo")
 	c.Check(remaining, Equals, PolicyBranchPath("bar"))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentLeadingSeparator(c *C) {
 	path := PolicyBranchPath("foo/bar")
 	next, remaining := path.PopNextComponent()
-	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(next, Equals, "foo")
 	c.Check(remaining, Equals, PolicyBranchPath("bar"))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentLast(c *C) {
 	path := PolicyBranchPath("bar")
 	next, remaining := path.PopNextComponent()
-	c.Check(next, Equals, PolicyBranchPath("bar"))
+	c.Check(next, Equals, "bar")
 	c.Check(remaining, Equals, PolicyBranchPath(""))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentEmpty(c *C) {
 	path := PolicyBranchPath("")
 	next, remaining := path.PopNextComponent()
-	c.Check(next, Equals, PolicyBranchPath(""))
+	c.Check(next, Equals, "")
 	c.Check(remaining, Equals, PolicyBranchPath(""))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleLeadingSeparators(c *C) {
 	path := PolicyBranchPath("///foo/bar")
 	next, remaining := path.PopNextComponent()
-	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(next, Equals, "foo")
 	c.Check(remaining, Equals, PolicyBranchPath("bar"))
 }
 
 func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleIntermediateSeparators(c *C) {
 	path := PolicyBranchPath("foo////bar")
 	next, remaining := path.PopNextComponent()
-	c.Check(next, Equals, PolicyBranchPath("foo"))
+	c.Check(next, Equals, "foo")
 	c.Check(remaining, Equals, PolicyBranchPath("///bar"))
 }
 

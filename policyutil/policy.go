@@ -230,7 +230,7 @@ func (n *policyBranchName) Unmarshal(r io.Reader) error {
 
 type policyBranchPath string
 
-func (p policyBranchPath) PopNextComponent() (next policyBranchPath, remaining policyBranchPath) {
+func (p policyBranchPath) PopNextComponent() (next string, remaining policyBranchPath) {
 	remaining = p
 	for len(remaining) > 0 {
 		s := strings.SplitN(string(remaining), "/", 2)
@@ -238,7 +238,7 @@ func (p policyBranchPath) PopNextComponent() (next policyBranchPath, remaining p
 		if len(s) == 2 {
 			remaining = policyBranchPath(s[1])
 		}
-		component := policyBranchPath(s[0])
+		component := s[0]
 		if len(component) > 0 {
 			return component, remaining
 		}
@@ -247,13 +247,13 @@ func (p policyBranchPath) PopNextComponent() (next policyBranchPath, remaining p
 	return "", ""
 }
 
-func (p policyBranchPath) Concat(path policyBranchPath) policyBranchPath {
+func (p policyBranchPath) Concat(path string) policyBranchPath {
 	var pathElements []string
 	if p != "" {
 		pathElements = append(pathElements, string(p))
 	}
 	if path != "" {
-		pathElements = append(pathElements, string(path))
+		pathElements = append(pathElements, path)
 	}
 	return policyBranchPath(strings.Join(pathElements, "/"))
 }
@@ -659,7 +659,7 @@ type policyBranch struct {
 
 type policyBranches []*policyBranch
 
-func (b policyBranches) selectBranch(next policyBranchPath) (int, error) {
+func (b policyBranches) selectBranch(next string) (int, error) {
 	switch {
 	case next[0] == '{':
 		// select branch by index
@@ -679,7 +679,7 @@ func (b policyBranches) selectBranch(next policyBranchPath) (int, error) {
 			if len(branch.Name) == 0 {
 				continue
 			}
-			if policyBranchPath(branch.Name) == next {
+			if string(branch.Name) == next {
 				return i, nil
 			}
 		}
@@ -1252,47 +1252,13 @@ func (r *policyExecuteRunner) runBranch(branches policyBranches) (selected int, 
 		}
 	}
 
-	next, remaining := r.remaining.PopNextComponent()
-	if len(next) == 0 || next[0] == '*' {
-		// There are no more components or the next component is a wildcard match - build a
-		// list of candidate paths for this subtree
-		selector := newPolicyPathSelector(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
-		path, err := selector.selectPath(branches)
-		if err != nil {
-			return 0, fmt.Errorf("cannot automatically select branch: %w", err)
-		}
-
-		switch next {
-		case "":
-			// We have a path for this whole subtree
-			r.remaining = path
-		case "**":
-			// Prepend the path for this whole subtree to the remaining components
-			r.remaining = path.Concat(remaining)
-		case "*":
-			// Prepend the first component of the path for this subtree to the remaining components
-			component, _ := path.PopNextComponent()
-			r.remaining = component.Concat(remaining)
-		default:
-			panic("not reached")
-		}
-
-		// rerun branch node
-		return r.runBranch(branches)
-	}
-
-	// We have a branch selector
-	r.remaining = remaining
-	selected, err = branches.selectBranch(next)
+	// Select a branch
+	selected, name, err := r.selectBranch(branches)
 	if err != nil {
 		return 0, err
 	}
 
 	// Run it!
-	name := policyBranchPath(branches[selected].Name)
-	if len(name) == 0 {
-		name = next
-	}
 	r.currentPath = r.currentPath.Concat(name)
 	if err := r.run(branches[selected].Policy); err != nil {
 		return 0, err
@@ -1311,42 +1277,8 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 		branches = append(branches, &policy.policyBranch)
 	}
 
-	next, remaining := r.remaining.PopNextComponent()
-	switch {
-	case len(next) > 0 && next[0] == '$':
-		// Don't permit numeric selectors for authorized policies.
-		return nil, nil, fmt.Errorf("invalid path component \"%s\" for authorized policy selector", next)
-	case len(next) == 0 || next[0] == '*':
-		// There are no more components or the next component is a wildcard match - build a
-		// list of candidate paths for this subtree
-		selector := newPolicyPathSelector(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
-		path, err := selector.selectPath(branches)
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot automatically select policy: %w", err)
-		}
-
-		switch next {
-		case "":
-			// We have a path for this whole subtree
-			r.remaining = path
-		case "**":
-			// Prepend the path for this whole subtree to the remaining components
-			r.remaining = path.Concat(remaining)
-		case "*":
-			// Prepend the first component of the path for this subtree to the remaining components
-			component, _ := path.PopNextComponent()
-			r.remaining = component.Concat(remaining)
-		default:
-			panic("not reached")
-		}
-
-		// rerun
-		return r.runAuthorizedPolicy(keySign, policyRef, policies)
-	}
-
-	// We have a policy selector
-	r.remaining = remaining
-	selected, err := branches.selectBranch(next)
+	// Select a policy
+	selected, name, err := r.selectBranch(branches)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1371,12 +1303,57 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	}
 
 	// Run the policy
-	r.currentPath = r.currentPath.Concat(next)
+	r.currentPath = r.currentPath.Concat(name)
 	if err := r.run(policy.Policy); err != nil {
 		return nil, nil, err
 	}
 
 	return approvedPolicy, ticket, nil
+}
+
+func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string, error) {
+	next, remaining := r.remaining.PopNextComponent()
+	if len(next) == 0 || next[0] == '*' {
+		// There are no more components or the next component is a wildcard match - build a
+		// list of candidate paths for this subtree
+		selector := newPolicyPathSelector(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
+		path, err := selector.selectPath(branches)
+		if err != nil {
+			return 0, "", fmt.Errorf("cannot automatically select branch: %w", err)
+		}
+
+		switch next {
+		case "":
+			// We have a path for this whole subtree
+			r.remaining = path
+		case "**":
+			// Prepend the path for this whole subtree to the remaining components
+			r.remaining = path.Concat(string(remaining))
+		case "*":
+			// Prepend the first component of the path for this subtree to the remaining components
+			component, _ := path.PopNextComponent()
+			r.remaining = policyBranchPath(component).Concat(string(remaining))
+		default:
+			panic("not reached")
+		}
+
+		// rerun
+		return r.selectBranch(branches)
+	}
+
+	// We have a branch selector
+	r.remaining = remaining
+	selected, err := branches.selectBranch(next)
+	if err != nil {
+		return 0, "", err
+	}
+
+	name := string(branches[selected].Name)
+	if len(name) == 0 {
+		name = next
+	}
+
+	return selected, name, nil
 }
 
 func (r *policyExecuteRunner) run(elements policyElements) error {
@@ -1757,9 +1734,9 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 			Digest:  currentDigest,
 		}
 
-		name := policyBranchPath(branch.Name)
+		name := string(branch.Name)
 		if len(name) == 0 {
-			name = policyBranchPath(fmt.Sprintf("{%d}", i))
+			name = fmt.Sprintf("{%d}", i)
 		}
 
 		err := func() error {
@@ -1990,9 +1967,9 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 			Digest:  currentDigest,
 		}
 
-		name := policyBranchPath(branch.Name)
+		name := string(branch.Name)
 		if len(name) == 0 {
-			name = policyBranchPath(fmt.Sprintf("{%d}", i))
+			name = fmt.Sprintf("{%d}", i)
 		}
 
 		err := func() error {
@@ -2092,7 +2069,7 @@ func (p *Policy) Branches() ([]string, error) {
 
 	var makeBeginBranchFn func(policyBranchPath) treeWalkerBeginBranchFn
 	makeBeginBranchFn = func(parentPath policyBranchPath) treeWalkerBeginBranchFn {
-		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			branchPath := parentPath.Concat(name)
 
 			session := newNullPolicySession(tpm2.HashAlgorithmSHA256)
@@ -2245,12 +2222,12 @@ func (r *PolicyBranchDetails) NvWritten() (nvWrittenSet bool, set bool) {
 func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]PolicyBranchDetails, error) {
 	result := make(map[string]PolicyBranchDetails)
 
-	var makeBeginBranchFn func(policyBranchPath, policyBranchPath, policyBranchPath, bool, *PolicyBranchDetails) treeWalkerBeginBranchFn
-	makeBeginBranchFn = func(parentPath, remaining, next policyBranchPath, consumeGreedy bool, details *PolicyBranchDetails) treeWalkerBeginBranchFn {
+	var makeBeginBranchFn func(policyBranchPath, policyBranchPath, string, bool, *PolicyBranchDetails) treeWalkerBeginBranchFn
+	makeBeginBranchFn = func(parentPath, remaining policyBranchPath, next string, consumeGreedy bool, details *PolicyBranchDetails) treeWalkerBeginBranchFn {
 		nodeDetails := *details
 		explicitlyHandledNode := false
 
-		return func(name policyBranchPath) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			if explicitlyHandledNode {
 				return nil, nil, nil, errTreeWalkerSkipBranch
 			}
@@ -2273,7 +2250,7 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 				remaining := remaining
 				consumeGreedy := consumeGreedy
 
-				var next policyBranchPath
+				var next string
 				if consumeGreedy {
 					next = "*"
 				} else {
