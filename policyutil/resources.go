@@ -171,15 +171,26 @@ type tpmPolicyResources struct {
 	sessions []tpm2.SessionContext
 }
 
+// TPMPolicyResourcesParams provides parameters to [NewTPMPolicyResources].
+type TPMPolicyResourcesParams struct {
+	Authorizer       Authorizer       // Provide a way to authorize resources
+	SignedAuthorizer SignedAuthorizer // Provide a way to obtain signed authorizations
+}
+
 // NewTPMPolicyResources returns a PolicyResources implementation that uses
 // the supplied data.
-func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, authorizer Authorizer, signedAuthorizer SignedAuthorizer, sessions ...tpm2.SessionContext) PolicyResources {
+func NewTPMPolicyResources(tpm *tpm2.TPMContext, data *PolicyResourcesData, params *TPMPolicyResourcesParams, sessions ...tpm2.SessionContext) PolicyResources {
 	if data == nil {
 		data = new(PolicyResourcesData)
 	}
+	if params == nil {
+		params = new(TPMPolicyResourcesParams)
+	}
+	authorizer := params.Authorizer
 	if authorizer == nil {
 		authorizer = new(nullAuthorizer)
 	}
+	signedAuthorizer := params.SignedAuthorizer
 	if signedAuthorizer == nil {
 		signedAuthorizer = new(nullSignedAuthorizer)
 	}
