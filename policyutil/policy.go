@@ -136,7 +136,7 @@ func (e *PolicyNVError) Unwrap() error {
 // PolicyAuthorizationError is returned from [Policy.Execute] if:
 //   - the policy uses TPM2_PolicySecret and the associated resource could not be authorized. When
 //     this occurs because there was an error loading the associated resource, this will wrap a
-//     *[nesourceLoadError]. If there was an error authorizing use of the resource with a policy
+//     *[ResourceLoadError]. If there was an error authorizing use of the resource with a policy
 //     session, this will wrap a *[ResourceAuthorizeError].
 //   - the policy uses TPM2_PolicySigned and no or an invalid signed authorization was supplied.
 //   - the policy uses TPM2_PolicyAuthorize and no or an invalid authorized policy was supplied.
@@ -175,7 +175,7 @@ func (*ResourceLoadError) isPolicyDelimiterError() {}
 // ResourceAuthorizeError is returned from [Policy.Execute] if an error is encountered
 // when trying to authorize a resource required by a policy. This should be wrappped in
 // either a *[PolicyNVError] or *[PolicyAuthorizationError] which indicates the assertion
-// that the error occurred for. This may wrap another *[PolicySession].
+// that the error occurred for. This may wrap another *[PolicyError].
 type ResourceAuthorizeError struct {
 	Name tpm2.Name
 	err  error
@@ -1050,14 +1050,24 @@ func (r *policyExecuteRunner) nameHash(nameHash *policyNameHashElement) error {
 
 func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
 	policy := auth.Policy()
-	if askForPolicy {
+	if policy == nil && askForPolicy {
 		policy, err = r.policyResources.policy(auth.Resource().Name())
 		if err != nil {
 			return nil, fmt.Errorf("cannot load policy: %w", err)
 		}
 	}
-	sessionType := prefer
+
 	alg := auth.Resource().Name().Algorithm()
+
+	// build available session types
+	availableSessionTypes := map[tpm2.SessionType]bool{
+		tpm2.SessionTypeHMAC:   true,
+		tpm2.SessionTypePolicy: true,
+	}
+	if policy == nil {
+		// no policy was supplied for the resource
+		availableSessionTypes[tpm2.SessionTypePolicy] = false
+	}
 
 	switch auth.Resource().Handle().Type() {
 	case tpm2.HandleTypeNVIndex:
@@ -1067,28 +1077,45 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 		}
 		switch {
 		case pub.Attrs&(tpm2.AttrNVAuthRead|tpm2.AttrNVPolicyRead) == tpm2.AttrNVAuthRead:
-			sessionType = tpm2.SessionTypeHMAC
+			// index only supports auth read
+			availableSessionTypes[tpm2.SessionTypePolicy] = false
 		case pub.Attrs&(tpm2.AttrNVAuthRead|tpm2.AttrNVPolicyRead) == tpm2.AttrNVPolicyRead:
-			sessionType = tpm2.SessionTypePolicy
+			// index only supports policy read
+			availableSessionTypes[tpm2.SessionTypeHMAC] = false
 		}
 	case tpm2.HandleTypePermanent:
-		// auth value is always available
-		sessionType = tpm2.SessionTypeHMAC
+		// auth value is always available, no support for policy yet
 		alg = r.sessionAlg
+		availableSessionTypes[tpm2.SessionTypePolicy] = false
 	case tpm2.HandleTypeTransient, tpm2.HandleTypePersistent:
 		pub, err := r.tpm.ReadPublic(auth.Resource())
 		if err != nil {
 			return nil, fmt.Errorf("cannot obtain Public: %w", err)
 		}
 		if pub.Attrs&tpm2.AttrUserWithAuth == 0 {
-			sessionType = tpm2.SessionTypePolicy
+			// object only supports policy for user role
+			availableSessionTypes[tpm2.SessionTypeHMAC] = false
 		}
 	default:
 		return nil, errors.New("unexpected handle type")
 	}
 
-	if policy == nil {
-		sessionType = tpm2.SessionTypeHMAC
+	// Select session type
+	sessionType := prefer
+	if !availableSessionTypes[prefer] {
+		var try tpm2.SessionType
+		switch prefer {
+		case tpm2.SessionTypeHMAC:
+			try = tpm2.SessionTypePolicy
+		case tpm2.SessionTypePolicy:
+			try = tpm2.SessionTypeHMAC
+		default:
+			panic("invalid preferred session type")
+		}
+		if !availableSessionTypes[try] {
+			return nil, errors.New("no auth types available")
+		}
+		sessionType = try
 	}
 
 	// Save the current policy session to make space for others that might be loaded
@@ -1115,10 +1142,6 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 
 	var authValueNeeded bool
 	if sessionType == tpm2.SessionTypePolicy {
-		if policy == nil {
-			return nil, errors.New("no policy")
-		}
-
 		params := &PolicyExecuteParams{
 			Usage:                usage,
 			IgnoreAuthorizations: r.ignoreAuthorizations,

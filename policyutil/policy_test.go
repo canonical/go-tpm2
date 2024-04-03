@@ -1977,7 +1977,7 @@ func (s *policySuite) TestPolicyNVMissingPolicy(c *C) {
 		operation: tpm2.OpEq})
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyNV assertion' task in root branch: `+
 		`cannot complete assertion with NV index 0x([[:xdigit:]]{8}) \(name: 0x([[:xdigit:]]{68})\): `+
-		`TPM returned an error whilst executing command TPM_CC_PolicyNV: TPM_RC_AUTH_UNAVAILABLE \(authValue or authPolicy is not available for selected entity\)`)
+		`cannot authorize resource with name 0x([[:xdigit:]]{68}): no auth types available`)
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
 	c.Check(pe.Path, Equals, "")
@@ -1988,9 +1988,9 @@ func (s *policySuite) TestPolicyNVMissingPolicy(c *C) {
 	nvPub.Attrs |= tpm2.AttrNVWritten
 	c.Check(ne.Name, DeepEquals, nvPub.Name())
 
-	var e *tpm2.TPMError
-	c.Assert(ne, internal_testutil.ErrorAs, &e)
-	c.Check(e, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicyNV, Code: tpm2.ErrorAuthUnavailable})
+	var re *ResourceAuthorizeError
+	c.Assert(err, internal_testutil.ErrorAs, &re)
+	c.Check(re.Name, DeepEquals, nvPub.Name())
 }
 
 func (s *policySuite) TestPolicyNVPrefersPolicySession(c *C) {
@@ -2466,7 +2466,7 @@ func (s *policySuite) TestPolicySecretWithNVMissingPolicySession(c *C) {
 		policyRef:  []byte("foo")})
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicySecret assertion' task in root branch: `+
 		`cannot complete authorization with authName=0x000b2ce1bec1b93901ee1e39517612a216fe496c26fa595fd5cf4149ff8f225e6aa9, policyRef=0x666f6f: `+
-		`TPM returned an error whilst executing command TPM_CC_PolicySecret: TPM_RC_AUTH_UNAVAILABLE \(authValue or authPolicy is not available for selected entity\)`)
+		`cannot authorize resource with name 0x000b2ce1bec1b93901ee1e39517612a216fe496c26fa595fd5cf4149ff8f225e6aa9: no auth types available`)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
@@ -2477,9 +2477,9 @@ func (s *policySuite) TestPolicySecretWithNVMissingPolicySession(c *C) {
 	c.Check(ae.AuthName, DeepEquals, nvPub.Name())
 	c.Check(ae.PolicyRef, DeepEquals, tpm2.Nonce("foo"))
 
-	var te *tpm2.TPMError
-	c.Assert(err, internal_testutil.ErrorAs, &te)
-	c.Check(te, DeepEquals, &tpm2.TPMError{Command: tpm2.CommandPolicySecret, Code: tpm2.ErrorAuthUnavailable})
+	var re *ResourceAuthorizeError
+	c.Assert(err, internal_testutil.ErrorAs, &re)
+	c.Check(re.Name, DeepEquals, nvPub.Name())
 }
 
 type testExecutePolicySignedData struct {
