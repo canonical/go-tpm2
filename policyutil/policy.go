@@ -268,7 +268,7 @@ type policyRunner interface {
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
 	cpHash(cpHash *policyCpHashElement) error
 	nameHash(nameHash *policyNameHashElement) error
-	authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
+	authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
 	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*Policy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
 }
@@ -316,21 +316,20 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot create nvIndex context: %w", err)
 	}
-	policy, err := runner.resources().policy(nvIndex.Name())
-	if err != nil {
-		return fmt.Errorf("cannot load nvIndex policy: %w", err)
-	}
 
-	var auth ResourceContext = newResourceContext(nvIndex)
+	var auth ResourceContext = newResourceContext(nvIndex, nil)
+	askForPolicy := true
 	switch {
 	case e.NvIndex.Attrs&tpm2.AttrNVPolicyRead != 0:
 		// use NV index for auth
 	case e.NvIndex.Attrs&tpm2.AttrNVAuthRead != 0:
 		// use NV index for auth
 	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
-		auth, policy, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandleOwner))
+		auth, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandleOwner))
+		askForPolicy = false
 	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:
-		auth, policy, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandlePlatform))
+		auth, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandlePlatform))
+		askForPolicy = false
 	default:
 		return errors.New("invalid nvIndex read auth mode")
 	}
@@ -348,7 +347,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 		e.OperandB, e.Offset, e.Operation,
 	)
 
-	authSession, err := runner.authorize(auth.Resource(), policy, usage, tpm2.SessionTypePolicy)
+	authSession, err := runner.authorize(auth, askForPolicy, usage, tpm2.SessionTypePolicy)
 	if err != nil {
 		return &PolicyNVError{
 			Index: nvIndex.Handle(),
@@ -392,7 +391,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 		}
 	}
 
-	authObject, policy, err := runner.resources().loadedResource(e.AuthObjectName)
+	authObject, err := runner.resources().loadedResource(e.AuthObjectName)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,
@@ -408,7 +407,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 		e.CpHashA, e.PolicyRef, e.Expiration,
 	)
 
-	authSession, err := runner.authorize(authObject.Resource(), policy, usage, tpm2.SessionTypeHMAC)
+	authSession, err := runner.authorize(authObject, false, usage, tpm2.SessionTypeHMAC)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  e.AuthObjectName,
@@ -1049,13 +1048,20 @@ func (r *policyExecuteRunner) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
+func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
+	policy := auth.Policy()
+	if askForPolicy {
+		policy, err = r.policyResources.policy(auth.Resource().Name())
+		if err != nil {
+			return nil, fmt.Errorf("cannot load policy: %w", err)
+		}
+	}
 	sessionType := prefer
-	alg := auth.Name().Algorithm()
+	alg := auth.Resource().Name().Algorithm()
 
-	switch auth.Handle().Type() {
+	switch auth.Resource().Handle().Type() {
 	case tpm2.HandleTypeNVIndex:
-		pub, err := r.tpm.NVReadPublic(auth)
+		pub, err := r.tpm.NVReadPublic(auth.Resource())
 		if err != nil {
 			return nil, fmt.Errorf("cannot obtain NVPublic: %w", err)
 		}
@@ -1070,7 +1076,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 		sessionType = tpm2.SessionTypeHMAC
 		alg = r.sessionAlg
 	case tpm2.HandleTypeTransient, tpm2.HandleTypePersistent:
-		pub, err := r.tpm.ReadPublic(auth)
+		pub, err := r.tpm.ReadPublic(auth.Resource())
 		if err != nil {
 			return nil, fmt.Errorf("cannot obtain Public: %w", err)
 		}
@@ -1131,7 +1137,7 @@ func (r *policyExecuteRunner) authorize(auth tpm2.ResourceContext, policy *Polic
 	}
 
 	if authValueNeeded {
-		if err := r.authorizer.Authorize(auth); err != nil {
+		if err := r.authorizer.Authorize(auth.Resource()); err != nil {
 			return nil, fmt.Errorf("cannot authorize resource: %w", err)
 		}
 	}
@@ -1638,7 +1644,7 @@ func (r *policyComputeRunner) resources() policyResources {
 func (r *policyComputeRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
-	return newResourceContext(resource), nil
+	return newResourceContext(resource, nil), nil
 }
 
 func (r *policyComputeRunner) cpHash(cpHash *policyCpHashElement) error {
@@ -1669,7 +1675,7 @@ func (r *policyComputeRunner) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (r *policyComputeRunner) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
+func (r *policyComputeRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
 	return new(mockSessionContext), nil
 }
 
@@ -1885,7 +1891,7 @@ func (r *policyValidateRunner) resources() policyResources {
 func (r *policyValidateRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
-	return newResourceContext(resource), nil
+	return newResourceContext(resource, nil), nil
 }
 
 func (r *policyValidateRunner) cpHash(cpHash *policyCpHashElement) error {
@@ -1902,7 +1908,7 @@ func (r *policyValidateRunner) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (r *policyValidateRunner) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
+func (r *policyValidateRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
 	return new(mockSessionContext), nil
 }
 

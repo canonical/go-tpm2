@@ -813,7 +813,7 @@ func (w *treeWalker) resources() policyResources {
 func (w *treeWalker) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
-	return newResourceContext(resource), nil
+	return newResourceContext(resource, nil), nil
 }
 
 func (w *treeWalker) cpHash(cpHash *policyCpHashElement) error {
@@ -824,7 +824,7 @@ func (w *treeWalker) nameHash(nameHash *policyNameHashElement) error {
 	return nil
 }
 
-func (w *treeWalker) authorize(auth tpm2.ResourceContext, policy *Policy, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error) {
+func (w *treeWalker) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error) {
 	return new(mockSessionContext), nil
 }
 
