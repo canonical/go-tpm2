@@ -1316,8 +1316,8 @@ func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		selector := newPolicyPathSelector(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
-		path, err := selector.selectPath(branches)
+		resolver := newPolicyPathWildcardResolver(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
+		path, err := resolver.selectPath(branches)
 		if err != nil {
 			return 0, "", fmt.Errorf("cannot automatically select branch: %w", err)
 		}
