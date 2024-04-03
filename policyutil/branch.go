@@ -130,9 +130,9 @@ type policyPathSelector struct {
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
-	paths      []policyBranchPath
-	detailsMap map[policyBranchPath]pathSelectorBranchDetails
-	nvOk       map[nvAssertionMapKey]struct{}
+	paths       []policyBranchPath
+	detailsMap  map[policyBranchPath]pathSelectorBranchDetails
+	nvCheckedOk map[nvAssertionMapKey]struct{}
 }
 
 func newPolicyPathSelector(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMHelper, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathSelector {
@@ -437,31 +437,48 @@ type nvIndexInfo struct {
 	policy   *Policy
 }
 
+type nvAssertionStatus int
+
+const (
+	nvAssertionStatusIndeterminate nvAssertionStatus = iota
+	nvAssertionStatusIncompatible
+	nvAssertionStatusOK
+)
+
 // filterNVIncompatibleBranches removes branches that contain TPM2_PolicyNV assertions
 // that will fail. This ignores assertions where it's not possible to determine the current
 // NV index contents.
 func (s *policyPathSelector) filterNVIncompatibleBranches() error {
-	nvSeen := make(map[nvAssertionMapKey]struct{})
+	nvResult := make(map[nvAssertionMapKey]nvAssertionStatus)
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)
 
-	s.nvOk = make(map[nvAssertionMapKey]struct{})
+	s.nvCheckedOk = make(map[nvAssertionMapKey]struct{})
 
 	for p, d := range s.detailsMap {
 		incompatible := false
 		for _, nv := range d.NV {
 			nv := nv
 
+			// check if we have a result for this assertion
 			key := makeNvAssertionMapKey(&nv)
-			if _, exists := nvSeen[key]; exists {
+			if status, exists := nvResult[key]; exists {
+				if status == nvAssertionStatusIncompatible {
+					incompatible = true
+					break
+				}
 				continue
 			}
-			nvSeen[key] = struct{}{}
 
+			// add preliminary result
+			nvResult[key] = nvAssertionStatusIndeterminate
+
+			// obtain NV index info
 			info, exists := nvInfo[nv.Index]
 			if !exists {
 				pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(nv.Index))
 				if tpm2.IsTPMHandleError(err, tpm2.ErrorHandle, tpm2.AnyCommandCode, tpm2.AnyHandleIndex) {
 					// if no NV index exists, then this branch won't work.
+					nvResult[key] = nvAssertionStatusIncompatible
 					incompatible = true
 					break
 				}
@@ -472,6 +489,7 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 				if !bytes.Equal(name, nv.Name) {
 					// if the NV index doesn't have the expected name, then this
 					// branch won't work.
+					nvResult[key] = nvAssertionStatusIncompatible
 					incompatible = true
 					break
 				}
@@ -484,24 +502,29 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 				nvInfo[nv.Index] = info
 			}
 
+			// Check the assertion is compatible with the public area
 			if int(nv.Offset) > int(info.pub.Size) {
+				nvResult[key] = nvAssertionStatusIncompatible
 				incompatible = true
 				break
 			}
 			if int(nv.Offset)+len(nv.OperandB) > int(info.pub.Size) {
+				nvResult[key] = nvAssertionStatusIncompatible
 				incompatible = true
 				break
 			}
 
+			// If we can't execute TPM2_NV_Read without authorization, then the result
+			// is indeterminate.
 			if !s.canAuthNV(info.pub, info.policy, tpm2.CommandNVRead) {
 				continue
 			}
 
 			// Run the policy session and read the NV index
-			err := func() error {
+			status, err := func() (nvAssertionStatus, error) {
 				session, policySession, err := s.tpm.StartAuthSession(tpm2.SessionTypePolicy, nv.Name.Algorithm())
 				if err != nil {
-					return err
+					return nvAssertionStatusIndeterminate, err
 				}
 				defer session.Flush()
 
@@ -522,34 +545,34 @@ func (s *policyPathSelector) filterNVIncompatibleBranches() error {
 				)
 				if err := runner.run(info.policy.policy.Policy); err != nil {
 					// ignore policy execution error
-					return nil
+					return nvAssertionStatusIndeterminate, nil
 				}
 
 				data, err := s.tpm.NVRead(info.resource, info.resource, uint16(len(nv.OperandB)), nv.Offset, session.Session())
 				if err != nil {
 					// ignore NVRead error
-					return nil
+					return nvAssertionStatusIndeterminate, nil
 				}
 
 				operandA := tpm2.Operand(data)
 				operandB := nv.OperandB
 
 				if !s.bufferMatch(operandA, operandB, nv.Operation) {
-					incompatible = true
-					return nil
+					return nvAssertionStatusIncompatible, nil
 				}
 
-				if s.canAuthNV(info.pub, info.policy, tpm2.CommandPolicyNV) {
-					s.nvOk[key] = struct{}{}
-				}
-
-				return nil
+				return nvAssertionStatusOK, nil
 			}()
 			if err != nil {
 				return err
 			}
-			if incompatible {
+			nvResult[key] = status
+			if status == nvAssertionStatusIncompatible {
+				incompatible = true
 				break
+			}
+			if status == nvAssertionStatusOK {
+				s.nvCheckedOk[key] = struct{}{}
 			}
 		}
 		if incompatible {
@@ -716,7 +739,7 @@ func (s *policyPathSelector) selectPath(branches policyBranches) (policyBranchPa
 
 		nvOK := true
 		for _, nv := range details.NV {
-			if _, ok := s.nvOk[makeNvAssertionMapKey(&nv)]; !ok {
+			if _, ok := s.nvCheckedOk[makeNvAssertionMapKey(&nv)]; !ok {
 				nvOK = false
 				break
 			}
