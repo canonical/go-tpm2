@@ -475,7 +475,7 @@ func (e *policySignedElement) run(runner policyRunner) error {
 		}
 	}
 
-	auth, err := runner.resources().signedAuthorization(runner.session().NonceTPM(), authKeyName, e.PolicyRef)
+	auth, err := runner.resources().signedAuthorization(authKeyName, e.PolicyRef)
 	if err != nil {
 		return &PolicyAuthorizationError{
 			AuthName:  authKeyName,

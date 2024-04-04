@@ -81,14 +81,14 @@ func (h *mockAuthorizer) Authorize(resource tpm2.ResourceContext) error {
 }
 
 type mockSignedAuthorizer struct {
-	signAuthorization func(tpm2.Nonce, tpm2.Name, tpm2.Nonce) (*PolicySignedAuthorization, error)
+	signAuthorization func(tpm2.HashAlgorithmId, tpm2.Nonce, tpm2.Name, tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
-func (h *mockSignedAuthorizer) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+func (h *mockSignedAuthorizer) SignedAuthorization(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	if h.signAuthorization == nil {
 		return nil, errors.New("not implemented")
 	}
-	return h.signAuthorization(sessionNonce, authKey, policyRef)
+	return h.signAuthorization(sessionAlg, sessionNonce, authKey, policyRef)
 }
 
 type mockExternalSensitiveResources struct {
@@ -1380,7 +1380,8 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	authorizer := &mockSignedAuthorizer{
-		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+		signAuthorization: func(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+			c.Check(sessionAlg, Equals, session.Params().HashAlg)
 			c.Check(sessionNonce, DeepEquals, session.State().NonceTPM)
 			c.Check(authKey, DeepEquals, data.authKey.Name())
 			c.Check(policyRef, DeepEquals, data.policyRef)
@@ -1598,7 +1599,8 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
 	authorizer := &mockSignedAuthorizer{
-		signAuthorization: func(sessionNonce tpm2.Nonce, authKeyName tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+		signAuthorization: func(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKeyName tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+			c.Check(sessionAlg, Equals, session.Params().HashAlg)
 			c.Check(sessionNonce, DeepEquals, session.State().NonceTPM)
 			c.Check(authKeyName, DeepEquals, authKey.Name())
 			c.Check(policyRef, IsNil)
@@ -2200,7 +2202,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 		},
 	}
 	signedAuthorizer := &mockSignedAuthorizer{
-		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+		signAuthorization: func(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 			return SignPolicySignedAuthorization(rand.Reader, nil, pubKey, policyRef, key, crypto.SHA256)
 		},
 	}
