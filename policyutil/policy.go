@@ -1887,16 +1887,18 @@ func (p *Policy) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 //
 // TPM2_PolicyAuthorize expects the digest algorithm of the signature to match the name
 // algorithm of the public key, so the name algorithm of authKey must match the algorithm
-// supplied through the opts argument. This function also uses the name algorithm of
-// authKey to select the policy digest to sign, so the name algorithm of authKey should
-// match the name algorithm of the resource that this policy is associated with.
+// supplied through the opts argument. The specified hashAlg argument is used to select
+// the policy digest to sign.
 //
 // This expects the policy to contain a digest for the selected algorithm already.
-func (p *Policy) Authorize(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
+func (p *Policy) Authorize(rand io.Reader, hashAlg tpm2.HashAlgorithmId, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
 	authName := authKey.Name()
-	hashAlg := authName.Algorithm()
-	if opts.HashFunc() != hashAlg.GetHash() {
+	authAlg := authName.Algorithm()
+	if opts.HashFunc() != authAlg.GetHash() {
 		return errors.New("mismatched authKey name and opts")
+	}
+	if !authAlg.Available() {
+		return errors.New("auth algorithm is unavailable")
 	}
 
 	approvedPolicy, err := p.Digest(hashAlg)

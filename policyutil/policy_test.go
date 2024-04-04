@@ -178,6 +178,7 @@ func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleIntermedi
 }
 
 type testAuthorizePolicyData struct {
+	hashAlg           tpm2.HashAlgorithmId
 	keyPEM            string
 	nameAlg           tpm2.HashAlgorithmId
 	policyRef         tpm2.Nonce
@@ -198,16 +199,16 @@ func (s *policySuiteNoTPM) testAuthorizePolicy(c *C, data *testAuthorizePolicyDa
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
 
-	_, policy, err := builder.Build(data.nameAlg)
+	_, policy, err := builder.Build(data.hashAlg)
 	c.Assert(err, IsNil)
 
-	err = policy.Authorize(bytes.NewReader(make([]byte, 33)), keySign, data.policyRef, key.(crypto.Signer), data.opts)
+	err = policy.Authorize(bytes.NewReader(make([]byte, 33)), data.hashAlg, keySign, data.policyRef, key.(crypto.Signer), data.opts)
 	if err != nil {
 		return err
 	}
 
 	expectedPolicy := NewMockPolicy(
-		TaggedHashList{{HashAlg: data.nameAlg, Digest: data.expectedDigest}},
+		TaggedHashList{{HashAlg: data.hashAlg, Digest: data.expectedDigest}},
 		[]PolicyAuthorization{{AuthKey: keySign, PolicyRef: data.policyRef, Signature: data.expectedSignature}},
 		NewMockPolicyAuthValueElement(),
 	)
@@ -225,6 +226,7 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 -----END PRIVATE KEY-----`
 
 	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		hashAlg:        tpm2.HashAlgorithmSHA256,
 		keyPEM:         keyPEM,
 		nameAlg:        tpm2.HashAlgorithmSHA256,
 		policyRef:      []byte("foo"),
@@ -253,6 +255,7 @@ c7C9ElAfzkjURTxVWrFldXF9M8kCdot7wNuLeWnIJL7p5y2A43mu4mOb
 -----END PRIVATE KEY-----`
 
 	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		hashAlg:        tpm2.HashAlgorithmSHA256,
 		keyPEM:         keyPEM,
 		nameAlg:        tpm2.HashAlgorithmSHA256,
 		policyRef:      []byte("foo"),
@@ -281,6 +284,7 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 -----END PRIVATE KEY-----`
 
 	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		hashAlg:        tpm2.HashAlgorithmSHA256,
 		keyPEM:         keyPEM,
 		nameAlg:        tpm2.HashAlgorithmSHA256,
 		opts:           crypto.SHA256,
@@ -299,7 +303,7 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 	c.Check(err, IsNil)
 }
 
-func (s *policySuiteNoTPM) TestAuthorizePolicyDifferentAlgorithm(c *C) {
+func (s *policySuiteNoTPM) TestAuthorizePolicyDifferentSigningAlgorithm(c *C) {
 	keyPEM := `
 -----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQghoJh0RNpHMdQGWw1
@@ -308,18 +312,48 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 -----END PRIVATE KEY-----`
 
 	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		hashAlg:        tpm2.HashAlgorithmSHA256,
 		keyPEM:         keyPEM,
 		nameAlg:        tpm2.HashAlgorithmSHA1,
 		policyRef:      []byte("foo"),
 		opts:           crypto.SHA1,
-		expectedDigest: internal_testutil.DecodeHexString(c, "af6038c78c5c962d37127e319124e3a8dc582e9b"),
+		expectedDigest: internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
 		expectedSignature: &tpm2.Signature{
 			SigAlg: tpm2.SigSchemeAlgECDSA,
 			Signature: &tpm2.SignatureU{
 				ECDSA: &tpm2.SignatureECDSA{
 					Hash:       tpm2.HashAlgorithmSHA1,
-					SignatureR: internal_testutil.DecodeHexString(c, "039dfb9e7b2ab5546fe8c47c8ddfc20a966fae87397bfdb1f7007e2db971f603"),
-					SignatureS: internal_testutil.DecodeHexString(c, "cf61bdfff0ddf9edce5a2ebb53f3910b88c9406cb35bb5a117fb149b2550250c"),
+					SignatureR: internal_testutil.DecodeHexString(c, "2cabfc9be52de4b594be752e5d80f3651dde517e8a5bdb209883acb422335074"),
+					SignatureS: internal_testutil.DecodeHexString(c, "01b3662bac8180fc4bce71dd512c54376408a79e1c35117a2006fdc534208684"),
+				},
+			},
+		},
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *policySuiteNoTPM) TestAuthorizePolicyDifferentPolicyAlgorithm(c *C) {
+	keyPEM := `
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQghoJh0RNpHMdQGWw1
+c4iu0s8/VoGE1Xx5ds7Zvpne/BOhRANCAAS9VCRI2K86GPrzKRZ92uhtpM8o+m/5
+Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
+-----END PRIVATE KEY-----`
+
+	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		hashAlg:        tpm2.HashAlgorithmSHA1,
+		keyPEM:         keyPEM,
+		nameAlg:        tpm2.HashAlgorithmSHA256,
+		policyRef:      []byte("foo"),
+		opts:           crypto.SHA256,
+		expectedDigest: internal_testutil.DecodeHexString(c, "af6038c78c5c962d37127e319124e3a8dc582e9b"),
+		expectedSignature: &tpm2.Signature{
+			SigAlg: tpm2.SigSchemeAlgECDSA,
+			Signature: &tpm2.SignatureU{
+				ECDSA: &tpm2.SignatureECDSA{
+					Hash:       tpm2.HashAlgorithmSHA256,
+					SignatureR: internal_testutil.DecodeHexString(c, "a68ac303b875ed4428b6284d3d5ce020936eff45d239eb7949a1a390311248a9"),
+					SignatureS: internal_testutil.DecodeHexString(c, "259695240c01bd676d059cb809cb8e117181e4b28987fbac60857b087edf1794"),
 				},
 			},
 		},
@@ -336,6 +370,7 @@ Q24QvsY89QC+L3a2SRfoRs+9jlcc13V7qOxbu2vnI0+Ql7VP4ePUfEQ0
 -----END PRIVATE KEY-----`
 
 	err := s.testAuthorizePolicy(c, &testAuthorizePolicyData{
+		hashAlg:   tpm2.HashAlgorithmSHA256,
 		keyPEM:    keyPEM,
 		nameAlg:   tpm2.HashAlgorithmSHA256,
 		policyRef: []byte("foo"),
@@ -1685,7 +1720,7 @@ func (s *policySuite) TestPolicyAuthorize(c *C) {
 	approvedPolicy, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 
-	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+	c.Check(policy.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
 
 	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
 		keySign:                  pubKey,
@@ -1709,7 +1744,7 @@ func (s *policySuite) TestPolicyAuthorizeWithNoPolicyRef(c *C) {
 	approvedPolicy, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 
-	c.Check(policy.Authorize(rand.Reader, pubKey, nil, key, crypto.SHA256), IsNil)
+	c.Check(policy.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, nil, key, crypto.SHA256), IsNil)
 
 	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
 		keySign:                  pubKey,
@@ -1732,7 +1767,7 @@ func (s *policySuite) TestPolicyAuthorizePolicyNotFound(c *C) {
 	_, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 
-	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+	c.Check(policy.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
 
 	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
 		keySign:            pubKey,
@@ -1762,7 +1797,7 @@ func (s *policySuite) TestPolicyAuthorizeInvalidSignature(c *C) {
 	_, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 
-	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+	c.Check(policy.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
 
 	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
 		keySign:            pubKey,
@@ -1808,7 +1843,7 @@ func (s *policySuite) testPolicyAuthorizeWithSubPolicyBranches(c *C, path string
 	approvedPolicy, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
 
-	c.Check(policy.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+	c.Check(policy.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
 
 	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
 		keySign:                  pubKey,
@@ -1846,7 +1881,7 @@ func (s *policySuite) TestPolicyAuthorizeWithMultiplePolicies(c *C) {
 	c.Check(builder.RootBranch().PolicyPCR(values), IsNil)
 	_, policy1, err := builder.Build(tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
-	c.Check(policy1.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+	c.Check(policy1.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
 
 	_, values, err = s.TPM.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0}}})
 	c.Assert(err, IsNil)
@@ -1855,7 +1890,7 @@ func (s *policySuite) TestPolicyAuthorizeWithMultiplePolicies(c *C) {
 	c.Check(builder.RootBranch().PolicyPCR(values), IsNil)
 	approvedPolicy, policy2, err := builder.Build(tpm2.HashAlgorithmSHA256)
 	c.Assert(err, IsNil)
-	c.Check(policy2.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
+	c.Check(policy2.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
 
 	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
 		keySign:                  pubKey,
