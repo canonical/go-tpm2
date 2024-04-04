@@ -1420,8 +1420,14 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 	c.Check(result.Path, Equals, "")
 	_, set := result.CommandCode()
 	c.Check(set, internal_testutil.IsFalse)
-	_, set = result.CpHash()
-	c.Check(set, internal_testutil.IsFalse)
+	if len(data.cpHashA) > 0 {
+		cpHash, set := result.CpHash()
+		c.Check(set, internal_testutil.IsTrue)
+		c.Check(cpHash, DeepEquals, data.cpHashA)
+	} else {
+		_, set = result.CpHash()
+		c.Check(set, internal_testutil.IsFalse)
+	}
 	_, set = result.NameHash()
 	c.Check(set, internal_testutil.IsFalse)
 	_, set = result.NvWritten()

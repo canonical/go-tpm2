@@ -1498,8 +1498,8 @@ type PolicyExecuteResult struct {
 	policyNvWritten   *bool
 }
 
-// CommandCode returns the command code if a TPM2_PolicyCommandCode assertion
-// was executed.
+// CommandCode returns the command code if a TPM2_PolicyCommandCode or
+// TPM2_PolicyDuplicationSelect assertion was executed.
 func (r *PolicyExecuteResult) CommandCode() (code tpm2.CommandCode, set bool) {
 	if r.policyCommandCode == nil {
 		return 0, false
@@ -1508,7 +1508,8 @@ func (r *PolicyExecuteResult) CommandCode() (code tpm2.CommandCode, set bool) {
 }
 
 // CpHash returns the command parameter hash if a TPM2_PolicyCpHash assertion
-// was executed.
+// was executed or a TPM2_PolicySecret or TPM2_PolicySigned assertion was executed
+// with a cpHash.
 func (r *PolicyExecuteResult) CpHash() (cpHashA tpm2.Digest, set bool) {
 	if len(r.policyCpHash) == 0 {
 		return nil, false
@@ -1516,7 +1517,8 @@ func (r *PolicyExecuteResult) CpHash() (cpHashA tpm2.Digest, set bool) {
 	return r.policyCpHash, true
 }
 
-// CpHash returns the name hash if a TPM2_PolicyNameHash assertion was executed.
+// NameHash returns the name hash if a TPM2_PolicyNameHash or TPM2_PolicyDuplicationSelect
+// assertion was executed.
 func (r *PolicyExecuteResult) NameHash() (nameHash tpm2.Digest, set bool) {
 	if len(r.policyNameHash) == 0 {
 		return nil, false

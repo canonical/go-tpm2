@@ -626,6 +626,11 @@ func (s *recorderPolicySession) PolicySigned(authKey tpm2.ResourceContext, inclu
 		AuthName:  authKey.Name(),
 		PolicyRef: policyRef,
 	})
+	if len(cpHashA) > 0 {
+		if err := s.PolicyCpHash(cpHashA); err != nil {
+			return nil, nil, err
+		}
+	}
 	return nil, nil, nil
 }
 
@@ -634,6 +639,11 @@ func (s *recorderPolicySession) PolicySecret(authObject tpm2.ResourceContext, cp
 		AuthName:  authObject.Name(),
 		PolicyRef: policyRef,
 	})
+	if len(cpHashA) > 0 {
+		if err := s.PolicyCpHash(cpHashA); err != nil {
+			return nil, nil, err
+		}
+	}
 	return nil, nil, nil
 }
 
