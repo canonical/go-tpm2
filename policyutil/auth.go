@@ -7,7 +7,6 @@ package policyutil
 import (
 	"crypto"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/canonical/go-tpm2"
@@ -89,9 +88,7 @@ type PolicySignedAuthorization struct {
 }
 
 // NewPolicySignedAuthorization creates a new authorization that can be used by [Policy.Execute] for a
-// TPM2_PolicySigned assertion. The sessionAlg argument indicates that session digest algorithm
-// that the authorization will be valid for, and must match the session digest algorithm if cpHashA
-// is supplied.
+// TPM2_PolicySigned assertion.
 //
 // The authorizing party chooses the values of the arguments in order to limit the scope of the
 // authorization.
@@ -113,21 +110,12 @@ type PolicySignedAuthorization struct {
 // sessions, and its validity period and scope are restricted by the expiration and cpHashA
 // arguments. If the authorization is not bound to a specific session, the ticket will expire on
 // the next TPM reset if this occurs before the calculated expiration time
-func NewPolicySignedAuthorization(sessionAlg tpm2.HashAlgorithmId, nonceTPM tpm2.Nonce, cpHashA CpHash, expiration int32) (*PolicySignedAuthorization, error) {
-	var cpDigest tpm2.Digest
-	if cpHashA != nil {
-		var err error
-		cpDigest, err = cpHashA.Digest(sessionAlg)
-		if err != nil {
-			return nil, fmt.Errorf("cannot compute cpHash: %w", err)
-		}
-	}
-
+func NewPolicySignedAuthorization(nonceTPM tpm2.Nonce, cpHashA tpm2.Digest, expiration int32) *PolicySignedAuthorization {
 	return &PolicySignedAuthorization{
 		NonceTPM:   nonceTPM,
-		CpHash:     cpDigest,
+		CpHash:     cpHashA,
 		Expiration: expiration,
-	}, nil
+	}
 }
 
 // Sign signs this authorization using the supplied signer and options. Note that only RSA-SSA,

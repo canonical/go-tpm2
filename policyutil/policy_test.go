@@ -1365,7 +1365,7 @@ type testExecutePolicySignedData struct {
 
 	signer            crypto.Signer
 	includeNonceTPM   bool
-	cpHashA           CpHash
+	cpHashA           tpm2.Digest
 	expiration        int32
 	signerOpts        crypto.SignerOpts
 	externalSensitive *tpm2.Sensitive
@@ -1385,8 +1385,7 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 			c.Check(authKey, DeepEquals, data.authKey.Name())
 			c.Check(policyRef, DeepEquals, data.policyRef)
 
-			auth, err := NewPolicySignedAuthorization(session.Params().HashAlg, sessionNonce, data.cpHashA, data.expiration)
-			c.Assert(err, IsNil)
+			auth := NewPolicySignedAuthorization(sessionNonce, data.cpHashA, data.expiration)
 			c.Check(auth.Sign(rand.Reader, data.authKey, policyRef, data.signer, data.signerOpts), IsNil)
 
 			return auth, nil
@@ -1405,13 +1404,10 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 		return err
 	}
 	if data.expiration < 0 && err == nil {
-		expectedCpHash, err := data.cpHashA.Digest(session.Params().HashAlg)
-		c.Check(err, IsNil)
-
 		c.Assert(result.NewTickets, internal_testutil.LenEquals, 1)
 		c.Check(result.NewTickets[0].AuthName, DeepEquals, data.authKey.Name())
 		c.Check(result.NewTickets[0].PolicyRef, DeepEquals, data.policyRef)
-		c.Check(result.NewTickets[0].CpHash, DeepEquals, expectedCpHash)
+		c.Check(result.NewTickets[0].CpHash, DeepEquals, data.cpHashA)
 		c.Check(result.NewTickets[0].Ticket.Tag, Equals, tpm2.TagAuthSigned)
 		c.Check(result.NewTickets[0].Ticket.Hierarchy, Equals, tpm2.HandleOwner)
 	} else {
@@ -1488,11 +1484,14 @@ func (s *policySuite) TestPolicySignedWithCpHash(c *C) {
 	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
+	cpHashA, err := ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))
+	c.Assert(err, IsNil)
+
 	err = s.testPolicySigned(c, &testExecutePolicySignedData{
 		authKey:    pubKey,
 		policyRef:  []byte("foo"),
 		signer:     key,
-		cpHashA:    CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
+		cpHashA:    cpHashA,
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, IsNil)
 }
@@ -1520,11 +1519,14 @@ func (s *policySuite) TestPolicySignedWithRequestedTicket(c *C) {
 	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey)
 	c.Assert(err, IsNil)
 
+	cpHashA, err := ComputeCpHash(tpm2.HashAlgorithmSHA256, tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))
+	c.Assert(err, IsNil)
+
 	err = s.testPolicySigned(c, &testExecutePolicySignedData{
 		authKey:    pubKey,
 		policyRef:  []byte("foo"),
 		signer:     key,
-		cpHashA:    CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
+		cpHashA:    cpHashA,
 		expiration: -100,
 		signerOpts: tpm2.HashAlgorithmSHA256})
 	c.Check(err, IsNil)
@@ -1600,7 +1602,7 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 			c.Check(authKeyName, DeepEquals, authKey.Name())
 			c.Check(policyRef, IsNil)
 
-			auth, err := NewPolicySignedAuthorization(session.Params().HashAlg, sessionNonce, nil, -100)
+			auth := NewPolicySignedAuthorization(sessionNonce, nil, -100)
 			c.Assert(err, IsNil)
 			c.Check(auth.Sign(rand.Reader, authKey, policyRef, key, tpm2.HashAlgorithmSHA256), IsNil)
 
@@ -2199,7 +2201,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	}
 	signedAuthorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-			auth, err := NewPolicySignedAuthorization(session.Params().HashAlg, nil, nil, 0)
+			auth := NewPolicySignedAuthorization(nil, nil, 0)
 			c.Assert(err, IsNil)
 			c.Check(auth.Sign(rand.Reader, pubKey, policyRef, key, crypto.SHA256), IsNil)
 
