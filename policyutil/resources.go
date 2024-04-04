@@ -683,5 +683,5 @@ func (r *mockPolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tp
 }
 
 func (*mockPolicyResources) signedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return &PolicySignedAuthorization{Authorization: new(PolicyAuthorization)}, nil
+	return new(PolicySignedAuthorization), nil
 }

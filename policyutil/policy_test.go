@@ -1385,10 +1385,11 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 			c.Check(authKey, DeepEquals, data.authKey.Name())
 			c.Check(policyRef, DeepEquals, data.policyRef)
 
-			auth := NewPolicySignedAuthorization(sessionNonce, data.cpHashA, data.expiration)
-			c.Check(auth.Sign(rand.Reader, data.authKey, policyRef, data.signer, data.signerOpts), IsNil)
-
-			return auth, nil
+			return SignPolicySignedAuthorization(rand.Reader, &PolicySignedParams{
+				NonceTPM:   sessionNonce,
+				CpHash:     data.cpHashA,
+				Expiration: data.expiration,
+			}, data.authKey, policyRef, data.signer, data.signerOpts)
 		},
 	}
 	externalSensitiveResources := &mockExternalSensitiveResources{
@@ -1602,11 +1603,10 @@ func (s *policySuite) TestPolicySignedWithTicket(c *C) {
 			c.Check(authKeyName, DeepEquals, authKey.Name())
 			c.Check(policyRef, IsNil)
 
-			auth := NewPolicySignedAuthorization(sessionNonce, nil, -100)
-			c.Assert(err, IsNil)
-			c.Check(auth.Sign(rand.Reader, authKey, policyRef, key, tpm2.HashAlgorithmSHA256), IsNil)
-
-			return auth, nil
+			return SignPolicySignedAuthorization(rand.Reader, &PolicySignedParams{
+				NonceTPM:   sessionNonce,
+				Expiration: -100,
+			}, authKey, policyRef, key, tpm2.HashAlgorithmSHA256)
 		},
 	}
 
@@ -2201,11 +2201,7 @@ func (s *policySuite) testPolicyBranches(c *C, data *testExecutePolicyBranchesDa
 	}
 	signedAuthorizer := &mockSignedAuthorizer{
 		signAuthorization: func(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-			auth := NewPolicySignedAuthorization(nil, nil, 0)
-			c.Assert(err, IsNil)
-			c.Check(auth.Sign(rand.Reader, pubKey, policyRef, key, crypto.SHA256), IsNil)
-
-			return auth, nil
+			return SignPolicySignedAuthorization(rand.Reader, nil, pubKey, policyRef, key, crypto.SHA256)
 		},
 	}
 

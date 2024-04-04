@@ -495,7 +495,7 @@ func (e *policySignedElement) run(runner policyRunner) error {
 		includeNonceTPM = true
 	}
 
-	timeout, ticket, err := runner.session().PolicySigned(authKey.Resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.Authorization.Signature)
+	timeout, ticket, err := runner.session().PolicySigned(authKey.Resource(), includeNonceTPM, auth.CpHash, e.PolicyRef, auth.Expiration, auth.PolicyAuthorization.Signature)
 	if err != nil {
 		return &PolicyAuthorizationError{AuthName: authKeyName, PolicyRef: e.PolicyRef, err: err}
 	}
