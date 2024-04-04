@@ -7,6 +7,7 @@ package policyutil
 import (
 	"bytes"
 	"crypto"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -21,6 +22,8 @@ import (
 
 const (
 	pathForbiddenChars = "{}*<>"
+
+	commandRawPolicyOR tpm2.CommandCode = 0x20010171
 )
 
 var (
@@ -618,8 +621,6 @@ type cpHashParams struct {
 }
 
 type policyCpHashElement struct {
-	Params *cpHashParams `tpm2:"sized"`
-
 	Digest tpm2.Digest
 }
 
@@ -632,13 +633,7 @@ func (e *policyCpHashElement) run(runner policyRunner) error {
 	return runner.session().PolicyCpHash(e.Digest)
 }
 
-type nameHashParams struct {
-	Handles []tpm2.Name
-}
-
 type policyNameHashElement struct {
-	Params *nameHashParams `tpm2:"sized"`
-
 	Digest tpm2.Digest
 }
 
@@ -685,6 +680,16 @@ func (b policyBranches) selectBranch(next string) (int, error) {
 		}
 		return 0, fmt.Errorf("cannot select branch: no branch with name \"%s\"", next)
 	}
+}
+
+type policyRawORElement struct {
+	HashList tpm2.DigestList
+}
+
+func (*policyRawORElement) name() string { return "TPM2_PolicyOR assertion" }
+
+func (e *policyRawORElement) run(runner policyRunner) error {
+	return runner.session().PolicyOR(e.HashList)
 }
 
 type policyORElement struct {
@@ -815,6 +820,8 @@ type policyElementDetails struct {
 	DuplicationSelect *policyDuplicationSelectElement
 	Password          *policyPasswordElement
 	NvWritten         *policyNvWrittenElement
+
+	RawOR *policyRawORElement
 }
 
 func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
@@ -847,6 +854,8 @@ func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
 		return &d.Password
 	case tpm2.CommandPolicyNvWritten:
 		return &d.NvWritten
+	case commandRawPolicyOR:
+		return &d.RawOR
 	default:
 		return nil
 	}
@@ -892,6 +901,8 @@ func (e *policyElement) runner() policyElementRunner {
 		return e.Details.Password
 	case tpm2.CommandPolicyNvWritten:
 		return e.Details.NvWritten
+	case commandRawPolicyOR:
+		return e.Details.RawOR
 	default:
 		panic("invalid type")
 	}
@@ -1658,17 +1669,20 @@ func (*nullTickets) addTicket(ticket *PolicyTicket)     {}
 func (*nullTickets) invalidTicket(ticket *PolicyTicket) {}
 
 type policyComputeRunner struct {
+	cpHashParams    map[uint32]cpHashParams
+	nameHashParams  map[uint32][]tpm2.Name
 	policySession   *computePolicySession
 	policyTickets   nullTickets
 	policyResources mockPolicyResources
 
 	currentPath policyBranchPath
-	hasCpHash   bool
 }
 
-func newPolicyComputeRunner(digest *taggedHash) *policyComputeRunner {
+func newPolicyComputeRunner(digest *taggedHash, cpHashParams map[uint32]cpHashParams, nameHashParams map[uint32][]tpm2.Name) *policyComputeRunner {
 	return &policyComputeRunner{
-		policySession: newComputePolicySession(digest),
+		cpHashParams:   cpHashParams,
+		nameHashParams: nameHashParams,
+		policySession:  newComputePolicySession(digest),
 	}
 }
 
@@ -1691,30 +1705,46 @@ func (r *policyComputeRunner) loadExternal(public *tpm2.Public) (ResourceContext
 }
 
 func (r *policyComputeRunner) cpHash(cpHash *policyCpHashElement) error {
-	r.hasCpHash = true
-	if cpHash.Params == nil {
-		return nil
+	if r.cpHashParams == nil {
+		return errors.New("cannot add digests to policies with TPM2_PolicyCpHash assertion")
 	}
-	digest, err := computeCpHash(r.session().HashAlg(), cpHash.Params.CommandCode, cpHash.Params.Handles, cpHash.Params.CpBytes)
+
+	if len(cpHash.Digest) != 4 {
+		return errors.New("internal error: invalid TPM2_PolicyCpHash element")
+	}
+	id := binary.BigEndian.Uint32(cpHash.Digest)
+	params, exists := r.cpHashParams[id]
+	if !exists {
+		return errors.New("internal error: no TPM2_PolicyCpHash params")
+	}
+
+	digest, err := computeCpHash(r.session().HashAlg(), params.CommandCode, params.Handles, params.CpBytes)
 	if err != nil {
 		return fmt.Errorf("cannot compute cpHashA: %w", err)
 	}
-	cpHash.Params = nil
 	cpHash.Digest = digest
 	return nil
 }
 
 func (r *policyComputeRunner) nameHash(nameHash *policyNameHashElement) error {
-	r.hasCpHash = true
-	if nameHash.Params == nil {
-		return nil
+	if r.nameHashParams == nil {
+		return errors.New("cannot add digests to policies with TPM2_PolicyNameHash assertion")
 	}
-	digest, err := computeNameHash(r.session().HashAlg(), nameHash.Params.Handles)
+
+	if len(nameHash.Digest) != 4 {
+		return errors.New("internal error: invalid TPM2_PolicyNameHash element")
+	}
+	id := binary.BigEndian.Uint32(nameHash.Digest)
+	params, exists := r.nameHashParams[id]
+	if !exists {
+		return errors.New("internal error: no TPM2_PolicyNameHash params")
+	}
+
+	digest, err := computeNameHash(r.session().HashAlg(), params)
 	if err != nil {
 		return fmt.Errorf("cannot compute nameHash: %w", err)
 	}
 	nameHash.Digest = digest
-	nameHash.Params = nil
 	return nil
 }
 
@@ -1790,59 +1820,49 @@ func (r *policyComputeRunner) run(elements policyElements) error {
 	return nil
 }
 
-func (p *Policy) computeForDigest(digest *taggedHash) error {
-	var policy *policy
-	if err := mu.CopyValue(&policy, p.policy); err != nil {
-		return fmt.Errorf("cannot make temporary copy of policy: %w", err)
+func (p *Policy) addDigest(alg tpm2.HashAlgorithmId, cpHashParams map[uint32]cpHashParams, nameHashParams map[uint32][]tpm2.Name) (tpm2.Digest, error) {
+	if !alg.IsValid() {
+		return nil, errors.New("invalid algorithm")
 	}
 
-	runner := newPolicyComputeRunner(digest)
+	var policy *policy
+	if err := mu.CopyValue(&policy, p.policy); err != nil {
+		return nil, fmt.Errorf("cannot make temporary copy of policy: %w", err)
+	}
+
+	digest := taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
+	runner := newPolicyComputeRunner(&digest, cpHashParams, nameHashParams)
 	if err := runner.run(policy.Policy); err != nil {
-		return err
+		return nil, err
 	}
 
 	addedDigest := false
 	for i, d := range policy.PolicyDigests {
 		if d.HashAlg == digest.HashAlg {
-			policy.PolicyDigests[i] = *digest
+			policy.PolicyDigests[i] = digest
 			addedDigest = true
 			break
 		}
 	}
 	if !addedDigest {
-		policy.PolicyDigests = append(policy.PolicyDigests, *digest)
-	}
-
-	if runner.hasCpHash && len(policy.PolicyDigests) > 1 {
-		return errors.New("policies that use TPM2_PolicyCpHash and TPM2_PolicyNameHash can't be computed for more than one digest algorithm")
+		policy.PolicyDigests = append(policy.PolicyDigests, digest)
 	}
 
 	p.policy = *policy
-	return nil
-}
-
-// Compute computes the digest for this policy for the specified algorithm. This also
-// updates stored digests within the policy, so the policy should be persisted after
-// calling this. On success, it returns the computed digest.
-//
-// Policies that contain TPM2_PolicyCpHash or TPM2_PolicyNameHash assertions can only
-// be computed for a single digest algorithm. An error will be returned if the policy has
-// already been computed for another algorithm.
-func (p *Policy) Compute(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
-	if !alg.IsValid() {
-		return nil, errors.New("invalid algorithm")
-	}
-
-	if digest, err := p.Digest(alg); err == nil {
-		return digest, nil
-	}
-
-	digest := taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
-	if err := p.computeForDigest(&digest); err != nil {
-		return nil, err
-	}
 
 	return digest.Digest, nil
+}
+
+// AddDigest computes and adds an additional digest to this policy for the specified
+// algorithm. The policy should be persisted after calling this if it is going to be
+// used for a resource wth the specified algorithm. On success, it returns the computed
+// digest.
+//
+// This will fail for policies that contain TPM2_PolicyCpHash or TPM2_PolicyNameHash
+// assertions, These can only be computed for a single digest algorithm, because they
+// are bound to a name.
+func (p *Policy) AddDigest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	return p.addDigest(alg, nil, nil)
 }
 
 // Digest returns the digest for this policy for the specified algorithm, if it
@@ -1871,8 +1891,7 @@ func (p *Policy) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 // authKey to select the policy digest to sign, so the name algorithm of authKey should
 // match the name algorithm of the resource that this policy is associated with.
 //
-// This will compute the policy for the selected algorithm if it hasn't been computed
-// already.
+// This expects the policy to contain a digest for the selected algorithm already.
 func (p *Policy) Authorize(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
 	authName := authKey.Name()
 	hashAlg := authName.Algorithm()
@@ -1880,9 +1899,9 @@ func (p *Policy) Authorize(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.
 		return errors.New("mismatched authKey name and opts")
 	}
 
-	approvedPolicy, err := p.Compute(hashAlg)
+	approvedPolicy, err := p.Digest(hashAlg)
 	if err != nil {
-		return fmt.Errorf("cannot compute digest: %w", err)
+		return fmt.Errorf("cannot obtain digest: %w", err)
 	}
 
 	policyAuth, err := SignPolicyAuthorization(rand, approvedPolicy, authKey, policyRef, signer, opts)

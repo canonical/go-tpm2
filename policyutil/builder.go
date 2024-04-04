@@ -5,6 +5,7 @@
 package policyutil
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
@@ -13,6 +14,8 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
+// PolicyBuilderBranchNode is a point in a [PolicyBuilderBranch] to which sub-branches
+// can be added.
 type PolicyBuilderBranchNode struct {
 	parentBranch  *PolicyBuilderBranch
 	childBranches []*PolicyBuilderBranch
@@ -331,14 +334,18 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 		return b.policy.fail("PolicyCpHash", fmt.Errorf("cannot marshal parameters: %w", err))
 	}
 
+	id := uint32(len(b.policy.cpHashParams))
+	idBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(idBytes, id)
+	b.policy.cpHashParams[id] = cpHashParams{
+		CommandCode: code,
+		Handles:     handleNames,
+		CpBytes:     cpBytes}
+
 	element := &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
-			CpHash: &policyCpHashElement{
-				Params: &cpHashParams{
-					CommandCode: code,
-					Handles:     handleNames,
-					CpBytes:     cpBytes}}}}
+			CpHash: &policyCpHashElement{Digest: idBytes}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -363,11 +370,15 @@ func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) error {
 		handleNames = append(handleNames, name)
 	}
 
+	id := uint32(len(b.policy.nameHashParams))
+	idBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(idBytes, id)
+	b.policy.nameHashParams[id] = handleNames
+
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
-			NameHash: &policyNameHashElement{
-				Params: &nameHashParams{Handles: handleNames}}}}
+			NameHash: &policyNameHashElement{Digest: idBytes}}}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	return nil
@@ -489,7 +500,8 @@ func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) error {
 //
 // The branches added to the returned branch node will be committed to this branch and
 // the branch node will be locked from further modifications by subsequent additions to this
-// branch, or any ancestor branches, or by calling [PolicyBuilder.Policy].
+// branch, or any ancestor branches, or by calling [PolicyBuilder.Build]. This ensures
+// that branches can only append to a policy with the [PolicyBuilder] API .
 func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
 	if err := b.prepareToModifyBranch(); err != nil {
 		b.policy.fail("AddBranchNode", err)
@@ -510,16 +522,57 @@ func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
 // Execution then resumes in the parent branch, with the assertion immediately following
 // the branch node.
 //
+// The PolicyBuilder API only allows a policy to be appended to.
+//
 // XXX: Note that the PolicyBuilder API may change.
 type PolicyBuilder struct {
-	root *PolicyBuilderBranch
-	err  error
+	root           *PolicyBuilderBranch
+	alg            tpm2.HashAlgorithmId
+	cpHashParams   map[uint32]cpHashParams
+	nameHashParams map[uint32][]tpm2.Name
+	err            error
 }
 
 // NewPolicyBuilder returns a new PolicyBuilder.
 func NewPolicyBuilder() *PolicyBuilder {
-	b := new(PolicyBuilder)
+	b := &PolicyBuilder{
+		alg:            tpm2.HashAlgorithmNull,
+		cpHashParams:   make(map[uint32]cpHashParams),
+		nameHashParams: make(map[uint32][]tpm2.Name),
+	}
 	b.root = newPolicyBuilderBranch(b, "")
+	return b
+}
+
+// NewPolicyBuilderOR returns a new PolicyBuilder initialized with a TPM2_PolicyOR
+// assertion of the supplied policies. This is to make it possible to use this API to
+// compute digests of policies with branches without having to use the [Policy] API to
+// execute them, or to build policies with branches with low-level control of branch
+// execution by manually executing a sequence of [Policy] instances. Applications that
+// use [Policy] for execution should normally just make use of [PolicyBuilderBranch.AddBranchNode]
+// and [PolicyBuilderBranchNode.AddBranch] for constructing policies with branches though.
+func NewPolicyBuilderOR(alg tpm2.HashAlgorithmId, policies ...*Policy) *PolicyBuilder {
+	b := NewPolicyBuilder()
+
+	var pHashList tpm2.DigestList
+	for i, policy := range policies {
+		digest, err := policy.Digest(alg)
+		if err != nil {
+			b.fail("NewPolicyBuilderOR", fmt.Errorf("cannot add branch %d: %w", i, err))
+			return b
+		}
+		pHashList = append(pHashList, digest)
+	}
+
+	element := &policyElement{
+		Type: commandRawPolicyOR,
+		Details: &policyElementDetails{
+			RawOR: &policyRawORElement{
+				HashList: pHashList,
+			}}}
+	b.root.policyBranch.Policy = append(b.root.policyBranch.Policy, element)
+	b.alg = alg
+
 	return b
 }
 
@@ -538,18 +591,27 @@ func (b *PolicyBuilder) RootBranch() *PolicyBuilderBranch {
 	return b.root
 }
 
-// Policy returns the completed policy. No more modifications can be made once this
-// has been called.
-func (b *PolicyBuilder) Policy() (*Policy, error) {
+// Build builds the policy for the specified algorithm and returns the completed
+// policy and digest. This will commit the current [PolicyBuilderBranchNode] to the
+// root [PolicyBuilderBranch] if it hasn't been done already.
+func (b *PolicyBuilder) Build(alg tpm2.HashAlgorithmId) (tpm2.Digest, *Policy, error) {
 	if b.failed() {
-		return nil, fmt.Errorf("could not build policy: %w", b.err)
+		return nil, nil, fmt.Errorf("could not build policy: %w", b.err)
+	}
+	if b.alg != tpm2.HashAlgorithmNull && alg != b.alg {
+		return nil, nil, fmt.Errorf("cannot build policy for algorithm %v", alg)
 	}
 
-	if !b.root.locked {
-		if err := b.root.lockBranch(); err != nil {
-			return nil, fmt.Errorf("cannot lock root branch: %w", err)
-		}
+	if err := b.root.commitCurrentBranchNode(); err != nil {
+		return nil, nil, fmt.Errorf("cannot commit current branch node in root branch: %w", err)
 	}
 
-	return &Policy{policy: policy{Policy: b.root.policyBranch.Policy}}, nil
+	// addDigest copies the policy structure
+	policy := &Policy{policy: policy{Policy: b.root.policyBranch.Policy}}
+	digest, err := policy.addDigest(alg, b.cpHashParams, b.nameHashParams)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot compute policy: %w", err)
+	}
+
+	return digest, policy, nil
 }
