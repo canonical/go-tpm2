@@ -74,7 +74,9 @@ func (a *PolicyAuthorization) Verify(message []byte) (ok bool, err error) {
 	if !hashAlg.Available() {
 		return false, errors.New("digest algorithm is not available")
 	}
-
+	if !a.AuthKey.IsAsymmetric() {
+		return false, errors.New("cannot verify HMAC signature")
+	}
 	digest := ComputePolicyAuthorizationTBSDigest(hashAlg, message, a.PolicyRef)
 	return cryptutil.VerifySignature(a.AuthKey.Public(), digest, a.Signature)
 }
