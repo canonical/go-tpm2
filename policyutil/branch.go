@@ -769,10 +769,6 @@ func (s *policyPathWildcardResolver) selectPath(branches policyBranches) (policy
 	return path, nil
 }
 
-func (s *policyPathWildcardResolver) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	return s.resources.authorizedPolicies(keySign, policyRef)
-}
-
 var errTreeWalkerSkipBranch = errors.New("")
 
 type (
