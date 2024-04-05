@@ -21,17 +21,17 @@ package tpm2
 // an expiration time of zero. The authorization qualifiers must match the arguments passed to this
 // command. The signature is provided via the auth parameter.
 //
-// The signature can be created using [github.com/canonical/go-tpm2/util.SignPolicyAuthorization].
+// The signature can be created using [github.com/canonical/go-tpm2/policyutil.SignPolicySignedAuthorization].
 //
 // If includeNonceTPM is set to true, this function includes the most recently received TPM nonce
 // value for the session associated with policySession as the first command parameter. In this
 // case, the nonce value must be included in the digest that is signed by the authorizing entity.
-// The current nonce value can be obtained and sent to the signer by calling
-// [SessionContext].NonceTPM
+// The current nonce value can be obtained and sent to the signer from the [SessionContextState]
+// obtained from [SessionContext].
 //
 // The cpHashA parameter allows the session to be bound to a specific command and set of command
 // parameters by providing a command parameter digest. Command parameter digests can be computed
-// using [github.com/canonical/go-tpm2/util.ComputeCpHash], using the digest algorithm for the
+// using [github.com/canonical/go-tpm2/policyutil.ComputeCpHash], using the digest algorithm for the
 // session. If provided, the cpHashA value must be included in the digest that is signed by the
 // authorizing entity. Note that this only binds the use of the session to a specific set of command
 // parameters - this assertion cannot be used to bind a policy to a specific set of command
@@ -103,7 +103,7 @@ func (t *TPMContext) PolicySigned(authContext ResourceContext, policySession Ses
 //
 // The cpHashA parameter allows the session to be bound to a specific command and set of command
 // parameters by providing a command parameter digest. Command parameter digests can be computed
-// using [github.com/canonical/go-tpm2/util.ComputeCpHash], using the digest algorithm for the
+// using [github.com/canonical/go-tpm2/policyutil.ComputeCpHash], using the digest algorithm for the
 // session. Note that this only binds the use of the session to a specific set of command
 // parameters - this assertion cannot be used to bind a policy to a specific set of command
 // parameters. For that, use [TPMContext.PolicyCpHash].  If the cpHashA parameter is not provided,
@@ -340,7 +340,7 @@ func (t *TPMContext) PolicyCommandCode(policySession SessionContext, code Comman
 // a specific command. This command allows the policy to be limited further to a specific command
 // and set of command parameters.
 //
-// Command parameter digests can be computed using [github.com/canonical/go-tpm2/util.ComputeCpHash],
+// Command parameter digests can be computed using [github.com/canonical/go-tpm2/policyutil.ComputeCpHash],
 // using the digest algorithm for the session.
 //
 // If the size of cpHashA is inconsistent with the digest algorithm for the session, a
@@ -365,6 +365,9 @@ func (t *TPMContext) PolicyCpHash(policySession SessionContext, cpHashA Digest, 
 // PolicyNameHash executes the TPM2_PolicyNameHash command to bind a policy to a specific set of
 // TPM entities, without being bound to the parameters of the command. This is a deferred
 // assertion.
+//
+// The name hash can be computed using [github.com/canonical/go-tpm2/policyutil.ComputeNameHash],
+// using the digest algorithm for the session.
 //
 // If the size of nameHash is inconsistent with the digest algorithm for the session, a
 // *[TPMParameterError] error with an error code of [ErrorSize] will be returned.
@@ -419,11 +422,11 @@ func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objec
 //
 // ... where H is the name algorithm of the key used to sign the digest.
 //
-// The signature can be created by [github.com/canonical/go-tpm2/util.PolicyAuthorize].
-// The unsigned digest can be created by [github.com/canonical/go-tpm2/util.ComputePolicyAuthorizeDigest].
+// The signature can be created by [github.com/canonical/go-tpm2/policyutil.SignPolicyAuthorization].
 //
 // The signature is then verified by [TPMContext.VerifySignature], which provides a ticket that is
-// used by this function.
+// used by this function. The digest that is signed can be created by
+// [github.com/canonical/go-tpm2/policyutil.ComputePolicyAuthorizationTBSDigest].
 //
 // If the name algorithm of the signing key is not supported, a *[TPMParameterError] error with an
 // error code of [ErrorHash] will be returned for parameter index 3.

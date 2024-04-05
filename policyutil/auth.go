@@ -41,7 +41,7 @@ type PolicyAuthorization struct {
 //
 // If the authorization is for use with TPM2_PolicyAuthorize then the supplied message is the
 // approved policy digest. This can sign authorizations for TPM2_PolicySigned as well, but
-// [PolicySignedAuthorization.Sign] is preferred for that because it constructs the message
+// [SignPolicySignedAuthorization] is preferred for that because it constructs the message
 // appropriately.
 //
 // This will panic if the specified digest algorithm is not available.
