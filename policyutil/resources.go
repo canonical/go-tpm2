@@ -323,7 +323,7 @@ func (r *tpmPolicyResources) LoadedResource(name tpm2.Name, policyParams *LoadPo
 		if parent.Policy() != nil {
 			params := &PolicyExecuteParams{
 				Tickets:              tickets,
-				Usage:                NewPolicySessionUsage(tpm2.CommandLoad, []Named{parent.Resource()}, object.Private, object.Public),
+				Usage:                NewPolicySessionUsage(tpm2.CommandLoad, []NamedHandle{parent.Resource()}, object.Private, object.Public),
 				IgnoreAuthorizations: policyParams.IgnoreAuthorizations,
 				IgnoreNV:             policyParams.IgnoreNV,
 			}

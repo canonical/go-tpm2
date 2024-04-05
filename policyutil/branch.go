@@ -213,7 +213,11 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 
 		cpHash, set := d.CpHash()
 		if set {
-			usageCpHash, err := ComputeCpHash(s.sessionAlg, s.usage.commandCode, s.usage.handles, s.usage.params...)
+			var handleNames []Named
+			for _, handle := range s.usage.handles {
+				handleNames = append(handleNames, handle)
+			}
+			usageCpHash, err := ComputeCpHash(s.sessionAlg, s.usage.commandCode, handleNames, s.usage.params...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
 			}
@@ -225,7 +229,11 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 
 		nameHash, set := d.NameHash()
 		if set {
-			usageNameHash, err := ComputeNameHash(s.sessionAlg, s.usage.handles...)
+			var handleNames []Named
+			for _, handle := range s.usage.handles {
+				handleNames = append(handleNames, handle)
+			}
+			usageNameHash, err := ComputeNameHash(s.sessionAlg, handleNames...)
 			if err != nil {
 				return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
 			}
@@ -241,8 +249,13 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 		}
 
 		nvWritten, set := d.NvWritten()
-		if set && s.usage.nvHandle.Type() == tpm2.HandleTypeNVIndex {
-			pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(s.usage.nvHandle))
+		if set {
+			authHandle := s.usage.handles[s.usage.authIndex]
+			if authHandle.Handle().Type() != tpm2.HandleTypeNVIndex {
+				delete(s.detailsMap, p)
+				continue
+			}
+			pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(authHandle.Handle()))
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
@@ -528,8 +541,9 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 				}
 				defer session.Flush()
 
+				rc := tpm2.NewLimitedResourceContext(nv.Index, nv.Name)
 				params := &PolicyExecuteParams{
-					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []Named{nv.Name, nv.Name}, uint16(len(nv.OperandB)), nv.Offset).NoAuthValue(),
+					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []NamedHandle{rc, rc}, uint16(len(nv.OperandB)), nv.Offset).NoAuthValue(),
 				}
 
 				resources := new(nullPolicyResources)

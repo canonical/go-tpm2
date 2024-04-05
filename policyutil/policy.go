@@ -355,7 +355,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 
 	usage := NewPolicySessionUsage(
 		tpm2.CommandPolicyNV,
-		[]Named{auth.Resource(), nvIndex, runner.session().Name()},
+		[]NamedHandle{auth.Resource(), nvIndex, runner.session().Name()},
 		e.OperandB, e.Offset, e.Operation,
 	)
 
@@ -415,7 +415,7 @@ func (e *policySecretElement) run(runner policyRunner) (err error) {
 
 	usage := NewPolicySessionUsage(
 		tpm2.CommandPolicySecret,
-		[]Named{authObject.Resource(), runner.session().Name()},
+		[]NamedHandle{authObject.Resource(), runner.session().Name()},
 		e.CpHashA, e.PolicyRef, e.Expiration,
 	)
 
@@ -952,8 +952,13 @@ type executePolicyTickets struct {
 func newExecutePolicyTickets(alg tpm2.HashAlgorithmId, tickets []*PolicyTicket, usage *PolicySessionUsage) (*executePolicyTickets, error) {
 	var usageCpHash tpm2.Digest
 	if usage != nil {
+		var handleNames []Named
+		for _, handle := range usage.handles {
+			handleNames = append(handleNames, handle)
+		}
+
 		var err error
-		usageCpHash, err = ComputeCpHash(alg, usage.commandCode, usage.handles, usage.params...)
+		usageCpHash, err = ComputeCpHash(alg, usage.commandCode, handleNames, usage.params...)
 		if err != nil {
 			return nil, fmt.Errorf("cannot compute cpHash from usage: %w", err)
 		}
@@ -1383,14 +1388,20 @@ func (r *policyExecuteRunner) run(elements policyElements) error {
 // automatically selecting branches where a policy has command context-specific branches.
 type PolicySessionUsage struct {
 	commandCode tpm2.CommandCode
-	handles     []Named
+	handles     []NamedHandle
 	params      []interface{}
-	nvHandle    tpm2.Handle
+	authIndex   uint8
 	noAuthValue bool
 }
 
-// NewPolicySessionUsage creates a new PolicySessionUsage.
-func NewPolicySessionUsage(command tpm2.CommandCode, handles []Named, params ...interface{}) *PolicySessionUsage {
+// NewPolicySessionUsage creates a new PolicySessionUsage. The returned usage
+// will assume that the session is being used for authorization of the first
+// handle, which is true in the vast majority of cases. If the session is being
+// used for authorization of another handle, use [WithAuthIndex].
+func NewPolicySessionUsage(command tpm2.CommandCode, handles []NamedHandle, params ...interface{}) *PolicySessionUsage {
+	if len(handles) == 0 || len(handles) > 3 {
+		panic("invalid number of handles")
+	}
 	return &PolicySessionUsage{
 		commandCode: command,
 		handles:     handles,
@@ -1398,13 +1409,18 @@ func NewPolicySessionUsage(command tpm2.CommandCode, handles []Named, params ...
 	}
 }
 
-// WithNVHandle indicates that the policy session is being used to authorize a NV
-// index with the specified handle. This will panic if handle is not a NV index.
-func (u *PolicySessionUsage) WithNVHandle(handle tpm2.Handle) *PolicySessionUsage {
-	if handle.Type() != tpm2.HandleTypeNVIndex {
-		panic("invalid handle")
+// WithAuthIndex indicates that the policy session is being used for authorization
+// of the handle at the specified index (zero indexed). This is zero for most commands,
+// where most commands only have a single handle that requires authorization. There are
+// a few commands that require authorization for 2 handles: TPM2_ActivateCredential,
+// TPM2_EventSequenceComplete, TPM2_Certify, TPM2_GetSessionAuditDigest,
+// TPM2_GetCommandAuditDigest, TPM2_GetTime, TPM2_CertifyX509, TPM2_NV_UndefineSpaceSpecial,
+// TPM2_NV_Certify, and TPM2_AC_Send.
+func (u *PolicySessionUsage) WithAuthIndex(index uint8) *PolicySessionUsage {
+	if int(index) >= len(u.handles) {
+		panic("invalid index")
 	}
-	u.nvHandle = handle
+	u.authIndex = index
 	return u
 }
 
