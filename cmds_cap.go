@@ -540,6 +540,20 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 	return data.Data.AuthPolicies, nil
 }
 
+// GetCapabilityAuthPolicy is a convenience function for [TPMContext.GetCapability], and returns
+// the auth policy digest associated with the supplied permanent handle, if there is one. This will
+// return a null hash if there is no auth policy digest.
+func (t *TPMContext) GetCapabilityAuthPolicy(handle Handle, sessions ...SessionContext) (TaggedHash, error) {
+	policies, err := t.GetCapabilityAuthPolicies(handle, 1, sessions...)
+	if err != nil {
+		return MakeTaggedHash(HashAlgorithmNull, nil), err
+	}
+	if len(policies) == 0 || policies[0].Handle != handle {
+		return MakeTaggedHash(HashAlgorithmNull, nil), fmt.Errorf("handle %v does no exist", handle)
+	}
+	return policies[0].PolicyHash, nil
+}
+
 // IsTPM2 determines whether this TPMContext is connected to a TPM2 device. It does this by
 // attempting to execute a TPM2_GetCapability command, and verifying that the response packet has
 // the expected tag.

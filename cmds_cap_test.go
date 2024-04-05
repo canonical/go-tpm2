@@ -11,6 +11,7 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/canonical/go-tpm2"
 	. "github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
@@ -625,6 +626,12 @@ func (s *capabilitiesSuite) TestGetCapabilityPCRProperties3(c *C) {
 		propertyCount: 1,
 		expected: TaggedPCRPropertyList{
 			{Tag: PropertyPCRSave, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}}}})
+}
+
+func (s *capabilitiesSuite) TestGetCapabilityAuthPolicy(c *C) {
+	policy, err := s.TPM.GetCapabilityAuthPolicy(tpm2.HandleOwner)
+	c.Check(err, IsNil)
+	c.Check(policy.HashAlg, Equals, HashAlgorithmNull)
 }
 
 // We don't have a TPM1.2 simulator, so create a mock Transport that just returns

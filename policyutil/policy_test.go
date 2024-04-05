@@ -799,7 +799,7 @@ func (s *policySuite) TestPolicyNVDifferentAuth(c *C) {
 		operandB:            internal_testutil.DecodeHexString(c, "00001000"),
 		offset:              4,
 		operation:           tpm2.OpEq,
-		expectedCommands:    7,
+		expectedCommands:    8,
 		expectedAuthorize:   true,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
@@ -1054,7 +1054,7 @@ func (s *policySuite) TestPolicySecret(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject:          s.TPM.OwnerHandleContext(),
 		policyRef:           []byte("foo"),
-		expectedCommands:    7,
+		expectedCommands:    8,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
@@ -1062,7 +1062,7 @@ func (s *policySuite) TestPolicySecret(c *C) {
 func (s *policySuite) TestPolicySecretNoPolicyRef(c *C) {
 	err := s.testPolicySecret(c, &testExecutePolicySecretData{
 		authObject:          s.TPM.OwnerHandleContext(),
-		expectedCommands:    7,
+		expectedCommands:    8,
 		expectedSessionType: tpm2.HandleTypeHMACSession})
 	c.Check(err, IsNil)
 }
@@ -2276,6 +2276,7 @@ func (s *policySuite) TestPolicyBranchesDifferentBranchIndex(c *C) {
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2295,6 +2296,7 @@ func (s *policySuite) TestPolicyBranchesNumericSelectorDifferentBranchIndex(c *C
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2339,6 +2341,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2551,6 +2554,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodes3(c *C) {
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2631,6 +2635,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage3(c *C) 
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2653,6 +2658,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectOneWithUsage(c *C
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2691,6 +2697,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard2(c *C) {
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2864,6 +2871,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodes3(c *C) {
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2885,6 +2893,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodes4(c *C) {
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2936,6 +2945,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectOneWithUsage(c *C
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -2987,6 +2997,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3(c *C) 
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,
@@ -3025,6 +3036,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard2(c *C) {
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
 			tpm2.CommandContextLoad,
+			tpm2.CommandGetCapability,
 			tpm2.CommandContextSave,
 			tpm2.CommandStartAuthSession,
 			tpm2.CommandContextLoad,

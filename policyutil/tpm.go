@@ -48,6 +48,10 @@ type TPMHelper interface {
 	// is required by any policy that includes TPM2_PolicyNV assertions or TPM2_PolicySecret
 	// assertions on NV indices.
 	NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error)
+
+	// GetPermanentHandleAuthPolicy returns the auth policy digest for the specified
+	// permanent handle, if there is one. If there isn't one, it returns a null hash.
+	GetPermanentHandleAuthPolicy(handle tpm2.Handle) (tpm2.TaggedHash, error)
 }
 
 type onlineTpmHelper struct {
@@ -132,6 +136,10 @@ func (h *onlineTpmHelper) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPubli
 	return pub, err
 }
 
+func (h *onlineTpmHelper) GetPermanentHandleAuthPolicy(handle tpm2.Handle) (tpm2.TaggedHash, error) {
+	return h.tpm.GetCapabilityAuthPolicy(handle, h.sessions...)
+}
+
 type nullTpmHelper struct{}
 
 func (*nullTpmHelper) StartAuthSession(sessionType tpm2.SessionType, alg tpm2.HashAlgorithmId) (SessionContext, PolicySession, error) {
@@ -164,4 +172,8 @@ func (*nullTpmHelper) NVRead(auth, index tpm2.ResourceContext, size, offset uint
 
 func (*nullTpmHelper) NVReadPublic(handle tpm2.HandleContext) (*tpm2.NVPublic, error) {
 	return nil, errors.New("no TPMHelper")
+}
+
+func (*nullTpmHelper) GetPermanentHandleAuthPolicy(handle tpm2.Handle) (tpm2.TaggedHash, error) {
+	return tpm2.MakeTaggedHash(tpm2.HashAlgorithmNull, nil), errors.New("no TPMHelper")
 }

@@ -1138,8 +1138,6 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 		}
 	}
 
-	alg := auth.Resource().Name().Algorithm()
-
 	// build available session types
 	availableSessionTypes := map[tpm2.SessionType]bool{
 		tpm2.SessionTypeHMAC:   true,
@@ -1149,6 +1147,8 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 		// no policy was supplied for the resource
 		availableSessionTypes[tpm2.SessionTypePolicy] = false
 	}
+
+	var alg tpm2.HashAlgorithmId
 
 	switch auth.Resource().Handle().Type() {
 	case tpm2.HandleTypeNVIndex:
@@ -1164,10 +1164,23 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 			// index only supports policy read
 			availableSessionTypes[tpm2.SessionTypeHMAC] = false
 		}
+		alg = auth.Resource().Name().Algorithm()
 	case tpm2.HandleTypePermanent:
-		// auth value is always available, no support for policy yet
-		alg = r.sessionAlg
-		availableSessionTypes[tpm2.SessionTypePolicy] = false
+		// Auth value is always available for permanent resources. Auth policy
+		// is available if
+		policyDigest, err := r.tpm.GetPermanentHandleAuthPolicy(auth.Resource().Handle())
+		if err != nil {
+			return nil, fmt.Errorf("cannot obtain permanent handle auth policy: %w", err)
+		}
+		switch {
+		case policyDigest.HashAlg == tpm2.HashAlgorithmNull:
+			// policy is not enabled for this resource
+			alg = r.sessionAlg
+			availableSessionTypes[tpm2.SessionTypePolicy] = false
+		default:
+			// policy is enabled for this resource
+			alg = policyDigest.HashAlg
+		}
 	case tpm2.HandleTypeTransient, tpm2.HandleTypePersistent:
 		pub, err := r.tpm.ReadPublic(auth.Resource())
 		if err != nil {
@@ -1177,6 +1190,7 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 			// object only supports policy for user role
 			availableSessionTypes[tpm2.SessionTypeHMAC] = false
 		}
+		alg = auth.Resource().Name().Algorithm()
 	default:
 		return nil, errors.New("unexpected handle type")
 	}
