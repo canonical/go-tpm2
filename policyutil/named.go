@@ -8,7 +8,13 @@ import (
 	"github.com/canonical/go-tpm2"
 )
 
-// Named is some type that represents an object.
+// Named is some resource that has a name.
 type Named interface {
 	Name() tpm2.Name
+}
+
+// NamedHandle is some resource that has a name and a handle.
+type NamedHandle interface {
+	Handle() tpm2.Handle
+	Named
 }

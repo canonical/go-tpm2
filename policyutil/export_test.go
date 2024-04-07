@@ -11,8 +11,6 @@ var (
 	NewComputePolicySession = newComputePolicySession
 )
 
-type CpHashParams = cpHashParams
-type NameHashParams = nameHashParams
 type PcrValue = pcrValue
 type PcrValueList = pcrValueList
 type PolicyBranchName = policyBranchName
@@ -34,10 +32,6 @@ func (t *PolicyOrTree) LeafNodes() []*policyOrNode {
 
 func (t *PolicyOrTree) SelectBranch(i int) []tpm2.DigestList {
 	return t.selectBranch(i)
-}
-
-func (p *Policy) ComputeForDigest(digest *TaggedHash) error {
-	return p.computeForDigest(digest)
 }
 
 func NewMockPolicyNVElement(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) *policyElement {
@@ -119,26 +113,20 @@ func NewMockPolicyCounterTimerElement(operandB tpm2.Operand, offset uint16, oper
 	}
 }
 
-func NewMockPolicyCpHashElement(params *CpHashParams, digest tpm2.Digest) *policyElement {
+func NewMockPolicyCpHashElement(digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: makePolicyElementDetails(
-			policyCpHashElement{
-				Params: params,
-				Digest: digest,
-			},
+			policyCpHashElement{Digest: digest},
 		),
 	}
 }
 
-func NewMockPolicyNameHashElement(params *NameHashParams, digest tpm2.Digest) *policyElement {
+func NewMockPolicyNameHashElement(digest tpm2.Digest) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: makePolicyElementDetails(
-			policyNameHashElement{
-				Params: params,
-				Digest: digest,
-			},
+			policyNameHashElement{Digest: digest},
 		),
 	}
 }

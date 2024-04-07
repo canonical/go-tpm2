@@ -52,8 +52,9 @@ type PolicyResources interface {
 	Authorize(resource tpm2.ResourceContext) error
 
 	// SignedAuthorization signs a TPM2_PolicySigned authorization for the specified key, policy ref
-	// and session nonce.
-	SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
+	// and session nonce. The supplied algorithm is the session algorithm, which should be
+	// used to construct a cpHash if desired.
+	SignedAuthorization(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 
 	// ContextSave saves the context of the transient resource associated with the supplied
 	// handle. This will return nil if it fails.
@@ -80,7 +81,7 @@ type Authorizer interface {
 type SignedAuthorizer interface {
 	// SignedAuthorization signs a TPM2_PolicySigned authorization for the specified key, policy ref
 	// and session nonce.
-	SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
+	SignedAuthorization(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
 type ExternalSensitiveResources interface {
@@ -322,7 +323,7 @@ func (r *tpmPolicyResources) LoadedResource(name tpm2.Name, policyParams *LoadPo
 		if parent.Policy() != nil {
 			params := &PolicyExecuteParams{
 				Tickets:              tickets,
-				Usage:                NewPolicySessionUsage(tpm2.CommandLoad, []Named{parent.Resource()}, object.Private, object.Public),
+				Usage:                NewPolicySessionUsage(tpm2.CommandLoad, []NamedHandle{parent.Resource()}, object.Private, object.Public),
 				IgnoreAuthorizations: policyParams.IgnoreAuthorizations,
 				IgnoreNV:             policyParams.IgnoreNV,
 			}
@@ -438,11 +439,11 @@ func (r *tpmPolicyResources) Authorize(resource tpm2.ResourceContext) error {
 	return r.authorizer.Authorize(resource)
 }
 
-func (r *tpmPolicyResources) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+func (r *tpmPolicyResources) SignedAuthorization(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	if r.signedAuthorizer == nil {
 		return nil, errors.New("no SignedAuthorizer")
 	}
-	return r.signedAuthorizer.SignedAuthorization(sessionNonce, authKey, policyRef)
+	return r.signedAuthorizer.SignedAuthorization(sessionAlg, sessionNonce, authKey, policyRef)
 }
 
 func (r *tpmPolicyResources) ContextSave(resource tpm2.ResourceContext) *tpm2.Context {
@@ -487,7 +488,7 @@ func (*nullPolicyResources) Authorize(resource tpm2.ResourceContext) error {
 	return errors.New("no PolicyResources")
 }
 
-func (*nullPolicyResources) SignedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+func (*nullPolicyResources) SignedAuthorization(sessionAlg tpm2.HashAlgorithmId, sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	return nil, errors.New("no PolicyResources")
 }
 
@@ -506,7 +507,7 @@ func (*nullPolicyResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, 
 type policyResources interface {
 	loadedResource(name tpm2.Name) (ResourceContext, error)
 	authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
-	signedAuthorization(nonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
+	signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
 type cachedResourceType int
@@ -663,8 +664,8 @@ func (r *executePolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef
 	return policies, nil
 }
 
-func (r *executePolicyResources) signedAuthorization(nonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return r.resources.SignedAuthorization(nonce, authKey, policyRef)
+func (r *executePolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return r.resources.SignedAuthorization(r.session.Session().Params().HashAlg, r.session.Session().State().NonceTPM, authKey, policyRef)
 }
 
 type mockPolicyResources struct{}
@@ -682,6 +683,6 @@ func (r *mockPolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tp
 	return nil, nil
 }
 
-func (*mockPolicyResources) signedAuthorization(sessionNonce tpm2.Nonce, authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
-	return &PolicySignedAuthorization{Authorization: new(PolicyAuthorization)}, nil
+func (*mockPolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
+	return new(PolicySignedAuthorization), nil
 }

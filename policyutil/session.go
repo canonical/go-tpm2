@@ -18,7 +18,6 @@ import (
 type policySession interface {
 	Name() tpm2.Name
 	HashAlg() tpm2.HashAlgorithmId
-	NonceTPM() tpm2.Nonce
 
 	PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error)
 	PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error)
@@ -51,7 +50,6 @@ type PolicySession interface {
 
 	Name() tpm2.Name
 	HashAlg() tpm2.HashAlgorithmId
-	NonceTPM() tpm2.Nonce
 
 	PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error)
 	PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error)
@@ -145,10 +143,6 @@ func (s *tpmPolicySession) Name() tpm2.Name {
 
 func (s *tpmPolicySession) HashAlg() tpm2.HashAlgorithmId {
 	return s.policySession.Session().Params().HashAlg
-}
-
-func (s *tpmPolicySession) NonceTPM() tpm2.Nonce {
-	return s.policySession.Session().State().NonceTPM
 }
 
 func (s *tpmPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
@@ -261,10 +255,6 @@ func (*computePolicySession) Name() tpm2.Name {
 
 func (s *computePolicySession) HashAlg() tpm2.HashAlgorithmId {
 	return s.digest.HashAlg
-}
-
-func (*computePolicySession) NonceTPM() tpm2.Nonce {
-	return nil
 }
 
 func (s *computePolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
@@ -399,10 +389,6 @@ func (s *nullPolicySession) HashAlg() tpm2.HashAlgorithmId {
 	return s.alg
 }
 
-func (*nullPolicySession) NonceTPM() tpm2.Nonce {
-	return nil
-}
-
 func (*nullPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
 	return nil, nil, nil
 }
@@ -503,10 +489,6 @@ func (s *teePolicySession) Name() tpm2.Name {
 
 func (s *teePolicySession) HashAlg() tpm2.HashAlgorithmId {
 	return s.head().HashAlg()
-}
-
-func (s *teePolicySession) NonceTPM() tpm2.Nonce {
-	return s.head().NonceTPM()
 }
 
 func (s *teePolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
@@ -639,15 +621,16 @@ func (s *recorderPolicySession) HashAlg() tpm2.HashAlgorithmId {
 	return s.alg
 }
 
-func (*recorderPolicySession) NonceTPM() tpm2.Nonce {
-	return nil
-}
-
 func (s *recorderPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
 	s.details.Signed = append(s.details.Signed, PolicyAuthorizationDetails{
 		AuthName:  authKey.Name(),
 		PolicyRef: policyRef,
 	})
+	if len(cpHashA) > 0 {
+		if err := s.PolicyCpHash(cpHashA); err != nil {
+			return nil, nil, err
+		}
+	}
 	return nil, nil, nil
 }
 
@@ -656,6 +639,11 @@ func (s *recorderPolicySession) PolicySecret(authObject tpm2.ResourceContext, cp
 		AuthName:  authObject.Name(),
 		PolicyRef: policyRef,
 	})
+	if len(cpHashA) > 0 {
+		if err := s.PolicyCpHash(cpHashA); err != nil {
+			return nil, nil, err
+		}
+	}
 	return nil, nil, nil
 }
 

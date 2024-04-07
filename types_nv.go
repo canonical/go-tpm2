@@ -118,7 +118,7 @@ func (p *NVPublic) Name() Name {
 	return name
 }
 
-// Handle implements [github.com/canonical/go-tpm2/policyutil.NVIndex].
+// Deprecated: there is currently no use for this.
 func (p *NVPublic) Handle() Handle {
 	return p.Index
 }
