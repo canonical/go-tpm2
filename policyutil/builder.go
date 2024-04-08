@@ -685,10 +685,10 @@ func (b *PolicyBuilder) RootBranch() *PolicyBuilderBranch {
 	return b.root
 }
 
-// Build builds the policy for the specified algorithm and returns the completed
-// policy and digest. This will commit the current [PolicyBuilderBranchNode] to the
-// root [PolicyBuilderBranch] if it hasn't been done already.
-func (b *PolicyBuilder) Build() (tpm2.Digest, *Policy, error) {
+// Policy returns the completed policy and digest. This will commit the current
+// [PolicyBuilderBranchNode] to the root [PolicyBuilderBranch] if it hasn't been done
+// already.
+func (b *PolicyBuilder) Policy() (tpm2.Digest, *Policy, error) {
 	if b.failed() {
 		return nil, nil, fmt.Errorf("could not build policy: %w", b.err)
 	}
