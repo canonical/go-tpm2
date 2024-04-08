@@ -685,9 +685,29 @@ func (b *PolicyBuilder) RootBranch() *PolicyBuilderBranch {
 	return b.root
 }
 
-// Policy returns the completed policy and digest. This will commit the current
-// [PolicyBuilderBranchNode] to the root [PolicyBuilderBranch] if it hasn't been done
-// already.
+// Digest returns the current digest. This will commit the current
+// [PolicyBuilderBranchNode] to the root [PolicyBuilderBranch] if it hasn't been
+// done already.
+func (b *PolicyBuilder) Digest() (tpm2.Digest, error) {
+	if b.failed() {
+		return nil, fmt.Errorf("could not build policy: %w", b.err)
+	}
+
+	if err := b.root.commitCurrentBranchNode(); err != nil {
+		return nil, fmt.Errorf("cannot commit current branch node in root branch: %w", err)
+	}
+
+	digest, err := b.root.digest()
+	if err != nil {
+		return nil, fmt.Errorf("internal error: %w", err)
+	}
+
+	return digest, nil
+}
+
+// Policy returns the current policy and digest. This will commit the current
+// [PolicyBuilderBranchNode] to the root [PolicyBuilderBranch] if it hasn't been
+// done already.
 func (b *PolicyBuilder) Policy() (tpm2.Digest, *Policy, error) {
 	if b.failed() {
 		return nil, nil, fmt.Errorf("could not build policy: %w", b.err)
