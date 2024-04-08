@@ -1711,7 +1711,7 @@ type testExecutePolicyAuthorizeData struct {
 }
 
 func (s *policySuite) testPolicyAuthorize(c *C, data *testExecutePolicyAuthorizeData) error {
-	builder := NewPolicyBuilder(data.keySign.Name().Algorithm())
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 	c.Check(builder.RootBranch().PolicyAuthorize(data.policyRef, data.keySign), IsNil)
 
 	expectedDigest, policy, err := builder.Policy()
@@ -1782,6 +1782,29 @@ func (s *policySuite) TestPolicyAuthorize(c *C) {
 	c.Check(err, IsNil)
 }
 
+func (s *policySuite) TestPolicyAuthorizeDifferentKeyNameAlg(c *C) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+
+	pubKey, err := objectutil.NewECCPublicKey(&key.PublicKey, objectutil.WithNameAlg(tpm2.HashAlgorithmSHA1))
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+
+	approvedPolicy, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	c.Check(policy.Authorize(rand.Reader, tpm2.HashAlgorithmSHA256, pubKey, []byte("foo"), key, crypto.SHA1), IsNil)
+
+	err = s.testPolicyAuthorize(c, &testExecutePolicyAuthorizeData{
+		keySign:                  pubKey,
+		policyRef:                []byte("foo"),
+		authorizedPolicies:       []*Policy{policy},
+		expectedRequireAuthValue: true,
+		expectedPath:             fmt.Sprintf("%x", approvedPolicy)})
+	c.Check(err, IsNil)
+}
 func (s *policySuite) TestPolicyAuthorizeWithNoPolicyRef(c *C) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	c.Assert(err, IsNil)
