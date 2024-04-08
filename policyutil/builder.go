@@ -225,13 +225,13 @@ func (b *PolicyBuilderBranch) lockBranch() error {
 // Where this assertion appears in a policy with multiple branches or a policy that is authorized,
 // the contents of the NV index will be tested in the process of automatic branch selection if
 // the index has a policy that permits the use of TPM2_NV_Read without any other conditions.
-func (b *PolicyBuilderBranch) PolicyNV(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+func (b *PolicyBuilderBranch) PolicyNV(nvIndex *tpm2.NVPublic, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyNV", err)
+		return nil, b.policy.fail("PolicyNV", err)
 	}
 
 	if !nvIndex.Name().IsValid() {
-		return b.policy.fail("PolicyNV", errors.New("invalid nvIndex"))
+		return nil, b.policy.fail("PolicyNV", errors.New("invalid nvIndex"))
 	}
 
 	element := &policyElement{
@@ -243,23 +243,27 @@ func (b *PolicyBuilderBranch) PolicyNV(nvIndex *tpm2.NVPublic, operandB tpm2.Ope
 				Offset:    offset,
 				Operation: operation}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyNV", err)
+		return nil, b.policy.fail("PolicyNV", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyNV", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicySecret adds a TPM2_PolicySecret assertion to this branch so that the policy requires
 // knowledge of the authorization value of the object associated with authObject.
-func (b *PolicyBuilderBranch) PolicySecret(authObject Named, policyRef tpm2.Nonce) error {
+func (b *PolicyBuilderBranch) PolicySecret(authObject Named, policyRef tpm2.Nonce) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicySecret", err)
+		return nil, b.policy.fail("PolicySecret", err)
 	}
 
 	authObjectName := authObject.Name()
 	if !authObjectName.IsValid() {
-		return b.policy.fail("PolicySecret", errors.New("invalid authObject name"))
+		return nil, b.policy.fail("PolicySecret", errors.New("invalid authObject name"))
 	}
 
 	element := &policyElement{
@@ -269,23 +273,27 @@ func (b *PolicyBuilderBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 				AuthObjectName: authObjectName,
 				PolicyRef:      policyRef}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicySecret", err)
+		return nil, b.policy.fail("PolicySecret", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicySecret", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicySigned adds a TPM2_PolicySigned assertion to this branch so that the policy requires
 // an assertion signed by the owner of the supplied key.
-func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.Nonce) error {
+func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.Nonce) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicySigned", err)
+		return nil, b.policy.fail("PolicySigned", err)
 	}
 
 	authKeyName := authKey.Name()
 	if !authKeyName.IsValid() {
-		return b.policy.fail("PolicySigned", errors.New("invalid authKey"))
+		return nil, b.policy.fail("PolicySigned", errors.New("invalid authKey"))
 	}
 
 	element := &policyElement{
@@ -295,11 +303,15 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 				AuthKey:   authKey,
 				PolicyRef: policyRef}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicySigned", err)
+		return nil, b.policy.fail("PolicySigned", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicySigned", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyAuthorize adds a TPM2_PolicyAuthorize assertion to this branch so that the policy
@@ -311,18 +323,18 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 // This assertion must come before any other assertions in a policy. Whilst this is not
 // a limitation of how this works on the TPM, the [Policy.Authorize] and [Policy.Execute]
 // APIs currently do not support authorized policies with a non-empty starting digest.
-func (b *PolicyBuilderBranch) PolicyAuthorize(policyRef tpm2.Nonce, keySign *tpm2.Public) error {
+func (b *PolicyBuilderBranch) PolicyAuthorize(policyRef tpm2.Nonce, keySign *tpm2.Public) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyAuthorize", err)
+		return nil, b.policy.fail("PolicyAuthorize", err)
 	}
 
 	if !b.parentIsEmpty || len(b.policyBranch.Policy) > 0 {
-		return b.policy.fail("PolicyAuthorize", errors.New("must be before any other assertions"))
+		return nil, b.policy.fail("PolicyAuthorize", errors.New("must be before any other assertions"))
 	}
 
 	keySignName := keySign.Name()
 	if !keySignName.IsValid() {
-		return b.policy.fail("PolicyAuthorize", errors.New("invalid keySign"))
+		return nil, b.policy.fail("PolicyAuthorize", errors.New("invalid keySign"))
 	}
 
 	element := &policyElement{
@@ -332,37 +344,45 @@ func (b *PolicyBuilderBranch) PolicyAuthorize(policyRef tpm2.Nonce, keySign *tpm
 				PolicyRef: policyRef,
 				KeySign:   keySign}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyAuthorize", err)
+		return nil, b.policy.fail("PolicyAuthorize", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyAuthorize", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyAuthValue adds a TPM2_PolicyAuthValue assertion to this branch so that the policy
 // requires knowledge of the authorization value of the resource on which the policy session
 // is used.
-func (b *PolicyBuilderBranch) PolicyAuthValue() error {
+func (b *PolicyBuilderBranch) PolicyAuthValue() (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyAuthValue", err)
+		return nil, b.policy.fail("PolicyAuthValue", err)
 	}
 
 	element := &policyElement{
 		Type:    tpm2.CommandPolicyAuthValue,
 		Details: &policyElementDetails{AuthValue: new(policyAuthValueElement)}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyAuthValue", err)
+		return nil, b.policy.fail("PolicyAuthValue", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyAuthValue", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyCommandCode adds a TPM2_PolicyCommandCode assertion to this branch to bind the policy
 // to the specified command.
-func (b *PolicyBuilderBranch) PolicyCommandCode(code tpm2.CommandCode) error {
+func (b *PolicyBuilderBranch) PolicyCommandCode(code tpm2.CommandCode) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyCommandCode", err)
+		return nil, b.policy.fail("PolicyCommandCode", err)
 	}
 
 	element := &policyElement{
@@ -370,18 +390,22 @@ func (b *PolicyBuilderBranch) PolicyCommandCode(code tpm2.CommandCode) error {
 		Details: &policyElementDetails{
 			CommandCode: &policyCommandCodeElement{CommandCode: code}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyAuthValue", err)
+		return nil, b.policy.fail("PolicyAuthValue", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyCommandCode", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyCounterTimer adds a TPM2_PolicyCounterTimer assertion to this branch to bind the policy
 // to the contents of the [tpm2.TimeInfo] structure.
-func (b *PolicyBuilderBranch) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+func (b *PolicyBuilderBranch) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyCounterTimer", err)
+		return nil, b.policy.fail("PolicyCounterTimer", err)
 	}
 
 	element := &policyElement{
@@ -392,11 +416,15 @@ func (b *PolicyBuilderBranch) PolicyCounterTimer(operandB tpm2.Operand, offset u
 				Offset:    offset,
 				Operation: operation}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyCounterTimer", err)
+		return nil, b.policy.fail("PolicyCounterTimer", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyCounterTimer", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyCpHash adds a TPM2_PolicyCpHash assertion to this branch in order to bind the policy to
@@ -404,14 +432,14 @@ func (b *PolicyBuilderBranch) PolicyCounterTimer(operandB tpm2.Operand, offset u
 //
 // As this binds the authorization to an object and and a policy has to have the same algorithm as
 // this, policies with this assertion can only be computed for a single digest algorithm.
-func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Named, params ...interface{}) error {
+func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Named, params ...interface{}) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyCpHash", err)
+		return nil, b.policy.fail("PolicyCpHash", err)
 	}
 
 	cpHash, err := ComputeCpHash(b.alg(), code, handles, params...)
 	if err != nil {
-		return b.policy.fail("PolicyCpHash", fmt.Errorf("cannot compute cpHashA: %w", err))
+		return nil, b.policy.fail("PolicyCpHash", fmt.Errorf("cannot compute cpHashA: %w", err))
 	}
 
 	element := &policyElement{
@@ -419,11 +447,15 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 		Details: &policyElementDetails{
 			CpHash: &policyCpHashElement{Digest: cpHash}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyCpHash", err)
+		return nil, b.policy.fail("PolicyCpHash", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyCpHash", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyNameHash adds a TPM2_PolicyNameHash assertion to this branch in order to bind the policy to
@@ -431,14 +463,14 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 //
 // As this binds the authorization to an object and and a policy has to have the same algorithm as
 // this, policies with this assertion can only be computed for a single digest algorithm.
-func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) error {
+func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyNameHash", err)
+		return nil, b.policy.fail("PolicyNameHash", err)
 	}
 
 	nameHash, err := ComputeNameHash(b.alg(), handles...)
 	if err != nil {
-		return b.policy.fail("PolicyNameHash", fmt.Errorf("cannot compute nameHash: %w", err))
+		return nil, b.policy.fail("PolicyNameHash", fmt.Errorf("cannot compute nameHash: %w", err))
 	}
 
 	element := &policyElement{
@@ -446,33 +478,37 @@ func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) error {
 		Details: &policyElementDetails{
 			NameHash: &policyNameHashElement{Digest: nameHash}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyNameHash", err)
+		return nil, b.policy.fail("PolicyNameHash", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyNameHash", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyPCR adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
 // supplied PCR values.
-func (b *PolicyBuilderBranch) PolicyPCR(values tpm2.PCRValues) error {
+func (b *PolicyBuilderBranch) PolicyPCR(values tpm2.PCRValues) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyPCR", err)
+		return nil, b.policy.fail("PolicyPCR", err)
 	}
 
 	var pcrs pcrValueList
 	for alg := range values {
 		if !alg.IsValid() {
-			return b.policy.fail("PolicyPCR", fmt.Errorf("invalid digest algorithm %v", alg))
+			return nil, b.policy.fail("PolicyPCR", fmt.Errorf("invalid digest algorithm %v", alg))
 		}
 		for pcr := range values[alg] {
 			s := tpm2.PCRSelect{pcr}
 			if _, err := s.ToBitmap(0); err != nil {
-				return b.policy.fail("PolicyPCR", fmt.Errorf("invalid PCR %v: %w", pcr, err))
+				return nil, b.policy.fail("PolicyPCR", fmt.Errorf("invalid PCR %v: %w", pcr, err))
 			}
 			digest := values[alg][pcr]
 			if len(digest) != alg.Size() {
-				return b.policy.fail("PolicyPCR", fmt.Errorf("invalid digest size for PCR %v, algorithm %v", pcr, alg))
+				return nil, b.policy.fail("PolicyPCR", fmt.Errorf("invalid digest size for PCR %v, algorithm %v", pcr, alg))
 			}
 			pcrs = append(pcrs, pcrValue{
 				PCR:    tpm2.Handle(pcr),
@@ -488,27 +524,31 @@ func (b *PolicyBuilderBranch) PolicyPCR(values tpm2.PCRValues) error {
 		Details: &policyElementDetails{
 			PCR: &policyPCRElement{PCRs: pcrs}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyPCR", err)
+		return nil, b.policy.fail("PolicyPCR", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyPCR", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyDuplicationSelect adds a TPM2_PolicyDuplicationSelect assertion to this branch in order
 // to permit duplication of object to newParent with the [tpm2.TPMContext.Duplicate] function. Note
 // that object must be supplied even if includeObject is false because the assertion sets the name
 // hash of the session context to restrict the usage of the session to the specified pair of objects.
-func (b *PolicyBuilderBranch) PolicyDuplicationSelect(object, newParent Named, includeObject bool) error {
+func (b *PolicyBuilderBranch) PolicyDuplicationSelect(object, newParent Named, includeObject bool) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyDuplicationSelect", err)
+		return nil, b.policy.fail("PolicyDuplicationSelect", err)
 	}
 
 	var objectName tpm2.Name
 	if object != nil {
 		objectName = object.Name()
 		if !objectName.IsValid() {
-			return b.policy.fail("PolicyDuplicationSelect", errors.New("invalid object name"))
+			return nil, b.policy.fail("PolicyDuplicationSelect", errors.New("invalid object name"))
 		}
 	}
 	var newParentName tpm2.Name
@@ -516,7 +556,7 @@ func (b *PolicyBuilderBranch) PolicyDuplicationSelect(object, newParent Named, i
 		newParentName = newParent.Name()
 	}
 	if newParentName.Type() == tpm2.NameTypeNone || !newParentName.IsValid() {
-		return b.policy.fail("PolicyDuplicationSelect", errors.New("invalid newParent name"))
+		return nil, b.policy.fail("PolicyDuplicationSelect", errors.New("invalid newParent name"))
 	}
 
 	element := &policyElement{
@@ -527,19 +567,23 @@ func (b *PolicyBuilderBranch) PolicyDuplicationSelect(object, newParent Named, i
 				NewParent:     newParentName,
 				IncludeObject: includeObject}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyDuplicationSelect", err)
+		return nil, b.policy.fail("PolicyDuplicationSelect", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyDuplicationSelect", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyPassword adds a TPM2_PolicyPassword assertion to this branch so that the policy
 // requires knowledge of the authorization value of the resource on which the policy session
 // is used.
-func (b *PolicyBuilderBranch) PolicyPassword() error {
+func (b *PolicyBuilderBranch) PolicyPassword() (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyPassword", err)
+		return nil, b.policy.fail("PolicyPassword", err)
 	}
 
 	element := &policyElement{
@@ -547,19 +591,23 @@ func (b *PolicyBuilderBranch) PolicyPassword() error {
 		Details: &policyElementDetails{
 			Password: new(policyPasswordElement)}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyPassword", err)
+		return nil, b.policy.fail("PolicyPassword", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyPassword", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // PolicyNvWritten adds a TPM2_PolicyNvWritten assertion to this branch in order to bind the
 // policy to the status of the [tpm2.AttrNVWritten] attribute for the NV index on which the
 // session is used.
-func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) error {
+func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return b.policy.fail("PolicyNvWritten", err)
+		return nil, b.policy.fail("PolicyNvWritten", err)
 	}
 
 	element := &policyElement{
@@ -567,11 +615,15 @@ func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) error {
 		Details: &policyElementDetails{
 			NvWritten: &policyNvWrittenElement{WrittenSet: writtenSet}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return b.policy.fail("PolicyNvWritten", err)
+		return nil, b.policy.fail("PolicyNvWritten", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
-	return nil
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyNvWritten", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
 }
 
 // AddBranchNode adds a branch node to this branch from which sub-branches can be added.
@@ -581,8 +633,9 @@ func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) error {
 //
 // The branches added to the returned branch node will be committed to this branch and
 // the branch node will be locked from further modifications by subsequent additions to this
-// branch, or any ancestor branches, or by calling [PolicyBuilder.Build]. This ensures
-// that branches can only append to a policy with the [PolicyBuilder] API .
+// branch, or any ancestor branches, or by calling [PolicyBuilder.Policy] or
+// [PolicyBuilder.Digest]. This ensures that branches can only append to a policy with
+// the [PolicyBuilder] API.
 func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
 	if err := b.prepareToModifyBranch(); err != nil {
 		b.policy.fail("AddBranchNode", err)
@@ -604,6 +657,10 @@ func (b *PolicyBuilderBranch) AddBranchNode() *PolicyBuilderBranchNode {
 // the branch node.
 //
 // The PolicyBuilder API only allows a policy to be appended to.
+//
+// The PolicyBuilder instance will be marked as failed whenever an error occurs. This means
+// that it isn't necessary to check errors for every call. In the event of an earlier
+// error, calls to [PolicyBuilder.Policy] and [PolicyBuilder.Digest] will return an error.
 //
 // XXX: Note that the PolicyBuilder API may change.
 type PolicyBuilder struct {
@@ -673,6 +730,8 @@ func (b *PolicyBuilder) RootBranch() *PolicyBuilderBranch {
 // Digest returns the current digest. This will commit the current
 // [PolicyBuilderBranchNode] to the root [PolicyBuilderBranch] if it hasn't been
 // done already.
+//
+// This will return an error if any call when building the policy failed.
 func (b *PolicyBuilder) Digest() (tpm2.Digest, error) {
 	if b.failed() {
 		return nil, fmt.Errorf("could not build policy: %w", b.err)
@@ -693,6 +752,8 @@ func (b *PolicyBuilder) Digest() (tpm2.Digest, error) {
 // Policy returns the current policy and digest. This will commit the current
 // [PolicyBuilderBranchNode] to the root [PolicyBuilderBranch] if it hasn't been
 // done already.
+//
+// This will return an error if any call when building the policy failed.
 func (b *PolicyBuilder) Policy() (tpm2.Digest, *Policy, error) {
 	if b.failed() {
 		return nil, nil, fmt.Errorf("could not build policy: %w", b.err)
