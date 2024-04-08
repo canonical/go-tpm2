@@ -84,7 +84,7 @@ func (n *PolicyBuilderBranchNode) AddBranch(name string) *PolicyBuilderBranch {
 	if !pbn.isValid() {
 		n.policy().fail("AddBranch", errors.New("invalid branch name"))
 	}
-	b := newPolicyBuilderBranch(n.policy(), pbn)
+	b := newPolicyBuilderBranch(n.policy(), pbn, len(n.parentBranch.policyBranch.Policy) == 0)
 	n.childBranches = append(n.childBranches, b)
 	return b
 }
@@ -94,14 +94,17 @@ type PolicyBuilderBranch struct {
 	policy       *PolicyBuilder
 	policyBranch *policyBranch
 
+	parentIsEmpty bool
+
 	currentBranchNode *PolicyBuilderBranchNode
 	locked            bool
 }
 
-func newPolicyBuilderBranch(policy *PolicyBuilder, name policyBranchName) *PolicyBuilderBranch {
+func newPolicyBuilderBranch(policy *PolicyBuilder, name policyBranchName, parentIsEmpty bool) *PolicyBuilderBranch {
 	return &PolicyBuilderBranch{
-		policy:       policy,
-		policyBranch: &policyBranch{Name: policyBranchName(name)},
+		policy:        policy,
+		policyBranch:  &policyBranch{Name: policyBranchName(name)},
+		parentIsEmpty: parentIsEmpty,
 	}
 }
 
@@ -235,16 +238,21 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 }
 
 // PolicyAuthorize adds a TPM2_PolicyAuthorize assertion to this branch so that the policy
-// can be changed by allowing the authorizing entity to sign new policies. The name algorithm
-// of the public key should match the name algorithm of the resource that this policy is being
-// created for. Whilst this isn't required by the TPM, the [Policy.Authorize] API enforces this
-// by only signing policy digests for the key's name algorithm.
+// can be changed by allowing the authorizing entity to sign new policies.
 //
 // When [Policy.Execute] runs this assertion, it will select an execute an appropriate
 // authorized policy.
+//
+// This assertion must come before any other assertions in a policy. Whilst this is not
+// a limitation of how this works on the TPM, the [Policy.Authorize] and [Policy.Execute]
+// APIs currently do not support authorized policies with a non-empty starting digest.
 func (b *PolicyBuilderBranch) PolicyAuthorize(policyRef tpm2.Nonce, keySign *tpm2.Public) error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return b.policy.fail("PolicyAuthorize", err)
+	}
+
+	if !b.parentIsEmpty || len(b.policyBranch.Policy) > 0 {
+		return b.policy.fail("PolicyAuthorize", errors.New("must be before any other assertions"))
 	}
 
 	keySignName := keySign.Name()
@@ -544,7 +552,7 @@ func NewPolicyBuilder() *PolicyBuilder {
 		cpHashParams:   make(map[uint32]cpHashParams),
 		nameHashParams: make(map[uint32][]tpm2.Name),
 	}
-	b.root = newPolicyBuilderBranch(b, "")
+	b.root = newPolicyBuilderBranch(b, "", true)
 	return b
 }
 

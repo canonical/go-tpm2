@@ -338,6 +338,74 @@ func (s *builderSuite) TestPolicyAuthorizeInvalidName(c *C) {
 		`could not build policy: encountered an error when calling PolicyAuthorize: invalid keySign`)
 }
 
+func (s *builderSuite) TestPolicyAuthorizeNotFirst(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	c.Check(builder.RootBranch().PolicyAuthorize(nil, new(tpm2.Public)), ErrorMatches, `must be before any other assertions`)
+	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches,
+		`could not build policy: encountered an error when calling PolicyAuthorize: must be before any other assertions`)
+}
+
+func (s *builderSuite) TestPolicyAuthorizeNotFirst2(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+	node := builder.RootBranch().AddBranchNode()
+	c.Check(node.AddBranch("").PolicyAuthorize(nil, new(tpm2.Public)), ErrorMatches, `must be before any other assertions`)
+	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches,
+		`could not build policy: encountered an error when calling PolicyAuthorize: must be before any other assertions`)
+}
+
+func (s *builderSuite) TestPolicyAuthorizeInBranch(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	keySign, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder()
+	node := builder.RootBranch().AddBranchNode()
+	c.Check(node.AddBranch("").PolicyAuthorize(nil, keySign), IsNil)
+
+	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "fdcbcfa9e7d38cd29fc2be62a1ae496e793f4bc4bd7f66ee92196e70bbedd1af"))
+	expectedBranchDigest := internal_testutil.DecodeHexString(c, "79eb5a0b041d2174a08c34c9207ae675aa7fdee856722e9eb85c885c09f0f959")
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}}, nil,
+		NewMockPolicyORElement(
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigest}},
+				NewMockPolicyAuthorizeElement(nil, keySign),
+			),
+		),
+	)
+
+	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ BranchNode {
+   Branch 0 {
+    # digest TPM_ALG_SHA256:%#x
+    AuthorizedPolicies {
+    }
+    PolicyAuthorize(policyRef:, keySign:%#x)
+   }
+ }
+}`, expectedDigest, expectedBranchDigest, keySign.Name()))
+}
+
 func (s *builderSuite) TestPolicyAuthValue(c *C) {
 	builder := NewPolicyBuilder()
 	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
