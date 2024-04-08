@@ -1222,6 +1222,37 @@ func (s *builderSuite) TestEmptyBranchNodeIsElided(c *C) {
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
+func (s *builderSuite) TestEmptyBranchesAreOmitted(c *C) {
+	builder := NewPolicyBuilder()
+	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+
+	node := builder.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	c.Check(node.AddBranch("").PolicyAuthValue(), IsNil)
+	c.Check(node.AddBranch(""), NotNil)
+
+	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+
+	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "ddca4f883da6ad2dc88e838cdceec7ae14a2993c3a8883c696e927e780c3910a"))
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}}, nil,
+		NewMockPolicyNvWrittenElement(true),
+		NewMockPolicyORElement(
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: internal_testutil.DecodeHexString(c, "636ac47c3f990024d504fdcc720b6fc40df5d63a5df47acb33c8e157b08f672c")}},
+				NewMockPolicyAuthValueElement(),
+			),
+		),
+		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
+	)
+
+	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+}
+
 func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	// Compute the expected digests using the low-level PolicyOR
 	var pHashList1 tpm2.DigestList

@@ -58,6 +58,10 @@ func (n *PolicyBuilderBranchNode) commitBranchNode() error {
 
 	var branches []*policyBranch
 	for _, branch := range n.childBranches {
+		if len(branch.policyBranch.Policy) == 0 {
+			// omit branches with no assertions
+			continue
+		}
 		branches = append(branches, branch.policyBranch)
 	}
 	return n.parentBranch.commitBranches(branches)
