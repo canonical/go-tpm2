@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
@@ -747,6 +748,106 @@ func (s *recorderPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 func (s *recorderPolicySession) PolicyNvWritten(writtenSet bool) error {
 	s.details.policyNvWritten = append(s.details.policyNvWritten, writtenSet)
 	return nil
+}
+
+type stringifierPolicySession struct {
+	alg   tpm2.HashAlgorithmId
+	w     io.Writer
+	depth int
+}
+
+func newStringifierPolicySession(alg tpm2.HashAlgorithmId, w io.Writer, depth int) *stringifierPolicySession {
+	return &stringifierPolicySession{
+		alg:   alg,
+		w:     w,
+		depth: depth,
+	}
+}
+
+func (*stringifierPolicySession) Name() tpm2.Name {
+	return nil
+}
+
+func (s *stringifierPolicySession) HashAlg() tpm2.HashAlgorithmId {
+	return s.alg
+}
+
+func (s *stringifierPolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicySigned(authKey:%#x, policyRef:%#x)", s.depth*3, "", authKey.Name(), policyRef)
+	return nil, nil, err
+}
+
+func (s *stringifierPolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicySecret(authObject:%#x, policyRef:%#x)", s.depth*3, "", authObject.Name(), policyRef)
+	return nil, nil, err
+}
+
+func (s *stringifierPolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tpm2.Digest, policyRef tpm2.Nonce, authName tpm2.Name, ticket *tpm2.TkAuth) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyTicket(tag:%v, auth:%#x, policyRef:%#x)", s.depth*3, "", ticket.Tag, authName, policyRef)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyOR(pHashList tpm2.DigestList) error {
+	return nil
+}
+
+func (s *stringifierPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyPCR(pcrDigest:%#x, pcrs:%v)", s.depth*3, "", pcrDigest, pcrs)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyNV(index:%#x, operandB:%#x, offset:%d, operation:%v)", s.depth*3, "", index.Name(), operandB, offset, operation)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyCounterTimer(operandB:%#x, offset:%d, operation:%v)", s.depth*3, "", operandB, offset, operation)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyCommandCode(%v)", s.depth*3, "", code)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyCpHash(%#x)", s.depth*3, "", cpHashA)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyNameHash(%#x)", s.depth*3, "", nameHash)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyDuplicationSelect(objectName:%#x, newParentName:%#x, includeObject:%t)", s.depth*3, "", objectName, newParentName, includeObject)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyAuthorize(policyRef:%#x, keySign:%#x)", s.depth*3, "", policyRef, keySign)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyAuthValue() error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyAuthValue()", s.depth*3, "")
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyPassword() error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyPassword()", s.depth*3, "")
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
+	return nil, errors.New("not supported")
+}
+
+func (s *stringifierPolicySession) PolicyNvWritten(writtenSet bool) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyNvWritten(%t)", s.depth*3, "", writtenSet)
+	return err
 }
 
 type mockSessionContext struct{}
