@@ -88,6 +88,11 @@ type ExternalSensitiveResources interface {
 	ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, error)
 }
 
+type NVAuthorizedPolicy struct {
+	Name   tpm2.Name
+	Policy *Policy
+}
+
 // PersistentResource contains details associated with a persistent object or
 // NV index.
 type PersistentResource struct {
@@ -117,6 +122,8 @@ type PolicyResourcesData struct {
 
 	// AuthorizedPolicies contain authorized sub-policies
 	AuthorizedPolicies []*Policy
+
+	NVAuthorizedPolicies []NVAuthorizedPolicy // currently unused
 }
 
 type resourceContext struct {
@@ -668,7 +675,15 @@ func (r *executePolicyResources) signedAuthorization(authKey tpm2.Name, policyRe
 	return r.resources.SignedAuthorization(r.session.Session().Params().HashAlg, r.session.Session().State().NonceTPM, authKey, policyRef)
 }
 
-type mockPolicyResources struct{}
+type mockPolicyResources struct {
+	authorized PolicyAuthorizedPolicies
+}
+
+func newMockPolicyResources(authorizedPolicies PolicyAuthorizedPolicies) *mockPolicyResources {
+	return &mockPolicyResources{
+		authorized: authorizedPolicies,
+	}
+}
 
 func (*mockPolicyResources) loadedResource(name tpm2.Name) (ResourceContext, error) {
 	// the handle is not relevant here
@@ -680,9 +695,54 @@ func (r *mockPolicyResources) policy(name tpm2.Name) (*Policy, error) {
 }
 
 func (r *mockPolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
-	return nil, nil
+	if r.authorized == nil {
+		return nil, nil
+	}
+	return r.authorized.AuthorizedPolicies(keySign, policyRef)
 }
 
 func (*mockPolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	return new(PolicySignedAuthorization), nil
+}
+
+// PolicyAuthorizedPolicies provides a way for [Policy.Branches], [Policy.Details] and
+// [Policy.Stringer] to access authorized policies that are required by a policy.
+type PolicyAuthorizedPolicies interface {
+	// AuthorizedPolicies returns a set of policies that are signed by the key with
+	// the specified name, appropriate for a TPM2_PolicyAuthorize assertion with the
+	// specified reference.
+	AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
+}
+
+type PolicyAuthorizedPoliciesData struct {
+	AuthorizedPolicies []*Policy
+}
+
+type policyAuthorizedPolicies struct {
+	signedPolicies []*Policy
+	nvPolicies     []NVAuthorizedPolicy
+}
+
+func (p *policyAuthorizedPolicies) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error) {
+	var out []*Policy
+	for _, policy := range p.signedPolicies {
+		for _, auth := range policy.policy.PolicyAuthorizations {
+			if !bytes.Equal(auth.AuthKey.Name(), keySign) {
+				continue
+			}
+			if !bytes.Equal(auth.PolicyRef, policyRef) {
+				continue
+			}
+			out = append(out, policy)
+			break
+		}
+	}
+	return out, nil
+}
+
+func NewPolicyAuthorizedPolicies(policies []*Policy, nvPolicies []NVAuthorizedPolicy) PolicyAuthorizedPolicies {
+	return &policyAuthorizedPolicies{
+		signedPolicies: policies,
+		nvPolicies:     nvPolicies,
+	}
 }

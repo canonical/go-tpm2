@@ -466,6 +466,10 @@ type PCRSelection struct {
 	SizeOfSelect uint8
 }
 
+func (s PCRSelection) String() string {
+	return fmt.Sprintf("{hash:%v, select:%v}", s.Hash, s.Select)
+}
+
 // Marshal implements [mu.CustomMarshaller.Marshal].
 func (s PCRSelection) Marshal(w io.Writer) error {
 	bmp, err := s.Select.ToBitmap(s.SizeOfSelect)
@@ -571,6 +575,14 @@ type TaggedHashList []TaggedHash
 
 // PCRSelectionList is a slice of PCRSelection values, and corresponds to the TPML_PCR_SELECTION type.
 type PCRSelectionList []PCRSelection
+
+func (l PCRSelectionList) String() string {
+	out := "["
+	for _, s := range l {
+		out += s.String()
+	}
+	return out + "]"
+}
 
 // WithMinSelectSize creates a copy of this list of selections with the minimum
 // size of each selection in bytes set to the specified value. If this isn't

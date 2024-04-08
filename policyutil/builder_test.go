@@ -11,6 +11,7 @@ import (
 	_ "crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"io"
 
 	. "gopkg.in/check.v1"
@@ -47,6 +48,11 @@ func (s *builderSuite) testPolicyNV(c *C, data *testBuildPolicyNVData) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyNV(index:%#x, operandB:%#x, offset:%d, operation:%v)
+}`, data.expectedDigest, data.nvPub.Name(), data.operandB, data.offset, data.operation))
 }
 
 func (s *builderSuite) TestPolicyNV(c *C) {
@@ -132,6 +138,11 @@ func (s *builderSuite) testPolicySecret(c *C, data *testBuildPolicySecretData) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicySecret(authObject:%#x, policyRef:%#x)
+}`, data.expectedDigest, data.authObjectName, data.policyRef))
 }
 
 func (s *builderSuite) TestPolicySecret(c *C) {
@@ -193,6 +204,11 @@ func (s *builderSuite) testPolicySigned(c *C, data *testBuildPolicySignedData) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicySigned(authKey:%#x, policyRef:%#x)
+}`, data.expectedDigest, authKey.Name(), data.policyRef))
 }
 
 func (s *builderSuite) TestPolicySigned(c *C) {
@@ -267,6 +283,13 @@ func (s *builderSuite) testPolicyAuthorize(c *C, data *testBuildPolicyAuthorizeD
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ AuthorizedPolicies {
+ }
+ PolicyAuthorize(policyRef:%#x, keySign:%#x)
+}`, data.expectedDigest, data.policyRef, keySign.Name()))
 }
 
 func (s *builderSuite) TestPolicyAuthorize(c *C) {
@@ -328,6 +351,11 @@ func (s *builderSuite) TestPolicyAuthValue(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyAuthValue()
+}`, expectedDigest))
 }
 
 type testBuildPolicyCommandCodeData struct {
@@ -347,6 +375,11 @@ func (s *builderSuite) testPolicyCommandCode(c *C, data *testBuildPolicyCommandC
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyCommandCode(%v)
+}`, data.expectedDigest, data.code))
 }
 
 func (s *builderSuite) TestPolicyCommandCode1(c *C) {
@@ -380,6 +413,11 @@ func (s *builderSuite) testPolicyCounterTimer(c *C, data *testBuildPolicyCounter
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyCounterTimer(operandB:%#x, offset:%d, operation:%v)
+}`, data.expectedDigest, data.operandB, data.offset, data.operation))
 }
 
 func (s *builderSuite) TestPolicyCounterTimer(c *C) {
@@ -435,6 +473,11 @@ func (s *builderSuite) testPolicyCpHash(c *C, data *testBuildPolicyCpHashData) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest %v:%#x
+ PolicyCpHash(%#x)
+}`, data.alg, data.expectedDigest, data.expectedCpHash))
 }
 
 func (s *builderSuite) TestPolicyCpHash(c *C) {
@@ -514,6 +557,11 @@ func (s *builderSuite) testPolicyNameHash(c *C, data *testBuildPolicyNameHashDat
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest %v:%#x
+ PolicyNameHash(%#x)
+}`, data.alg, data.expectedDigest, data.expectedNameHash))
 }
 
 func (s *builderSuite) TestPolicyNameHash(c *C) {
@@ -563,10 +611,18 @@ func (s *builderSuite) testPolicyPCR(c *C, data *testBuildPolicyPCRData) {
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.alg, data.expectedDigest)}, nil,
 		NewMockPolicyPCRElement(data.expectedPcrs))
 
+	expectedPcrs, expectedPcrDigest, err := ComputePCRDigestFromAllValues(data.alg, data.values)
+	c.Assert(err, IsNil)
+
 	digest, policy, err := builder.Build(data.alg)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest %v:%#x
+ PolicyPCR(pcrDigest:%#x, pcrs:%v)
+}`, data.alg, data.expectedDigest, expectedPcrDigest, expectedPcrs))
 }
 
 func (s *builderSuite) TestPolicyPCR(c *C) {
@@ -717,6 +773,11 @@ func (s *builderSuite) testPolicyDuplicationSelect(c *C, data *testBuildPolicyDu
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyDuplicationSelect(objectName:%#x, newParentName:%#x, includeObject:%t)
+}`, data.expectedDigest, data.object.Name(), data.newParent.Name(), data.includeObject))
 }
 
 func (s *builderSuite) TestPolicyDuplicationSelect(c *C) {
@@ -794,6 +855,11 @@ func (s *builderSuite) TestPolicyPassword(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyPassword()
+}`, expectedDigest))
 }
 
 type testBuildPolicyNvWrittenData struct {
@@ -813,6 +879,11 @@ func (s *builderSuite) testPolicyNvWritten(c *C, data *testBuildPolicyNvWrittenD
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyNvWritten(%t)
+}`, data.expectedDigest, data.writtenSet))
 }
 
 func (s *builderSuite) TestPolicyNvWrittenFalse(c *C) {
@@ -851,6 +922,13 @@ func (s *builderSuite) TestPolicyMixed(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicySecret(authObject:0x40000001, policyRef:0x626172)
+ PolicyAuthValue()
+ PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+}`, expectedDigest))
 }
 
 func (s *builderSuite) TestPolicyMixedSHA1(c *C) {
@@ -870,6 +948,13 @@ func (s *builderSuite) TestPolicyMixedSHA1(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA1:%#x
+ PolicySecret(authObject:0x40000001, policyRef:0x626172)
+ PolicyAuthValue()
+ PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+}`, expectedDigest))
 }
 
 func (s *builderSuite) TestPolicyBranches(c *C) {
@@ -935,6 +1020,22 @@ func (s *builderSuite) TestPolicyBranches(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyNvWritten(true)
+ BranchNode {
+   Branch 0 (branch1) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicyAuthValue()
+   }
+   Branch 1 (branch2) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
+   }
+ }
+ PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+}`, expectedDigest, pHashList[0], pHashList[1]))
 }
 
 func (s *builderSuite) TestPolicyBranchesMultipleDigests(c *C) {
@@ -1025,6 +1126,38 @@ func (s *builderSuite) TestPolicyBranchesMultipleDigests(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigestSHA256)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA1:%#x
+ PolicyNvWritten(true)
+ BranchNode {
+   Branch 0 (branch1) {
+    # digest TPM_ALG_SHA1:%#x
+    PolicyAuthValue()
+   }
+   Branch 1 (branch2) {
+    # digest TPM_ALG_SHA1:%#x
+    PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
+   }
+ }
+ PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+}`, expectedDigestSHA1, pHashListSHA1[0], pHashListSHA1[1]))
+	c.Check(policy.Stringer(tpm2.HashAlgorithmSHA256, nil).String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyNvWritten(true)
+ BranchNode {
+   Branch 0 (branch1) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicyAuthValue()
+   }
+   Branch 1 (branch2) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
+   }
+ }
+ PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+}`, expectedDigestSHA256, pHashListSHA256[0], pHashListSHA256[1]))
 }
 
 func (s *builderSuite) TestPolicyBuildCommitsCurrentBranchNode(c *C) {
@@ -1191,6 +1324,31 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyNvWritten(true)
+ BranchNode {
+   Branch 0 (branch1) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicyAuthValue()
+   }
+   Branch 1 (branch2) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
+   }
+ }
+ BranchNode {
+   Branch 0 (branch3) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+   }
+   Branch 1 (branch4) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicyCommandCode(TPM_CC_NV_WriteLock)
+   }
+ }
+}`, expectedDigest, pHashList1[0], pHashList1[1], pHashList2[0], pHashList2[1]))
 }
 
 func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
@@ -1343,4 +1501,39 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#x
+ PolicyNvWritten(true)
+ BranchNode {
+   Branch 0 (branch1) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicyAuthValue()
+    BranchNode {
+      Branch 0 (branch2) {
+       # digest TPM_ALG_SHA256:%#x
+       PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+      }
+      Branch 1 (branch3) {
+       # digest TPM_ALG_SHA256:%#x
+       PolicyCommandCode(TPM_CC_NV_WriteLock)
+      }
+    }
+   }
+   Branch 1 (branch4) {
+    # digest TPM_ALG_SHA256:%#x
+    PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
+    BranchNode {
+      Branch 0 (branch5) {
+       # digest TPM_ALG_SHA256:%#x
+       PolicyCommandCode(TPM_CC_NV_ChangeAuth)
+      }
+      Branch 1 (branch6) {
+       # digest TPM_ALG_SHA256:%#x
+       PolicyCommandCode(TPM_CC_NV_WriteLock)
+      }
+    }
+   }
+ }
+}`, expectedDigest, pHashList1[0], pHashList2[0], pHashList2[1], pHashList1[1], pHashList3[0], pHashList3[1]))
 }

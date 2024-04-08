@@ -2183,7 +2183,22 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 }
 
 // Branches returns the path of every branch in this policy.
-func (p *Policy) Branches() ([]string, error) {
+//
+// If the authorizedPolicies argument is supplied, associated authorized policies will be
+// merged into the result, otherwise missing authorized policies will be represented
+// by a path component of the form "<authorize:key:%#x,ref:%#x>". The supplied algorithm
+// is only really required for policies that make use of authorized policies, and is used
+// to select the algorithm for encoding the path component for an authorized policy, which
+// is the policy digest. Setting this to [tpm2.HashAlgorithmNull] selects the first digest
+// algorithm that this policy is computed for.
+func (p *Policy) Branches(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies) ([]string, error) {
+	if alg == tpm2.HashAlgorithmNull {
+		if len(p.policy.PolicyDigests) == 0 {
+			return nil, ErrMissingDigest
+		}
+		alg = p.policy.PolicyDigests[0].HashAlg
+	}
+
 	var result []string
 
 	var makeBeginBranchFn func(policyBranchPath) treeWalkerBeginBranchFn
@@ -2191,7 +2206,7 @@ func (p *Policy) Branches() ([]string, error) {
 		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			branchPath := parentPath.Concat(name)
 
-			session := newNullPolicySession(tpm2.HashAlgorithmSHA256)
+			session := newNullPolicySession(alg)
 
 			beginBranchNodeFn := func() (treeWalkerBeginBranchFn, error) {
 				return makeBeginBranchFn(branchPath), nil
@@ -2206,7 +2221,7 @@ func (p *Policy) Branches() ([]string, error) {
 		}
 	}
 
-	walker := newTreeWalker(new(mockPolicyResources), makeBeginBranchFn(""))
+	walker := newTreeWalker(newMockPolicyResources(authorizedPolicies), makeBeginBranchFn(""))
 	if err := walker.run(p.policy.Policy); err != nil {
 		return nil, err
 	}
@@ -2337,8 +2352,19 @@ func (r *PolicyBranchDetails) NvWritten() (nvWrittenSet bool, set bool) {
 }
 
 // Details returns details of all branches with the supplied path prefix, for
-// the specified algorithm.
-func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]PolicyBranchDetails, error) {
+// the specified algorithm. If the specified algorithm is [tpm2.HashAlgorithmNull],
+// then the first algorithm the policy is computed for is used.
+//
+// If the authorizedPolicies argument is supplied, details of branches from associated
+// authorized policies will be inserted into the result.
+func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string, authorizedPolicies PolicyAuthorizedPolicies) (map[string]PolicyBranchDetails, error) {
+	if alg == tpm2.HashAlgorithmNull {
+		if len(p.policy.PolicyDigests) == 0 {
+			return nil, ErrMissingDigest
+		}
+		alg = p.policy.PolicyDigests[0].HashAlg
+	}
+
 	result := make(map[string]PolicyBranchDetails)
 
 	var makeBeginBranchFn func(policyBranchPath, policyBranchPath, string, bool, *PolicyBranchDetails) treeWalkerBeginBranchFn
@@ -2391,7 +2417,7 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 	}
 
 	walker := newTreeWalker(
-		new(mockPolicyResources),
+		newMockPolicyResources(authorizedPolicies),
 		makeBeginBranchFn("", policyBranchPath(path), "*", false, new(PolicyBranchDetails)),
 	)
 	if err := walker.run(p.policy.Policy); err != nil {
@@ -2399,4 +2425,242 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string) (map[string]Poli
 	}
 
 	return result, nil
+}
+
+type policyStringifierRunner struct {
+	w io.Writer
+
+	policySession   policySession
+	policyTickets   nullTickets
+	policyResources *mockPolicyResources
+
+	depth int
+
+	currentPath policyBranchPath
+}
+
+func newPolicyStringifierRunner(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies, w io.Writer) *policyStringifierRunner {
+	return &policyStringifierRunner{
+		w:               w,
+		policySession:   newStringifierPolicySession(alg, w, 0),
+		policyResources: newMockPolicyResources(authorizedPolicies),
+	}
+}
+
+func (r *policyStringifierRunner) session() policySession {
+	return r.policySession
+}
+
+func (r *policyStringifierRunner) tickets() policyTickets {
+	return &r.policyTickets
+}
+
+func (r *policyStringifierRunner) resources() policyResources {
+	return r.policyResources
+}
+
+func (r *policyStringifierRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
+	// the handle is not relevant here
+	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	return newResourceContext(resource, nil), nil
+}
+
+func (r *policyStringifierRunner) cpHash(cpHash *policyCpHashElement) error {
+	return nil
+}
+
+func (r *policyStringifierRunner) nameHash(nameHash *policyNameHashElement) error {
+	return nil
+}
+
+func (r *policyStringifierRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
+	return new(mockSessionContext), nil
+}
+
+func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected int, err error) {
+	fmt.Fprintf(r.w, "\n%*s BranchNode {", r.depth*3, "")
+	for i, branch := range branches {
+		err := func() error {
+			origSession := r.policySession
+			origPath := r.currentPath
+
+			r.depth++
+			r.policySession = newStringifierPolicySession(r.policySession.HashAlg(), r.w, r.depth)
+			name := string(branch.Name)
+			if len(name) == 0 {
+				name = fmt.Sprintf("{%d}", i)
+			}
+			r.currentPath = r.currentPath.Concat(name)
+			defer func() {
+				r.depth--
+				r.policySession = origSession
+				r.currentPath = origPath
+			}()
+
+			fmt.Fprintf(r.w, "\n%*sBranch %d", r.depth*3, "", i)
+			if len(branch.Name) > 0 {
+				fmt.Fprintf(r.w, " (%s)", branch.Name)
+			}
+			fmt.Fprintf(r.w, " {")
+
+			var digest tpm2.Digest
+			for _, d := range branch.PolicyDigests {
+				if d.HashAlg != r.policySession.HashAlg() {
+					continue
+				}
+				digest = d.Digest
+				break
+			}
+			if len(digest) == 0 {
+				return ErrMissingDigest
+			}
+			fmt.Fprintf(r.w, "\n%*s # digest %v:%#x", r.depth*3, "", r.policySession.HashAlg(), digest)
+
+			if err := r.run(branch.Policy); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(r.w, "\n%*s}", r.depth*3, "")
+			return nil
+		}()
+		if err != nil {
+			return 0, err
+		}
+	}
+	fmt.Fprintf(r.w, "\n%*s }", r.depth*3, "")
+
+	return 0, nil
+}
+
+func (r *policyStringifierRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
+	fmt.Fprintf(r.w, "\n%*s AuthorizedPolicies {", r.depth*3, "")
+	for _, policy := range policies {
+		err := func() error {
+			origSession := r.policySession
+			origPath := r.currentPath
+
+			r.depth++
+			r.policySession = newStringifierPolicySession(r.policySession.HashAlg(), r.w, r.depth)
+			r.currentPath = r.currentPath.Concat(string(policy.Name))
+			defer func() {
+				r.depth--
+				r.policySession = origSession
+				r.currentPath = origPath
+			}()
+
+			var digest tpm2.Digest
+			for _, d := range policy.PolicyDigests {
+				if d.HashAlg != r.policySession.HashAlg() {
+					continue
+				}
+				digest = d.Digest
+				break
+			}
+			if len(digest) == 0 {
+				return ErrMissingDigest
+			}
+			fmt.Fprintf(r.w, "\n%*sAuthorizedPolicy %x {", r.depth*3, "", digest)
+			fmt.Fprintf(r.w, "\n%*s # digest %v:%#x", r.depth*3, "", r.policySession.HashAlg(), digest)
+
+			if err := r.run(policy.Policy); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(r.w, "\n%*s}", r.depth*3, "")
+			return nil
+		}()
+		if err != nil {
+			return nil, nil, err
+		}
+
+	}
+	fmt.Fprintf(r.w, "\n%*s }", r.depth*3, "")
+	return nil, nil, nil
+}
+
+func (r *policyStringifierRunner) run(elements policyElements) error {
+	for len(elements) > 0 {
+		element := elements[0].runner()
+		elements = elements[1:]
+		if err := element.run(r); err != nil {
+			return makePolicyError(err, r.currentPath, element.name())
+		}
+	}
+
+	return nil
+}
+
+func (p *Policy) string(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies) (string, error) {
+	var digest tpm2.Digest
+	if alg == tpm2.HashAlgorithmNull {
+		if len(p.policy.PolicyDigests) > 0 {
+			alg = p.policy.PolicyDigests[0].HashAlg
+			digest = p.policy.PolicyDigests[0].Digest
+		}
+	} else {
+		for _, d := range p.policy.PolicyDigests {
+			if d.HashAlg != alg {
+				continue
+			}
+			digest = d.Digest
+			break
+		}
+	}
+	if len(digest) == 0 {
+		return "", ErrMissingDigest
+	}
+
+	w := new(bytes.Buffer)
+	fmt.Fprintf(w, "\nPolicy {")
+	fmt.Fprintf(w, "\n # digest %v:%#x", alg, digest)
+	for i, auth := range p.policy.PolicyAuthorizations {
+		fmt.Fprintf(w, "\n # auth %d authName:%#x, policyRef:%#x, sigAlg:%v", i, auth.AuthKey.Name(), auth.PolicyRef, auth.Signature.SigAlg)
+		if auth.Signature.SigAlg.IsValid() {
+			fmt.Fprintf(w, ", hashAlg:%v", auth.Signature.HashAlg())
+		}
+	}
+
+	runner := newPolicyStringifierRunner(alg, authorizedPolicies, w)
+	if err := runner.run(p.policy.Policy); err != nil {
+		return "", err
+	}
+
+	fmt.Fprintf(w, "\n}")
+	return w.String(), nil
+}
+
+func (p *Policy) String() string {
+	if len(p.policy.PolicyDigests) == 0 {
+		return "%!(ERROR=no computed digests)"
+	}
+	return p.Stringer(p.policy.PolicyDigests[0].HashAlg, nil).String()
+}
+
+type policyStringer struct {
+	alg                tpm2.HashAlgorithmId
+	authorizedPolicies PolicyAuthorizedPolicies
+	policy             *Policy
+}
+
+// String implements fmt.Stringer. It will print a string representation of the policy
+// with the first computed digest algorithm.
+func (s *policyStringer) String() string {
+	str, err := s.policy.string(s.alg, s.authorizedPolicies)
+	if err != nil {
+		return fmt.Sprintf("%%!(ERROR=%v)", err)
+	}
+	return str
+}
+
+// Stringer returns a fmt.Stringer that will print a string representation of the policy
+// for the specified digest algorithm. The policy must already include this algorithm. If
+// the algorithm is [tpm2.HashAlgorithmNull], then the first computed algorithm will be used.
+// If authorizedPolicies is supplied, the string representation will include the relevant
+// authorized policies as well.
+func (p *Policy) Stringer(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAuthorizedPolicies) fmt.Stringer {
+	return &policyStringer{
+		alg:                alg,
+		authorizedPolicies: authorizedPolicies,
+		policy:             p,
+	}
 }

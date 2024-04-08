@@ -391,7 +391,7 @@ func (s *policyPathWildcardResolver) canAuthNV(pub *tpm2.NVPublic, policy *Polic
 		return false
 	}
 
-	details, err := policy.Details(pub.Name().Algorithm(), "")
+	details, err := policy.Details(pub.Name().Algorithm(), "", nil)
 	if err != nil {
 		return false
 	}
@@ -787,7 +787,8 @@ type treeWalker struct {
 	completeFullPathFn  treeWalkerCompleteFullPathFn
 	ranCompleteFullPath bool
 	currentPath         policyBranchPath
-	remaining           policyElements
+
+	remaining []policyElementRunner
 }
 
 func newTreeWalker(resources policyResources, beginRootBranchFn treeWalkerBeginBranchFn) *treeWalker {
@@ -797,7 +798,7 @@ func newTreeWalker(resources policyResources, beginRootBranchFn treeWalkerBeginB
 	}
 }
 
-func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int, branch *policyBranch, remaining policyElements) error {
+func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int, branch *policyBranch, remaining []policyElementRunner) error {
 	name := string(branch.Name)
 	if len(name) == 0 {
 		name = fmt.Sprintf("{%d}", index)
@@ -828,7 +829,11 @@ func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int
 	w.currentPath = w.currentPath.Concat(name)
 	w.ranCompleteFullPath = false
 
-	return w.runInternal(append(branch.Policy, remaining...))
+	var elements []policyElementRunner
+	for _, element := range branch.Policy {
+		elements = append(elements, element.runner())
+	}
+	return w.runInternal(append(elements, remaining...))
 }
 
 func (w *treeWalker) session() policySession {
@@ -883,9 +888,27 @@ func (w *treeWalker) runBranch(branches policyBranches) (int, error) {
 	return 0, nil
 }
 
+type treeWalkerPolicyAuthorizeRunner struct {
+	keySign   *tpm2.Public
+	policyRef tpm2.Nonce
+}
+
+func (r *treeWalkerPolicyAuthorizeRunner) name() string {
+	return "TPM2_PolicyAuthorize assertion"
+}
+
+func (r *treeWalkerPolicyAuthorizeRunner) run(runner policyRunner) error {
+	return runner.session().PolicyAuthorize(nil, r.policyRef, r.keySign.Name(), nil)
+}
+
 func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (tpm2.Digest, *tpm2.TkVerified, error) {
 	remaining := w.remaining
 	w.remaining = nil
+
+	remaining = append([]policyElementRunner{&treeWalkerPolicyAuthorizeRunner{
+		keySign:   keySign,
+		policyRef: policyRef,
+	}}, remaining...)
 
 	beginBranchFn, err := w.beginBranchNodeFn()
 	if err != nil {
@@ -899,7 +922,7 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 			}
 		}
 	} else {
-		if err := w.walkBranch(beginBranchFn, 0, &policyBranch{Name: policyBranchName(fmt.Sprintf("<authorize:key:%x,policyRef:%x>", keySign.Name(), policyRef))}, remaining); err != nil {
+		if err := w.walkBranch(beginBranchFn, 0, &policyBranch{Name: policyBranchName(fmt.Sprintf("<authorize:key:%#x,ref:%#x>", keySign.Name(), policyRef))}, remaining); err != nil {
 			return nil, nil, fmt.Errorf("cannot walk missing policy: %w", err)
 		}
 	}
@@ -907,10 +930,10 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 	return nil, nil, nil
 }
 
-func (w *treeWalker) runInternal(elements policyElements) error {
+func (w *treeWalker) runInternal(elements []policyElementRunner) error {
 	w.remaining = elements
 	for len(w.remaining) > 0 {
-		element := w.remaining[0].runner()
+		element := w.remaining[0]
 		w.remaining = w.remaining[1:]
 		if err := element.run(w); err != nil {
 			return makePolicyError(err, w.currentPath, element.name())
@@ -941,5 +964,9 @@ func (w *treeWalker) run(elements policyElements) error {
 		w.completeFullPathFn = nil
 	}()
 
-	return w.runInternal(elements)
+	var elementsCopy []policyElementRunner
+	for _, element := range elements {
+		elementsCopy = append(elementsCopy, element.runner())
+	}
+	return w.runInternal(elementsCopy)
 }

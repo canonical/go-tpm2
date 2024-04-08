@@ -718,6 +718,46 @@ func (c Capability) Format(s fmt.State, f rune) {
 	}
 }
 
+func (o ArithmeticOp) String() string {
+	switch o {
+	case OpEq:
+		return "TPM_EO_EQ"
+	case OpNeq:
+		return "TPM_OP_NEQ"
+	case OpSignedGT:
+		return "TPM_EO_SIGNED_GT"
+	case OpUnsignedGT:
+		return "TPM_EO_UNSIGNED_GT"
+	case OpSignedLT:
+		return "TPM_EO_SIGNED_LT"
+	case OpUnsignedLT:
+		return "TPM_EO_UNSIGNED_LT"
+	case OpSignedGE:
+		return "TPM_EO_SIGNED_GE"
+	case OpUnsignedGE:
+		return "TPM_EO_UNSIGNED_GE"
+	case OpSignedLE:
+		return "TPM_EO_SIGNED_LE"
+	case OpUnsignedLE:
+		return "TPM_EO_UNSIGNED_LE"
+	case OpBitset:
+		return "TPM_EO_BITSET"
+	case OpBitclear:
+		return "TPM_EO_BITCLEAR"
+	default:
+		return fmt.Sprintf("0x%08x", uint16(o))
+	}
+}
+
+func (o ArithmeticOp) Format(s fmt.State, f rune) {
+	switch f {
+	case 's', 'v':
+		fmt.Fprintf(s, "%s", o.String())
+	default:
+		fmt.Fprintf(s, makeDefaultFormatter(s, f), uint16(o))
+	}
+}
+
 var (
 	errorCodeDescriptions = map[ErrorCode]string{
 		ErrorInitialize:      "TPM not initialized by TPM2_Startup or already initialized",
