@@ -77,42 +77,20 @@ func (n *PolicyBuilderBranchNode) commitBranchNode() error {
 	}
 	n.committed = true
 
-	var branchesToLock []*PolicyBuilderBranch
-	nodes := []*PolicyBuilderBranchNode{n}
-	for len(nodes) > 0 {
-		node := nodes[0]
-		nodes = nodes[1:]
-
-		for _, branch := range node.childBranches {
-			if branch.locked {
-				continue
-			}
-			branchesToLock = append(branchesToLock, branch)
-			if branch.currentBranchNode != nil {
-				nodes = append(nodes, branch.currentBranchNode)
-			}
-		}
-	}
-
-	for i := len(branchesToLock) - 1; i >= 0; i-- {
-		if err := branchesToLock[i].lockBranch(); err != nil {
-			return err
-		}
-	}
-
 	var branches []*policyBranch
 	for _, branch := range n.childBranches {
+		if err := branch.lockBranch(); err != nil {
+			return err
+		}
+
 		if len(branch.policyBranch.Policy) == 0 {
 			// omit branches with no assertions
 			continue
 		}
-		digest, err := branch.digest()
-		if err != nil {
-			return fmt.Errorf("internal error: %w", err)
-		}
-		branch.policyBranch.PolicyDigests = taggedHashList{{HashAlg: branch.alg(), Digest: digest}}
+
 		branches = append(branches, &branch.policyBranch)
 	}
+
 	return n.parentBranch.commitBranches(branches)
 }
 
@@ -225,7 +203,14 @@ func (b *PolicyBuilderBranch) lockBranch() error {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return err
 	}
+
+	digest, err := b.digest()
+	if err != nil {
+		return fmt.Errorf("internal error: %w", err)
+	}
+	b.policyBranch.PolicyDigests = taggedHashList{{HashAlg: b.alg(), Digest: digest}}
 	b.locked = true
+
 	return nil
 }
 
