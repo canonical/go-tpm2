@@ -1143,7 +1143,7 @@ Policy {
  }
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigestSHA1, pHashListSHA1[0], pHashListSHA1[1]))
-	c.Check(policy.Stringer(tpm2.HashAlgorithmSHA256).String(), Equals, fmt.Sprintf(`
+	c.Check(policy.Stringer(tpm2.HashAlgorithmSHA256, nil).String(), Equals, fmt.Sprintf(`
 Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyNvWritten(true)
