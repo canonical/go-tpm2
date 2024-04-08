@@ -2508,7 +2508,7 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 				if d.HashAlg != r.policySession.HashAlg() {
 					continue
 				}
-				digest = d.Digest
+				digest = d.Digest()
 				break
 			}
 			if len(digest) == 0 {
@@ -2553,7 +2553,7 @@ func (r *policyStringifierRunner) runAuthorizedPolicy(keySign *tpm2.Public, poli
 				if d.HashAlg != r.policySession.HashAlg() {
 					continue
 				}
-				digest = d.Digest
+				digest = d.Digest()
 				break
 			}
 			if len(digest) == 0 {
@@ -2595,14 +2595,14 @@ func (p *Policy) string(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAutho
 	if alg == tpm2.HashAlgorithmNull {
 		if len(p.policy.PolicyDigests) > 0 {
 			alg = p.policy.PolicyDigests[0].HashAlg
-			digest = p.policy.PolicyDigests[0].Digest
+			digest = p.policy.PolicyDigests[0].Digest()
 		}
 	} else {
 		for _, d := range p.policy.PolicyDigests {
 			if d.HashAlg != alg {
 				continue
 			}
-			digest = d.Digest
+			digest = d.Digest()
 			break
 		}
 	}
