@@ -267,11 +267,17 @@ func (s *computePolicySession) HashAlg() tpm2.HashAlgorithmId {
 }
 
 func (s *computePolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	if len(authKey.Name()) == 0 || !authKey.Name().IsValid() {
+		return nil, nil, errors.New("invalid authKey name")
+	}
 	s.policyUpdate(tpm2.CommandPolicySigned, authKey.Name(), policyRef)
 	return nil, nil, nil
 }
 
 func (s *computePolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
+	if len(authObject.Name()) == 0 || !authObject.Name().IsValid() {
+		return nil, nil, errors.New("invalid authObject name")
+	}
 	s.policyUpdate(tpm2.CommandPolicySecret, authObject.Name(), policyRef)
 	return nil, nil, nil
 }
@@ -299,10 +305,17 @@ func (s *computePolicySession) PolicyOR(pHashList tpm2.DigestList) error {
 }
 
 func (s *computePolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+	if len(pcrDigest) != s.alg.Size() {
+		return errors.New("invalid pcrDigest size")
+	}
 	return s.updateForCommand(tpm2.CommandPolicyPCR, pcrs, mu.Raw(pcrDigest))
 }
 
 func (s *computePolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
+	if len(index.Name()) == 0 || !index.Name().IsValid() {
+		return errors.New("invalid index name")
+	}
+
 	h := s.alg.NewHash()
 	mu.MustMarshalToWriter(h, mu.Raw(operandB), offset, operation)
 
@@ -346,11 +359,11 @@ func (s *computePolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
 }
 
 func (s *computePolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	if !newParentName.IsValid() {
+	if len(newParentName) == 0 || !newParentName.IsValid() {
 		return errors.New("invalid newParent name")
 	}
 	if includeObject {
-		if !objectName.IsValid() {
+		if len(objectName) == 0 || !objectName.IsValid() {
 			return errors.New("invalid object name")
 		}
 		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.Raw(objectName), mu.Raw(newParentName), includeObject)
@@ -361,6 +374,9 @@ func (s *computePolicySession) PolicyDuplicationSelect(objectName, newParentName
 }
 
 func (s *computePolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+	if len(keySign) == 0 || !keySign.IsValid() {
+		return errors.New("invalid keySign name")
+	}
 	s.policyUpdate(tpm2.CommandPolicyAuthorize, keySign, policyRef)
 	return nil
 }
