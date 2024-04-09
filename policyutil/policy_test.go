@@ -269,34 +269,42 @@ func (s *policySuiteNoTPM) TestPolicyBranchesMultipleDigests(c *C) {
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA1:%#x
+ # digest TPM_ALG_SHA1:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA1:%#x
+    # digest TPM_ALG_SHA1:%#[2]x
     PolicyAuthValue()
    }
    Branch 1 (branch2) {
-    # digest TPM_ALG_SHA1:%#x
+    # digest TPM_ALG_SHA1:%#[3]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[3]x
+ )
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigestSHA1, pHashListSHA1[0], pHashListSHA1[1]))
 	c.Check(policy.Stringer(tpm2.HashAlgorithmSHA256, nil).String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     PolicyAuthValue()
    }
    Branch 1 (branch2) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[3]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[3]x
+ )
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigestSHA256, pHashListSHA256[0], pHashListSHA256[1]))
 }

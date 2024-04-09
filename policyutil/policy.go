@@ -710,7 +710,7 @@ func (e *policyORElement) run(runner policyRunner) error {
 			break
 		}
 		if !found {
-			digests = append(digests, make([]byte, runner.session().HashAlg().Size()))
+			return ErrMissingDigest
 		}
 	}
 
@@ -719,11 +719,20 @@ func (e *policyORElement) run(runner policyRunner) error {
 		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
 	}
 
+	skipIntermediates := false
+	if selected < 0 {
+		selected = 0
+		skipIntermediates = true
+	}
 	pHashLists := tree.selectBranch(selected)
 
-	for _, pHashList := range pHashLists {
-		if err := runner.session().PolicyOR(pHashList); err != nil {
-			return err
+	if skipIntermediates {
+		return runner.session().PolicyOR(pHashLists[len(pHashLists)-1])
+	} else {
+		for _, pHashList := range pHashLists {
+			if err := runner.session().PolicyOR(pHashList); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1261,20 +1270,6 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 func (r *policyExecuteRunner) runBranch(branches policyBranches) (selected int, err error) {
 	if len(branches) == 0 {
 		return 0, errors.New("no branches")
-	}
-
-	for _, branch := range branches {
-		found := false
-		for _, digest := range branch.PolicyDigests {
-			if digest.HashAlg != r.sessionAlg {
-				continue
-			}
-
-			found = true
-		}
-		if !found {
-			return 0, ErrMissingDigest
-		}
 	}
 
 	// Select a branch
@@ -1818,7 +1813,7 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 	}
 
 	r.currentPath = r.currentPath.Concat("**")
-	return 0, nil
+	return -1, nil
 }
 
 func (r *policyComputeRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
@@ -2015,7 +2010,6 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 			return 0, err
 		}
 
-		found := false
 		for _, digest := range branch.PolicyDigests {
 			if digest.HashAlg != r.session().HashAlg() {
 				continue
@@ -2024,16 +2018,12 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 			if !bytes.Equal(digest.Digest, computedDigest) {
 				return 0, fmt.Errorf("stored and computed branch digest mismatch for branch %d (computed: %x, stored: %x)", i, computedDigest, digest.Digest)
 			}
-			found = true
 			break
-		}
-		if !found {
-			return 0, ErrMissingDigest
 		}
 	}
 
 	r.currentPath = r.currentPath.Concat("**")
-	return 0, nil
+	return -1, nil
 }
 
 func (r *policyValidateRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
@@ -2389,13 +2379,113 @@ func (r *policyStringifierRunner) authorize(auth ResourceContext, askForPolicy b
 }
 
 func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected int, err error) {
+	var treeDepth int
+	switch {
+	case len(branches) <= 8:
+		treeDepth = 1
+	case len(branches) <= 64:
+		treeDepth = 2
+	case len(branches) <= 512:
+		treeDepth = 3
+	default:
+		treeDepth = 4
+	}
+
+	var digests tpm2.DigestList
+	for _, branch := range branches {
+		var digest tpm2.Digest
+		for _, d := range branch.PolicyDigests {
+			if d.HashAlg != r.session().HashAlg() {
+				continue
+			}
+			digest = d.Digest
+			break
+		}
+		if len(digest) == 0 {
+			return 0, ErrMissingDigest
+		}
+		digests = append(digests, digest)
+	}
+
+	tree, err := newPolicyOrTree(r.session().HashAlg(), digests)
+	if err != nil {
+		return 0, fmt.Errorf("cannot compute PolicyOR tree: %w", err)
+	}
+
 	fmt.Fprintf(r.w, "\n%*s BranchNode {", r.depth*3, "")
+
+	maybeOpenSection := func(i int) {
+		extraDepth := (treeDepth - 1) * 2
+		if treeDepth > 3 && i%512 == 0 {
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-5)*3, "")
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-4)*3, "")
+		}
+		if treeDepth > 2 && i%64 == 0 {
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-3)*3, "")
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-2)*3, "")
+		}
+		if treeDepth > 1 && i%8 == 0 {
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-1)*3, "")
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth)*3, "")
+		}
+	}
+	maybeCloseSection := func(i int, finish bool) error {
+		if i == 0 {
+			return errors.New("invalid index")
+		}
+
+		extraDepth := (treeDepth - 1) * 2
+		digests := tree.selectBranch(i - 1)
+		if treeDepth > 1 && (i%8 == 0 || finish) {
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth)*3, "")
+			if len(digests) > 1 {
+				session := newStringifierPolicySession(r.session().HashAlg(), r.w, r.depth+extraDepth)
+				if err := session.PolicyOR(digests[0]); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-1)*3, "")
+		}
+		if treeDepth > 2 && (i%64 == 0 || finish) {
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-2)*3, "")
+			if len(digests) > 2 {
+				session := newStringifierPolicySession(r.session().HashAlg(), r.w, r.depth+extraDepth-2)
+				if err := session.PolicyOR(digests[0]); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-3)*3, "")
+		}
+		if treeDepth > 4 && (i%512 == 0 || finish) {
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-4)*3, "")
+			if len(digests) > 3 {
+				session := newStringifierPolicySession(r.session().HashAlg(), r.w, r.depth+extraDepth-4)
+				if err := session.PolicyOR(digests[0]); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-5)*3, "")
+		}
+		return nil
+	}
+
+	maybeOpenSection(0)
+
 	for i, branch := range branches {
+		if i > 0 {
+			if err := maybeCloseSection(i, false); err != nil {
+				return 0, fmt.Errorf("internal error: %w", err)
+			}
+			maybeOpenSection(i)
+		}
+
 		err := func() error {
 			origSession := r.policySession
 			origPath := r.currentPath
+			origDepth := r.depth
 
 			r.depth++
+			r.depth += ((treeDepth - 1) * 2)
 			r.policySession = newStringifierPolicySession(r.policySession.HashAlg(), r.w, r.depth)
 			name := string(branch.Name)
 			if len(name) == 0 {
@@ -2403,7 +2493,7 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 			}
 			r.currentPath = r.currentPath.Concat(name)
 			defer func() {
-				r.depth--
+				r.depth = origDepth
 				r.policySession = origSession
 				r.currentPath = origPath
 			}()
@@ -2414,18 +2504,7 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 			}
 			fmt.Fprintf(r.w, " {")
 
-			var digest tpm2.Digest
-			for _, d := range branch.PolicyDigests {
-				if d.HashAlg != r.policySession.HashAlg() {
-					continue
-				}
-				digest = d.Digest
-				break
-			}
-			if len(digest) == 0 {
-				return ErrMissingDigest
-			}
-			fmt.Fprintf(r.w, "\n%*s # digest %v:%#x", r.depth*3, "", r.policySession.HashAlg(), digest)
+			fmt.Fprintf(r.w, "\n%*s # digest %v:%#x", r.depth*3, "", r.policySession.HashAlg(), digests[i])
 
 			if err := r.run(branch.Policy); err != nil {
 				return err
@@ -2438,9 +2517,12 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 			return 0, err
 		}
 	}
+	if err := maybeCloseSection(len(branches), true); err != nil {
+		return 0, fmt.Errorf("internal error: %w", err)
+	}
 	fmt.Fprintf(r.w, "\n%*s }", r.depth*3, "")
 
-	return 0, nil
+	return -1, nil
 }
 
 func (r *policyStringifierRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {

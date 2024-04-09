@@ -816,7 +816,18 @@ func (s *stringifierPolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tp
 }
 
 func (s *stringifierPolicySession) PolicyOR(pHashList tpm2.DigestList) error {
-	return nil
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyOR(", s.depth*3, "")
+	if err != nil {
+		return err
+	}
+	for _, digest := range pHashList {
+		_, err := fmt.Fprintf(s.w, "\n%*s  %#x", s.depth*3, "", digest)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = fmt.Fprintf(s.w, "\n%*s )", s.depth*3, "")
+	return err
 }
 
 func (s *stringifierPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {

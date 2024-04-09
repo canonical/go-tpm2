@@ -425,15 +425,19 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  BranchNode {
    Branch 0 {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     AuthorizedPolicies {
     }
-    PolicyAuthorize(policyRef:, keySign:%#x)
+    PolicyAuthorize(policyRef:, keySign:%#[3]x)
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[2]x
+ )
 }`, expectedDigest, expectedBranchDigest, keySign.Name()))
 	digest, err = builder.Digest()
 	c.Check(digest, DeepEquals, expectedDigest)
@@ -1220,18 +1224,22 @@ func (s *builderSuite) TestPolicyBranches(c *C) {
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     PolicyAuthValue()
    }
    Branch 1 (branch2) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[3]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[3]x
+ )
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigest, pHashList[0], pHashList[1]))
 	digest, err = builder.Digest()
@@ -1466,28 +1474,36 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     PolicyAuthValue()
    }
    Branch 1 (branch2) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[3]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[3]x
+ )
  BranchNode {
    Branch 0 (branch3) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[4]x
     PolicyCommandCode(TPM_CC_NV_ChangeAuth)
    }
    Branch 1 (branch4) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[5]x
     PolicyCommandCode(TPM_CC_NV_WriteLock)
    }
  }
+ PolicyOR(
+  %#[4]x
+  %#[5]x
+ )
 }`, expectedDigest, pHashList1[0], pHashList1[1], pHashList2[0], pHashList2[1]))
 	digest, err = builder.Digest()
 	c.Check(digest, DeepEquals, expectedDigest)
@@ -1654,39 +1670,212 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     PolicyAuthValue()
     BranchNode {
       Branch 0 (branch2) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[3]x
        PolicyCommandCode(TPM_CC_NV_ChangeAuth)
       }
       Branch 1 (branch3) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[4]x
        PolicyCommandCode(TPM_CC_NV_WriteLock)
       }
     }
+    PolicyOR(
+     %#[3]x
+     %#[4]x
+    )
    }
    Branch 1 (branch4) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[5]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
     BranchNode {
       Branch 0 (branch5) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[6]x
        PolicyCommandCode(TPM_CC_NV_ChangeAuth)
       }
       Branch 1 (branch6) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[7]x
        PolicyCommandCode(TPM_CC_NV_WriteLock)
       }
     }
+    PolicyOR(
+     %#[6]x
+     %#[7]x
+    )
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[5]x
+ )
 }`, expectedDigest, pHashList1[0], pHashList2[0], pHashList2[1], pHashList1[1], pHashList3[0], pHashList3[1]))
 	digest, err = builder.Digest()
 	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *builderSuite) TestPolicyBranchesMoreThanEight(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	authKey, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+
+	node := builder.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	node.AddBranch("").PolicyAuthValue()
+	node.AddBranch("").PolicyPassword()
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandleEndorsement), []byte("foo"))
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandlePlatform), []byte("foo"))
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandleLockout), []byte("foo"))
+	node.AddBranch("").PolicyCommandCode(tpm2.CommandNVRead)
+	node.AddBranch("").PolicyCommandCode(tpm2.CommandPolicyNV)
+	node.AddBranch("").PolicyAuthorize([]byte("foo"), authKey)
+
+	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "357ff2e053e2e5869fd96d9f063e00d61c740802332fd1e44e67ab443c6d1fdb"))
+	expectedBranchDigests := tpm2.DigestList{
+		internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
+		internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
+		internal_testutil.DecodeHexString(c, "62fd94980db2a746545cab626e9df21a1d0f00472f637d4bf567026e40a6ebed"),
+		internal_testutil.DecodeHexString(c, "2c5b145496a4c18c7c93c9cf1143396d18167dcc18affa07ae0a98c0a80c5a82"),
+		internal_testutil.DecodeHexString(c, "43aeb5b5951cbdc33ae50185870b1cf8576abcb3ec51aa92bda92880a3219054"),
+		internal_testutil.DecodeHexString(c, "97ab4c24a2a7b67ffdaf69433118adb27edfeabc3bfb152ae7bb07362977ff00"),
+		internal_testutil.DecodeHexString(c, "47ce3032d8bad1f3089cb0c09088de43501491d460402b90cd1b7fc0b68ca92f"),
+		internal_testutil.DecodeHexString(c, "203e4bd5d0448c9615cc13fa18e8d39222441cc40204d99a77262068dbd55a43"),
+		internal_testutil.DecodeHexString(c, "3c8876f373f0ca06738973156ca12d324f382990fda581027a1b557048c83dd0"),
+	}
+
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}}, nil,
+		NewMockPolicyORElement(
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[0]}},
+				NewMockPolicyAuthValueElement(),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[1]}},
+				NewMockPolicyPasswordElement(),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[2]}},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[3]}},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleEndorsement), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[4]}},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandlePlatform), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[5]}},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleLockout), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[6]}},
+				NewMockPolicyCommandCodeElement(tpm2.CommandNVRead),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[7]}},
+				NewMockPolicyCommandCodeElement(tpm2.CommandPolicyNV),
+			),
+			NewMockPolicyBranch(
+				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[8]}},
+				NewMockPolicyAuthorizeElement([]byte("foo"), authKey),
+			),
+		),
+	)
+	digest, policy, err := builder.Policy()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#[1]x
+ BranchNode {
+    {
+       {
+         Branch 0 {
+          # digest TPM_ALG_SHA256:%#[2]x
+          PolicyAuthValue()
+         }
+         Branch 1 {
+          # digest TPM_ALG_SHA256:%#[3]x
+          PolicyPassword()
+         }
+         Branch 2 {
+          # digest TPM_ALG_SHA256:%#[4]x
+          PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
+         }
+         Branch 3 {
+          # digest TPM_ALG_SHA256:%#[5]x
+          PolicySecret(authObject:0x4000000b, policyRef:0x666f6f)
+         }
+         Branch 4 {
+          # digest TPM_ALG_SHA256:%#[6]x
+          PolicySecret(authObject:0x4000000c, policyRef:0x666f6f)
+         }
+         Branch 5 {
+          # digest TPM_ALG_SHA256:%#[7]x
+          PolicySecret(authObject:0x4000000a, policyRef:0x666f6f)
+         }
+         Branch 6 {
+          # digest TPM_ALG_SHA256:%#[8]x
+          PolicyCommandCode(TPM_CC_NV_Read)
+         }
+         Branch 7 {
+          # digest TPM_ALG_SHA256:%#[9]x
+          PolicyCommandCode(TPM_CC_PolicyNV)
+         }
+       }
+       PolicyOR(
+        %#[2]x
+        %#[3]x
+        %#[4]x
+        %#[5]x
+        %#[6]x
+        %#[7]x
+        %#[8]x
+        %#[9]x
+       )
+    }
+    {
+       {
+         Branch 8 {
+          # digest TPM_ALG_SHA256:%#[10]x
+          AuthorizedPolicies {
+          }
+          PolicyAuthorize(policyRef:0x666f6f, keySign:%#[11]x)
+         }
+       }
+       PolicyOR(
+        %#[10]x
+        %#[10]x
+       )
+    }
+ }
+ PolicyOR(
+  0x04534b013d88e1b9fa41d631a62d99539cb0182c31be15110f7d5073f2ddb46e
+  0x8395a82161cdfd3f7ff0e663270f19d59a55fb3d9a9f6c7168e3a78d42ad47cc
+ )
+}`, expectedDigest, expectedBranchDigests[0], expectedBranchDigests[1], expectedBranchDigests[2], expectedBranchDigests[3], expectedBranchDigests[4], expectedBranchDigests[5], expectedBranchDigests[6], expectedBranchDigests[7], expectedBranchDigests[8], authKey.Name()))
+	fmt.Println(policy)
 }
