@@ -3367,12 +3367,12 @@ func (s *policySuite) TestPolicyBranchesMissingBranchDigests(c *C) {
 	}
 
 	_, err = policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, params)
-	c.Check(err, ErrorMatches, `cannot run 'branch node' task in root branch: missing digest for session algorithm`)
+	c.Check(err, ErrorMatches, `cannot run 'branch node' task in branch 'branch1': missing digest for session algorithm`)
 	c.Check(err, internal_testutil.ErrorIs, ErrMissingDigest)
 
 	var pe *PolicyError
 	c.Assert(err, internal_testutil.ErrorAs, &pe)
-	c.Check(pe.Path, Equals, "")
+	c.Check(pe.Path, Equals, "branch1")
 }
 
 func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {

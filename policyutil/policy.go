@@ -111,7 +111,7 @@ func makePolicyError(err error, path policyBranchPath, task string) *PolicyError
 func (e *PolicyError) Error() string {
 	branch := "root branch"
 	if len(e.Path) > 0 {
-		branch = "branch " + e.Path
+		branch = "branch '" + e.Path + "'"
 	}
 	return fmt.Sprintf("cannot run '%s' task in %s: %v", e.task, branch, e.err)
 }
