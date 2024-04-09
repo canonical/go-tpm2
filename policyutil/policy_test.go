@@ -2527,7 +2527,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage1(c *C) {
 
 func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).WithoutAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -2547,7 +2547,7 @@ func (s *policySuite) TestPolicyBranchAutoSelectWithUsage2(c *C) {
 
 func (s *policySuite) TestPolicyBranchAutoSelectWithUsageAndIgnore(c *C) {
 	s.testPolicyBranches(c, &testExecutePolicyBranchesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).WithoutAuthValue(),
 		ignoreAuthorizations: []PolicyAuthorizationID{
 			{AuthName: tpm2.MakeHandleName(tpm2.HandleOwner), PolicyRef: []byte("foo")},
 		},
@@ -2821,7 +2821,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage2(c *C) 
 
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWithUsage3(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)), tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVWriteLock, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)), tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}).WithoutAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -2883,7 +2883,7 @@ func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard1(c *C) {
 func (s *policySuite) TestPolicyBranchesMultipleNodesAutoSelectWildcard2(c *C) {
 	s.testPolicyBranchesMultipleNodes(c, &testExecutePolicyBranchesMultipleNodesData{
 		path:  "*/branch4",
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).WithoutAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3183,7 +3183,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage2(c *C) 
 
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWithUsage3(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).WithoutAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3222,7 +3222,7 @@ func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard1(c *C) {
 func (s *policySuite) TestPolicyBranchesEmbeddedNodesAutoSelectWildcard2(c *C) {
 	s.testPolicyBranchesEmbeddedNodes(c, &testExecutePolicyBranchesEmbeddedNodesData{
 		path:  "*/branch6",
-		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).NoAuthValue(),
+		usage: NewPolicySessionUsage(tpm2.CommandNVChangeAuth, []NamedHandle{tpm2.NewLimitedResourceContext(0x01000000, append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...))}, tpm2.Auth("foo")).WithoutAuthValue(),
 		expectedCommands: tpm2.CommandCodeList{
 			tpm2.CommandPolicyNvWritten,
 			tpm2.CommandContextSave,
@@ -3434,6 +3434,7 @@ type testExecutePolicyDuplicationSelectData struct {
 	object        Named
 	newParent     Named
 	includeObject bool
+	usage         *PolicySessionUsage
 }
 
 func (s *policySuite) testPolicyDuplicationSelect(c *C, data *testExecutePolicyDuplicationSelectData) {
@@ -3444,7 +3445,7 @@ func (s *policySuite) testPolicyDuplicationSelect(c *C, data *testExecutePolicyD
 
 	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
 
-	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, nil)
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, &PolicyExecuteParams{Usage: data.usage})
 	c.Assert(err, IsNil)
 	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
 	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
@@ -3457,8 +3458,15 @@ func (s *policySuite) testPolicyDuplicationSelect(c *C, data *testExecutePolicyD
 	c.Check(set, internal_testutil.IsFalse)
 	nameHash, set := result.NameHash()
 	c.Check(set, internal_testutil.IsTrue)
-	expectedNameHash, err := ComputeNameHash(tpm2.HashAlgorithmSHA256, data.object.Name(), data.newParent.Name())
-	c.Assert(err, IsNil)
+	var expectedNameHash tpm2.Digest
+	if data.object != nil {
+		expectedNameHash, err = ComputeNameHash(tpm2.HashAlgorithmSHA256, data.object.Name(), data.newParent.Name())
+		c.Assert(err, IsNil)
+	} else {
+		c.Assert(data.usage, NotNil)
+		expectedNameHash, err = data.usage.NameHash(tpm2.HashAlgorithmSHA256)
+		c.Assert(err, IsNil)
+	}
 	c.Check(nameHash, DeepEquals, expectedNameHash)
 	_, set = result.NvWritten()
 	c.Check(set, internal_testutil.IsFalse)
@@ -3496,6 +3504,22 @@ func (s *policySuite) TestPolicyDuplicationSelectNoIncludeObject(c *C) {
 		object:        object,
 		newParent:     newParent,
 		includeObject: false})
+}
+
+func (s *policySuite) TestPolicyDuplicationSelectNoIncludeObjectName(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	object := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+
+	h = crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+
+	s.testPolicyDuplicationSelect(c, &testExecutePolicyDuplicationSelectData{
+		newParent:     newParent,
+		includeObject: false,
+		usage:         NewPolicySessionUsage(tpm2.CommandDuplicate, []NamedHandle{tpm2.NewLimitedResourceContext(0x80000000, object), tpm2.NewLimitedResourceContext(0x80000001, newParent)}, tpm2.Data{}, tpm2.SymDefObject{Algorithm: tpm2.SymObjectAlgorithmNull}),
+	})
 }
 
 func (s *policySuite) TestPolicyDuplicationSelectDifferentNames(c *C) {

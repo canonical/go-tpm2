@@ -897,9 +897,13 @@ func (s *builderSuite) testPolicyDuplicationSelect(c *C, data *testBuildPolicyDu
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
+	var objectName tpm2.Name
+	if data.object != nil {
+		objectName = data.object.Name()
+	}
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: data.expectedDigest}}, nil,
-		NewMockPolicyDuplicationSelectElement(data.object.Name(), data.newParent.Name(), data.includeObject))
+		NewMockPolicyDuplicationSelectElement(objectName, data.newParent.Name(), data.includeObject))
 
 	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -909,7 +913,7 @@ func (s *builderSuite) testPolicyDuplicationSelect(c *C, data *testBuildPolicyDu
 Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyDuplicationSelect(objectName:%#x, newParentName:%#x, includeObject:%t)
-}`, data.expectedDigest, data.object.Name(), data.newParent.Name(), data.includeObject))
+}`, data.expectedDigest, objectName, data.newParent.Name(), data.includeObject))
 	digest, err = builder.Digest()
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
@@ -946,6 +950,17 @@ func (s *builderSuite) TestPolicyDuplicationSelectNoIncludeObject(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "a9ceacb309fb05bdc45784f0647641bcd2f3a05a10ed94c5525413c7da33234e")})
 }
 
+func (s *builderSuite) TestPolicyDuplicationSelectNoIncludeObjectName(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+
+	s.testPolicyDuplicationSelect(c, &testBuildPolicyDuplicationSelectData{
+		newParent:      newParent,
+		includeObject:  false,
+		expectedDigest: internal_testutil.DecodeHexString(c, "a9ceacb309fb05bdc45784f0647641bcd2f3a05a10ed94c5525413c7da33234e")})
+}
+
 func (s *builderSuite) TestPolicyDuplicationSelectDifferentNames(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "bar")
@@ -971,8 +986,24 @@ func (s *builderSuite) TestPolicyDuplicationSelectInvalidNewParentName(c *C) {
 }
 
 func (s *builderSuite) TestPolicyDuplicationSelectInvalidObjectName(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	_, err := builder.RootBranch().PolicyDuplicationSelect(tpm2.Name{0, 0}, nil, true)
+	_, err := builder.RootBranch().PolicyDuplicationSelect(tpm2.Name{0, 0}, newParent, true)
+	c.Check(err, ErrorMatches, `invalid object name`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyDuplicationSelect: invalid object name`)
+}
+
+func (s *builderSuite) TestPolicyDuplicationSelectMissingObjectName(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.Raw(h.Sum(nil))))
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyDuplicationSelect(nil, newParent, true)
 	c.Check(err, ErrorMatches, `invalid object name`)
 	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyDuplicationSelect: invalid object name`)

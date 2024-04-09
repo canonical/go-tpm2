@@ -32,6 +32,10 @@ func (r *policyBuilderBranchRunner) resources() policyResources {
 	return &r.policyResources
 }
 
+func (r *policyBuilderBranchRunner) authResourceName() tpm2.Name {
+	return nil
+}
+
 func (*policyBuilderBranchRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
@@ -262,7 +266,7 @@ func (b *PolicyBuilderBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 	}
 
 	authObjectName := authObject.Name()
-	if !authObjectName.IsValid() {
+	if len(authObjectName) == 0 || !authObjectName.IsValid() {
 		return nil, b.policy.fail("PolicySecret", errors.New("invalid authObject name"))
 	}
 
@@ -292,7 +296,7 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 	}
 
 	authKeyName := authKey.Name()
-	if !authKeyName.IsValid() {
+	if len(authKeyName) == 0 || !authKeyName.IsValid() {
 		return nil, b.policy.fail("PolicySigned", errors.New("invalid authKey"))
 	}
 
@@ -536,9 +540,14 @@ func (b *PolicyBuilderBranch) PolicyPCR(values tpm2.PCRValues) (tpm2.Digest, err
 }
 
 // PolicyDuplicationSelect adds a TPM2_PolicyDuplicationSelect assertion to this branch in order
-// to permit duplication of object to newParent with the [tpm2.TPMContext.Duplicate] function. Note
-// that object must be supplied even if includeObject is false because the assertion sets the name
-// hash of the session context to restrict the usage of the session to the specified pair of objects.
+// to permit duplication of object to newParent with the [tpm2.TPMContext.Duplicate] function.
+// If includeObject is true, then the assertion is bound to both object and newParent. If
+// includeObject is false then the assertion is only bound to newParent. In this case, supplying
+// object is optional. Note that when the TPM2_PolicyDuplicationSelect assertions is executed,
+// the object name must be supplied because the assertion sets the name hash of the session. If
+// object is supplied here, then it will be included in the policy and used when the assertion is
+// executed. If it isn't supplied here, then it will be obtained from the [PolicySessionUsage]
+// supplied to [Policy.Execute].
 func (b *PolicyBuilderBranch) PolicyDuplicationSelect(object, newParent Named, includeObject bool) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return nil, b.policy.fail("PolicyDuplicationSelect", err)
@@ -547,15 +556,16 @@ func (b *PolicyBuilderBranch) PolicyDuplicationSelect(object, newParent Named, i
 	var objectName tpm2.Name
 	if object != nil {
 		objectName = object.Name()
-		if !objectName.IsValid() {
-			return nil, b.policy.fail("PolicyDuplicationSelect", errors.New("invalid object name"))
-		}
 	}
+	if (includeObject && len(objectName) == 0) || !objectName.IsValid() {
+		return nil, b.policy.fail("PolicyDuplicationSelect", errors.New("invalid object name"))
+	}
+
 	var newParentName tpm2.Name
 	if newParent != nil {
 		newParentName = newParent.Name()
 	}
-	if newParentName.Type() == tpm2.NameTypeNone || !newParentName.IsValid() {
+	if len(newParentName) == 0 || !newParentName.IsValid() {
 		return nil, b.policy.fail("PolicyDuplicationSelect", errors.New("invalid newParent name"))
 	}
 

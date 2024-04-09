@@ -276,6 +276,7 @@ type policyRunner interface {
 	tickets() policyTickets
 	resources() policyResources
 
+	authResourceName() tpm2.Name
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
 	authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
@@ -775,7 +776,11 @@ type policyDuplicationSelectElement struct {
 func (*policyDuplicationSelectElement) name() string { return "TPM2_PolicyDuplicationSelect assertion" }
 
 func (e *policyDuplicationSelectElement) run(runner policyRunner) error {
-	return runner.session().PolicyDuplicationSelect(e.Object, e.NewParent, e.IncludeObject)
+	object := e.Object
+	if len(object) == 0 && !e.IncludeObject {
+		object = runner.authResourceName()
+	}
+	return runner.session().PolicyDuplicationSelect(object, e.NewParent, e.IncludeObject)
 }
 
 type policyPasswordElement struct{}
@@ -1094,6 +1099,13 @@ func (r *policyExecuteRunner) tickets() policyTickets {
 
 func (r *policyExecuteRunner) resources() policyResources {
 	return r.policyResources
+}
+
+func (r *policyExecuteRunner) authResourceName() tpm2.Name {
+	if r.usage == nil {
+		return nil
+	}
+	return r.usage.handles[r.usage.authIndex].Name()
 }
 
 func (r *policyExecuteRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
@@ -1421,11 +1433,46 @@ func (u *PolicySessionUsage) WithAuthIndex(index uint8) *PolicySessionUsage {
 	return u
 }
 
-// NoAuthValue indicates that the policy session is being used to authorize a
+// WithoutAuthValue indicates that the policy session is being used to authorize a
 // resource that the authorization value cannot be determined for.
-func (u *PolicySessionUsage) NoAuthValue() *PolicySessionUsage {
+func (u *PolicySessionUsage) WithoutAuthValue() *PolicySessionUsage {
 	u.noAuthValue = true
 	return u
+}
+
+// CommandCode returns the command code for this usage.
+func (u PolicySessionUsage) CommandCode() tpm2.CommandCode {
+	return u.commandCode
+}
+
+// CpHash returns the command parameter hash for this usage for the specified session
+// algorithm.
+func (u PolicySessionUsage) CpHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	var handleNames []Named
+	for _, handle := range u.handles {
+		handleNames = append(handleNames, handle)
+	}
+	return ComputeCpHash(alg, u.commandCode, handleNames, u.params...)
+}
+
+// NameHash returns the name hash for this usage for the specified session algorithm.
+func (u PolicySessionUsage) NameHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	var handleNames []Named
+	for _, handle := range u.handles {
+		handleNames = append(handleNames, handle)
+	}
+	return ComputeNameHash(alg, handleNames...)
+}
+
+// AllowAuthValue indicates whether this usage permits use of the auth value for the
+// resource being authorized.
+func (u PolicySessionUsage) AllowAuthValue() bool {
+	return !u.noAuthValue
+}
+
+// AuthHandle returns the handle for the resource being authorized.
+func (u PolicySessionUsage) AuthHandle() NamedHandle {
+	return u.handles[u.authIndex]
 }
 
 // PolicyAuthorizationID contains an identifier for a TPM2_PolicySecret,
@@ -1709,6 +1756,10 @@ func (r *policyComputeRunner) resources() policyResources {
 	return &r.policyResources
 }
 
+func (r *policyComputeRunner) authResourceName() tpm2.Name {
+	return nil
+}
+
 func (r *policyComputeRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
@@ -1916,6 +1967,10 @@ func (r *policyValidateRunner) tickets() policyTickets {
 
 func (r *policyValidateRunner) resources() policyResources {
 	return &r.policyResources
+}
+
+func (r *policyValidateRunner) authResourceName() tpm2.Name {
+	return nil
 }
 
 func (r *policyValidateRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
@@ -2317,6 +2372,10 @@ func (r *policyStringifierRunner) tickets() policyTickets {
 
 func (r *policyStringifierRunner) resources() policyResources {
 	return r.policyResources
+}
+
+func (r *policyStringifierRunner) authResourceName() tpm2.Name {
+	return nil
 }
 
 func (r *policyStringifierRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
