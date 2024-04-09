@@ -1078,6 +1078,124 @@ func (s *builderSuite) TestPolicyNvWrittenTrue(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "f7887d158ae8d38be0ac5319f37a9e07618bf54885453c7a54ddb0c6a6193beb")})
 }
 
+type testBuildPolicyORData struct {
+	alg            tpm2.HashAlgorithmId
+	pHashList      tpm2.DigestList
+	expectedDigest tpm2.Digest
+}
+
+func (s *builderSuite) testPolicyOR(c *C, data *testBuildPolicyORData) {
+	builder := NewPolicyBuilder(data.alg)
+	digest, err := builder.RootBranch().PolicyOR(data.pHashList...)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
+
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: data.alg, Digest: data.expectedDigest}}, nil,
+		NewMockPolicyRawORElement(data.pHashList))
+
+	digest, policy, err := builder.Policy()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+
+	var orDigests string
+	for _, digest := range data.pHashList {
+		orDigests += fmt.Sprintf("\n  %#x", digest)
+	}
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest %v:%#x
+ PolicyOR(%s
+ )
+}`, data.alg, data.expectedDigest, orDigests))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
+	c.Logf("%x", digest)
+}
+
+func (s *builderSuite) TestPolicyOR(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testBuildPolicyORData{
+		alg:            tpm2.HashAlgorithmSHA256,
+		pHashList:      tpm2.DigestList{digest1, digest2},
+		expectedDigest: internal_testutil.DecodeHexString(c, "c00c6d95b4a744adc22a95ea83771a700464423ce66ff64733469eb6da324085"),
+	})
+}
+
+func (s *builderSuite) TestPolicyORDifferentDigests(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo2")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA256.New()
+	io.WriteString(h, "bar2")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testBuildPolicyORData{
+		alg:            tpm2.HashAlgorithmSHA256,
+		pHashList:      tpm2.DigestList{digest1, digest2},
+		expectedDigest: internal_testutil.DecodeHexString(c, "20b175204dcda0f1bc6eea7687e7c90821e4dd991ea9d906b7f9628c476b06b6"),
+	})
+}
+
+func (s *builderSuite) TestPolicyORNotEnoughDigests(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyOR(make(tpm2.Digest, 32))
+	c.Check(err, ErrorMatches, `invalid number of digests`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyOR: invalid number of digests`)
+}
+
+func (s *builderSuite) TestPolicyORTooManyDigests(c *C) {
+	digest := make(tpm2.Digest, 32)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyOR(digest, digest, digest, digest, digest, digest, digest, digest, digest)
+	c.Check(err, ErrorMatches, `invalid number of digests`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyOR: invalid number of digests`)
+}
+
+func (s *builderSuite) TestPolicyORInvalidDigestSize(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA1.New()
+	io.WriteString(h, "bar")
+	digest2 := h.Sum(nil)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyOR(digest1, digest2)
+	c.Check(err, ErrorMatches, `digest at index 1 has the wrong size`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyOR: digest at index 1 has the wrong size`)
+}
+
+func (s *builderSuite) TestPolicyORSHA1(c *C) {
+	h := crypto.SHA1.New()
+	io.WriteString(h, "foo")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA1.New()
+	io.WriteString(h, "bar")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testBuildPolicyORData{
+		alg:            tpm2.HashAlgorithmSHA1,
+		pHashList:      tpm2.DigestList{digest1, digest2},
+		expectedDigest: internal_testutil.DecodeHexString(c, "790924ef04397586334d3d315f26fd6a8e105710"),
+	})
+}
+
 func (s *builderSuite) TestModifyFailedBranch(c *C) {
 	// XXX: Note that this only tests one method - this should be expanded to test all
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)

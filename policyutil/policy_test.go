@@ -3614,6 +3614,74 @@ func (s *policySuite) TestPolicyNvWrittenTrue(c *C) {
 	s.testPolicyNvWritten(c, true)
 }
 
+type testExecutePolicyORData struct {
+	policy    *Policy
+	pHashList tpm2.DigestList
+}
+
+func (s *policySuite) testPolicyOR(c *C, data *testExecutePolicyORData) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyOR(data.pHashList...)
+	expectedDigest, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	_, err = data.policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, nil)
+	c.Check(err, IsNil)
+
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, nil)
+	c.Assert(err, IsNil)
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
+	c.Check(result.Path, Equals, "")
+	_, set := result.CommandCode()
+	c.Check(set, internal_testutil.IsFalse)
+	_, set = result.CpHash()
+	c.Check(set, internal_testutil.IsFalse)
+	_, set = result.NameHash()
+	c.Check(set, internal_testutil.IsFalse)
+	_, set = result.NvWritten()
+	c.Check(set, internal_testutil.IsFalse)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *policySuite) TestPolicyOR(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyAuthValue()
+	digest1, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testExecutePolicyORData{
+		policy:    policy,
+		pHashList: tpm2.DigestList{digest1, digest2},
+	})
+}
+
+func (s *policySuite) TestPolicyORDifferentDigests(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyAuthValue()
+	digest1, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	h := crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testExecutePolicyORData{
+		policy:    policy,
+		pHashList: tpm2.DigestList{digest2, digest1},
+	})
+}
+
 func (s *policySuiteNoTPM) TestPolicyDetails(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
 

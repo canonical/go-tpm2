@@ -636,6 +636,44 @@ func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) (tpm2.Digest, err
 	return digest, nil
 }
 
+// PolicyOR adds a TPM2_PolicyOR assertion to this branch for low-level control of policies
+// that can be satisfied with different sets of conditions. This is to makeit possible to
+// use this API to compute digests of policies with branches without having to use the
+// [Policy] API to execute them, or to build policies with branches with low-level control
+// of branch execution by manually executing a sequence of [Policy] instances corresponding
+// to each branch.  Applications that use [Policy] for execution should normally just make
+// use of [PolicyBuilderBranch.AddBranchNode] and [PolicyBuilderBranchNode.AddBranch] for
+// constructing policies with branches though.
+func (b *PolicyBuilderBranch) PolicyOR(pHashList ...tpm2.Digest) (tpm2.Digest, error) {
+	if err := b.prepareToModifyBranch(); err != nil {
+		return nil, b.policy.fail("PolicyOR", err)
+	}
+
+	if len(pHashList) < 2 || len(pHashList) > 8 {
+		return nil, b.policy.fail("PolicyOR", errors.New("invalid number of digests"))
+	}
+	for i, digest := range pHashList {
+		if len(digest) != b.alg().Size() {
+			return nil, b.policy.fail("PolicyOR", fmt.Errorf("digest at index %d has the wrong size", i))
+		}
+	}
+
+	element := &policyElement{
+		Type: commandRawPolicyOR,
+		Details: &policyElementDetails{
+			RawOR: &policyRawORElement{HashList: pHashList}}}
+	if err := element.runner().run(&b.runner); err != nil {
+		return nil, b.policy.fail("PolicyOR", fmt.Errorf("internal error: %w", err))
+	}
+	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
+
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyOR", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
+}
+
 // AddBranchNode adds a branch node to this branch from which sub-branches can be added.
 // This makes it possible to create policies that can be satisified with different sets of
 // conditions. One of the sub-branches will be selected during execution, and will be
