@@ -73,9 +73,13 @@ func newPolicyOrTree(alg tpm2.HashAlgorithmId, digests tpm2.DigestList) (out *po
 
 			// Consume the next n digests to fit in to this node and produce a single digest
 			// that will go in to the parent node.
-			trial := newComputePolicySession(&taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())})
+			trial := newComputePolicySession(alg, nil, true)
 			trial.PolicyOR(node.digests)
-			nextDigests = append(nextDigests, trial.digest.Digest)
+			nextDigest, err := trial.PolicyGetDigest()
+			if err != nil {
+				return nil, err
+			}
+			nextDigests = append(nextDigests, nextDigest)
 
 			// We've consumed n digests, so adjust the slice to point to the next ones to consume to
 			// produce a sibling node.
@@ -108,7 +112,7 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 	node := t.leafNodes[i>>3]
 
 	for node != nil {
-		out = append(out, ensureSufficientORDigests(node.digests))
+		out = append(out, node.digests)
 		node = node.parent
 	}
 
@@ -206,18 +210,14 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 
 	for p, d := range s.detailsMap {
 		code, set := d.CommandCode()
-		if set && code != s.usage.commandCode {
+		if set && code != s.usage.CommandCode() {
 			delete(s.detailsMap, p)
 			continue
 		}
 
 		cpHash, set := d.CpHash()
 		if set {
-			var handleNames []Named
-			for _, handle := range s.usage.handles {
-				handleNames = append(handleNames, handle)
-			}
-			usageCpHash, err := ComputeCpHash(s.sessionAlg, s.usage.commandCode, handleNames, s.usage.params...)
+			usageCpHash, err := s.usage.CpHash(s.sessionAlg)
 			if err != nil {
 				return fmt.Errorf("cannot obtain cpHash from usage parameters: %w", err)
 			}
@@ -229,11 +229,7 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 
 		nameHash, set := d.NameHash()
 		if set {
-			var handleNames []Named
-			for _, handle := range s.usage.handles {
-				handleNames = append(handleNames, handle)
-			}
-			usageNameHash, err := ComputeNameHash(s.sessionAlg, handleNames...)
+			usageNameHash, err := s.usage.NameHash(s.sessionAlg)
 			if err != nil {
 				return fmt.Errorf("cannot obtain nameHash from usage parameters: %w", err)
 			}
@@ -243,14 +239,14 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 			}
 		}
 
-		if d.AuthValueNeeded && s.usage.noAuthValue {
+		if d.AuthValueNeeded && !s.usage.AllowAuthValue() {
 			delete(s.detailsMap, p)
 			continue
 		}
 
 		nvWritten, set := d.NvWritten()
 		if set {
-			authHandle := s.usage.handles[s.usage.authIndex]
+			authHandle := s.usage.AuthHandle()
 			if authHandle.Handle().Type() != tpm2.HandleTypeNVIndex {
 				delete(s.detailsMap, p)
 				continue
@@ -543,7 +539,7 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 
 				rc := tpm2.NewLimitedResourceContext(nv.Index, nv.Name)
 				params := &PolicyExecuteParams{
-					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []NamedHandle{rc, rc}, uint16(len(nv.OperandB)), nv.Offset).NoAuthValue(),
+					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []NamedHandle{rc, rc}, uint16(len(nv.OperandB)), nv.Offset).WithoutAuthValue(),
 				}
 
 				resources := new(nullPolicyResources)
@@ -846,6 +842,10 @@ func (w *treeWalker) tickets() policyTickets {
 
 func (w *treeWalker) resources() policyResources {
 	return w.policyResources
+}
+
+func (r *treeWalker) authResourceName() tpm2.Name {
+	return nil
 }
 
 func (w *treeWalker) loadExternal(public *tpm2.Public) (ResourceContext, error) {

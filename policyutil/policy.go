@@ -7,7 +7,6 @@ package policyutil
 import (
 	"bytes"
 	"crypto"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -277,9 +276,8 @@ type policyRunner interface {
 	tickets() policyTickets
 	resources() policyResources
 
+	authResourceName() tpm2.Name
 	loadExternal(public *tpm2.Public) (ResourceContext, error)
-	cpHash(cpHash *policyCpHashElement) error
-	nameHash(nameHash *policyNameHashElement) error
 	authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
 	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
@@ -603,9 +601,6 @@ type policyCpHashElement struct {
 func (*policyCpHashElement) name() string { return "TPM2_PolicyCpHash assertion" }
 
 func (e *policyCpHashElement) run(runner policyRunner) error {
-	if err := runner.cpHash(e); err != nil {
-		return err
-	}
 	return runner.session().PolicyCpHash(e.Digest)
 }
 
@@ -616,9 +611,6 @@ type policyNameHashElement struct {
 func (*policyNameHashElement) name() string { return "TPM2_PolicyNameHash assertion" }
 
 func (e *policyNameHashElement) run(runner policyRunner) error {
-	if err := runner.nameHash(e); err != nil {
-		return err
-	}
 	return runner.session().PolicyNameHash(e.Digest)
 }
 
@@ -694,7 +686,7 @@ func (e *policyORElement) run(runner policyRunner) error {
 			break
 		}
 		if !found {
-			digests = append(digests, make([]byte, runner.session().HashAlg().Size()))
+			return ErrMissingDigest
 		}
 	}
 
@@ -703,11 +695,20 @@ func (e *policyORElement) run(runner policyRunner) error {
 		return fmt.Errorf("cannot compute PolicyOR tree: %w", err)
 	}
 
+	skipIntermediates := false
+	if selected < 0 {
+		selected = 0
+		skipIntermediates = true
+	}
 	pHashLists := tree.selectBranch(selected)
 
-	for _, pHashList := range pHashLists {
-		if err := runner.session().PolicyOR(pHashList); err != nil {
-			return err
+	if skipIntermediates {
+		return runner.session().PolicyOR(pHashLists[len(pHashLists)-1])
+	} else {
+		for _, pHashList := range pHashLists {
+			if err := runner.session().PolicyOR(pHashList); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -760,7 +761,11 @@ type policyDuplicationSelectElement struct {
 func (*policyDuplicationSelectElement) name() string { return "TPM2_PolicyDuplicationSelect assertion" }
 
 func (e *policyDuplicationSelectElement) run(runner policyRunner) error {
-	return runner.session().PolicyDuplicationSelect(e.Object, e.NewParent, e.IncludeObject)
+	object := e.Object
+	if len(object) == 0 && !e.IncludeObject {
+		object = runner.authResourceName()
+	}
+	return runner.session().PolicyDuplicationSelect(object, e.NewParent, e.IncludeObject)
 }
 
 type policyPasswordElement struct{}
@@ -1171,6 +1176,13 @@ func (r *policyExecuteRunner) resources() policyResources {
 	return r.policyResources
 }
 
+func (r *policyExecuteRunner) authResourceName() tpm2.Name {
+	if r.usage == nil {
+		return nil
+	}
+	return r.usage.handles[r.usage.authIndex].Name()
+}
+
 func (r *policyExecuteRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	if public.IsAsymmetric() {
 		return r.tpm.LoadExternal(nil, public, tpm2.HandleOwner)
@@ -1185,14 +1197,6 @@ func (r *policyExecuteRunner) loadExternal(public *tpm2.Public) (ResourceContext
 	}
 
 	return r.tpm.LoadExternal(sensitive, public, tpm2.HandleNull)
-}
-
-func (r *policyExecuteRunner) cpHash(cpHash *policyCpHashElement) error {
-	return nil
-}
-
-func (r *policyExecuteRunner) nameHash(nameHash *policyNameHashElement) error {
-	return nil
 }
 
 func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (sessionOut SessionContext, err error) {
@@ -1332,20 +1336,6 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 func (r *policyExecuteRunner) runBranch(branches policyBranches) (selected int, err error) {
 	if len(branches) == 0 {
 		return 0, errors.New("no branches")
-	}
-
-	for _, branch := range branches {
-		found := false
-		for _, digest := range branch.PolicyDigests {
-			if digest.HashAlg != r.sessionAlg {
-				continue
-			}
-
-			found = true
-		}
-		if !found {
-			return 0, ErrMissingDigest
-		}
 	}
 
 	// Select a branch
@@ -1504,11 +1494,46 @@ func (u *PolicySessionUsage) WithAuthIndex(index uint8) *PolicySessionUsage {
 	return u
 }
 
-// NoAuthValue indicates that the policy session is being used to authorize a
+// WithoutAuthValue indicates that the policy session is being used to authorize a
 // resource that the authorization value cannot be determined for.
-func (u *PolicySessionUsage) NoAuthValue() *PolicySessionUsage {
+func (u *PolicySessionUsage) WithoutAuthValue() *PolicySessionUsage {
 	u.noAuthValue = true
 	return u
+}
+
+// CommandCode returns the command code for this usage.
+func (u PolicySessionUsage) CommandCode() tpm2.CommandCode {
+	return u.commandCode
+}
+
+// CpHash returns the command parameter hash for this usage for the specified session
+// algorithm.
+func (u PolicySessionUsage) CpHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	var handleNames []Named
+	for _, handle := range u.handles {
+		handleNames = append(handleNames, handle)
+	}
+	return ComputeCpHash(alg, u.commandCode, handleNames, u.params...)
+}
+
+// NameHash returns the name hash for this usage for the specified session algorithm.
+func (u PolicySessionUsage) NameHash(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	var handleNames []Named
+	for _, handle := range u.handles {
+		handleNames = append(handleNames, handle)
+	}
+	return ComputeNameHash(alg, handleNames...)
+}
+
+// AllowAuthValue indicates whether this usage permits use of the auth value for the
+// resource being authorized.
+func (u PolicySessionUsage) AllowAuthValue() bool {
+	return !u.noAuthValue
+}
+
+// AuthHandle returns the handle for the resource being authorized.
+func (u PolicySessionUsage) AuthHandle() NamedHandle {
+	return u.handles[u.authIndex]
 }
 
 // PolicyAuthorizationID contains an identifier for a TPM2_PolicySecret,
@@ -1767,8 +1792,6 @@ func (*nullTickets) addTicket(ticket *PolicyTicket)     {}
 func (*nullTickets) invalidTicket(ticket *PolicyTicket) {}
 
 type policyComputeRunner struct {
-	cpHashParams    map[uint32]cpHashParams
-	nameHashParams  map[uint32][]tpm2.Name
 	policySession   *computePolicySession
 	policyTickets   nullTickets
 	policyResources mockPolicyResources
@@ -1776,11 +1799,9 @@ type policyComputeRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyComputeRunner(digest *taggedHash, cpHashParams map[uint32]cpHashParams, nameHashParams map[uint32][]tpm2.Name) *policyComputeRunner {
+func newPolicyComputeRunner(alg tpm2.HashAlgorithmId) *policyComputeRunner {
 	return &policyComputeRunner{
-		cpHashParams:   cpHashParams,
-		nameHashParams: nameHashParams,
-		policySession:  newComputePolicySession(digest),
+		policySession: newComputePolicySession(alg, nil, true),
 	}
 }
 
@@ -1796,54 +1817,14 @@ func (r *policyComputeRunner) resources() policyResources {
 	return &r.policyResources
 }
 
+func (r *policyComputeRunner) authResourceName() tpm2.Name {
+	return nil
+}
+
 func (r *policyComputeRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
-}
-
-func (r *policyComputeRunner) cpHash(cpHash *policyCpHashElement) error {
-	if r.cpHashParams == nil {
-		return errors.New("cannot add digests to policies with TPM2_PolicyCpHash assertion")
-	}
-
-	if len(cpHash.Digest) != 4 {
-		return errors.New("internal error: invalid TPM2_PolicyCpHash element")
-	}
-	id := binary.BigEndian.Uint32(cpHash.Digest)
-	params, exists := r.cpHashParams[id]
-	if !exists {
-		return errors.New("internal error: no TPM2_PolicyCpHash params")
-	}
-
-	digest, err := computeCpHash(r.session().HashAlg(), params.CommandCode, params.Handles, params.CpBytes)
-	if err != nil {
-		return fmt.Errorf("cannot compute cpHashA: %w", err)
-	}
-	cpHash.Digest = digest
-	return nil
-}
-
-func (r *policyComputeRunner) nameHash(nameHash *policyNameHashElement) error {
-	if r.nameHashParams == nil {
-		return errors.New("cannot add digests to policies with TPM2_PolicyNameHash assertion")
-	}
-
-	if len(nameHash.Digest) != 4 {
-		return errors.New("internal error: invalid TPM2_PolicyNameHash element")
-	}
-	id := binary.BigEndian.Uint32(nameHash.Digest)
-	params, exists := r.nameHashParams[id]
-	if !exists {
-		return errors.New("internal error: no TPM2_PolicyNameHash params")
-	}
-
-	digest, err := computeNameHash(r.session().HashAlg(), params)
-	if err != nil {
-		return fmt.Errorf("cannot compute nameHash: %w", err)
-	}
-	nameHash.Digest = digest
-	return nil
 }
 
 func (r *policyComputeRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
@@ -1857,27 +1838,26 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 	}
 
 	for i, branch := range branches {
-		computedDigest := taggedHash{
-			HashAlg: r.session().HashAlg(),
-			Digest:  currentDigest,
-		}
-
 		name := string(branch.Name)
 		if len(name) == 0 {
 			name = fmt.Sprintf("{%d}", i)
 		}
 
-		err := func() error {
+		computedDigest, err := func() (tpm2.Digest, error) {
 			origPolicySession := r.policySession
 			origPath := r.currentPath
-			r.policySession = newComputePolicySession(&computedDigest)
+			r.policySession = newComputePolicySession(r.session().HashAlg(), currentDigest, true)
 			r.currentPath = r.currentPath.Concat(name)
 			defer func() {
 				r.policySession = origPolicySession
 				r.currentPath = origPath
 			}()
 
-			return r.run(branch.Policy)
+			if err := r.run(branch.Policy); err != nil {
+				return nil, err
+			}
+
+			return r.session().PolicyGetDigest()
 		}()
 		if err != nil {
 			return 0, err
@@ -1889,17 +1869,17 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 				continue
 			}
 
-			branch.PolicyDigests[j] = tpm2.MakeTaggedHash(computedDigest.HashAlg, computedDigest.Digest)
+			branch.PolicyDigests[j] = tpm2.MakeTaggedHash(r.session().HashAlg(), computedDigest)
 			added = true
 			break
 		}
 		if !added {
-			branch.PolicyDigests = append(branch.PolicyDigests, tpm2.MakeTaggedHash(computedDigest.HashAlg, computedDigest.Digest))
+			branch.PolicyDigests = append(branch.PolicyDigests, tpm2.MakeTaggedHash(r.session().HashAlg(), computedDigest))
 		}
 	}
 
 	r.currentPath = r.currentPath.Concat("**")
-	return 0, nil
+	return -1, nil
 }
 
 func (r *policyComputeRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
@@ -1918,39 +1898,6 @@ func (r *policyComputeRunner) run(elements policyElements) error {
 	return nil
 }
 
-func (p *Policy) addDigest(alg tpm2.HashAlgorithmId, cpHashParams map[uint32]cpHashParams, nameHashParams map[uint32][]tpm2.Name) (tpm2.Digest, error) {
-	if !alg.IsValid() {
-		return nil, errors.New("invalid algorithm")
-	}
-
-	var policy *policy
-	if err := mu.CopyValue(&policy, p.policy); err != nil {
-		return nil, fmt.Errorf("cannot make temporary copy of policy: %w", err)
-	}
-
-	digest := taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
-	runner := newPolicyComputeRunner(&digest, cpHashParams, nameHashParams)
-	if err := runner.run(policy.Policy); err != nil {
-		return nil, err
-	}
-
-	addedDigest := false
-	for i, d := range policy.PolicyDigests {
-		if d.HashAlg == digest.HashAlg {
-			policy.PolicyDigests[i] = tpm2.MakeTaggedHash(digest.HashAlg, digest.Digest)
-			addedDigest = true
-			break
-		}
-	}
-	if !addedDigest {
-		policy.PolicyDigests = append(policy.PolicyDigests, tpm2.MakeTaggedHash(digest.HashAlg, digest.Digest))
-	}
-
-	p.policy = *policy
-
-	return digest.Digest, nil
-}
-
 // AddDigest computes and adds an additional digest to this policy for the specified
 // algorithm. The policy should be persisted after calling this if it is going to be
 // used for a resource wth the specified algorithm. On success, it returns the computed
@@ -1960,7 +1907,40 @@ func (p *Policy) addDigest(alg tpm2.HashAlgorithmId, cpHashParams map[uint32]cpH
 // assertions, These can only be computed for a single digest algorithm, because they
 // are bound to a name.
 func (p *Policy) AddDigest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
-	return p.addDigest(alg, nil, nil)
+	if !alg.Available() {
+		return nil, errors.New("unavailable algorithm")
+	}
+
+	var policy *policy
+	if err := mu.CopyValue(&policy, p.policy); err != nil {
+		return nil, fmt.Errorf("cannot make temporary copy of policy: %w", err)
+	}
+
+	runner := newPolicyComputeRunner(alg)
+	if err := runner.run(policy.Policy); err != nil {
+		return nil, err
+	}
+
+	computedDigest, err := runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, err
+	}
+
+	addedDigest := false
+	for i, d := range policy.PolicyDigests {
+		if d.HashAlg == alg {
+			policy.PolicyDigests[i] = tpm2.MakeTaggedHash(alg, computedDigest)
+			addedDigest = true
+			break
+		}
+	}
+	if !addedDigest {
+		policy.PolicyDigests = append(policy.PolicyDigests, tpm2.MakeTaggedHash(alg, computedDigest))
+	}
+
+	p.policy = *policy
+
+	return computedDigest, nil
 }
 
 // Digest returns the digest for this policy for the specified algorithm, if it
@@ -2032,9 +2012,9 @@ type policyValidateRunner struct {
 	currentPath policyBranchPath
 }
 
-func newPolicyValidateRunner(digest *taggedHash) *policyValidateRunner {
+func newPolicyValidateRunner(alg tpm2.HashAlgorithmId) *policyValidateRunner {
 	return &policyValidateRunner{
-		policySession: newComputePolicySession(digest),
+		policySession: newComputePolicySession(alg, nil, false),
 	}
 }
 
@@ -2050,24 +2030,14 @@ func (r *policyValidateRunner) resources() policyResources {
 	return &r.policyResources
 }
 
+func (r *policyValidateRunner) authResourceName() tpm2.Name {
+	return nil
+}
+
 func (r *policyValidateRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
-}
-
-func (r *policyValidateRunner) cpHash(cpHash *policyCpHashElement) error {
-	if len(cpHash.Digest) != r.session().HashAlg().Size() {
-		return errors.New("invalid digest size")
-	}
-	return nil
-}
-
-func (r *policyValidateRunner) nameHash(nameHash *policyNameHashElement) error {
-	if len(nameHash.Digest) != r.session().HashAlg().Size() {
-		return errors.New("invalid digest size")
-	}
-	return nil
 }
 
 func (r *policyValidateRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
@@ -2081,51 +2051,45 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 	}
 
 	for i, branch := range branches {
-		computedDigest := taggedHash{
-			HashAlg: r.session().HashAlg(),
-			Digest:  currentDigest,
-		}
-
 		name := string(branch.Name)
 		if len(name) == 0 {
 			name = fmt.Sprintf("{%d}", i)
 		}
 
-		err := func() error {
+		computedDigest, err := func() (tpm2.Digest, error) {
 			origPolicySession := r.policySession
 			origPath := r.currentPath
-			r.policySession = newComputePolicySession(&computedDigest)
+			r.policySession = newComputePolicySession(r.session().HashAlg(), currentDigest, false)
 			r.currentPath = r.currentPath.Concat(name)
 			defer func() {
 				r.policySession = origPolicySession
 				r.currentPath = origPath
 			}()
 
-			return r.run(branch.Policy)
+			if err := r.run(branch.Policy); err != nil {
+				return nil, err
+			}
+
+			return r.session().PolicyGetDigest()
 		}()
 		if err != nil {
 			return 0, err
 		}
 
-		found := false
 		for _, digest := range branch.PolicyDigests {
 			if digest.HashAlg != r.session().HashAlg() {
 				continue
 			}
 
-			if !bytes.Equal(digest.Digest(), computedDigest.Digest) {
-				return 0, fmt.Errorf("stored and computed branch digest mismatch for branch %d (computed: %x, stored: %x)", i, computedDigest.Digest, digest.Digest())
+			if !bytes.Equal(digest.Digest(), computedDigest) {
+				return 0, fmt.Errorf("stored and computed branch digest mismatch for branch %d (computed: %x, stored: %x)", i, computedDigest, digest.Digest())
 			}
-			found = true
 			break
-		}
-		if !found {
-			return 0, ErrMissingDigest
 		}
 	}
 
 	r.currentPath = r.currentPath.Concat("**")
-	return 0, nil
+	return -1, nil
 }
 
 func (r *policyValidateRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
@@ -2149,20 +2113,27 @@ func (r *policyValidateRunner) run(elements policyElements) error {
 // success, it returns the digest correpsonding to this policy for the
 // specified digest algorithm.
 func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
+	if !alg.Available() {
+		return nil, errors.New("unavailable algorithm")
+	}
+
 	expectedDigest, err := p.Digest(alg)
 	if err != nil {
 		return nil, err
 	}
 
-	digest := &taggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
-
-	runner := newPolicyValidateRunner(digest)
+	runner := newPolicyValidateRunner(alg)
 	if err := runner.run(p.policy.Policy); err != nil {
 		return nil, err
 	}
 
-	if !bytes.Equal(digest.Digest, expectedDigest) {
-		return nil, fmt.Errorf("stored and computed policy digest mismatch (computed: %x, stored: %x)", digest.Digest, expectedDigest)
+	computedDigest, err := runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, err
+	}
+
+	if !bytes.Equal(computedDigest, expectedDigest) {
+		return nil, fmt.Errorf("stored and computed policy digest mismatch (computed: %x, stored: %x)", computedDigest, expectedDigest)
 	}
 
 	for _, auth := range p.policy.PolicyAuthorizations {
@@ -2170,7 +2141,7 @@ func (p *Policy) Validate(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 			continue
 		}
 
-		ok, err := auth.Verify(digest.Digest)
+		ok, err := auth.Verify(computedDigest)
 		if err != nil {
 			return nil, &PolicyAuthorizationError{AuthName: auth.AuthKey.Name(), PolicyRef: auth.PolicyRef, err: fmt.Errorf("cannot verify signature: %w", err)}
 		}
@@ -2459,18 +2430,14 @@ func (r *policyStringifierRunner) resources() policyResources {
 	return r.policyResources
 }
 
+func (r *policyStringifierRunner) authResourceName() tpm2.Name {
+	return nil
+}
+
 func (r *policyStringifierRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
 	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
-}
-
-func (r *policyStringifierRunner) cpHash(cpHash *policyCpHashElement) error {
-	return nil
-}
-
-func (r *policyStringifierRunner) nameHash(nameHash *policyNameHashElement) error {
-	return nil
 }
 
 func (r *policyStringifierRunner) authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (session SessionContext, err error) {
@@ -2478,13 +2445,113 @@ func (r *policyStringifierRunner) authorize(auth ResourceContext, askForPolicy b
 }
 
 func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected int, err error) {
+	var treeDepth int
+	switch {
+	case len(branches) <= 8:
+		treeDepth = 1
+	case len(branches) <= 64:
+		treeDepth = 2
+	case len(branches) <= 512:
+		treeDepth = 3
+	default:
+		treeDepth = 4
+	}
+
+	var digests tpm2.DigestList
+	for _, branch := range branches {
+		var digest tpm2.Digest
+		for _, d := range branch.PolicyDigests {
+			if d.HashAlg != r.session().HashAlg() {
+				continue
+			}
+			digest = d.Digest()
+			break
+		}
+		if len(digest) == 0 {
+			return 0, ErrMissingDigest
+		}
+		digests = append(digests, digest)
+	}
+
+	tree, err := newPolicyOrTree(r.session().HashAlg(), digests)
+	if err != nil {
+		return 0, fmt.Errorf("cannot compute PolicyOR tree: %w", err)
+	}
+
 	fmt.Fprintf(r.w, "\n%*s BranchNode {", r.depth*3, "")
+
+	maybeOpenSection := func(i int) {
+		extraDepth := (treeDepth - 1) * 2
+		if treeDepth > 3 && i%512 == 0 {
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-5)*3, "")
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-4)*3, "")
+		}
+		if treeDepth > 2 && i%64 == 0 {
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-3)*3, "")
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-2)*3, "")
+		}
+		if treeDepth > 1 && i%8 == 0 {
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth-1)*3, "")
+			fmt.Fprintf(r.w, "\n%*s {", (r.depth+extraDepth)*3, "")
+		}
+	}
+	maybeCloseSection := func(i int, finish bool) error {
+		if i == 0 {
+			return errors.New("invalid index")
+		}
+
+		extraDepth := (treeDepth - 1) * 2
+		digests := tree.selectBranch(i - 1)
+		if treeDepth > 1 && (i%8 == 0 || finish) {
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth)*3, "")
+			if len(digests) > 1 {
+				session := newStringifierPolicySession(r.session().HashAlg(), r.w, r.depth+extraDepth)
+				if err := session.PolicyOR(digests[0]); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-1)*3, "")
+		}
+		if treeDepth > 2 && (i%64 == 0 || finish) {
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-2)*3, "")
+			if len(digests) > 2 {
+				session := newStringifierPolicySession(r.session().HashAlg(), r.w, r.depth+extraDepth-2)
+				if err := session.PolicyOR(digests[0]); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-3)*3, "")
+		}
+		if treeDepth > 4 && (i%512 == 0 || finish) {
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-4)*3, "")
+			if len(digests) > 3 {
+				session := newStringifierPolicySession(r.session().HashAlg(), r.w, r.depth+extraDepth-4)
+				if err := session.PolicyOR(digests[0]); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(r.w, "\n%*s }", (r.depth+extraDepth-5)*3, "")
+		}
+		return nil
+	}
+
+	maybeOpenSection(0)
+
 	for i, branch := range branches {
+		if i > 0 {
+			if err := maybeCloseSection(i, false); err != nil {
+				return 0, fmt.Errorf("internal error: %w", err)
+			}
+			maybeOpenSection(i)
+		}
+
 		err := func() error {
 			origSession := r.policySession
 			origPath := r.currentPath
+			origDepth := r.depth
 
 			r.depth++
+			r.depth += ((treeDepth - 1) * 2)
 			r.policySession = newStringifierPolicySession(r.policySession.HashAlg(), r.w, r.depth)
 			name := string(branch.Name)
 			if len(name) == 0 {
@@ -2492,7 +2559,7 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 			}
 			r.currentPath = r.currentPath.Concat(name)
 			defer func() {
-				r.depth--
+				r.depth = origDepth
 				r.policySession = origSession
 				r.currentPath = origPath
 			}()
@@ -2503,18 +2570,7 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 			}
 			fmt.Fprintf(r.w, " {")
 
-			var digest tpm2.Digest
-			for _, d := range branch.PolicyDigests {
-				if d.HashAlg != r.policySession.HashAlg() {
-					continue
-				}
-				digest = d.Digest()
-				break
-			}
-			if len(digest) == 0 {
-				return ErrMissingDigest
-			}
-			fmt.Fprintf(r.w, "\n%*s # digest %v:%#x", r.depth*3, "", r.policySession.HashAlg(), digest)
+			fmt.Fprintf(r.w, "\n%*s # digest %v:%#x", r.depth*3, "", r.policySession.HashAlg(), digests[i])
 
 			if err := r.run(branch.Policy); err != nil {
 				return err
@@ -2527,9 +2583,12 @@ func (r *policyStringifierRunner) runBranch(branches policyBranches) (selected i
 			return 0, err
 		}
 	}
+	if err := maybeCloseSection(len(branches), true); err != nil {
+		return 0, fmt.Errorf("internal error: %w", err)
+	}
 	fmt.Fprintf(r.w, "\n%*s }", r.depth*3, "")
 
-	return 0, nil
+	return -1, nil
 }
 
 func (r *policyStringifierRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {

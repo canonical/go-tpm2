@@ -185,6 +185,15 @@ func NewMockPolicyNvWrittenElement(writtenSet bool) *policyElement {
 	}
 }
 
+func NewMockPolicyRawORElement(pHashList tpm2.DigestList) *policyElement {
+	return &policyElement{
+		Type: commandRawPolicyOR,
+		Details: makePolicyElementDetails(
+			policyRawORElement{HashList: pHashList},
+		),
+	}
+}
+
 func NewMockPolicy(digests tpm2.TaggedHashList, authorizations []PolicyAuthorization, elements ...*policyElement) *Policy {
 	return &Policy{
 		policy: policy{

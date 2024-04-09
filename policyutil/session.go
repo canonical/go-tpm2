@@ -213,25 +213,33 @@ func (s *tpmPolicySession) PolicyNvWritten(writtenSet bool) error {
 // computePolicySession is an implementation of Session that computes a
 // digest from a sequence of assertions.
 type computePolicySession struct {
-	digest *taggedHash
+	alg          tpm2.HashAlgorithmId
+	digest       tpm2.Digest
+	noCpNameHash bool
 }
 
-func newComputePolicySession(digest *taggedHash) *computePolicySession {
-	return &computePolicySession{digest: digest}
+func newComputePolicySession(alg tpm2.HashAlgorithmId, digest tpm2.Digest, noCpNameHash bool) *computePolicySession {
+	out := &computePolicySession{
+		alg:          alg,
+		digest:       make(tpm2.Digest, alg.Size()),
+		noCpNameHash: noCpNameHash,
+	}
+	copy(out.digest, digest)
+	return out
 }
 
 func (s *computePolicySession) reset() {
-	s.digest.Digest = make(tpm2.Digest, s.digest.HashAlg.Size())
+	s.digest = make(tpm2.Digest, s.alg.Size())
 }
 
 func (s *computePolicySession) updateForCommand(command tpm2.CommandCode, params ...interface{}) error {
-	h := s.digest.HashAlg.NewHash()
-	h.Write(s.digest.Digest)
+	h := s.alg.NewHash()
+	h.Write(s.digest)
 	mu.MustMarshalToWriter(h, command)
 	if _, err := mu.MarshalToWriter(h, params...); err != nil {
 		return err
 	}
-	s.digest.Digest = h.Sum(nil)
+	s.digest = h.Sum(nil)
 	return nil
 }
 
@@ -244,10 +252,10 @@ func (s *computePolicySession) mustUpdateForCommand(command tpm2.CommandCode, pa
 func (s *computePolicySession) policyUpdate(command tpm2.CommandCode, name tpm2.Name, policyRef tpm2.Nonce) {
 	s.mustUpdateForCommand(command, mu.MakeRaw(name))
 
-	h := s.digest.HashAlg.NewHash()
-	h.Write(s.digest.Digest)
+	h := s.alg.NewHash()
+	h.Write(s.digest)
 	mu.MustMarshalToWriter(h, mu.MakeRaw(policyRef))
-	s.digest.Digest = h.Sum(nil)
+	s.digest = h.Sum(nil)
 }
 
 func (*computePolicySession) Name() tpm2.Name {
@@ -255,20 +263,19 @@ func (*computePolicySession) Name() tpm2.Name {
 }
 
 func (s *computePolicySession) HashAlg() tpm2.HashAlgorithmId {
-	return s.digest.HashAlg
+	return s.alg
 }
 
 func (s *computePolicySession) PolicySigned(authKey tpm2.ResourceContext, includeNonceTPM bool, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, auth *tpm2.Signature) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if !authKey.Name().IsValid() {
+	if len(authKey.Name()) == 0 || !authKey.Name().IsValid() {
 		return nil, nil, errors.New("invalid authKey name")
 	}
-
 	s.policyUpdate(tpm2.CommandPolicySigned, authKey.Name(), policyRef)
 	return nil, nil, nil
 }
 
 func (s *computePolicySession) PolicySecret(authObject tpm2.ResourceContext, cpHashA tpm2.Digest, policyRef tpm2.Nonce, expiration int32, authObjectAuthSession tpm2.SessionContext) (tpm2.Timeout, *tpm2.TkAuth, error) {
-	if !authObject.Name().IsValid() {
+	if len(authObject.Name()) == 0 || !authObject.Name().IsValid() {
 		return nil, nil, errors.New("invalid authObject name")
 	}
 	s.policyUpdate(tpm2.CommandPolicySecret, authObject.Name(), policyRef)
@@ -288,7 +295,7 @@ func (s *computePolicySession) PolicyOR(pHashList tpm2.DigestList) error {
 
 	digests := new(bytes.Buffer)
 	for i, digest := range pHashList {
-		if len(digest) != s.digest.HashAlg.Size() {
+		if len(digest) != s.alg.Size() {
 			return fmt.Errorf("invalid digest length at branch %d", i)
 		}
 		digests.Write(digest)
@@ -298,14 +305,18 @@ func (s *computePolicySession) PolicyOR(pHashList tpm2.DigestList) error {
 }
 
 func (s *computePolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+	if len(pcrDigest) != s.alg.Size() {
+		return errors.New("invalid pcrDigest size")
+	}
 	return s.updateForCommand(tpm2.CommandPolicyPCR, pcrs, mu.MakeRaw(pcrDigest))
 }
 
 func (s *computePolicySession) PolicyNV(auth, index tpm2.ResourceContext, operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp, authAuthSession tpm2.SessionContext) error {
-	if !index.Name().IsValid() {
+	if len(index.Name()) == 0 || !index.Name().IsValid() {
 		return errors.New("invalid index name")
 	}
-	h := s.digest.HashAlg.NewHash()
+
+	h := s.alg.NewHash()
 	mu.MustMarshalToWriter(h, mu.MakeRaw(operandB), offset, operation)
 
 	s.mustUpdateForCommand(tpm2.CommandPolicyNV, mu.MakeRaw(h.Sum(nil)), mu.MakeRaw(index.Name()))
@@ -313,7 +324,7 @@ func (s *computePolicySession) PolicyNV(auth, index tpm2.ResourceContext, operan
 }
 
 func (s *computePolicySession) PolicyCounterTimer(operandB tpm2.Operand, offset uint16, operation tpm2.ArithmeticOp) error {
-	h := s.digest.HashAlg.NewHash()
+	h := s.alg.NewHash()
 	mu.MustMarshalToWriter(h, mu.MakeRaw(operandB), offset, operation)
 
 	s.mustUpdateForCommand(tpm2.CommandPolicyCounterTimer, mu.MakeRaw(h.Sum(nil)))
@@ -326,21 +337,33 @@ func (s *computePolicySession) PolicyCommandCode(code tpm2.CommandCode) error {
 }
 
 func (s *computePolicySession) PolicyCpHash(cpHashA tpm2.Digest) error {
+	if s.noCpNameHash {
+		return fmt.Errorf("cannot compute digest for policies with TPM2_PolicyCpHash assertion")
+	}
+	if len(cpHashA) != s.alg.Size() {
+		return errors.New("invalid digest size")
+	}
 	s.mustUpdateForCommand(tpm2.CommandPolicyCpHash, mu.MakeRaw(cpHashA))
 	return nil
 }
 
 func (s *computePolicySession) PolicyNameHash(nameHash tpm2.Digest) error {
+	if s.noCpNameHash {
+		return fmt.Errorf("cannot compute digest for policies with TPM2_PolicyNameHash assertion")
+	}
+	if len(nameHash) != s.alg.Size() {
+		return errors.New("invalid digest size")
+	}
 	s.mustUpdateForCommand(tpm2.CommandPolicyNameHash, mu.MakeRaw(nameHash))
 	return nil
 }
 
 func (s *computePolicySession) PolicyDuplicationSelect(objectName, newParentName tpm2.Name, includeObject bool) error {
-	if !newParentName.IsValid() {
+	if len(newParentName) == 0 || !newParentName.IsValid() {
 		return errors.New("invalid newParent name")
 	}
 	if includeObject {
-		if !objectName.IsValid() {
+		if len(objectName) == 0 || !objectName.IsValid() {
 			return errors.New("invalid object name")
 		}
 		s.mustUpdateForCommand(tpm2.CommandPolicyDuplicationSelect, mu.MakeRaw(objectName), mu.MakeRaw(newParentName), includeObject)
@@ -351,6 +374,9 @@ func (s *computePolicySession) PolicyDuplicationSelect(objectName, newParentName
 }
 
 func (s *computePolicySession) PolicyAuthorize(approvedPolicy tpm2.Digest, policyRef tpm2.Nonce, keySign tpm2.Name, verified *tpm2.TkVerified) error {
+	if len(keySign) == 0 || !keySign.IsValid() {
+		return errors.New("invalid keySign name")
+	}
 	s.policyUpdate(tpm2.CommandPolicyAuthorize, keySign, policyRef)
 	return nil
 }
@@ -366,7 +392,9 @@ func (s *computePolicySession) PolicyPassword() error {
 }
 
 func (s *computePolicySession) PolicyGetDigest() (tpm2.Digest, error) {
-	return s.digest.Digest, nil
+	digest := make(tpm2.Digest, len(s.digest))
+	copy(digest, s.digest)
+	return digest, nil
 }
 
 func (s *computePolicySession) PolicyNvWritten(writtenSet bool) error {
@@ -788,7 +816,18 @@ func (s *stringifierPolicySession) PolicyTicket(timeout tpm2.Timeout, cpHashA tp
 }
 
 func (s *stringifierPolicySession) PolicyOR(pHashList tpm2.DigestList) error {
-	return nil
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyOR(", s.depth*3, "")
+	if err != nil {
+		return err
+	}
+	for _, digest := range pHashList {
+		_, err := fmt.Fprintf(s.w, "\n%*s  %#x", s.depth*3, "", digest)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = fmt.Fprintf(s.w, "\n%*s )", s.depth*3, "")
+	return err
 }
 
 func (s *stringifierPolicySession) PolicyPCR(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {

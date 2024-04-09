@@ -37,14 +37,16 @@ type testBuildPolicyNVData struct {
 }
 
 func (s *builderSuite) testPolicyNV(c *C, data *testBuildPolicyNVData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNV(data.nvPub, data.operandB, data.offset, data.operation), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyNV(data.nvPub, data.operandB, data.offset, data.operation)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
 		NewMockPolicyNVElement(data.nvPub, data.operandB, data.offset, data.operation))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -53,6 +55,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyNV(index:%#x, operandB:%#x, offset:%d, operation:%v)
 }`, data.expectedDigest, data.nvPub.Name(), data.operandB, data.offset, data.operation))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyNV(c *C) {
@@ -127,14 +131,16 @@ type testBuildPolicySecretData struct {
 }
 
 func (s *builderSuite) testPolicySecret(c *C, data *testBuildPolicySecretData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySecret(data.authObjectName, data.policyRef), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicySecret(data.authObjectName, data.policyRef)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
 		NewMockPolicySecretElement(data.authObjectName, data.policyRef))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -143,6 +149,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicySecret(authObject:%#x, policyRef:%#x)
 }`, data.expectedDigest, data.authObjectName, data.policyRef))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicySecret(c *C) {
@@ -158,6 +166,13 @@ func (s *builderSuite) TestPolicySecretNoPolicyRef(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "0d84f55daf6e43ac97966e62c9bb989d3397777d25c5f749868055d65394f952")})
 }
 
+func (s *builderSuite) TestPolicySecretDifferentPolicyRef(c *C) {
+	s.testPolicySecret(c, &testBuildPolicySecretData{
+		authObjectName: tpm2.MakeHandleName(tpm2.HandleOwner),
+		policyRef:      []byte("bar"),
+		expectedDigest: internal_testutil.DecodeHexString(c, "27f33f7496da106954207c4bc322b0cccb96516dfbf53f82b28e2c069905558b")})
+}
+
 func (s *builderSuite) TestPolicySecretDifferentAuthObject(c *C) {
 	nv := tpm2.NVPublic{
 		Index:   0x0181f000,
@@ -171,9 +186,10 @@ func (s *builderSuite) TestPolicySecretDifferentAuthObject(c *C) {
 }
 
 func (s *builderSuite) TestPolicySecretInvalidName(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySecret(tpm2.Name{0, 0}, nil), ErrorMatches, `invalid authObject name`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicySecret(tpm2.Name{0, 0}, nil)
+	c.Check(err, ErrorMatches, `invalid authObject name`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches,
 		`could not build policy: encountered an error when calling PolicySecret: invalid authObject name`)
 }
@@ -193,14 +209,16 @@ func (s *builderSuite) testPolicySigned(c *C, data *testBuildPolicySignedData) {
 	authKey, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
 	c.Assert(err, IsNil)
 
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySigned(authKey, data.policyRef), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicySigned(authKey, data.policyRef)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
 		NewMockPolicySignedElement(authKey, data.policyRef))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -209,6 +227,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicySigned(authKey:%#x, policyRef:%#x)
 }`, data.expectedDigest, authKey.Name(), data.policyRef))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicySigned(c *C) {
@@ -250,9 +270,10 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 }
 
 func (s *builderSuite) TestPolicySignedInvalidName(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySigned(new(tpm2.Public), nil), ErrorMatches, `invalid authKey`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicySigned(new(tpm2.Public), nil)
+	c.Check(err, ErrorMatches, `invalid authKey`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches,
 		`could not build policy: encountered an error when calling PolicySigned: invalid authKey`)
 }
@@ -272,14 +293,16 @@ func (s *builderSuite) testPolicyAuthorize(c *C, data *testBuildPolicyAuthorizeD
 	keySign, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
 	c.Assert(err, IsNil)
 
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyAuthorize(data.policyRef, keySign), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyAuthorize(data.policyRef, keySign)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
 		NewMockPolicyAuthorizeElement(data.policyRef, keySign))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -290,6 +313,8 @@ Policy {
  }
  PolicyAuthorize(policyRef:%#x, keySign:%#x)
 }`, data.expectedDigest, data.policyRef, keySign.Name()))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyAuthorize(c *C) {
@@ -331,23 +356,106 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 }
 
 func (s *builderSuite) TestPolicyAuthorizeInvalidName(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyAuthorize(nil, new(tpm2.Public)), ErrorMatches, `invalid keySign`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyAuthorize(nil, new(tpm2.Public))
+	c.Check(err, ErrorMatches, `invalid keySign`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches,
 		`could not build policy: encountered an error when calling PolicyAuthorize: invalid keySign`)
 }
 
-func (s *builderSuite) TestPolicyAuthValue(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
+func (s *builderSuite) TestPolicyAuthorizeNotFirst(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyAuthValue()
+	_, err := builder.RootBranch().PolicyAuthorize(nil, new(tpm2.Public))
+	c.Check(err, ErrorMatches, `must be before any other assertions`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches,
+		`could not build policy: encountered an error when calling PolicyAuthorize: must be before any other assertions`)
+}
 
+func (s *builderSuite) TestPolicyAuthorizeNotFirst2(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyAuthValue()
+	node := builder.RootBranch().AddBranchNode()
+	_, err := node.AddBranch("").PolicyAuthorize(nil, new(tpm2.Public))
+	c.Check(err, ErrorMatches, `must be before any other assertions`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches,
+		`could not build policy: encountered an error when calling PolicyAuthorize: must be before any other assertions`)
+}
+
+func (s *builderSuite) TestPolicyAuthorizeInBranch(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	keySign, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "fdcbcfa9e7d38cd29fc2be62a1ae496e793f4bc4bd7f66ee92196e70bbedd1af"))
+	expectedBranchDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "79eb5a0b041d2174a08c34c9207ae675aa7fdee856722e9eb85c885c09f0f959"))
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	node := builder.RootBranch().AddBranchNode()
+	digest, err := node.AddBranch("").PolicyAuthorize(nil, keySign)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedBranchDigest)
+
+	expectedPolicy := NewMockPolicy(
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
+		NewMockPolicyORElement(
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigest)},
+				NewMockPolicyAuthorizeElement(nil, keySign),
+			),
+		),
+	)
+
+	digest, policy, err := builder.Policy()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#[1]x
+ BranchNode {
+   Branch 0 {
+    # digest TPM_ALG_SHA256:%#[2]x
+    AuthorizedPolicies {
+    }
+    PolicyAuthorize(policyRef:, keySign:%#[3]x)
+   }
+ }
+ PolicyOR(
+  %#[2]x
+  %#[2]x
+ )
+}`, expectedDigest, expectedBranchDigest, keySign.Name()))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *builderSuite) TestPolicyAuthValue(c *C) {
 	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"))
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyAuthValue()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
 		NewMockPolicyAuthValueElement())
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -356,6 +464,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyAuthValue()
 }`, expectedDigest))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
 }
 
 type testBuildPolicyCommandCodeData struct {
@@ -364,14 +474,16 @@ type testBuildPolicyCommandCodeData struct {
 }
 
 func (s *builderSuite) testPolicyCommandCode(c *C, data *testBuildPolicyCommandCodeData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCommandCode(data.code), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyCommandCode(data.code)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
 		NewMockPolicyCommandCodeElement(data.code))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -380,6 +492,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyCommandCode(%v)
 }`, data.expectedDigest, data.code))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyCommandCode1(c *C) {
@@ -402,14 +516,16 @@ type testBuildPolicyCounterTimerData struct {
 }
 
 func (s *builderSuite) testPolicyCounterTimer(c *C, data *testBuildPolicyCounterTimerData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCounterTimer(data.operandB, data.offset, data.operation), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyCounterTimer(data.operandB, data.offset, data.operation)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
 		NewMockPolicyCounterTimerElement(data.operandB, data.offset, data.operation))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -418,6 +534,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyCounterTimer(operandB:%#x, offset:%d, operation:%v)
 }`, data.expectedDigest, data.operandB, data.offset, data.operation))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyCounterTimer(c *C) {
@@ -462,14 +580,16 @@ type testBuildPolicyCpHashData struct {
 }
 
 func (s *builderSuite) testPolicyCpHash(c *C, data *testBuildPolicyCpHashData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCpHash(data.code, data.handles, data.params...), IsNil)
+	builder := NewPolicyBuilder(data.alg)
+	digest, err := builder.RootBranch().PolicyCpHash(data.code, data.handles, data.params...)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.alg, data.expectedDigest)}, nil,
 		NewMockPolicyCpHashElement(data.expectedCpHash))
 
-	digest, policy, err := builder.Build(data.alg)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -478,6 +598,8 @@ Policy {
  # digest %v:%#x
  PolicyCpHash(%#x)
 }`, data.alg, data.expectedDigest, data.expectedCpHash))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyCpHash(c *C) {
@@ -530,12 +652,12 @@ func (s *builderSuite) TestPolicyCpHashSHA1(c *C) {
 }
 
 func (s *builderSuite) TestPolicyCpHashInvalidName(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0, 0}}, tpm2.Private{1, 2, 3, 4}, mu.MakeSizedSource(objectutil.NewRSAStorageKeyTemplate())), ErrorMatches,
-		`invalid name at handle 0`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0, 0}}, tpm2.Private{1, 2, 3, 4}, mu.MakeSizedSource(objectutil.NewRSAStorageKeyTemplate()))
+	c.Check(err, ErrorMatches, `cannot compute cpHashA: invalid name for handle 0`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches,
-		`could not build policy: encountered an error when calling PolicyCpHash: invalid name at handle 0`)
+		`could not build policy: encountered an error when calling PolicyCpHash: cannot compute cpHashA: invalid name for handle 0`)
 }
 
 type testBuildPolicyNameHashData struct {
@@ -546,14 +668,16 @@ type testBuildPolicyNameHashData struct {
 }
 
 func (s *builderSuite) testPolicyNameHash(c *C, data *testBuildPolicyNameHashData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNameHash(data.handles...), IsNil)
+	builder := NewPolicyBuilder(data.alg)
+	digest, err := builder.RootBranch().PolicyNameHash(data.handles...)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.alg, data.expectedDigest)}, nil,
 		NewMockPolicyNameHashElement(data.expectedNameHash))
 
-	digest, policy, err := builder.Build(data.alg)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -562,6 +686,8 @@ Policy {
  # digest %v:%#x
  PolicyNameHash(%#x)
 }`, data.alg, data.expectedDigest, data.expectedNameHash))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyNameHash(c *C) {
@@ -589,11 +715,12 @@ func (s *builderSuite) TestPolicyNameHashSHA1(c *C) {
 }
 
 func (s *builderSuite) TestPolicyNameHashInvalidName(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNameHash(tpm2.Name{0, 0}), ErrorMatches, `invalid name at handle 0`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyNameHash(tpm2.Name{0, 0})
+	c.Check(err, ErrorMatches, `cannot compute nameHash: invalid name for handle 0`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches,
-		`could not build policy: encountered an error when calling PolicyNameHash: invalid name at handle 0`)
+		`could not build policy: encountered an error when calling PolicyNameHash: cannot compute nameHash: invalid name for handle 0`)
 }
 
 type testBuildPolicyPCRData struct {
@@ -604,8 +731,10 @@ type testBuildPolicyPCRData struct {
 }
 
 func (s *builderSuite) testPolicyPCR(c *C, data *testBuildPolicyPCRData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyPCR(data.values), IsNil)
+	builder := NewPolicyBuilder(data.alg)
+	digest, err := builder.RootBranch().PolicyPCR(data.values)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.alg, data.expectedDigest)}, nil,
@@ -614,7 +743,7 @@ func (s *builderSuite) testPolicyPCR(c *C, data *testBuildPolicyPCRData) {
 	expectedPcrs, expectedPcrDigest, err := ComputePCRDigestFromAllValues(data.alg, data.values)
 	c.Assert(err, IsNil)
 
-	digest, policy, err := builder.Build(data.alg)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -623,6 +752,8 @@ Policy {
  # digest %v:%#x
  PolicyPCR(pcrDigest:%#x, pcrs:%v)
 }`, data.alg, data.expectedDigest, expectedPcrDigest, expectedPcrs))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyPCR(c *C) {
@@ -734,23 +865,26 @@ func (s *builderSuite) TestPolicyPCRDifferentAlg(c *C) {
 }
 
 func (s *builderSuite) TestPolicyPCRInvalidBank(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmNull: {4: nil}}), ErrorMatches, `invalid digest algorithm TPM_ALG_NULL`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmNull: {4: nil}})
+	c.Check(err, ErrorMatches, `invalid digest algorithm TPM_ALG_NULL`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCR: invalid digest algorithm TPM_ALG_NULL`)
 }
 
 func (s *builderSuite) TestPolicyPCRInvalidDigest(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: []byte{0}}}), ErrorMatches, `invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: []byte{0}}})
+	c.Check(err, ErrorMatches, `invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCR: invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
 }
 
 func (s *builderSuite) TestPolicyPCRInvalidPCR(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {-1: make([]byte, 32)}}), ErrorMatches, `invalid PCR -1: invalid PCR index \(< 0\)`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {-1: make([]byte, 32)}})
+	c.Check(err, ErrorMatches, `invalid PCR -1: invalid PCR index \(< 0\)`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCR: invalid PCR -1: invalid PCR index \(< 0\)`)
 }
 
@@ -762,14 +896,20 @@ type testBuildPolicyDuplicationSelectData struct {
 }
 
 func (s *builderSuite) testPolicyDuplicationSelect(c *C, data *testBuildPolicyDuplicationSelectData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyDuplicationSelect(data.object, data.newParent, data.includeObject), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyDuplicationSelect(data.object, data.newParent, data.includeObject)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
+	var objectName tpm2.Name
+	if data.object != nil {
+		objectName = data.object.Name()
+	}
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
-		NewMockPolicyDuplicationSelectElement(data.object.Name(), data.newParent.Name(), data.includeObject))
+		NewMockPolicyDuplicationSelectElement(objectName, data.newParent.Name(), data.includeObject))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -777,7 +917,9 @@ func (s *builderSuite) testPolicyDuplicationSelect(c *C, data *testBuildPolicyDu
 Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyDuplicationSelect(objectName:%#x, newParentName:%#x, includeObject:%t)
-}`, data.expectedDigest, data.object.Name(), data.newParent.Name(), data.includeObject))
+}`, data.expectedDigest, objectName, data.newParent.Name(), data.includeObject))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyDuplicationSelect(c *C) {
@@ -812,6 +954,17 @@ func (s *builderSuite) TestPolicyDuplicationSelectNoIncludeObject(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "a9ceacb309fb05bdc45784f0647641bcd2f3a05a10ed94c5525413c7da33234e")})
 }
 
+func (s *builderSuite) TestPolicyDuplicationSelectNoIncludeObjectName(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
+
+	s.testPolicyDuplicationSelect(c, &testBuildPolicyDuplicationSelectData{
+		newParent:      newParent,
+		includeObject:  false,
+		expectedDigest: internal_testutil.DecodeHexString(c, "a9ceacb309fb05bdc45784f0647641bcd2f3a05a10ed94c5525413c7da33234e")})
+}
+
 func (s *builderSuite) TestPolicyDuplicationSelectDifferentNames(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "bar")
@@ -829,29 +982,50 @@ func (s *builderSuite) TestPolicyDuplicationSelectDifferentNames(c *C) {
 }
 
 func (s *builderSuite) TestPolicyDuplicationSelectInvalidNewParentName(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyDuplicationSelect(nil, tpm2.Name{0, 0}, false), ErrorMatches, `invalid newParent name`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyDuplicationSelect(nil, tpm2.Name{0, 0}, false)
+	c.Check(err, ErrorMatches, `invalid newParent name`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyDuplicationSelect: invalid newParent name`)
 }
 
 func (s *builderSuite) TestPolicyDuplicationSelectInvalidObjectName(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyDuplicationSelect(tpm2.Name{0, 0}, nil, true), ErrorMatches, `invalid object name`)
-	_, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	h := crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyDuplicationSelect(tpm2.Name{0, 0}, newParent, true)
+	c.Check(err, ErrorMatches, `invalid object name`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyDuplicationSelect: invalid object name`)
+}
+
+func (s *builderSuite) TestPolicyDuplicationSelectMissingObjectName(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	newParent := tpm2.Name(mu.MustMarshalToBytes(tpm2.HashAlgorithmSHA256, mu.MakeRaw(h.Sum(nil))))
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyDuplicationSelect(nil, newParent, true)
+	c.Check(err, ErrorMatches, `invalid object name`)
+	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyDuplicationSelect: invalid object name`)
 }
 
 func (s *builderSuite) TestPolicyPassword(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyPassword(), IsNil)
-
 	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"))
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyPassword()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
 		NewMockPolicyPasswordElement())
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -860,6 +1034,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyPassword()
 }`, expectedDigest))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
 }
 
 type testBuildPolicyNvWrittenData struct {
@@ -868,14 +1044,16 @@ type testBuildPolicyNvWrittenData struct {
 }
 
 func (s *builderSuite) testPolicyNvWritten(c *C, data *testBuildPolicyNvWrittenData) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(data.writtenSet), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicyNvWritten(data.writtenSet)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, data.expectedDigest)}, nil,
 		NewMockPolicyNvWrittenElement(data.writtenSet))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -884,6 +1062,8 @@ Policy {
  # digest TPM_ALG_SHA256:%#x
  PolicyNvWritten(%t)
 }`, data.expectedDigest, data.writtenSet))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyNvWrittenFalse(c *C) {
@@ -898,27 +1078,156 @@ func (s *builderSuite) TestPolicyNvWrittenTrue(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "f7887d158ae8d38be0ac5319f37a9e07618bf54885453c7a54ddb0c6a6193beb")})
 }
 
+type testBuildPolicyORData struct {
+	alg            tpm2.HashAlgorithmId
+	pHashList      tpm2.DigestList
+	expectedDigest tpm2.Digest
+}
+
+func (s *builderSuite) testPolicyOR(c *C, data *testBuildPolicyORData) {
+	builder := NewPolicyBuilder(data.alg)
+	digest, err := builder.RootBranch().PolicyOR(data.pHashList...)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
+
+	expectedPolicy := NewMockPolicy(
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(data.alg, data.expectedDigest)}, nil,
+		NewMockPolicyRawORElement(data.pHashList))
+
+	digest, policy, err := builder.Policy()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, data.expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+
+	var orDigests string
+	for _, digest := range data.pHashList {
+		orDigests += fmt.Sprintf("\n  %#x", digest)
+	}
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest %v:%#x
+ PolicyOR(%s
+ )
+}`, data.alg, data.expectedDigest, orDigests))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, data.expectedDigest)
+	c.Logf("%x", digest)
+}
+
+func (s *builderSuite) TestPolicyOR(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA256.New()
+	io.WriteString(h, "bar")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testBuildPolicyORData{
+		alg:            tpm2.HashAlgorithmSHA256,
+		pHashList:      tpm2.DigestList{digest1, digest2},
+		expectedDigest: internal_testutil.DecodeHexString(c, "c00c6d95b4a744adc22a95ea83771a700464423ce66ff64733469eb6da324085"),
+	})
+}
+
+func (s *builderSuite) TestPolicyORDifferentDigests(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo2")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA256.New()
+	io.WriteString(h, "bar2")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testBuildPolicyORData{
+		alg:            tpm2.HashAlgorithmSHA256,
+		pHashList:      tpm2.DigestList{digest1, digest2},
+		expectedDigest: internal_testutil.DecodeHexString(c, "20b175204dcda0f1bc6eea7687e7c90821e4dd991ea9d906b7f9628c476b06b6"),
+	})
+}
+
+func (s *builderSuite) TestPolicyORNotEnoughDigests(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyOR(make(tpm2.Digest, 32))
+	c.Check(err, ErrorMatches, `invalid number of digests`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyOR: invalid number of digests`)
+}
+
+func (s *builderSuite) TestPolicyORTooManyDigests(c *C) {
+	digest := make(tpm2.Digest, 32)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyOR(digest, digest, digest, digest, digest, digest, digest, digest, digest)
+	c.Check(err, ErrorMatches, `invalid number of digests`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyOR: invalid number of digests`)
+}
+
+func (s *builderSuite) TestPolicyORInvalidDigestSize(c *C) {
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA1.New()
+	io.WriteString(h, "bar")
+	digest2 := h.Sum(nil)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyOR(digest1, digest2)
+	c.Check(err, ErrorMatches, `digest at index 1 has the wrong size`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyOR: digest at index 1 has the wrong size`)
+}
+
+func (s *builderSuite) TestPolicyORSHA1(c *C) {
+	h := crypto.SHA1.New()
+	io.WriteString(h, "foo")
+	digest1 := h.Sum(nil)
+
+	h = crypto.SHA1.New()
+	io.WriteString(h, "bar")
+	digest2 := h.Sum(nil)
+
+	s.testPolicyOR(c, &testBuildPolicyORData{
+		alg:            tpm2.HashAlgorithmSHA1,
+		pHashList:      tpm2.DigestList{digest1, digest2},
+		expectedDigest: internal_testutil.DecodeHexString(c, "790924ef04397586334d3d315f26fd6a8e105710"),
+	})
+}
+
 func (s *builderSuite) TestModifyFailedBranch(c *C) {
 	// XXX: Note that this only tests one method - this should be expanded to test all
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNameHash(tpm2.Name{0, 0}), ErrorMatches, `invalid name at handle 0`)
-	c.Check(builder.RootBranch().PolicyAuthValue(), ErrorMatches, `encountered an error when calling PolicyNameHash: invalid name at handle 0`)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyNameHash(tpm2.Name{0, 0})
+	c.Check(err, ErrorMatches, `cannot compute nameHash: invalid name for handle 0`)
+	_, err = builder.RootBranch().PolicyAuthValue()
+	c.Check(err, ErrorMatches, `encountered an error when calling PolicyNameHash: cannot compute nameHash: invalid name for handle 0`)
 }
 
 func (s *builderSuite) TestPolicyMixed(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")), IsNil)
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-
 	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "426df7ddd07dbfaa400237f773da801e464ef2766084966b04d8b4dfc0feeee5"))
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	digest, err := builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar"))
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "27f33f7496da106954207c4bc322b0cccb96516dfbf53f82b28e2c069905558b")))
+	c.Logf("%x", digest)
+	digest, err = builder.RootBranch().PolicyAuthValue()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, tpm2.Digest(internal_testutil.DecodeHexString(c, "6e896f81d416d6a8476927f968bf1ec93111fa5fed24d006968028df5a5801f5")))
+	c.Logf("%x", digest)
+	digest, err = builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
 		NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")),
 		NewMockPolicyAuthValueElement(),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -929,13 +1238,15 @@ Policy {
  PolicyAuthValue()
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigest))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyMixedSHA1(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar")), IsNil)
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
+	builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("bar"))
+	builder.RootBranch().PolicyAuthValue()
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
 	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "abdce83ab50f4d5fd378181e21de9486559612d3"))
 	expectedPolicy := NewMockPolicy(
@@ -944,7 +1255,7 @@ func (s *builderSuite) TestPolicyMixedSHA1(c *C) {
 		NewMockPolicyAuthValueElement(),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth))
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA1)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -955,6 +1266,8 @@ Policy {
  PolicyAuthValue()
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigest))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyBranches(c *C) {
@@ -962,43 +1275,49 @@ func (s *builderSuite) TestPolicyBranches(c *C) {
 	var pHashList tpm2.DigestList
 	var policies []*Policy
 
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicyAuthValue()
+	digest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList = append(pHashList, digest)
 	policies = append(policies, policy)
 
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList = append(pHashList, digest)
 	policies = append(policies, policy)
 
 	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies...)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-	expectedDigest, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	expectedDigest, err := builder.Digest()
 	c.Assert(err, IsNil)
 
 	// Now build a policy with branches
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
 
 	node := builder.RootBranch().AddBranchNode()
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
 	c.Assert(b1, NotNil)
-	c.Check(b1.PolicyAuthValue(), IsNil)
+	digest, err = b1.PolicyAuthValue()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList[0])
 
 	b2 := node.AddBranch("branch2")
 	c.Assert(b2, NotNil)
-	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+	digest, err = b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList[1])
 
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	digest, err = builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
@@ -1016,165 +1335,49 @@ func (s *builderSuite) TestPolicyBranches(c *C) {
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 	)
 
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err = builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     PolicyAuthValue()
    }
    Branch 1 (branch2) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[3]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[3]x
+ )
  PolicyCommandCode(TPM_CC_NV_ChangeAuth)
 }`, expectedDigest, pHashList[0], pHashList[1]))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
 }
 
-func (s *builderSuite) TestPolicyBranchesMultipleDigests(c *C) {
-	// Compute the expected digests using the low-level PolicyOR
-	var pHashListSHA1 tpm2.DigestList
-	var pHashListSHA256 tpm2.DigestList
-	var policies []*Policy
-
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
-	c.Assert(err, IsNil)
-	pHashListSHA256 = append(pHashListSHA256, digest)
-	policies = append(policies, policy)
-	digest, err = policy.AddDigest(tpm2.HashAlgorithmSHA1)
-	c.Assert(err, IsNil)
-	pHashListSHA1 = append(pHashListSHA1, digest)
-
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
-	c.Assert(err, IsNil)
-	pHashListSHA256 = append(pHashListSHA256, digest)
-	policies = append(policies, policy)
-	digest, err = policy.AddDigest(tpm2.HashAlgorithmSHA1)
-	c.Assert(err, IsNil)
-	pHashListSHA1 = append(pHashListSHA1, digest)
-
-	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies...)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-	expectedDigestSHA256, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
-	c.Assert(err, IsNil)
-	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA1, policies...)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-	expectedDigestSHA1, _, err := builder.Build(tpm2.HashAlgorithmSHA1)
-	c.Assert(err, IsNil)
-
-	// Now build a policy with branches
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+func (s *builderSuite) TestPolicyPolicyCommitsCurrentBranchNode(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
 	node := builder.RootBranch().AddBranchNode()
 	c.Assert(node, NotNil)
 
 	b1 := node.AddBranch("branch1")
 	c.Assert(b1, NotNil)
-	c.Check(b1.PolicyAuthValue(), IsNil)
+	b1.PolicyAuthValue()
 
 	b2 := node.AddBranch("branch2")
 	c.Assert(b2, NotNil)
-	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-
-	expectedPolicy := NewMockPolicy(
-		tpm2.TaggedHashList{
-			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, expectedDigestSHA1),
-			tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigestSHA256),
-		},
-		nil,
-		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyORElement(
-			NewMockPolicyBranch(
-				"branch1", tpm2.TaggedHashList{
-					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, pHashListSHA1[0]),
-					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashListSHA256[0]),
-				},
-				NewMockPolicyAuthValueElement(),
-			),
-			NewMockPolicyBranch(
-				"branch2", tpm2.TaggedHashList{
-					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA1, pHashListSHA1[1]),
-					tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, pHashListSHA256[1]),
-				},
-				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
-			),
-		),
-		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
-	)
-
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA1)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigestSHA1)
-
-	digest, err = policy.AddDigest(tpm2.HashAlgorithmSHA256)
-	c.Check(err, IsNil)
-	c.Check(digest, DeepEquals, expectedDigestSHA256)
-	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
-	c.Check(policy.String(), Equals, fmt.Sprintf(`
-Policy {
- # digest TPM_ALG_SHA1:%#x
- PolicyNvWritten(true)
- BranchNode {
-   Branch 0 (branch1) {
-    # digest TPM_ALG_SHA1:%#x
-    PolicyAuthValue()
-   }
-   Branch 1 (branch2) {
-    # digest TPM_ALG_SHA1:%#x
-    PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
-   }
- }
- PolicyCommandCode(TPM_CC_NV_ChangeAuth)
-}`, expectedDigestSHA1, pHashListSHA1[0], pHashListSHA1[1]))
-	c.Check(policy.Stringer(tpm2.HashAlgorithmSHA256, nil).String(), Equals, fmt.Sprintf(`
-Policy {
- # digest TPM_ALG_SHA256:%#x
- PolicyNvWritten(true)
- BranchNode {
-   Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
-    PolicyAuthValue()
-   }
-   Branch 1 (branch2) {
-    # digest TPM_ALG_SHA256:%#x
-    PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
-   }
- }
- PolicyCommandCode(TPM_CC_NV_ChangeAuth)
-}`, expectedDigestSHA256, pHashListSHA256[0], pHashListSHA256[1]))
-}
-
-func (s *builderSuite) TestPolicyBuildCommitsCurrentBranchNode(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-
-	node := builder.RootBranch().AddBranchNode()
-	c.Assert(node, NotNil)
-
-	b1 := node.AddBranch("branch1")
-	c.Assert(b1, NotNil)
-	c.Check(b1.PolicyAuthValue(), IsNil)
-
-	b2 := node.AddBranch("branch2")
-	c.Assert(b2, NotNil)
-	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
 
 	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "a3b2cc44e50ad0ca14d18bb5264942a549301778cf208e8b3989a8f9f2b058cd"))
 	expectedPolicy := NewMockPolicy(
@@ -1193,20 +1396,42 @@ func (s *builderSuite) TestPolicyBuildCommitsCurrentBranchNode(c *C) {
 		),
 	)
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 }
 
-func (s *builderSuite) TestEmptyBranchNodeIsElided(c *C) {
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+func (s *builderSuite) TestPolicyDigestCommitsCurrentBranchNode(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
 	node := builder.RootBranch().AddBranchNode()
 	c.Assert(node, NotNil)
 
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	b1 := node.AddBranch("branch1")
+	c.Assert(b1, NotNil)
+	b1.PolicyAuthValue()
+
+	b2 := node.AddBranch("branch2")
+	c.Assert(b2, NotNil)
+	b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+
+	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "a3b2cc44e50ad0ca14d18bb5264942a549301778cf208e8b3989a8f9f2b058cd"))
+	digest, err := builder.Digest()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *builderSuite) TestEmptyBranchNodeIsElided(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+
+	node := builder.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
 
 	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "fe9bbb331494a468c52d1fa63b890b2c073a006a13abadf7bb07fc1412e2cdb3"))
 	expectedPolicy := NewMockPolicy(
@@ -1215,7 +1440,38 @@ func (s *builderSuite) TestEmptyBranchNodeIsElided(c *C) {
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
 	)
 
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err := builder.Policy()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+}
+
+func (s *builderSuite) TestEmptyBranchesAreOmitted(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+
+	node := builder.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	node.AddBranch("").PolicyAuthValue()
+	c.Check(node.AddBranch(""), NotNil)
+
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+
+	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "ddca4f883da6ad2dc88e838cdceec7ae14a2993c3a8883c696e927e780c3910a"))
+	expectedPolicy := NewMockPolicy(
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
+		NewMockPolicyNvWrittenElement(true),
+		NewMockPolicyORElement(
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, internal_testutil.DecodeHexString(c, "636ac47c3f990024d504fdcc720b6fc40df5d63a5df47acb33c8e157b08f672c"))},
+				NewMockPolicyAuthValueElement(),
+			),
+		),
+		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
+	)
+
+	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
@@ -1226,18 +1482,18 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	var pHashList1 tpm2.DigestList
 	var policies1 []*Policy
 
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicyAuthValue()
+	digest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList1 = append(pHashList1, digest)
 	policies1 = append(policies1, policy)
 
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList1 = append(pHashList1, digest)
 	policies1 = append(policies1, policy)
@@ -1246,46 +1502,54 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 	var policies2 []*Policy
 
 	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies1...)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList2 = append(pHashList2, digest)
 	policies2 = append(policies2, policy)
 
 	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies1...)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock)
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList2 = append(pHashList2, digest)
 	policies2 = append(policies2, policy)
 
 	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies2...)
-	expectedDigest, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	expectedDigest, err := builder.Digest()
 	c.Assert(err, IsNil)
 
 	// Now build a policy with branches
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
 
 	node1 := builder.RootBranch().AddBranchNode()
 	c.Assert(node1, NotNil)
 
 	b1 := node1.AddBranch("branch1")
 	c.Assert(b1, NotNil)
-	c.Check(b1.PolicyAuthValue(), IsNil)
+	digest, err = b1.PolicyAuthValue()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList1[0])
 
 	b2 := node1.AddBranch("branch2")
 	c.Assert(b2, NotNil)
-	c.Check(b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+	digest, err = b2.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList1[1])
 
 	node2 := builder.RootBranch().AddBranchNode()
 	c.Assert(node2, NotNil)
 
 	b3 := node2.AddBranch("branch3")
-	c.Check(b3.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	digest, err = b3.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList2[0])
 
 	b4 := node2.AddBranch("branch4")
-	c.Check(b4.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
+	digest, err = b4.PolicyCommandCode(tpm2.CommandNVWriteLock)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList2[1])
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
@@ -1320,35 +1584,45 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 		),
 	)
 
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err = builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     PolicyAuthValue()
    }
    Branch 1 (branch2) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[3]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[3]x
+ )
  BranchNode {
    Branch 0 (branch3) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[4]x
     PolicyCommandCode(TPM_CC_NV_ChangeAuth)
    }
    Branch 1 (branch4) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[5]x
     PolicyCommandCode(TPM_CC_NV_WriteLock)
    }
  }
+ PolicyOR(
+  %#[4]x
+  %#[5]x
+ )
 }`, expectedDigest, pHashList1[0], pHashList1[1], pHashList2[0], pHashList2[1]))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
 }
 
 func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
@@ -1356,20 +1630,20 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	var pHashList2 tpm2.DigestList
 	var policies2 []*Policy
 
-	builder := NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-	digest, policy, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicyAuthValue()
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	digest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList2 = append(pHashList2, digest)
 	policies2 = append(policies2, policy)
 
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicyAuthValue(), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicyAuthValue()
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock)
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList2 = append(pHashList2, digest)
 	policies2 = append(policies2, policy)
@@ -1377,20 +1651,20 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	var pHashList3 tpm2.DigestList
 	var policies3 []*Policy
 
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList3 = append(pHashList3, digest)
 	policies3 = append(policies3, policy)
 
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
-	c.Check(builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
-	c.Check(builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
+	builder.RootBranch().PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	builder.RootBranch().PolicyCommandCode(tpm2.CommandNVWriteLock)
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList3 = append(pHashList3, digest)
 	policies3 = append(policies3, policy)
@@ -1399,56 +1673,64 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 	var policies1 []*Policy
 
 	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies2...)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList1 = append(pHashList1, digest)
 	policies1 = append(policies1, policy)
 
 	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies3...)
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err = builder.Policy()
 	c.Assert(err, IsNil)
 	pHashList1 = append(pHashList1, digest)
 	policies1 = append(policies1, policy)
 
 	builder = NewPolicyBuilderOR(tpm2.HashAlgorithmSHA256, policies1...)
-	expectedDigest, _, err := builder.Build(tpm2.HashAlgorithmSHA256)
+	expectedDigest, _, err := builder.Policy()
 
 	// Now build a policy with branches
-	builder = NewPolicyBuilder()
-	c.Check(builder.RootBranch().PolicyNvWritten(true), IsNil)
+	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyNvWritten(true)
 
 	node1 := builder.RootBranch().AddBranchNode()
 	c.Assert(node1, NotNil)
 
 	b1 := node1.AddBranch("branch1")
 	c.Assert(b1, NotNil)
-	c.Check(b1.PolicyAuthValue(), IsNil)
+	b1.PolicyAuthValue()
 
 	node2 := b1.AddBranchNode()
 	c.Assert(node2, NotNil)
 
 	b2 := node2.AddBranch("branch2")
 	c.Assert(b2, NotNil)
-	c.Check(b2.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	digest, err = b2.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList2[0])
 
 	b3 := node2.AddBranch("branch3")
 	c.Assert(b3, NotNil)
-	c.Check(b3.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
+	digest, err = b3.PolicyCommandCode(tpm2.CommandNVWriteLock)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList2[1])
 
 	b4 := node1.AddBranch("branch4")
 	c.Assert(b4, NotNil)
-	c.Check(b4.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")), IsNil)
+	b4.PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
 
 	node3 := b4.AddBranchNode()
 	c.Assert(node3, NotNil)
 
 	b5 := node3.AddBranch("branch5")
 	c.Assert(b5, NotNil)
-	c.Check(b5.PolicyCommandCode(tpm2.CommandNVChangeAuth), IsNil)
+	digest, err = b5.PolicyCommandCode(tpm2.CommandNVChangeAuth)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList3[0])
 
 	b6 := node3.AddBranch("branch6")
 	c.Assert(b6, NotNil)
-	c.Check(b6.PolicyCommandCode(tpm2.CommandNVWriteLock), IsNil)
+	digest, err = b6.PolicyCommandCode(tpm2.CommandNVWriteLock)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, pHashList3[1])
 
 	expectedPolicy := NewMockPolicy(
 		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
@@ -1497,43 +1779,218 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 		),
 	)
 
-	digest, policy, err = builder.Build(tpm2.HashAlgorithmSHA256)
+	digest, policy, err = builder.Policy()
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, expectedDigest)
 	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
 	c.Check(policy.String(), Equals, fmt.Sprintf(`
 Policy {
- # digest TPM_ALG_SHA256:%#x
+ # digest TPM_ALG_SHA256:%#[1]x
  PolicyNvWritten(true)
  BranchNode {
    Branch 0 (branch1) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[2]x
     PolicyAuthValue()
     BranchNode {
       Branch 0 (branch2) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[3]x
        PolicyCommandCode(TPM_CC_NV_ChangeAuth)
       }
       Branch 1 (branch3) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[4]x
        PolicyCommandCode(TPM_CC_NV_WriteLock)
       }
     }
+    PolicyOR(
+     %#[3]x
+     %#[4]x
+    )
    }
    Branch 1 (branch4) {
-    # digest TPM_ALG_SHA256:%#x
+    # digest TPM_ALG_SHA256:%#[5]x
     PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
     BranchNode {
       Branch 0 (branch5) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[6]x
        PolicyCommandCode(TPM_CC_NV_ChangeAuth)
       }
       Branch 1 (branch6) {
-       # digest TPM_ALG_SHA256:%#x
+       # digest TPM_ALG_SHA256:%#[7]x
        PolicyCommandCode(TPM_CC_NV_WriteLock)
       }
     }
+    PolicyOR(
+     %#[6]x
+     %#[7]x
+    )
    }
  }
+ PolicyOR(
+  %#[2]x
+  %#[5]x
+ )
 }`, expectedDigest, pHashList1[0], pHashList2[0], pHashList2[1], pHashList1[1], pHashList3[0], pHashList3[1]))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, expectedDigest)
+}
+
+func (s *builderSuite) TestPolicyBranchesMoreThanEight(c *C) {
+	pubKeyPEM := `
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErK42Zv5/ZKY0aAtfe6hFpPEsHgu1
+EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
+-----END PUBLIC KEY-----`
+
+	b, _ := pem.Decode([]byte(pubKeyPEM))
+	pubKey, err := x509.ParsePKIXPublicKey(b.Bytes)
+	c.Assert(err, IsNil)
+	c.Assert(pubKey, internal_testutil.ConvertibleTo, &ecdsa.PublicKey{})
+
+	authKey, err := objectutil.NewECCPublicKey(pubKey.(*ecdsa.PublicKey))
+	c.Assert(err, IsNil)
+
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+
+	node := builder.RootBranch().AddBranchNode()
+	c.Assert(node, NotNil)
+
+	node.AddBranch("").PolicyAuthValue()
+	node.AddBranch("").PolicyPassword()
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo"))
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandleEndorsement), []byte("foo"))
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandlePlatform), []byte("foo"))
+	node.AddBranch("").PolicySecret(tpm2.MakeHandleName(tpm2.HandleLockout), []byte("foo"))
+	node.AddBranch("").PolicyCommandCode(tpm2.CommandNVRead)
+	node.AddBranch("").PolicyCommandCode(tpm2.CommandPolicyNV)
+	node.AddBranch("").PolicyAuthorize([]byte("foo"), authKey)
+
+	expectedDigest := tpm2.Digest(internal_testutil.DecodeHexString(c, "357ff2e053e2e5869fd96d9f063e00d61c740802332fd1e44e67ab443c6d1fdb"))
+	expectedBranchDigests := tpm2.DigestList{
+		internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
+		internal_testutil.DecodeHexString(c, "8fcd2169ab92694e0c633f1ab772842b8241bbc20288981fc7ac1eddc1fddb0e"),
+		internal_testutil.DecodeHexString(c, "62fd94980db2a746545cab626e9df21a1d0f00472f637d4bf567026e40a6ebed"),
+		internal_testutil.DecodeHexString(c, "2c5b145496a4c18c7c93c9cf1143396d18167dcc18affa07ae0a98c0a80c5a82"),
+		internal_testutil.DecodeHexString(c, "43aeb5b5951cbdc33ae50185870b1cf8576abcb3ec51aa92bda92880a3219054"),
+		internal_testutil.DecodeHexString(c, "97ab4c24a2a7b67ffdaf69433118adb27edfeabc3bfb152ae7bb07362977ff00"),
+		internal_testutil.DecodeHexString(c, "47ce3032d8bad1f3089cb0c09088de43501491d460402b90cd1b7fc0b68ca92f"),
+		internal_testutil.DecodeHexString(c, "203e4bd5d0448c9615cc13fa18e8d39222441cc40204d99a77262068dbd55a43"),
+		internal_testutil.DecodeHexString(c, "3c8876f373f0ca06738973156ca12d324f382990fda581027a1b557048c83dd0"),
+	}
+
+	expectedPolicy := NewMockPolicy(
+		tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedDigest)}, nil,
+		NewMockPolicyORElement(
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[0])},
+				NewMockPolicyAuthValueElement(),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[1])},
+				NewMockPolicyPasswordElement(),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[2])},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[3])},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleEndorsement), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[4])},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandlePlatform), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[5])},
+				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleLockout), []byte("foo")),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[6])},
+				NewMockPolicyCommandCodeElement(tpm2.CommandNVRead),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[7])},
+				NewMockPolicyCommandCodeElement(tpm2.CommandPolicyNV),
+			),
+			NewMockPolicyBranch(
+				"", tpm2.TaggedHashList{tpm2.MakeTaggedHash(tpm2.HashAlgorithmSHA256, expectedBranchDigests[8])},
+				NewMockPolicyAuthorizeElement([]byte("foo"), authKey),
+			),
+		),
+	)
+	digest, policy, err := builder.Policy()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest TPM_ALG_SHA256:%#[1]x
+ BranchNode {
+    {
+       {
+         Branch 0 {
+          # digest TPM_ALG_SHA256:%#[2]x
+          PolicyAuthValue()
+         }
+         Branch 1 {
+          # digest TPM_ALG_SHA256:%#[3]x
+          PolicyPassword()
+         }
+         Branch 2 {
+          # digest TPM_ALG_SHA256:%#[4]x
+          PolicySecret(authObject:0x40000001, policyRef:0x666f6f)
+         }
+         Branch 3 {
+          # digest TPM_ALG_SHA256:%#[5]x
+          PolicySecret(authObject:0x4000000b, policyRef:0x666f6f)
+         }
+         Branch 4 {
+          # digest TPM_ALG_SHA256:%#[6]x
+          PolicySecret(authObject:0x4000000c, policyRef:0x666f6f)
+         }
+         Branch 5 {
+          # digest TPM_ALG_SHA256:%#[7]x
+          PolicySecret(authObject:0x4000000a, policyRef:0x666f6f)
+         }
+         Branch 6 {
+          # digest TPM_ALG_SHA256:%#[8]x
+          PolicyCommandCode(TPM_CC_NV_Read)
+         }
+         Branch 7 {
+          # digest TPM_ALG_SHA256:%#[9]x
+          PolicyCommandCode(TPM_CC_PolicyNV)
+         }
+       }
+       PolicyOR(
+        %#[2]x
+        %#[3]x
+        %#[4]x
+        %#[5]x
+        %#[6]x
+        %#[7]x
+        %#[8]x
+        %#[9]x
+       )
+    }
+    {
+       {
+         Branch 8 {
+          # digest TPM_ALG_SHA256:%#[10]x
+          AuthorizedPolicies {
+          }
+          PolicyAuthorize(policyRef:0x666f6f, keySign:%#[11]x)
+         }
+       }
+       PolicyOR(
+        %#[10]x
+        %#[10]x
+       )
+    }
+ }
+ PolicyOR(
+  0x04534b013d88e1b9fa41d631a62d99539cb0182c31be15110f7d5073f2ddb46e
+  0x8395a82161cdfd3f7ff0e663270f19d59a55fb3d9a9f6c7168e3a78d42ad47cc
+ )
+}`, expectedDigest, expectedBranchDigests[0], expectedBranchDigests[1], expectedBranchDigests[2], expectedBranchDigests[3], expectedBranchDigests[4], expectedBranchDigests[5], expectedBranchDigests[6], expectedBranchDigests[7], expectedBranchDigests[8], authKey.Name()))
+	fmt.Println(policy)
 }

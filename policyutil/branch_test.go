@@ -42,14 +42,15 @@ func (s *branchSuite) checkPolicyOrTree(c *C, alg tpm2.HashAlgorithmId, digests 
 			nodeDigests := node.Digests()
 			c.Check(nodeDigests[i&0x7], DeepEquals, digest)
 
-			ta := &TaggedHash{HashAlg: alg, Digest: make(tpm2.Digest, alg.Size())}
-			trial := NewComputePolicySession(ta)
+			trial := NewComputePolicySession(alg, nil, true)
 			if len(nodeDigests) == 1 {
 				nodeDigests = tpm2.DigestList{nodeDigests[0], nodeDigests[0]}
 			}
 			trial.PolicyOR(nodeDigests)
 
-			digest = ta.Digest
+			var err error
+			digest, err = trial.PolicyGetDigest()
+			c.Assert(err, IsNil)
 			node = node.Parent()
 			i = i >> 3
 		}
@@ -191,10 +192,11 @@ func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeS
 	expected := s.policyOrTreeBranchDigestLists(c, tree, data.selected)
 	c.Assert(expected, internal_testutil.LenEquals, depth)
 
-	ta := &TaggedHash{HashAlg: data.alg, Digest: make(tpm2.Digest, data.alg.Size())}
-	trial := NewComputePolicySession(ta)
+	trial := NewComputePolicySession(data.alg, nil, true)
 	trial.PolicyOR(expected[len(expected)-1])
-	c.Check(ta.Digest, DeepEquals, policy)
+	digest, err := trial.PolicyGetDigest()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, policy)
 
 	pHashLists := tree.SelectBranch(data.selected)
 	c.Check(pHashLists, DeepEquals, expected)
