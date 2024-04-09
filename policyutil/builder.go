@@ -637,10 +637,10 @@ func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) (tpm2.Digest, err
 }
 
 // PolicyOR adds a TPM2_PolicyOR assertion to this branch for low-level control of policies
-// that can be satisfied with different sets of conditions. This is to makeit possible to
+// that can be satisfied with different sets of conditions. This is to make it possible to
 // use this API to compute digests of policies with branches without having to use the
 // [Policy] API to execute them, or to build policies with branches with low-level control
-// of branch execution by manually executing a sequence of [Policy] instances corresponding
+// of branch execution by manually executing a sequence of [Policy] structures corresponding
 // to each branch.  Applications that use [Policy] for execution should normally just make
 // use of [PolicyBuilderBranch.AddBranchNode] and [PolicyBuilderBranchNode.AddBranch] for
 // constructing policies with branches though.
@@ -730,9 +730,10 @@ func NewPolicyBuilder(alg tpm2.HashAlgorithmId) *PolicyBuilder {
 // assertion of the supplied policies. This is to make it possible to use this API to
 // compute digests of policies with branches without having to use the [Policy] API to
 // execute them, or to build policies with branches with low-level control of branch
-// execution by manually executing a sequence of [Policy] instances. Applications that
-// use [Policy] for execution should normally just make use of [PolicyBuilderBranch.AddBranchNode]
-// and [PolicyBuilderBranchNode.AddBranch] for constructing policies with branches though.
+// execution by manually executing a sequence of [Policy] structures corresponding to
+// each branch. Applications that use [Policy] for execution should normally just make
+// use of [PolicyBuilderBranch.AddBranchNode] and [PolicyBuilderBranchNode.AddBranch]
+// for constructing policies with branches though.
 func NewPolicyBuilderOR(alg tpm2.HashAlgorithmId, policies ...*Policy) *PolicyBuilder {
 	b := NewPolicyBuilder(alg)
 
