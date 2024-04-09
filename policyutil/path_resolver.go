@@ -355,8 +355,6 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 	nvResult := make(map[nvAssertionMapKey]nvAssertionStatus)
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)
 
-	s.nvCheckedOk = make(map[nvAssertionMapKey]struct{})
-
 	for p, d := range s.detailsMap {
 		incompatible := false
 		for _, nv := range d.NV {
@@ -555,10 +553,11 @@ func (e *policyPathWildcardResolverTreeWalkError) Unwrap() error {
 
 func (*policyPathWildcardResolverTreeWalkError) isPolicyDelimiterError() {}
 
-func (s *policyPathWildcardResolver) selectPath(branches policyBranches) (policyBranchPath, error) {
+func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBranchPath, error) {
 	// reset state
 	s.paths = nil
 	s.detailsMap = make(map[policyBranchPath]pathWildcardResolverBranchDetails)
+	s.nvCheckedOk = make(map[nvAssertionMapKey]struct{})
 
 	var makeBeginBranchFn func(policyBranchPath, *pathWildcardResolverBranchDetails) treeWalkerBeginBranchFn
 	makeBeginBranchFn = func(parentPath policyBranchPath, details *pathWildcardResolverBranchDetails) treeWalkerBeginBranchFn {

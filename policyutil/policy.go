@@ -1060,8 +1060,6 @@ func (t *executePolicyTickets) currentTickets() (out []*PolicyTicket) {
 }
 
 type policyExecuteRunner struct {
-	sessionAlg tpm2.HashAlgorithmId
-
 	policySessionContext SessionContext
 	policySession        *teePolicySession
 	policyTickets        *executePolicyTickets
@@ -1074,18 +1072,18 @@ type policyExecuteRunner struct {
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
+	wildcardResolver *policyPathWildcardResolver
+
 	remaining   policyBranchPath
 	currentPath policyBranchPath
 }
 
 func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, tpm TPMHelper, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
-	sessionAlg := session.HashAlg()
 	return &policyExecuteRunner{
-		sessionAlg:           sessionAlg,
 		policySessionContext: session.Context(),
 		policySession: newTeePolicySession(
 			session,
-			newRecorderPolicySession(sessionAlg, details),
+			newRecorderPolicySession(session.HashAlg(), details),
 		),
 		policyTickets:        tickets,
 		policyResources:      resources,
@@ -1094,6 +1092,7 @@ func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets
 		usage:                params.Usage,
 		ignoreAuthorizations: params.IgnoreAuthorizations,
 		ignoreNV:             params.IgnoreNV,
+		wildcardResolver:     newPolicyPathWildcardResolver(session.HashAlg(), resources, tpm, params.Usage, params.IgnoreAuthorizations, params.IgnoreNV),
 		remaining:            policyBranchPath(params.Path),
 	}
 }
@@ -1179,7 +1178,7 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 		switch {
 		case policyDigest.HashAlg == tpm2.HashAlgorithmNull:
 			// policy is not enabled for this resource
-			alg = r.sessionAlg
+			alg = r.session().HashAlg()
 			availableSessionTypes[tpm2.SessionTypePolicy] = false
 		default:
 			// policy is enabled for this resource
@@ -1336,8 +1335,7 @@ func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		resolver := newPolicyPathWildcardResolver(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
-		path, err := resolver.selectPath(branches)
+		path, err := r.wildcardResolver.resolve(branches)
 		if err != nil {
 			return 0, "", fmt.Errorf("cannot automatically select branch: %w", err)
 		}
