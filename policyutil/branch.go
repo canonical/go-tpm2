@@ -112,7 +112,7 @@ func (t *policyOrTree) selectBranch(i int) (out []tpm2.DigestList) {
 	node := t.leafNodes[i>>3]
 
 	for node != nil {
-		out = append(out, ensureSufficientORDigests(node.digests))
+		out = append(out, node.digests)
 		node = node.parent
 	}
 
