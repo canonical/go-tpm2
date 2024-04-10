@@ -1618,14 +1618,16 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 // automatically where possible. This works by selecting the first suitable path, with a
 // preference for paths that don't include TPM2_PolicySecret, TPM2_PolicySigned,
 // TPM2_PolicyAuthValue, and TPM2_PolicyPassword assertions. It also has a preference for paths
-// that don't include TPM2_PolicyNV assertions that require authorization to use or read. A path
+// that don't include TPM2_PolicyNV assertions that require authorization to use or read, and for
+// paths without TPM2_PolicyCommandCode, TPM2_PolicyCpHash, TPM2_PolicyNameHash and
+// TPM2_PolicyDuplicatiionSelect assertions where no [PolicySessionUsage] is supplied. A path
 // is omitted from the set of suitable paths if any of the following conditions are true:
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
 //     the supplied [PolicySessionUsage].
 //   - It contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion and this isn't permitted
 //     by the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicyNvWritten with a value that doesn't match the public area of the NV index
-//     provided via the supplied [PolicySessionUsage].
+//     that the session will be used to authorize, provided via the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicySigned, TPM2_PolicySecret or TPM2_PolicyAuthorize and the specific
 //     authorization is included in the IgnoreAuthorizations field of [PolicyExecuteParams].
 //   - It uses TPM2_PolicyNV and the NV index is included in the IgnoreNV field of
