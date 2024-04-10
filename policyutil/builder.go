@@ -716,7 +716,8 @@ type PolicyBuilder struct {
 	err  error
 }
 
-// NewPolicyBuilder returns a new PolicyBuilder.
+// NewPolicyBuilder returns a new PolicyBuilder. It will panic if the supplied algorithm
+// is not available.
 func NewPolicyBuilder(alg tpm2.HashAlgorithmId) *PolicyBuilder {
 	if !alg.Available() {
 		panic("invalid algorithm")

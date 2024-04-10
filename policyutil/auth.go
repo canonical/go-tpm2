@@ -43,9 +43,10 @@ type PolicyAuthorization struct {
 // approved policy digest. This can sign authorizations for TPM2_PolicySigned as well, but
 // [SignPolicySignedAuthorization] is preferred for that because it constructs the message
 // appropriately.
-//
-// This will panic if the specified digest algorithm is not available.
 func SignPolicyAuthorization(rand io.Reader, message []byte, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) (*PolicyAuthorization, error) {
+	if !opts.HashFunc().Available() {
+		return nil, errors.New("digest algorithm is not available")
+	}
 	digest := ComputePolicyAuthorizationTBSDigest(opts.HashFunc(), message, policyRef)
 	sig, err := cryptutil.Sign(rand, signer, digest, opts)
 	if err != nil {
@@ -127,8 +128,6 @@ type PolicySignedParams struct {
 // sessions, and its validity period and scope are restricted by the expiration and cpHashA
 // arguments. If the authorization is not bound to a specific session, the ticket will expire on
 // the next TPM reset if this occurs before the calculated expiration time
-//
-// This will panic if the requested digest algorithm is not available.
 func SignPolicySignedAuthorization(rand io.Reader, params *PolicySignedParams, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) (*PolicySignedAuthorization, error) {
 	if params == nil {
 		params = new(PolicySignedParams)
