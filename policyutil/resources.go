@@ -687,7 +687,7 @@ func newMockPolicyResources(authorizedPolicies PolicyAuthorizedPolicies) *mockPo
 
 func (*mockPolicyResources) loadedResource(name tpm2.Name) (ResourceContext, error) {
 	// the handle is not relevant here
-	return newResourceContext(tpm2.NewLimitedResourceContext(0x80000000, name), nil), nil
+	return newResourceContext(tpm2.NewResourceContext(0x80000000, name), nil), nil
 }
 
 func (r *mockPolicyResources) policy(name tpm2.Name) (*Policy, error) {

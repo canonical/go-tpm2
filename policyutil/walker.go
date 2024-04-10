@@ -96,7 +96,7 @@ func (r *treeWalker) authResourceName() tpm2.Name {
 
 func (w *treeWalker) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 

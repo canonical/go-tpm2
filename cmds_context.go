@@ -18,11 +18,13 @@ import (
 // integrity protects the context with a key derived from the hierarchy proof. If saveContext does
 // not correspond to a transient object or a session, then it will return an error.
 //
-// On successful completion, it returns a Context instance that can be passed to
-// [TPMContext.ContextLoad]. Note that this function wraps the context data returned from the TPM
+// On successful completion, it returns a Context structure that can be passed to
+// [TPMContext.ContextLoad]. Note that this function wraps the context blob returned from the TPM
 // with some host-side state associated with the resource, so that it can be restored fully in
-// [TPMContext.ContextLoad]. If saveContext corresponds to a session, the host-side state that is
-// added to the returned context blob includes the session key.
+// [TPMContext.ContextLoad]. This means that the context structure cannot be passed directly to the
+// TPM using the TPM2_ContextLoad command, but [TPMContext.ContextLoad] must be used instead. If
+// saveContext corresponds to a session, the host-side state that is added to the returned context
+// blob includes the session key.
 //
 // If saveContext corresponds to a session, then TPM2_ContextSave also removes resources associated
 // with the session from the TPM (it becomes a saved session rather than a loaded session). In this
@@ -55,14 +57,21 @@ func (t *TPMContext) ContextSave(saveContext HandleContext) (context *Context, e
 // ContextLoad executes the TPM2_ContextLoad command with the supplied Context, in order to restore
 // a context previously saved from [TPMContext.ContextSave].
 //
-// If the size field of the integrity HMAC in the context blob is greater than the size of the
-// largest digest algorithm, a *[TPMError] with an error code of [ErrorSize] is returned. If the
-// context blob is shorter than the size indicated for the integrity HMAC, a *[TPMError] with an
-// error code of [ErrorInsufficient] is returned.
+// Note that the context blob returned from [TPMContext.ContextSave] wraps the context blob returned
+// from the TPM with some host-side state that can be used by this function to reconstruct a
+// HandleContext. This function expects a context structure created by [TPMContext.ContextSave] as
+// opposed to one created directly by the TPM2_ContextSave command on the TPM.
 //
-// If the size of the context's integrity HMAC does not match the context integrity digest
-// algorithm for the TPM, or the context blob is too short, a *[TPMParameterError] error with an
-// error code of [ErrorSize] will be returned. If the integrity HMAC check fails, a
+// If the size field of the integrity HMAC in the unwrapped context blob is greater than the size of
+// the largest digest algorithm, a *[TPMError] with an error code of [ErrorSize] is returned. If the
+// unwrapped context blob is shorter than the indicated size of the integrity HMAC, a *[TPMError] error
+// with an error code of [ErrorInsufficient] is returned.
+//
+// If the size of the integrity HMAC in the unwrapped context blob does not match the size of the
+// context integrity digest algorithm for the TPM, or the unwrapped context blob is too short, a
+// *[TPMParameterError] error with an error code of [ErrorSize] is returned.
+//
+// If the integrity HMAC check for the context including the unwrapped blob fails, a
 // *[TPMParameterError] with an error code of [ErrorIntegrity] will be returned.
 //
 // If the hierarchy that the context is part of is disabled, a *[TPMParameterError] error with an
@@ -127,15 +136,22 @@ func (t *TPMContext) ContextLoad(context *Context) (loadedContext HandleContext,
 		if loadedHandle.Type() != HandleTypeTransient {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is the wrong type", loadedHandle)}
 		}
-		hc = newObjectContext(loadedHandle, hc.Name(), hc.(ObjectContext).Public())
+		switch obj := hc.(type) {
+		case ObjectContext:
+			return newObjectContext(loadedHandle, hc.Name(), obj.Public()), nil
+		case ResourceContext:
+			return newResourceContext(loadedHandle, hc.Name()), nil
+		default:
+			return newHandleContext(loadedHandle), nil
+		}
 	case HandleTypeHMACSession, HandleTypePolicySession:
 		if loadedHandle != context.SavedHandle {
 			return nil, &InvalidResponseError{CommandContextLoad, fmt.Errorf("handle %v returned from TPM is incorrect", loadedHandle)}
 		}
+		return hc, nil
 	default:
 		panic("not reached")
 	}
-	return hc, nil
 }
 
 // FlushContext executes the TPM2_FlushContext command on the handle referenced by flushContext,
@@ -190,8 +206,8 @@ func (t *TPMContext) FlushContext(flushContext HandleContext) error {
 // handle, a *[TPMError] error with an error code of [ErrorNVDefined] will be returned.
 //
 // On successful completion of persisting a transient object, it returns a ResourceContext that
-// corresponds to the persistent object. If object was created with [NewLimitedResourceContext],
-// then a similarly limited context will be returned for the new persistent object. On successful
+// corresponds to the persistent object. If object can be type asserted to [ObjectContext], then
+// the returned ResourceContext can also be type asserted to [ObjectContext]. On successful
 // completion of evicting a persistent object, it returns a nil ResourceContext, and object will be
 // invalidated.
 func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle Handle, authAuthSession SessionContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -218,13 +234,13 @@ func (t *TPMContext) EvictControl(auth, object ResourceContext, persistentHandle
 	name := make(Name, len(object.Name()))
 	copy(name, object.Name())
 
-	switch {
-	case object.Handle() == persistentHandle:
+	if object.Handle() == persistentHandle {
+		// we evicted an object
 		object.Dispose()
 		return nil, nil
-	case public != nil:
-		return newObjectContext(persistentHandle, name, public), nil
-	default:
-		return newLimitedResourceContext(persistentHandle, name), nil
 	}
+	if public == nil {
+		return newResourceContext(persistentHandle, name), nil
+	}
+	return newObjectContext(persistentHandle, name, public), nil
 }

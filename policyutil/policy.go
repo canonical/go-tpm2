@@ -1757,7 +1757,7 @@ func (r *policyComputeRunner) authResourceName() tpm2.Name {
 
 func (r *policyComputeRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 
@@ -1970,7 +1970,7 @@ func (r *policyValidateRunner) authResourceName() tpm2.Name {
 
 func (r *policyValidateRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 
@@ -2370,7 +2370,7 @@ func (r *policyStringifierRunner) authResourceName() tpm2.Name {
 
 func (r *policyStringifierRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 

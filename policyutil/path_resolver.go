@@ -163,7 +163,7 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 				delete(s.detailsMap, p)
 				continue
 			}
-			pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(authHandle.Handle()))
+			pub, err := s.tpm.NVReadPublic(tpm2.NewHandleContext(authHandle.Handle()))
 			if err != nil {
 				return fmt.Errorf("cannot obtain NV index public area: %w", err)
 			}
@@ -415,7 +415,7 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 			info, exists := nvInfo[nv.Index]
 			if !exists {
 				// Read the index info from the TPM
-				pub, err := s.tpm.NVReadPublic(tpm2.NewLimitedHandleContext(nv.Index))
+				pub, err := s.tpm.NVReadPublic(tpm2.NewHandleContext(nv.Index))
 				if tpm2.IsTPMHandleError(err, tpm2.ErrorHandle, tpm2.AnyCommandCode, tpm2.AnyHandleIndex) {
 					// if no NV index exists, then this branch won't work.
 					nvResult[key] = nvAssertionStatusIncompatible
@@ -470,7 +470,7 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 				}
 				defer session.Flush()
 
-				rc := tpm2.NewLimitedResourceContext(nv.Index, nv.Name)
+				rc := tpm2.NewResourceContext(nv.Index, nv.Name)
 				params := &PolicyExecuteParams{
 					Usage: NewPolicySessionUsage(tpm2.CommandNVRead, []NamedHandle{rc, rc}, uint16(len(nv.OperandB)), nv.Offset).WithoutAuthValue(),
 				}

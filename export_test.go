@@ -32,7 +32,7 @@ func (c *CommandContext) Cmd() *CmdContext {
 }
 
 func (c *NvIndexContextImpl) Public() *NVPublic {
-	return c.Data.NV.Data
+	return c.Data.NV
 }
 
 func (c *ResponseContext) Dispatcher() commandDispatcher {

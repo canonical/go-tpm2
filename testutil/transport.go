@@ -861,7 +861,7 @@ func (t *Transport) removeResources(errs []error, tpm *tpm2.TPMContext) []error 
 				errs = append(errs, fmt.Errorf("cannot undefine %v: %w", info.handle, err))
 			}
 		case tpm2.HandleTypeHMACSession, tpm2.HandleTypePolicySession, tpm2.HandleTypeTransient:
-			tpm.FlushContext(tpm2.NewLimitedHandleContext(info.handle))
+			tpm.FlushContext(tpm2.NewHandleContext(info.handle))
 		case tpm2.HandleTypePersistent:
 			auth := tpm.GetPermanentContext(info.auth())
 			object, err := tpm2.NewObjectResourceContextFromPub(info.handle, info.pub)

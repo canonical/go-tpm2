@@ -114,12 +114,13 @@ import (
 // On success, a ResourceContext instance will be returned that corresponds to the newly created
 // object on the TPM. It will not be necessary to call [ResourceContext].SetAuthValue on it - this
 // function sets the correct authorization value so that it can be used in subsequent commands that
-// require knowledge of the authorization value. If the Type field of inPublic is
-// [ObjectTypeKeyedHash] or [ObjectTypeSymCipher], then the returned *Public object will have a
-// Unique field that is the digest of the sensitive data and the value of the object's seed in the
-// sensitive area, computed using the object's name algorithm. If the Type field of inPublic is
-// [ObjectTypeECC] or [ObjectTypeRSA], then the returned *Public object will have a Unique field
-// containing details about the public part of the key, computed from the private part of the key.
+// require knowledge of the authorization value. The returned ResourceContext can be type asserted
+// to [ObjectContext]. If the Type field of inPublic is [ObjectTypeKeyedHash] or
+// [ObjectTypeSymCipher], then the returned *Public object will have a Unique field that is the digest
+// of the sensitive data and the value of the object's seed in the sensitive area, computed using the
+// object's name algorithm. If the Type field of inPublic is [ObjectTypeECC] or [ObjectTypeRSA], then
+// the returned *Public object will have a Unique field containing details about the public part of the
+// key, computed from the private part of the key.
 //
 // The returned *CreationData will contain a digest computed from the values of PCRs selected by
 // the creationPCR parameter at creation time in the PCRDigest field. It will also contain the

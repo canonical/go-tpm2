@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"crypto"
 	_ "crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -103,8 +102,7 @@ type ObjectContext interface {
 	ResourceContext
 
 	// Public is the public area associated with the object. This will return nil
-	// if the context was created via NewLimitedHandleContext or
-	// NewLimitedResourceContext, or HandleContext.Dispose was called.
+	// if HandleContext.Dispose was called.
 	Public() *Public
 }
 
@@ -125,53 +123,80 @@ type sessionContextData struct {
 	State  SessionContextState
 }
 
-type publicSized struct {
-	Data *Public `tpm2:"sized"`
-}
-
-type nvPublicSized struct {
-	Data *NVPublic `tpm2:"sized"`
-}
-
-type sessionContextDataSized struct {
-	Data *sessionContextData `tpm2:"sized"`
-}
-
 type handleContextU struct {
-	Object  *publicSized
-	NV      *nvPublicSized
-	Session *sessionContextDataSized
+	Object  *Public
+	NV      *NVPublic
+	Session *sessionContextData
 }
 
 func (d *handleContextU) Select(selector reflect.Value) interface{} {
-	switch selector.Interface().(Handle).Type() {
-	case HandleTypePCR, HandleTypePermanent:
+	switch selector.Interface().(handleContextType) {
+	case handleContextTypePermanent, handleContextTypeLimitedResource, handleContextTypeLimited:
 		return mu.NilUnionValue
-	case HandleTypeTransient, HandleTypePersistent:
-		return &d.Object
-	case HandleTypeNVIndex:
+	case handleContextTypeNVIndex:
 		return &d.NV
-	case HandleTypeHMACSession, HandleTypePolicySession:
+	case handleContextTypeSession:
 		return &d.Session
+	case handleContextTypeObject:
+		return &d.Object
 	default:
 		return nil
 	}
 }
 
+type handleContextType uint8
+
+const (
+	handleContextTypePermanent handleContextType = 1 // corresponds to permanentContext
+	handleContextTypeNVIndex   handleContextType = 2 // corresponds to nvIndexContext
+	handleContextTypeSession   handleContextType = 3 // corresponds to sessionContext
+	handleContextTypeObject    handleContextType = 4 // corresponds to objectContext
+
+	// handleContextTypeLimitedResource corresponds to resourceContext. This can represent a
+	// NV index or object for which we have a name but no public area.
+	handleContextTypeLimitedResource handleContextType = 5
+
+	// handleContextLimited corresponds to handleContext. This can represent any TPM resource
+	// for which we only have a handle. The name will be set to the handle, which is ok for
+	// permanent resources and sessions, but it means that NV indexes and objects are unsuitable
+	// in any commands that use sessions.
+	handleContextTypeLimited handleContextType = 6
+
+	// handleContextTypeDisposed exists to prevent serializing handles where HandleContext.Dispose
+	// has been called.
+	handleContextTypeDisposed handleContextType = 7
+)
+
+func handleContextTypeFromHandle(handle Handle) handleContextType {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypePermanent:
+		return handleContextTypePermanent
+	case HandleTypeNVIndex:
+		return handleContextTypeNVIndex
+	case HandleTypeHMACSession, HandleTypePolicySession:
+		return handleContextTypeSession
+	case HandleTypeTransient, HandleTypePersistent:
+		return handleContextTypeObject
+	default:
+		panic("invalid handle type")
+	}
+}
+
 type handleContext struct {
-	H    Handle
-	N    Name
-	Data *handleContextU
+	HandleType   handleContextType
+	HandleHandle Handle
+	HandleName   Name
+	Data         *handleContextU
 }
 
 var _ HandleContext = (*handleContext)(nil)
 
 func (h *handleContext) Handle() Handle {
-	return h.H
+	return h.HandleHandle
 }
 
 func (h *handleContext) Name() Name {
-	return h.N
+	return h.HandleName
 }
 
 func (h *handleContext) SerializeToBytes() []byte {
@@ -192,60 +217,133 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 }
 
 func (h *handleContext) Dispose() {
-	h.H = HandleUnassigned
-	h.N = nil
+	h.HandleType = handleContextTypeDisposed
+	h.HandleHandle = HandleUnassigned
+	h.HandleName = MakeHandleName(HandleUnassigned)
 	h.Data = new(handleContextU)
 }
 
 func (h *handleContext) checkValid() error {
-	switch h.H.Type() {
-	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
-		return nil
-	case HandleTypeHMACSession, HandleTypePolicySession:
-		data := h.Data.Session.Data
-		if data == nil {
-			return nil
+	switch h.HandleType {
+	case handleContextTypePermanent:
+		switch h.HandleHandle.Type() {
+		case HandleTypePCR, HandleTypePermanent:
+			// ok
+		default:
+			return errors.New("unexpected handle type for permanent context")
 		}
+		expectedName := MakeHandleName(h.HandleHandle)
+		if !bytes.Equal(h.HandleName, expectedName) {
+			return errors.New("unexpected name for permanent context")
+		}
+	case handleContextTypeNVIndex:
+		switch h.HandleHandle.Type() {
+		case HandleTypeNVIndex:
+			// ok
+		default:
+			return errors.New("unexpected handle type for NV index context")
+		}
+		if h.Data.NV.NameAlg.Available() {
+			expectedName, err := h.Data.NV.ComputeName()
+			if err != nil {
+				return fmt.Errorf("cannot compute name of public area in NV index context: %w", err)
+			}
+			if !bytes.Equal(h.HandleName, expectedName) {
+				return errors.New("unexpected name for NV index context")
+			}
+		}
+	case handleContextTypeSession:
+		switch h.HandleHandle.Type() {
+		case HandleTypeHMACSession, HandleTypePolicySession:
+			// ok
+		default:
+			return errors.New("unexpected handle type for session context")
+		}
+		expectedName := MakeHandleName(h.HandleHandle)
+		if !bytes.Equal(h.HandleName, expectedName) {
+			return errors.New("unexpected name for session context")
+		}
+		data := h.Data.Session
 		if !data.Params.HashAlg.Available() {
-			return errors.New("digest algorithm for session context is not available")
+			return errors.New("session context digest algorithm is not available")
 		}
-		switch h.H.Type() {
+		if len(data.Params.SessionKey) > 0 && len(data.Params.SessionKey) != data.Params.HashAlg.Size() {
+			return errors.New("inconsistent digest algorithm and session key length for session context")
+		}
+		switch h.HandleHandle.Type() {
 		case HandleTypeHMACSession:
+			if data.Params.IsBound && len(data.Params.SessionKey) == 0 {
+				return errors.New("inconsistent bind parameters and session key length for HMAC session context")
+			}
+			if data.Params.IsBound && len(data.Params.BoundEntity) == 0 || !data.Params.IsBound && len(data.Params.BoundEntity) > 0 {
+				return errors.New("inconsistent bind parameters for HMAC session context")
+			}
 			if data.State.NeedsPassword || data.State.NeedsAuthValue {
-				return errors.New("invalid policy session HMAC type for HMAC session context")
+				return errors.New("invalid policy session auth type for HMAC session context")
 			}
 		case HandleTypePolicySession:
-			// ok
+			if data.Params.IsBound || len(data.Params.BoundEntity) > 0 {
+				return errors.New("invalid bind parameters for policy session context")
+			}
+			if data.State.NeedsPassword && data.State.NeedsAuthValue {
+				return errors.New("inconsistent auth types for policy session context")
+			}
 		default:
 			panic("not reached")
 		}
 		return nil
+	case handleContextTypeObject:
+		switch h.HandleHandle.Type() {
+		case HandleTypeTransient, HandleTypePersistent:
+			// ok
+		default:
+			return errors.New("unexpected handle type for object context")
+		}
+		if h.Data.Object.NameAlg.Available() {
+			expectedName, err := h.Data.Object.ComputeName()
+			if err != nil {
+				return fmt.Errorf("cannot compute name of public area in object context: %w", err)
+			}
+			if !bytes.Equal(h.HandleName, expectedName) {
+				return errors.New("unexpected name for object context")
+			}
+		}
+	case handleContextTypeLimitedResource:
+		switch h.HandleHandle.Type() {
+		case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
+			// ok
+		default:
+			return errors.New("unexpected handle type for limited resource context")
+		}
+	case handleContextTypeLimited:
+		switch h.HandleHandle.Type() {
+		case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
+			// ok
+		default:
+			return errors.New("unexpected handle type for limited context")
+		}
+		expectedName := mu.MustMarshalToBytes(h.HandleHandle)
+		if !bytes.Equal(h.HandleName, expectedName) {
+			return errors.New("unexpected name for limited context")
+		}
 	default:
-		// shouldn't happen because it should have failed to unmarshal
-		panic("invalid context type")
+		panic("not reached")
 	}
+
+	return nil
 }
 
-func newLimitedHandleContext(handle Handle) HandleContext {
+func newHandleContext(handle Handle) HandleContext {
 	switch handle.Type() {
-	case HandleTypePCR, HandleTypePermanent:
-		return newPermanentContext(handle)
-	case HandleTypeNVIndex:
-		name := make(Name, binary.Size(Handle(0)))
-		binary.BigEndian.PutUint32(name, uint32(handle))
-
-		return newNVIndexContext(handle, name, nil)
-	case HandleTypeHMACSession, HandleTypePolicySession:
-		return newSessionContext(handle, nil)
-	case HandleTypeTransient, HandleTypePersistent:
-		name := make(Name, binary.Size(Handle(0)))
-		binary.BigEndian.PutUint32(name, uint32(handle))
-
-		return newObjectContext(handle, name, nil)
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
+		return &handleContext{
+			HandleType:   handleContextTypeLimited,
+			HandleHandle: handle,
+			HandleName:   mu.MustMarshalToBytes(handle),
+		}
 	default:
 		panic("invalid handle type")
 	}
-
 }
 
 type resourceContext struct {
@@ -253,12 +351,16 @@ type resourceContext struct {
 	authValue []byte
 }
 
-func newLimitedResourceContext(handle Handle, name Name) ResourceContext {
+func newResourceContext(handle Handle, name Name) ResourceContext {
 	switch handle.Type() {
-	case HandleTypeNVIndex:
-		return newNVIndexContext(handle, name, nil)
-	case HandleTypeTransient, HandleTypePersistent:
-		return newObjectContext(handle, name, nil)
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
+		return &resourceContext{
+			handleContext: handleContext{
+				HandleType:   handleContextTypeLimitedResource,
+				HandleHandle: handle,
+				HandleName:   name,
+			},
+		}
 	default:
 		panic("invalid handle type")
 	}
@@ -286,18 +388,18 @@ type permanentContext struct {
 func newPermanentContext(handle Handle) *permanentContext {
 	switch handle.Type() {
 	case HandleTypePCR, HandleTypePermanent:
-		// ok
+		return &permanentContext{
+			resourceContext: resourceContext{
+				handleContext: handleContext{
+					HandleType:   handleContextTypePermanent,
+					HandleHandle: handle,
+					HandleName:   MakeHandleName(handle),
+				},
+			},
+		}
 	default:
 		panic("invalid handle type")
 	}
-
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(handle))
-	return &permanentContext{
-		resourceContext: resourceContext{
-			handleContext: handleContext{
-				H: handle,
-				N: name}}}
 }
 
 var _ ResourceContext = (*permanentContext)(nil)
@@ -315,17 +417,23 @@ type objectContext struct {
 func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 	switch handle.Type() {
 	case HandleTypeTransient, HandleTypePersistent:
-		// ok
+		if public == nil {
+			panic("nil public area")
+		}
+		return &objectContext{
+			resourceContext: resourceContext{
+				handleContext: handleContext{
+					HandleType:   handleContextTypeObject,
+					HandleHandle: handle,
+					HandleName:   name,
+					Data:         &handleContextU{Object: public},
+				},
+			},
+		}
 	default:
 		panic("invalid handle type")
 	}
 
-	return &objectContext{
-		resourceContext: resourceContext{
-			handleContext: handleContext{
-				H:    handle,
-				N:    name,
-				Data: &handleContextU{Object: &publicSized{Data: public}}}}}
 }
 
 func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -342,11 +450,7 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 var _ ObjectContext = (*objectContext)(nil)
 
 func (r *objectContext) Public() *Public {
-	if r.Data.Object == nil {
-		// This context was disposed.
-		return nil
-	}
-	return r.Data.Object.Data
+	return r.Data.Object
 }
 
 type nvIndexContext struct {
@@ -356,17 +460,23 @@ type nvIndexContext struct {
 func newNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexContext {
 	switch handle.Type() {
 	case HandleTypeNVIndex:
-		// ok
+		if public == nil {
+			panic("nil public area")
+		}
+		return &nvIndexContext{
+			resourceContext: resourceContext{
+				handleContext: handleContext{
+					HandleType:   handleContextTypeNVIndex,
+					HandleHandle: handle,
+					HandleName:   name,
+					Data:         &handleContextU{NV: public},
+				},
+			},
+		}
 	default:
 		panic("invalid handle type")
 	}
 
-	return &nvIndexContext{
-		resourceContext: resourceContext{
-			handleContext: handleContext{
-				H:    handle,
-				N:    name,
-				Data: &handleContextU{NV: &nvPublicSized{Data: public}}}}}
 }
 
 func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ...SessionContext) (ResourceContext, error) {
@@ -386,20 +496,20 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 var _ NVIndexContext = (*nvIndexContext)(nil)
 
 func (r *nvIndexContext) Type() NVType {
-	if r.Data.NV == nil || r.Data.NV.Data == nil {
-		// This context was disposed or is limited
+	if r.Data.NV == nil {
+		// This context was disposed
 		return 0
 	}
-	return r.Data.NV.Data.Attrs.Type()
+	return r.Data.NV.Attrs.Type()
 }
 
 func (r *nvIndexContext) SetAttr(a NVAttributes) {
-	if r.Data.NV == nil || r.Data.NV.Data == nil {
-		// This context was disposed or is limited
+	if r.Data.NV == nil {
+		// This context was disposed
 		return
 	}
-	r.Data.NV.Data.Attrs |= a
-	r.N = r.Data.NV.Data.Name()
+	r.Data.NV.Attrs |= a
+	r.HandleName = r.Data.NV.Name()
 }
 
 type sessionContext struct {
@@ -410,27 +520,30 @@ type sessionContext struct {
 func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
 	switch handle.Type() {
 	case HandleTypeHMACSession, HandleTypePolicySession:
-		// ok
+		if data == nil {
+			panic("nil session data")
+		}
 	default:
 		if handle != HandlePW {
 			panic("invalid handle type")
 		}
 	}
 
-	name := make(Name, binary.Size(Handle(0)))
-	binary.BigEndian.PutUint32(name, uint32(handle))
 	return &sessionContext{
 		handleContext: &handleContext{
-			H:    handle,
-			N:    name,
-			Data: &handleContextU{Session: &sessionContextDataSized{Data: data}}}}
+			HandleType:   handleContextTypeSession,
+			HandleHandle: handle,
+			HandleName:   MakeHandleName(handle),
+			Data:         &handleContextU{Session: data},
+		},
+	}
 }
 
 var _ SessionContext = (*sessionContext)(nil)
 
-func (r *sessionContext) Available() bool {
-	return r.Data() != nil
-}
+//func (r *sessionContext) Available() bool {
+//	return r.Data() != nil
+//}
 
 func (r *sessionContext) Params() SessionContextParams {
 	d := r.Data()
@@ -508,11 +621,7 @@ func (r *sessionContext) ExcludeAttrs(attrs SessionAttributes) SessionContext {
 }
 
 func (r *sessionContext) Data() *sessionContextData {
-	if r.handleContext.Data.Session == nil {
-		// This handle context was disposed.
-		return nil
-	}
-	return r.handleContext.Data.Session.Data
+	return r.handleContext.Data.Session
 }
 
 func pwSession() SessionContext {
@@ -531,7 +640,7 @@ func (t *TPMContext) newResourceContextFromTPM(handle HandleContext, sessions ..
 	case HandleTypeTransient, HandleTypePersistent:
 		rc, err = t.newObjectContextFromTPM(handle, sessions...)
 	default:
-		panic("invalid handle type")
+		return nil, errors.New("invalid handle type")
 	}
 
 	switch {
@@ -557,14 +666,17 @@ func (t *TPMContext) newResourceContextFromTPM(handle HandleContext, sessions ..
 // If any sessions are supplied, the public area is read from the TPM twice. The second time uses
 // the supplied sessions.
 //
-// This function will panic if handle doesn't correspond to a NV index, transient object or
-// persistent object.
+// This function will return an error if handle doesn't correspond to a NV index, transient object
+// or persistent object.
 //
 // If subsequent use of the returned ResourceContext requires knowledge of the authorization value
 // of the corresponding TPM resource, this should be provided by calling
 // [ResourceContext].SetAuthValue.
+//
+// If the specified handle is an object, the returned context can be type asserted to [ObjectContext].
+// If the specified handle is a NV index, the returned context can be type asserted to [NVIndexContext].
 func (t *TPMContext) NewResourceContext(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
-	rc, err := t.newResourceContextFromTPM(newLimitedHandleContext(handle))
+	rc, err := t.newResourceContextFromTPM(newHandleContext(handle))
 	if err != nil {
 		return nil, err
 	}
@@ -587,41 +699,59 @@ func (t *TPMContext) NewResourceContext(handle Handle, sessions ...SessionContex
 // If any sessions are supplied, the public area is read from the TPM twice. The second time uses
 // the supplied sessions.
 //
-// This function will panic if handle doesn't correspond to a NV index, transient object or
-// persistent object.
+// This function will return an error if handle doesn't correspond to a NV index, transient object
+// or persistent object.
 //
 // If subsequent use of the returned ResourceContext requires knowledge of the authorization value
 // of the corresponding TPM resource, this should be provided by calling
 // [ResourceContext].SetAuthValue.
+//
+// If the specified handle is an object, the returned context can be type asserted to [ObjectContext].
+// If the specified handle is a NV index, the returned context can be type asserted to [NVIndexContext].
 //
 // Deprecated: Use [TPMContext.NewResourceContext] instead.
 func (t *TPMContext) CreateResourceContextFromTPM(handle Handle, sessions ...SessionContext) (ResourceContext, error) {
 	return t.NewResourceContext(handle, sessions...)
 }
 
-// NewLimitedHandleContext creates a new HandleContext for the specified handle. The returned
-// HandleContext can not be used in any commands other than [TPMContext.FlushContext],
-// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic], and it cannot be used with any sessions.
+// NewHandleContext creates a new HandleContext for the specified handle. The returned
+// HandleContext cannot be type asserted to [ResourceContext] or [SessionContext] and can
+// only be used in commands that don't use sessions, such as [TPMContext.FlushContext],
+// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic].
 //
-// This function will panic if handle doesn't correspond to a session, transient or persistent
-// object, or NV index.
-func NewLimitedHandleContext(handle Handle) HandleContext {
+// This function will panic if handle doesn't correspond to a session, transient or
+// persistent object, or NV index.
+func NewHandleContext(handle Handle) HandleContext {
 	switch handle.Type() {
 	case HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypeTransient, HandleTypePersistent:
-		return newLimitedHandleContext(handle)
+		return newHandleContext(handle)
 	default:
 		panic("invalid handle type")
 	}
 }
 
-// CreatePartialHandleContext creates a new HandleContext for the specified handle. The returned
-// HandleContext is partial and cannot be used in any command other than [TPMContext.FlushContext],
-// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic], and it cannot be used with any sessions.
+// NewLimitedHandleContext creates a new HandleContext for the specified handle. The
+// returned HandleContext cannot be type asserted to [ResourceContext] or [SessionContext]
+// and can only be used in commands that don't use sessions, such as [TPMContext.FlushContext],
+// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic].
 //
-// This function will panic if handle doesn't correspond to a session, transient or persistent
-// object, or NV index.
+// This function will panic if handle doesn't correspond to a session, transient or
+// persistent object, or NV index.
 //
-// Deprecated: Use [NewLimitedHandleContext].
+// Deprecated: use [NewHandleContext].
+func NewLimitedHandleContext(handle Handle) HandleContext {
+	return NewHandleContext(handle)
+}
+
+// CreatePartialHandleContext creates a new HandleContext for the specified handle. The
+// returned HandleContext cannot be type asserted to [ResourceContext] or [SessionContext]
+// and can only be used in commands that don't use sessions, such as [TPMContext.FlushContext],
+// [TPMContext.ReadPublic] or [TPMContext.NVReadPublic].
+//
+// This function will panic if handle doesn't correspond to a session, transient or
+// persistent object, or NV index.
+//
+// Deprecated: Use [NewHandleContext].
 func CreatePartialHandleContext(handle Handle) HandleContext {
 	return NewLimitedHandleContext(handle)
 }
@@ -724,31 +854,28 @@ func NewHandleContextFromReader(r io.Reader) (HandleContext, error) {
 		return nil, errors.New("context blob contains trailing bytes")
 	}
 
-	switch data.Handle().Type() {
-	case HandleTypePCR, HandleTypePermanent:
-		return nil, errors.New("cannot create a permanent context from serialized data")
-	}
-
 	if err := data.checkValid(); err != nil {
 		return nil, err
 	}
 
-	var hc HandleContext
-	switch data.Handle().Type() {
-	case HandleTypeNVIndex:
-		hc = &nvIndexContext{resourceContext: resourceContext{handleContext: *data}}
-	case HandleTypeHMACSession, HandleTypePolicySession:
-		if data.Data.Session.Data != nil {
-			data.Data.Session.Data.State.IsExclusive = false
-		}
-		hc = &sessionContext{handleContext: data}
-	case HandleTypeTransient, HandleTypePersistent:
-		hc = &objectContext{resourceContext: resourceContext{handleContext: *data}}
+	switch data.HandleType {
+	case handleContextTypePermanent:
+		return newPermanentContext(data.Handle()), nil
+	case handleContextTypeNVIndex:
+		return newNVIndexContext(data.Handle(), data.Name(), data.Data.NV), nil
+	case handleContextTypeSession:
+		data.Data.Session.State.IsExclusive = false
+		return newSessionContext(data.Handle(), data.Data.Session), nil
+	case handleContextTypeObject:
+		return newObjectContext(data.Handle(), data.Name(), data.Data.Object), nil
+	case handleContextTypeLimitedResource:
+		return newResourceContext(data.Handle(), data.Name()), nil
+	case handleContextTypeLimited:
+		return newHandleContext(data.Handle()), nil
 	default:
+		// this should have been caught earlier
 		panic("not reached")
 	}
-
-	return hc, nil
 }
 
 // CreateHandleContextFromReader returns a new HandleContext created from the serialized data read
@@ -786,22 +913,6 @@ func NewHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 	return rc, len(b) - buf.Len(), nil
 }
 
-// NewLimitedResourceContext creates a new ResourceContext with the specified handle and name. The
-// returned ResourceContext has limited functionality - eg, it cannot be used in functions that
-// require knowledge of the public area associated with the resource (such as
-// [TPMContext.StartAuthSession] and some NV functions).
-//
-// This function will panic if handle doesn't correspond to a transient or persistent object, or an
-// NV index.
-func NewLimitedResourceContext(handle Handle, name Name) ResourceContext {
-	switch handle.Type() {
-	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
-		return newLimitedResourceContext(handle, name)
-	default:
-		panic("invalid handle type")
-	}
-}
-
 // CreateHandleContextFromBytes returns a new HandleContext created from the serialized data read
 // from the supplied byte slice. This should contain data that was previously created by
 // [HandleContext].SerializeToBytes or [HandleContext].SerializeToWriter.
@@ -818,13 +929,56 @@ func CreateHandleContextFromBytes(b []byte) (HandleContext, int, error) {
 	return NewHandleContextFromBytes(b)
 }
 
+// NewResourceContext creates a new ResourceContext with the specified handle and name. The
+// returned ResourceContext has limited functionality - eg, it cannot bs used in functions that
+// require knowledge of the public area associated with the resource (such as
+// [TPMContext.StartAuthSession]), and some NV functions that modify the attributes of an index
+// will not update its name. It cannot be type asserted to [ObjectContext] or [NVIndexContext].
+//
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization value
+// of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
+//
+// This function will panic if handle doesn't correspond to a transient or persistent object, or an
+// NV index.
+func NewResourceContext(handle Handle, name Name) ResourceContext {
+	switch handle.Type() {
+	case HandleTypeNVIndex, HandleTypeTransient, HandleTypePersistent:
+		return newResourceContext(handle, name)
+	default:
+		panic("invalid handle type")
+	}
+}
+
+// NewLimitedResourceContext creates a new ResourceContext with the specified handle and name. The
+// returned ResourceContext has limited functionality - eg, it cannot bs used in functions that
+// require knowledge of the public area associated with the resource (such as
+// [TPMContext.StartAuthSession], and some NV functions that modify the attributes of an index
+// will not update its name. It cannot be type asserted to [ObjectContext] or [NVIndexContext].
+//
+// If subsequent use of the returned ResourceContext requires knowledge of the authorization value
+// of the corresponding TPM resource, this should be provided by calling
+// [ResourceContext].SetAuthValue.
+//
+// This function will panic if handle doesn't correspond to a transient or persistent object, or an
+// NV index.
+//
+// Deprecated: use [NewResourceContext].
+func NewLimitedResourceContext(handle Handle, name Name) ResourceContext {
+	return NewResourceContext(handle, name)
+}
+
 // NewNVIndexResourceContextFromPub returns a new ResourceContext created from the provided
 // public area. If subsequent use of the returned ResourceContext requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
+// [ResourceContext].SetAuthValue. The returned context can be type asserted to
+// [NVIndexContext].
 //
 // This requires that the associated name algorithm is linked into the current binary.
 func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
+	if pub.Index.Type() != HandleTypeNVIndex {
+		return nil, errors.New("invalid handle type")
+	}
 	name, err := pub.ComputeName()
 	if err != nil {
 		return nil, fmt.Errorf("cannot compute name from public area: %v", err)
@@ -836,15 +990,22 @@ func NewNVIndexResourceContextFromPub(pub *NVPublic) (ResourceContext, error) {
 // and associated name. This is useful for creating a ResourceContext for an object that uses a
 // name algorithm that is not available. If subsequent use of the returned ResourceContext requires
 // knowledge of the authorization value of the corresponding TPM resource, this should be provided
-// by calling [ResourceContext].SetAuthValue.
+// by calling [ResourceContext].SetAuthValue. The returned context can be type asserted to
+// [NVIndexContext].
+//
+// This does not check the consistency of the name and public area.
+//
+// It will panic if the Index field of the supplied public area has a handle type other than
+// [HandleTypeNVIndex].
 func NewNVIndexResourceContext(pub *NVPublic, name Name) ResourceContext {
 	return newNVIndexContext(pub.Index, name, pub)
 }
 
-// CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the provided
-// public area. If subsequent use of the returned ResourceContext requires knowledge of the
-// authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
+// CreateNVIndexResourceContextFromPublic returns a new ResourceContext created from the
+// provided public area. If subsequent use of the returned ResourceContext requires knowledge
+// of the authorization value of the corresponding TPM resource, this should be provided by
+// calling [ResourceContext].SetAuthValue. The returned context can be type asserted to
+// [NVIndexContext].
 //
 // This requires that the associated name algorithm is linked into the current binary.
 //
@@ -856,7 +1017,8 @@ func CreateNVIndexResourceContextFromPublic(pub *NVPublic) (ResourceContext, err
 // NewObjectResourceContextFromPub returns a new ResourceContext created from the provided
 // public area. If subsequent use of the returned ResourceContext requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
+// [ResourceContext].SetAuthValue. The returned context can be type asserted to
+// [ObjectContext].
 //
 // This requires that the associated name algorithm is linked into the current binary.
 func NewObjectResourceContextFromPub(handle Handle, pub *Public) (ResourceContext, error) {
@@ -876,22 +1038,21 @@ func NewObjectResourceContextFromPub(handle Handle, pub *Public) (ResourceContex
 // associated name. This is useful for creating a ResourceContext for an object that uses a name
 // algorithm that is not available. If subsequent use of the returned ResourceContext requires
 // knowledge of the authorization value of the corresponding TPM resource, this should be provided
-// by calling [ResourceContext].SetAuthValue.
+// by calling [ResourceContext].SetAuthValue. The returned context can be type asserted to
+// [ObjectContext].
+//
+// This does not check the consistency of the name and public area.
 //
 // This will panic if the handle type is not [HandleTypeTransient] or [HandleTypePersistent].
 func NewObjectResourceContext(handle Handle, pub *Public, name Name) ResourceContext {
-	switch handle.Type() {
-	case HandleTypeTransient, HandleTypePersistent:
-		return newObjectContext(handle, name, pub)
-	default:
-		panic("invalid handle type")
-	}
+	return newObjectContext(handle, name, pub)
 }
 
-// CreateObjectResourceContextFromPublic returns a new ResourceContext created from the provided
+// CreateObjectResourceContextFromPub returns a new ResourceContext created from the provided
 // public area. If subsequent use of the returned ResourceContext requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
+// [ResourceContext].SetAuthValue. The returned context can be type asserted to
+// [ObjectContext].
 //
 // This requires that the associated name algorithm is linked into the current binary.
 //

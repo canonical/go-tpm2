@@ -25,16 +25,17 @@ import (
 // parameter encryption where used. The size of the digest algorithm is used to determine the nonce
 // size used for the session.
 //
-// If tpmKey is provided then a salted session is created. The key must correspond to an asymmetric
+// If tpmKey is provided then a salted session is created. In this case, it must be possible to
+// type assert the provided key to [ObjectContext]. The key must correspond to an asymmetric
 // decrypt key in the TPM - it must have a type of [ObjectTypeRSA] or [ObjectTypeECC] and it must
 // have the [AttrDecrypt] attribute set. In this case, a random salt value will be established
 // which will contribute to the session key derivation. If tpmKey has the type of [ObjectTypeRSA],
 // the random salt will be created on the host and RSA-OAEP encrypted with the public part of
-// tpmKey before being sent to the TPM. If tpmKey has the type of [ObjectTypeECC], ECDH is used to
-// derive a random salt, using tpmKey and an ephemeral host key. If tpmKey is provided but does not
-// correspond to an asymmetric key, a *[TPMHandleError] error with an error code of [ErrorKey] will
-// be returned for handle index 1. If tpmKey is provided but corresponds to an object with only its
-// public part loaded, a *[TPMHandleError] error with an error code of [ErrorHandle] will be
+// tpmKey before being sent to the TPM. If tpmKey has the type of [ObjectTypeECC], a random salt
+// is established using ECDH key exchange and an ephemeral host key. If tpmKey is provided but does
+// not correspond to an asymmetric key, a *[TPMHandleError] error with an error code of [ErrorKey]
+// will be returned for handle index 1. If tpmKey is provided but corresponds to an object with only
+// its public part loaded, a *[TPMHandleError] error with an error code of [ErrorHandle] will be
 // returned for handle index 1. If tpmKey is provided but does not correspond to a decrypt key, a
 // *[TPMHandleError] error with an error code of [ErrorAttributes] will be returned for handle
 // index 1.
