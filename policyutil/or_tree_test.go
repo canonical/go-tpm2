@@ -23,9 +23,9 @@ func hash(alg crypto.Hash, data string) []byte {
 	return h.Sum(nil)
 }
 
-type branchSuite struct{}
+type orTreeSuite struct{}
 
-func (s *branchSuite) checkPolicyOrTree(c *C, alg tpm2.HashAlgorithmId, digests tpm2.DigestList, tree *PolicyOrTree) (finalDigest tpm2.Digest, depth int) {
+func (s *orTreeSuite) checkPolicyOrTree(c *C, alg tpm2.HashAlgorithmId, digests tpm2.DigestList, tree *PolicyOrTree) (finalDigest tpm2.Digest, depth int) {
 	leafNodes := tree.LeafNodes()
 	for i, digest := range digests {
 		var first bool
@@ -67,7 +67,7 @@ func (s *branchSuite) checkPolicyOrTree(c *C, alg tpm2.HashAlgorithmId, digests 
 	return finalDigest, depth
 }
 
-func (s *branchSuite) policyOrTreeBranchDigestLists(c *C, tree *PolicyOrTree, n int) (out []tpm2.DigestList) {
+func (s *orTreeSuite) policyOrTreeBranchDigestLists(c *C, tree *PolicyOrTree, n int) (out []tpm2.DigestList) {
 	leafNodes := tree.LeafNodes()
 
 	node := leafNodes[n>>3]
@@ -79,7 +79,7 @@ func (s *branchSuite) policyOrTreeBranchDigestLists(c *C, tree *PolicyOrTree, n 
 	return out
 }
 
-var _ = Suite(&branchSuite{})
+var _ = Suite(&orTreeSuite{})
 
 type testNewPolicyOrTreeData struct {
 	alg     tpm2.HashAlgorithmId
@@ -89,7 +89,7 @@ type testNewPolicyOrTreeData struct {
 	expected tpm2.Digest
 }
 
-func (s *branchSuite) testNewPolicyOrTree(c *C, data *testNewPolicyOrTreeData) {
+func (s *orTreeSuite) testNewPolicyOrTree(c *C, data *testNewPolicyOrTreeData) {
 	tree, err := NewPolicyOrTree(data.alg, data.digests)
 	c.Assert(err, IsNil)
 
@@ -98,7 +98,7 @@ func (s *branchSuite) testNewPolicyOrTree(c *C, data *testNewPolicyOrTreeData) {
 	c.Check(depth, Equals, data.depth)
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeSingleDigest(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeSingleDigest(c *C) {
 	s.testNewPolicyOrTree(c, &testNewPolicyOrTreeData{
 		alg:      tpm2.HashAlgorithmSHA256,
 		digests:  tpm2.DigestList{hash(crypto.SHA256, "foo")},
@@ -106,7 +106,7 @@ func (s *branchSuite) TestNewPolicyOrTreeSingleDigest(c *C) {
 		expected: internal_testutil.DecodeHexString(c, "51d05afe8c2bbc42a2c1f540d7390b0228cd0d59d417a8e765c28af6f43f024c")})
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeDepth1(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeDepth1(c *C) {
 	s.testNewPolicyOrTree(c, &testNewPolicyOrTreeData{
 		alg: tpm2.HashAlgorithmSHA256,
 		digests: tpm2.DigestList{
@@ -119,7 +119,7 @@ func (s *branchSuite) TestNewPolicyOrTreeDepth1(c *C) {
 		expected: testutil.DecodeHexString(c, "5e5a5c8790bd34336f2df51c216e072ca52bd9c0c2dc67e249d5952aa81aecfa")})
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeDepth2(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeDepth2(c *C) {
 	var digests tpm2.DigestList
 	for i := 1; i < 26; i++ {
 		digests = append(digests, hash(crypto.SHA256, strconv.Itoa(i)))
@@ -131,7 +131,7 @@ func (s *branchSuite) TestNewPolicyOrTreeDepth2(c *C) {
 		expected: testutil.DecodeHexString(c, "84be2df61f929c0afca3bcec125f7365fd825b410a150019e250b0dfb25110cf")})
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeSHA1(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeSHA1(c *C) {
 	var digests tpm2.DigestList
 	for i := 1; i < 26; i++ {
 		digests = append(digests, hash(crypto.SHA1, strconv.Itoa(i)))
@@ -143,7 +143,7 @@ func (s *branchSuite) TestNewPolicyOrTreeSHA1(c *C) {
 		expected: testutil.DecodeHexString(c, "dddd1fd38995710c4aa703599b9741e729ac9ceb")})
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeDepth3(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeDepth3(c *C) {
 	var digests tpm2.DigestList
 	for i := 1; i < 201; i++ {
 		digests = append(digests, hash(crypto.SHA256, strconv.Itoa(i)))
@@ -155,7 +155,7 @@ func (s *branchSuite) TestNewPolicyOrTreeDepth3(c *C) {
 		expected: testutil.DecodeHexString(c, "9c1cb2f1722a0a06f5e6774a9628cabce76572b0f2201bf66002a9eb2dfd6f11")})
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeDepth4(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeDepth4(c *C) {
 	var digests tpm2.DigestList
 	for i := 1; i < 1601; i++ {
 		digests = append(digests, hash(crypto.SHA256, strconv.Itoa(i)))
@@ -167,12 +167,12 @@ func (s *branchSuite) TestNewPolicyOrTreeDepth4(c *C) {
 		expected: testutil.DecodeHexString(c, "6f2ccbe268c9b3324c0922fcc2ccd760f6a7d264b7f61dccd3fba21f98412f85")})
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeNoDigests(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeNoDigests(c *C) {
 	_, err := NewPolicyOrTree(tpm2.HashAlgorithmSHA256, nil)
 	c.Check(err, ErrorMatches, "no digests")
 }
 
-func (s *branchSuite) TestNewPolicyOrTreeTooManyDigests(c *C) {
+func (s *orTreeSuite) TestNewPolicyOrTreeTooManyDigests(c *C) {
 	_, err := NewPolicyOrTree(tpm2.HashAlgorithmSHA256, make(tpm2.DigestList, 5000))
 	c.Check(err, ErrorMatches, "too many digests")
 }
@@ -183,7 +183,7 @@ type testPolicyOrTreeSelectBranchData struct {
 	selected int
 }
 
-func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeSelectBranchData) {
+func (s *orTreeSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeSelectBranchData) {
 	tree, err := NewPolicyOrTree(data.alg, data.digests)
 	c.Assert(err, IsNil)
 
@@ -202,14 +202,14 @@ func (s *branchSuite) testPolicyOrTreeSelectBranch(c *C, data *testPolicyOrTreeS
 	c.Check(pHashLists, DeepEquals, expected)
 }
 
-func (s *branchSuite) TestPolicyOrTreeSelectBranchSingleDigest(c *C) {
+func (s *orTreeSuite) TestPolicyOrTreeSelectBranchSingleDigest(c *C) {
 	s.testPolicyOrTreeSelectBranch(c, &testPolicyOrTreeSelectBranchData{
 		alg:      tpm2.HashAlgorithmSHA256,
 		digests:  tpm2.DigestList{hash(crypto.SHA256, "foo")},
 		selected: 0})
 }
 
-func (s *branchSuite) TestPolicyOrTreeSelectBranchDepth1(c *C) {
+func (s *orTreeSuite) TestPolicyOrTreeSelectBranchDepth1(c *C) {
 	s.testPolicyOrTreeSelectBranch(c, &testPolicyOrTreeSelectBranchData{
 		alg: tpm2.HashAlgorithmSHA256,
 		digests: tpm2.DigestList{
@@ -221,7 +221,7 @@ func (s *branchSuite) TestPolicyOrTreeSelectBranchDepth1(c *C) {
 		selected: 4})
 }
 
-func (s *branchSuite) TestPolicyOrTreeSelectBranchDepth2(c *C) {
+func (s *orTreeSuite) TestPolicyOrTreeSelectBranchDepth2(c *C) {
 	var digests tpm2.DigestList
 	for i := 1; i < 26; i++ {
 		digests = append(digests, hash(crypto.SHA256, strconv.Itoa(i)))
@@ -232,7 +232,7 @@ func (s *branchSuite) TestPolicyOrTreeSelectBranchDepth2(c *C) {
 		selected: 22})
 }
 
-func (s *branchSuite) TestPolicyOrTreeSelectBranchDepth3(c *C) {
+func (s *orTreeSuite) TestPolicyOrTreeSelectBranchDepth3(c *C) {
 	var digests tpm2.DigestList
 	for i := 1; i < 201; i++ {
 		digests = append(digests, hash(crypto.SHA256, strconv.Itoa(i)))

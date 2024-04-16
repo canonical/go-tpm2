@@ -38,7 +38,7 @@ func (r *policyBuilderBranchRunner) authResourceName() tpm2.Name {
 
 func (*policyBuilderBranchRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 
@@ -749,7 +749,8 @@ type PolicyBuilder struct {
 	err  error
 }
 
-// NewPolicyBuilder returns a new PolicyBuilder.
+// NewPolicyBuilder returns a new PolicyBuilder. It will panic if the supplied algorithm
+// is not available.
 func NewPolicyBuilder(alg tpm2.HashAlgorithmId) *PolicyBuilder {
 	if !alg.Available() {
 		panic("invalid algorithm")

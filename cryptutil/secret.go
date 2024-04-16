@@ -28,6 +28,9 @@ import (
 // The specified digest algorithm must match the name algorithm of the public area associated with
 // the supplied private key.
 func SecretDecrypt(priv crypto.PrivateKey, hashAlg tpm2.HashAlgorithmId, label, secret []byte) (seed []byte, err error) {
+	if !hashAlg.Available() {
+		return nil, errors.New("digest algorithm is not available")
+	}
 	return internal_crypt.SecretDecrypt(priv, hashAlg.GetHash(), label, secret)
 }
 

@@ -235,7 +235,7 @@ func (t *TPMContext) Create(parentContext ResourceContext, inSensitive *Sensitiv
 // On success, a ResourceContext corresponding to the newly loaded transient object will be
 // returned. If subsequent use of the returned ResourceContext requires knowledge of the
 // authorization value of the corresponding TPM resource, this should be provided by calling
-// [ResourceContext].SetAuthValue.
+// [ResourceContext].SetAuthValue. The return ResourceContext can be type asserted to [ObjectContext].
 func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPublic *Public, parentContextAuthSession SessionContext, sessions ...SessionContext) (objectContext ResourceContext, err error) {
 	var objectHandle Handle
 	var name Name
@@ -341,6 +341,7 @@ func (t *TPMContext) Load(parentContext ResourceContext, inPrivate Private, inPu
 // returned. If inPrivate has been provided, it will not be necessary to call
 // [ResourceContext].SetAuthValue on it - this function sets the correct authorization value so
 // that it can be used in subsequent commands that require knowledge of the authorization value.
+// The return ResourceContext can be type asserted to [ObjectContext].
 func (t *TPMContext) LoadExternal(inPrivate *Sensitive, inPublic *Public, hierarchy Handle, sessions ...SessionContext) (objectContext ResourceContext, err error) {
 	var objectHandle Handle
 	var name Name
@@ -667,12 +668,13 @@ func (t *TPMContext) ObjectChangeAuth(objectContext, parentContext ResourceConte
 // object on the TPM, along with the private and public parts.  It will not be necessary to call
 // [ResourceContext].SetAuthValue on the returned ResourceContext - this function sets the correct
 // authorization value so that it can be used in subsequent commands that require knowledge of the
-// authorization value. If the Type field of the template is [ObjectTypeKeyedHash] or
-// [ObjectTypeSymCipher], then the returned *Public object will have a Unique field that is the
-// digest of the sensitive data and the value of the object's seed in the sensitive area, computed
-// using the object's name algorithm. If the Type field of the template is [ObjectTypeECC] or
-// [ObjectTypeRSA], then the returned *Public object will have a Unique field containing details
-// about the public part of the key, computed from the private part of the key.
+// authorization value.  The returned ResourceContext can be type asserted to [ObjectContext]. If
+// the Type field of the template is [ObjectTypeKeyedHash] or [ObjectTypeSymCipher], then the
+// returned *Public object will have a Unique field that is the digest of the sensitive data and
+// the value of the object's seed in the sensitive area, computed using the object's name algorithm.
+// If the Type field of the template is [ObjectTypeECC] or [ObjectTypeRSA], then the returned *Public
+// object will have a Unique field containing details about the public part of the key, computed from
+// the private part of the key.
 func (t *TPMContext) CreateLoaded(parentContext ResourceContext, inSensitive *SensitiveCreate, inPublic PublicTemplate, parentContextAuthSession SessionContext, sessions ...SessionContext) (objectContext ResourceContext, outPrivate Private, outPublic *Public, err error) {
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}

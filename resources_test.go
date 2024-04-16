@@ -43,7 +43,7 @@ func (s *resourcesSuite) testNewObjectResourceContextFromTPM(c *C, data *testNew
 	c.Check(rc.(ObjectContext).Public(), DeepEquals, data.public)
 }
 
-func (s *resourcesSuite) TestNewResourceContextTransient(c *C) {
+func (s *resourcesSuite) TestNewResourceContextFromTPMTransient(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	s.testNewObjectResourceContextFromTPM(c, &testNewObjectResourceContextFromTPMData{
 		handle: rc.Handle(),
@@ -51,7 +51,7 @@ func (s *resourcesSuite) TestNewResourceContextTransient(c *C) {
 		name:   rc.Name()})
 }
 
-func (s *resourcesSuite) TestNewResourceContextPersistent(c *C) {
+func (s *resourcesSuite) TestNewResourceContextFromTPMPersistent(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
 	rc = s.EvictControl(c, HandleOwner, rc, s.NextAvailableHandle(c, 0x81000008))
 	s.testNewObjectResourceContextFromTPM(c, &testNewObjectResourceContextFromTPMData{
@@ -99,12 +99,13 @@ func (s *resourcesSuite) TestNewResourceContextUnavailableNV(c *C) {
 	s.testNewResourceContextUnavailable(c, 0x018100ff)
 }
 
-func (s *resourcesSuite) TestNewResourceContextPanicsForWrongType(c *C) {
-	c.Check(func() { s.TPM.NewResourceContext(HandleOwner) }, PanicMatches, "invalid handle type")
+func (s *resourcesSuite) TestNewResourceContextErrorsForWrongType(c *C) {
+	_, err := s.TPM.NewResourceContext(HandleOwner)
+	c.Check(err, ErrorMatches, `invalid handle type`)
 }
 
-func (s *resourcesSuite) testNewLimitedHandleContext(c *C, handle Handle) {
-	hc := NewLimitedHandleContext(handle)
+func (s *resourcesSuite) testNewHandleContext(c *C, handle Handle) {
+	hc := NewHandleContext(handle)
 	c.Assert(hc, NotNil)
 	c.Check(hc.Handle(), Equals, handle)
 
@@ -113,33 +114,33 @@ func (s *resourcesSuite) testNewLimitedHandleContext(c *C, handle Handle) {
 	c.Check(hc.Name(), DeepEquals, name)
 }
 
-func (s *resourcesSuite) TestNewLimitedHandleContextSession(c *C) {
+func (s *resourcesSuite) TestNewHandleContextSession(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-	s.testNewLimitedHandleContext(c, session.Handle())
+	s.testNewHandleContext(c, session.Handle())
 }
 
-func (s *resourcesSuite) TestNewLimitedHandleContextTransient(c *C) {
+func (s *resourcesSuite) TestNewHandleContextTransient(c *C) {
 	rc := s.CreateStoragePrimaryKeyRSA(c)
-	s.testNewLimitedHandleContext(c, rc.Handle())
+	s.testNewHandleContext(c, rc.Handle())
 }
 
-func (s *resourcesSuite) TestNewLimitedHandleContextForWrongType(c *C) {
-	c.Check(func() { NewLimitedHandleContext(0x00000000) }, PanicMatches, "invalid handle type")
+func (s *resourcesSuite) TestNewHandleContextForWrongType(c *C) {
+	c.Check(func() { NewHandleContext(0x00000000) }, PanicMatches, "invalid handle type")
 }
 
-func (s *resourcesSuite) testNewLimitedResourceContext(c *C, handle Handle, name Name) {
-	rc := NewLimitedResourceContext(handle, name)
+func (s *resourcesSuite) testNewResourceContext(c *C, handle Handle, name Name) {
+	rc := NewResourceContext(handle, name)
 	c.Assert(rc, NotNil)
 	c.Check(rc.Handle(), Equals, handle)
 	c.Check(rc.Name(), DeepEquals, name)
 }
 
-func (s *resourcesSuite) TestNewLimitedResourceContextTransient(c *C) {
-	s.testNewLimitedResourceContext(c, 0x80000001, internal_testutil.DecodeHexString(c, "000b000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"))
+func (s *resourcesSuite) TestNewResourceContextTransient(c *C) {
+	s.testNewResourceContext(c, 0x80000001, internal_testutil.DecodeHexString(c, "000b000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"))
 }
 
-func (s *resourcesSuite) TestNewLimitedResourceContextPersistent(c *C) {
-	s.testNewLimitedResourceContext(c, 0x81000002, internal_testutil.DecodeHexString(c, "0004000102030405060708090a0b0c0d0e0f10111213"))
+func (s *resourcesSuite) TestNewResourceContextPersistent(c *C) {
+	s.testNewResourceContext(c, 0x81000002, internal_testutil.DecodeHexString(c, "0004000102030405060708090a0b0c0d0e0f10111213"))
 }
 
 type testNewObjectHandleContextFromBytesData struct {

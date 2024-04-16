@@ -111,7 +111,7 @@ func makePolicyError(err error, path policyBranchPath, task string) *PolicyError
 func (e *PolicyError) Error() string {
 	branch := "root branch"
 	if len(e.Path) > 0 {
-		branch = "branch " + e.Path
+		branch = "branch '" + e.Path + "'"
 	}
 	return fmt.Sprintf("cannot run '%s' task in %s: %v", e.task, branch, e.err)
 }
@@ -1126,8 +1126,6 @@ func (t *executePolicyTickets) currentTickets() (out []*PolicyTicket) {
 }
 
 type policyExecuteRunner struct {
-	sessionAlg tpm2.HashAlgorithmId
-
 	policySessionContext SessionContext
 	policySession        *teePolicySession
 	policyTickets        *executePolicyTickets
@@ -1140,18 +1138,18 @@ type policyExecuteRunner struct {
 	ignoreAuthorizations []PolicyAuthorizationID
 	ignoreNV             []Named
 
+	wildcardResolver *policyPathWildcardResolver
+
 	remaining   policyBranchPath
 	currentPath policyBranchPath
 }
 
 func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets, resources *executePolicyResources, authorizer Authorizer, tpm TPMHelper, params *PolicyExecuteParams, details *PolicyBranchDetails) *policyExecuteRunner {
-	sessionAlg := session.HashAlg()
 	return &policyExecuteRunner{
-		sessionAlg:           sessionAlg,
 		policySessionContext: session.Context(),
 		policySession: newTeePolicySession(
 			session,
-			newRecorderPolicySession(sessionAlg, details),
+			newRecorderPolicySession(session.HashAlg(), details),
 		),
 		policyTickets:        tickets,
 		policyResources:      resources,
@@ -1160,6 +1158,7 @@ func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets
 		usage:                params.Usage,
 		ignoreAuthorizations: params.IgnoreAuthorizations,
 		ignoreNV:             params.IgnoreNV,
+		wildcardResolver:     newPolicyPathWildcardResolver(session.HashAlg(), resources, tpm, params.Usage, params.IgnoreAuthorizations, params.IgnoreNV),
 		remaining:            policyBranchPath(params.Path),
 	}
 }
@@ -1245,7 +1244,7 @@ func (r *policyExecuteRunner) authorize(auth ResourceContext, askForPolicy bool,
 		switch {
 		case policyDigest.HashAlg == tpm2.HashAlgorithmNull:
 			// policy is not enabled for this resource
-			alg = r.sessionAlg
+			alg = r.session().HashAlg()
 			availableSessionTypes[tpm2.SessionTypePolicy] = false
 		default:
 			// policy is enabled for this resource
@@ -1402,8 +1401,7 @@ func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string
 	if len(next) == 0 || next[0] == '*' {
 		// There are no more components or the next component is a wildcard match - build a
 		// list of candidate paths for this subtree
-		resolver := newPolicyPathWildcardResolver(r.sessionAlg, r.policyResources, r.tpm, r.usage, r.ignoreAuthorizations, r.ignoreNV)
-		path, err := resolver.selectPath(branches)
+		path, err := r.wildcardResolver.resolve(branches)
 		if err != nil {
 			return 0, "", fmt.Errorf("cannot automatically select branch: %w", err)
 		}
@@ -1686,14 +1684,16 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 // automatically where possible. This works by selecting the first suitable path, with a
 // preference for paths that don't include TPM2_PolicySecret, TPM2_PolicySigned,
 // TPM2_PolicyAuthValue, and TPM2_PolicyPassword assertions. It also has a preference for paths
-// that don't include TPM2_PolicyNV assertions that require authorization to use or read. A path
+// that don't include TPM2_PolicyNV assertions that require authorization to use or read, and for
+// paths without TPM2_PolicyCommandCode, TPM2_PolicyCpHash, TPM2_PolicyNameHash and
+// TPM2_PolicyDuplicatiionSelect assertions where no [PolicySessionUsage] is supplied. A path
 // is omitted from the set of suitable paths if any of the following conditions are true:
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
 //     the supplied [PolicySessionUsage].
 //   - It contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion and this isn't permitted
 //     by the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicyNvWritten with a value that doesn't match the public area of the NV index
-//     provided via the supplied [PolicySessionUsage].
+//     that the session will be used to authorize, provided via the supplied [PolicySessionUsage].
 //   - It uses TPM2_PolicySigned, TPM2_PolicySecret or TPM2_PolicyAuthorize and the specific
 //     authorization is included in the IgnoreAuthorizations field of [PolicyExecuteParams].
 //   - It uses TPM2_PolicyNV and the NV index is included in the IgnoreNV field of
@@ -1823,7 +1823,7 @@ func (r *policyComputeRunner) authResourceName() tpm2.Name {
 
 func (r *policyComputeRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 
@@ -2036,7 +2036,7 @@ func (r *policyValidateRunner) authResourceName() tpm2.Name {
 
 func (r *policyValidateRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 
@@ -2436,7 +2436,7 @@ func (r *policyStringifierRunner) authResourceName() tpm2.Name {
 
 func (r *policyStringifierRunner) loadExternal(public *tpm2.Public) (ResourceContext, error) {
 	// the handle is not relevant here
-	resource := tpm2.NewLimitedResourceContext(0x80000000, public.Name())
+	resource := tpm2.NewResourceContext(0x80000000, public.Name())
 	return newResourceContext(resource, nil), nil
 }
 

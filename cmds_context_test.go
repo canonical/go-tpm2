@@ -52,7 +52,7 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 
 	c.Check(persist.Handle(), Equals, HandleUnassigned)
 
-	_, _, _, err = s.TPM.ReadPublic(NewLimitedHandleContext(data.handle))
+	_, _, _, err = s.TPM.ReadPublic(NewHandleContext(data.handle))
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
 	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandReadPublic, Code: ErrorHandle}, Index: 1})
 }
@@ -126,7 +126,7 @@ func (s *contextSuite) TestContextSaveSession(c *C) {
 func (s *contextSuite) TestContextSaveLimitedResourceContext(c *C) {
 	object := s.CreateStoragePrimaryKeyRSA(c)
 
-	lr := NewLimitedResourceContext(object.Handle(), object.Name())
+	lr := NewResourceContext(object.Handle(), object.Name())
 
 	context, err := s.TPM.ContextSave(lr)
 	c.Assert(err, IsNil)
@@ -138,7 +138,7 @@ func (s *contextSuite) TestContextSaveLimitedResourceContext(c *C) {
 func (s *contextSuite) TestContextSaveLimitedHandleContext(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
 
-	lh := NewLimitedHandleContext(session.Handle())
+	lh := NewHandleContext(session.Handle())
 
 	context, err := s.TPM.ContextSave(lh)
 	c.Assert(err, IsNil)
@@ -210,7 +210,7 @@ func (s *contextSuite) TestContextSaveAndLoadSession(c *C) {
 func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
 	session := s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 
-	lh := NewLimitedHandleContext(session.Handle())
+	lh := NewHandleContext(session.Handle())
 
 	context, err := s.TPM.ContextSave(lh)
 	c.Assert(err, IsNil)
@@ -219,12 +219,10 @@ func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
 	c.Assert(err, IsNil)
 
 	var sample SessionContext
-	c.Assert(restored, Implements, &sample)
+	c.Assert(restored, Not(Implements), &sample)
 
 	c.Check(restored.Handle(), Equals, lh.Handle())
 	c.Check(restored.Name(), DeepEquals, lh.Name())
-	c.Assert(restored, internal_testutil.ConvertibleTo, &SessionContextImpl{})
-	c.Check(restored.(*SessionContextImpl).Data(), IsNil)
 
 	c.Check(s.TPM.DoesHandleExist(restored.Handle()), internal_testutil.IsTrue)
 }
@@ -232,7 +230,7 @@ func (s *contextSuite) TestContextSaveAndLoadSessionLimitedHandle(c *C) {
 func (s *contextSuite) TestContextSaveAndLoadTransientLimitedResource(c *C) {
 	object := s.CreateStoragePrimaryKeyRSA(c)
 
-	lr := NewLimitedResourceContext(object.Handle(), object.Name())
+	lr := NewResourceContext(object.Handle(), object.Name())
 
 	context, err := s.TPM.ContextSave(lr)
 	c.Assert(err, IsNil)
@@ -242,6 +240,9 @@ func (s *contextSuite) TestContextSaveAndLoadTransientLimitedResource(c *C) {
 
 	var sample ResourceContext
 	c.Check(restored, Implements, &sample)
+
+	var sample2 ObjectContext
+	c.Check(restored, Not(Implements), &sample2)
 
 	c.Check(restored.Handle().Type(), Equals, HandleTypeTransient)
 	c.Check(restored.Handle(), Not(Equals), lr.Handle())
@@ -255,7 +256,7 @@ func (s *contextSuite) TestContextSaveAndLoadTransientLimitedResource(c *C) {
 func (s *contextSuite) TestContextSaveAndLoadTransientLimitedHandle(c *C) {
 	object := s.CreateStoragePrimaryKeyRSA(c)
 
-	lh := NewLimitedHandleContext(object.Handle())
+	lh := NewHandleContext(object.Handle())
 
 	context, err := s.TPM.ContextSave(lh)
 	c.Assert(err, IsNil)
@@ -264,11 +265,11 @@ func (s *contextSuite) TestContextSaveAndLoadTransientLimitedHandle(c *C) {
 	c.Assert(err, IsNil)
 
 	var sample ResourceContext
-	c.Check(restored, Implements, &sample)
+	c.Check(restored, Not(Implements), &sample)
 
 	c.Check(restored.Handle().Type(), Equals, HandleTypeTransient)
 	c.Check(restored.Handle(), Not(Equals), lh.Handle())
-	c.Check(restored.Name(), DeepEquals, lh.Name())
+	c.Check(restored.Name(), DeepEquals, Name(mu.MustMarshalToBytes(restored.Handle())))
 
 	c.Check(s.TPM.DoesHandleExist(restored.Handle()), internal_testutil.IsTrue)
 }
@@ -300,7 +301,7 @@ func (s *contextSuite) TestFlushContextTransient(c *C) {
 
 	c.Check(object.Handle(), Equals, HandleUnassigned)
 
-	_, _, _, err := s.TPM.ReadPublic(NewLimitedHandleContext(handle))
+	_, _, _, err := s.TPM.ReadPublic(NewHandleContext(handle))
 	c.Assert(err, internal_testutil.ConvertibleTo, &TPMWarning{})
 	c.Check(err.(*TPMWarning), DeepEquals, &TPMWarning{Command: CommandReadPublic, Code: WarningReferenceH0})
 }
@@ -316,4 +317,33 @@ func (s *contextSuite) TestFlushContextSession(c *C) {
 	handles, err := s.TPM.GetCapabilityHandles(HandleTypeHMACSession.BaseHandle(), CapabilityMaxProperties)
 	c.Assert(err, IsNil)
 	c.Check(handle, Not(internal_testutil.IsOneOf(Equals)), handles)
+}
+
+func (s *contextSuite) TestEvictControlLimitedResource(c *C) {
+	object := s.CreatePrimary(c, HandleOwner, testutil.NewRSAStorageKeyTemplate())
+
+	lr := NewResourceContext(object.Handle(), object.Name())
+	handle := s.NextAvailableHandle(c, 0x81000000)
+
+	persist, err := s.TPM.EvictControl(s.TPM.OwnerHandleContext(), lr, handle, nil)
+	c.Assert(err, IsNil)
+	c.Check(persist.Handle(), Equals, handle)
+	c.Check(persist.Name(), DeepEquals, lr.Name())
+
+	var sample ObjectContext
+	c.Check(persist, Not(Implements), &sample)
+
+	_, name, _, err := s.TPM.ReadPublic(persist)
+	c.Assert(err, IsNil)
+	c.Check(name, DeepEquals, lr.Name())
+
+	persist2, err := s.TPM.EvictControl(s.TPM.OwnerHandleContext(), persist, handle, nil)
+	c.Check(err, IsNil)
+	c.Check(persist2, IsNil)
+
+	c.Check(persist.Handle(), Equals, HandleUnassigned)
+
+	_, _, _, err = s.TPM.ReadPublic(NewHandleContext(handle))
+	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
+	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandReadPublic, Code: ErrorHandle}, Index: 1})
 }

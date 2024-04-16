@@ -62,8 +62,6 @@ func digestFromSignerOpts(opts crypto.SignerOpts) (tpm2.HashAlgorithmId, error) 
 // Sign creates a signature of the supplied digest using the supplied signer and options.
 // Note that only RSA-SSA, RSA-PSS, ECDSA and HMAC signatures can be created. The returned
 // signature can be verified on a TPM using the associated public key.
-//
-// This may panic if the requested digest algorithm is not available.
 func Sign(rand io.Reader, signer crypto.Signer, digest []byte, opts crypto.SignerOpts) (*tpm2.Signature, error) {
 	hashAlg, err := digestFromSignerOpts(opts)
 	if err != nil {
@@ -75,10 +73,16 @@ func Sign(rand io.Reader, signer crypto.Signer, digest []byte, opts crypto.Signe
 	switch k := signer.Public().(type) {
 	case *rsa.PublicKey:
 		_ = k
+		if _, pss := opts.(*rsa.PSSOptions); pss && !hashAlg.Available() {
+			return nil, errors.New("digest algorithm is not available")
+		}
 	case *ecdsa.PublicKey:
 		_ = k
 	case HMACKey:
 		_ = k
+		if !hashAlg.Available() {
+			return nil, errors.New("digest algorithm is not available")
+		}
 	default:
 		return nil, errors.New("unsupported key type")
 	}
