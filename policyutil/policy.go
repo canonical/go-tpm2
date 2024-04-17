@@ -2108,15 +2108,22 @@ func (p *Policy) Branches(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAut
 
 	var makeBeginBranchFn func(policyBranchPath) treeWalkerBeginBranchFn
 	makeBeginBranchFn = func(parentPath policyBranchPath) treeWalkerBeginBranchFn {
+		// This function is called when starting a new branch node. It is called with information
+		// about the parent branch
 		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
-			branchPath := parentPath.Concat(name)
+			// This function is called at the start of a new branch. It inherits the path of the parent branch
+			// (parentPath).
+			branchPath := parentPath.Concat(name) // Create the new path of this branch
 
+			// Create a new session for this branch
 			session := newNullPolicySession(alg)
 
+			// Create a new function for entering a new branch node from this branch
 			beginBranchNodeFn := func() (treeWalkerBeginBranchFn, error) {
 				return makeBeginBranchFn(branchPath), nil
 			}
 
+			// Create a new function that signals the end of a complete path (ie, no more elements)
 			completeFullPathFn := func() error {
 				result = append(result, string(branchPath))
 				return nil
@@ -2274,44 +2281,62 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string, authorizedPolici
 
 	var makeBeginBranchFn func(policyBranchPath, policyBranchPath, string, bool, *PolicyBranchDetails) treeWalkerBeginBranchFn
 	makeBeginBranchFn = func(parentPath, remaining policyBranchPath, next string, consumeGreedy bool, details *PolicyBranchDetails) treeWalkerBeginBranchFn {
+		// This function is called when starting a new branch node. It is called with information
+		// about the parent branch
 		nodeDetails := *details
 		explicitlyHandledNode := false
 
 		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+			// This function is called at the start of a new branch. It inherits the current details
+			// at the point that the node was entered (details), the path of the parent branch (parentPath),
+			// the remaining path components (remaining), the next path component if there is one (next), and
+			// whether we are in a greedy wildcard match (consumeGreedy).
 			if explicitlyHandledNode {
+				// skip - a branch at this node has already handled the next component.
 				return nil, nil, nil, errTreeWalkerSkipBranch
 			}
 			switch {
 			case len(next) == 0 || next[0] == '*':
-				// ok
+				// ok - there is no next component specified or it's a wildcard match
 			case next == name:
-				// ok
+				// ok - the next component specified matches this branch
 				explicitlyHandledNode = true
 			default:
+				// skip - the next component was specified, it's not a wildcard match and doesn't match this branch
 				return nil, nil, nil, errTreeWalkerSkipBranch
 			}
 
-			branchPath := parentPath.Concat(name)
-			branchDetails := nodeDetails
+			branchPath := parentPath.Concat(name) // Create the new path of this branch
+			branchDetails := nodeDetails          // Copy the node details
 
-			session := newRecorderPolicySession(alg, &branchDetails)
+			session := newRecorderPolicySession(alg, &branchDetails) // Create a new session
 
+			// Create a new function for entering a new branch node from this branch
 			beginBranchNodeFn := func() (treeWalkerBeginBranchFn, error) {
 				remaining := remaining
 				consumeGreedy := consumeGreedy
 
+				// Create a new branch function that will only handle the required
+				// branches.
+
 				var next string
 				if consumeGreedy {
+					// This node is already a greedy wildcard match, so pass "*"
+					// as the next component to handle all branches
 					next = "*"
 				} else {
+					// Pop the next branch component
 					next, remaining = remaining.PopNextComponent()
 					if next == "**" {
+						// We're entering a greedy wildcard match. This will
+						// propagate to all subbranches
 						consumeGreedy = true
 					}
 				}
 				return makeBeginBranchFn(branchPath, remaining, next, consumeGreedy, &branchDetails), nil
 			}
 
+			// Create a new function that signals the end of a complete path (ie, no more elements)
 			completeFullPath := func() error {
 				result[string(branchPath)] = branchDetails
 				return nil

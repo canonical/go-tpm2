@@ -13,11 +13,6 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 )
 
-type pathWildcardResolverBranchDetails struct {
-	PolicyBranchDetails
-	missingAuthorized bool
-}
-
 // policyPathWildcardResolver attempts to automatically select a sequence of paths to execute.
 type policyPathWildcardResolver struct {
 	mockPolicyResources
@@ -30,9 +25,10 @@ type policyPathWildcardResolver struct {
 	ignoreNV             []Named
 
 	// These fields are reset on each call to resolve.
-	paths       []policyBranchPath
-	detailsMap  map[policyBranchPath]pathWildcardResolverBranchDetails
-	nvCheckedOk map[nvAssertionMapKey]struct{}
+	paths             []policyBranchPath                       // ordered collection of paths
+	details           map[policyBranchPath]PolicyBranchDetails // map of details collected for each path
+	missingAuthorized map[policyBranchPath]struct{}            // map of each collected path with missing authorized policies
+	nvCheckedOk       map[nvAssertionMapKey]struct{}           // map of PolicyNV assertions that would succeed
 }
 
 func newPolicyPathWildcardResolver(sessionAlg tpm2.HashAlgorithmId, resources *executePolicyResources, tpm TPMHelper, usage *PolicySessionUsage, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *policyPathWildcardResolver {
@@ -49,11 +45,11 @@ func newPolicyPathWildcardResolver(sessionAlg tpm2.HashAlgorithmId, resources *e
 // filterInvalidBranches removes branches that are definitely invalid.
 func (s *policyPathWildcardResolver) filterInvalidBranches() {
 	// iterate over each execution path
-	for p, d := range s.detailsMap {
+	for p, d := range s.details {
 		if d.IsValid() {
 			continue
 		}
-		delete(s.detailsMap, p)
+		delete(s.details, p)
 	}
 }
 
@@ -62,7 +58,7 @@ func (s *policyPathWildcardResolver) filterInvalidBranches() {
 func (s *policyPathWildcardResolver) filterIgnoredResources() {
 	for _, ignore := range s.ignoreAuthorizations {
 		// iterate over each execution path
-		for p, d := range s.detailsMap {
+		for p, d := range s.details {
 			var auths []PolicyAuthorizationID
 			auths = append(auths, d.Secret...)
 			auths = append(auths, d.Signed...)
@@ -72,7 +68,7 @@ func (s *policyPathWildcardResolver) filterIgnoredResources() {
 			for _, auth := range auths {
 				if bytes.Equal(auth.AuthName, ignore.AuthName) && bytes.Equal(auth.PolicyRef, ignore.PolicyRef) {
 					// this path contains an authorization to ignore, so drop it
-					delete(s.detailsMap, p)
+					delete(s.details, p)
 					break
 				}
 			}
@@ -81,12 +77,12 @@ func (s *policyPathWildcardResolver) filterIgnoredResources() {
 
 	for _, ignore := range s.ignoreNV {
 		// iterate over each execution path
-		for p, d := range s.detailsMap {
+		for p, d := range s.details {
 			// iterate over each PolicyNV assertion in this path
 			for _, nv := range d.NV {
 				if bytes.Equal(nv.Name, ignore.Name()) {
 					// this path contains a PolicyNV assertion to ignore, so drop it
-					delete(s.detailsMap, p)
+					delete(s.details, p)
 					break
 				}
 			}
@@ -99,9 +95,9 @@ func (s *policyPathWildcardResolver) filterIgnoredResources() {
 // PolicyResources.
 func (s *policyPathWildcardResolver) filterMissingAuthorizedBranches() {
 	// iterate over each execution path
-	for p, d := range s.detailsMap {
-		if d.missingAuthorized {
-			delete(s.detailsMap, p)
+	for p := range s.details {
+		if _, missing := s.missingAuthorized[p]; missing {
+			delete(s.details, p)
 		}
 	}
 }
@@ -114,11 +110,11 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 	}
 
 	// iterate over each execution path
-	for p, d := range s.detailsMap {
+	for p, d := range s.details {
 		code, set := d.CommandCode()
 		if set && code != s.usage.CommandCode() {
 			// this path doesn't match the command code, so drop it
-			delete(s.detailsMap, p)
+			delete(s.details, p)
 			continue
 		}
 
@@ -130,7 +126,7 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 			}
 			if !bytes.Equal(usageCpHash, cpHash) {
 				// this path doesn't match the command parameters, so drop it
-				delete(s.detailsMap, p)
+				delete(s.details, p)
 				continue
 			}
 		}
@@ -143,14 +139,14 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 			}
 			if !bytes.Equal(usageNameHash, nameHash) {
 				// this path doesn't match the command handles, so drop it
-				delete(s.detailsMap, p)
+				delete(s.details, p)
 				continue
 			}
 		}
 
 		if d.AuthValueNeeded && !s.usage.AllowAuthValue() {
 			// this path requires an auth value which the usage indicates is not possible, so drop it
-			delete(s.detailsMap, p)
+			delete(s.details, p)
 			continue
 		}
 
@@ -160,7 +156,7 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 			if authHandle.Handle().Type() != tpm2.HandleTypeNVIndex {
 				// this path uses TPM2_PolicyNvWritten but the auth handle is not a
 				// NV index, so drop this path
-				delete(s.detailsMap, p)
+				delete(s.details, p)
 				continue
 			}
 			pub, err := s.tpm.NVReadPublic(tpm2.NewHandleContext(authHandle.Handle()))
@@ -171,7 +167,7 @@ func (s *policyPathWildcardResolver) filterUsageIncompatibleBranches() error {
 			if nvWritten != written {
 				// this path uses TPM2_PolicyNvWritten but the auth handle attributes
 				// are incompatible, so drop this path.
-				delete(s.detailsMap, p)
+				delete(s.details, p)
 				continue
 			}
 		}
@@ -186,14 +182,14 @@ func (s *policyPathWildcardResolver) filterPcrIncompatibleBranches() error {
 	// Build a list of PCR selections from the paths
 	var pcrs tpm2.PCRSelectionList
 	// iterate over each execution path
-	for p, d := range s.detailsMap {
+	for p, d := range s.details {
 		// iterate over each PolicyPCR assertion in this path
 		for _, item := range d.PCR {
 			// merge the selections
 			tmpPcrs, err := pcrs.Merge(item.PCRs)
 			if err != nil {
 				// this assertion is invalid, so drop this path
-				delete(s.detailsMap, p)
+				delete(s.details, p)
 				break
 			}
 			pcrs = tmpPcrs
@@ -212,7 +208,7 @@ func (s *policyPathWildcardResolver) filterPcrIncompatibleBranches() error {
 	}
 
 	// iterate over each execution path
-	for p, d := range s.detailsMap {
+	for p, d := range s.details {
 		// iterate over each PolicyPCR assertion in this path
 		for _, item := range d.PCR {
 			// compare the assertion to the current values
@@ -222,7 +218,7 @@ func (s *policyPathWildcardResolver) filterPcrIncompatibleBranches() error {
 			}
 			if !bytes.Equal(pcrDigest, item.PCRDigest) {
 				// the assertion doesn't match the current PCR values, so drop this path
-				delete(s.detailsMap, p)
+				delete(s.details, p)
 				break
 			}
 		}
@@ -388,7 +384,7 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 	nvInfo := make(map[tpm2.Handle]*nvIndexInfo)              // a map of handles to information about the corresponding index
 
 	// iterate over each execution path
-	for p, d := range s.detailsMap {
+	for p, d := range s.details {
 		incompatible := false
 		// iterate over each PolicyNV assertion in this path
 		for _, nv := range d.NV {
@@ -524,7 +520,7 @@ func (s *policyPathWildcardResolver) filterNVIncompatibleBranches() error {
 		if incompatible {
 			// the last checked PolicyNV assertion for this path is bad, so
 			// drop the whole path
-			delete(s.detailsMap, p)
+			delete(s.details, p)
 		}
 	}
 
@@ -537,7 +533,7 @@ func (s *policyPathWildcardResolver) filterCounterTimerIncompatibleBranches() er
 	// determine whether any paths use TPM2_PolicyCounterTimer
 	hasCounterTimerAssertions := false
 	// iterate over each execution path
-	for _, d := range s.detailsMap {
+	for _, d := range s.details {
 		if len(d.CounterTimer) > 0 {
 			// we've found one - no need to check any more
 			hasCounterTimerAssertions = true
@@ -563,7 +559,7 @@ func (s *policyPathWildcardResolver) filterCounterTimerIncompatibleBranches() er
 	}
 
 	// iterate over each execution path
-	for p, d := range s.detailsMap {
+	for p, d := range s.details {
 		incompatible := false
 		// iterate over each PolicyCounterTimer assertion in this path
 		for _, item := range d.CounterTimer {
@@ -592,7 +588,7 @@ func (s *policyPathWildcardResolver) filterCounterTimerIncompatibleBranches() er
 		if incompatible {
 			// the last checked PolicyCounterTimer assertion for this path is bad, so
 			// drop the whole path
-			delete(s.detailsMap, p)
+			delete(s.details, p)
 		}
 	}
 
@@ -616,31 +612,50 @@ func (*policyPathWildcardResolverTreeWalkError) isPolicyDelimiterError() {}
 func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBranchPath, error) {
 	// reset state
 	s.paths = nil
-	s.detailsMap = make(map[policyBranchPath]pathWildcardResolverBranchDetails)
+	s.details = make(map[policyBranchPath]PolicyBranchDetails)
+	s.missingAuthorized = make(map[policyBranchPath]struct{})
 	s.nvCheckedOk = make(map[nvAssertionMapKey]struct{})
 
 	// Walk every path from the supplied branches
-	var makeBeginBranchFn func(policyBranchPath, *pathWildcardResolverBranchDetails) treeWalkerBeginBranchFn
-	makeBeginBranchFn = func(parentPath policyBranchPath, details *pathWildcardResolverBranchDetails) treeWalkerBeginBranchFn {
-		nodeDetails := *details
+	var makeBeginBranchFn func(policyBranchPath, *PolicyBranchDetails, bool) treeWalkerBeginBranchFn
+	makeBeginBranchFn = func(parentPath policyBranchPath, details *PolicyBranchDetails, missingAuthorized bool) treeWalkerBeginBranchFn {
+		// This function is called when starting a new branch node. It is called with information
+		// about the parent branch
+
+		nodeDetails := *details // copy the details collected from the parent branch
 
 		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
-			branchPath := parentPath.Concat(name)
-			branchDetails := nodeDetails
+			// This function is called at the start of a new branch. It inherits the current details
+			// at the point that the node was entered (nodeDetails) as well as the path of the parent
+			// branch (parentPath) and whether this path has any missing authorized policies (missingAuthorized).
+
+			branchPath := parentPath.Concat(name)        // Create the new path of this branch
+			branchDetails := nodeDetails                 // Copy the details from the node to this branch
+			branchMissingAuthorized := missingAuthorized // Copy whether this path has been flagged as having missing authorized policies
 
 			if name != "" && name[0] == '<' {
-				branchDetails.missingAuthorized = true
+				branchMissingAuthorized = true // this path is missing authorized policies
 			}
 
-			session := newRecorderPolicySession(s.sessionAlg, &branchDetails.PolicyBranchDetails)
+			// Create a new session for this branch
+			session := newRecorderPolicySession(s.sessionAlg, &branchDetails)
 
+			// Create a new function for entering a new branch node from this branch
 			beginBranchNodeFn := func() (treeWalkerBeginBranchFn, error) {
-				return makeBeginBranchFn(branchPath, &branchDetails), nil
+				// We're entering a new branch node
+
+				// Create a new function for entering a new branch from this branch node, which
+				// inherits the properties of the current branch
+				return makeBeginBranchFn(branchPath, &branchDetails, branchMissingAuthorized), nil
 			}
 
+			// Create a new function that signals the end of a complete path (ie, no more elements)
 			completeFullPath := func() error {
-				s.detailsMap[branchPath] = branchDetails
 				s.paths = append(s.paths, branchPath)
+				s.details[branchPath] = branchDetails
+				if branchMissingAuthorized {
+					s.missingAuthorized[branchPath] = struct{}{}
+				}
 				return nil
 			}
 
@@ -648,7 +663,7 @@ func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBra
 		}
 	}
 
-	walker := newTreeWalker(s, makeBeginBranchFn("", new(pathWildcardResolverBranchDetails)))
+	walker := newTreeWalker(s, makeBeginBranchFn("", new(PolicyBranchDetails), false))
 	if err := walker.run(policyElements{
 		&policyElement{
 			Type: tpm2.CommandPolicyOR,
@@ -679,7 +694,7 @@ func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBra
 
 	var candidates []policyBranchPath
 	for _, path := range s.paths {
-		if _, exists := s.detailsMap[path]; !exists {
+		if _, exists := s.details[path]; !exists {
 			continue
 		}
 		candidates = append(candidates, path)
@@ -694,7 +709,7 @@ func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBra
 
 	// Try to find a better path
 	for _, candidate := range candidates {
-		details := s.detailsMap[candidate]
+		details := s.details[candidate]
 		// prefer paths without TPM2_PolicyAuthValue and TPM2_PolicyPassword
 		if details.AuthValueNeeded {
 			continue
