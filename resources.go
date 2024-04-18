@@ -202,6 +202,23 @@ type handleContext struct {
 	HandleHandle Handle
 	HandleName   Name
 	Data         *handleContextUnion
+	disposeFns   []func() `tpm2:"ignore"`
+}
+
+func newHandleContext(handle Handle) HandleContext {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
+		out := &handleContext{
+			HandleType:   handleContextTypeLimited,
+			HandleHandle: handle,
+			HandleName:   mu.MustMarshalToBytes(handle),
+			Data:         newHandleContextUnion(EmptyValue),
+		}
+		out.disposeFns = []func(){out.dispose}
+		return out
+	default:
+		panic("invalid handle type")
+	}
 }
 
 var _ HandleContext = (*handleContext)(nil)
@@ -231,11 +248,17 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 	return err
 }
 
-func (h *handleContext) Dispose() {
+func (h *handleContext) dispose() {
 	h.HandleType = handleContextTypeDisposed
 	h.HandleHandle = HandleUnassigned
 	h.HandleName = MakeHandleName(HandleUnassigned)
 	h.Data = newHandleContextUnion(EmptyValue)
+}
+
+func (h *handleContext) Dispose() {
+	for _, fn := range h.disposeFns {
+		fn()
+	}
 }
 
 func (h *handleContext) checkValid() error {
@@ -348,29 +371,15 @@ func (h *handleContext) checkValid() error {
 	return nil
 }
 
-func newHandleContext(handle Handle) HandleContext {
-	switch handle.Type() {
-	case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
-		return &handleContext{
-			HandleType:   handleContextTypeLimited,
-			HandleHandle: handle,
-			HandleName:   mu.MustMarshalToBytes(handle),
-			Data:         newHandleContextUnion(EmptyValue),
-		}
-	default:
-		panic("invalid handle type")
-	}
-}
-
 type resourceContext struct {
 	handleContext
-	authValue []byte
+	authValue []byte `tpm2:"ignore"`
 }
 
 func newResourceContext(handle Handle, name Name) ResourceContext {
 	switch handle.Type() {
 	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
-		return &resourceContext{
+		out := &resourceContext{
 			handleContext: handleContext{
 				HandleType:   handleContextTypeLimitedResource,
 				HandleHandle: handle,
@@ -378,20 +387,21 @@ func newResourceContext(handle Handle, name Name) ResourceContext {
 				Data:         newHandleContextUnion(EmptyValue),
 			},
 		}
+		out.disposeFns = []func(){out.handleContext.dispose, out.dispose}
+		return out
 	default:
 		panic("invalid handle type")
 	}
+}
+
+func (r *resourceContext) dispose() {
+	r.authValue = nil
 }
 
 var _ ResourceContext = (*resourceContext)(nil)
 
 func (r *resourceContext) SetAuthValue(authValue []byte) {
 	r.authValue = authValue
-}
-
-func (r *resourceContext) Dispose() {
-	r.authValue = nil
-	r.handleContext.Dispose()
 }
 
 func (r *resourceContext) AuthValue() []byte {
@@ -422,8 +432,6 @@ func newPermanentContext(handle Handle) *permanentContext {
 
 var _ ResourceContext = (*permanentContext)(nil)
 
-func (r *permanentContext) Dispose() {}
-
 func nullResource() ResourceContext {
 	return newPermanentContext(HandleNull)
 }
@@ -438,7 +446,7 @@ func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 		if public == nil {
 			panic("nil public area")
 		}
-		return &objectContext{
+		out := &objectContext{
 			resourceContext: resourceContext{
 				handleContext: handleContext{
 					HandleType:   handleContextTypeObject,
@@ -448,6 +456,8 @@ func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 				},
 			},
 		}
+		out.disposeFns = []func(){out.handleContext.dispose, out.resourceContext.dispose, out.dispose}
+		return out
 	default:
 		panic("invalid handle type")
 	}
@@ -464,12 +474,11 @@ func (t *TPMContext) newObjectContextFromTPM(context HandleContext, sessions ...
 	return newObjectContext(context.Handle(), name, pub), nil
 }
 
-var _ ObjectContext = (*objectContext)(nil)
-
-func (r *objectContext) Dispose() {
-	r.resourceContext.Dispose()
+func (r *objectContext) dispose() {
 	r.Data = newHandleContextUnion(Public{Type: ObjectTypeId(AlgorithmNull), NameAlg: HashAlgorithmNull})
 }
+
+var _ ObjectContext = (*objectContext)(nil)
 
 func (r *objectContext) Public() *Public {
 	return r.Data.Object()
@@ -485,7 +494,7 @@ func newNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexConte
 		if public == nil {
 			panic("nil public area")
 		}
-		return &nvIndexContext{
+		out := &nvIndexContext{
 			resourceContext: resourceContext{
 				handleContext: handleContext{
 					HandleType:   handleContextTypeNVIndex,
@@ -495,6 +504,8 @@ func newNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexConte
 				},
 			},
 		}
+		out.disposeFns = []func(){out.handleContext.dispose, out.resourceContext.dispose, out.dispose}
+		return out
 	default:
 		panic("invalid handle type")
 	}
@@ -514,12 +525,11 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 	return newNVIndexContext(context.Handle(), name, pub), nil
 }
 
-var _ NVIndexContext = (*nvIndexContext)(nil)
-
-func (r *nvIndexContext) Dispose() {
-	r.resourceContext.Dispose()
+func (r *nvIndexContext) dispose() {
 	r.Data = newHandleContextUnion(NVPublic{NameAlg: HashAlgorithmNull})
 }
+
+var _ NVIndexContext = (*nvIndexContext)(nil)
 
 func (r *nvIndexContext) Type() NVType {
 	return r.Data.NV().Attrs.Type()
@@ -532,7 +542,7 @@ func (r *nvIndexContext) SetAttr(a NVAttributes) {
 
 type sessionContext struct {
 	*handleContext
-	attrs SessionAttributes
+	attrs SessionAttributes `tpm2:"ignore"`
 }
 
 func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
@@ -550,7 +560,7 @@ func newSessionContext(handle Handle, data *sessionContextData) *sessionContext 
 		}
 	}
 
-	return &sessionContext{
+	out := &sessionContext{
 		handleContext: &handleContext{
 			HandleType:   handleContextTypeSession,
 			HandleHandle: handle,
@@ -558,19 +568,20 @@ func newSessionContext(handle Handle, data *sessionContextData) *sessionContext 
 			Data:         newHandleContextUnion(*data),
 		},
 	}
+	out.disposeFns = []func(){out.handleContext.dispose, out.dispose}
+	return out
 }
 
-var _ SessionContext = (*sessionContext)(nil)
-
-func (r *sessionContext) Dispose() {
-	r.handleContext.Dispose()
-	r.handleContext.Data = newHandleContextUnion(sessionContextData{
+func (s *sessionContext) dispose() {
+	s.handleContext.Data = newHandleContextUnion(sessionContextData{
 		Params: SessionContextParams{
 			HashAlg:   HashAlgorithmNull,
 			Symmetric: SymDef{Algorithm: SymAlgorithmNull},
 		},
 	})
 }
+
+var _ SessionContext = (*sessionContext)(nil)
 
 func (r *sessionContext) Params() SessionContextParams {
 	return r.Data().Params

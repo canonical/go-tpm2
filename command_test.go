@@ -400,14 +400,14 @@ func (s *commandSuite) TestUseResouceContextWithAuthPW(c *C) {
 	h := UseResourceContextWithAuth(resource, nil)
 	c.Check(h, NotNil)
 	c.Check(h.Handle(), Equals, resource)
-	c.Check(h.Session(), DeepEquals, PwSession())
+	c.Check(h.Session().SerializeToBytes(), DeepEquals, PwSession().SerializeToBytes())
 }
 
 func (s *commandSuite) TestUseResouceContextWithAuthNil(c *C) {
 	h := UseResourceContextWithAuth(nil, nil)
 	c.Check(h, NotNil)
 	c.Check(h.Handle(), DeepEquals, NullResource())
-	c.Check(h.Session(), DeepEquals, PwSession())
+	c.Check(h.Session().SerializeToBytes(), DeepEquals, PwSession().SerializeToBytes())
 }
 
 func (s *commandSuite) TestCommandContextAddHandles(c *C) {

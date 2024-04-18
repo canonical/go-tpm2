@@ -527,15 +527,11 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 		}
 
 		var taggedUnion bool
-		var hasUnexported bool
 
 		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			if f.PkgPath != "" {
-				hasUnexported = true
-			}
-			if isUnion(f.Type) {
+			if isUnion(t.Field(i).Type) {
 				taggedUnion = true
+				break
 			}
 		}
 
@@ -546,11 +542,7 @@ func classifyKind(t reflect.Type, o *options) (kind, error) {
 			return kindUnion, nil
 		}
 
-		switch {
-		case hasUnexported:
-			// structs with unexported fields are unsupported
-			return kindUnsupported, errors.New("struct type with unexported fields")
-		case o.selector != "":
+		if o.selector != "" {
 			return kindUnsupported, errors.New(`"selector" option is invalid with struct types that don't represent unions`)
 		}
 

@@ -19,16 +19,44 @@ type (
 	treeWalkerCompleteFullPathFn func() error
 )
 
+type treeWalkerCompleteFullPathRunner struct {
+	walker *treeWalker
+	depth  int
+	fn     treeWalkerCompleteFullPathFn
+}
+
+func (treeWalkerCompleteFullPathRunner) name() string { return "complete full path" }
+
+func (r treeWalkerCompleteFullPathRunner) run(_ policyRunner) error {
+	if r.walker.depth != r.depth {
+		return nil
+	}
+	return r.fn()
+}
+
+type treeWalkerPolicyAuthorizeRunner struct {
+	keySign   *tpm2.Public
+	policyRef tpm2.Nonce
+}
+
+func (r *treeWalkerPolicyAuthorizeRunner) name() string {
+	return "TPM2_PolicyAuthorize assertion"
+}
+
+func (r *treeWalkerPolicyAuthorizeRunner) run(runner policyRunner) error {
+	return runner.session().PolicyAuthorize(nil, r.policyRef, r.keySign.Name(), nil)
+}
+
+// treeWalker walks every path of elements in a policy, or from a single branch node.
 type treeWalker struct {
 	policyTickets     nullTickets
 	policyResources   policyResources
 	beginRootBranchFn treeWalkerBeginBranchFn
 
-	policySession       policySession
-	beginBranchNodeFn   treeWalkerBeginBranchNodeFn
-	completeFullPathFn  treeWalkerCompleteFullPathFn
-	ranCompleteFullPath bool
-	currentPath         policyBranchPath
+	currentPath       policyBranchPath
+	policySession     policySession
+	beginBranchNodeFn treeWalkerBeginBranchNodeFn
+	depth             int
 
 	remaining []policyElementRunner
 }
@@ -56,25 +84,24 @@ func (w *treeWalker) walkBranch(beginBranchFn treeWalkerBeginBranchFn, index int
 
 	origSession := w.policySession
 	origBeginBranchNodeFn := w.beginBranchNodeFn
-	origCompleteFullPathFn := w.completeFullPathFn
 	origPath := w.currentPath
 	defer func() {
 		w.policySession = origSession
 		w.beginBranchNodeFn = origBeginBranchNodeFn
-		w.completeFullPathFn = origCompleteFullPathFn
 		w.currentPath = origPath
+		w.depth--
 	}()
 
 	w.policySession = session
 	w.beginBranchNodeFn = beginBranchNodeFn
-	w.completeFullPathFn = completeFullPathFn
 	w.currentPath = w.currentPath.Concat(name)
-	w.ranCompleteFullPath = false
+	w.depth++
 
 	var elements []policyElementRunner
 	for _, element := range branch.Policy {
 		elements = append(elements, element.runner())
 	}
+	remaining = append(remaining, &treeWalkerCompleteFullPathRunner{walker: w, depth: w.depth, fn: completeFullPathFn})
 	return w.runInternal(append(elements, remaining...))
 }
 
@@ -134,19 +161,6 @@ func (w *treeWalker) runBranch(branches policyBranches) (int, error) {
 	return 0, nil
 }
 
-type treeWalkerPolicyAuthorizeRunner struct {
-	keySign   *tpm2.Public
-	policyRef tpm2.Nonce
-}
-
-func (r *treeWalkerPolicyAuthorizeRunner) name() string {
-	return "TPM2_PolicyAuthorize assertion"
-}
-
-func (r *treeWalkerPolicyAuthorizeRunner) run(runner policyRunner) error {
-	return runner.session().PolicyAuthorize(nil, r.policyRef, r.keySign.Name(), nil)
-}
-
 func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (tpm2.Digest, *tpm2.TkVerified, error) {
 	remaining := w.remaining
 	w.remaining = nil
@@ -185,15 +199,13 @@ func (w *treeWalker) runInternal(elements []policyElementRunner) error {
 			return makePolicyError(err, w.currentPath, element.name())
 		}
 	}
-	if !w.ranCompleteFullPath {
-		w.ranCompleteFullPath = true
-		return w.completeFullPathFn()
-	}
-
 	return nil
 }
 
 func (w *treeWalker) run(elements policyElements) error {
+	w.currentPath = ""
+	w.depth = 0
+
 	session, beginBranchNodeFn, completeFullPathFn, err := w.beginRootBranchFn("")
 	if err != nil {
 		return err
@@ -201,18 +213,16 @@ func (w *treeWalker) run(elements policyElements) error {
 
 	w.policySession = session
 	w.beginBranchNodeFn = beginBranchNodeFn
-	w.completeFullPathFn = completeFullPathFn
-	w.currentPath = ""
 
 	defer func() {
 		w.policySession = nil
 		w.beginBranchNodeFn = nil
-		w.completeFullPathFn = nil
 	}()
 
 	var elementsCopy []policyElementRunner
 	for _, element := range elements {
 		elementsCopy = append(elementsCopy, element.runner())
 	}
+	elementsCopy = append(elementsCopy, &treeWalkerCompleteFullPathRunner{walker: w, depth: w.depth, fn: completeFullPathFn})
 	return w.runInternal(elementsCopy)
 }
