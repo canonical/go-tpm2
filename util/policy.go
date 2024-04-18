@@ -17,6 +17,8 @@ import (
 // is that it is possible to compute digests for PolicySecret and PolicyNV assertions
 // without knowledge of the authorization value of the authorizing entities used for those
 // commands.
+//
+// Deprecated: Use [policyutil.PolicyBuilder].
 type TrialAuthPolicy struct {
 	alg    tpm2.HashAlgorithmId
 	digest tpm2.Digest
@@ -29,6 +31,8 @@ type TrialAuthPolicy struct {
 // ComputeAuthPolicy creates a new context for computing an authorization policy digest.
 // It will panic if the specified algorithm is not available. The caller should check
 // this beforehand.
+//
+// Deprecated: Use [policyutil.NewPolicyBuilder].
 func ComputeAuthPolicy(alg tpm2.HashAlgorithmId) *TrialAuthPolicy {
 	if !alg.Available() {
 		panic("unsupported digest algorithm or algorithm not linked in to binary")

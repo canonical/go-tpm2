@@ -115,6 +115,8 @@ func SignPolicyAuthorization(key crypto.PrivateKey, scheme *tpm2.SigScheme, nonc
 // ComputePolicyAuthorizeDigest computes a digest to sign from the supplied authorization policy
 // digest and policy reference. The resulting digest can be signed to authorize the supplied policy
 // with the TPM2_PolicyAuthorize assertion, using the [tpm2.TPMContext.PolicyAuthorize] function.
+//
+// Deprecated: Use [policyutil.ComputePolicyAuthorizationTBSDigest].
 func ComputePolicyAuthorizeDigest(alg tpm2.HashAlgorithmId, approvedPolicy tpm2.Digest, policyRef tpm2.Nonce) (tpm2.Digest, error) {
 	if !alg.Available() {
 		return nil, errors.New("digest algorithm is not available")
@@ -133,6 +135,8 @@ func ComputePolicyAuthorizeDigest(alg tpm2.HashAlgorithmId, approvedPolicy tpm2.
 //
 // The digest algorithm used for the signature must match the name algorithm in the public area
 // associated with the supplied private key.
+//
+// Deprecated: Use [policyutil.SignPolicyAuthorize].
 func PolicyAuthorize(key crypto.PrivateKey, scheme *tpm2.SigScheme, approvedPolicy tpm2.Digest, policyRef tpm2.Nonce) (tpm2.Digest, *tpm2.Signature, error) {
 	hashAlg := scheme.AnyDetails().HashAlg
 	if !hashAlg.Available() {
