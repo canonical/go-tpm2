@@ -187,6 +187,22 @@ type handleContext struct {
 	HandleHandle Handle
 	HandleName   Name
 	Data         *handleContextU
+	disposeFns   []func() `tpm2:"ignore"`
+}
+
+func newHandleContext(handle Handle) HandleContext {
+	switch handle.Type() {
+	case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
+		out := &handleContext{
+			HandleType:   handleContextTypeLimited,
+			HandleHandle: handle,
+			HandleName:   mu.MustMarshalToBytes(handle),
+		}
+		out.disposeFns = []func(){out.dispose}
+		return out
+	default:
+		panic("invalid handle type")
+	}
 }
 
 var _ HandleContext = (*handleContext)(nil)
@@ -216,11 +232,17 @@ func (h *handleContext) SerializeToWriter(w io.Writer) error {
 	return err
 }
 
-func (h *handleContext) Dispose() {
+func (h *handleContext) dispose() {
 	h.HandleType = handleContextTypeDisposed
 	h.HandleHandle = HandleUnassigned
 	h.HandleName = MakeHandleName(HandleUnassigned)
 	h.Data = new(handleContextU)
+}
+
+func (h *handleContext) Dispose() {
+	for _, fn := range h.disposeFns {
+		fn()
+	}
 }
 
 func (h *handleContext) checkValid() error {
@@ -333,48 +355,36 @@ func (h *handleContext) checkValid() error {
 	return nil
 }
 
-func newHandleContext(handle Handle) HandleContext {
-	switch handle.Type() {
-	case HandleTypePCR, HandleTypeNVIndex, HandleTypeHMACSession, HandleTypePolicySession, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
-		return &handleContext{
-			HandleType:   handleContextTypeLimited,
-			HandleHandle: handle,
-			HandleName:   mu.MustMarshalToBytes(handle),
-		}
-	default:
-		panic("invalid handle type")
-	}
-}
-
 type resourceContext struct {
 	handleContext
-	authValue []byte
+	authValue []byte `tpm2:"ignore"`
 }
 
 func newResourceContext(handle Handle, name Name) ResourceContext {
 	switch handle.Type() {
 	case HandleTypePCR, HandleTypeNVIndex, HandleTypePermanent, HandleTypeTransient, HandleTypePersistent:
-		return &resourceContext{
+		out := &resourceContext{
 			handleContext: handleContext{
 				HandleType:   handleContextTypeLimitedResource,
 				HandleHandle: handle,
 				HandleName:   name,
 			},
 		}
+		out.disposeFns = []func(){out.handleContext.dispose, out.dispose}
+		return out
 	default:
 		panic("invalid handle type")
 	}
+}
+
+func (r *resourceContext) dispose() {
+	r.authValue = nil
 }
 
 var _ ResourceContext = (*resourceContext)(nil)
 
 func (r *resourceContext) SetAuthValue(authValue []byte) {
 	r.authValue = authValue
-}
-
-func (r *resourceContext) Dispose() {
-	r.authValue = nil
-	r.handleContext.Dispose()
 }
 
 func (r *resourceContext) AuthValue() []byte {
@@ -404,8 +414,6 @@ func newPermanentContext(handle Handle) *permanentContext {
 
 var _ ResourceContext = (*permanentContext)(nil)
 
-func (r *permanentContext) Dispose() {}
-
 func nullResource() ResourceContext {
 	return newPermanentContext(HandleNull)
 }
@@ -420,7 +428,7 @@ func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 		if public == nil {
 			panic("nil public area")
 		}
-		return &objectContext{
+		out := &objectContext{
 			resourceContext: resourceContext{
 				handleContext: handleContext{
 					HandleType:   handleContextTypeObject,
@@ -430,6 +438,8 @@ func newObjectContext(handle Handle, name Name, public *Public) *objectContext {
 				},
 			},
 		}
+		out.disposeFns = []func(){out.handleContext.dispose, out.dispose}
+		return out
 	default:
 		panic("invalid handle type")
 	}
@@ -463,7 +473,7 @@ func newNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexConte
 		if public == nil {
 			panic("nil public area")
 		}
-		return &nvIndexContext{
+		out := &nvIndexContext{
 			resourceContext: resourceContext{
 				handleContext: handleContext{
 					HandleType:   handleContextTypeNVIndex,
@@ -473,6 +483,8 @@ func newNVIndexContext(handle Handle, name Name, public *NVPublic) *nvIndexConte
 				},
 			},
 		}
+		out.disposeFns = []func(){out.handleContext.dispose, out.dispose}
+		return out
 	default:
 		panic("invalid handle type")
 	}
@@ -514,7 +526,7 @@ func (r *nvIndexContext) SetAttr(a NVAttributes) {
 
 type sessionContext struct {
 	*handleContext
-	attrs SessionAttributes
+	attrs SessionAttributes `tpm2:"ignore"`
 }
 
 func newSessionContext(handle Handle, data *sessionContextData) *sessionContext {
@@ -529,7 +541,7 @@ func newSessionContext(handle Handle, data *sessionContextData) *sessionContext 
 		}
 	}
 
-	return &sessionContext{
+	out := &sessionContext{
 		handleContext: &handleContext{
 			HandleType:   handleContextTypeSession,
 			HandleHandle: handle,
@@ -537,13 +549,11 @@ func newSessionContext(handle Handle, data *sessionContextData) *sessionContext 
 			Data:         &handleContextU{Session: data},
 		},
 	}
+	out.disposeFns = []func(){out.handleContext.dispose}
+	return out
 }
 
 var _ SessionContext = (*sessionContext)(nil)
-
-//func (r *sessionContext) Available() bool {
-//	return r.Data() != nil
-//}
 
 func (r *sessionContext) Params() SessionContextParams {
 	d := r.Data()

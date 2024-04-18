@@ -992,7 +992,10 @@ func (s *muSuite) TestUnmarshalToNilPointer(c *C) {
 
 func (s *muSuite) TestMarshalSizedAndRaw(c *C) {
 	a := Sized(Raw([]byte{}))
-	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type mu.wrappedValue \\(struct type with unexported fields\\)")
+	c.Check(func() { MarshalToBytes(a) }, PanicMatches, "cannot marshal unsupported type interface {} \\(unsupported kind: interface\\)\n\n"+
+		"=== BEGIN STACK ===\n"+
+		"... mu.wrappedValue field value\n"+
+		"=== END STACK ===\n")
 	c.Check(IsValid(a), internal_testutil.IsFalse)
 }
 

@@ -439,12 +439,7 @@ func tpmKind(t reflect.Type, o *options) (TPMKind, error) {
 		k := TPMKindStruct
 
 		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			if f.PkgPath != "" {
-				// structs with unexported fields are unsupported
-				return TPMKindUnsupported, errors.New("struct type with unexported fields")
-			}
-			if isUnion(f.Type) {
+			if isUnion(t.Field(i).Type) {
 				k = TPMKindTaggedUnion
 				break
 			}
