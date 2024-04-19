@@ -521,9 +521,6 @@ func (e *policyAuthorizeElement) run(runner policyRunner) error {
 	if !keySignName.IsValid() {
 		return errors.New("invalid keySign")
 	}
-	if e.KeySign.NameAlg != runner.session().HashAlg() {
-		return errors.New("keySign name algorithm is expected to match session algorithm")
-	}
 
 	policies, err := runner.resources().authorizedPolicies(keySignName, e.PolicyRef)
 	if err != nil {
@@ -531,8 +528,8 @@ func (e *policyAuthorizeElement) run(runner policyRunner) error {
 	}
 
 	// Filter out policies that aren't computed for the current session algorithm or
-	// don't have a matching authorization, although we shouldn't really filter out
-	// anything here.
+	// don't have a matching authorization, although we shouldn't really have any
+	// without a matching authorization.
 	var candidatePolicies []*authorizedPolicy
 	for _, policy := range policies {
 		digest, err := policy.Digest(runner.session().HashAlg())
@@ -1902,13 +1899,11 @@ func (p *Policy) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 //
 // TPM2_PolicyAuthorize expects the digest algorithm of the signature to match the name
 // algorithm of the public key, so the name algorithm of authKey must match the algorithm
-// supplied through the opts argument. Although the TPM does not expect the policy digest
-// to sign to have the same algorithm, this API does expect that which means that the name
-// algorithm of authKey must be the same as the name algorithm of the resource that this
-// policy protects. This limitation simplifies lookup of policy authorizations during execution.
+// supplied through the opts argument. The specified hashAlg argument is used to select
+// the policy digest to sign.
 //
 // This expects the policy to contain a digest for the selected algorithm already.
-func (p *Policy) Authorize(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
+func (p *Policy) Authorize(rand io.Reader, hashAlg tpm2.HashAlgorithmId, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
 	authName := authKey.Name()
 	authAlg := authName.Algorithm()
 	if opts.HashFunc() != authAlg.GetHash() {
@@ -1918,7 +1913,7 @@ func (p *Policy) Authorize(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.
 		return errors.New("auth algorithm is unavailable")
 	}
 
-	approvedPolicy, err := p.Digest(authAlg)
+	approvedPolicy, err := p.Digest(hashAlg)
 	if err != nil {
 		return fmt.Errorf("cannot obtain digest: %w", err)
 	}
