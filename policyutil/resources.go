@@ -48,6 +48,8 @@ type PolicyResources interface {
 	// specified reference.
 	AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
 
+	AuthorizedNVPolicies(name tpm2.Name) ([]*Policy, error)
+
 	// Authorize sets the authorization value of the specified resource context.
 	Authorize(resource tpm2.ResourceContext) error
 
@@ -439,6 +441,17 @@ func (r *tpmPolicyResources) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm
 	return out, nil
 }
 
+func (r *tpmPolicyResources) AuthorizedNVPolicies(name tpm2.Name) ([]*Policy, error) {
+	var out []*Policy
+	for _, policy := range r.data.NVAuthorizedPolicies {
+		if !bytes.Equal(policy.Name, name) {
+			continue
+		}
+		out = append(out, policy.Policy)
+	}
+	return out, nil
+}
+
 func (r *tpmPolicyResources) Authorize(resource tpm2.ResourceContext) error {
 	if r.authorizer == nil {
 		return errors.New("no Authorizer")
@@ -491,6 +504,10 @@ func (*nullPolicyResources) AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2
 	return nil, nil
 }
 
+func (*nullPolicyResources) AuthorizedNVPolicies(name tpm2.Name) ([]*Policy, error) {
+	return nil, nil
+}
+
 func (*nullPolicyResources) Authorize(resource tpm2.ResourceContext) error {
 	return errors.New("no PolicyResources")
 }
@@ -514,6 +531,7 @@ func (*nullPolicyResources) ExternalSensitive(name tpm2.Name) (*tpm2.Sensitive, 
 type policyResources interface {
 	loadedResource(name tpm2.Name) (ResourceContext, error)
 	authorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
+	authorizedNVPolicies(name tpm2.Name) ([]*Policy, error)
 	signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error)
 }
 
@@ -543,20 +561,23 @@ type executePolicyResources struct {
 	resources PolicyResources
 	tickets   *executePolicyTickets
 
-	ignoreAuthorizations []PolicyAuthorizationID
-	ignoreNV             []Named
+	ignoreAuthorizations   []PolicyAuthorizationID
+	ignoreNV               []Named
+	ignoreNVAuthorizations tpm2.DigestList
 
-	cachedResources          map[nameMapKey]cachedResource
-	cachedAuthorizedPolicies map[authMapKey][]*Policy
+	cachedResources            map[nameMapKey]cachedResource
+	cachedAuthorizedPolicies   map[authMapKey][]*Policy
+	cachedAuthorizedNVPolicies map[nameMapKey][]*Policy
 }
 
-func newExecutePolicyResources(session SessionContext, resources PolicyResources, tickets *executePolicyTickets, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named) *executePolicyResources {
+func newExecutePolicyResources(session SessionContext, resources PolicyResources, tickets *executePolicyTickets, ignoreAuthorizations []PolicyAuthorizationID, ignoreNV []Named, ignoreNVAuthorizations tpm2.DigestList) *executePolicyResources {
 	return &executePolicyResources{
 		session:                  session,
 		resources:                resources,
 		tickets:                  tickets,
 		ignoreAuthorizations:     ignoreAuthorizations,
 		ignoreNV:                 ignoreNV,
+		ignoreNVAuthorizations:   ignoreNVAuthorizations,
 		cachedResources:          make(map[nameMapKey]cachedResource),
 		cachedAuthorizedPolicies: make(map[authMapKey][]*Policy),
 	}
@@ -671,6 +692,20 @@ func (r *executePolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef
 	return policies, nil
 }
 
+func (r *executePolicyResources) authorizedNVPolicies(name tpm2.Name) ([]*Policy, error) {
+	if policies, exists := r.cachedAuthorizedNVPolicies[makeNameMapKey(name)]; exists {
+		return policies, nil
+	}
+
+	policies, err := r.resources.AuthorizedNVPolicies(name)
+	if err != nil {
+		return nil, err
+	}
+
+	r.cachedAuthorizedNVPolicies[makeNameMapKey(name)] = policies
+	return policies, nil
+}
+
 func (r *executePolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	return r.resources.SignedAuthorization(r.session.Session().Params().HashAlg, r.session.Session().State().NonceTPM, authKey, policyRef)
 }
@@ -701,6 +736,13 @@ func (r *mockPolicyResources) authorizedPolicies(keySign tpm2.Name, policyRef tp
 	return r.authorized.AuthorizedPolicies(keySign, policyRef)
 }
 
+func (r *mockPolicyResources) authorizedNVPolicies(name tpm2.Name) ([]*Policy, error) {
+	if r.authorized == nil {
+		return nil, nil
+	}
+	return r.authorized.AuthorizedNVPolicies(name)
+}
+
 func (*mockPolicyResources) signedAuthorization(authKey tpm2.Name, policyRef tpm2.Nonce) (*PolicySignedAuthorization, error) {
 	return new(PolicySignedAuthorization), nil
 }
@@ -712,10 +754,8 @@ type PolicyAuthorizedPolicies interface {
 	// the specified name, appropriate for a TPM2_PolicyAuthorize assertion with the
 	// specified reference.
 	AuthorizedPolicies(keySign tpm2.Name, policyRef tpm2.Nonce) ([]*Policy, error)
-}
 
-type PolicyAuthorizedPoliciesData struct {
-	AuthorizedPolicies []*Policy
+	AuthorizedNVPolicies(name tpm2.Name) ([]*Policy, error)
 }
 
 type policyAuthorizedPolicies struct {
@@ -736,6 +776,17 @@ func (p *policyAuthorizedPolicies) AuthorizedPolicies(keySign tpm2.Name, policyR
 			out = append(out, policy)
 			break
 		}
+	}
+	return out, nil
+}
+
+func (p *policyAuthorizedPolicies) AuthorizedNVPolicies(name tpm2.Name) ([]*Policy, error) {
+	var out []*Policy
+	for _, policy := range p.nvPolicies {
+		if !bytes.Equal(policy.Name, name) {
+			continue
+		}
+		out = append(out, policy.Policy)
 	}
 	return out, nil
 }

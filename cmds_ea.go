@@ -415,8 +415,8 @@ func (t *TPMContext) PolicyDuplicationSelect(policySession SessionContext, objec
 
 // PolicyAuthorize executes the TPM2_PolicyAuthorize command, which allows policies to change. This
 // is an immediate assertion. The command allows an authorizing entity to sign a new policy that
-// can be used in an existing policy. The authorizing party signs a digest that is computed as
-// follows:
+// can be used in an existing policy. This assertion binds the policy a public key and policy ref.
+// The authorizing party signs a digest that is computed as follows:
 //
 //	digest := H(approvedPolicy||policyRef)
 //
@@ -535,8 +535,68 @@ func (t *TPMContext) PolicyNvWritten(policySession SessionContext, writtenSet bo
 		Run(nil)
 }
 
-// func (t *TPMContext) PolicyTemplate(policySession HandleContext, templateHash Digest, sessions ...SessionContext) error {
-// }
+// PolicyTemplate executes the TPM2_PolicyTemplate command to bind a policy to the supplied template hash.
+// This only makes sense if the session is intented to be used with the TPM2_Create, TPM2_CreatePrimary or
+// TPM2_CreateLoaded commands. This is a deferred assertion.
+//
+// If this command has been executed previously in this session with a different templateHash, a *[TPMParameterError]
+// error with an error code of [ErrorValue] will be returned.
+//
+// If the session associated with policySession already has a command parameter digest or name digest defined, a
+// *[TPMError] error with an error code of [ErrorCpHash] will be returned.
+//
+// If the size of the supplied template hash does not match the digest algorithm of the session that policySession
+// corresponds to, a *[TPMParameterError] with an error code of [ErrorSize] will be returned.
+//
+// On successful completion, the policy digest of the session associated with policySession will be extended to include
+// the value of the templateHash, and the value of templateHash will be recorded on the session context to limit usage
+// of the session to specific templates with the TPM2_Create, TPM2_CreatePrimary and TPM2_CreateLoaded commands.
+func (t *TPMContext) PolicyTemplate(policySession HandleContext, templateHash Digest, sessions ...SessionContext) error {
+	return t.StartCommand(CommandPolicyTemplate).
+		AddHandles(UseHandleContext(policySession)).
+		AddParams(templateHash).
+		AddExtraSessions(sessions...).
+		Run(nil)
+}
 
-// func (t *TPMContext) PolicyAuthorizeNV(authContext, nvIndex, policySession HandleContext, authContextAuth interface{}, sessions ...SessionContext) error {
-// }
+// PolicyAuthorizeNV executes the TPM2_PolicyAuthorizeNV command, which allows policies to change.
+// This is an immediate assertion. This assertion binds the policy a NV index. The command allows
+// an authorizing entity to write a new policy digest to an NV index, immediately revoking the
+// previous policy.
+//
+// The command requires authorization, defined by the state of the [AttrNVPPRead],
+// [AttrNVOwnerRead], [AttrNVAuthRead] and [AttrNVPolicyRead] attributes of the NV index. The handle
+// used for authorization is specified via authContext. If the NV index has the [AttrNVPPRead]
+// attribute, authorization can be satisfied with [HandlePlatform]. If the NV index has the
+// [AttrNVOwnerRead] attribute, authorization can be satisfied with [HandleOwner]. If the NV index
+// has the [AttrNVAuthRead] or [AttrNVPolicyRead] attribute, authorization can be satisfied with
+// nvIndex. The command requires authorization with the user auth role for authContext, with session
+// based authorization provided via authContextAuthSession.
+//
+// If the session associated with policySession is not a trial session and the resource associated
+// with authContext is not permitted to authorize this access, a *[TPMError] error with an error
+// code of [ErrorNVAuthorization] will be returned.
+//
+// If nvIndex is being used for authorization and the [AttrNVAuthRead] attribute is defined, the
+// authorization can be satisfied by demonstrating knowledge of the authorization value, either via
+// cleartext or HMAC authorization. If nvIndex is being used for authorization and the
+// [AttrNVPolicyRead] attribute is defined, the authorization can be satisfied using a policy
+// session with a digest that matches the authorization policy for the index.
+//
+// If the session associated with policySession is not a trial session and the contents of the NV
+// index does not correctly unmarshal into a TPMT_HA structure, a *[TPMError] with an error code of
+// [ErrorInsufficient] or [ErrorHash] will be returned.
+//
+// If the session associated with policySession is not a trial session and the algorithm of the
+// digest stored in the NV index does not match the session algorithm, a *[TPMError] with an error
+// of [ErrorHash] will be returned. If the stored digest does not match the current session digest,
+// a *[TPMError] with an error code of [ErrorValue] will be returned.
+//
+// On successful completion, the policy digest of the session context associated with policySession
+// is cleared, and then extended to include the name of the NV index.
+func (t *TPMContext) PolicyAuthorizeNV(authContext, nvIndex ResourceContext, policySession SessionContext, authContextAuthSession SessionContext, sessions ...SessionContext) error {
+	return t.StartCommand(CommandPolicyAuthorizeNV).
+		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession), UseHandleContext(nvIndex), UseHandleContext(policySession)).
+		AddExtraSessions(sessions...).
+		Run(nil)
+}

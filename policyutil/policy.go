@@ -125,17 +125,32 @@ func (e *PolicyError) Unwrap() error {
 // authorizing use of the NV index with a policy session, this will wrap a
 // *[ResourceAuthorizeError].
 type PolicyNVError struct {
-	Index tpm2.Handle // The NV index handle
-	Name  tpm2.Name   // The NV index name
+	Index NamedHandle // The NV index
 
 	err error
 }
 
 func (e *PolicyNVError) Error() string {
-	return fmt.Sprintf("cannot complete assertion with NV index %v (name: %#x): %v", e.Index, e.Name, e.err)
+	return fmt.Sprintf("cannot complete assertion with NV index %v (name: %#x): %v", e.Index.Handle(), e.Index.Name(), e.err)
 }
 
 func (e *PolicyNVError) Unwrap() error {
+	return e.err
+}
+
+// PolicyAuthorizationNVError is returned from [Policy.Execute] and other methods when
+// an error is encountered when executing a NV authorized policy with TPM2_PolicyAuthorizeNV.
+type PolicyAuthorizationNVError struct {
+	Index NamedHandle // The NV index
+
+	err error
+}
+
+func (e *PolicyAuthorizationNVError) Error() string {
+	return fmt.Sprintf("cannot complete NV authorization with NV index %v (name: %#x): %v", e.Index.Handle(), e.Index.Name(), e.err)
+}
+
+func (e *PolicyAuthorizationNVError) Unwrap() error {
 	return e.err
 }
 
@@ -281,6 +296,7 @@ type policyRunner interface {
 	authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
 	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
+	runAuthorizedNVPolicy(index NamedHandle, policies []*authorizedPolicy) error
 }
 
 type taggedHash struct {
@@ -345,8 +361,7 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	}
 	if err != nil {
 		return &PolicyNVError{
-			Index: nvIndex.Handle(),
-			Name:  nvIndex.Name(),
+			Index: nvIndex,
 			err:   fmt.Errorf("cannot create auth context: %w", err),
 		}
 	}
@@ -360,15 +375,14 @@ func (e *policyNVElement) run(runner policyRunner) (err error) {
 	authSession, err := runner.authorize(auth, askForPolicy, usage, tpm2.SessionTypePolicy)
 	if err != nil {
 		return &PolicyNVError{
-			Index: nvIndex.Handle(),
-			Name:  nvIndex.Name(),
+			Index: nvIndex,
 			err:   &ResourceAuthorizeError{Name: nvIndex.Name(), err: err},
 		}
 	}
 	defer authSession.Flush()
 
 	if err := runner.session().PolicyNV(auth.Resource(), nvIndex, e.OperandB, e.Offset, e.Operation, authSession.Session()); err != nil {
-		return &PolicyNVError{Index: nvIndex.Handle(), Name: nvIndex.Name(), err: err}
+		return &PolicyNVError{Index: nvIndex, err: err}
 	}
 
 	return nil
@@ -810,6 +824,108 @@ func (e *policyNvWrittenElement) run(runner policyRunner) error {
 	return runner.session().PolicyNvWritten(e.WrittenSet)
 }
 
+type policyTemplateElement struct {
+	TemplateHash tpm2.Digest
+}
+
+func (*policyTemplateElement) name() string { return "TPM2_PolicyTemplate assertion" }
+
+func (e *policyTemplateElement) run(runner policyRunner) error {
+	return runner.session().PolicyTemplate(e.TemplateHash)
+}
+
+type policyAuthorizeNVElement struct {
+	NvIndex *tpm2.NVPublic
+}
+
+func (*policyAuthorizeNVElement) name() string { return "NV authorized policy" }
+
+func (e *policyAuthorizeNVElement) run(runner policyRunner) error {
+	nvIndex, err := tpm2.NewNVIndexResourceContextFromPub(e.NvIndex)
+	if err != nil {
+		return fmt.Errorf("cannot create nvIndex context: %w", err)
+	}
+
+	var auth ResourceContext = newResourceContext(nvIndex, nil)
+	askForPolicy := true
+	switch {
+	case e.NvIndex.Attrs&tpm2.AttrNVPolicyRead != 0:
+		// use NV index for auth
+	case e.NvIndex.Attrs&tpm2.AttrNVAuthRead != 0:
+		// use NV index for auth
+	case e.NvIndex.Attrs&tpm2.AttrNVOwnerRead != 0:
+		auth, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandleOwner))
+		askForPolicy = false
+	case e.NvIndex.Attrs&tpm2.AttrNVPPRead != 0:
+		auth, err = runner.resources().loadedResource(tpm2.MakeHandleName(tpm2.HandlePlatform))
+		askForPolicy = false
+	default:
+		return errors.New("invalid nvIndex read auth mode")
+	}
+	if err != nil {
+		return &PolicyAuthorizationNVError{
+			Index: nvIndex,
+			err:   fmt.Errorf("cannot create auth context: %w", err),
+		}
+	}
+
+	policies, err := runner.resources().authorizedNVPolicies(nvIndex.Name())
+	if err != nil {
+		return &PolicyAuthorizationNVError{
+			Index: nvIndex,
+			err:   err,
+		}
+	}
+
+	// Filter out policies that aren't computed for the current session algorithm.
+	var candidatePolicies []*authorizedPolicy
+	for _, policy := range policies {
+		digest, err := policy.Digest(runner.session().HashAlg())
+		if err == ErrMissingDigest {
+			// no suitable digest
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		candidatePolicies = append(candidatePolicies, &authorizedPolicy{
+			policyBranch: policyBranch{
+				Name:          policyBranchName(fmt.Sprintf("%x", digest)),
+				Policy:        policy.policy.Policy,
+				PolicyDigests: taggedHashList{{HashAlg: runner.session().HashAlg(), Digest: digest}},
+			},
+		})
+	}
+
+	if err := runner.runAuthorizedNVPolicy(nvIndex, candidatePolicies); err != nil {
+		return &PolicyAuthorizationNVError{
+			Index: nvIndex,
+			err:   err,
+		}
+	}
+
+	usage := NewPolicySessionUsage(
+		tpm2.CommandPolicyAuthorizeNV,
+		[]NamedHandle{auth.Resource(), nvIndex, runner.session().Name()},
+	)
+
+	authSession, err := runner.authorize(auth, askForPolicy, usage, tpm2.SessionTypePolicy)
+	if err != nil {
+		return &PolicyAuthorizationNVError{
+			Index: nvIndex,
+			err:   &ResourceAuthorizeError{Name: nvIndex.Name(), err: err},
+		}
+	}
+	defer authSession.Flush()
+
+	if err := runner.session().PolicyAuthorizeNV(auth.Resource(), nvIndex, authSession.Session()); err != nil {
+		return &PolicyAuthorizationNVError{Index: nvIndex, err: err}
+	}
+
+	return nil
+}
+
 type policyElementDetails struct {
 	NV                *policyNVElement
 	Secret            *policySecretElement
@@ -825,6 +941,8 @@ type policyElementDetails struct {
 	DuplicationSelect *policyDuplicationSelectElement
 	Password          *policyPasswordElement
 	NvWritten         *policyNvWrittenElement
+	Template          *policyTemplateElement
+	AuthorizeNV       *policyAuthorizeNVElement
 
 	RawOR *policyRawORElement
 }
@@ -1068,9 +1186,10 @@ type policyExecuteRunner struct {
 	authorizer Authorizer
 	tpm        TPMHelper
 
-	usage                *PolicySessionUsage
-	ignoreAuthorizations []PolicyAuthorizationID
-	ignoreNV             []Named
+	usage                  *PolicySessionUsage
+	ignoreAuthorizations   []PolicyAuthorizationID
+	ignoreNV               []Named
+	ignoreNVAuthorizations tpm2.DigestList
 
 	wildcardResolver *policyPathWildcardResolver
 
@@ -1085,15 +1204,16 @@ func newPolicyExecuteRunner(session PolicySession, tickets *executePolicyTickets
 			session,
 			newRecorderPolicySession(session.HashAlg(), details),
 		),
-		policyTickets:        tickets,
-		policyResources:      resources,
-		authorizer:           authorizer,
-		tpm:                  tpm,
-		usage:                params.Usage,
-		ignoreAuthorizations: params.IgnoreAuthorizations,
-		ignoreNV:             params.IgnoreNV,
-		wildcardResolver:     newPolicyPathWildcardResolver(session.HashAlg(), resources, tpm, params.Usage, params.IgnoreAuthorizations, params.IgnoreNV),
-		remaining:            policyBranchPath(params.Path),
+		policyTickets:          tickets,
+		policyResources:        resources,
+		authorizer:             authorizer,
+		tpm:                    tpm,
+		usage:                  params.Usage,
+		ignoreAuthorizations:   params.IgnoreAuthorizations,
+		ignoreNV:               params.IgnoreNV,
+		ignoreNVAuthorizations: params.IgnoreNVAuthorizations,
+		wildcardResolver:       newPolicyPathWildcardResolver(session.HashAlg(), resources, tpm, params.Usage, params.IgnoreAuthorizations, params.IgnoreNV, params.IgnoreNVAuthorizations),
+		remaining:              policyBranchPath(params.Path),
 	}
 }
 
@@ -1330,6 +1450,31 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	return approvedPolicy, ticket, nil
 }
 
+func (r *policyExecuteRunner) runAuthorizedNVPolicy(index NamedHandle, policies []*authorizedPolicy) error {
+	if len(policies) == 0 {
+		return errors.New("no policies")
+	}
+
+	var branches policyBranches
+	for _, policy := range policies {
+		branches = append(branches, &policy.policyBranch)
+	}
+
+	// Select a policy
+	selected, name, err := r.selectBranch(branches)
+	if err != nil {
+		return err
+	}
+
+	// Run the policy
+	r.currentPath = r.currentPath.Concat(name)
+	if err := r.run(policies[selected].Policy); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string, error) {
 	next, remaining := r.remaining.PopNextComponent()
 	if len(next) == 0 || next[0] == '*' {
@@ -1521,11 +1666,16 @@ type PolicyExecuteParams struct {
 	// This propagates to sub-policies.
 	IgnoreAuthorizations []PolicyAuthorizationID
 
-	// IgnoreNV can be used to indicate that branches containing TPM2_PolicyNV assertions
-	// with an NV index matching the specified name should be ignored. This can be used where
-	// these assertions have failed due to an authorization issue on previous runs. This
-	// propagates to sub-policies.
+	// IgnoreNV can be used to indicate that branches containing TPM2_PolicyNV or
+	// TPM2_PolicyAuthorizeNV assertions with an NV index matching the specified name should
+	// be ignored. This can be used where these assertions have failed due to an authorization
+	// issue on previous runs. This propagates to sub-policies.
 	IgnoreNV []Named
+
+	// IgnoreNVAuthorizations can be used to ignore a list of NV authorized policies with the
+	// specified digests. This can be used where it's not possible to choose the correct policy
+	// because the corresponding NV index needs authorization to read.
+	IgnoreNVAuthorizations tpm2.DigestList
 }
 
 // PolicyExecuteResult is returned from [Policy.Execute].
@@ -1545,10 +1695,11 @@ type PolicyExecuteResult struct {
 	// Path indicates the executed path.
 	Path string
 
-	policyCommandCode *tpm2.CommandCode
-	policyCpHash      tpm2.Digest
-	policyNameHash    tpm2.Digest
-	policyNvWritten   *bool
+	policyCommandCode  *tpm2.CommandCode
+	policyCpHash       tpm2.Digest
+	policyNameHash     tpm2.Digest
+	policyNvWritten    *bool
+	policyTemplateHash tpm2.Digest
 }
 
 // CommandCode returns the command code if a TPM2_PolicyCommandCode or
@@ -1588,6 +1739,14 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 	return *r.policyNvWritten, true
 }
 
+// TemplateHash returns the template hash if a TPM2_PolicyTemplate assertion was executed.
+func (r *PolicyExecuteResult) TemplateHash() (templateHash tpm2.Digest, set bool) {
+	if len(r.policyTemplateHash) == 0 {
+		return nil, false
+	}
+	return r.policyTemplateHash, true
+}
+
 // Execute runs this policy using the supplied policy session.
 //
 // The caller may supply additional parameters via the PolicyExecuteParams struct, which is an
@@ -1618,10 +1777,13 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 // automatically where possible. This works by selecting the first suitable path, with a
 // preference for paths that don't include TPM2_PolicySecret, TPM2_PolicySigned,
 // TPM2_PolicyAuthValue, and TPM2_PolicyPassword assertions. It also has a preference for paths
-// that don't include TPM2_PolicyNV assertions that require authorization to use or read, and for
-// paths without TPM2_PolicyCommandCode, TPM2_PolicyCpHash, TPM2_PolicyNameHash and
-// TPM2_PolicyDuplicatiionSelect assertions where no [PolicySessionUsage] is supplied. A path
-// is omitted from the set of suitable paths if any of the following conditions are true:
+// that don't include TPM2_PolicyNV and TPM2_PolicyAuthorizeNV assertions that require
+// authorization to read the contents of the index, and for paths without TPM2_PolicyCommandCode,
+// TPM2_PolicyCpHash, TPM2_PolicyNameHash, TPM2_PolicyTemplate and TPM2_PolicyDuplicatiionSelect
+// assertions where no [PolicySessionUsage] is supplied. There is a preference for paths without
+// TPM2_PolicyAuthorize or TPM2_PolicyAuthorizeNV assertions where it is not possible to determine
+// whether an authorized policy will succeed. A path is omitted from the set of suitable paths if
+// any of the following conditions are true:
 //   - It contains a command code, command parameter hash, or name hash that doesn't match
 //     the supplied [PolicySessionUsage].
 //   - It contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion and this isn't permitted
@@ -1637,6 +1799,9 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 //     other conditions, else the condition isn't checked.
 //   - It uses TPM2_PolicyPCR with values that don't match the current PCR values.
 //   - It uses TPM2_PolicyCounterTimer with conditions that will fail.
+//   - An authorized policy used with TPM2_PolicyAuthorize does not have a valid signature.
+//   - An authorized policy used with TPM2_PolicyAuthorizeNV does not match the current NV index
+//     contents, if it is possible to read that without authorization.
 //
 // Note that this automatic selection makes the following assumptions:
 //   - TPM2_PolicySecret assertions always succeed. Where they are known to not succeed because
@@ -1645,13 +1810,12 @@ func (r *PolicyExecuteResult) NvWritten() (nvWrittenSet bool, set bool) {
 //   - TPM2_PolicySigned assertions always succeed. Where they are known to not succeed because
 //     an assertion can't be provided or it is invalid, add the assertion details to the
 //     IgnoreAuthorizations field of [PolicyExecuteParams].
-//   - TPM2_PolicyAuthorize assertions always succeed if policies are returned from the
-//     implementation of [PolicyResourceLoader.LoadAuthorizedPolicies]. Where these are known
-//     to not succeed, add the assertion details to the IgnoreAuthorizations field of
-//     [PolicyExecuteParams].
 //   - TPM2_PolicyNV assertions on NV indexes that require authorization to read will always
 //     succeed. Where these are known to not suceed, add the assertion details to the IgnoreNV
 //     field of [PolicyExecuteParams].
+//   - TPM2_PolicyAuthorizeNV assertions will always succeed if the corresponding NV index requires
+//     authorization to read. Where policies are known to be invalid, add their digests to the
+//     IgnoreNVAuthorized field of [PolicyExecuteParams].
 //
 // On success, the supplied policy session may be used for authorization in a context that requires
 // that this policy is satisfied. Information about the result of executing the session is also
@@ -1679,7 +1843,7 @@ func (p *Policy) Execute(session PolicySession, resources PolicyResources, tpm T
 	runner := newPolicyExecuteRunner(
 		session,
 		tickets,
-		newExecutePolicyResources(session.Context(), resources, tickets, params.IgnoreAuthorizations, params.IgnoreNV),
+		newExecutePolicyResources(session.Context(), resources, tickets, params.IgnoreAuthorizations, params.IgnoreNV, params.IgnoreNVAuthorizations),
 		resources,
 		tpm,
 		params,
@@ -1818,6 +1982,10 @@ func (r *policyComputeRunner) runBranch(branches policyBranches) (selected int, 
 
 func (r *policyComputeRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
 	return nil, nil, nil
+}
+
+func (r *policyComputeRunner) runAuthorizedNVPolicy(index NamedHandle, policies []*authorizedPolicy) error {
+	return nil
 }
 
 func (r *policyComputeRunner) run(elements policyElements) error {
@@ -2030,6 +2198,10 @@ func (r *policyValidateRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyR
 	return nil, nil, nil
 }
 
+func (r *policyValidateRunner) runAuthorizedNVPolicy(index NamedHandle, policies []*authorizedPolicy) error {
+	return nil
+}
+
 func (r *policyValidateRunner) run(elements policyElements) error {
 	for len(elements) > 0 {
 		element := elements[0].runner()
@@ -2110,7 +2282,7 @@ func (p *Policy) Branches(alg tpm2.HashAlgorithmId, authorizedPolicies PolicyAut
 	makeBeginBranchFn = func(parentPath policyBranchPath) treeWalkerBeginBranchFn {
 		// This function is called when starting a new branch node. It is called with information
 		// about the parent branch
-		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name string, _ tpm2.Digest, _ any) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			// This function is called at the start of a new branch. It inherits the path of the parent branch
 			// (parentPath).
 			branchPath := parentPath.Concat(name) // Create the new path of this branch
@@ -2158,6 +2330,14 @@ type PolicyAuthorizationDetails struct {
 	PolicyRef tpm2.Nonce
 }
 
+// PolicyAuthorizeNVDetails contains the properties of a TPM2_PolicyAuthorizeNV
+// assertion.
+type PolicyAuthorizeNVDetails struct {
+	Auth  tpm2.Handle
+	Index tpm2.Handle
+	Name  tpm2.Name
+}
+
 // PolicyCounterTimerDetails contains the properties of a TPM2_PolicyCounterTimer
 // assertion.
 type PolicyCounterTimerDetails struct {
@@ -2174,17 +2354,19 @@ type PolicyPCRDetails struct {
 
 // PolicyBranchDetails contains the properties of a single policy branch.
 type PolicyBranchDetails struct {
-	NV                []PolicyNVDetails            // TPM2_PolicyNV assertions
-	Secret            []PolicyAuthorizationDetails // TPM2_PolicySecret assertions
-	Signed            []PolicyAuthorizationDetails // TPM2_PolicySigned assertions
-	Authorize         []PolicyAuthorizationDetails // TPM2_PolicyAuthorize assertions
-	AuthValueNeeded   bool                         // The branch contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion
-	policyCommandCode tpm2.CommandCodeList
-	CounterTimer      []PolicyCounterTimerDetails // TPM2_PolicyCounterTimer assertions
-	policyCpHash      tpm2.DigestList
-	policyNameHash    tpm2.DigestList
-	PCR               []PolicyPCRDetails // TPM2_PolicyPCR assertions
-	policyNvWritten   []bool
+	NV                 []PolicyNVDetails            // TPM2_PolicyNV assertions
+	Secret             []PolicyAuthorizationDetails // TPM2_PolicySecret assertions
+	Signed             []PolicyAuthorizationDetails // TPM2_PolicySigned assertions
+	Authorize          []PolicyAuthorizationDetails // TPM2_PolicyAuthorize assertions
+	AuthValueNeeded    bool                         // The branch contains a TPM2_PolicyAuthValue or TPM2_PolicyPassword assertion
+	policyCommandCode  tpm2.CommandCodeList
+	CounterTimer       []PolicyCounterTimerDetails // TPM2_PolicyCounterTimer assertions
+	policyCpHash       tpm2.DigestList
+	policyNameHash     tpm2.DigestList
+	PCR                []PolicyPCRDetails // TPM2_PolicyPCR assertions
+	policyNvWritten    []bool
+	policyTemplateHash tpm2.DigestList
+	AuthorizeNV        []PolicyAuthorizeNVDetails // TPM2_PolicyAuthorizeNV assertions
 }
 
 // IsValid indicates whether the corresponding policy branch is valid.
@@ -2214,6 +2396,16 @@ func (r *PolicyBranchDetails) IsValid() bool {
 		}
 		cpHashNum += 1
 	}
+	if len(r.policyTemplateHash) > 0 {
+		if len(r.policyTemplateHash) > 1 {
+			for _, templateHash := range r.policyTemplateHash[1:] {
+				if !bytes.Equal(templateHash, r.policyTemplateHash[0]) {
+					return false
+				}
+			}
+		}
+		cpHashNum += 1
+	}
 	if cpHashNum > 1 {
 		return false
 	}
@@ -2228,8 +2420,8 @@ func (r *PolicyBranchDetails) IsValid() bool {
 	return true
 }
 
-// The command code associated with a branch if set, either set by the TPM2_PolicyCommandCode
-// or TPM2_PolicyDuplicationSelect assertion.
+// CommandCode returns the command code associated with a branch if set, either
+// set by the TPM2_PolicyCommandCode or TPM2_PolicyDuplicationSelect assertion.
 func (r *PolicyBranchDetails) CommandCode() (code tpm2.CommandCode, set bool) {
 	if len(r.policyCommandCode) == 0 {
 		return 0, false
@@ -2237,8 +2429,8 @@ func (r *PolicyBranchDetails) CommandCode() (code tpm2.CommandCode, set bool) {
 	return r.policyCommandCode[0], true
 }
 
-// The cpHash associated with a branch if set, either set by the TPM2_PolicyCpHash,
-// TPM2_PolicySecret, or TPM2_PolicySigned assertions.
+// CpHash returns the cpHash associated with a branch if set, either set
+// by the TPM2_PolicyCpHash, TPM2_PolicySecret, or TPM2_PolicySigned assertions.
 func (r *PolicyBranchDetails) CpHash() (cpHashA tpm2.Digest, set bool) {
 	if len(r.policyCpHash) == 0 {
 		return nil, false
@@ -2246,8 +2438,8 @@ func (r *PolicyBranchDetails) CpHash() (cpHashA tpm2.Digest, set bool) {
 	return r.policyCpHash[0], true
 }
 
-// The nameHash associated with a branch if set, either set by the TPM2_PolicyNameHash
-// or TPM2_PolicyDuplicationSelect assertion.
+// NameHash returns the nameHash associated with a branch if set, either set
+// by the TPM2_PolicyNameHash or TPM2_PolicyDuplicationSelect assertion.
 func (r *PolicyBranchDetails) NameHash() (nameHash tpm2.Digest, set bool) {
 	if len(r.policyNameHash) == 0 {
 		return nil, false
@@ -2255,12 +2447,21 @@ func (r *PolicyBranchDetails) NameHash() (nameHash tpm2.Digest, set bool) {
 	return r.policyNameHash[0], true
 }
 
-// The nvWrittenSet value associated with a branch if set.
+// NvWritten returns the nvWrittenSet value associated with a branch if set.
 func (r *PolicyBranchDetails) NvWritten() (nvWrittenSet bool, set bool) {
 	if len(r.policyNvWritten) == 0 {
 		return false, false
 	}
 	return r.policyNvWritten[0], true
+}
+
+// TemplateHash returns the template hash associated with a branch if set, set by a
+// TPM2_PolicyTemplate assertion.
+func (r *PolicyBranchDetails) TemplateHash() (templateDigest tpm2.Digest, set bool) {
+	if len(r.policyTemplateHash) == 0 {
+		return nil, false
+	}
+	return r.policyTemplateHash[0], true
 }
 
 // Details returns details of all branches with the supplied path prefix, for
@@ -2286,7 +2487,7 @@ func (p *Policy) Details(alg tpm2.HashAlgorithmId, path string, authorizedPolici
 		nodeDetails := *details
 		explicitlyHandledNode := false
 
-		return func(name string) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
+		return func(name string, _ tpm2.Digest, _ any) (policySession, treeWalkerBeginBranchNodeFn, treeWalkerCompleteFullPathFn, error) {
 			// This function is called at the start of a new branch. It inherits the current details
 			// at the point that the node was entered (details), the path of the parent branch (parentPath),
 			// the remaining path components (remaining), the next path component if there is one (next), and
@@ -2594,6 +2795,52 @@ func (r *policyStringifierRunner) runAuthorizedPolicy(keySign *tpm2.Public, poli
 	}
 	fmt.Fprintf(r.w, "\n%*s }", r.depth*3, "")
 	return nil, nil, nil
+}
+
+func (r *policyStringifierRunner) runAuthorizedNVPolicy(index NamedHandle, policies []*authorizedPolicy) error {
+	fmt.Fprintf(r.w, "\n%*s AuthorizedNVPolicies {", r.depth*3, "")
+	for _, policy := range policies {
+		err := func() error {
+			origSession := r.policySession
+			origPath := r.currentPath
+
+			r.depth++
+			r.policySession = newStringifierPolicySession(r.policySession.HashAlg(), r.w, r.depth)
+			r.currentPath = r.currentPath.Concat(string(policy.Name))
+			defer func() {
+				r.depth--
+				r.policySession = origSession
+				r.currentPath = origPath
+			}()
+
+			var digest tpm2.Digest
+			for _, d := range policy.PolicyDigests {
+				if d.HashAlg != r.policySession.HashAlg() {
+					continue
+				}
+				digest = d.Digest
+				break
+			}
+			if len(digest) == 0 {
+				return ErrMissingDigest
+			}
+			fmt.Fprintf(r.w, "\n%*sAuthorizedPolicy %x {", r.depth*3, "", digest)
+			fmt.Fprintf(r.w, "\n%*s # digest %v:%#x", r.depth*3, "", r.policySession.HashAlg(), digest)
+
+			if err := r.run(policy.Policy); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(r.w, "\n%*s}", r.depth*3, "")
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+
+	}
+	fmt.Fprintf(r.w, "\n%*s }", r.depth*3, "")
+	return nil
 }
 
 func (r *policyStringifierRunner) run(elements policyElements) error {

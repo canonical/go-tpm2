@@ -455,10 +455,53 @@ func (t *TPMContext) NVSetPinCounterParams(authContext, nvIndex ResourceContext,
 	if !isNv {
 		return errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Type() != NVTypePinPass && context.Type() != NVTypePinFail {
+	if context.Public().Attrs.Type() != NVTypePinPass && context.Type() != NVTypePinFail {
 		return errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data := mu.MustMarshalToBytes(params)
+	return t.NVWrite(authContext, nvIndex, data, 0, authContextAuthSession, sessions...)
+}
+
+// NVSetTaggedHash is a convenience function for [TPMContext.NVWrite] for updating the
+// contents of the ordinary index associated with nvIndex. If the type of nvIndex is not
+// NVTypeOrdinary, an error will be returned. This will return an error if nvIndex cannot be
+// type asserted to [NVIndexContext].
+//
+// The command requires authorization, defined by the state of the [AttrNVPPWrite],
+// [AttrNVOwnerWrite], [AttrNVAuthWrite] and [AttrNVPolicyWrite] attributes. The handle used for
+// authorization is specified via authContext. If the NV index has the [AttrNVPPWrite] attribute,
+// authorization can be satisfied with [HandlePlatform]. If the NV index has the [AttrNVOwnerWrite]
+// attribute, authorization can be satisfied with [HandleOwner]. If the NV index has the
+// [AttrNVAuthWrite] or [AttrNVPolicyWrite] attribute, authorization can be satisfied with nvIndex.
+// The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext
+// is not permitted to authorize this access, a *TPMError error with an error code of
+// [ErrorNVAuthorization] will be returned.
+//
+// If nvIndex is being used for authorization and the [AttrNVAuthWrite] attribute is defined, the
+// authorization can be satisfied by demonstrating knowledge of the authorization value, either via
+// cleartext or HMAC authorization. If nvIndex is being used for authorization and the
+// [AttrNVPolicyWrite] attribute is defined, the authorization can be satisfied using a policy
+// session with a digest that matches the authorization policy for the index.
+//
+// If the index has the [AttrNVWriteLocked] attribute set, a *[TPMError] error with an error code
+// of [ErrorNVLocked] will be returned.
+//
+// On successful completion, the [AttrNVWritten] flag will be set if this is the first time that
+// the index has been written to. If nvIndex can be type asserted to [NVIndexContext], the name of
+// nvIndex will be updated accordingly.
+func (t *TPMContext) NVSetTaggedHash(authContext, nvIndex ResourceContext, taggedHash TaggedHash, authContextAuthSession SessionContext, sessions ...SessionContext) error {
+	context, isNv := nvIndex.(NVIndexContext)
+	if !isNv {
+		return errors.New("nvIndex does not correspond to a NV index")
+	}
+	if context.Public().Attrs.Type() != NVTypeOrdinary {
+		return errors.New("nvIndex does not correspond to an ordinary index")
+	}
+	data, err := mu.MarshalToBytes(taggedHash)
+	if err != nil {
+		return fmt.Errorf("cannot marshal tagged hash: %w", err)
+	}
 	return t.NVWrite(authContext, nvIndex, data, 0, authContextAuthSession, sessions...)
 }
 
@@ -841,7 +884,7 @@ func (t *TPMContext) NVReadBits(authContext, nvIndex ResourceContext, authContex
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Type() != NVTypeBits {
+	if context.Public().Attrs.Type() != NVTypeBits {
 		return 0, errors.New("nvIndex does not correspond to a bit field")
 	}
 	return t.nvReadUint64(authContext, nvIndex, authContextAuthSession, sessions...)
@@ -881,7 +924,7 @@ func (t *TPMContext) NVReadCounter(authContext, nvIndex ResourceContext, authCon
 	if !isNv {
 		return 0, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Type() != NVTypeCounter {
+	if context.Public().Attrs.Type() != NVTypeCounter {
 		return 0, errors.New("nvIndex does not correspond to a counter")
 	}
 	return t.nvReadUint64(authContext, nvIndex, authContextAuthSession, sessions...)
@@ -921,7 +964,7 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 	if !isNv {
 		return nil, errors.New("nvIndex does not correspond to a NV index")
 	}
-	if context.Type() != NVTypePinPass && context.Type() != NVTypePinFail {
+	if context.Public().Attrs.Type() != NVTypePinPass && context.Type() != NVTypePinFail {
 		return nil, errors.New("nvIndex does not correspond to a PIN pass or PIN fail index")
 	}
 	data, err := t.NVRead(authContext, nvIndex, 8, 0, authContextAuthSession, sessions...)
@@ -933,6 +976,54 @@ func (t *TPMContext) NVReadPinCounterParams(authContext, nvIndex ResourceContext
 		return nil, &InvalidResponseError{CommandNVRead, fmt.Errorf("cannot unmarshal response bytes: %w", err)}
 	}
 	return &res, nil
+}
+
+// NVReadTaggedHash is a convenience function for [TPMContext.NVRead] for reading the contents
+// of the ordinary index associated with nvIndex. If the type of nvIndex is not [NVTypeOrdinary],
+// an error will be returned. This will return an error if nvIndex cannot be type asserted to
+// [NVIndexContext].
+//
+// The command requires authorization, defined by the state of the [AttrNVPPRead],
+// [AttrNVOwnerRead], [AttrNVAuthRead] and [AttrNVPolicyRead] attributes. The handle used for
+// authorization is specified via authContext. If the NV index has the [AttrNVPPRead] attribute,
+// authorization can be satisfied with [HandlePlatform]. If the NV index has the [AttrNVOwnerRead]
+// attribute, authorization can be satisfied with [HandleOwner]. If the NV index has the
+// [AttrNVAuthRead] or [AttrNVPolicyRead] attribute, authorization can be satisfied with nvIndex.
+// The command requires authorization with the user auth role for authContext, with session based
+// authorization provided via authContextAuthSession. If the resource associated with authContext
+// is not permitted to authorize this access, a *[TPMError] error with an error code of
+// [ErrorNVAuthorization] will be returned.
+//
+// If nvIndex is being used for authorization and the [AttrNVAuthRead] attribute is defined, the
+// authorization can be satisfied by demonstrating knowledge of the authorization value, either via
+// cleartext or HMAC authorization. If nvIndex is being used for authorization and the
+// [AttrNVPolicyRead] attribute is defined, the authorization can be satisfied using a policy
+// session with a digest that matches the authorization policy for the index.
+//
+// If the index has the [AttrNVReadLocked] attribute set, a *[TPMError] error with an error code of
+// [ErrorNVLocked] will be returned.
+//
+// If the index has not been initialized (ie, the [AttrNVWritten] attribute is not set), a
+// *[TPMError] error with an error code of [ErrorNVUninitialized] will be returned.
+//
+// On successful completion, a tagged hash will be returned.
+func (t *TPMContext) NVReadTaggedHash(authContext, nvIndex ResourceContext, authContextAuthSession SessionContext, sessions ...SessionContext) (TaggedHash, error) {
+	context, isNv := nvIndex.(NVIndexContext)
+	if !isNv {
+		return MakeTaggedHash(HashAlgorithmNull, nil), errors.New("nvIndex does not correspond to a NV index")
+	}
+	if context.Public().Attrs.Type() != NVTypeOrdinary {
+		return MakeTaggedHash(HashAlgorithmNull, nil), errors.New("nvIndex does not correspond to an ordinary index")
+	}
+	data, err := t.NVRead(authContext, nvIndex, context.Public().Size, 0, authContextAuthSession, sessions...)
+	if err != nil {
+		return MakeTaggedHash(HashAlgorithmNull, nil), err
+	}
+	var res TaggedHash
+	if _, err := mu.UnmarshalFromBytes(data, &res); err != nil {
+		return MakeTaggedHash(HashAlgorithmNull, nil), &InvalidResponseError{CommandNVRead, fmt.Errorf("cannot unmarshal response bytes: %w", err)}
+	}
+	return res, nil
 }
 
 // NVReadLock executes the TPM2_NV_ReadLock command to inhibit further reads of the NV index

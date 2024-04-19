@@ -954,9 +954,9 @@ func (s *policySuite) TestPolicyNVFails(c *C) {
 
 	var ne *PolicyNVError
 	c.Assert(pe, internal_testutil.ErrorAs, &ne)
-	c.Check(ne.Index, Equals, nvPub.Index)
+	c.Check(ne.Index.Handle(), Equals, nvPub.Index)
 	nvPub.Attrs |= tpm2.AttrNVWritten
-	c.Check(ne.Name, DeepEquals, nvPub.Name())
+	c.Check(ne.Index.Name(), DeepEquals, nvPub.Name())
 
 	var e *tpm2.TPMError
 	c.Assert(ne, internal_testutil.ErrorAs, &e)
@@ -1051,9 +1051,9 @@ func (s *policySuite) TestPolicyNVMissingPolicy(c *C) {
 
 	var ne *PolicyNVError
 	c.Assert(pe, internal_testutil.ErrorAs, &ne)
-	c.Check(ne.Index, Equals, nvPub.Index)
+	c.Check(ne.Index.Handle(), Equals, nvPub.Index)
 	nvPub.Attrs |= tpm2.AttrNVWritten
-	c.Check(ne.Name, DeepEquals, nvPub.Name())
+	c.Check(ne.Index.Name(), DeepEquals, nvPub.Name())
 
 	var re *ResourceAuthorizeError
 	c.Assert(err, internal_testutil.ErrorAs, &re)
@@ -1119,9 +1119,9 @@ func (s *policySuite) TestPolicyNVWithSubPolicyError(c *C) {
 
 	var ne *PolicyNVError
 	c.Assert(pe, internal_testutil.ErrorAs, &ne)
-	c.Check(ne.Index, Equals, nvPub.Index)
+	c.Check(ne.Index.Handle(), Equals, nvPub.Index)
 	nvPub.Attrs |= tpm2.AttrNVWritten
-	c.Check(ne.Name, DeepEquals, nvPub.Name())
+	c.Check(ne.Index.Name(), DeepEquals, nvPub.Name())
 
 	var rae *ResourceAuthorizeError
 	c.Assert(ne, internal_testutil.ErrorAs, &rae)

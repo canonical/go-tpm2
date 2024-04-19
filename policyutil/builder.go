@@ -54,6 +54,10 @@ func (r *policyBuilderBranchRunner) runAuthorizedPolicy(keySign *tpm2.Public, po
 	return nil, nil, nil
 }
 
+func (r *policyBuilderBranchRunner) runAuthorizedNVPolicy(index NamedHandle, policies []*authorizedPolicy) error {
+	return nil
+}
+
 // PolicyBuilderBranchNode is a point in a [PolicyBuilderBranch] to which sub-branches
 // can be added.
 type PolicyBuilderBranchNode struct {
@@ -632,6 +636,77 @@ func (b *PolicyBuilderBranch) PolicyNvWritten(writtenSet bool) (tpm2.Digest, err
 	digest, err := b.runner.session().PolicyGetDigest()
 	if err != nil {
 		return nil, b.policy.fail("PolicyNvWritten", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
+}
+
+// PolicyTemplate adds a TPM2_PolicyTemplate assertion to this branch to bind the policy to the
+// specified public template. This only makes sense for policies that are used for TPM2_Create,
+// TPM2_CreatePrimary and TPM2_CreateLoaded. This can be used to restrict the resources that a
+// storage or derivation parent can be used to create.
+func (b *PolicyBuilderBranch) PolicyTemplate(template tpm2.PublicTemplate) (tpm2.Digest, error) {
+	if err := b.prepareToModifyBranch(); err != nil {
+		return nil, b.policy.fail("PolicyTemplate", err)
+	}
+
+	h := b.alg().NewHash()
+	data, err := template.ToTemplate()
+	if err != nil {
+		return nil, b.policy.fail("PolicyTemplate", fmt.Errorf("cannot obtain template bytes: %w", err))
+	}
+	h.Write(data)
+
+	element := &policyElement{
+		Type: tpm2.CommandPolicyTemplate,
+		Details: &policyElementDetails{
+			Template: &policyTemplateElement{TemplateHash: h.Sum(nil)}}}
+	if err := element.runner().run(&b.runner); err != nil {
+		return nil, b.policy.fail("PolicyTemplate", fmt.Errorf("internal error: %w", err))
+	}
+	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
+
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyTemplate", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
+}
+
+// PolicyAuthorizeNV adds a TPM2_PolicyAuthorizeNV assertion to this branch so that the policy
+// can be changed by allowing the authorizing entity update the contents of a NV index
+//
+// When [Policy.Execute] runs this assertion, it will select and execute an appropriate
+// authorized policy.
+//
+// This assertion must come before any other assertions in a policy. Whilst this is not
+// a limitation of how this works on the TPM, the [Policy.Execute] API currently does not
+// support authorized policies with a non-empty starting digest.
+func (b *PolicyBuilderBranch) PolicyAuthorizeNV(nvIndex *tpm2.NVPublic) (tpm2.Digest, error) {
+	if err := b.prepareToModifyBranch(); err != nil {
+		return nil, b.policy.fail("PolicyAuthorizeNV", err)
+	}
+
+	if !b.parentIsEmpty || len(b.policyBranch.Policy) > 0 {
+		return nil, b.policy.fail("PolicyAuthorizeNV", errors.New("must be before any other assertions"))
+	}
+
+	if !nvIndex.Name().IsValid() {
+		return nil, b.policy.fail("PolicyNV", errors.New("invalid nvIndex"))
+	}
+
+	element := &policyElement{
+		Type: tpm2.CommandPolicyAuthorizeNV,
+		Details: &policyElementDetails{
+			AuthorizeNV: &policyAuthorizeNVElement{
+				NvIndex: nvIndex}}}
+	if err := element.runner().run(&b.runner); err != nil {
+		return nil, b.policy.fail("PolicyAuthorizeNV", fmt.Errorf("internal error: %w", err))
+	}
+	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
+
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyAuthorizeNV", fmt.Errorf("internal error: %w", err))
 	}
 	return digest, nil
 }

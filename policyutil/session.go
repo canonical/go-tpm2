@@ -36,6 +36,8 @@ type policySession interface {
 	PolicyPassword() error
 	PolicyGetDigest() (tpm2.Digest, error)
 	PolicyNvWritten(writtenSet bool) error
+	PolicyTemplate(templateHash tpm2.Digest) error
+	PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error
 }
 
 // SessionContext corresponds to a session on the TPM
@@ -68,6 +70,8 @@ type PolicySession interface {
 	PolicyPassword() error
 	PolicyGetDigest() (tpm2.Digest, error)
 	PolicyNvWritten(writtenSet bool) error
+	PolicyTemplate(templateHash tpm2.Digest) error
+	PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error
 }
 
 type tpmSessionContext struct {
@@ -208,6 +212,14 @@ func (s *tpmPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 
 func (s *tpmPolicySession) PolicyNvWritten(writtenSet bool) error {
 	return s.tpm.PolicyNvWritten(s.policySession.Session(), writtenSet, s.sessions...)
+}
+
+func (s *tpmPolicySession) PolicyTemplate(templateHash tpm2.Digest) error {
+	return s.tpm.PolicyTemplate(s.policySession.Session(), templateHash, s.sessions...)
+}
+
+func (s *tpmPolicySession) PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error {
+	return s.tpm.PolicyAuthorizeNV(auth, index, s.policySession.Session(), authAuthSession)
 }
 
 // computePolicySession is an implementation of Session that computes a
@@ -402,6 +414,25 @@ func (s *computePolicySession) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
+func (s *computePolicySession) PolicyTemplate(templateHash tpm2.Digest) error {
+	if s.noCpNameHash {
+		return fmt.Errorf("cannot compute digest for policies with TPM2_PolicyTemplate assertion")
+	}
+	if len(templateHash) != s.alg.Size() {
+		return errors.New("invalid digest size")
+	}
+	s.mustUpdateForCommand(tpm2.CommandPolicyTemplate, mu.Raw(templateHash))
+	return nil
+}
+
+func (s *computePolicySession) PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error {
+	if len(index.Name()) == 0 || !index.Name().IsValid() {
+		return errors.New("invalid index name")
+	}
+	s.mustUpdateForCommand(tpm2.CommandPolicyAuthorizeNV, mu.Raw(index.Name()))
+	return nil
+}
+
 type nullPolicySession struct {
 	alg tpm2.HashAlgorithmId
 }
@@ -479,6 +510,14 @@ func (s *nullPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 }
 
 func (*nullPolicySession) PolicyNvWritten(writtenSet bool) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyTemplate(templateHash tpm2.Digest) error {
+	return nil
+}
+
+func (*nullPolicySession) PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error {
 	return nil
 }
 
@@ -630,6 +669,18 @@ func (s *teePolicySession) PolicyNvWritten(writtenSet bool) error {
 	})
 }
 
+func (s *teePolicySession) PolicyTemplate(templateHash tpm2.Digest) error {
+	return s.forEach(func(session policySession) error {
+		return session.PolicyTemplate(templateHash)
+	})
+}
+
+func (s *teePolicySession) PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error {
+	return s.forEach(func(session policySession) error {
+		return session.PolicyAuthorizeNV(auth, index, authAuthSession)
+	})
+}
+
 type recorderPolicySession struct {
 	alg     tpm2.HashAlgorithmId
 	details *PolicyBranchDetails
@@ -778,6 +829,20 @@ func (s *recorderPolicySession) PolicyNvWritten(writtenSet bool) error {
 	return nil
 }
 
+func (s *recorderPolicySession) PolicyTemplate(templateHash tpm2.Digest) error {
+	s.details.policyTemplateHash = append(s.details.policyTemplateHash, templateHash)
+	return nil
+}
+
+func (s *recorderPolicySession) PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error {
+	s.details.AuthorizeNV = append(s.details.AuthorizeNV, PolicyAuthorizeNVDetails{
+		Auth:  auth.Handle(),
+		Index: index.Handle(),
+		Name:  index.Name(),
+	})
+	return nil
+}
+
 type stringifierPolicySession struct {
 	alg   tpm2.HashAlgorithmId
 	w     io.Writer
@@ -886,6 +951,16 @@ func (s *stringifierPolicySession) PolicyGetDigest() (tpm2.Digest, error) {
 
 func (s *stringifierPolicySession) PolicyNvWritten(writtenSet bool) error {
 	_, err := fmt.Fprintf(s.w, "\n%*s PolicyNvWritten(%t)", s.depth*3, "", writtenSet)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyTemplate(templateHash tpm2.Digest) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyTemplate(%#x)", s.depth*3, "", templateHash)
+	return err
+}
+
+func (s *stringifierPolicySession) PolicyAuthorizeNV(auth, index tpm2.ResourceContext, authAuthSession tpm2.SessionContext) error {
+	_, err := fmt.Fprintf(s.w, "\n%*s PolicyAuthorizeNV(%#x)", s.depth*3, "", index.Name())
 	return err
 }
 

@@ -110,7 +110,13 @@ type ObjectContext interface {
 type NVIndexContext interface {
 	ResourceContext
 
+	// Public is the public area associated with this index. This will return nil
+	// if HandleContext.Dispose was called. The attributes of this shouldn't be
+	// updated directly - for this, use SetAttr.
+	Public() *NVPublic
+
 	// Type returns the type of the index
+	// Deprecated: use Public
 	Type() NVType
 
 	// SetAttr is called when an attribute is set so that the context
@@ -506,6 +512,10 @@ func (t *TPMContext) newNVIndexContextFromTPM(context HandleContext, sessions ..
 }
 
 var _ NVIndexContext = (*nvIndexContext)(nil)
+
+func (r *nvIndexContext) Public() *NVPublic {
+	return r.Data.NV
+}
 
 func (r *nvIndexContext) Type() NVType {
 	if r.Data.NV == nil {
