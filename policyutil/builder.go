@@ -289,7 +289,10 @@ func (b *PolicyBuilderBranch) PolicySecret(authObject Named, policyRef tpm2.Nonc
 }
 
 // PolicySigned adds a TPM2_PolicySigned assertion to this branch so that the policy requires
-// an assertion signed by the owner of the supplied key.
+// an assertion signed by the owner of the supplied key. This supports HMAC assertions, but
+// the [PolicyResources] implementation supplied to [Policy.Execute] must implement the
+// ExternalSensitive method in order to obtain the sensitive part of the key, which is not
+// stored inside the policy.
 func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.Nonce) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return nil, b.policy.fail("PolicySigned", err)
@@ -325,7 +328,8 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 // authorized policy.
 //
 // Note that authorizations signed by the owner of the key must use a digest algorithm that
-// matches the name alforithm of the key. This is a TPM limitation.
+// matches the name algorithm of the key. This is a TPM limitation. Policies can only be
+// authorized by asymmetric signatures.
 //
 // This assertion must come before any other assertions in a policy. Whilst this is not
 // a limitation of how this works on the TPM, the [Policy.Authorize] and [Policy.Execute]
