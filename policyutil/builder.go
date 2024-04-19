@@ -324,6 +324,11 @@ func (b *PolicyBuilderBranch) PolicySigned(authKey *tpm2.Public, policyRef tpm2.
 // When [Policy.Execute] runs this assertion, it will select an execute an appropriate
 // authorized policy.
 //
+// Note that authorizations signed by the owner of the key must use a digest algorithm that
+// matches the name alforithm of the key. This is a TPM limitation. This package expects that
+// the owner of the key will only sign policy digests that match the name algorithm of the key.
+// Whilst this isn't a TPM limitation, it simplifies the lookup of authorizations.
+//
 // This assertion must come before any other assertions in a policy. Whilst this is not
 // a limitation of how this works on the TPM, the [Policy.Authorize] and [Policy.Execute]
 // APIs currently do not support authorized policies with a non-empty starting digest.
