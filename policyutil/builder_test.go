@@ -1995,5 +1995,4 @@ Policy {
   0x8395a82161cdfd3f7ff0e663270f19d59a55fb3d9a9f6c7168e3a78d42ad47cc
  )
 }`, expectedDigest, expectedBranchDigests[0], expectedBranchDigests[1], expectedBranchDigests[2], expectedBranchDigests[3], expectedBranchDigests[4], expectedBranchDigests[5], expectedBranchDigests[6], expectedBranchDigests[7], expectedBranchDigests[8], authKey.Name()))
-	fmt.Println(policy)
 }

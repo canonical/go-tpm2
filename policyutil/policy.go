@@ -553,6 +553,9 @@ func (e *policyAuthorizeElement) run(runner policyRunner) error {
 			if !bytes.Equal(auth.PolicyRef, e.PolicyRef) {
 				continue
 			}
+			if ok, _ := auth.Verify(digest); !ok {
+				continue
+			}
 			policyAuth = &auth
 			break
 		}
@@ -1896,14 +1899,14 @@ func (p *Policy) Digest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 // Authorize signs this policy with the supplied signer so that it can be used as an
 // authorized policy for a TPM2_PolicyAuthorize assertion with the supplied authKey and
 // policyRef. Calling this updates the policy, so it should be persisted afterwards.
+// This signs every digest that the policy has been computed for.
 //
 // TPM2_PolicyAuthorize expects the digest algorithm of the signature to match the name
 // algorithm of the public key, so the name algorithm of authKey must match the algorithm
-// supplied through the opts argument. The specified hashAlg argument is used to select
-// the policy digest to sign.
+// supplied through the opts argument.
 //
 // This expects the policy to contain a digest for the selected algorithm already.
-func (p *Policy) Authorize(rand io.Reader, hashAlg tpm2.HashAlgorithmId, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) error {
+func (p *Policy) Authorize(rand io.Reader, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) (err error) {
 	authName := authKey.Name()
 	authAlg := authName.Algorithm()
 	if opts.HashFunc() != authAlg.GetHash() {
@@ -1913,28 +1916,23 @@ func (p *Policy) Authorize(rand io.Reader, hashAlg tpm2.HashAlgorithmId, authKey
 		return errors.New("auth algorithm is unavailable")
 	}
 
-	approvedPolicy, err := p.Digest(hashAlg)
-	if err != nil {
-		return fmt.Errorf("cannot obtain digest: %w", err)
-	}
-
-	policyAuth, err := SignPolicyAuthorization(rand, approvedPolicy, authKey, policyRef, signer, opts)
-	if err != nil {
-		return fmt.Errorf("cannot sign authorization: %w", err)
-	}
-
-	addedAuth := false
-	for i, auth := range p.policy.PolicyAuthorizations {
+	var authorizations policyAuthorizations
+	for _, auth := range p.policy.PolicyAuthorizations {
 		if bytes.Equal(auth.AuthKey.Name(), authName) && bytes.Equal(auth.PolicyRef, policyRef) {
-			p.policy.PolicyAuthorizations[i] = *policyAuth
-			addedAuth = true
-			break
+			continue
 		}
-	}
-	if !addedAuth {
-		p.policy.PolicyAuthorizations = append(p.policy.PolicyAuthorizations, *policyAuth)
+		authorizations = append(authorizations, auth)
 	}
 
+	for _, approvedPolicy := range p.policy.PolicyDigests {
+		auth, err := SignPolicyAuthorization(rand, approvedPolicy.Digest, authKey, policyRef, signer, opts)
+		if err != nil {
+			return fmt.Errorf("cannot sign authorization for digest %v: %w", approvedPolicy.HashAlg, err)
+		}
+		authorizations = append(authorizations, *auth)
+	}
+
+	p.policy.PolicyAuthorizations = authorizations
 	return nil
 }
 
