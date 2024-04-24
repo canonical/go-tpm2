@@ -50,5 +50,14 @@ func MakeCredential(rand io.Reader, key *tpm2.Public, credential tpm2.Digest, ob
 		return nil, nil, fmt.Errorf("cannot apply outer wrapper: %w", err)
 	}
 
+	credentialBlob, err = mu.MarshalToBytes(credentialBlob)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot marshal credential bytes: %w", err)
+	}
+	
+	secret, err = mu.MarshalToBytes(secret)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot marshal secret bytes: %w", err)
+	}
 	return credentialBlob, secret, nil
 }
