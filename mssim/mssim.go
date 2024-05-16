@@ -172,6 +172,16 @@ func (t *Transport) Stop() (out error) {
 	return nil
 }
 
+// SetLocality sets the locality for subsequent commands. The supplied value is
+// the numeric locality rather than the TPMA_LOCALITY representation. It returns the
+// currently set locality. Localities between 5 and 31 are invalid and the behaviour
+// of the simulator is not defined in this case.
+func (t *Transport) SetLocality(locality uint8) uint8 {
+	prev := t.internal.locality
+	t.internal.locality = locality
+	return prev
+}
+
 type commandSender struct {
 	transport *internalTransport
 }
