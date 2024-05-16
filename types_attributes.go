@@ -91,12 +91,72 @@ const (
 type Locality uint8
 
 const (
-	LocalityZero  Locality = 0 // TPM_LOC_ZERO
-	LocalityOne   Locality = 1 // TPM_LOC_ONE
-	LocalityTwo   Locality = 2 // TPM_LOC_TWO
-	LocalityThree Locality = 3 // TPM_LOC_THREE
-	LocalityFour  Locality = 4 // TPM_LOC_FOUR
+	LocalityZero  Locality = 1 << 0 // TPM_LOC_ZERO
+	LocalityOne   Locality = 1 << 1 // TPM_LOC_ONE
+	LocalityTwo   Locality = 1 << 2 // TPM_LOC_TWO
+	LocalityThree Locality = 1 << 3 // TPM_LOC_THREE
+	LocalityFour  Locality = 1 << 4 // TPM_LOC_FOUR
 )
+
+// IsValid returns whether this value represents one or more valid
+// localities. The zero value does not represent any valid localities.
+func (l Locality) IsValid() bool {
+	return l > 0
+}
+
+// IsExtended indicates whether this value represents an extended locality,
+// which is a locality greater than or equal to 32. Note that the Locality
+// type cannot represent localities between 5 and 31.
+func (l Locality) IsExtended() bool {
+	return 0xe0&l > 0
+}
+
+// IsMultiple indicates whether this value represents multiple localities.
+// This is only possible for localities 0 to 4.
+func (l Locality) IsMultiple() bool {
+	if l.IsExtended() {
+		return false
+	}
+	found := false
+	for n := uint8(0); n < 5; n++ {
+		if l&(1<<n) > 0 {
+			if found {
+				return true
+			}
+			found = true
+		}
+	}
+
+	return false
+}
+
+// Values returns the localities represented by this value as a slice of
+// integers.
+func (l Locality) Values() []uint8 {
+	if l.IsExtended() {
+		return []uint8{uint8(l)}
+	}
+
+	var out []uint8
+	for n := uint8(0); n < 5; n++ {
+		if l&(1<<n) > 0 {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// Value returns the locality represented by this value as an integer. It
+// will panic if it doesn't represent any valid locality ([IsValid] returns
+// false), or if it represents multiple localities ([IsMultiple] returns
+// true).
+func (l Locality) Value() uint8 {
+	vals := l.Values()
+	if len(vals) != 1 {
+		panic("unset or multiple localities are represented")
+	}
+	return vals[0]
+}
 
 // PermanentAttributes corresponds to the TPMA_PERMANENT type and is returned
 // when querying the value of [PropertyPermanent].
