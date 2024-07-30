@@ -5,6 +5,7 @@
 package testutil_test
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
@@ -94,6 +95,54 @@ func (s *transportSuite) deferCloseTpm(c *C) {
 	s.AddCleanup(func() {
 		c.Check(s.TPM.Close(), IsNil)
 	})
+}
+
+func (s *transportSuite) TestResponseIntercept(c *C) {
+	s.initTPMContext(c, 0)
+	s.deferCloseTpm(c)
+
+	var expectedValue uint32
+	s.TCTI.ResponseIntercept = func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) {
+		c.Check(cmdCode, Equals, tpm2.CommandGetCapability)
+		c.Check(cmdHandles, internal_testutil.LenEquals, 0)
+
+		var cap tpm2.Capability
+		var prop tpm2.Property
+		var n uint32
+		_, err := mu.UnmarshalFromBytes(cpBytes, &cap, &prop, &n)
+		c.Check(cap, Equals, tpm2.CapabilityTPMProperties)
+		c.Check(prop, Equals, tpm2.PropertyPSFamilyIndicator)
+		c.Check(n, internal_testutil.IntEqual, 1)
+
+		rc, rpBytes, rAuthArea, err := tpm2.ReadResponsePacket(rsp, nil)
+		c.Assert(err, IsNil)
+		c.Assert(rc, Equals, tpm2.ResponseSuccess)
+		c.Check(rAuthArea, internal_testutil.LenEquals, 0)
+
+		var moreData bool
+		var capabilityData *tpm2.CapabilityData
+		_, err = mu.UnmarshalFromBytes(rpBytes, &moreData, &capabilityData)
+		c.Assert(err, IsNil)
+		c.Assert(capabilityData.Data.TPMProperties, internal_testutil.LenEquals, 1)
+
+		switch capabilityData.Data.TPMProperties[0].Value {
+		case 1: // PC-Client
+			// For PC-Client, mock the wrong value we get from swtpm which is the value of TPM_PT_FAMILY_INDICATOR ("2.0", null terminated ASCII)
+			expectedValue = 0x323e3000
+		default:
+			// For everything else, mock the PC-Client value
+			expectedValue = 1
+		}
+		capabilityData.Data.TPMProperties[0].Value = expectedValue
+
+		rsp.Reset()
+		newRpBytes := mu.MustMarshalToBytes(moreData, capabilityData)
+		c.Assert(tpm2.WriteResponsePacket(rsp, rc, nil, newRpBytes, rAuthArea), IsNil)
+	}
+
+	val, err := s.TPM.GetCapabilityTPMProperty(tpm2.PropertyPSFamilyIndicator)
+	c.Check(err, IsNil)
+	c.Check(val, Equals, expectedValue)
 }
 
 func (s *transportSuite) TestCommandLog(c *C) {

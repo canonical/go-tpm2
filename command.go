@@ -22,11 +22,11 @@ type CommandHeader struct {
 	CommandCode CommandCode
 }
 
-// WriteCommandPacket serializes a complete TPM packet from the provided arguments to
-// the supplied writer. The parameters argument must already be serialized to the TPM
+// WriteCommandPacket serializes a complete TPM command packet from the provided arguments
+// to the supplied writer. The parameters argument must already be serialized to the TPM
 // wire format.
 //
-// This will return an error if the supplied parameters cannot be represented correctly
+// This will return an error if the supplied arguments cannot be represented correctly
 // by the TPM wire format.
 func WriteCommandPacket(w io.Writer, command CommandCode, handles HandleList, authArea []AuthCommand, parameters []byte) error {
 	header := CommandHeader{CommandCode: command}
@@ -175,6 +175,9 @@ type ResponseHeader struct {
 	ResponseCode ResponseCode
 }
 
+// ReadResponsePacket reads a response packet from the supplied reader, returning the response code,
+// parameters, and auth area. The parameters will still be in the TPM wire format. The response handle
+// will be written to the memory pointed to by the supplied handle argument if provided.
 func ReadResponsePacket(r io.Reader, handle *Handle) (rc ResponseCode, parameters []byte, authArea []AuthResponse, err error) {
 	var header ResponseHeader
 	if _, err := mu.UnmarshalFromReader(r, &header); err != nil {
@@ -183,12 +186,15 @@ func ReadResponsePacket(r io.Reader, handle *Handle) (rc ResponseCode, parameter
 
 	switch header.Tag {
 	case TagRspCommand:
+		// Only valid with the response code TPM_RC_BAD_TAG, expected from TPM1.2 devices in
+		// response to receiving a TPM2 device with an unrecognized tag.
 		if header.ResponseCode != ResponseBadTag {
-			return 0, nil, nil, fmt.Errorf("[TPM_ST_RSP_COMMAND]: %w", InvalidResponseCodeError(header.ResponseCode))
+			return 0, nil, nil, fmt.Errorf("received error for response with tag TPM_ST_RSP_COMMAND: %w", InvalidResponseCodeError(header.ResponseCode))
 		}
 	case TagSessions:
 		if header.ResponseCode != ResponseSuccess {
-			return 0, nil, nil, fmt.Errorf("[TPM_ST_SESSIONS]: %w", InvalidResponseCodeError(header.ResponseCode))
+			// All error responses have the TPM_ST_NO_SESSIONS tag
+			return 0, nil, nil, fmt.Errorf("received error for response with tag TPM_ST_SESSIONS: %w", InvalidResponseCodeError(header.ResponseCode))
 		}
 	case TagNoSessions:
 		if header.ResponseCode != ResponseSuccess && header.ResponseSize != uint32(binary.Size(header)) {
@@ -204,6 +210,7 @@ func ReadResponsePacket(r io.Reader, handle *Handle) (rc ResponseCode, parameter
 	switch header.Tag {
 	case TagSessions, TagNoSessions:
 		if header.ResponseCode == ResponseSuccess && handle != nil {
+			// Read the response handle in the case of success and where a handle is expected
 			if _, err := mu.UnmarshalFromReader(lr, handle); err != nil {
 				return 0, nil, nil, fmt.Errorf("cannot unmarshal handle: %w", err)
 			}
@@ -243,6 +250,80 @@ func ReadResponsePacket(r io.Reader, handle *Handle) (rc ResponseCode, parameter
 	}
 
 	return header.ResponseCode, parameters, authArea, nil
+}
+
+// WriteResponsePacket serializes a complete TPM response packet from the provided arguments
+// to the supplied writer. The parameters argument must already be serialized to the TPM
+// wire format. If handle is nil, then no response handle is serialized.
+//
+// This will return an error if the supplied arguments cannot be represented correctly
+// by the TPM wire format.
+//
+// This will return an error if the supplied arguments are inconsistent, eg, an error
+// response code with a non-zero parameters length or non-zero authArea length.
+func WriteResponsePacket(w io.Writer, rc ResponseCode, handle *Handle, parameters []byte, authArea []AuthResponse) error {
+	header := ResponseHeader{ResponseCode: rc}
+
+	switch {
+	case rc == ResponseBadTag && len(authArea) == 0:
+		// This is any response expected from a TPM1.2 device in response to a TPM2 command because of the invalid command tag
+		header.Tag = TagRspCommand
+	case rc != ResponseSuccess && len(authArea) == 0:
+		// Any other non-success response
+		header.Tag = TagNoSessions
+	case rc == ResponseSuccess && len(authArea) == 0:
+		// Success response without sessions
+		header.Tag = TagNoSessions
+	case rc == ResponseSuccess && len(authArea) > 0:
+		// Success response with sessions
+		header.Tag = TagSessions
+	default:
+		return errors.New("inconsistent ResponseCode and authArea arguments")
+	}
+
+	payload := new(bytes.Buffer)
+
+	if rc != ResponseSuccess {
+		if len(parameters) > 0 {
+			// Error responses don't have parameters
+			return errors.New("inconsistent ResponseCode and parameters arguments")
+		}
+		header.ResponseSize = uint32(binary.Size(header))
+		return nil
+	}
+
+	// This is a success response.
+	// Serialize the response handle if provided.
+	if handle != nil {
+		mu.MustMarshalToWriter(payload, handle)
+	}
+
+	switch header.Tag {
+	case TagNoSessions:
+		if _, err := payload.Write(parameters); err != nil {
+			panic(fmt.Errorf("cannot write parameters: %w", err))
+		}
+	case TagSessions:
+		if int64(len(parameters)) > math.MaxUint32 {
+			return errors.New("parameter area is too large")
+		}
+		mu.MustMarshalToWriter(payload, uint32(len(parameters)))
+		if _, err := payload.Write(parameters); err != nil {
+			panic(fmt.Errorf("cannot write parameters: %w", err))
+		}
+		if _, err := mu.MarshalToWriter(payload, mu.Raw(authArea)); err != nil {
+			return fmt.Errorf("cannot marshal authArea: %w", err)
+		}
+	}
+
+	if int64(payload.Len()) > math.MaxUint32-int64(binary.Size(header)) {
+		return errors.New("total payload is too large")
+	}
+
+	header.ResponseSize = uint32(binary.Size(header) + payload.Len())
+
+	_, err := mu.MarshalToWriter(w, header, mu.Raw(payload.Bytes()))
+	return err
 }
 
 // ResponsePacket corresponds to a complete response packet including header and payload.

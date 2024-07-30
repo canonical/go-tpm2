@@ -6,6 +6,7 @@ package testutil
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,11 @@ import (
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/internal/transportutil"
 	"github.com/canonical/go-tpm2/mu"
+)
+
+const (
+	maxCommandSize  = 4096
+	maxResponseSize = 4096
 )
 
 // Deprecated: use [TransportWrapper].
@@ -204,7 +210,6 @@ type cmdContext struct {
 	handles  tpm2.HandleList
 	authArea []tpm2.AuthCommand
 	pBytes   []byte
-	response *bytes.Buffer
 }
 
 type cmdAuditStatus struct {
@@ -271,6 +276,7 @@ type Transport struct {
 	transport         tpm2.Transport
 	permittedFeatures TPMFeatureFlags
 
+	r io.Reader
 	w io.Writer
 
 	restorePermanentAttrs tpm2.PermanentAttributes
@@ -292,41 +298,76 @@ type Transport struct {
 	// this interface
 	CommandLog            []*CommandRecord
 	disableCommandLogging bool
+
+	// ResponseIntercept allows a test to modify a response packet returned
+	// back to a command called by a test
+	ResponseIntercept func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer)
 }
 
-func (t *Transport) processCommandDoneIfPossible() error {
-	cmd := t.currentCmd
+type responseReader struct {
+	t *Transport
+}
 
-	// Decode the response header and see if we have enough bytes
+func (r *responseReader) Read(data []byte) (int, error) {
+	// This is read via transportutil.BufferResponses so should always
+	// be called with len(data) == maxResponseSize
+	if len(data) != maxResponseSize {
+		return 0, fmt.Errorf("responseReader io.Reader called with unexpected buffer size (%d bytes)", len(data))
+	}
+	rsp, err := r.t.readResponse()
+	if err != nil {
+		return 0, err
+	}
+	if len(rsp) > maxResponseSize {
+		return 0, fmt.Errorf("responseReader io.Reader obtained response that is too large (%d bytes)", len(rsp))
+	}
+	copy(data, rsp)
+	return len(rsp), nil
+}
+
+// readResponse returns a complete response buffer after performing some command-specific
+// actions.
+func (t *Transport) readResponse() ([]byte, error) {
+	if t.currentCmd == nil {
+		return nil, errors.New("a response is not expected (the command context has not been set)")
+	}
+
+	rsp := new(bytes.Buffer)
+
+	r := io.TeeReader(t.transport, rsp)
+
 	var hdr tpm2.ResponseHeader
-	_, err := mu.UnmarshalFromReader(bytes.NewReader(cmd.response.Bytes()), &hdr)
-	switch {
-	case errors.Is(err, io.ErrUnexpectedEOF):
-		return nil
-	case err != nil:
-		return fmt.Errorf("cannot unmarshal response header: %w", err)
+	if _, err := mu.UnmarshalFromReader(r, &hdr); err != nil {
+		return nil, fmt.Errorf("cannot unmarshal response header: %w", err)
+	}
+	if hdr.ResponseSize < uint32(binary.Size(hdr)) {
+		return nil, fmt.Errorf("invalid response header size (%d bytes)", hdr.ResponseSize)
 	}
 
-	if int64(cmd.response.Len()) < int64(hdr.ResponseSize) {
-		// Not enough bytes
-		return nil
+	remaining := hdr.ResponseSize - uint32(binary.Size(hdr))
+	if _, err := io.CopyN(rsp, t.transport, int64(remaining)); err != nil {
+		return nil, fmt.Errorf("cannot obtain rest of response: %w", err)
 	}
+
+	cmd := t.currentCmd
 
 	rHandle := tpm2.HandleUnassigned
 	var pHandle *tpm2.Handle
 
 	// Try to unpack the response packet
 	if cmd.info.rspHandle {
+		// we're expecting a response handle
 		pHandle = &rHandle
 	}
-	rc, rpBytes, rAuthArea, err := tpm2.ReadResponsePacket(bytes.NewReader(cmd.response.Bytes()), pHandle)
+	rc, rpBytes, rAuthArea, err := tpm2.ReadResponsePacket(bytes.NewReader(rsp.Bytes()), pHandle)
 	if err != nil {
-		return fmt.Errorf("cannot unmarshal response: %w", err)
+		return nil, fmt.Errorf("cannot unmarshal response packet: %w", err)
 	}
 
 	t.currentCmd = nil
 
 	if !t.disableCommandLogging {
+		// Log the command if logging isn't disabled
 		t.CommandLog = append(t.CommandLog, &CommandRecord{
 			CmdCode:     cmd.code,
 			CmdHandles:  cmd.handles,
@@ -340,7 +381,8 @@ func (t *Transport) processCommandDoneIfPossible() error {
 	}
 
 	if rc != tpm2.ResponseSuccess {
-		return nil
+		// The TPM returned an error response, so there's nothing else to do
+		return rsp.Bytes(), nil
 	}
 
 	// Record new transient objects or sessions
@@ -355,14 +397,14 @@ func (t *Transport) processCommandDoneIfPossible() error {
 			var inSensitive []byte
 			var inPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &inSensitive, mu.Sized(&inPublic)); err != nil {
-				return fmt.Errorf("cannot unmarshal params: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
 		case tpm2.CommandLoad:
 			var inPrivate tpm2.Private
 			var inPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
-				return fmt.Errorf("cannot unmarshal params: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
 		case tpm2.CommandHMACStart:
@@ -370,7 +412,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 		case tpm2.CommandContextLoad:
 			var context tpm2.Context
 			if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &context); err != nil {
-				return fmt.Errorf("cannot unmarshal params: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			for _, s := range savedObjects {
 				if bytes.Equal(s.data, context.Blob) {
@@ -383,7 +425,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 			var inPrivate []byte
 			var inPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &inPrivate, mu.Sized(&inPublic)); err != nil {
-				return fmt.Errorf("cannot unmarshal params: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal params: %w", err)
 			}
 			info.pub = inPublic
 		case tpm2.CommandHashSequenceStart:
@@ -404,7 +446,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 		object := cmd.handles[1]
 		var persistent tpm2.Handle
 		if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &persistent); err != nil {
-			return fmt.Errorf("cannot unmarshal parameters: %w", err)
+			return nil, fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		switch object.Type() {
 		case tpm2.HandleTypeTransient:
@@ -451,7 +493,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 		// manually.
 		if !hasDecryptSession(cmd.authArea) {
 			if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &newAuth); err != nil {
-				return fmt.Errorf("cannot unmarshal parameters: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal parameters: %w", err)
 			}
 		}
 		t.hierarchyAuths[cmd.handles[0]] = newAuth
@@ -460,7 +502,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 		var auth tpm2.Auth
 		var nvPublic *tpm2.NVPublic
 		if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &auth, mu.Sized(&nvPublic)); err != nil {
-			return fmt.Errorf("cannot unmarshal parameters: %w", err)
+			return nil, fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		index := nvPublic.Index
 		t.handles[index] = &handleInfo{handle: index, created: true, nvPub: nvPublic}
@@ -471,7 +513,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 	case tpm2.CommandStartup:
 		var startupType tpm2.StartupType
 		if _, err := mu.UnmarshalFromBytes(cmd.pBytes, &startupType); err != nil {
-			return fmt.Errorf("cannot unmarshal parameters: %w", err)
+			return nil, fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		if startupType != tpm2.StartupState {
 			delete(t.hierarchyAuths, tpm2.HandlePlatform)
@@ -484,7 +526,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 		case tpm2.HandleTypeTransient:
 			var context tpm2.Context
 			if _, err := mu.UnmarshalFromBytes(rpBytes, &context); err != nil {
-				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if info, ok := t.handles[handle]; ok {
 				savedObjects = append(savedObjects, &savedObject{data: context.Blob, pub: info.pub, seq: info.seq})
@@ -497,7 +539,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 			nvIndex := cmd.handles[0]
 			var nvPublic *tpm2.NVPublic
 			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&nvPublic)); err != nil {
-				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[nvIndex]; !ok {
 				t.handles[nvIndex] = &handleInfo{handle: nvIndex}
@@ -509,7 +551,7 @@ func (t *Transport) processCommandDoneIfPossible() error {
 			object := cmd.handles[0]
 			var outPublic *tpm2.Public
 			if _, err := mu.UnmarshalFromBytes(rpBytes, mu.Sized(&outPublic)); err != nil {
-				return fmt.Errorf("cannot unmarshal response parameters: %w", err)
+				return nil, fmt.Errorf("cannot unmarshal response parameters: %w", err)
 			}
 			if _, ok := t.handles[object]; !ok {
 				t.handles[object] = &handleInfo{handle: object}
@@ -518,18 +560,14 @@ func (t *Transport) processCommandDoneIfPossible() error {
 		}
 	}
 
-	return nil
+	if t.ResponseIntercept != nil {
+		t.ResponseIntercept(cmd.code, cmd.handles, cmd.authArea, cmd.pBytes, rsp)
+	}
+	return rsp.Bytes(), nil
 }
 
 func (t *Transport) Read(data []byte) (int, error) {
-	r := io.TeeReader(t.transport, t.currentCmd.response)
-	n, err := r.Read(data)
-
-	if err := t.processCommandDoneIfPossible(); err != nil {
-		return n, err
-	}
-
-	return n, err
+	return t.r.Read(data)
 }
 
 func (t *Transport) isDAExcempt(handle tpm2.Handle) (bool, error) {
@@ -558,7 +596,13 @@ func (t *Transport) isDAExcempt(handle tpm2.Handle) (bool, error) {
 	}
 }
 
+// sendCommand sends a complete command buffer after performing some checks and
+// recording some context about the command.
 func (t *Transport) sendCommand(data []byte) (int, error) {
+	if t.currentCmd != nil {
+		return 0, errors.New("a previous command did not complete successfully (the command context was not cleared)")
+	}
+
 	var hdr tpm2.CommandHeader
 	if _, err := mu.UnmarshalFromBytes(data, &hdr); err != nil {
 		return 0, fmt.Errorf("cannot decode command header: %w", err)
@@ -712,7 +756,6 @@ func (t *Transport) sendCommand(data []byte) (int, error) {
 		handles:  handles,
 		authArea: authArea,
 		pBytes:   pBytes,
-		response: new(bytes.Buffer),
 	}
 
 	n, err := t.transport.Write(data)
@@ -720,6 +763,14 @@ func (t *Transport) sendCommand(data []byte) (int, error) {
 		t.currentCmd = nil
 	}
 	return n, err
+}
+
+type commandSender struct {
+	t *Transport
+}
+
+func (s *commandSender) Write(data []byte) (int, error) {
+	return s.t.sendCommand(data)
 }
 
 func (t *Transport) Write(data []byte) (int, error) {
@@ -1030,14 +1081,6 @@ func (t *Transport) Unwrap() tpm2.Transport {
 	return t.transport
 }
 
-type commandSender struct {
-	t *Transport
-}
-
-func (s *commandSender) Write(data []byte) (int, error) {
-	return s.t.sendCommand(data)
-}
-
 // WrapTCTI wraps the supplied transport and authorizes it to use the specified features. If
 // the supplied Transport corresponds to a real TPM device, the caller should verify that the
 // specified features are permitted by the current test environment by checking the value
@@ -1104,7 +1147,8 @@ func WrapTransport(transport tpm2.Transport, permittedFeatures TPMFeatureFlags) 
 		restoreCmdAuditStatus: cmdAuditStatus,
 		hierarchyAuths:        make(map[tpm2.Handle]tpm2.Auth),
 		handles:               make(map[tpm2.Handle]*handleInfo)}
-	out.w = transportutil.BufferCommands(&commandSender{t: out}, 4096)
+	out.r = transportutil.BufferResponses(&responseReader{t: out}, maxResponseSize)
+	out.w = transportutil.BufferCommands(&commandSender{t: out}, maxCommandSize)
 	return out, nil
 
 }

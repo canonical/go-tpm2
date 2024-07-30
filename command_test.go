@@ -122,14 +122,14 @@ func (s *commandSuite) TestReadResponsePacketInvalidSize(c *C) {
 func (s *commandSuite) TestUnmarshalResponsePacketUnexpectedTPM1(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "00c40000000a00000000"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "\\[TPM_ST_RSP_COMMAND\\]: invalid response code 0x00000000")
+	c.Check(err, ErrorMatches, "received error for response with tag TPM_ST_RSP_COMMAND: invalid response code 0x00000000")
 	c.Check(err, internal_testutil.ErrorIs, InvalidResponseCodeError(0))
 }
 
 func (s *commandSuite) TestReadResponsePacketUnexpectedTPM1(c *C) {
 	r := bytes.NewReader(internal_testutil.DecodeHexString(c, "00c40000000a00000000"))
 	_, _, _, err := ReadResponsePacket(r, nil)
-	c.Check(err, ErrorMatches, "\\[TPM_ST_RSP_COMMAND\\]: invalid response code 0x00000000")
+	c.Check(err, ErrorMatches, "received error for response with tag TPM_ST_RSP_COMMAND: invalid response code 0x00000000")
 	c.Check(err, internal_testutil.ErrorIs, InvalidResponseCodeError(0))
 }
 
@@ -150,14 +150,14 @@ func (s *commandSuite) TestReadResponsePacketTPM1WithExtraBytes(c *C) {
 func (s *commandSuite) TestUnmarshalResponsePacketUnsuccessfulWithSessions(c *C) {
 	p := ResponsePacket(internal_testutil.DecodeHexString(c, "80020000000a0000088e"))
 	_, _, _, err := p.Unmarshal(nil)
-	c.Check(err, ErrorMatches, "\\[TPM_ST_SESSIONS\\]: invalid response code 0x0000088e")
+	c.Check(err, ErrorMatches, "received error for response with tag TPM_ST_SESSIONS: invalid response code 0x0000088e")
 	c.Check(err, internal_testutil.ErrorIs, InvalidResponseCodeError(0x88e))
 }
 
 func (s *commandSuite) TestReadResponsePacketUnsuccessfulWithSessions(c *C) {
 	r := bytes.NewReader(internal_testutil.DecodeHexString(c, "80020000000a0000088e"))
 	_, _, _, err := ReadResponsePacket(r, nil)
-	c.Check(err, ErrorMatches, "\\[TPM_ST_SESSIONS\\]: invalid response code 0x0000088e")
+	c.Check(err, ErrorMatches, "received error for response with tag TPM_ST_SESSIONS: invalid response code 0x0000088e")
 	c.Check(err, internal_testutil.ErrorIs, InvalidResponseCodeError(0x88e))
 }
 
