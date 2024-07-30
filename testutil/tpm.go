@@ -635,7 +635,12 @@ type openDevice struct {
 	transport *Transport
 }
 
-func newOpenDevice(transport *Transport) tpm2.TPMDevice {
+// NewDeviceFromTransport returns a new TPMDevice from the supplied
+// transport that just returns the same transport on open. It's useful
+// in tests where it is necessary to create multiple [tpm2.TPMContext]
+// instances from the same underlying transport, although this isn't
+// something one would do in normal production use.
+func NewDeviceFromTransport(transport *Transport) tpm2.TPMDevice {
 	return &openDevice{transport: transport}
 }
 
@@ -644,7 +649,7 @@ func (d *openDevice) Open() (tpm2.Transport, error) {
 }
 
 func (*openDevice) String() string {
-	return "external test device"
+	return "external test device from existing transport"
 }
 
 type tpmDevice struct {
