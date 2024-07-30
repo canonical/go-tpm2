@@ -271,7 +271,8 @@ type TCTI = Transport
 // Transport is a special proxy inteface used for testing, which wraps a real interface.
 // It tracks changes to the TPM state and restores it when the connection is closed,
 // and also performs some permission checks to ensure that a test does not access
-// functionality that it has not declared as permitted.
+// functionality that it has not declared as permitted. It is not safe to use from more
+// than one goroutine.
 type Transport struct {
 	transport         tpm2.Transport
 	permittedFeatures TPMFeatureFlags

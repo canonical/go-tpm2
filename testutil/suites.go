@@ -149,7 +149,7 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	case b.Transport != nil:
 		// A transport has been provided by the test using the new field.
 		// Create a TPMContext from the supplied transport
-		b.TPM, _ = OpenTPMDevice(c, NewDeviceFromTransport(b.Transport))
+		b.TPM, _ = OpenTPMDevice(c, newTransportPassthroughDevice(b.Transport))
 		b.TCTI = b.Transport // populate the deprecated field
 	case b.Device != nil:
 		// A device has been provided by the test.

@@ -631,25 +631,105 @@ func NewTransportT(t *testing.T, features TPMFeatureFlags) *Transport {
 	return transport.(*Transport)
 }
 
-type openDevice struct {
+// TransportBackedDevice is a TPMDevice that is backed by an already
+// opened transport, and just returns the same transport on each open
+// call. It keeps track of how many transports are currently open.
+// Consider that whilst [tpm2.TPMDevice] implementations can generally be
+// used by more than one goroutine, each opened [tpm2.Transport] is only
+// safe to use from a single goroutine, and this device returns multiple
+// pointers to the same transport.
+type TransportBackedDevice struct {
+	transport *Transport
+	closable  bool
+	opened    int
+}
+
+// NewTransportBackedDevice returns a new TPMDevice from the supplied
+// transport that just returns the same transport on each call to Open.
+// It's useful in tests where it is necessary to create multiple
+// [tpm2.TPMContext] instances from the same underlying transport, although
+// this isn't something one would do in normal production use. An example
+// here is creating a [tpm2.TPMContext] in the code under test that shares
+// a transport with the unit test code (which has its own [tpm2.TPMContext]).
+//
+// If the closable argument is true, it means that calling Close on any
+// returned transport will actually close the underlying transport. Further
+// calls to Open will return a transport that is already closed. If it is
+// false, the returned device will keep track of how many transports are open,
+// but calling Close on any returned transport will not actually close the
+// underlying transport.
+//
+// Consider that whilst [tpm2.TPMDevice] implementations can generally be
+// used by more than one goroutine, each opened [tpm2.Transport] is only
+// safe to use from a single goroutine, and this device returns multiple
+// pointers to the same transport.
+func NewTransportBackedDevice(transport *Transport, closable bool) *TransportBackedDevice {
+	return &TransportBackedDevice{
+		transport: transport,
+		closable:  closable,
+	}
+}
+
+// NumberOpen returns the number of currently open transports opened from
+// this device. This will decrement when a transport is closed.
+func (d *TransportBackedDevice) NumberOpen() int {
+	return d.opened
+}
+
+type duplicateTransport struct {
+	*Transport
+	device *TransportBackedDevice
+
+	closed bool
+}
+
+func (t *duplicateTransport) Close() error {
+	if t.closed {
+		return errors.New("transport already closed")
+	}
+	// No locking becuase these should all be used on the same goroutine
+	t.device.opened -= 1
+	t.closed = true
+
+	if !t.device.closable {
+		return nil
+	}
+	return t.Transport.Close()
+}
+
+func (t *duplicateTransport) Unwrap() tpm2.Transport {
+	return t.Transport
+}
+
+// Open implements [tpm2.TPMDevice.Open]. Whilst most implementations of this
+// return a new transport, this repeatedly returns the same transport which means each
+// call to this returns transports that generally have to be used on the same gorountine.
+func (d *TransportBackedDevice) Open() (tpm2.Transport, error) {
+	d.opened += 1
+	return &duplicateTransport{
+		Transport: d.transport,
+		device:    d,
+	}, nil
+}
+
+func (*TransportBackedDevice) String() string {
+	return "device backed by existing transport"
+}
+
+type transportPassthroughDevice struct {
 	transport *Transport
 }
 
-// NewDeviceFromTransport returns a new TPMDevice from the supplied
-// transport that just returns the same transport on open. It's useful
-// in tests where it is necessary to create multiple [tpm2.TPMContext]
-// instances from the same underlying transport, although this isn't
-// something one would do in normal production use.
-func NewDeviceFromTransport(transport *Transport) tpm2.TPMDevice {
-	return &openDevice{transport: transport}
+func newTransportPassthroughDevice(transport *Transport) tpm2.TPMDevice {
+	return &transportPassthroughDevice{transport: transport}
 }
 
-func (d *openDevice) Open() (tpm2.Transport, error) {
+func (d *transportPassthroughDevice) Open() (tpm2.Transport, error) {
 	return d.transport, nil
 }
 
-func (*openDevice) String() string {
-	return "external test device from existing transport"
+func (d *transportPassthroughDevice) String() string {
+	return "transport passthrough device"
 }
 
 type tpmDevice struct {
@@ -709,7 +789,7 @@ func WrapDevice(device tpm2.TPMDevice, features TPMFeatureFlags) tpm2.TPMDevice 
 // on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned device will wrap a
 // *[linux.RawDevice] for the character device at the path specified by the TPMDevicePath variable if the requested features
 // are permitted, as defined by the [PermittedTPMFeatures] variable. If the test requires features that are not permitted,
-// then the device will return [ErrSkipNoTPM] instead of a transport.
+// then the device will return [ErrSkipNoTPM] instead of a transport. It is safe to use this device from multiple goroutines.
 func NewDevice(c *C, features TPMFeatureFlags) tpm2.TPMDevice {
 	device, err := newDevice(features)
 	c.Assert(err, IsNil)
@@ -722,7 +802,7 @@ func NewDevice(c *C, features TPMFeatureFlags) tpm2.TPMDevice {
 // on the port specified by the MssimPort variable. If TPMBackend is TPMBackendDevice, the returned device will wrap a
 // *[linux.RawDevice] for the character device at the path specified by the TPMDevicePath variable if the requested features
 // are permitted, as defined by the [PermittedTPMFeatures] variable. If the test requires features that are not permitted,
-// then the device will return [ErrSkipNoTPM] instead of a transport.
+// then the device will return [ErrSkipNoTPM] instead of a transport. It is safe to use this device from multiple goroutines.
 func NewDeviceT(t *testing.T, features TPMFeatureFlags) tpm2.TPMDevice {
 	device, err := newDevice(features)
 	if err != nil {
