@@ -22,7 +22,8 @@ var ErrTimeoutNotSupported = errors.New("configurable command timeouts are not s
 // Deprecated: use [Transport] instead.
 type TCTI = Transport
 
-// Transport represents a communication channel to a TPM implementation.
+// Transport represents a communication channel to a TPM implementation. Implementations of
+// this should not be used from multiple goroutines simultaneously.
 type Transport interface {
 	// Read is used to receive a response to a previously transmitted command.
 	Read(p []byte) (int, error)

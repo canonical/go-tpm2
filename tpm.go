@@ -213,7 +213,9 @@ type tpmDeviceProperties struct {
 
 // TPMContext is the main entry point by which commands are executed on a TPM device using this
 // package. It provides convenience functions for supported commands and communicates with the
-// underlying device via a transmission interface, which is provided to [NewTPMContext].
+// underlying device via a [Transport] implementation, which is obtained from a [tpm2.TPMDevice]
+// implementation provided to [OpenTPMDevice].
+//
 // Convenience functions are wrappers around [TPMContext.StartCommand], which may be used directly
 // for custom commands or commands that aren't supported directly by this package.
 //
@@ -268,6 +270,8 @@ type tpmDeviceProperties struct {
 // Some convenience methods also accept a variable number of optional [SessionContext] arguments -
 // these are for sessions that don't provide authorization for a corresponding TPM resource. These
 // sessions may be used for the purposes of session based parameter encryption or command auditing.
+//
+// TPMContext is not safe to use concurrently from multiple goroutines.
 type TPMContext struct {
 	device             TPMDevice
 	transport          Transport
@@ -431,7 +435,8 @@ type TPMDevice interface {
 	// Open opens a communication channel with the TPM device. The returned
 	// channel will only be used from the same goroutine that TPMContext is
 	// used from. Implementations must handle command reads and writes that
-	// are split across multiple calls.
+	// are split across multiple calls. Implementations of Open should be
+	// safe to call from multiple goroutines simultaneously.
 	Open() (Transport, error)
 
 	fmt.Stringer

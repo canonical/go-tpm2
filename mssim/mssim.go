@@ -116,6 +116,8 @@ func (d *Device) openInternal() (*Transport, error) {
 // The returned transport will automatically retry commands that fail with TPM_RC_RETRY or
 // TPM_RC_YIELDED. It will also retry commands that fail with TPM_RC_TESTING if the command
 // wasn't TPM_CC_SELF_TEST.
+//
+// The returned transport should not be used from more than one goroutine simultaneously.
 func (d *Device) Open() (tpm2.Transport, error) {
 	return d.openInternal()
 }
@@ -132,7 +134,7 @@ func (d *Device) String() string {
 type Tcti = Transport
 
 // Transport represents a connection to a TPM simulator that implements the Microsoft TPM2
-// simulator interface.
+// simulator interface. It should not be used from multiple goroutines simultaneously.
 type Transport struct {
 	retrier  tpm2.Transport
 	internal *internalTransport
@@ -294,12 +296,13 @@ func (t *internalTransport) runPlatformCommand(cmd uint32, args ...interface{}) 
 }
 
 // NewLocalDevice returns a new device structure for the specified port on the
-// local machine.
+// local machine. It is safe to use from multiple goroutines simultaneously.
 func NewLocalDevice(port uint) *Device {
 	return &Device{port: port}
 }
 
-// NewDevice returns a new device structure for the specified host and port.
+// NewDevice returns a new device structure for the specified host and port. It
+// is safe to use from multiple goroutines simultaneously.
 func NewDevice(host string, port uint) *Device {
 	return &Device{host: host, port: port}
 }

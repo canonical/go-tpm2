@@ -25,6 +25,9 @@ const (
 // Deprecated: use [TransportWrapper].
 type TCTIWrapper = TransportWrapper
 
+// TransportWrapper is a [tpm2.Transport] that wraps another [tpm2.Transport]
+// and provides a way to access the underlying transport. It's used by the internal
+// [Transport] type which wraps a real [tpm2.Transport] implementation.
 type TransportWrapper interface {
 	tpm2.Transport
 	Unwrap() tpm2.Transport
@@ -268,9 +271,9 @@ func (r *CommandRecord) UnmarshalResponse() (rc tpm2.ResponseCode, handle tpm2.H
 // Deprecated: Use [Transport].
 type TCTI = Transport
 
-// Transport is a special proxy inteface used for testing, which wraps a real interface.
-// It tracks changes to the TPM state and restores it when the connection is closed,
-// and also performs some permission checks to ensure that a test does not access
+// Transport is a special proxy transport inteface used for testing, which wraps a real
+// transport. It tracks changes to the TPM state and restores it when the connection is
+// closed, and also performs some permission checks to ensure that a test does not access
 // functionality that it has not declared as permitted. It is not safe to use from more
 // than one goroutine.
 type Transport struct {

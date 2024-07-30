@@ -25,7 +25,8 @@ type fileStatter interface {
 // Deprecated: Use [Transport].
 type Tcti = Transport
 
-// Transport represents a connection to a Linux TPM character device.
+// Transport represents a connection to a Linux TPM character device. It is not intended to be
+// used from multiple goroutines simultaneously.
 type Transport struct {
 	r       io.Reader
 	w       io.Writer

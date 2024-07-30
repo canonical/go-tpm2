@@ -208,7 +208,8 @@ func (d *Device) PartialReadSupported() bool {
 	return d.partialReadSupported
 }
 
-// Open implements [tpm2.TPMDevice.Open].
+// Open implements [tpm2.TPMDevice.Open]. The returned transport cannot be used from multiple
+// goroutines simultaneously.
 func (d *Device) Open() (tpm2.Transport, error) {
 	return d.openInternal()
 }
@@ -223,7 +224,8 @@ func (d *Device) String() string {
 // Deprecated: use [RawDevice].
 type TPMDeviceRaw = RawDevice
 
-// RawDevice represents a raw Linux TPM character device.
+// RawDevice represents a raw Linux TPM character device. It is safe to use this
+// from multiple goroutines simultaneously.
 type RawDevice struct {
 	Device
 	devno int
@@ -294,7 +296,7 @@ func (d *RawDevice) ResourceManagedDevice() (*RMDevice, error) {
 type TPMDeviceRM = RMDevice
 
 // RMDevice represents a Linux TPM character device that makes use of the kernel
-// resource manager.
+// resource manager. It is safe to use this from multiple goroutines simultaneously.
 type RMDevice struct {
 	Device
 	raw *RawDevice
@@ -416,7 +418,8 @@ func probeTpmDevices() (out []*RawDevice, err error) {
 }
 
 // ListTPMDevices returns a list of all TPM devices. Note that this returns
-// all devices, regardless of version.
+// all devices, regardless of version. It is safe to call this function from
+// multiple goroutines simultaneously.
 func ListTPMDevices() (out []*RawDevice, err error) {
 	devices.once.Do(func() {
 		devices.devices, devices.err = probeTpmDevices()
@@ -424,7 +427,8 @@ func ListTPMDevices() (out []*RawDevice, err error) {
 	return devices.devices, devices.err
 }
 
-// ListTPMDevices returns a list of all TPM2 devices.
+// ListTPMDevices returns a list of all TPM2 devices. It is safe to call this
+// function from multiple goroutines simultaneously.
 func ListTPM2Devices() (out []*RawDevice, err error) {
 	candidates, err := ListTPMDevices()
 	if err != nil {
@@ -441,7 +445,8 @@ func ListTPM2Devices() (out []*RawDevice, err error) {
 }
 
 // DefaultTPMDevice returns the default TPM device. If there are no devices
-// available, then [ErrNoTPMDevices] is returned.
+// available, then [ErrNoTPMDevices] is returned. It is safe to call this
+// function from multiple goroutines simultaneously.
 func DefaultTPMDevice() (*RawDevice, error) {
 	devices, err := ListTPMDevices()
 	if err != nil {
@@ -455,7 +460,8 @@ func DefaultTPMDevice() (*RawDevice, error) {
 
 // DefaultTPM2Device returns the default TPM2 device. If there are no devices
 // available, then [ErrNoTPMDevices] is returned. If the default TPM device is
-// not a TPM2 device, then [ErrDefaultNotTPM2Device] is returned.
+// not a TPM2 device, then [ErrDefaultNotTPM2Device] is returned. It is safe to
+// call this function from multiple goroutines simultaneously.
 func DefaultTPM2Device() (*RawDevice, error) {
 	device, err := DefaultTPMDevice()
 	if err != nil {
