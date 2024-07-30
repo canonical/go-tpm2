@@ -110,9 +110,16 @@ func (r *CommandRecordC) UnmarshalResponse(c *C) (rc tpm2.ResponseCode, handle t
 type TPMTest struct {
 	BaseTest
 
-	TPM    *tpm2.TPMContext // The TPM context for the test
-	TCTI   *Transport       // The TPM transmission interface for the test
-	Device tpm2.TPMDevice   // The TPM device that supplies the transmission interface
+	TPM *tpm2.TPMContext // The TPM context for the test
+
+	// TCTI is the TPM transport interface for the test.
+	// Deprecated: Use the Transport field instead. Only one of these should be
+	//  set at a time before calling SetUpTest, although if neither field is set
+	//  then SetUpTest will set them both for backwards compatibility.
+	TCTI *Transport
+
+	Transport *Transport     // The TPM transport interface for the test
+	Device    tpm2.TPMDevice // The TPM device that supplies the transmission interface
 
 	TPMFeatures TPMFeatureFlags // TPM features required by tests in this suite
 }
@@ -120,21 +127,44 @@ type TPMTest struct {
 func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	switch {
 	case b.TPM != nil:
-		c.Assert(b.TCTI, NotNil)
+		// A TPMContext has been provided by the test. Make sure it set one of TCTI or Transport,
+		// but not both - we do that here.
+		switch {
+		case b.TCTI != nil:
+			// The test set the deprecated field.
+			c.Assert(b.Transport, IsNil)
+			b.Transport = b.TCTI // copy the pointer from the deprecated field to the new field
+		case b.Transport != nil:
+			// The test set the new field.
+			c.Assert(b.TCTI, IsNil)
+			b.TCTI = b.Transport // copy the pointer from the new field to the deprecated field
+		default:
+			c.Fatal("if the TPM field is set prior to calling SetUpTest, one of the TCTI (which is deprecated) or Transport fields must be set")
+		}
 	case b.TCTI != nil:
+		// A transport has been provided by the test using the deprecated field.
+		c.Assert(b.Transport, IsNil)
+		b.Transport = b.TCTI // copy the pointer to the new field and fallthrough
+		fallthrough
+	case b.Transport != nil:
+		// A transport has been provided by the test using the new field.
 		// Create a TPMContext from the supplied transport
-		b.TPM, _ = OpenTPMDevice(c, newOpenDevice(b.TCTI))
+		b.TPM, _ = OpenTPMDevice(c, newOpenDevice(b.Transport))
+		b.TCTI = b.Transport // populate the deprecated field
 	case b.Device != nil:
+		// A device has been provided by the test.
 		// Create a TPMContext and transport from the supplied device
-		b.TPM, b.TCTI = OpenTPMDevice(c, b.Device)
+		b.TPM, b.Transport = OpenTPMDevice(c, b.Device)
+		b.TCTI = b.Transport // populate the deprecated field
 	default:
-		// Create a new TPMContext and transport
-		b.TPM, b.TCTI = NewTPMContext(c, b.TPMFeatures)
+		// Nothing has been supplied by the test. Create a default TPMContext and transport
+		b.TPM, b.Transport = NewTPMContext(c, b.TPMFeatures)
+		b.TCTI = b.Transport // populate the deprecated field
 	}
 }
 
 // SetUpTest is called to set up the test fixture before each test. If the TPM,
-// TCTI and Device members have not been set before this is called, a TPM connection
+// Transport and Device members have not been set before this is called, a TPM connection
 // and TPMContext will be created automatically. In this case, the TPMFeatures member
 // should be set prior to calling SetUpTest in order to declare the features that
 // the test will require. If the test requires any features that are not included
@@ -144,10 +174,10 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 // If the Device member is set prior to calling SetUpTest, a TPM connection and
 // TPMContext is created using this.
 //
-// If the TCTI member is set prior to calling SetUpTest, a TPMContext is created
+// If the Transport member is set prior to calling SetUpTest, a TPMContext is created
 // using this connection if necessary.
 //
-// If both TPM and TCTI are set prior to calling SetUpTest, then these will be
+// If both TPM and Transport are set prior to calling SetUpTest, then these will be
 // used by the test.
 //
 // The TPMContext is closed automatically when TearDownTest is called, unless
@@ -159,8 +189,9 @@ func (b *TPMTest) SetUpTest(c *C) {
 		if b.TPM != nil {
 			c.Check(b.TPM.Close(), IsNil)
 		}
-		b.TCTI = nil
 		b.TPM = nil
+		b.TCTI = nil
+		b.Transport = nil
 		b.Device = nil
 	})
 }
@@ -168,7 +199,7 @@ func (b *TPMTest) SetUpTest(c *C) {
 // CommandLog returns a log of TPM commands that have been executed since
 // the start of the test, or since the last call to ForgetCommands.
 func (b *TPMTest) CommandLog() (log []*CommandRecordC) {
-	for _, r := range b.TCTI.CommandLog {
+	for _, r := range b.Transport.CommandLog {
 		log = append(log, &CommandRecordC{r})
 	}
 	return log
@@ -177,14 +208,14 @@ func (b *TPMTest) CommandLog() (log []*CommandRecordC) {
 // LastCommand returns a record of the last TPM command that was executed.
 // It asserts if no command has been executed.
 func (b *TPMTest) LastCommand(c *C) *CommandRecordC {
-	c.Assert(b.TCTI.CommandLog, Not(internal_testutil.LenEquals), 0)
-	return &CommandRecordC{b.TCTI.CommandLog[len(b.TCTI.CommandLog)-1]}
+	c.Assert(b.Transport.CommandLog, Not(internal_testutil.LenEquals), 0)
+	return &CommandRecordC{b.Transport.CommandLog[len(b.Transport.CommandLog)-1]}
 }
 
 // ForgetCommands forgets the log of TPM commands that have been executed
 // since the start of the test or since the last call to ForgetCommands.
 func (b *TPMTest) ForgetCommands() {
-	b.TCTI.CommandLog = nil
+	b.Transport.CommandLog = nil
 }
 
 // NextAvailableHandle returns the next unused handle starting from
@@ -196,8 +227,8 @@ func (b *TPMTest) ForgetCommands() {
 //
 // It asserts if no handle is available.
 func (b *TPMTest) NextAvailableHandle(c *C, handle tpm2.Handle) tpm2.Handle {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	group := handle & 0xffff8000
 
@@ -223,8 +254,8 @@ func (b *TPMTest) NextAvailableHandle(c *C, handle tpm2.Handle) tpm2.Handle {
 // RequireCommand checks if the required command is supported
 // by the TPM and skips the test if it isn't.
 func (b *TPMTest) RequireCommand(c *C, code tpm2.CommandCode) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	if !b.TPM.IsCommandSupported(code) {
 		c.Skip(fmt.Sprintf("unsupported command %v", code))
@@ -234,8 +265,8 @@ func (b *TPMTest) RequireCommand(c *C, code tpm2.CommandCode) {
 // RequireAlgorithm checks if the required algorithm is known to the
 // TPM and skips the test if it isn't.
 func (b *TPMTest) RequireAlgorithm(c *C, alg tpm2.AlgorithmId) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	if !b.TPM.IsAlgorithmSupported(alg) {
 		c.Skip(fmt.Sprintf("unsupported algorithm %v", alg))
@@ -245,8 +276,8 @@ func (b *TPMTest) RequireAlgorithm(c *C, alg tpm2.AlgorithmId) {
 // RequireRSAKeySize checks if a RSA object can be created with the
 // specified key size and skips the test if it can't.
 func (b *TPMTest) RequireRSAKeySize(c *C, keyBits uint16) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	if !b.TPM.IsRSAKeySizeSupported(keyBits) {
 		c.Skip(fmt.Sprintf("unsupported RSA key size %d", keyBits))
@@ -256,8 +287,8 @@ func (b *TPMTest) RequireRSAKeySize(c *C, keyBits uint16) {
 // RequireECCCurve checks if the specified elliptic curve is known
 // to the TPM and skips the test if it isn't.
 func (b *TPMTest) RequireECCCurve(c *C, curve tpm2.ECCCurve) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	if !b.TPM.IsECCCurveSupported(curve) {
 		c.Skip(fmt.Sprintf("unsupported elliptic curve %v", curve))
@@ -267,8 +298,8 @@ func (b *TPMTest) RequireECCCurve(c *C, curve tpm2.ECCCurve) {
 // RequireSymmetricAlgorithm checks if an object with the specified
 // symmetric algorithm can be created and skips the test if it can't.
 func (b *TPMTest) RequireSymmetricAlgorithm(c *C, algorithm tpm2.SymObjectAlgorithmId, keyBits uint16) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	if !b.TPM.IsSymmetricAlgorithmSupported(algorithm, keyBits) {
 		c.Skip(fmt.Sprintf("unsupported symmetric algorithm %v-%d", algorithm, keyBits))
@@ -279,8 +310,8 @@ func (b *TPMTest) RequireSymmetricAlgorithm(c *C, algorithm tpm2.SymObjectAlgori
 // clears the TPM using the platform hierarchy. It causes the test to fail
 // if it isn't successful.
 func (b *TPMTest) ClearTPMUsingPlatformHierarchy(c *C) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	c.Check(clearTPMUsingPlatform(b.TPM), IsNil)
 }
@@ -288,8 +319,8 @@ func (b *TPMTest) ClearTPMUsingPlatformHierarchy(c *C) {
 // HierarchyChangeAuth calls the tpm2.TPMContext.HierarchyChangeAuth function and
 // causes the test to fail if it is not successful.
 func (b *TPMTest) HierarchyChangeAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Auth) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	c.Check(b.TPM.HierarchyChangeAuth(b.TPM.GetPermanentContext(hierarchy), auth, nil), IsNil)
 }
@@ -297,8 +328,8 @@ func (b *TPMTest) HierarchyChangeAuth(c *C, hierarchy tpm2.Handle, auth tpm2.Aut
 // CreatePrimary calls the tpm2.TPMContext.CreatePrimary function and asserts
 // if it is not succesful.
 func (b *TPMTest) CreatePrimary(c *C, hierarchy tpm2.Handle, template *tpm2.Public) tpm2.ResourceContext {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	object, _, _, _, _, err := b.TPM.CreatePrimary(b.TPM.GetPermanentContext(hierarchy), nil, template, nil, nil, nil)
 	c.Assert(err, IsNil)
@@ -308,8 +339,8 @@ func (b *TPMTest) CreatePrimary(c *C, hierarchy tpm2.Handle, template *tpm2.Publ
 // EvictControl calls the tpm2.TPMContext.EvictControl function and asserts if it
 // is not successful.
 func (b *TPMTest) EvictControl(c *C, auth tpm2.Handle, object tpm2.ResourceContext, persistentHandle tpm2.Handle) tpm2.ResourceContext {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	p, err := b.TPM.EvictControl(b.TPM.GetPermanentContext(auth), object, persistentHandle, nil)
 	c.Assert(err, IsNil)
@@ -319,8 +350,8 @@ func (b *TPMTest) EvictControl(c *C, auth tpm2.Handle, object tpm2.ResourceConte
 // NVDefineSpace calls the tpm2.TPMContext.NVDefineSpace function and asserts if
 // it is not successful.
 func (b *TPMTest) NVDefineSpace(c *C, authHandle tpm2.Handle, auth tpm2.Auth, publicInfo *tpm2.NVPublic) tpm2.ResourceContext {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	n, err := b.TPM.NVDefineSpace(b.TPM.GetPermanentContext(authHandle), auth, publicInfo, nil)
 	c.Assert(err, IsNil)
@@ -330,8 +361,8 @@ func (b *TPMTest) NVDefineSpace(c *C, authHandle tpm2.Handle, auth tpm2.Auth, pu
 // StartAuthSession calls the tpm2.TPMContext.StartAuthSession function and asserts
 // if it is not successful.
 func (b *TPMTest) StartAuthSession(c *C, tpmKey, bind tpm2.ResourceContext, sessionType tpm2.SessionType, symmetric *tpm2.SymDef, authHash tpm2.HashAlgorithmId) tpm2.SessionContext {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	session, err := b.TPM.StartAuthSession(tpmKey, bind, sessionType, symmetric, authHash)
 	c.Assert(err, IsNil)
@@ -352,37 +383,69 @@ type TPMSimulatorTest struct {
 	TPMTest
 }
 
-func (b *TPMSimulatorTest) initTPMSimulatorConnectionIfNeeded(c *C) {
+func (b *TPMSimulatorTest) initTPMSimulatorDeviceIfNeeded(c *C) {
 	switch {
 	case b.TPM != nil:
-		c.Assert(b.TCTI, NotNil)
+		// Do nothing for now - TPMTest.SetUpTest will do nothing either,
+		// and we'll verify we have a simulator transport.
 	case b.TCTI != nil:
-		// TPMTest.SetUpTest will create a TPMContext.
+		// Do nothing for now - TPMTest.SetUpTest will create a TPMContext,
+		// and we'll verify we have a simulator transport.
+	case b.Transport != nil:
+		// Do nothing for now - TPMTest.SetUpTest will create a TPMContext,
+		// and we'll verify we have a simulator transport.
 	case b.Device != nil:
 		// Do nothing for now - TPMTest.SetUpTest will create a new
-		// TPMContext and transport
+		// TPMContext and transport and we'll verify it creates a simulator
+		// transport
 	default:
 		b.Device = NewSimulatorDevice()
-		// TPMTest.SetUpTest will create a TPMContext and transport
+		// TPMTest.SetUpTest will create a TPMContext and simulator transport
 	}
 }
 
-// SetUpTest is called to set up the test fixture before each test. If the
-// TCTI member has not been set before this is called, a connection to the TPM
-// simulator and a TPMContext will be created automatically. If TPMBackend is
+// SetUpTest is called to set up the test fixture before each test. If the TPM,
+// Transport and Device members have not been set before this is called, a TPM connection
+// and TPMContext will be created automatically. In this case, the TPMFeatures member
+// should be set prior to calling SetUpTest in order to declare the features that
+// the test will require. If the test requires any features that are not included
+// in PermittedTPMFeatures, the test will be skipped. If TPMBackend is TPMBackendNone,
+// then the test will be skipped.
+//
+// If the Device member is set prior to calling SetUpTest, a TPM connection and
+// TPMContext is created using this.
+//
+// If the Transport member is set prior to calling SetUpTest, a TPMContext is created
+// using this connection if necessary.
+//
+// If both TPM and Transport are set prior to calling SetUpTest, then these will be
+// used by the test.
+//
+// The TPMContext is closed automatically when TearDownTest is called, unless
+// the test clears the TPM member first.
+
+// SetUpTest is called to set up the test fixture before each test. If the TPM,
+// Transport and Device members have not been set before this is called, a TPM simulator
+// connection and TPMContext will be created automatically. If TPMBackend is
 // not TPMBackendMssim, then the test will be skipped.
 //
-// If the TCTI member is set prior to calling SetUpTest, then a TPMContext is
-// created using this connection if necessary.
+// If the Device member is set prior to calling SetUpTest, a TPM connection and
+// TPMContext is created using this. The test asserts that the device creates a simulator
+// transport (ie, *[mssim.Transport]).
 //
-// If the TCTI and TPM members are both set prior to calling SetUpTest, then
-// these will be used by the test.
+// If the Transport member is set prior to calling SetUpTest, a TPMContext is created
+// using this connection if necessary. The test asserts that the supplied transport
+// is a simulator transport (ie, *[mssim.Transport]).
+//
+// If both TPM and Transport are set prior to calling SetUpTest, then these will be
+// used by the test, although the test asserts that the supplied transport is a
+// simulator transport (ie, *[mssim.Transport]).
 //
 // When TearDownTest is called, the TPM simulator will be reset and cleared
 // and the TPMContext will be closed, unless the test clears the TPM member
 // first.
 func (b *TPMSimulatorTest) SetUpTest(c *C) {
-	b.initTPMSimulatorConnectionIfNeeded(c)
+	b.initTPMSimulatorDeviceIfNeeded(c)
 	b.TPMTest.SetUpTest(c)
 
 	// Assert that we have a simulator
@@ -398,7 +461,7 @@ func (b *TPMSimulatorTest) SetUpTest(c *C) {
 
 // Mssim returns the underlying simulator connection.
 func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Transport {
-	var transport tpm2.Transport = b.TCTI
+	var transport tpm2.Transport = b.Transport
 	for {
 		wrapper, isWrapper := transport.(TransportWrapper)
 		if !isWrapper {
@@ -413,8 +476,8 @@ func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Transport {
 // ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator
 // and causes the test to fail if it is not successful.
 func (b *TPMSimulatorTest) ResetTPMSimulator(c *C) {
-	b.TCTI.disableCommandLogging = true
-	defer func() { b.TCTI.disableCommandLogging = false }()
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
 
 	c.Check(resetTPMSimulator(b.TPM, b.Mssim(c)), IsNil)
 }

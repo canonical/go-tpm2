@@ -59,6 +59,7 @@ func (s *transportSuite) SetUpTest(c *C) {
 	// Skip TPMSimulatorTest.SetUpTest and TPMTest.SetUpTest
 	s.BaseTest.SetUpTest(c)
 	c.Assert(s.TCTI, IsNil)
+	c.Assert(s.Transport, IsNil)
 	c.Assert(s.TPM, IsNil)
 }
 
@@ -68,24 +69,26 @@ func (s *transportSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags)
 	})
 	defer restore()
 
-	s.TPM, s.TCTI = NewTPMSimulatorContext(c)
+	s.TPM, s.Transport = NewTPMSimulatorContext(c)
+	s.TCTI = s.Transport
 
 	s.AddCleanup(func() {
 		// The test has to call Close()
-		c.Check(s.TCTI.Unwrap().(*ignoreCloseTransport).closed, internal_testutil.IsTrue)
+		c.Check(s.Transport.Unwrap().(*ignoreCloseTransport).closed, internal_testutil.IsTrue)
 
 		s.TPM = tpm2.NewTPMContext(s.Mssim(c))
 
 		s.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
-		c.Check(s.TCTI.Unwrap().(TransportWrapper).Unwrap().Close(), IsNil)
+		c.Check(s.Transport.Unwrap().(TransportWrapper).Unwrap().Close(), IsNil)
 
 		s.TPM = nil
 		s.TCTI = nil
+		s.Transport = nil
 	})
 }
 
 func (s *transportSuite) rawTpm(c *C) *tpm2.TPMContext {
-	c.Assert(s.TCTI, NotNil)
+	c.Assert(s.Transport, NotNil)
 	return tpm2.NewTPMContext(s.Mssim(c))
 }
 
@@ -102,7 +105,7 @@ func (s *transportSuite) TestResponseIntercept(c *C) {
 	s.deferCloseTpm(c)
 
 	var expectedValue uint32
-	s.TCTI.ResponseIntercept = func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) {
+	s.Transport.ResponseIntercept = func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer) {
 		c.Check(cmdCode, Equals, tpm2.CommandGetCapability)
 		c.Check(cmdHandles, internal_testutil.LenEquals, 0)
 

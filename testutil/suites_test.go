@@ -156,13 +156,39 @@ func (s *tpmTestSuite) TestTestLifecycleDefault(c *C) {
 	suite := new(TPMTest)
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
-	c.Check(suite.TCTI, NotNil)
+	c.Check(suite.Transport, NotNil)
+	c.Check(suite.TCTI, Equals, suite.Transport)
 
 	tpm := suite.TPM
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
+	c.Check(suite.Transport, IsNil)
+	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
+		`.*use of closed network connection$`,
+		`.*file already closed$`,
+		`.*transport already closed$`})
+}
+
+func (s *tpmTestSuite) TestTestLifecycleProvidedDevice(c *C) {
+	suite := new(TPMTest)
+
+	device := NewDevice(c, 0)
+	suite.Device = device
+
+	suite.SetUpTest(c)
+	c.Check(suite.TPM, NotNil)
+	c.Check(suite.Transport, NotNil)
+	c.Check(suite.TCTI, Equals, suite.Transport)
+
+	tpm := suite.TPM
+
+	suite.TearDownTest(c)
+	c.Check(suite.TPM, IsNil)
+	c.Check(suite.TCTI, IsNil)
+	c.Check(suite.Transport, IsNil)
+	c.Check(suite.Device, IsNil)
 	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
 		`.*file already closed$`,
@@ -173,16 +199,41 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	suite := new(TPMTest)
 
 	transport := NewTransport(c, 0)
-	suite.TCTI = transport
+	suite.Transport = transport
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
+	c.Check(suite.Transport, Equals, transport)
 	c.Check(suite.TCTI, Equals, transport)
 
 	tpm := suite.TPM
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
+	c.Check(suite.Transport, IsNil)
+	c.Check(suite.TCTI, IsNil)
+	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
+		`.*use of closed network connection$`,
+		`.*file already closed$`,
+		`.*transport already closed$`})
+}
+
+func (s *tpmTestSuite) TestTestLifecycleProvidedTransportDeprecated(c *C) {
+	suite := new(TPMTest)
+
+	transport := NewTransport(c, 0)
+	suite.TCTI = transport
+
+	suite.SetUpTest(c)
+	c.Check(suite.TPM, NotNil)
+	c.Check(suite.Transport, Equals, transport)
+	c.Check(suite.TCTI, Equals, transport)
+
+	tpm := suite.TPM
+
+	suite.TearDownTest(c)
+	c.Check(suite.TPM, IsNil)
+	c.Check(suite.Transport, IsNil)
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
@@ -195,14 +246,38 @@ func (s *tpmTestSuite) TestTestLifecycleProvidedTPM(c *C) {
 
 	tpm, transport := NewTPMContext(c, 0)
 	suite.TPM = tpm
-	suite.TCTI = transport
+	suite.Transport = transport
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, Equals, tpm)
+	c.Check(suite.Transport, Equals, transport)
 	c.Check(suite.TCTI, Equals, transport)
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
+	c.Check(suite.Transport, IsNil)
+	c.Check(suite.TCTI, IsNil)
+	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
+		`.*use of closed network connection$`,
+		`.*file already closed$`,
+		`.*transport already closed$`})
+}
+
+func (s *tpmTestSuite) TestTestLifecycleProvidedTPMDeprecated(c *C) {
+	suite := new(TPMTest)
+
+	tpm, transport := NewTPMContext(c, 0)
+	suite.TPM = tpm
+	suite.TCTI = transport
+
+	suite.SetUpTest(c)
+	c.Check(suite.TPM, Equals, tpm)
+	c.Check(suite.Transport, Equals, transport)
+	c.Check(suite.TCTI, Equals, transport)
+
+	suite.TearDownTest(c)
+	c.Check(suite.TPM, IsNil)
+	c.Check(suite.Transport, IsNil)
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), internal_testutil.IsOneOf(ErrorMatches), []string{
 		`.*use of closed network connection$`,
@@ -216,11 +291,11 @@ func (s *tpmTestSuite) TestLifecycleNoCloseTPM(c *C) {
 	suite.SetUpTest(c)
 	tpm := suite.TPM
 	suite.TPM = nil
-	suite.TCTI = nil
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
 	c.Check(suite.TCTI, IsNil)
+	c.Check(suite.Transport, IsNil)
 	c.Check(tpm.Close(), IsNil)
 }
 
@@ -247,7 +322,16 @@ func (s *tpmTestSuite) TestSkipNoTPM(c *C) {
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
-func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
+func (s *tpmTestSuite) TestErrSkipNoTPMDevice(c *C) {
+	suite := new(mockTPMTestSuite)
+
+	suite.Device = WrapDevice(nil, 0)
+
+	result := Run(suite, &RunConf{Output: io.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
+}
+
+func (s *tpmTestSuite) TestInvalidSetUpTPMOnly(c *C) {
 	suite := new(mockTPMTestSuite)
 
 	tpm, _ := NewTPMContext(c, 0)
@@ -255,6 +339,21 @@ func (s *tpmTestSuite) TestInvalidSetUp(c *C) {
 		c.Check(tpm.Close(), IsNil)
 	})
 	suite.TPM = tpm
+
+	result := Run(suite, &RunConf{Output: io.Discard})
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 1 MISSED")
+}
+
+func (s *tpmTestSuite) TestInvalidSetUpBothTransportFields(c *C) {
+	suite := new(mockTPMTestSuite)
+
+	tpm, transport := NewTPMContext(c, 0)
+	s.AddCleanup(func() {
+		c.Check(tpm.Close(), IsNil)
+	})
+	suite.TPM = tpm
+	suite.Transport = transport
+	suite.TCTI = transport
 
 	result := Run(suite, &RunConf{Output: io.Discard})
 	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 1 MISSED")
@@ -464,10 +563,11 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
-	c.Assert(suite.TCTI, NotNil)
-	c.Check(suite.TCTI.Unwrap(), internal_testutil.ConvertibleTo, &mssim.Transport{})
+	c.Assert(suite.Transport, NotNil)
+	c.Check(suite.TCTI, Equals, suite.Transport)
+	c.Check(suite.Transport.Unwrap(), internal_testutil.ConvertibleTo, &mssim.Transport{})
 
-	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
+	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clear
 	c.Check(suite.TPM.ClearControl(suite.TPM.PlatformHandleContext(), true, nil), IsNil)
 	c.Check(suite.TPM.HierarchyControl(suite.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
@@ -475,6 +575,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleDefault(c *C) {
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
+	c.Check(suite.Transport, IsNil)
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), ErrorMatches, `.*transport already closed$`)
 
@@ -492,10 +593,11 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 	suite := new(TPMSimulatorTest)
 
 	transport := NewSimulatorTransport(c)
-	suite.TCTI = transport
+	suite.Transport = transport
 
 	suite.SetUpTest(c)
 	c.Check(suite.TPM, NotNil)
+	c.Check(suite.Transport, Equals, transport)
 	c.Check(suite.TCTI, Equals, transport)
 
 	suite.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
@@ -506,6 +608,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleProvidedTransport(c *C) {
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
+	c.Check(suite.Transport, IsNil)
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), ErrorMatches, `.*transport already closed$`)
 
@@ -528,6 +631,7 @@ func (s *tpmSimulatorTestSuite) TestTestLifecycleNoResetAndClear(c *C) {
 
 	suite.TearDownTest(c)
 	c.Check(suite.TPM, IsNil)
+	c.Check(suite.Transport, IsNil)
 	c.Check(suite.TCTI, IsNil)
 	c.Check(tpm.Close(), IsNil)
 }
@@ -549,7 +653,16 @@ func (s *tpmSimulatorTestSuite) TestSkipNoTPM(c *C) {
 	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
 }
 
-func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
+func (s *tpmSimulatorTestSuite) TestErrSkipNoTPMDevice(c *C) {
+	suite := new(mockTPMSimulatorTestSuite)
+
+	suite.Device = WrapDevice(nil, 0)
+
+	result := Run(suite, &RunConf{Output: io.Discard})
+	c.Check(result.String(), Equals, "OK: 0 passed, 1 skipped")
+}
+
+func (s *tpmSimulatorTestSuite) TestInvalidSetUpTPMOnly(c *C) {
 	suite := new(mockTPMSimulatorTestSuite)
 
 	tpm, _ := NewTPMSimulatorContext(c)
@@ -559,7 +672,22 @@ func (s *tpmSimulatorTestSuite) TestInvalidSetUp(c *C) {
 	suite.TPM = tpm
 
 	result := Run(suite, &RunConf{Output: io.Discard})
-	c.Check(result.String(), Equals, "OOPS: 0 passed, 2 FAILED, 1 MISSED")
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 1 MISSED")
+}
+
+func (s *tpmSimulatorTestSuite) TestInvalidSetUpBothTransportFields(c *C) {
+	suite := new(mockTPMSimulatorTestSuite)
+
+	tpm, transport := NewTPMSimulatorContext(c)
+	s.AddCleanup(func() {
+		c.Check(tpm.Close(), IsNil)
+	})
+	suite.TPM = tpm
+	suite.Transport = transport
+	suite.TCTI = transport
+
+	result := Run(suite, &RunConf{Output: io.Discard})
+	c.Check(result.String(), Equals, "OOPS: 0 passed, 1 FAILED, 1 MISSED")
 }
 
 type tpmSimulatorTestSuiteProper struct {

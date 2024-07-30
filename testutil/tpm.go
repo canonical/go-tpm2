@@ -845,6 +845,8 @@ func NewSimulatorTCTIT(t *testing.T) *Transport {
 // will be skipped.
 //
 // The returned Transport must be closed when it is no longer required.
+//
+// Deprecated: use [NewSimulatorDevice].
 func NewSimulatorTransportT(t *testing.T) *Transport {
 	device := NewSimulatorDevice()
 	transport, err := device.Open()
