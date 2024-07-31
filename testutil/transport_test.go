@@ -64,7 +64,7 @@ func (s *transportSuite) SetUpTest(c *C) {
 }
 
 func (s *transportSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
-	restore := MockWrapMssimTransport(func(transport tpm2.Transport) (*Transport, error) {
+	restore := MockWrapMssimTransport(func(transport tpm2.Transport, _ TPMFeatureFlags) (*Transport, error) {
 		return WrapTransport(&ignoreCloseTransport{transport: transport}, permittedFeatures)
 	})
 	defer restore()
@@ -2113,4 +2113,58 @@ func (s *transportSuite) TestDontEvictExistingIndex(c *C) {
 	c.Check(err, IsNil)
 	c.Check(props, internal_testutil.LenEquals, 1)
 	c.Check(props[0], Equals, nvPublic.Index)
+}
+
+func (s *transportSuite) TestBlockPCRAllocateWithSimulator(c *C) {
+	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV)
+	s.deferCloseTpm(c)
+
+	current, err := s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+
+	_, _, _, _, err = s.TPM.PCRAllocate(s.TPM.PlatformHandleContext(), current, nil)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: TPM2_PCR_Allocate can only be used with the simulator`)
+}
+
+func (s *transportSuite) TestRestorePCRAllocateWithSimulator(c *C) {
+	s.initTPMContext(c, TPMFeaturePlatformHierarchy|TPMFeatureNV|TPMFeatureShutdown|TpmFeatureSimulatorOnlyPCRAllocation)
+
+	orig, err := s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+	c.Assert(orig, internal_testutil.LenGreater, 1)
+
+	var allocation tpm2.PCRSelectionList
+	mu.MustCopyValue(&allocation, orig)
+	allocation[0].Select = nil
+	success, _, _, _, err := s.TPM.PCRAllocate(s.TPM.PlatformHandleContext(), allocation, nil)
+	c.Check(err, IsNil)
+	c.Check(success, internal_testutil.IsTrue)
+
+	s.ResetTPMSimulator(c)
+
+	current, err := s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+	c.Check(current, DeepEquals, allocation)
+
+	c.Check(s.TPM.Close(), IsNil)
+
+	origTransport := s.Transport
+
+	// The intermediate transport is closed now, so wrap a new one to
+	// create a new passthrough device and context so we can reset the
+	// simulator again and make sure that the revert was saved.
+	newTransport, err := WrapTransport(&ignoreCloseTransport{transport: s.Transport.Unwrap().(TransportWrapper).Unwrap()}, TPMFeatureShutdown|TPMFeatureNV)
+	c.Assert(err, IsNil)
+	device := NewTransportPassthroughDevice(newTransport)
+	s.TPM, s.Transport = OpenTPMDevice(c, device)
+
+	s.ResetTPMSimulator(c)
+
+	current, err = s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+	c.Check(current, DeepEquals, orig)
+
+	c.Check(s.TPM.Close(), IsNil)
+
+	s.Transport = origTransport
 }

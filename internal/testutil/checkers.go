@@ -352,6 +352,14 @@ func (checker *hasLenChecker) Check(params []interface{}, names []string) (resul
 var LenEquals Checker = &hasLenChecker{
 	&CheckerInfo{Name: "LenEquals", Params: []string{"value", "n"}}, IntEqual}
 
+// LenGreater checks that the value has a length that is greater than n.
+//
+// For example:
+//
+//	c.Check(value, LenGreater, 5)
+var LenGreater Checker = &hasLenChecker{
+	&CheckerInfo{Name: "LenGreater", Params: []string{"value", "n"}}, IntGreater}
+
 // LenGreaterEquals checks that the value has a length that is greater than or equal
 // to n.
 //

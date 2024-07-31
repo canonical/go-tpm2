@@ -75,6 +75,7 @@ var commandInfoMap = map[tpm2.CommandCode]commandInfo{
 	tpm2.CommandClearControl:               commandInfo{1, 1, false, true},
 	tpm2.CommandHierarchyChangeAuth:        commandInfo{1, 1, false, true},
 	tpm2.CommandNVDefineSpace:              commandInfo{1, 1, false, true},
+	tpm2.CommandPCRAllocate:                commandInfo{1, 1, false, true},
 	tpm2.CommandCreatePrimary:              commandInfo{1, 1, true, false},
 	tpm2.CommandNVGlobalWriteLock:          commandInfo{1, 1, false, true},
 	tpm2.CommandGetCommandAuditDigest:      commandInfo{2, 2, false, true},
@@ -283,20 +284,22 @@ type Transport struct {
 	r io.Reader
 	w io.Writer
 
-	restorePermanentAttrs tpm2.PermanentAttributes
-	restoreStClearAttrs   tpm2.StartupClearAttributes
-	restoreDaParams       daParams
-	restoreCmdAuditStatus cmdAuditStatus
+	restorePermanentAttrs      tpm2.PermanentAttributes
+	restoreStClearAttrs        tpm2.StartupClearAttributes
+	restoreDaParams            daParams
+	restoreCmdAuditStatus      cmdAuditStatus
+	restorePcrAllocationParams tpm2.PCRSelectionList
 
 	currentCmd *cmdContext
 
 	hierarchyAuths map[tpm2.Handle]tpm2.Auth
 	handles        map[tpm2.Handle]*handleInfo
 
-	didClearControl      bool
-	didHierarchyControl  bool
-	didSetDaParams       bool
-	didSetCmdAuditStatus bool
+	didClearControl        bool
+	didHierarchyControl    bool
+	didSetDaParams         bool
+	didSetCmdAuditStatus   bool
+	didUpdatePcrAllocation bool
 
 	// CommandLog keeps a record of all of the commands executed via
 	// this interface
@@ -562,6 +565,8 @@ func (t *Transport) readResponse() ([]byte, error) {
 			}
 			t.handles[object].pub = outPublic
 		}
+	case tpm2.CommandPCRAllocate:
+		t.didUpdatePcrAllocation = true
 	}
 
 	if t.ResponseIntercept != nil {
@@ -648,12 +653,12 @@ func (t *Transport) sendCommand(data []byte) (int, error) {
 			return 0, fmt.Errorf("cannot unmarshal parameters: %w", err)
 		}
 		switch {
-		case t.permittedFeatures&TPMFeaturePlatformHierarchy == 0:
-			// We can't reenable hierarchies so this change will require a restart or reset.
-			commandFeatures |= TPMFeatureStClearChange
 		case enable == tpm2.HandlePlatform:
 			// We won't be able to reenable hierarchies because the platform hierarchy is
 			// being disabled. This change will require a restart or reset.
+			commandFeatures |= TPMFeatureStClearChange
+		case t.permittedFeatures&TPMFeaturePlatformHierarchy == 0:
+			// We can't reenable hierarchies so this change will require a restart or reset.
 			commandFeatures |= TPMFeatureStClearChange
 		}
 	case tpm2.CommandNVUndefineSpace:
@@ -673,6 +678,10 @@ func (t *Transport) sendCommand(data []byte) (int, error) {
 		if t.permittedFeatures&TPMFeatureClearControl > 0 {
 			// Permitting TPMFeatureClearControl should imply TPMFeatureNV is permitted for this command.
 			commandFeatures &^= TPMFeatureNV
+		}
+	case tpm2.CommandPCRAllocate:
+		if t.permittedFeatures&tpmFeatureSimulatorOnlyPCRAllocation == 0 {
+			return 0, errors.New("TPM2_PCR_Allocate can only be used with the simulator")
 		}
 	case tpm2.CommandNVGlobalWriteLock:
 		commandFeatures |= TPMFeatureNVGlobalWriteLock
@@ -794,7 +803,7 @@ func (t *Transport) restorePlatformHierarchyAuth(tpm *tpm2.TPMContext) error {
 		if tpm2.IsTPMHandleError(err, tpm2.ErrorHierarchy, tpm2.CommandHierarchyChangeAuth, 1) {
 			// Platform hierarchy was disabled which was already checked to be permitted via
 			// TPMFeatureStClearChange. The auth value will be restored on the next
-			// TPM2_Startup(CLEAR).
+			// TPM2_Startup(CLEAR) after a reset.
 			return nil
 		}
 		return fmt.Errorf("cannot clear auth value for %v: %w", tpm2.HandlePlatform, err)
@@ -809,7 +818,7 @@ func (t *Transport) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []err
 
 	if t.permittedFeatures&TPMFeaturePlatformHierarchy == 0 {
 		// TPM2_HierarchyControl was already checked to be permitted via TPMFeatureStClearChange.
-		// The hierarchies will be restored on the next TPM2_Startup(CLEAR).
+		// The hierarchies will be restored on the next TPM2_Startup(CLEAR) after a reset.
 		return errs
 	}
 
@@ -828,7 +837,7 @@ func (t *Transport) restoreHierarchies(errs []error, tpm *tpm2.TPMContext) []err
 			if tpm2.IsTPMHandleError(err, tpm2.ErrorHierarchy, tpm2.CommandHierarchyControl, 1) {
 				// The platform hierarchy was disabled which already checked to be permitted via
 				// TPMFeatureStClearChange. The hierarchies will be restored on the next
-				// TPM2_Startup(CLEAR).
+				// TPM2_Startup(CLEAR) after a reset.
 				break
 			}
 			errs = append(errs, fmt.Errorf("cannot restore hierarchy %v: %w", hierarchy, err))
@@ -848,6 +857,23 @@ func (t *Transport) restoreHierarchyAuths(errs []error, tpm *tpm2.TPMContext) []
 	}
 
 	return errs
+}
+
+func (t *Transport) restorePcrAllocation(tpm *tpm2.TPMContext) error {
+	if !t.didUpdatePcrAllocation {
+		return nil
+	}
+
+	// We already check that TPMFeaturePlatformHierarchy is permitted before changing the allocation,
+	// so we're ok to use the platform hierarchy here.
+	success, _, _, _, err := tpm.PCRAllocate(tpm.PlatformHandleContext(), t.restorePcrAllocationParams, nil)
+	if err != nil {
+		return fmt.Errorf("cannot restore PCR allocation: %w", err)
+	}
+	if !success {
+		return errors.New("cannot restore PCR allocation for unknown reason")
+	}
+	return nil
 }
 
 func (t *Transport) restoreDisableClear(tpm *tpm2.TPMContext) error {
@@ -1053,6 +1079,10 @@ func (t *Transport) Close() error {
 
 	errs = t.restoreHierarchyAuths(errs, tpm)
 
+	if err := t.restorePcrAllocation(tpm); err != nil {
+		errs = append(errs, err)
+	}
+
 	if err := t.restoreDisableClear(tpm); err != nil {
 		errs = append(errs, err)
 	}
@@ -1142,17 +1172,25 @@ func WrapTransport(transport tpm2.Transport, permittedFeatures TPMFeatureFlags) 
 		cmdAuditStatus.commands = commands
 	}
 
+	var pcrAllocation tpm2.PCRSelectionList
+	if permittedFeatures&tpmFeatureSimulatorOnlyPCRAllocation > 0 {
+		pcrAllocation, err = tpm.GetCapabilityPCRs()
+		if err != nil {
+			return nil, fmt.Errorf("cannot obtain current PCR allocation: %w", err)
+		}
+	}
+
 	out := &Transport{
-		transport:             transport,
-		permittedFeatures:     permittedFeatures,
-		restorePermanentAttrs: permanentAttrs,
-		restoreStClearAttrs:   stClearAttrs,
-		restoreDaParams:       daParams,
-		restoreCmdAuditStatus: cmdAuditStatus,
-		hierarchyAuths:        make(map[tpm2.Handle]tpm2.Auth),
-		handles:               make(map[tpm2.Handle]*handleInfo)}
+		transport:                  transport,
+		permittedFeatures:          permittedFeatures,
+		restorePermanentAttrs:      permanentAttrs,
+		restoreStClearAttrs:        stClearAttrs,
+		restoreDaParams:            daParams,
+		restoreCmdAuditStatus:      cmdAuditStatus,
+		restorePcrAllocationParams: pcrAllocation,
+		hierarchyAuths:             make(map[tpm2.Handle]tpm2.Auth),
+		handles:                    make(map[tpm2.Handle]*handleInfo)}
 	out.r = transportutil.BufferResponses(&responseReader{t: out}, maxResponseSize)
 	out.w = transportutil.BufferCommands(&commandSender{t: out}, maxCommandSize)
 	return out, nil
-
 }

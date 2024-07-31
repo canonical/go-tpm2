@@ -8,8 +8,11 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/canonical/go-tpm2"
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/testutil"
+	. "gopkg.in/check.v1"
 )
 
 func TestPCRExtend(t *testing.T) {
@@ -379,4 +382,86 @@ func TestPCRReset(t *testing.T) {
 			}
 		})
 	}
+}
+
+type pcrSuite struct {
+	testutil.TPMSimulatorTest
+}
+
+var _ = Suite(&pcrSuite{})
+
+type testPCRAllocationParams struct {
+	allocation             PCRSelectionList
+	authContextAuthSession SessionContext
+}
+
+func (s *pcrSuite) testPCRAllocation(c *C, params *testPCRAllocationParams) error {
+	sessionHandles := []Handle{authSessionHandle(params.authContextAuthSession)}
+
+	success, _, sizeNeeded, _, err := s.TPM.PCRAllocate(s.TPM.PlatformHandleContext(), params.allocation, params.authContextAuthSession)
+	if err != nil {
+		c.Check(success, internal_testutil.IsFalse)
+		return err
+	}
+
+	c.Check(success, internal_testutil.IsTrue)
+
+	var expectedSizeNeeded uint32
+	for _, selection := range params.allocation {
+		digestSize := selection.Hash.Size()
+		expectedSizeNeeded += uint32(len(selection.Select) * digestSize)
+	}
+	c.Check(sizeNeeded, internal_testutil.IntEqual, expectedSizeNeeded)
+
+	authArea := s.LastCommand(c).CmdAuthArea
+	c.Assert(authArea, internal_testutil.LenEquals, 1)
+	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
+
+	s.ResetTPMSimulator(c)
+
+	current, err := s.TPM.GetCapabilityPCRs()
+	c.Check(err, IsNil)
+	c.Check(current, testutil.TPMValueDeepEquals, params.allocation)
+
+	return nil
+}
+
+func (s *pcrSuite) TestPCRAllocation1(c *C) {
+	current, err := s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+
+	for i := range current {
+		current[i].Select = []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
+	}
+	err = s.testPCRAllocation(c, &testPCRAllocationParams{
+		allocation: current,
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *pcrSuite) TestPCRAllocation2(c *C) {
+	current, err := s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+	c.Assert(current, internal_testutil.LenGreater, 1)
+
+	current[0].Select = nil
+
+	err = s.testPCRAllocation(c, &testPCRAllocationParams{
+		allocation: current,
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *pcrSuite) TestPCRAllocationWithSession(c *C) {
+	current, err := s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+
+	for i := range current {
+		current[i].Select = []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
+	}
+	err = s.testPCRAllocation(c, &testPCRAllocationParams{
+		allocation:             current,
+		authContextAuthSession: s.StartAuthSession(c, nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256),
+	})
+	c.Check(err, IsNil)
 }

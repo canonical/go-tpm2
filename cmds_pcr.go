@@ -103,6 +103,28 @@ func (t *TPMContext) PCRRead(pcrSelectionIn PCRSelectionList, sessions ...Sessio
 	return pcrUpdateCounter, pcrValues, nil
 }
 
+// PCRAllocate executes the TPM2_PCR_Allocate command to set the PCR allocation, which is
+// persistent even across TPM2_Clear. The supplied authContext parameter must correspond to
+// [HandlePlatform]. This command requires authorization of authContext with the user auth
+// role, with session based authorization provided via authContextAuthSession.
+//
+// The desired PCR allocation is supplied via the pcrAllocation argument. The function indicates
+// whether the allocation was successful. This will only be true if no error is returned. Note
+// that the allocation takes effect after the next TPM reset. The function returns the maximum
+// number of PCRs supported per bank, plus the size needed for the new allocation and the the
+// size available.
+func (t *TPMContext) PCRAllocate(authContext ResourceContext, pcrAllocation PCRSelectionList, authContextAuthSession SessionContext, sessions ...SessionContext) (allocationSuccess bool, maxPCR uint32, sizeNeeded uint32, sizeAvailable uint32, err error) {
+	if err := t.StartCommand(CommandPCRAllocate).
+		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession)).
+		AddParams(pcrAllocation).
+		AddExtraSessions(sessions...).
+		Run(nil, &allocationSuccess, &maxPCR, &sizeNeeded, &sizeAvailable); err != nil {
+		return false, 0, 0, 0, err
+	}
+
+	return allocationSuccess, maxPCR, sizeNeeded, sizeAvailable, nil
+}
+
 // PCRReset executes the TPM2_PCR_Reset command to reset the PCR associated with pcrContext in all
 // banks. This command requires authorization with the user auth role for pcrContext, with session
 // based authorization provided via pcrContextAuthSession.

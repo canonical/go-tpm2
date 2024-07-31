@@ -149,7 +149,7 @@ func (b *TPMTest) initTPMContextIfNeeded(c *C) {
 	case b.Transport != nil:
 		// A transport has been provided by the test using the new field.
 		// Create a TPMContext from the supplied transport
-		b.TPM, _ = OpenTPMDevice(c, newTransportPassthroughDevice(b.Transport))
+		b.TPM, _ = OpenTPMDevice(c, NewTransportPassthroughDevice(b.Transport))
 		b.TCTI = b.Transport // populate the deprecated field
 	case b.Device != nil:
 		// A device has been provided by the test.
@@ -456,6 +456,20 @@ func (b *TPMSimulatorTest) SetUpTest(c *C) {
 			return
 		}
 		b.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
+		c.Check(b.TPM.Close(), IsNil)
+		b.TPM = nil
+
+		if b.Transport.didUpdatePcrAllocation {
+			// We need to give the TPM one more reset
+			c.Assert(b.Device, NotNil)
+			tpm, transport := OpenTPMDevice(c, b.Device)
+			b.TPM = tpm
+			b.Transport = transport
+			b.TCTI = transport
+			b.ResetTPMSimulator(c)
+			c.Check(b.TPM.Close(), IsNil)
+			b.TPM = nil
+		}
 	})
 }
 

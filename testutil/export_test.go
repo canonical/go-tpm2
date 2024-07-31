@@ -8,7 +8,11 @@ import (
 	"github.com/canonical/go-tpm2"
 )
 
-func MockWrapMssimTransport(fn func(tpm2.Transport) (*Transport, error)) (restore func()) {
+const (
+	TpmFeatureSimulatorOnlyPCRAllocation = tpmFeatureSimulatorOnlyPCRAllocation
+)
+
+func MockWrapMssimTransport(fn func(tpm2.Transport, TPMFeatureFlags) (*Transport, error)) (restore func()) {
 	origWrapMssimTransport := wrapMssimTransport
 	wrapMssimTransport = fn
 	return func() {
