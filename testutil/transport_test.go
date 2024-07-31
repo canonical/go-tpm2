@@ -64,7 +64,7 @@ func (s *transportSuite) SetUpTest(c *C) {
 }
 
 func (s *transportSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
-	restore := MockWrapMssimTransport(func(transport tpm2.Transport, _ TPMFeatureFlags) (*Transport, error) {
+	restore := MockWrapMssimTransport(func(transport tpm2.Transport) (*Transport, error) {
 		return WrapTransport(&ignoreCloseTransport{transport: transport}, permittedFeatures)
 	})
 	defer restore()

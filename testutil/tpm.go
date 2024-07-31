@@ -168,7 +168,9 @@ var (
 	// MssimPort defines the port number of the TPM simulator command port where TPMBackend is TPMBackendMssim.
 	MssimPort uint = 2321
 
-	wrapMssimTransport = WrapTransport
+	wrapMssimTransport = func(transport tpm2.Transport) (*Transport, error) {
+		return WrapTransport(transport, TPMFeatureFlags(math.MaxUint32))
+	}
 
 	ErrSkipNoTPM = errors.New("no TPM configured for the test")
 )
@@ -970,7 +972,7 @@ func (d *simulatorDevice) Open() (tpm2.Transport, error) {
 		return nil, err
 	}
 
-	return wrapMssimTransport(transport, TPMFeatureFlags(math.MaxUint32))
+	return wrapMssimTransport(transport)
 }
 
 func (d *simulatorDevice) String() string {
