@@ -1011,23 +1011,38 @@ func ClearTPMUsingPlatformHierarchyT(t *testing.T, tpm *tpm2.TPMContext) {
 	}
 }
 
-func resetTPMSimulator(tpm *tpm2.TPMContext, transport *mssim.Transport) error {
+func resetTPMSimulator(tpm *tpm2.TPMContext, transport *mssim.Transport, startup bool) error {
 	if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
 		return err
 	}
 	if err := transport.Reset(); err != nil {
 		return fmt.Errorf("resetting the simulator failed: %v", err)
 	}
+	if !startup {
+		return nil
+	}
 	return tpm.Startup(tpm2.StartupClear)
 }
 
-// ResetTPMSimulatorT issues a Shutdown -> Reset -> Startup cycle of the TPM simulator.
+// ResetTPMSimulatorT issues a Shutdown(Clear) -> Reset -> Startup(Clear) cycle of the
+// TPM simulator.
 func ResetTPMSimulatorT(t *testing.T, tpm *tpm2.TPMContext, transport *Transport) {
 	mssim, ok := transport.Unwrap().(*mssim.Transport)
 	if !ok {
 		t.Fatal("not a simulator")
 	}
-	if err := resetTPMSimulator(tpm, mssim); err != nil {
+	if err := resetTPMSimulator(tpm, mssim, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// ResetTPMSimulatorNoStartupT issues a Shutdown(Clear) -> Reset cycle of the TPM simulator.
+func ResetTPMSimulatorNoStartupT(t *testing.T, tpm *tpm2.TPMContext, transport *Transport) {
+	mssim, ok := transport.Unwrap().(*mssim.Transport)
+	if !ok {
+		t.Fatal("not a simulator")
+	}
+	if err := resetTPMSimulator(tpm, mssim, false); err != nil {
 		t.Fatal(err)
 	}
 }

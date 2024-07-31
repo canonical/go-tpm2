@@ -10,6 +10,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/go-tpm2"
+	"github.com/canonical/go-tpm2/internal/testutil"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mssim"
 	"github.com/canonical/go-tpm2/mu"
@@ -701,6 +702,21 @@ func (s *tpmSimulatorTestSuiteProper) TestResetTPMSimulator(c *C) {
 	c.Assert(err, IsNil)
 
 	s.ResetTPMSimulator(c)
+
+	currentTime, err := s.TPM.ReadClock()
+	c.Assert(err, IsNil)
+	c.Check(currentTime.ClockInfo.ResetCount, Equals, origCurrentTime.ClockInfo.ResetCount+1)
+}
+
+func (s *tpmSimulatorTestSuiteProper) TestResetTPMSimulatorNoStartup(c *C) {
+	origCurrentTime, err := s.TPM.ReadClock()
+	c.Assert(err, IsNil)
+
+	s.ResetTPMSimulatorNoStartup(c)
+
+	_, err = s.TPM.ReadClock()
+	c.Check(tpm2.IsTPMError(err, tpm2.ErrorInitialize, tpm2.CommandReadClock), testutil.IsTrue)
+	c.Check(s.TPM.Startup(tpm2.StartupClear), IsNil)
 
 	currentTime, err := s.TPM.ReadClock()
 	c.Assert(err, IsNil)

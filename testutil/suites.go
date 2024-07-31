@@ -473,19 +473,28 @@ func (b *TPMSimulatorTest) Mssim(c *C) *mssim.Transport {
 	return transport.(*mssim.Transport)
 }
 
-// ResetTPMSimulator issues a Shutdown -> Reset -> Startup cycle of the TPM simulator
-// and causes the test to fail if it is not successful.
+// ResetTPMSimulator issues a Shutdown(Clear) -> Reset -> Startup(Clear) cycle of the TPM
+// simulator and causes the test to fail if it is not successful.
 func (b *TPMSimulatorTest) ResetTPMSimulator(c *C) {
 	b.Transport.disableCommandLogging = true
 	defer func() { b.Transport.disableCommandLogging = false }()
 
-	c.Check(resetTPMSimulator(b.TPM, b.Mssim(c)), IsNil)
+	c.Check(resetTPMSimulator(b.TPM, b.Mssim(c), true), IsNil)
 }
 
-// ResetAndClearTPMSimulatorUsingPlatformHierarchy issues a Shutdown -> Reset ->
-// Startup cycle of the TPM simulator which ensures that the platform hierarchy is
-// enabled, and then enables the TPM2_Clear command and clears the TPM using the
-// platform hierarchy.
+// ResetTPMSimulatorNoStartup issues a Shutdown(Clear) -> Reset cycle of the TPM simulator
+// and causes the test to fail if it is not successful.
+func (b *TPMSimulatorTest) ResetTPMSimulatorNoStartup(c *C) {
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
+
+	c.Check(resetTPMSimulator(b.TPM, b.Mssim(c), false), IsNil)
+}
+
+// ResetAndClearTPMSimulatorUsingPlatformHierarchy issues a Shutdown(Clear) -> Reset ->
+// Startup(Clear) cycle of the TPM simulator which ensures that the platform hierarchy is
+// enabled, and then enables the TPM2_Clear command and clears the TPM using the platform
+// hierarchy.
 func (b *TPMSimulatorTest) ResetAndClearTPMSimulatorUsingPlatformHierarchy(c *C) {
 	b.ResetTPMSimulator(c)
 	b.ClearTPMUsingPlatformHierarchy(c)
