@@ -76,7 +76,7 @@ func (d *Device) openInternal() (*Transport, error) {
 	platformAddress := net.JoinHostPort(d.Host(), strconv.FormatUint(uint64(d.Port())+1, 10))
 
 	internal := &internalTransport{
-		locality: 3,
+		locality: 0,
 	}
 
 	tpm, err := net.Dial("tcp", tpmAddress)
