@@ -437,6 +437,8 @@ const (
 	PropertyNVBufferMax       Property = 0x12c // TPM_PT_NV_BUFFER_MAX
 	PropertyModes             Property = 0x12d // TPM_PT_MODES
 	PropertyMaxCapBuffer      Property = 0x12e // TPM_PT_MAX_CAP_BUFFER
+	PropertyFirmwareSVN       Property = 0x12f // TPM_PT_FIRMWARE_SVN
+	PropertyFirmwareMaxSVN    Property = 0x130 // TPM_PT_FIRMWARE_MAX_SVN
 
 	PropertyFixed Property = PropertyFamilyIndicator
 )

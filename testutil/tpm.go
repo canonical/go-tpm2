@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -643,6 +644,7 @@ func NewTransportT(t *testing.T, features TPMFeatureFlags) *Transport {
 // safe to use from a single goroutine, and this device returns multiple
 // pointers to the same transport.
 type TransportBackedDevice struct {
+	mu        sync.Mutex
 	transport *Transport
 	closable  bool
 	opened    int
@@ -679,6 +681,9 @@ func NewTransportBackedDevice(transport *Transport, closable bool) *TransportBac
 // NumberOpen returns the number of currently open transports opened from
 // this device. This will decrement when a transport is closed.
 func (d *TransportBackedDevice) NumberOpen() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	return d.opened
 }
 
@@ -693,7 +698,8 @@ func (t *duplicateTransport) Close() error {
 	if t.closed {
 		return errors.New("transport already closed")
 	}
-	// No locking becuase these should all be used on the same goroutine
+	t.device.mu.Lock()
+	defer t.device.mu.Unlock()
 	t.device.opened -= 1
 	t.closed = true
 
@@ -713,6 +719,9 @@ func (t *duplicateTransport) Unwrap() tpm2.Transport {
 // means each call to this returns transports that generally have to be used on the
 // same gorountine.
 func (d *TransportBackedDevice) Open() (tpm2.Transport, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	d.opened += 1
 	return &duplicateTransport{
 		Transport: d.transport,
@@ -725,6 +734,7 @@ func (*TransportBackedDevice) String() string {
 }
 
 type transportPassthroughDevice struct {
+	mu        sync.Mutex
 	transport *Transport
 }
 
@@ -736,6 +746,9 @@ func NewTransportPassthroughDevice(transport *Transport) tpm2.TPMDevice {
 }
 
 func (d *transportPassthroughDevice) Open() (tpm2.Transport, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	transport := d.transport
 	d.transport = nil
 	if transport == nil {
