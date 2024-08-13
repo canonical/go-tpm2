@@ -30,8 +30,10 @@ type RetryParams struct {
 	BackoffRate uint
 }
 
+// retreierTransport is an implementation to tpm2.Transport and is the public
+// facing part of this interface.
 type retrierTransport struct {
-	tomb *tomb.Tomb
+	tomb *tomb.Tomb // tracker for goroutines
 
 	w io.WriteCloser // write channel from public io.Writer to transport routine
 
@@ -86,17 +88,19 @@ func NewRetrierTransport(transport tpm2.Transport, params RetryParams) tpm2.Tran
 	return t
 }
 
+// retrierTransportLoop is the context associated with the transport goroutine that talks to
+// the supplied tpm2.Transport.
 type retrierTransportLoop struct {
-	params    RetryParams
-	transport tpm2.Transport
+	params    RetryParams    // supplied retrier parameters
+	transport tpm2.Transport // supplied underlying transport, accessed only from transport routine
 
-	tomb *tomb.Tomb
+	tomb *tomb.Tomb // tracker for goroutines (shared with retrierTransport)
 
-	r io.Reader
+	r io.Reader // transport routine reader from public io.Writer
 
-	w    io.Writer
-	wLen chan<- int64
-	wErr chan<- error
+	w    io.Writer    // transport routine writer to public io.Reader
+	wLen chan<- int64 // transport routine writer of the size of the next response to the public io.Reader (so it can create an io.LimitedReader)
+	wErr chan<- error // transport routine writer of transport errors to the public io.Reader
 }
 
 func newRetrierTransportLoop(params *RetryParams, transport tpm2.Transport, tomb *tomb.Tomb, r io.Reader, w io.Writer, wLen chan<- int64, wErr chan<- error) *retrierTransportLoop {
@@ -112,45 +116,53 @@ func newRetrierTransportLoop(params *RetryParams, transport tpm2.Transport, tomb
 }
 
 func (l *retrierTransportLoop) runCommand(commandCode tpm2.CommandCode, data []byte) ([]byte, error) {
-	retryDelay := l.params.InitialBackoff
+	retryDelay := l.params.InitialBackoff // set the retry delay to the initial backoff time.
 
 	for retries := l.params.MaxRetries; ; retries-- {
+		// Loop for the maximum specified number of retries
 		if !l.tomb.Alive() {
+			// A close has been requested, so exit early.
 			return nil, ErrClosed
 		}
 
-		// Send the command.
+		// Send the full command to the underlying transport.
 		if _, err := l.transport.Write(data); err != nil {
 			return nil, fmt.Errorf("cannot send command: %w", err)
 		}
 
 		if !l.tomb.Alive() {
+			// A close has been requested, so exit early.
 			return nil, ErrClosed
 		}
 
 		rsp := new(bytes.Buffer)
 		tr := io.TeeReader(l.transport, rsp)
 
-		// Wait for the response header
+		// Wait for the response header from the underlying transport.
 		var hdr tpm2.ResponseHeader
 		if _, err := mu.UnmarshalFromReader(tr, &hdr); err != nil {
 			return nil, fmt.Errorf("cannot unmarshal response header: %w", err)
 		}
 
-		// Read the rest of the response
+		// Wait for and read the rest of the response from the underlying transport.
 		if _, err := io.CopyN(io.Discard, tr, int64(hdr.ResponseSize)-int64(binary.Size(hdr))); err != nil {
 			return nil, err
 		}
 
+		// Does the response indicate that the command should be retried?
 		err := tpm2.DecodeResponseCode(commandCode, hdr.ResponseCode)
 		if retries > 0 && (tpm2.IsTPMWarning(err, tpm2.WarningYielded, commandCode) ||
 			tpm2.IsTPMWarning(err, tpm2.WarningTesting, commandCode) ||
 			tpm2.IsTPMWarning(err, tpm2.WarningRetry, commandCode)) {
+			// Yes, we have retries left and should retry. Sleep for the current retry delay.
 			time.Sleep(retryDelay)
+			// Scale the next retry delau by the specified backoff rate.
 			retryDelay *= time.Duration(l.params.BackoffRate)
+			// Retry!
 			continue
 		}
 
+		// The response doesn't indicate that the command should be retried. Return the whole response.
 		return rsp.Bytes(), nil
 	}
 }
@@ -160,7 +172,7 @@ func (l *retrierTransportLoop) run() (err error) {
 		cmd := new(bytes.Buffer)
 		tr := io.TeeReader(l.r, cmd)
 
-		// Wait for the next command header
+		// Wait for the next command header from the public io.Writer
 		var hdr tpm2.CommandHeader
 		_, err := mu.UnmarshalFromReader(tr, &hdr)
 		switch {
@@ -172,7 +184,7 @@ func (l *retrierTransportLoop) run() (err error) {
 			return err
 		}
 
-		// Read the rest of the command
+		// Wait for and read the rest of the command from the public io.Writer
 		_, err = io.CopyN(io.Discard, tr, int64(hdr.CommandSize)-int64(binary.Size(hdr)))
 		switch {
 		case err == io.EOF:
@@ -183,17 +195,23 @@ func (l *retrierTransportLoop) run() (err error) {
 			return err
 		}
 
+		// Run this command
 		rsp, err := l.runCommand(hdr.CommandCode, cmd.Bytes())
 		switch {
 		case err != nil:
-			// Command dispatch failed, send an error to the reader
+			// Command dispatch to the underlying transport failed, send an error to the public io.Reader
 			l.wErr <- err
 		default:
-			// Command was executed, send the response to the reader
+			// Command was dispatched to the underlying transport successfully and we already have a full
+			// response. Send the response size to the public io.Reader
 			l.wLen <- int64(len(rsp))
+
+			// Copy the whole resonse to the public io.Reader, which uses the received size to create a
+			// temporary io.LimitedReader.
 			_, err := io.Copy(l.w, bytes.NewReader(rsp))
 			switch {
 			case errors.Is(err, io.ErrClosedPipe):
+				// A close happened
 				return nil
 			case err != nil:
 				// Unexpected error
