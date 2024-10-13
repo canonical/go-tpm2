@@ -71,10 +71,14 @@ func (a HashAlgorithmId) IsValid() bool {
 	case HashAlgorithmSHA256:
 	case HashAlgorithmSHA384:
 	case HashAlgorithmSHA512:
+	case HashAlgorithmSHA256_192:
 	case HashAlgorithmSM3_256:
 	case HashAlgorithmSHA3_256:
 	case HashAlgorithmSHA3_384:
 	case HashAlgorithmSHA3_512:
+	case HashAlgorithmSHAKE256_192:
+	case HashAlgorithmSHAKE256_256:
+	case HashAlgorithmSHAKE256_512:
 	default:
 		return false
 	}
@@ -106,6 +110,8 @@ func (a HashAlgorithmId) Size() int {
 		return 48
 	case HashAlgorithmSHA512:
 		return 64
+	case HashAlgorithmSHA256_192:
+		return 24
 	case HashAlgorithmSM3_256:
 		return 32
 	case HashAlgorithmSHA3_256:
@@ -114,21 +120,31 @@ func (a HashAlgorithmId) Size() int {
 		return 48
 	case HashAlgorithmSHA3_512:
 		return 64
+	case HashAlgorithmSHAKE256_192:
+		return 24
+	case HashAlgorithmSHAKE256_256:
+		return 32
+	case HashAlgorithmSHAKE256_512:
+		return 64
 	default:
 		panic("unknown hash algorithm")
 	}
 }
 
 const (
-	HashAlgorithmNull     HashAlgorithmId = HashAlgorithmId(AlgorithmNull)     // TPM_ALG_NULL
-	HashAlgorithmSHA1     HashAlgorithmId = HashAlgorithmId(AlgorithmSHA1)     // TPM_ALG_SHA1
-	HashAlgorithmSHA256   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA256)   // TPM_ALG_SHA256
-	HashAlgorithmSHA384   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA384)   // TPM_ALG_SHA384
-	HashAlgorithmSHA512   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA512)   // TPM_ALG_SHA512
-	HashAlgorithmSM3_256  HashAlgorithmId = HashAlgorithmId(AlgorithmSM3_256)  // TPM_ALG_SM3_256
-	HashAlgorithmSHA3_256 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_256) // TPM_ALG_SHA3_256
-	HashAlgorithmSHA3_384 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_384) // TPM_ALG_SHA3_384
-	HashAlgorithmSHA3_512 HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_512) // TPM_ALG_SHA3_512
+	HashAlgorithmNull         HashAlgorithmId = HashAlgorithmId(AlgorithmNull)         // TPM_ALG_NULL
+	HashAlgorithmSHA1         HashAlgorithmId = HashAlgorithmId(AlgorithmSHA1)         // TPM_ALG_SHA1
+	HashAlgorithmSHA256       HashAlgorithmId = HashAlgorithmId(AlgorithmSHA256)       // TPM_ALG_SHA256
+	HashAlgorithmSHA384       HashAlgorithmId = HashAlgorithmId(AlgorithmSHA384)       // TPM_ALG_SHA384
+	HashAlgorithmSHA512       HashAlgorithmId = HashAlgorithmId(AlgorithmSHA512)       // TPM_ALG_SHA512
+	HashAlgorithmSHA256_192   HashAlgorithmId = HashAlgorithmId(AlgorithmSHA256_192)   // TPM_ALG_SHA256_192
+	HashAlgorithmSM3_256      HashAlgorithmId = HashAlgorithmId(AlgorithmSM3_256)      // TPM_ALG_SM3_256
+	HashAlgorithmSHA3_256     HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_256)     // TPM_ALG_SHA3_256
+	HashAlgorithmSHA3_384     HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_384)     // TPM_ALG_SHA3_384
+	HashAlgorithmSHA3_512     HashAlgorithmId = HashAlgorithmId(AlgorithmSHA3_512)     // TPM_ALG_SHA3_512
+	HashAlgorithmSHAKE256_192 HashAlgorithmId = HashAlgorithmId(AlgorithmSHAKE256_192) // TPM_ALG_SHAKE256_192
+	HashAlgorithmSHAKE256_256 HashAlgorithmId = HashAlgorithmId(AlgorithmSHAKE256_256) // TPM_ALG_SHAKE256_256
+	HashAlgorithmSHAKE256_512 HashAlgorithmId = HashAlgorithmId(AlgorithmSHAKE256_512) // TPM_ALG_SHAKE256_512
 )
 
 // SymAlgorithmId corresponds to the TPMI_ALG_SYM type
@@ -266,6 +282,10 @@ func (s SigSchemeId) IsValid() bool {
 	case SigSchemeAlgECDAA:
 	case SigSchemeAlgSM2:
 	case SigSchemeAlgECSchnorr:
+	case SigSchemeAlgEDDSA:
+	case SigSchemeAlgEDDSA_PH:
+	case SigSchemeAlgLMS:
+	case SigSchemeAlgXMSS:
 	default:
 		return false
 	}
@@ -281,4 +301,8 @@ const (
 	SigSchemeAlgECDAA     SigSchemeId = SigSchemeId(AlgorithmECDAA)     // TPM_ALG_ECDAA
 	SigSchemeAlgSM2       SigSchemeId = SigSchemeId(AlgorithmSM2)       // TPM_ALG_SM2
 	SigSchemeAlgECSchnorr SigSchemeId = SigSchemeId(AlgorithmECSchnorr) // TPM_ALG_ECSCHNORR
+	SigSchemeAlgEDDSA     SigSchemeId = SigSchemeId(AlgorithmEDDSA)     // TPM_ALG_EDDSA
+	SigSchemeAlgEDDSA_PH  SigSchemeId = SigSchemeId(AlgorithmEDDSA_PH)  // TPM_ALG_EDDSA
+	SigSchemeAlgLMS       SigSchemeId = SigSchemeId(AlgorithmLMS)       // TPM_ALG_LMS
+	SigSchemeAlgXMSS      SigSchemeId = SigSchemeId(AlgorithmXMSS)      // TPM_ALG_XMSS
 )

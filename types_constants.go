@@ -34,6 +34,7 @@ const (
 	AlgorithmSHA256         AlgorithmId = 0x000b // TPM_ALG_SHA256
 	AlgorithmSHA384         AlgorithmId = 0x000c // TPM_ALG_SHA384
 	AlgorithmSHA512         AlgorithmId = 0x000d // TPM_ALG_SHA512
+	AlgorithmSHA256_192     AlgorithmId = 0x000e // TPM_ALG_SHA256_192
 	AlgorithmNull           AlgorithmId = 0x0010 // TPM_ALG_NULL
 	AlgorithmSM3_256        AlgorithmId = 0x0012 // TPM_ALG_SM3_256
 	AlgorithmSM4            AlgorithmId = 0x0013 // TPM_ALG_SM4
@@ -56,11 +57,31 @@ const (
 	AlgorithmSHA3_256       AlgorithmId = 0x0027 // TPM_ALG_SHA3_256
 	AlgorithmSHA3_384       AlgorithmId = 0x0028 // TPM_ALG_SHA3_384
 	AlgorithmSHA3_512       AlgorithmId = 0x0029 // TPM_ALG_SHA3_512
+	AlgorithmSHAKE128       AlgorithmId = 0x002a // TPM_ALG_SHAKE128
+	AlgorithmSHAKE256       AlgorithmId = 0x002b // TPM_ALG_SHAKE256
+	AlgorithmSHAKE256_192   AlgorithmId = 0x002c // TPM_ALG_SHAKE256_192
+	AlgorithmSHAKE256_256   AlgorithmId = 0x002d // TPM_ALG_SHAKE256_256
+	AlgorithmSHAKE256_512   AlgorithmId = 0x002e // TPM_ALG_SHAKE256_512
+	AlgorithmCMAC           AlgorithmId = 0x003f // TPM_ALG_CMAC
 	AlgorithmCTR            AlgorithmId = 0x0040 // TPM_ALG_CTR
 	AlgorithmOFB            AlgorithmId = 0x0041 // TPM_ALG_OFB
 	AlgorithmCBC            AlgorithmId = 0x0042 // TPM_ALG_CBC
 	AlgorithmCFB            AlgorithmId = 0x0043 // TPM_ALG_CFB
 	AlgorithmECB            AlgorithmId = 0x0044 // TPM_ALG_ECB
+	AlgorithmCCM            AlgorithmId = 0x0050 // TPM_ALG_CCM
+	AlgorithmGCM            AlgorithmId = 0x0051 // TPM_ALG_GCM
+	AlgorithmKW             AlgorithmId = 0x0052 // TPM_ALG_KW
+	AlgorithmKWP            AlgorithmId = 0x0053 // TPM_ALG_KWP
+	AlgorithmEAX            AlgorithmId = 0x0054 // TPM_ALG_EAX
+	AlgorithmEDDSA          AlgorithmId = 0x0060 // TPM_ALG_EDDSA
+	AlgorithmEDDSA_PH       AlgorithmId = 0x0061 // TPM_ALG_EDDSA_PH
+	AlgorithmLMS            AlgorithmId = 0x0070 // TPM_ALG_LMS
+	AlgorithmXMSS           AlgorithmId = 0x0071 // TPM_ALG_XMSS
+	AlgorithmKeyedXOF       AlgorithmId = 0x0080 // TPM_ALG_KEYEDXOF
+	AlgorithmKMACXOF128     AlgorithmId = 0x0081 // TPM_ALG_KMACXOF128
+	AlgorithmKMACXOF256     AlgorithmId = 0x0082 // TPM_ALG_KMACXOF256
+	AlgorithmKMAC128        AlgorithmId = 0x0090 // TPM_ALG_KMAC128
+	AlgorithmKMAC256        AlgorithmId = 0x0091 // TPM_ALG_KMAC256
 
 	AlgorithmFirst AlgorithmId = AlgorithmRSA
 )
@@ -74,14 +95,19 @@ func (c ECCCurve) GoCurve() elliptic.Curve {
 }
 
 const (
-	ECCCurveNIST_P192 ECCCurve = 0x0001 // TPM_ECC_NIST_P192
-	ECCCurveNIST_P224 ECCCurve = 0x0002 // TPM_ECC_NIST_P224
-	ECCCurveNIST_P256 ECCCurve = 0x0003 // TPM_ECC_NIST_P256
-	ECCCurveNIST_P384 ECCCurve = 0x0004 // TPM_ECC_NIST_P384
-	ECCCurveNIST_P521 ECCCurve = 0x0005 // TPM_ECC_NIST_P521
-	ECCCurveBN_P256   ECCCurve = 0x0010 // TPM_ECC_BN_P256
-	ECCCurveBN_P638   ECCCurve = 0x0011 // TPM_ECC_BN_P638
-	ECCCurveSM2_P256  ECCCurve = 0x0020 // TPM_ECC_SM2_P256
+	ECCCurveNIST_P192  ECCCurve = 0x0001 // TPM_ECC_NIST_P192
+	ECCCurveNIST_P224  ECCCurve = 0x0002 // TPM_ECC_NIST_P224
+	ECCCurveNIST_P256  ECCCurve = 0x0003 // TPM_ECC_NIST_P256
+	ECCCurveNIST_P384  ECCCurve = 0x0004 // TPM_ECC_NIST_P384
+	ECCCurveNIST_P521  ECCCurve = 0x0005 // TPM_ECC_NIST_P521
+	ECCCurveBN_P256    ECCCurve = 0x0010 // TPM_ECC_BN_P256
+	ECCCurveBN_P638    ECCCurve = 0x0011 // TPM_ECC_BN_P638
+	ECCCurveSM2_P256   ECCCurve = 0x0020 // TPM_ECC_SM2_P256
+	ECCCurveBP_P256_R1 ECCCurve = 0x0030 // TPM_ECC_BP_P256_R1
+	ECCCurveBP_P384_R1 ECCCurve = 0x0031 // TPM_ECC_BP_P384_R1
+	ECCCurveBP_P512_R1 ECCCurve = 0x0032 // TPM_ECC_BP_P512_R1
+	ECCCurve25519      ECCCurve = 0x0040 // TPM_ECC_CURVE_25519
+	ECCCurve448        ECCCurve = 0x0041 // TPM_ECC_CURVE_448
 
 	ECCCurveFirst ECCCurve = ECCCurveNIST_P192
 )

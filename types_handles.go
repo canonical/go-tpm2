@@ -17,14 +17,22 @@ func (h Handle) Type() HandleType {
 }
 
 const (
-	HandleOwner       Handle = 0x40000001 // TPM_RH_OWNER
-	HandleNull        Handle = 0x40000007 // TPM_RH_NULL
-	HandleUnassigned  Handle = 0x40000008 // TPM_RH_UNASSIGNED
-	HandlePW          Handle = 0x40000009 // TPM_RS_PW
-	HandleLockout     Handle = 0x4000000a // TPM_RH_LOCKOUT
-	HandleEndorsement Handle = 0x4000000b // TPM_RH_ENDORSEMENT
-	HandlePlatform    Handle = 0x4000000c // TPM_RH_PLATFORM
-	HandlePlatformNV  Handle = 0x4000000d // TPM_RH_PLATFORM_NV
+	HandleOwner              Handle = 0x40000001 // TPM_RH_OWNER
+	HandleNull               Handle = 0x40000007 // TPM_RH_NULL
+	HandleUnassigned         Handle = 0x40000008 // TPM_RH_UNASSIGNED
+	HandlePW                 Handle = 0x40000009 // TPM_RS_PW
+	HandleLockout            Handle = 0x4000000a // TPM_RH_LOCKOUT
+	HandleEndorsement        Handle = 0x4000000b // TPM_RH_ENDORSEMENT
+	HandlePlatform           Handle = 0x4000000c // TPM_RH_PLATFORM
+	HandlePlatformNV         Handle = 0x4000000d // TPM_RH_PLATFORM_NV
+	HandleFWOwner            Handle = 0x40000140 // TPM_RH_FW_OWNER
+	HandleFWEndorsement      Handle = 0x40000141 // TPM_RH_FW_ENDORSEMENT
+	HandleFWPlatform         Handle = 0x40000142 // TPM_RH_FW_PLATFORM
+	HandleFWNull             Handle = 0x40000143 // TPM_RH_FW_NULL
+	HandleSVNOwnerBase       Handle = 0x40010000 // TPM_RH_SVN_OWNER_BASE
+	HandleSVNEndorsementBase Handle = 0x40020000 // TPM_RH_SVN_ENDORSEMENT_BASE
+	HandleSVNPlatformBase    Handle = 0x40030000 // TPM_RH_SVN_PLATFORM_BASE
+	HandleSVNNullBase        Handle = 0x40040000 // TPM_RH_SVN_NULL_BASE
 )
 
 // HandleType corresponds to the TPM_HT type, and is used to

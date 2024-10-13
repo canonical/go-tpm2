@@ -532,6 +532,22 @@ func (h Handle) String() string {
 		return "TPM_RH_PLATFORM"
 	case HandlePlatformNV:
 		return "TPM_RH_PLATFORM_NV"
+	case HandleFWOwner:
+		return "TPM_RH_FW_OWNER"
+	case HandleFWEndorsement:
+		return "TPM_RH_FW_ENDORSEMENT"
+	case HandleFWPlatform:
+		return "TPM_RH_FW_PLATFORM"
+	case HandleFWNull:
+		return "TPM_RH_FW_NULL"
+	case HandleSVNOwnerBase:
+		return "TPM_RH_SVN_OWNER_BASE"
+	case HandleSVNEndorsementBase:
+		return "TPM_RH_SVN_ENDORSEMENT_BASE"
+	case HandleSVNPlatformBase:
+		return "TPM_RH_SVN_PLATFORM_BASE"
+	case HandleSVNNullBase:
+		return "TPM_RH_SVN_NULL_BASE"
 	default:
 		return fmt.Sprintf("0x%08x", uint32(h))
 	}
@@ -570,6 +586,8 @@ func (a AlgorithmId) String() string {
 		return "TPM_ALG_SHA384"
 	case AlgorithmSHA512:
 		return "TPM_ALG_SHA512"
+	case AlgorithmSHA256_192:
+		return "TPM_ALG_SHA256_192"
 	case AlgorithmNull:
 		return "TPM_ALG_NULL"
 	case AlgorithmSM3_256:
@@ -614,6 +632,18 @@ func (a AlgorithmId) String() string {
 		return "TPM_ALG_SHA3_384"
 	case AlgorithmSHA3_512:
 		return "TPM_ALG_SHA3_512"
+	case AlgorithmSHAKE128:
+		return "TPM_ALG_SHAKE128"
+	case AlgorithmSHAKE256:
+		return "TPM_ALG_SHAKE256"
+	case AlgorithmSHAKE256_192:
+		return "TPM_ALG_SHAKE256_192"
+	case AlgorithmSHAKE256_256:
+		return "TPM_ALG_SHAKE256_256"
+	case AlgorithmSHAKE256_512:
+		return "TPM_ALG_SHAKE256_512"
+	case AlgorithmCMAC:
+		return "TPM_ALG_CMAC"
 	case AlgorithmCTR:
 		return "TPM_ALG_CTR"
 	case AlgorithmOFB:
@@ -624,6 +654,34 @@ func (a AlgorithmId) String() string {
 		return "TPM_ALG_CFB"
 	case AlgorithmECB:
 		return "TPM_ALG_ECB"
+	case AlgorithmCCM:
+		return "TPM_ALG_CCM"
+	case AlgorithmGCM:
+		return "TPM_ALG_GCM"
+	case AlgorithmKW:
+		return "TPM_ALG_KW"
+	case AlgorithmKWP:
+		return "TPM_ALG_KWP"
+	case AlgorithmEAX:
+		return "TPM_ALG_EAX"
+	case AlgorithmEDDSA:
+		return "TPM_ALG_EDDSA"
+	case AlgorithmEDDSA_PH:
+		return "TPM_ALG_EDDSA_PH"
+	case AlgorithmLMS:
+		return "TPM_ALG_LMS"
+	case AlgorithmXMSS:
+		return "TPM_ALG_XMSS"
+	case AlgorithmKeyedXOF:
+		return "TPM_ALG_KEYEDXOF"
+	case AlgorithmKMACXOF128:
+		return "TPM_ALG_KMACXOF128"
+	case AlgorithmKMACXOF256:
+		return "TPM_ALG_KMACXOF256"
+	case AlgorithmKMAC128:
+		return "TPM_ALG_KMAC128"
+	case AlgorithmKMAC256:
+		return "TPM_ALG_KMAC256"
 	default:
 		return fmt.Sprintf("0x%04x", uint16(a))
 	}
@@ -828,9 +886,11 @@ var (
 		ErrorExpired:      "the policy has expired",
 		ErrorPolicyCC: "the commandCode in the policy is not the commandCode of the command or the command code in a policy command " +
 			"references a command that is not implemented",
-		ErrorBinding:  "public and sensitive portions of an object are not cryptographically bound",
-		ErrorCurve:    "curve not supported",
-		ErrorECCPoint: "point is not on the required curve"}
+		ErrorBinding:    "public and sensitive portions of an object are not cryptographically bound",
+		ErrorCurve:      "curve not supported",
+		ErrorECCPoint:   "point is not on the required curve",
+		ErrorFWLimited:  "the hierarchy is firmware-limited but the Firmware Secret is unavailable",
+		ErrorSVNLimited: "the hierarchy is SVN-limited but the Firmware SVN Secret associated with the given SVN is unavailable"}
 
 	warningCodeDescriptions = map[WarningCode]string{
 		WarningContextGap:     "gap for context ID is too large",

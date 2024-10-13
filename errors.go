@@ -479,6 +479,10 @@ const (
 	ErrorCurve ErrorCode = errorCode1Start + 0x26
 
 	ErrorECCPoint ErrorCode = errorCode1Start + 0x27 // TPM_RC_ECC_POINT
+
+	ErrorFWLimited ErrorCode = errorCode1Start + 0x28 // TPM_RC_FW_LIMITED
+
+	ErrorSVNLimited ErrorCode = errorCode1Start + 0x29 // TPM_RC_SVN_LIMITED
 )
 
 // TPMErrorBadTag represents a TPM response that indicates that the tag field of the command header
