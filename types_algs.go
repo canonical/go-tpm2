@@ -649,6 +649,8 @@ type SignatureECDSA = SignatureECC
 type SignatureECDAA = SignatureECC
 type SignatureSM2 = SignatureECC
 type SignatureECSchnorr = SignatureECC
+type SignatureEDDSA = SignatureECC
+type SignatureEDDSA_PH = SignatureECC
 
 // SignatureU is a union type that corresponds to TPMU_SIGNATURE. The selector
 // type is [SigSchemeId]. The mapping of selector values to fields is as follows:
@@ -658,6 +660,8 @@ type SignatureECSchnorr = SignatureECC
 //   - SigSchemeAlgECDAA: ECDAA
 //   - SigSchemeAlgSM2: SM2
 //   - SigSchemeAlgECSchnorr: ECSchnorr
+//   - SigSchemeAlgEDDSA: EDDSA
+//   - SigSchemeAlgEDDSA_PH: EDDSA_PH
 //   - SigSchemeAlgHMAC: HMAC
 //   - SigSchemeAlgNull: none
 type SignatureU struct {
@@ -667,6 +671,8 @@ type SignatureU struct {
 	ECDAA     *SignatureECDAA
 	SM2       *SignatureSM2
 	ECSchnorr *SignatureECSchnorr
+	EDDSA     *SignatureEDDSA
+	EDDSA_PH  *SignatureEDDSA_PH
 	HMAC      *TaggedHash
 }
 
@@ -685,6 +691,10 @@ func (s *SignatureU) Select(selector reflect.Value) interface{} {
 		return &s.SM2
 	case SigSchemeAlgECSchnorr:
 		return &s.ECSchnorr
+	case SigSchemeAlgEDDSA:
+		return &s.EDDSA
+	case SigSchemeAlgEDDSA_PH:
+		return &s.EDDSA_PH
 	case SigSchemeAlgHMAC:
 		return &s.HMAC
 	case SigSchemeAlgNull:
@@ -717,6 +727,10 @@ func (s SignatureU) Any(scheme SigSchemeId) *SchemeHash {
 		return &SchemeHash{HashAlg: s.SM2.Hash}
 	case SigSchemeAlgECSchnorr:
 		return &SchemeHash{HashAlg: s.ECSchnorr.Hash}
+	case SigSchemeAlgEDDSA:
+		return &SchemeHash{HashAlg: s.EDDSA.Hash}
+	case SigSchemeAlgEDDSA_PH:
+		return &SchemeHash{HashAlg: s.EDDSA_PH.Hash}
 	case SigSchemeAlgHMAC:
 		return &SchemeHash{HashAlg: s.HMAC.HashAlg}
 	default:
