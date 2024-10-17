@@ -193,8 +193,6 @@ type SigSchemeSM2 = SchemeHash
 type SigSchemeECSchnorr = SchemeHash
 type SigSchemeEDDSA = SchemeHash
 type SigSchemeEDDSA_PH = SchemeHash
-type SigSchemeLMS = SchemeHash
-type SigSchemeXMSS = SchemeHash
 
 // SigSchemeU is a union type that corresponds to the TPMU_SIG_SCHEME type. The
 // selector type is [SigSchemeId]. The mapping of selector value to fields is as follows:
@@ -206,8 +204,6 @@ type SigSchemeXMSS = SchemeHash
 //   - SigSchemeAlgECSchnorr: ECSchnorr
 //   - SigSchemeAlgEDDSA: EDDSA
 //   - SigSchemeAlgEDDSA_PH: EDDSA_PH
-//   - SigSchemeAlgLMS: LMS
-//   - SigSchemeAlgXMSS: XMSS
 //   - SigSchemeAlgHMAC: HMAC
 //   - SigSchemeAlgNull: none
 type SigSchemeU struct {
@@ -219,8 +215,6 @@ type SigSchemeU struct {
 	ECSchnorr *SigSchemeECSchnorr
 	EDDSA     *SigSchemeEDDSA
 	EDDSA_PH  *SigSchemeEDDSA_PH
-	LMS       *SigSchemeLMS
-	XMSS      *SigSchemeXMSS
 	HMAC      *SchemeHMAC
 }
 
@@ -243,10 +237,6 @@ func (s *SigSchemeU) Select(selector reflect.Value) interface{} {
 		return &s.EDDSA
 	case SigSchemeAlgEDDSA_PH:
 		return &s.EDDSA_PH
-	case SigSchemeAlgLMS:
-		return &s.LMS
-	case SigSchemeAlgXMSS:
-		return &s.XMSS
 	case SigSchemeAlgHMAC:
 		return &s.HMAC
 	case SigSchemeAlgNull:
@@ -279,10 +269,6 @@ func (s SigSchemeU) Any(scheme SigSchemeId) *SchemeHash {
 		return (*SchemeHash)(&(*s.EDDSA))
 	case SigSchemeAlgEDDSA_PH:
 		return (*SchemeHash)(&(*s.EDDSA_PH))
-	case SigSchemeAlgLMS:
-		return (*SchemeHash)(&(*s.LMS))
-	case SigSchemeAlgXMSS:
-		return (*SchemeHash)(&(*s.XMSS))
 	case SigSchemeAlgHMAC:
 		return (*SchemeHash)(&(*s.HMAC))
 	default:
@@ -389,8 +375,6 @@ func (s AsymSchemeId) IsValid() bool {
 	case AsymSchemeECMQV:
 	case AsymSchemeEDDSA:
 	case AsymSchemeEDDSA_PH:
-	case AsymSchemeLMS:
-	case AsymSchemeXMSS:
 	default:
 		return false
 	}
@@ -412,8 +396,6 @@ func (s AsymSchemeId) HasDigest() bool {
 	case AsymSchemeECMQV:
 	case AsymSchemeEDDSA:
 	case AsymSchemeEDDSA_PH:
-	case AsymSchemeLMS:
-	case AsymSchemeXMSS:
 	default:
 		return false
 	}
@@ -452,8 +434,6 @@ const (
 //   - AsymSchemeECMQV: ECMQV
 //   - AsymSchemeEDDSA: EDDSA
 //   - AsymSchemeEDDSA_PH: EDDSA_PH
-//   - AsymSchemeLMS: LMS
-//   - AsymSchemeXMSS: XMSS
 //   - AsymSchemeNull: none
 type AsymSchemeU struct {
 	RSASSA    *SigSchemeRSASSA
@@ -468,8 +448,6 @@ type AsymSchemeU struct {
 	ECMQV     *KeySchemeECMQV
 	EDDSA     *SigSchemeEDDSA
 	EDDSA_PH  *SigSchemeEDDSA_PH
-	LMS       *SigSchemeLMS
-	XMSS      *SigSchemeXMSS
 }
 
 // Select implements [mu.Union].
@@ -499,10 +477,6 @@ func (s *AsymSchemeU) Select(selector reflect.Value) interface{} {
 		return &s.EDDSA
 	case AsymSchemeEDDSA_PH:
 		return &s.EDDSA_PH
-	case AsymSchemeLMS:
-		return &s.LMS
-	case AsymSchemeXMSS:
-		return &s.XMSS
 	case AsymSchemeNull:
 		return mu.NilUnionValue
 	default:
@@ -544,10 +518,6 @@ func (s AsymSchemeU) Any(scheme AsymSchemeId) *SchemeHash {
 		return (*SchemeHash)(&(*s.EDDSA))
 	case AsymSchemeEDDSA_PH:
 		return (*SchemeHash)(&(*s.EDDSA_PH))
-	case AsymSchemeLMS:
-		return (*SchemeHash)(&(*s.LMS))
-	case AsymSchemeXMSS:
-		return (*SchemeHash)(&(*s.XMSS))
 	default:
 		panic("not reached")
 	}

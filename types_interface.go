@@ -284,8 +284,6 @@ func (s SigSchemeId) IsValid() bool {
 	case SigSchemeAlgECSchnorr:
 	case SigSchemeAlgEDDSA:
 	case SigSchemeAlgEDDSA_PH:
-	case SigSchemeAlgLMS:
-	case SigSchemeAlgXMSS:
 	default:
 		return false
 	}
