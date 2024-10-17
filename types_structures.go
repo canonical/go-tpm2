@@ -31,18 +31,27 @@ type Empty struct{}
 //   - HashAlgorithmSHA256: SHA256
 //   - HashAlgorithmSHA384: SHA384
 //   - HashAlgorithmSHA512: SHA512
+//   - HashAlgorithmSHA256_192: SHA256_192
+//   - HashAlgorithmSM3_256: SM_256
 //   - HashAlgorithmSHA3_256: SHA3_256
 //   - HashAlgorithmSHA3_384: SHA3_384
 //   - HashAlgorithmSHA3_512: SHA3_512
+//   - HashAlgorithmSHAKE256_192: SHAKE256_192
+//   - HashAlgorithmSHAKE256_256: SHAKE256_256
+//   - HashAlgorithmSHAKE256_512: SHAKE256_512
 type TaggedHashU struct {
-	SHA1     [20]byte
-	SHA256   [32]byte
-	SHA384   [48]byte
-	SHA512   [64]byte
-	SM3_256  [32]byte
-	SHA3_256 [32]byte
-	SHA3_384 [48]byte
-	SHA3_512 [64]byte
+	SHA1         [20]byte
+	SHA256       [32]byte
+	SHA384       [48]byte
+	SHA512       [64]byte
+	SHA256_192   [24]byte
+	SM3_256      [32]byte
+	SHA3_256     [32]byte
+	SHA3_384     [48]byte
+	SHA3_512     [64]byte
+	SHAKE256_192 [24]byte
+	SHAKE256_256 [32]byte
+	SHAKE256_512 [64]byte
 }
 
 // Select implements [mu.Union].
@@ -58,6 +67,8 @@ func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
 		return &u.SHA384
 	case HashAlgorithmSHA512:
 		return &u.SHA512
+	case HashAlgorithmSHA256_192:
+		return &u.SHA256_192
 	case HashAlgorithmSM3_256:
 		return &u.SM3_256
 	case HashAlgorithmSHA3_256:
@@ -66,6 +77,12 @@ func (u *TaggedHashU) Select(selector reflect.Value) interface{} {
 		return &u.SHA3_384
 	case HashAlgorithmSHA3_512:
 		return &u.SHA3_512
+	case HashAlgorithmSHAKE256_192:
+		return &u.SHAKE256_192
+	case HashAlgorithmSHAKE256_256:
+		return &u.SHAKE256_256
+	case HashAlgorithmSHAKE256_512:
+		return &u.SHAKE256_512
 	default:
 		return nil
 	}
@@ -100,6 +117,8 @@ func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
 		copy(digestData.SHA384[:], digest)
 	case HashAlgorithmSHA512:
 		copy(digestData.SHA512[:], digest)
+	case HashAlgorithmSHA256_192:
+		copy(digestData.SHA256_192[:], digest)
 	case HashAlgorithmSM3_256:
 		copy(digestData.SM3_256[:], digest)
 	case HashAlgorithmSHA3_256:
@@ -108,6 +127,12 @@ func NewTaggedHash(alg HashAlgorithmId, digest Digest) (*TaggedHash, error) {
 		copy(digestData.SHA3_384[:], digest)
 	case HashAlgorithmSHA3_512:
 		copy(digestData.SHA3_512[:], digest)
+	case HashAlgorithmSHAKE256_192:
+		copy(digestData.SHAKE256_192[:], digest)
+	case HashAlgorithmSHAKE256_256:
+		copy(digestData.SHAKE256_256[:], digest)
+	case HashAlgorithmSHAKE256_512:
+		copy(digestData.SHAKE256_512[:], digest)
 	}
 
 	return &TaggedHash{
@@ -130,6 +155,8 @@ func MakeTaggedHash(alg HashAlgorithmId, digest Digest) TaggedHash {
 		copy(digestData.SHA384[:], digest)
 	case HashAlgorithmSHA512:
 		copy(digestData.SHA512[:], digest)
+	case HashAlgorithmSHA256_192:
+		copy(digestData.SHA256_192[:], digest)
 	case HashAlgorithmSM3_256:
 		copy(digestData.SM3_256[:], digest)
 	case HashAlgorithmSHA3_256:
@@ -138,6 +165,12 @@ func MakeTaggedHash(alg HashAlgorithmId, digest Digest) TaggedHash {
 		copy(digestData.SHA3_384[:], digest)
 	case HashAlgorithmSHA3_512:
 		copy(digestData.SHA3_512[:], digest)
+	case HashAlgorithmSHAKE256_192:
+		copy(digestData.SHAKE256_192[:], digest)
+	case HashAlgorithmSHAKE256_256:
+		copy(digestData.SHAKE256_256[:], digest)
+	case HashAlgorithmSHAKE256_512:
+		copy(digestData.SHAKE256_512[:], digest)
 	}
 	return TaggedHash{
 		HashAlg:    alg,
@@ -164,6 +197,8 @@ func (h *TaggedHash) Digest() Digest {
 		copy(out, h.DigestData.SHA384[:])
 	case HashAlgorithmSHA512:
 		copy(out, h.DigestData.SHA512[:])
+	case HashAlgorithmSHA256_192:
+		copy(out, h.DigestData.SHA256_192[:])
 	case HashAlgorithmSM3_256:
 		copy(out, h.DigestData.SM3_256[:])
 	case HashAlgorithmSHA3_256:
@@ -172,6 +207,12 @@ func (h *TaggedHash) Digest() Digest {
 		copy(out, h.DigestData.SHA3_384[:])
 	case HashAlgorithmSHA3_512:
 		copy(out, h.DigestData.SHA3_512[:])
+	case HashAlgorithmSHAKE256_192:
+		copy(out, h.DigestData.SHAKE256_192[:])
+	case HashAlgorithmSHAKE256_256:
+		copy(out, h.DigestData.SHAKE256_256[:])
+	case HashAlgorithmSHAKE256_512:
+		copy(out, h.DigestData.SHAKE256_512[:])
 	}
 
 	return out
