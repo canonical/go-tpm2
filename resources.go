@@ -655,9 +655,9 @@ func (t *TPMContext) newResourceContextFromTPM(handle HandleContext, sessions ..
 
 	switch {
 	case IsTPMWarning(err, WarningReferenceH0, AnyCommandCode):
-		return nil, ResourceUnavailableError{handle.Handle()}
+		return nil, &ResourceUnavailableError{handle.Handle(), err}
 	case IsTPMHandleError(err, ErrorHandle, AnyCommandCode, AnyHandleIndex):
-		return nil, ResourceUnavailableError{handle.Handle()}
+		return nil, &ResourceUnavailableError{handle.Handle(), err}
 	case err != nil:
 		return nil, err
 	}
@@ -667,7 +667,7 @@ func (t *TPMContext) newResourceContextFromTPM(handle HandleContext, sessions ..
 
 // NewResourceContext creates and returns a new ResourceContext for the specified handle. It will
 // execute a command to read the public area from the TPM in order to initialize state that
-// is maintained on the host side. A [ResourceUnavailableError] error will be returned if the
+// is maintained on the host side. A *[ResourceUnavailableError] error will be returned if the
 // specified handle references a resource that doesn't exist.
 //
 // The public area and name returned from the TPM are checked for consistency as long as the
@@ -700,7 +700,7 @@ func (t *TPMContext) NewResourceContext(handle Handle, sessions ...SessionContex
 
 // CreateResourceContextFromTPM creates and returns a new ResourceContext for the specified handle.
 // It will execute a command to read the public area from the TPM in order to initialize state that
-// is maintained on the host side. A [ResourceUnavailableError] error will be returned if the
+// is maintained on the host side. A *[ResourceUnavailableError] error will be returned if the
 // specified handle references a resource that doesn't exist.
 //
 // The public area and name returned from the TPM are checked for consistency as long as the

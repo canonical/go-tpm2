@@ -325,26 +325,32 @@ func (s *errorsSuite) TestIsTPMHandleError9(c *C) {
 }
 
 func (s *errorsSuite) TestResourceUnavailableErrorIs1(c *C) {
-	err := ResourceUnavailableError{Handle: 0x81000001}
-	c.Check(err.Is(ResourceUnavailableError{Handle: 0x81000001}), internal_testutil.IsTrue)
+	err := &ResourceUnavailableError{Handle: 0x81000001}
+	c.Check(err.Is(&ResourceUnavailableError{Handle: 0x81000001}), internal_testutil.IsTrue)
 }
 
 func (s *errorsSuite) TestResourceUnavailableErrorIs2(c *C) {
-	err := ResourceUnavailableError{Handle: 0x80000000}
-	c.Check(err.Is(ResourceUnavailableError{Handle: 0x80000000}), internal_testutil.IsTrue)
+	err := &ResourceUnavailableError{Handle: 0x80000000}
+	c.Check(err.Is(&ResourceUnavailableError{Handle: 0x80000000}), internal_testutil.IsTrue)
 }
 
 func (s *errorsSuite) TestResourceUnavailableErrorIs3(c *C) {
-	err := ResourceUnavailableError{Handle: 0x81000001}
-	c.Check(err.Is(ResourceUnavailableError{Handle: AnyHandle}), internal_testutil.IsTrue)
+	err := &ResourceUnavailableError{Handle: 0x81000001}
+	c.Check(err.Is(&ResourceUnavailableError{Handle: AnyHandle}), internal_testutil.IsTrue)
 }
 
 func (s *errorsSuite) TestResourceUnavailableErrorIs4(c *C) {
-	err := ResourceUnavailableError{Handle: 0x81000001}
-	c.Check(err.Is(ResourceUnavailableError{Handle: 0x80000000}), internal_testutil.IsFalse)
+	err := &ResourceUnavailableError{Handle: 0x81000001}
+	c.Check(err.Is(&ResourceUnavailableError{Handle: 0x80000000}), internal_testutil.IsFalse)
 }
 
 func (s *errorsSuite) TestResourceUnavailableErrorIs5(c *C) {
-	err := ResourceUnavailableError{Handle: 0x81000001}
+	err := &ResourceUnavailableError{Handle: 0x81000001}
 	c.Check(err.Is(errors.New("error")), internal_testutil.IsFalse)
+}
+
+func (s *errorsSuite) TestResourceUnavailableErrorUnwrap(c *C) {
+	err := NewResourceUnavailableError(0x81000001, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
+	c.Check(err.Unwrap(), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
+
 }

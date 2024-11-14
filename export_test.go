@@ -73,3 +73,7 @@ func NewMockResponseContext(dispatcher commandDispatcher, rsp *RspContext) *Resp
 		dispatcher: dispatcher,
 		rsp:        rsp}
 }
+
+func NewResourceUnavailableError(handle Handle, err error) *ResourceUnavailableError {
+	return &ResourceUnavailableError{Handle: handle, err: err}
+}

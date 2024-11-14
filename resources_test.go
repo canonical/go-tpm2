@@ -81,22 +81,22 @@ func (s *resourcesSuite) TestNewResourceContextNV(c *C) {
 	c.Check(rc2.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, &pub)
 }
 
-func (s *resourcesSuite) testNewResourceContextUnavailable(c *C, handle Handle) {
+func (s *resourcesSuite) testNewResourceContextUnavailable(c *C, handle Handle, mainErr error) {
 	rc, err := s.TPM.NewResourceContext(handle)
 	c.Check(rc, IsNil)
-	c.Check(err, DeepEquals, ResourceUnavailableError{handle})
+	c.Check(err, DeepEquals, NewResourceUnavailableError(handle, mainErr))
 }
 
 func (s *resourcesSuite) TestNewResourceContextUnavailableTransient(c *C) {
-	s.testNewResourceContextUnavailable(c, 0x80000000)
+	s.testNewResourceContextUnavailable(c, 0x80000000, &TPMWarning{Command: CommandReadPublic, Code: WarningReferenceH0})
 }
 
 func (s *resourcesSuite) TestNewResourceContextUnavailablePersistent(c *C) {
-	s.testNewResourceContextUnavailable(c, 0x8100ff00)
+	s.testNewResourceContextUnavailable(c, 0x8100ff00, &TPMHandleError{TPMError: &TPMError{Command: CommandReadPublic, Code: ErrorHandle}, Index: 1})
 }
 
 func (s *resourcesSuite) TestNewResourceContextUnavailableNV(c *C) {
-	s.testNewResourceContextUnavailable(c, 0x018100ff)
+	s.testNewResourceContextUnavailable(c, 0x018100ff, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
 }
 
 func (s *resourcesSuite) TestNewResourceContextErrorsForWrongType(c *C) {
