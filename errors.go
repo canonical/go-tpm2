@@ -13,10 +13,14 @@ import (
 const (
 	// AnyCommandCode is used to match any command code when using IsTPMError,
 	// IsTPMHandleError, IsTPMParameterError, IsTPMSessionError and IsTPMWarning.
+	// As this sets the reserved bits, this can always be distringuished from a
+	// valid command code.
 	AnyCommandCode CommandCode = 0xc0000000
 
 	// AnyErrorCode is used to match any error code when using IsTPMError,
-	// IsTPMHandleError, IsTPMParameterError and IsTPMSessionError.
+	// IsTPMHandleError, IsTPMParameterError and IsTPMSessionError. As this
+	// is beyond the value of any error code, it can always be distinguished from
+	// a valid error code.
 	AnyErrorCode ErrorCode = 0xff
 
 	// AnyHandle is used to match any handle when using IsResourceUnavailableError.
@@ -31,8 +35,15 @@ const (
 	// AnySessionIndex is used to match any session when using IsTPMSessionError.
 	AnySessionIndex int = -1
 
-	// AnyWarningCode is used to match any warning code when using IsTPMWarning.
+	// AnyWarningCode is used to match any warning code when using IsTPMWarning. As this
+	// is beyond the value of any warning code, it can always be distinguished from a valid
+	// warning code.
 	AnyWarningCode WarningCode = 0xff
+
+	// AnyVendorResponseCode is used to match any response code when using IsTPMVendorError.
+	// As bit 10 is set, this is always an invalid vendor code so can be distinguished from
+	// a valid vendor code.
+	AnyVendorResponseCode ResponseCode = 0x900
 )
 
 // ResourceUnavailableError is returned from [TPMContext.NewResourceContext] if it is called with
@@ -40,14 +51,19 @@ const (
 // because the resource doesn't exist on the TPM, or it lives within a hierarchy that is disabled.
 type ResourceUnavailableError struct {
 	Handle Handle
+	err    error
 }
 
-func (e ResourceUnavailableError) Error() string {
+func (e *ResourceUnavailableError) Error() string {
 	return fmt.Sprintf("a resource at handle 0x%08x is not available on the TPM", e.Handle)
 }
 
-func (e ResourceUnavailableError) Is(target error) bool {
-	t, ok := target.(ResourceUnavailableError)
+func (e *ResourceUnavailableError) Unwrap() error {
+	return e.err
+}
+
+func (e *ResourceUnavailableError) Is(target error) bool {
+	t, ok := target.(*ResourceUnavailableError)
 	if !ok {
 		return false
 	}
@@ -131,6 +147,10 @@ type TPMVendorError struct {
 	Code    ResponseCode // Response code
 }
 
+func (e *TPMVendorError) CommandCode() CommandCode {
+	return e.Command
+}
+
 // ResponseCode returns a TPM response code for this error.
 // It will panic if it cannot be converted to a valid vendor error response code.
 func (e *TPMVendorError) ResponseCode() ResponseCode {
@@ -142,6 +162,14 @@ func (e *TPMVendorError) ResponseCode() ResponseCode {
 
 func (e *TPMVendorError) Error() string {
 	return fmt.Sprintf("TPM returned a vendor defined error whilst executing command %s: 0x%08x", e.Command, e.Code)
+}
+
+func (e *TPMVendorError) Is(target error) bool {
+	t, ok := target.(*TPMVendorError)
+	if !ok {
+		return false
+	}
+	return (t.Code == AnyVendorResponseCode || t.Code == e.Code) && (t.Command == AnyCommandCode || t.Command == e.Command)
 }
 
 // WarningCode represents a TPM warning. These are TCG defined format 0 response codes with the
@@ -209,6 +237,10 @@ const (
 type TPMWarning struct {
 	Command CommandCode // Command code associated with this error
 	Code    WarningCode // Warning code
+}
+
+func (e *TPMWarning) CommandCode() CommandCode {
+	return e.Command
 }
 
 // ResponseCode returns a TPM response code for this error.
@@ -492,6 +524,10 @@ type TPMErrorBadTag struct {
 	Command CommandCode
 }
 
+func (e *TPMErrorBadTag) CommandCode() CommandCode {
+	return e.Command
+}
+
 // ResponseCode returns a TPM response code for this error.
 func (TPMErrorBadTag) ResponseCode() ResponseCode {
 	return ResponseBadTag
@@ -506,6 +542,10 @@ func (e *TPMErrorBadTag) Error() string {
 type TPMError struct {
 	Command CommandCode // Command code associated with this error
 	Code    ErrorCode   // Error code
+}
+
+func (e *TPMError) CommandCode() CommandCode {
+	return e.Command
 }
 
 // ResponseCode returns a TPM response code for this error.
@@ -672,7 +712,7 @@ func (e *TPMHandleError) Unwrap() error {
 // IsResourceUnavailableError indicates whether an error is a [ResourceUnavailableError] with the
 // specified handle. To test for any handle, use [AnyHandle].
 func IsResourceUnavailableError(err error, handle Handle) bool {
-	return errors.Is(err, ResourceUnavailableError{Handle: handle})
+	return errors.Is(err, &ResourceUnavailableError{Handle: handle})
 }
 
 // IsTPMError indicates whether the error or any error within its chain is a *[TPMError] with the
@@ -680,6 +720,19 @@ func IsResourceUnavailableError(err error, handle Handle) bool {
 // for any command code, use [AnyCommandCode].
 func IsTPMError(err error, code ErrorCode, command CommandCode) bool {
 	return errors.Is(err, &TPMError{Command: command, Code: code})
+}
+
+// AsTPMError returns a TPMError if the supplied error is one or any within its chain is.
+// It will only return a TPMError if the supplied parameters match - see IsTPMError for
+// how this works.
+func AsTPMError(err error, code ErrorCode, command CommandCode) *TPMError {
+	var outErr *TPMError
+	if errors.As(err, &outErr) {
+		if IsTPMError(outErr, code, command) {
+			return outErr
+		}
+	}
+	return nil
 }
 
 // IsTPMHandleError indicates whether the error or any error within its chain is a
@@ -690,12 +743,38 @@ func IsTPMHandleError(err error, code ErrorCode, command CommandCode, handle int
 	return errors.Is(err, &TPMHandleError{TPMError: &TPMError{Command: command, Code: code}, Index: handle})
 }
 
+// AsTPMHandleError returns a TPMHandleError if the supplied error is one or any within its
+// chain is. It will only return a TPMHandleError if the supplied parameters match - see
+// IsTPMHandleError for how this works.
+func AsTPMHandleError(err error, code ErrorCode, command CommandCode, handle int) *TPMHandleError {
+	var outErr *TPMHandleError
+	if errors.As(err, &outErr) {
+		if IsTPMHandleError(outErr, code, command, handle) {
+			return outErr
+		}
+	}
+	return nil
+}
+
 // IsTPMParameterError indicates whether the error or any error within its chain is a
 // *[TPMParameterError] with the specified [ErrorCode], [CommandCode] and parameter index. To test
 // for any error code, use [AnyErrorCode]. To test for any command code, use [AnyCommandCode]. To
 // test for any parameter index, use [AnyParameterIndex].
 func IsTPMParameterError(err error, code ErrorCode, command CommandCode, param int) bool {
 	return errors.Is(err, &TPMParameterError{TPMError: &TPMError{Command: command, Code: code}, Index: param})
+}
+
+// AsTPMParameterError returns a TPMParameterError if the supplied error is one or any within its
+// chain is. It will only return a TPMParameterError if the supplied parameters match - see
+// IsTPMParameterError for how this works.
+func AsTPMParameterError(err error, code ErrorCode, command CommandCode, handle int) *TPMParameterError {
+	var outErr *TPMParameterError
+	if errors.As(err, &outErr) {
+		if IsTPMParameterError(outErr, code, command, handle) {
+			return outErr
+		}
+	}
+	return nil
 }
 
 // IsTPMSessionError indicates whether the error or any error within its chain is a
@@ -706,11 +785,58 @@ func IsTPMSessionError(err error, code ErrorCode, command CommandCode, session i
 	return errors.Is(err, &TPMSessionError{TPMError: &TPMError{Command: command, Code: code}, Index: session})
 }
 
+// AsTPMSessionError returns a TPMSessionError if the supplied error is one or any within its
+// chain is. It will only return a TPMSessionError if the supplied parameters match - see
+// IsTPMSessionError for how this works.
+func AsTPMSessionError(err error, code ErrorCode, command CommandCode, handle int) *TPMSessionError {
+	var outErr *TPMSessionError
+	if errors.As(err, &outErr) {
+		if IsTPMSessionError(outErr, code, command, handle) {
+			return outErr
+		}
+	}
+	return nil
+}
+
 // IsTPMWarning indicates whether the error or any error within its chain is a *[TPMWarning] with
 // the specified [WarningCode] and [CommandCode]. To test for any warning code, use
 // [AnyWarningCode]. To test for any command code, use [AnyCommandCode].
 func IsTPMWarning(err error, code WarningCode, command CommandCode) bool {
 	return errors.Is(err, &TPMWarning{Command: command, Code: code})
+}
+
+// AsTPMWarningError returns a TPMWarning if the supplied error is one or any within its
+// chain is. It will only return a TPMWarning if the supplied parameters match - see
+// IsTPMWarning for how this works.
+func AsTPMWarning(err error, code WarningCode, command CommandCode) *TPMWarning {
+	var outErr *TPMWarning
+	if errors.As(err, &outErr) {
+		if IsTPMWarning(outErr, code, command) {
+			return outErr
+		}
+	}
+	return nil
+}
+
+// IsTPMVendorError indicates whether the error or any error within its chain is a
+// *[TPMVendorError] with the specified [ResponseCode] and [CommandCode]. To test for
+// any response code, use [AnyVendorResponseCode]. To test for any command code, use
+// [AnyCommandCode].
+func IsTPMVendorError(err error, rc ResponseCode, command CommandCode) bool {
+	return errors.Is(err, &TPMVendorError{Command: command, Code: rc})
+}
+
+// AsTPMVendorError returns a TPMVendorError if the supplied error is one or any within
+// its chainis. It wil only return a TPMVendorError if the supplied parameters match - see
+// IsTPMVendorError for how this works.
+func AsTPMVendorError(err error, rc ResponseCode, command CommandCode) *TPMVendorError {
+	var outErr *TPMVendorError
+	if errors.As(err, &outErr) {
+		if IsTPMVendorError(outErr, rc, command) {
+			return outErr
+		}
+	}
+	return nil
 }
 
 // InvalidResponseCode is returned from [DecodeResponseCode] and any [TPMContext] method that

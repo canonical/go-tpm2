@@ -84,7 +84,7 @@ func (s *resourcesSuite) TestNewResourceContextNV(c *C) {
 func (s *resourcesSuite) testNewResourceContextUnavailable(c *C, handle Handle) {
 	rc, err := s.TPM.NewResourceContext(handle)
 	c.Check(rc, IsNil)
-	c.Check(err, DeepEquals, ResourceUnavailableError{handle})
+	c.Check(err, DeepEquals, NewResourceUnavailableError(handle, err))
 }
 
 func (s *resourcesSuite) TestNewResourceContextUnavailableTransient(c *C) {
