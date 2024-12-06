@@ -677,7 +677,7 @@ func (l PCRSelectionList) MustSort() (out PCRSelectionList) {
 // Merge will merge the PCR selections specified by l and r together and
 // return a new set of PCR selections which contains a combination of both.
 // For each PCR found in r that isn't found in l, it will be added to the
-// first occurence of the corresponding PCR bank found in l if that exists,
+// last occurence of the corresponding PCR bank found in l if that exists,
 // or otherwise a selection for that PCR bank will be appended to the result.
 //
 // This will return an error if either selection list cannot be marshalled
@@ -714,10 +714,8 @@ func (l PCRSelectionList) Merge(r PCRSelectionList) (out PCRSelectionList, err e
 				panic(err)
 			}
 
-			if dsti == -1 {
-				dsti = i
-				dstbmp = lbmp
-			}
+			dsti = i
+			dstbmp = lbmp
 
 			// Avoid duplicated PCRs by clearing any in this source selection
 			// that exist in any selection in the destination list.

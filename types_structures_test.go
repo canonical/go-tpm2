@@ -374,8 +374,8 @@ func (s *typesStructuresSuite) TestPCRSelectionListMerge5(c *C) {
 	}
 	y := PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{3, 4, 2, 7}}}
 	expected := PCRSelectionList{
-		{Hash: HashAlgorithmSHA256, Select: []int{2, 4, 5, 6, 7}},
-		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 3}},
+		{Hash: HashAlgorithmSHA256, Select: []int{2, 5, 6}},
+		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 3, 4, 7}},
 	}
 	merged, err := x.Merge(y)
 	c.Check(err, IsNil)
