@@ -49,18 +49,19 @@ func (b *commandBuffer) Write(data []byte) (n int, err error) {
 		return n, nil
 	}
 
+	// We have enough bytes. Clear the buffer on return
+	defer func() { b.buf = nil }()
+
 	// Send the command
 	cmd := b.buf[:int(hdr.CommandSize)]
-	remaining := b.buf[int(hdr.CommandSize):]
-	b.buf = nil
-
+	remaining := len(b.buf[int(hdr.CommandSize):])
 	if _, err := b.w.Write(cmd); err != nil {
 		return n, err
 	}
 
-	if len(remaining) > 0 {
+	if remaining > 0 {
 		// Discard excess bytes and return an appropriate error
-		return n, io.ErrShortWrite
+		return n - remaining, io.ErrShortWrite
 	}
 
 	return n, nil

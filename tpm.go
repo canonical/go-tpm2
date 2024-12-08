@@ -271,7 +271,7 @@ type tpmDeviceProperties struct {
 // these are for sessions that don't provide authorization for a corresponding TPM resource. These
 // sessions may be used for the purposes of session based parameter encryption or command auditing.
 //
-// TPMContext is not safe to use concurrently from multiple goroutines.
+// TPMContext is not safe to use concurrently from multiple goroutines, unless specified otherwise.
 type TPMContext struct {
 	device             TPMDevice
 	transport          Transport
@@ -280,7 +280,8 @@ type TPMContext struct {
 	execContext        execContext
 }
 
-// Close calls Close on the transmission interface.
+// Close calls Close on the transmission interface. This can be called on any goroutine, even if
+// a command is in progress on another goroutine.
 func (t *TPMContext) Close() error {
 	if err := t.transport.Close(); err != nil {
 		return &TransportError{"close", err}

@@ -237,7 +237,10 @@ type retrierTransport struct {
 }
 
 // NewRetrierTransport returns a new transport that resubmits commands on certain
-// errors, which is necessary for transports that don't already do this.
+// errors, which is necessary for transports that don't already do this. This
+// functionality isn't implemented in the public API because some transports already
+// support automatic command resubmission - the linux character device being one of
+// them.
 func NewRetrierTransport(transport tpm2.Transport, params RetryParams) tpm2.Transport {
 	// Construct the write channel
 	wr, ww := io.Pipe()
