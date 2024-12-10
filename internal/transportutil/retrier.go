@@ -40,19 +40,19 @@ type retrierLoop struct {
 
 	tomb *tomb.Tomb // tracker for goroutines (shared with retrierTransport)
 
-	r    io.Reader    // reader from public io.Writer
-	w    io.Writer    // writer to public io.Reader
-	wErr chan<- error // writer of transport errors to public io.Reader, and used to insert boundaries between responses.
+	r         io.Reader               // command channel from public io.Writer
+	w         io.Writer               // response channel to io.Reader
+	rspResult transportResultSendChan // response channel results to public io.Reader
 }
 
-func newRetrierLoop(params *RetryParams, transport tpm2.Transport, tomb *tomb.Tomb, r io.Reader, w io.Writer, wErr chan<- error) *retrierLoop {
+func newRetrierLoop(params *RetryParams, transport tpm2.Transport, tomb *tomb.Tomb, r io.Reader, w io.Writer, rspResult transportResultSendChan) *retrierLoop {
 	return &retrierLoop{
 		params:    *params,
 		transport: transport,
 		tomb:      tomb,
 		r:         r,
 		w:         w,
-		wErr:      wErr,
+		rspResult: rspResult,
 	}
 }
 
@@ -169,35 +169,24 @@ func (l *retrierLoop) run() (err error) {
 			// We're closing down, so just propagate this error.
 			return err
 		case err != nil:
-			// Command dispatch to the underlying transport failed, so send the error to the public io.Reader
-			// on the dedicated read error channel.
+			// Command dispatch failed in some way - we don't distinguish between transport errors related to
+			// the command or the response due to the retry logic - we treat errors as being related to the
+			// response, so send the error to the public io.Reader.
 			select {
-			case l.wErr <- err: // This is a blocking write.
+			case l.rspResult <- transportResult{n: 0, err: err}: // This is a blocking write.
 			case <-l.tomb.Dying():
 				// A close has been requested, so unblock and exit early with the command error.
 				return err
 			}
 		default:
 			// Command was dispatched to the underlying transport successfully and we already have a full
-			// response. Send a nil error to the public io.Reader on the dedicated read error channel first,
-			// to unblock it.
+			// response. Send information about the results of the read from the transport to the public
+			// io.Reader to unblock it.
 			select {
-			case l.wErr <- nil: // This is a blocking write, and will unblock the public io.Reader to leave it waiting for the response size.
+			case l.rspResult <- transportResult{n: len(rsp), err: nil}: // This is a blocking write.
 			case <-l.tomb.Dying():
 				// A close has been requested, so unblock and exit early.
 				return tomb.ErrDying
-			}
-
-			// Send the response size to the public io.Reader now
-			err := binary.Write(l.w, binary.LittleEndian, int64(len(rsp)))
-			switch {
-			case errors.Is(err, io.ErrClosedPipe):
-				// The read end was closed from the public io.Closer, treat
-				// this as a normal termination.
-				return nil
-			case err != nil:
-				// Unexpected error
-				return err
 			}
 
 			if !l.tomb.Alive() {
@@ -206,8 +195,8 @@ func (l *retrierLoop) run() (err error) {
 				return tomb.ErrDying
 			}
 
-			// Copy the whole resonse to the public io.Reader, which uses the received size to create a
-			// temporary io.LimitedReader.
+			// Copy the whole resonse to the public io.Reader, which uses the received transportResult
+			// to create a temporary io.LimitedReader.
 			_, err = io.Copy(l.w, bytes.NewReader(rsp))
 			switch {
 			case errors.Is(err, io.ErrClosedPipe):
@@ -227,20 +216,33 @@ func (l *retrierLoop) run() (err error) {
 type retrierTransport struct {
 	tomb *tomb.Tomb // tracker for goroutines
 
-	wc                  io.WriteCloser // write channel from public io.Writer to retry routine
-	rc                  io.ReadCloser  // read channel to public io.Reader from retry routine
-	rErr                <-chan error   // read errors, sent from retry routine to io.Reader
-	transportCloserOnce sync.Once      // ensures we only close the underlying transport once.
-	transportCloser     io.Closer      // the closer implementation for the underlying transport.
+	wc        io.WriteCloser          // command channel to retry routine.
+	rc        io.ReadCloser           // response channel from retry routine.
+	rspResult transportResultRecvChan // response channel results
+
+	transportCloserOnce sync.Once // ensures we only close the underlying transport once.
+	transportCloser     io.Closer // the closer implementation for the underlying transport.
 
 	current io.Reader // current response packet.
 }
 
 // NewRetrierTransport returns a new transport that resubmits commands on certain
 // errors, which is necessary for transports that don't already do this. This
-// functionality isn't implemented in the public API because some transports already
-// support automatic command resubmission - the linux character device being one of
-// them.
+// functionality isn't implemented in the public [tpm2.TPMContext] API because some
+// transports already support automatic command resubmission - the linux character
+// device being one of them.
+//
+// The returned transport expects to only see TPM command and response packets. It will
+// fail if any other type of packet is sent through it (eg, packets that have been
+// encapsulated for a specific transport).
+//
+// The supplied transport must implement partial read support for the [io.Reader] side,
+// as described in the documentation for [tpm2.Transport]. The [io.Writer] part will
+// only ever receive commands in a single write call.
+//
+// The [io.Reader] part of the returned transport supports partial reads. The [io.Writer]
+// part of the returned transport supports a command being split across multiple writes,
+// as described in the documentation for [tpm2.Transport].
 func NewRetrierTransport(transport tpm2.Transport, params RetryParams) tpm2.Transport {
 	// Construct the write channel
 	wr, ww := io.Pipe()
@@ -252,14 +254,15 @@ func NewRetrierTransport(transport tpm2.Transport, params RetryParams) tpm2.Tran
 	// rr is read by the public io.Reader
 	// rw is written to from the retry routine
 
-	// Construct a channel to send transport errors to the public io.Reader.
-	rErr := make(chan error)
+	// Construct a channel to send the result of the Read from the underlying
+	// transport to the public io.Reader
+	rspResult := make(transportResultChan)
 
 	tmb := new(tomb.Tomb)
 
 	// Run the retry routine
 	tmb.Go(func() error {
-		loop := newRetrierLoop(&params, transport, tmb, wr, rw, rErr)
+		loop := newRetrierLoop(&params, transport, tmb, wr, rw, rspResult)
 		err := loop.run()
 
 		// We might exit for reasons other than a call via the public
@@ -275,7 +278,7 @@ func NewRetrierTransport(transport tpm2.Transport, params RetryParams) tpm2.Tran
 		tomb:            tmb,
 		wc:              ww,
 		rc:              rr,
-		rErr:            rErr,
+		rspResult:       rspResult,
 		transportCloser: transport,
 	}
 }
@@ -283,27 +286,23 @@ func NewRetrierTransport(transport tpm2.Transport, params RetryParams) tpm2.Tran
 func (t *retrierTransport) Read(data []byte) (int, error) {
 	for {
 		if t.current == nil {
+			var rspLen int
 			// Wait for the next response packet, or an error.
 			select {
+			case rspResult := <-t.rspResult:
+				if rspResult.err != nil {
+					// An error was received. The retry loop doesn't mix errors
+					// with n > 0, so just return the error.
+					return 0, rspResult.err
+				}
+				rspLen = rspResult.n
 			case <-t.tomb.Dying():
 				// A close has been requested, so just return io.EOF.
 				return 0, io.EOF
-			case err := <-t.rErr:
-				if err != nil {
-					// An error was received, so return that to the caller.
-					return 0, err
-				}
 			}
 
-			// We've read a nil error so there is a pending response. The first 8
-			// bytes is a int64 indicating the length.
-			var rLen int64
-			if err := binary.Read(t.rc, binary.LittleEndian, &rLen); err != nil {
-				return 0, err
-			}
-
-			// Create a limited reader of the length we just read.
-			t.current = io.LimitReader(t.rc, rLen)
+			// Create a limited reader for the response
+			t.current = io.LimitReader(t.rc, int64(rspLen))
 		}
 
 		n, err := t.current.Read(data)

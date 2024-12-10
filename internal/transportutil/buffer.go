@@ -19,6 +19,11 @@ type commandBuffer struct {
 // BufferCommands buffers command packets written to the returned writer and
 // writes complete packets to the supplied writer in a single write. The
 // maxCommandSize argument defines the maximum size of a command.
+//
+// The returned io.Writer only supports TPM command packets. It will fail if
+// any other type of packet is sent through it (eg, packets that have been
+// encapsulated for a specific transport), because it depends on decoding the
+// command header.
 func BufferCommands(w io.Writer, maxCommandSize uint32) io.Writer {
 	return &commandBuffer{w: w, maxCommandSize: maxCommandSize}
 }
@@ -77,6 +82,10 @@ type responseBuffer struct {
 // in a single read and makes them available to the returned reader for partial
 // reading. The maxResponseSize argument defines the size of the read on the
 // supplied reader.
+//
+// The supplied reader will be passed a buffer of size maxResponseSize. It must
+// return a complete response packet when ready - it must not block waiting to
+// fill the supplied buffer.
 func BufferResponses(r io.Reader, maxResponseSize uint32) io.Reader {
 	return &responseBuffer{r: r, maxResponseSize: maxResponseSize}
 }
