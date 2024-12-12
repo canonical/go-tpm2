@@ -16,48 +16,61 @@ type commandBuffer struct {
 	buf            []byte
 }
 
-// BufferCommands buffers command packets written to the returned writer and
-// writes complete packets to the supplied writer in a single write. The
-// maxCommandSize argument defines the maximum size of a command.
+// BufferCommands buffers writes written to the returned io.Writer and
+// writes complete commnd packets to the supplied io.Writer in a single
+// write. The maxCommandSize argument defines the maximum size of a
+// command. If the commandSize field of a command header indicates the
+// command packet size will be larger than maxCommandSize, an error will
+// be returned.
+//
+// If the supplied io.Writer returns an error on submission of a command
+// packet, the entire packet is discarded.
 //
 // The returned io.Writer only supports TPM command packets. It will fail if
 // any other type of packet is sent through it (eg, packets that have been
-// encapsulated for a specific transport), because it depends on decoding the
-// command header.
+// encapsulated for a specific transport), because it depends on being able
+// to decode the command header.
 func BufferCommands(w io.Writer, maxCommandSize uint32) io.Writer {
 	return &commandBuffer{w: w, maxCommandSize: maxCommandSize}
 }
 
 func (b *commandBuffer) Write(data []byte) (n int, err error) {
-	n = len(data)
-	buf := append(b.buf, data...)
+	n = len(data)                 // The size of the buffer passed to us.
+	buf := append(b.buf, data...) // Append the supplied buffer to what we have from previous writes and and store the slice in a temporary variable
 
-	// Try to decode a command header
+	// Try to decode a command header from all of the data we have already.
 	var hdr tpm2.CommandHeader
 	_, err = mu.UnmarshalFromBytes(buf, &hdr)
 	switch {
 	case errors.Is(err, io.ErrUnexpectedEOF):
-		// We don't have a command header yet, so queue the write
+		// We don't have enough bytes for a command header yet. Store the temporary
+		// buffer that we have for the next write.
 		b.buf = buf
 		return n, nil
 	case err != nil:
+		// This is an unexpected error.
 		return 0, fmt.Errorf("cannot decode command header: %w", err)
 	case hdr.CommandSize > b.maxCommandSize:
+		// The decoded command header has an invalid command size.
 		return 0, fmt.Errorf("invalid command size (%d bytes)", hdr.CommandSize)
 	}
 
-	// We have a command header, so queue the write
+	// We have a command header. Save the temporary buffer slice which contains
+	// the current write appended to all previous writes.
 	b.buf = buf
 
 	if len(b.buf) < int(hdr.CommandSize) {
-		// Not enough bytes yet
+		// We don't have enough bytes for a complete command yet, so return
+		// now and wait for more writes.
 		return n, nil
 	}
 
-	// We have enough bytes. Clear the buffer on return
+	// We have enough bytes. Clear the buffer unconditionally on return,
+	// including any error paths where they are encountered.
 	defer func() { b.buf = nil }()
 
-	// Send the command
+	// Send the command to the originally supplied io.Writer in a
+	// single call.
 	cmd := b.buf[:int(hdr.CommandSize)]
 	remaining := len(b.buf[int(hdr.CommandSize):])
 	if _, err := b.w.Write(cmd); err != nil {
@@ -65,10 +78,13 @@ func (b *commandBuffer) Write(data []byte) (n int, err error) {
 	}
 
 	if remaining > 0 {
-		// Discard excess bytes and return an appropriate error
+		// The caller supplied too many bytes for the command. Discard
+		// the excess bytes, adjust n accordingly and return an
+		// appropriate error.
 		return n - remaining, io.ErrShortWrite
 	}
 
+	// Command sending completed successfully.
 	return n, nil
 }
 

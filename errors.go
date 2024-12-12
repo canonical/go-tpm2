@@ -126,7 +126,10 @@ func (e *InvalidAuthResponseError) Error() string {
 type TctiError = TransportError
 
 // TransportError is returned from any [TPMContext] method if the underlying [Transport] returns an error.
-// If this error occurs, the underlying connection will generally be unusable for subsequent commands.
+// If this error occurs, the underlying connection will generally be unusable for subsequent commands, as
+// the TPM and host-side state can become inconsistent. It should be considered a fatal error, requiring
+// the existing connection to be closed and all host-side state to be discarded before re-opening a new
+// connection.
 type TransportError struct {
 	Op  string // The operation that caused the error
 	err error
