@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/internal/transportutil"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/transportutil"
 )
 
 const (
@@ -258,7 +258,7 @@ type platformTransport struct {
 	// can't have 2 consecutive writers.
 	mu sync.Mutex
 
-	conn net.Conn
+	conn net.Conn // The underlying connection.
 }
 
 func newPlatformTransport(conn net.Conn) *platformTransport {
@@ -442,6 +442,9 @@ func (t *tpmMainTransport) Read(data []byte) (int, error) {
 }
 
 func (t *tpmMainTransport) Write(data []byte) (int, error) {
+	if t.expectingResponse {
+		return 0, transportutil.ErrBusy
+	}
 	return t.w.Write(data) // Buffer the commands
 }
 

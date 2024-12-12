@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/canonical/go-tpm2/internal/transportutil"
+	"github.com/canonical/go-tpm2/transportutil"
 )
 
 const (

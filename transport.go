@@ -13,9 +13,19 @@ import (
 // InfiniteTimeout can be used to configure an infinite timeout.
 const InfiniteTimeout = -1 * time.Millisecond
 
-// ErrTimeoutNotSupported indicates that a [Transport] implementation does not support
-// configuring the command timeout.
-var ErrTimeoutNotSupported = errors.New("configurable command timeouts are not supported")
+var (
+	// ErrTimeoutNotSupported indicates that a [Transport] implementation does not support
+	// configuring the command timeout.
+	ErrTimeoutNotSupported = errors.New("configurable command timeouts are not supported")
+
+	// ErrTransportBusy should be returned from calls to Write if a previously
+	// submitted command has not finished or not all of its bytes have
+	// been read back yet.
+	ErrTransportBusy = errors.New("transport is busy")
+
+	// ErrTransportClosed indicates that a transport is closed.
+	ErrTransportClosed = errors.New("transport already closed")
+)
 
 // TCTI represents a communication channel to a TPM implementation.
 //

@@ -13,8 +13,8 @@ import (
 	"os"
 
 	"github.com/canonical/go-tpm2"
-	"github.com/canonical/go-tpm2/internal/transportutil"
 	"github.com/canonical/go-tpm2/mu"
+	"github.com/canonical/go-tpm2/transportutil"
 )
 
 const (

@@ -5,9 +5,12 @@
 package linux
 
 import (
+	"errors"
 	"io"
 	"os"
 	"syscall"
+
+	"github.com/canonical/go-tpm2/transportutil"
 )
 
 // The TPM character device's read and poll implementations are a bit funky, in a way that
@@ -62,9 +65,6 @@ func (f *tpmFile) wrapErr(op string, err error) error {
 	if err == nil || err == io.EOF {
 		return err
 	}
-	if err == errClosed {
-		err = os.ErrClosed
-	}
 	return &os.PathError{
 		Op:   op,
 		Path: f.file.Name(),
@@ -86,7 +86,7 @@ func (f *tpmFile) ReadNonBlocking(data []byte) (n int, err error) {
 	}); err != nil {
 		// The only error that can be returned from this is poll.ErrFileClosing
 		// which is private
-		return 0, f.wrapErr("read", errClosed)
+		return 0, f.wrapErr("read", transportutil.ErrClosed)
 	}
 	return n, f.wrapErr("read", readErr)
 }
@@ -106,7 +106,7 @@ func (f *tpmFile) Read(data []byte) (n int, err error) {
 	}); err != nil {
 		// The only error that can be returned from this is poll.ErrFileClosing
 		// which is private
-		return 0, f.wrapErr("read", errClosed)
+		return 0, f.wrapErr("read", transportutil.ErrClosed)
 	}
 	return n, f.wrapErr("read", readErr)
 }
@@ -126,9 +126,12 @@ func (f *tpmFile) Write(data []byte) (n int, err error) {
 	}); err != nil {
 		// The only error that can be returned from this is poll.ErrFileClosing
 		// which is private
-		return 0, f.wrapErr("write", errClosed)
+		return 0, f.wrapErr("write", transportutil.ErrClosed)
 	}
-	if n < len(data) && writeErr == nil {
+	switch {
+	case errors.Is(writeErr, syscall.Errno(syscall.EBUSY)):
+		writeErr = transportutil.ErrBusy
+	case n < len(data) && writeErr == nil:
 		writeErr = io.ErrShortWrite
 	}
 	return n, f.wrapErr("write", writeErr)

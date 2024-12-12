@@ -6,8 +6,8 @@ import (
 
 	"github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
-	. "github.com/canonical/go-tpm2/internal/transportutil"
 	"github.com/canonical/go-tpm2/mu"
+	. "github.com/canonical/go-tpm2/transportutil"
 	. "gopkg.in/check.v1"
 )
 
