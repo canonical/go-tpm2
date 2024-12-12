@@ -369,24 +369,6 @@ func (t *tpmTransport) recvResponse(last bool, args ...interface{}) (int, error)
 	return mu.UnmarshalFromReader(t.transport, args...)
 }
 
-// commandSender is an implementation of io.Writer that encapsulates a complete TPM
-// command into the simulator wire format and sends them via tpmMainTransport.sendCommand.
-type commandSender struct {
-	transport *tpmMainTransport
-}
-
-func (s *commandSender) Write(data []byte) (int, error) {
-	n, err := s.transport.sendCommand(cmdTPMSendCommand, true, uint8(atomic.LoadUint32(s.transport.locality)&0xff), uint32(len(data)), mu.RawBytes(data))
-	n -= (n - len(data))
-	if n < 0 {
-		n = 0
-	}
-	if n < len(data) && err == nil {
-		err = io.ErrShortWrite
-	}
-	return n, err
-}
-
 // tpmMainTransport is an extension to tpmTransport for handling actual TPM commands.
 // It is used by transportutil.NewRetrierTransport which interacts with it in a retry
 // loop which runs in its own dedicated goroutine.
@@ -397,19 +379,15 @@ type tpmMainTransport struct {
 	tpmTransport
 	locality *uint32 // Locality of commands submitted to the simulator, in numeric form rather than TPMA_LOCALITY
 
-	w io.Writer // For buffering commands
-
 	lr *io.LimitedReader // a io.LimitedReader for the current response
 }
 
 func newTpmMainTransport(transport transportutil.LockableTransport, locality *uint32) *tpmMainTransport {
 	t := newTpmTransport(transport)
-	out := &tpmMainTransport{
+	return &tpmMainTransport{
 		tpmTransport: *t,
 		locality:     locality,
 	}
-	out.w = transportutil.BufferCommands(&commandSender{transport: out}, maxCommandSize)
-	return out
 }
 
 func (t *tpmMainTransport) Read(data []byte) (int, error) {
@@ -445,7 +423,19 @@ func (t *tpmMainTransport) Write(data []byte) (int, error) {
 	if t.expectingResponse {
 		return 0, transportutil.ErrBusy
 	}
-	return t.w.Write(data) // Buffer the commands
+
+	// We're called from the command retrier, which guarantees that commands
+	// are written in a single command, so there's no need for an additional
+	// stage of buffering here - just send what we have.
+	n, err := t.sendCommand(cmdTPMSendCommand, true, uint8(atomic.LoadUint32(t.locality)&0xff), uint32(len(data)), mu.RawBytes(data))
+	n -= (n - len(data))
+	if n < 0 {
+		n = 0
+	}
+	if n < len(data) && err == nil {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }
 
 func (t *tpmMainTransport) Close() error {
