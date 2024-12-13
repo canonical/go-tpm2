@@ -91,7 +91,7 @@ func (b *commandBuffer) Write(data []byte) (n int, err error) {
 type responseBuffer struct {
 	r               io.Reader
 	maxResponseSize uint32
-	rsp             io.Reader
+	rsp             *bytes.Reader
 }
 
 // BufferResponses reads complete response packets from the supplied reader
@@ -118,21 +118,24 @@ func (b *responseBuffer) readNextResponse() error {
 }
 
 func (b *responseBuffer) Read(data []byte) (n int, err error) {
-	for {
-		if b.rsp == nil {
-			if err := b.readNextResponse(); err != nil {
-				return 0, err
-			}
+	if b.rsp == nil {
+		if err := b.readNextResponse(); err != nil {
+			return 0, err
 		}
-
-		n, err = b.rsp.Read(data)
-		if err == io.EOF {
-			b.rsp = nil
-			err = nil
-			if n == 0 {
-				continue
-			}
-		}
-		return n, err
 	}
+
+	n, err = b.rsp.Read(data)
+	if b.rsp.Len() == 0 {
+		// We've read all of the bytes from this response.
+		b.rsp = nil // Make the next call wait for another response.
+
+		if err == io.EOF {
+			// It's possible we could get a io.EOF from the bytes.Reader here, but
+			// tpm2.Transport.Read should never return this unless it will never
+			// return any more bytes (eg, after it's closed). In this case, clear
+			// the error.
+			err = nil
+		}
+	}
+	return n, err
 }
