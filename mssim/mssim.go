@@ -23,12 +23,16 @@ import (
 )
 
 const (
-	cmdPowerOn        uint32 = 1
-	cmdTPMSendCommand uint32 = 8
-	cmdNVOn           uint32 = 11
-	cmdReset          uint32 = 17
-	cmdSessionEnd     uint32 = 20
-	cmdStop           uint32 = 21
+	cmdPowerOn         uint32 = 1
+	cmdHashStart       uint32 = 5
+	cmdHashData        uint32 = 6
+	cmdHashEnd         uint32 = 7
+	cmdTPMSendCommand  uint32 = 8
+	cmdNVOn            uint32 = 11
+	cmdRemoteHandshake uint32 = 15
+	cmdReset           uint32 = 17
+	cmdSessionEnd      uint32 = 20
+	cmdStop            uint32 = 21
 )
 
 const (
@@ -39,6 +43,16 @@ const (
 
 var (
 	DefaultDevice *Device = &Device{port: DefaultPort}
+)
+
+// SimulatorFlags provides information about TPM simulator features.
+type SimulatorFlags uint32
+
+const (
+	SimulatorFlagPlatformAvailable SimulatorFlags = 1 << iota
+	SimulatorFlagUsesTbs
+	SimulatorFlagInRawMode
+	SimulatorFlagSupportsPP
 )
 
 // PlatformCommandError corresponds to an error code in response to a platform command
@@ -181,6 +195,8 @@ type Transport struct {
 	platform *platformTransport // For handling control commands on the platform channel
 
 	locality uint32 // uint32 so we can use atomic primitives. This is the integer locality rather than the TPMA_LOCALITY representation
+
+	hashSequence *HashSequence // the current hash sequence
 }
 
 // Read implements [tpm2.Transport.Read].
@@ -220,12 +236,38 @@ func (t *Transport) Close() (err error) {
 	return err
 }
 
-// Reset submits the reset command on the platform connection, which
-// initiates a reset of the TPM simulator and results in the execution
-// of _TPM_Init().
-func (t *Transport) Reset() error {
+// HashStart begins a hash sequence with the _TPM_Hash_Start command on the TPM
+// connection. If a sequence is already in progress, a _TPM_Hash_End will be sent
+// for that sequence first. Whether this happens before or after TPM2_Startup
+// determines whether it is a H-CRTM sequence or a DRTM sequence.
+func (t *Transport) HashStart() (*HashSequence, error) {
+	if t.hashSequence != nil {
+		if err := t.hashSequence.End(); err != nil {
+			return nil, fmt.Errorf("cannot end current hash sequence: %w", err)
+		}
+	}
+
 	var u32 uint32
-	return t.platform.runCommand(cmdReset, 0, &u32)
+	if err := t.tpm.runCommand(cmdHashStart, 0, &u32); err != nil {
+		return nil, err
+	}
+
+	out := &HashSequence{transport: t}
+	t.hashSequence = out
+	return out, nil
+}
+
+// RemoteHandshake obtains the server version and flags.
+func (t *Transport) RemoteHandshake() (uint32, SimulatorFlags, error) {
+	var (
+		version uint32
+		flags   SimulatorFlags
+		u32     uint32
+	)
+	if err := t.tpm.runCommand(cmdRemoteHandshake, 1, 0, &version, &flags, &u32); err != nil {
+		return 0, 0, err
+	}
+	return version, flags, nil
 }
 
 // Stop submits a stop command on both the TPM command and platform
@@ -241,12 +283,53 @@ func (t *Transport) Stop() (err error) {
 	return err
 }
 
+// initiates a reset of the TPM simulator and results in the execution
+// of _TPM_Init().
+func (t *Transport) Reset() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdReset, 0, &u32)
+}
+
 // SetLocality sets the locality for subsequent commands. The supplied value is
 // the numeric locality rather than the TPMA_LOCALITY representation. It returns the
 // currently set locality. Localities between 5 and 31 are invalid and thebehaviour
 // of the simulator is not defined in this case.
 func (t *Transport) SetLocality(locality uint8) uint8 {
+	// We use atomics here because the locality value is accessed from the
+	// dedicated goroutine that NewRetrierTransport creates to access the transport
+	// supplied to it (in this case, an instance of tpmMainTransport).
 	return uint8(atomic.SwapUint32(&t.locality, uint32(locality)))
+}
+
+// HashSequence corresponds to a H-CRTM or DRTM sequence.
+type HashSequence struct {
+	transport *Transport
+}
+
+// Write writes the supplied bytes to this hash sequence with the _TPM_Hash_Data command.
+func (s *HashSequence) Write(data []byte) error {
+	if s.transport == nil {
+		return errors.New("hash sequence ended")
+	}
+
+	var u32 uint32
+	return s.transport.tpm.runCommand(cmdHashData, 2, uint32(len(data)), mu.Raw(data), &u32)
+}
+
+// End terminates this hash sequence with _TPM_Hash_End. On success,
+// it will no longer be possible to use this sequence.
+func (s *HashSequence) End() error {
+	if s.transport == nil {
+		return errors.New("hash sequence ended")
+	}
+
+	var u32 uint32
+	if err := s.transport.tpm.runCommand(cmdHashEnd, 0, &u32); err != nil {
+		return err
+	}
+	s.transport.hashSequence = nil
+	s.transport = nil
+	return nil
 }
 
 // platformTransport provides a way to send control commands to and receive responses
@@ -367,6 +450,17 @@ func (t *tpmTransport) recvResponse(last bool, args ...interface{}) (int, error)
 	}()
 
 	return mu.UnmarshalFromReader(t.transport, args...)
+}
+
+func (t *tpmTransport) runCommand(cmd uint32, nargs int, args ...interface{}) error {
+	if nargs > len(args) {
+		panic("insufficient command arguments")
+	}
+	if _, err := t.sendCommand(cmd, true, args[:nargs]); err != nil {
+		return err
+	}
+	_, err := t.recvResponse(true, args[nargs:])
+	return err
 }
 
 // tpmMainTransport is an extension to tpmTransport for handling actual TPM commands.
