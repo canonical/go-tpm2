@@ -12,37 +12,12 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/transportutil"
-)
-
-const (
-	cmdPowerOn         uint32 = 1
-	cmdHashStart       uint32 = 5
-	cmdHashData        uint32 = 6
-	cmdHashEnd         uint32 = 7
-	cmdTPMSendCommand  uint32 = 8
-	cmdNVOn            uint32 = 11
-	cmdRemoteHandshake uint32 = 15
-	cmdReset           uint32 = 17
-	cmdSessionEnd      uint32 = 20
-	cmdStop            uint32 = 21
-)
-
-const (
-	DefaultPort uint = 2321
-
-	maxCommandSize = 4096
-)
-
-var (
-	DefaultDevice *Device = &Device{port: DefaultPort}
 )
 
 // SimulatorFlags provides information about TPM simulator features.
@@ -66,119 +41,6 @@ type PlatformCommandError struct {
 
 func (e *PlatformCommandError) Error() string {
 	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
-}
-
-// Device describes a TPM simulator device.
-type Device struct {
-	host string
-	port uint
-}
-
-// Host is the host that the TPM simulator is running on.
-func (d *Device) Host() string {
-	if d.host == "" {
-		return "localhost"
-	}
-	return d.host
-}
-
-// Port is the port number of the TPM simulator's command channel.
-// Its platform channel runs on the next port number.
-func (d *Device) Port() uint {
-	return d.port
-}
-
-func (d *Device) openInternal() (transport *Transport, err error) {
-	tpmAddress := net.JoinHostPort(d.Host(), strconv.FormatUint(uint64(d.Port()), 10))
-	platformAddress := net.JoinHostPort(d.Host(), strconv.FormatUint(uint64(d.Port())+1, 10))
-
-	// Open up the TPM and platform sockets
-	tpm, err := net.Dial("tcp", tpmAddress)
-	if err != nil {
-		return nil, fmt.Errorf("cannot connect to TPM socket: %w", err)
-	}
-
-	platform, err := net.Dial("tcp", platformAddress)
-	if err != nil {
-		tpm.Close()
-		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
-	}
-
-	defer func() {
-		if err == nil {
-			return
-		}
-		switch {
-		case transport != nil: // Once we have a Transport, close it on error
-			transport.Close()
-		default: // Before we have a Transport, close each TCP socket individually on error
-			platform.Close()
-			tpm.Close()
-		}
-	}()
-
-	tmp := new(Transport)
-
-	// Build a threadsafe way to proxy calls to/from the TPM socket. We communicate
-	// with the TPM socket from:
-	// - The dedicated retry loop goroutine in the command retrier, for TPM commands.
-	// - The transport public API on the current goroutine, for control commands.
-	// The supplied TPM connection will be accessed on a dedicated internal goroutine.
-	mux := transportutil.NewMultiplexedTransportManager(tpm)
-
-	// Make a retrier for the main public tpm2.Transport API to communicate TPM
-	// commands with. The retrier communicates with the supplied transport on a
-	// dedicated goroutine.
-	tmp.retrier = transportutil.NewRetrierTransport(
-		newTpmMainTransport(mux.NewTransport(), &tmp.locality),
-		transportutil.RetryParams{
-			MaxRetries:     4,
-			InitialBackoff: 20 * time.Millisecond,
-			BackoffRate:    2,
-		})
-
-	// Early exits from this point should see retrier.Close() being called to
-	// shut down the goroutines it starts.
-
-	// Build another transport for control commands for the TPM socket, used
-	// on the current goroutine
-	tmp.tpm = newTpmTransport(mux.NewTransport())
-
-	// Build a transport for hanlding control commands on the platform socket.
-	tmp.platform = newPlatformTransport(platform)
-
-	transport = tmp
-
-	// Ensure the simulator is powered on and NV is available.
-	var u32 uint32
-	if err := transport.platform.runCommand(cmdPowerOn, 0, &u32); err != nil {
-		return nil, fmt.Errorf("cannot complete power on command on platform channel: %w", err)
-	}
-	if err := transport.platform.runCommand(cmdNVOn, 0, &u32); err != nil {
-		return nil, fmt.Errorf("cannot complete NV on command on plarform channel: %w", err)
-	}
-
-	return transport, nil
-}
-
-// Open implements [tpm2.TPMDevice.Open].
-//
-// The returned transport will automatically retry commands that fail with TPM_RC_RETRY or
-// TPM_RC_YIELDED. It will also retry commands that fail with TPM_RC_TESTING if the command
-// wasn't TPM_CC_SELF_TEST.
-//
-// The returned transport should not be used from more than one goroutine simultaneously.
-//
-// Before returning an open transport, this package will send some platform commands to
-// make sure that the simulator TPM device is on and NV storage is available. If this is
-// already the case, then these commands are no-ops. It does not call TPM2_Startup.
-func (d *Device) Open() (tpm2.Transport, error) {
-	return d.openInternal()
-}
-
-// String implements [fmt.Stringer].
-func (d *Device) String() string {
-	return fmt.Sprintf("mssim device, host=\"%s\", port=%d", d.Host(), d.Port())
 }
 
 // Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2
@@ -281,6 +143,16 @@ func (t *Transport) Stop() (err error) {
 		err = e
 	}
 	return err
+}
+
+func (t *Transport) PowerOff() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdPowerOff, 0, &u32)
+}
+
+func (t *Transport) PowerOn() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdPowerOn, 0, &u32)
 }
 
 // initiates a reset of the TPM simulator and results in the execution
@@ -534,18 +406,6 @@ func (t *tpmMainTransport) Write(data []byte) (int, error) {
 
 func (t *tpmMainTransport) Close() error {
 	return t.transport.Close()
-}
-
-// NewLocalDevice returns a new device structure for the specified port on the
-// local machine. It is safe to use from multiple goroutines simultaneously.
-func NewLocalDevice(port uint) *Device {
-	return &Device{port: port}
-}
-
-// NewDevice returns a new device structure for the specified host and port. It
-// is safe to use from multiple goroutines simultaneously.
-func NewDevice(host string, port uint) *Device {
-	return &Device{host: host, port: port}
 }
 
 // OpenConnection attempts to open a connection to a TPM simulator on the
