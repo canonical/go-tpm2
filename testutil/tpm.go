@@ -854,6 +854,9 @@ func (d *tpmDevice) Open() (tpm2.Transport, error) {
 }
 
 func (d *tpmDevice) String() string {
+	if d.device == nil {
+		return "<nil tpm2.TPMDevice>"
+	}
 	return d.device.String()
 }
 
@@ -977,8 +980,16 @@ type simulatorDevice struct {
 	device *mssim.Device
 }
 
+// WrapSimulatorDevice wraps the supplied simulator device so that transports created by it are wrapped by
+// [WrapTransport].
+func WrapSimulatorDevice(device *mssim.Device) tpm2.TPMDevice {
+	return &simulatorDevice{
+		device: device,
+	}
+}
+
 // NewSimulatorDevice returns a new tpm2.TPMDevice that wraps a *[mssim.Device] for the TPM simulator on the port
-// specified by the MssimPort variable. If TPMBackedn is not TPMBackendMssim, then the device will return [ErrSkipNoTPM]
+// specified by the MssimPort variable. If TPMBackend is not TPMBackendMssim, then the device will return [ErrSkipNoTPM]
 // instead of a transport.
 func NewSimulatorDevice() tpm2.TPMDevice {
 	var device *mssim.Device
@@ -1003,6 +1014,9 @@ func (d *simulatorDevice) Open() (tpm2.Transport, error) {
 }
 
 func (d *simulatorDevice) String() string {
+	if d.device == nil {
+		return "<nil tpm2.TPMDevice>"
+	}
 	return d.device.String()
 }
 
