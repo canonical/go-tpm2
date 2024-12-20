@@ -5,6 +5,7 @@ package mssim
 
 const (
 	cmdPowerOn         uint32 = 1
+	cmdPowerOff        uint32 = 2
 	cmdHashStart       uint32 = 5
 	cmdHashData        uint32 = 6
 	cmdHashEnd         uint32 = 7

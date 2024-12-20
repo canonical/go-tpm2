@@ -145,17 +145,22 @@ func (t *Transport) Stop() (err error) {
 	return err
 }
 
+// PowerOff puts the simulator into a power off state. It has no effect if the simulator
+// is already in a power off state.
 func (t *Transport) PowerOff() error {
 	var u32 uint32
 	return t.platform.runCommand(cmdPowerOff, 0, &u32)
 }
 
+// PowerOn puts the simulator into a power on state. It has no effect if the simulator
+// is already in a power off state. If the simulator was in a power off state, it results
+// in the execution of _TPM_Init().
 func (t *Transport) PowerOn() error {
 	var u32 uint32
 	return t.platform.runCommand(cmdPowerOn, 0, &u32)
 }
 
-// initiates a reset of the TPM simulator and results in the execution
+// Reset initiates a reset of the TPM simulator and results in the execution
 // of _TPM_Init().
 func (t *Transport) Reset() error {
 	var u32 uint32

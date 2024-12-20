@@ -17,8 +17,12 @@ const (
 	DefaultPort uint = 2321
 )
 
+func defaultDevice() *Device {
+	return NewLocalDevice(DefaultPort)
+}
+
 var (
-	DefaultDevice *Device = &Device{port: DefaultPort}
+	DefaultDevice *Device = defaultDevice()
 )
 
 type deviceAddr struct {
