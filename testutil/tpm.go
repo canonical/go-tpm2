@@ -173,7 +173,14 @@ var (
 
 	wrapMssimTransport = WrapTransport
 
+	// ErrSkipNoTPM is expected to be returned from tpm2.TPMDevice implementations
+	// in order to cause a test to be skipped if no TPM connection is available.
 	ErrSkipNoTPM = errors.New("no TPM configured for the test")
+
+	// ErrNoTPMDevice can be returned from tpm2.TPMDevice implementations to indicate that
+	// no TPM is available, but this will generally cause a test to fail rather than
+	// be skipped.
+	ErrNoTPMDevice = errors.New("no TPM device available")
 )
 
 type tpmBackendFlag TPMBackendType
@@ -647,6 +654,7 @@ type TransportBackedDevice struct {
 	mu        sync.Mutex
 	transport *Transport
 	closable  bool
+	maxOpen   int
 	opened    int
 }
 
@@ -665,16 +673,20 @@ type TransportBackedDevice struct {
 // but calling Close on any returned transport will not actually close the
 // underlying transport - it will mark that specific one as closed.
 //
+// The maxOpen argument can limit the number of open transports. If set to
+// a value <= 0, then there is no limit.
+//
 // Consider that whilst [tpm2.TPMDevice] implementations can generally be
 // used by more than one goroutine, each opened [tpm2.Transport] is only
 // safe to use from a single goroutine, and this device returns multiple
 // pointers to the same transport.
 //
 // Note that this device does not work with [OpenTPMDevice] or [OpenTPMDeviceT].
-func NewTransportBackedDevice(transport *Transport, closable bool) *TransportBackedDevice {
+func NewTransportBackedDevice(transport *Transport, closable bool, maxOpen int) *TransportBackedDevice {
 	return &TransportBackedDevice{
 		transport: transport,
 		closable:  closable,
+		maxOpen:   maxOpen,
 	}
 }
 
@@ -721,6 +733,10 @@ func (t *duplicateTransport) Unwrap() tpm2.Transport {
 func (d *TransportBackedDevice) Open() (tpm2.Transport, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	if d.maxOpen > 0 && d.opened >= d.maxOpen {
+		return nil, ErrNoTPMDevice
+	}
 
 	d.opened += 1
 	return &duplicateTransport{

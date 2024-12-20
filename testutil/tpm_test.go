@@ -17,7 +17,7 @@ type tpmSuite struct {
 var _ = Suite(&tpmSuite{})
 
 func (s *tpmSuite) TestNewTransportBackedDeviceClosable(c *C) {
-	device := NewTransportBackedDevice(s.Transport, true)
+	device := NewTransportBackedDevice(s.Transport, true, -1)
 	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 0)
 
 	transport, err := device.Open()
@@ -41,7 +41,7 @@ func (s *tpmSuite) TestNewTransportBackedDeviceClosable(c *C) {
 }
 
 func (s *tpmSuite) TestNewTransportBackedDeviceNotClosable(c *C) {
-	device := NewTransportBackedDevice(s.Transport, false)
+	device := NewTransportBackedDevice(s.Transport, false, -1)
 	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 0)
 
 	transport, err := device.Open()
@@ -61,7 +61,7 @@ func (s *tpmSuite) TestNewTransportBackedDeviceNotClosable(c *C) {
 }
 
 func (s *tpmSuite) TestNewTransportBackedDeviceMultipleOpen(c *C) {
-	device := NewTransportBackedDevice(s.Transport, false)
+	device := NewTransportBackedDevice(s.Transport, false, 2)
 	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 0)
 
 	transport1, err := device.Open()
@@ -70,6 +70,31 @@ func (s *tpmSuite) TestNewTransportBackedDeviceMultipleOpen(c *C) {
 
 	transport2, err := device.Open()
 	c.Assert(err, IsNil)
+	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 2)
+
+	c.Check(transport1.Close(), IsNil)
+	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 1)
+	c.Check(transport2.Close(), IsNil)
+	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 0)
+
+	// The test fixture will fail if the underlying transport was closed
+	// unexpectedly
+}
+
+func (s *tpmSuite) TestNewTransportBackedDeviceMaxOpen(c *C) {
+	device := NewTransportBackedDevice(s.Transport, false, 2)
+	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 0)
+
+	transport1, err := device.Open()
+	c.Assert(err, IsNil)
+	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 1)
+
+	transport2, err := device.Open()
+	c.Assert(err, IsNil)
+	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 2)
+
+	_, err = device.Open()
+	c.Check(err, Equals, ErrNoTPMDevice)
 	c.Check(device.NumberOpen(), internal_testutil.IntEqual, 2)
 
 	c.Check(transport1.Close(), IsNil)
