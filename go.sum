@@ -1,5 +1,5 @@
-github.com/canonical/go-sp800.108-kdf v0.0.0-20210314145419-a3359f2d21b9 h1:USzKjrfWo/ESzozv2i3OMM7XDgxrZRvaHFrKkIKRtwU=
-github.com/canonical/go-sp800.108-kdf v0.0.0-20210314145419-a3359f2d21b9/go.mod h1:Zrs3YjJr+w51u0R/dyLh/oWt/EcBVdLPCVFYC4daW5s=
+github.com/canonical/go-kbkdf v0.0.0-20250104172618-3b1308f9acf9 h1:Twk1ZSTWRClfGShP16ePf2JIiayqWS4ix1rkAR6baag=
+github.com/canonical/go-kbkdf v0.0.0-20250104172618-3b1308f9acf9/go.mod h1:IneQ5/yQcfPXrGekEXpR6yeea55ZD24N5+kHzeDseOM=
 github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 h1:ZpnhV/YsD2/4cESfV5+Hoeu/iUR3ruzNvZ+yQfO03a0=
 github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2/go.mod h1:bBOAhwG1umN6/6ZUMtDFBMQR8jRg9O75tm9K00oMsK4=
 github.com/kr/pretty v0.2.1 h1:Fmg33tUaq4/8ym9TJN1x7sLJnHVwhP33CNkpYV/7rwI=

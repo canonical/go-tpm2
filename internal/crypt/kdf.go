@@ -9,7 +9,8 @@ import (
 	"crypto"
 	"encoding/binary"
 
-	kdf "github.com/canonical/go-sp800.108-kdf"
+	kbkdf "github.com/canonical/go-kbkdf"
+	"github.com/canonical/go-kbkdf/hmac_prf"
 )
 
 // KDFa performs key derivation using the counter mode described in SP800-108
@@ -21,7 +22,7 @@ func KDFa(hashAlg crypto.Hash, key, label, contextU, contextV []byte, sizeInBits
 	copy(context, contextU)
 	copy(context[len(contextU):], contextV)
 
-	outKey := kdf.CounterModeKey(kdf.NewHMACPRF(hashAlg), key, label, context, uint32(sizeInBits))
+	outKey := kbkdf.CounterModeKey(hmac_prf.From(hashAlg), key, label, context, uint32(sizeInBits))
 
 	if sizeInBits%8 != 0 {
 		outKey[0] &= ((1 << uint(sizeInBits%8)) - 1)

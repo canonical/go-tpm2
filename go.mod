@@ -3,7 +3,7 @@ module github.com/canonical/go-tpm2
 go 1.18
 
 require (
-	github.com/canonical/go-sp800.108-kdf v0.0.0-20210314145419-a3359f2d21b9
+	github.com/canonical/go-kbkdf v0.0.0-20250104172618-3b1308f9acf9
 	github.com/snapcore/snapd v0.0.0-20201005140838-501d14ac146e
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
