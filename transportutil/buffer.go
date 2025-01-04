@@ -16,7 +16,14 @@ type commandBuffer struct {
 	buf            []byte
 }
 
-// BufferCommands buffers writes written to the returned io.Writer and
+type CommandBuffer interface {
+	io.Writer
+
+	// Len is the number of bytes currently in the command buffer.
+	Len() int
+}
+
+// BufferCommands buffers writes written to the returned CommandBuffer and
 // writes complete commnd packets to the supplied io.Writer in a single
 // write. The maxCommandSize argument defines the maximum size of a
 // command. If the commandSize field of a command header indicates the
@@ -26,11 +33,11 @@ type commandBuffer struct {
 // If the supplied io.Writer returns an error on submission of a command
 // packet, the entire packet is discarded.
 //
-// The returned io.Writer only supports TPM command packets. It will fail if
+// The returned CommandBuffer only supports TPM command packets. It will fail if
 // any other type of packet is sent through it (eg, packets that have been
 // encapsulated for a specific transport), because it depends on being able
 // to decode the command header.
-func BufferCommands(w io.Writer, maxCommandSize uint32) io.Writer {
+func BufferCommands(w io.Writer, maxCommandSize uint32) CommandBuffer {
 	return &commandBuffer{w: w, maxCommandSize: maxCommandSize}
 }
 
@@ -88,21 +95,32 @@ func (b *commandBuffer) Write(data []byte) (n int, err error) {
 	return n, nil
 }
 
+func (b *commandBuffer) Len() int {
+	return len(b.buf)
+}
+
 type responseBuffer struct {
 	r               io.Reader
 	maxResponseSize uint32
 	rsp             *bytes.Reader
 }
 
+type ResponseBuffer interface {
+	io.Reader
+
+	// Len is the remaining number of bytes to read.
+	Len() int
+}
+
 // BufferResponses reads complete response packets from the supplied reader
-// in a single read and makes them available to the returned reader for partial
-// reading. The maxResponseSize argument defines the size of the read on the
-// supplied reader.
+// in a single read and makes them available to the returned ResponseBuffer for
+// partial reading. The maxResponseSize argument defines the size of the read on
+// the supplied reader.
 //
 // The supplied reader will be passed a buffer of size maxResponseSize. It must
 // return a complete response packet when ready - it must not block waiting to
 // fill the supplied buffer.
-func BufferResponses(r io.Reader, maxResponseSize uint32) io.Reader {
+func BufferResponses(r io.Reader, maxResponseSize uint32) ResponseBuffer {
 	return &responseBuffer{r: r, maxResponseSize: maxResponseSize}
 }
 
@@ -138,4 +156,11 @@ func (b *responseBuffer) Read(data []byte) (n int, err error) {
 		}
 	}
 	return n, err
+}
+
+func (b *responseBuffer) Len() int {
+	if b.rsp == nil {
+		return 0
+	}
+	return b.rsp.Len()
 }

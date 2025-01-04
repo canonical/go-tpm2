@@ -5,9 +5,12 @@
 package linux
 
 import (
+	"errors"
 	"io"
 	"os"
+	"syscall"
 
+	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/transportutil"
 )
 
@@ -28,14 +31,14 @@ type Tcti = Transport
 // Transport represents a connection to a Linux TPM character device. It is not intended to be
 // used from multiple goroutines simultaneously.
 type Transport struct {
-	r       io.Reader
+	r       transportutil.ResponseBuffer
 	w       io.Writer
 	closer  io.Closer
 	statter fileStatter
 }
 
 func newTransport(file *tpmFile, partialReadSupported bool, maxResponseSize uint32) *Transport {
-	var r io.Reader = file
+	var r transportutil.ResponseBuffer = file
 	if !partialReadSupported {
 		r = transportutil.BufferResponses(r, maxResponseSize)
 	}
@@ -54,10 +57,27 @@ func (d *Transport) Read(data []byte) (int, error) {
 
 // Write implmements [tpm2.Transport].
 func (d *Transport) Write(data []byte) (int, error) {
-	return d.w.Write(data)
+	if d.r.Len() > 0 {
+		return 0, tpm2.ErrTransportBusy
+	}
+	n, err := d.w.Write(data)
+	switch {
+	case errors.Is(err, syscall.Errno(syscall.EBUSY)):
+		return 0, tpm2.ErrTransportBusy
+	case err != nil:
+		return 0, err
+	default:
+		return n, nil
+	}
 }
 
 // Close implements [tpm2.Transport.Close].
 func (d *Transport) Close() error {
-	return d.closer.Close()
+	if err := d.closer.Close(); err != nil {
+		if errors.Is(err, os.ErrClosed) {
+			return tpm2.ErrTransportClosed
+		}
+		return err
+	}
+	return nil
 }

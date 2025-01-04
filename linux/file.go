@@ -144,3 +144,7 @@ func (f *tpmFile) Close() error {
 func (f *tpmFile) Stat() (os.FileInfo, error) {
 	return f.file.Stat()
 }
+
+func (f *tpmFile) Len() int {
+	return 0
+}
