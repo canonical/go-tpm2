@@ -392,9 +392,14 @@ func (t *TPMContext) SetCommandTimeout(timeout time.Duration) error {
 	return ErrTimeoutNotSupported
 }
 
-// Transport returns the underlying transmission channel for this context.
+// Transport returns the underlying transport for this context.
 func (t *TPMContext) Transport() Transport {
 	return t.transport
+}
+
+// Device returns the device that the transport for this context was created from.
+func (t *TPMContext) Device() TPMDevice {
+	return t.device
 }
 
 // InitProperties executes one or more TPM2_GetCapability commands to initialize properties used
@@ -470,7 +475,12 @@ type dummyTPMDevice struct {
 }
 
 func (d *dummyTPMDevice) Open() (Transport, error) {
-	return d.transport, nil
+	transport := d.transport
+	if transport == nil {
+		return nil, errors.New("cannot open transport from dummy device")
+	}
+	d.transport = nil
+	return transport, nil
 }
 
 func (d *dummyTPMDevice) String() string {
