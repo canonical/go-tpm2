@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	// DefaultPort is the default IP port that the TPM channel of
+	// the simulator runs on. The platform port is this + 1.
 	DefaultPort uint = 2321
 )
 
@@ -22,12 +24,16 @@ func defaultDevice() *Device {
 }
 
 var (
+	// DefaultDevice is configured for the simulator, running locally
+	// with the default port for the TPM channel.
 	DefaultDevice *Device = defaultDevice()
+
+	netDial = net.Dial
 )
 
 type deviceAddr struct {
-	host string
-	port uint
+	Host string
+	Port uint
 }
 
 func (a deviceAddr) Network() string {
@@ -35,7 +41,7 @@ func (a deviceAddr) Network() string {
 }
 
 func (a deviceAddr) String() string {
-	return net.JoinHostPort(a.host, strconv.FormatUint(uint64(a.port), 10))
+	return net.JoinHostPort(a.Host, strconv.FormatUint(uint64(a.Port), 10))
 }
 
 // Device describes a TPM simulator device.
@@ -57,14 +63,17 @@ func NewLocalDevice(port uint) *Device {
 // the supplied port is for the TPM channel, and that the platform channel is on
 // the subsequent port.
 func NewDevice(host string, port uint) *Device {
+	if host == "" {
+		host = "localhost"
+	}
 	return &Device{
 		tpm: &deviceAddr{
-			host: host,
-			port: port,
+			Host: host,
+			Port: port,
 		},
 		platform: &deviceAddr{
-			host: host,
-			port: port + 1,
+			Host: host,
+			Port: port + 1,
 		},
 	}
 }
@@ -103,10 +112,7 @@ func (d *Device) PlatformAddr() net.Addr {
 //
 // Deprecated: Use [Device.TPMAddr] or [Device.PlatformAddr] instead.
 func (d *Device) Host() string {
-	if d.tpm.host == "" {
-		return "localhost"
-	}
-	return d.tpm.host
+	return d.tpm.Host
 }
 
 // Port is the port number of the TPM simulator's command channel.
@@ -114,17 +120,17 @@ func (d *Device) Host() string {
 //
 // Deprecated: Use [Device.TPMAddr] or [Device.PlatformAddr] instead.
 func (d *Device) Port() uint {
-	return d.tpm.port
+	return d.tpm.Port
 }
 
 func (d *Device) openInternal() (transport *Transport, err error) {
 	// Open up the TPM and platform sockets
-	tpm, err := net.Dial(d.tpm.Network(), d.tpm.String())
+	tpm, err := netDial(d.tpm.Network(), d.tpm.String())
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to TPM socket: %w", err)
 	}
 
-	platform, err := net.Dial(d.platform.Network(), d.platform.String())
+	platform, err := netDial(d.platform.Network(), d.platform.String())
 	if err != nil {
 		tpm.Close()
 		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
@@ -156,7 +162,7 @@ func (d *Device) openInternal() (transport *Transport, err error) {
 	// commands with. The retrier communicates with the supplied transport on a
 	// dedicated goroutine.
 	tmp.retrier = transportutil.NewRetrierTransport(
-		newTpmMainTransport(mux.NewTransport(), &tmp.locality),
+		newTpmMainTransport(mux.NewTransport(), &tmp.locality, tpm.RemoteAddr(), tpm.LocalAddr()),
 		transportutil.RetryParams{
 			MaxRetries:     4,
 			InitialBackoff: 20 * time.Millisecond,
@@ -168,7 +174,7 @@ func (d *Device) openInternal() (transport *Transport, err error) {
 
 	// Build another transport for control commands for the TPM socket, used
 	// on the current goroutine
-	tmp.tpm = newTpmTransport(mux.NewTransport())
+	tmp.tpm = newTpmTransport(mux.NewTransport(), tpm.RemoteAddr(), tpm.LocalAddr())
 
 	// Build a transport for hanlding control commands on the platform socket.
 	tmp.platform = newPlatformTransport(platform)

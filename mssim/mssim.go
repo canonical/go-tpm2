@@ -61,12 +61,13 @@ type Transport struct {
 	hashSequence *HashSequence // the current hash sequence
 }
 
-// Read implements [tpm2.Transport.Read].
+// Read implements [tpm2.Transport.Read]. It reads from the TPM channel.
 func (t *Transport) Read(data []byte) (int, error) {
 	return t.retrier.Read(data)
 }
 
-// Write implements [tpm2.Transport.Write].
+// Write implements [tpm2.Transport.Write]. It writes to the TPM channel and only supports
+// TPM commands.
 func (t *Transport) Write(data []byte) (int, error) {
 	return t.retrier.Write(data)
 }
@@ -90,9 +91,15 @@ func (t *Transport) Close() (err error) {
 	// shut down some goroutines.
 
 	if e := t.platform.close(); e != nil {
+		if errors.Is(err, net.ErrClosed) {
+			e = transportutil.ErrClosed
+		}
 		err = fmt.Errorf("cannot close platform channel: %w", e)
 	}
 	if e := t.retrier.Close(); e != nil {
+		if errors.Is(err, net.ErrClosed) {
+			e = transportutil.ErrClosed
+		}
 		err = fmt.Errorf("cannot close TPM channel: %w", e)
 	}
 	return err
@@ -176,6 +183,26 @@ func (t *Transport) SetLocality(locality uint8) uint8 {
 	// dedicated goroutine that NewRetrierTransport creates to access the transport
 	// supplied to it (in this case, an instance of tpmMainTransport).
 	return uint8(atomic.SwapUint32(&t.locality, uint32(locality)))
+}
+
+// TPMRemoteAddr returns the remote address of the TPM channel.
+func (t *Transport) TPMRemoteAddr() net.Addr {
+	return t.tpm.remoteAddr
+}
+
+// TPMLocalAddr returns the local address of the TPM channel.
+func (t *Transport) TPMLocalAddr() net.Addr {
+	return t.tpm.localAddr
+}
+
+// PlatformRemoteAddr returns the remote address of the platform channel.
+func (t *Transport) PlatformRemoteAddr() net.Addr {
+	return t.platform.conn.RemoteAddr()
+}
+
+// PlatformLocalAddr returns the local address of the platform channel.
+func (t *Transport) PlatformLocalAddr() net.Addr {
+	return t.platform.conn.LocalAddr()
 }
 
 // HashSequence corresponds to a H-CRTM or DRTM sequence.
@@ -272,11 +299,17 @@ func (t *platformTransport) close() error {
 // in order to communicate with the underlying main downstream transport.
 type tpmTransport struct {
 	transport         transportutil.LockableTransport
+	remoteAddr        net.Addr
+	localAddr         net.Addr
 	expectingResponse bool // Whether more calls to recvTransport or Read are expected for the current transaction
 }
 
-func newTpmTransport(transport transportutil.LockableTransport) *tpmTransport {
-	return &tpmTransport{transport: transport}
+func newTpmTransport(transport transportutil.LockableTransport, remoteAddr, localAddr net.Addr) *tpmTransport {
+	return &tpmTransport{
+		transport:  transport,
+		remoteAddr: remoteAddr,
+		localAddr:  localAddr,
+	}
 }
 
 // sendCommand sends a command with the specified ID and its arguments to the
@@ -353,8 +386,8 @@ type tpmMainTransport struct {
 	lr *io.LimitedReader // a io.LimitedReader for the current response
 }
 
-func newTpmMainTransport(transport transportutil.LockableTransport, locality *uint32) *tpmMainTransport {
-	t := newTpmTransport(transport)
+func newTpmMainTransport(transport transportutil.LockableTransport, locality *uint32, remoteAddr, localAddr net.Addr) *tpmMainTransport {
+	t := newTpmTransport(transport, remoteAddr, localAddr)
 	return &tpmMainTransport{
 		tpmTransport: *t,
 		locality:     locality,
