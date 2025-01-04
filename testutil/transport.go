@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/canonical/go-tpm2"
 	"github.com/canonical/go-tpm2/mu"
@@ -309,6 +310,9 @@ type Transport struct {
 	// ResponseIntercept allows a test to modify a response packet returned
 	// back to a command called by a test
 	ResponseIntercept func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer)
+
+	closeOnce sync.Once // only run Close once
+	keepOpen  bool      // Keep the underlying transport open on Close
 }
 
 type responseReader struct {
@@ -1013,6 +1017,63 @@ func (t *Transport) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 	return nil
 }
 
+// SetKeepUpderlyingTransportOpenOnClose tells this transport not to call
+// [tpm2.Transport.Close] on the underlying transport when Close is called
+// on this transport. This leaves it free to be reused. Setting this to false
+// on an already "closed" transport will have no effect.
+func (t *Transport) SetKeepUnderlyingTransportOpenOnClose(keepOpen bool) {
+	t.keepOpen = keepOpen
+}
+
+func (t *Transport) closeInternal() error {
+	tpm := tpm2.NewTPMContext(t.transport)
+
+	var errs []error
+
+	// First, restore the auth value for the platform hierarchy
+	if err := t.restorePlatformHierarchyAuth(tpm); err != nil {
+		errs = append(errs, err)
+	}
+
+	// ...then use the platform hierarchy, if permitted, to reenable disabled
+	// hierarchies.
+	errs = t.restoreHierarchies(errs, tpm)
+
+	errs = t.restoreHierarchyAuths(errs, tpm)
+
+	if err := t.restorePcrAllocation(tpm); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := t.restoreDisableClear(tpm); err != nil {
+		errs = append(errs, err)
+	}
+
+	errs = t.restoreDA(errs, tpm)
+
+	errs = t.removeResources(errs, tpm)
+
+	if err := t.restoreCommandCodeAuditStatus(tpm); err != nil {
+		errs = append(errs, err)
+	}
+
+	if !t.keepOpen {
+		if err := t.transport.Close(); err != nil {
+			return err
+		}
+	}
+
+	if len(errs) > 0 {
+		err := "cannot cleanup TPM state because of the following errors:\n"
+		for _, e := range errs {
+			err += "- " + e.Error() + "\n"
+		}
+		return errors.New(err)
+	}
+
+	return nil
+}
+
 // Close will attempt to restore the state of the TPM and then close the connection.
 //
 // If any hierarchies were disabled by a test, they will be re-enabled if
@@ -1063,51 +1124,10 @@ func (t *Transport) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 // can't be undone because, eg, the endorsement hierarchy was disabled and cannot
 // be reenabled, and TPMFeatureSetCommandCodeAuditStatus is not permitted, then an
 // error will be returned.
-func (t *Transport) Close() error {
-	tpm := tpm2.NewTPMContext(t.transport)
-
-	var errs []error
-
-	// First, restore the auth value for the platform hierarchy
-	if err := t.restorePlatformHierarchyAuth(tpm); err != nil {
-		errs = append(errs, err)
-	}
-
-	// ...then use the platform hierarchy, if permitted, to reenable disabled
-	// hierarchies.
-	errs = t.restoreHierarchies(errs, tpm)
-
-	errs = t.restoreHierarchyAuths(errs, tpm)
-
-	if err := t.restorePcrAllocation(tpm); err != nil {
-		errs = append(errs, err)
-	}
-
-	if err := t.restoreDisableClear(tpm); err != nil {
-		errs = append(errs, err)
-	}
-
-	errs = t.restoreDA(errs, tpm)
-
-	errs = t.removeResources(errs, tpm)
-
-	if err := t.restoreCommandCodeAuditStatus(tpm); err != nil {
-		errs = append(errs, err)
-	}
-
-	if err := t.transport.Close(); err != nil {
-		return err
-	}
-
-	if len(errs) > 0 {
-		err := "cannot cleanup TPM state because of the following errors:\n"
-		for _, e := range errs {
-			err += "- " + e.Error() + "\n"
-		}
-		return errors.New(err)
-	}
-
-	return nil
+func (t *Transport) Close() (err error) {
+	err = tpm2.ErrTransportClosed
+	t.closeOnce.Do(func() { err = t.closeInternal() })
+	return err
 }
 
 // Unwrap returns the real interface that this one wraps.

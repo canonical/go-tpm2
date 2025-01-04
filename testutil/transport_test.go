@@ -65,7 +65,10 @@ func (s *transportSuite) SetUpTest(c *C) {
 
 func (s *transportSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags) {
 	restore := MockWrapMssimTransport(func(transport tpm2.Transport, _ TPMFeatureFlags) (*Transport, error) {
-		return WrapTransport(&ignoreCloseTransport{transport: transport}, permittedFeatures)
+		out, err := WrapTransport(transport, permittedFeatures)
+		c.Assert(err, IsNil)
+		out.SetKeepUnderlyingTransportOpenOnClose(true)
+		return out, nil
 	})
 	defer restore()
 
@@ -74,12 +77,18 @@ func (s *transportSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags)
 
 	s.AddCleanup(func() {
 		// The test has to call Close()
-		c.Check(s.Transport.Unwrap().(*ignoreCloseTransport).closed, internal_testutil.IsTrue)
+		c.Check(s.Transport.Close(), Equals, tpm2.ErrTransportClosed)
 
-		s.TPM = tpm2.NewTPMContext(s.Mssim(c))
+		// The test should have called close on the test transport, but
+		// the underlying one should remain open. Do a reset and clear of
+		// the simulator using it.
+		dev := NewTransportPassthroughDevice(s.Transport.Unwrap())
+		tpm, err := tpm2.OpenTPMDevice(dev)
+		c.Assert(err, IsNil)
+		s.TPM = tpm
 
 		s.ResetAndClearTPMSimulatorUsingPlatformHierarchy(c)
-		c.Check(s.Transport.Unwrap().(TransportWrapper).Unwrap().Close(), IsNil)
+		c.Check(s.TPM.Close(), IsNil)
 
 		s.TPM = nil
 		s.TCTI = nil
@@ -2153,7 +2162,8 @@ func (s *transportSuite) TestRestorePCRAllocateWithSimulator(c *C) {
 	// The intermediate transport is closed now, so wrap a new one to
 	// create a new passthrough device and context so we can reset the
 	// simulator again and make sure that the revert was saved.
-	newTransport, err := WrapTransport(&ignoreCloseTransport{transport: s.Transport.Unwrap().(TransportWrapper).Unwrap()}, TPMFeatureShutdown|TPMFeatureNV)
+	newTransport, err := WrapTransport(s.Transport.Unwrap(), TPMFeatureShutdown|TPMFeatureNV)
+	newTransport.SetKeepUnderlyingTransportOpenOnClose(true)
 	c.Assert(err, IsNil)
 	device := NewTransportPassthroughDevice(newTransport)
 	s.TPM, s.Transport = OpenTPMDevice(c, device)

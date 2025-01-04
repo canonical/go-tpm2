@@ -751,13 +751,15 @@ func (*TransportBackedDevice) String() string {
 
 type transportPassthroughDevice struct {
 	mu        sync.Mutex
-	transport *Transport
+	transport tpm2.Transport
 }
 
 // NewTransportPassthroughDevice returns a device that returns the supplied transport
 // on the first and only call to its Open method. On subsequent calls, it returns the
-// [ErrSkipNoTPM] error, which makes it suitable for [OpenTPMDevice] and [OpenTPMDeviceT].
-func NewTransportPassthroughDevice(transport *Transport) tpm2.TPMDevice {
+// [ErrSkipNoTPM] error, which makes it suitable for [OpenTPMDevice] and [OpenTPMDeviceT]
+// (although it is only suitable with those functions if the supplied transport is a
+// [Transport]).
+func NewTransportPassthroughDevice(transport tpm2.Transport) tpm2.TPMDevice {
 	return &transportPassthroughDevice{transport: transport}
 }
 

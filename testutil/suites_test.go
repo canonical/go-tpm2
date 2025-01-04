@@ -724,7 +724,7 @@ func (s *tpmSimulatorTestSuiteProper) TestResetTPMSimulatorNoStartup(c *C) {
 }
 
 func (s *tpmSimulatorTestSuiteProper) TestResetAndClearTPMSimulatorUsingPlatformHierarchy(c *C) {
-	s.ResetTPMSimulator(c) // Increment reset count so we can detect the clea
+	s.ResetTPMSimulator(c) // Increment reset count so we can detect the clear
 	c.Check(s.TPM.ClearControl(s.TPM.PlatformHandleContext(), true, nil), IsNil)
 	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
 
