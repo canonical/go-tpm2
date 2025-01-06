@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
-	"errors"
 	"math"
 
 	. "gopkg.in/check.v1"
@@ -19,37 +18,6 @@ import (
 	. "github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
-
-type ignoreCloseTransport struct {
-	transport tpm2.Transport
-	closed    bool
-}
-
-func (t *ignoreCloseTransport) Read(data []byte) (int, error) {
-	if t.closed {
-		return 0, errors.New("already closed")
-	}
-	return t.transport.Read(data)
-}
-
-func (t *ignoreCloseTransport) Write(data []byte) (int, error) {
-	if t.closed {
-		return 0, errors.New("already closed")
-	}
-	return t.transport.Write(data)
-}
-
-func (t *ignoreCloseTransport) Close() error {
-	if t.closed {
-		return errors.New("already closed")
-	}
-	t.closed = true
-	return nil
-}
-
-func (t *ignoreCloseTransport) Unwrap() tpm2.Transport {
-	return t.transport
-}
 
 type transportSuite struct {
 	TPMSimulatorTest
@@ -67,6 +35,8 @@ func (s *transportSuite) initTPMContext(c *C, permittedFeatures TPMFeatureFlags)
 	restore := MockWrapMssimTransport(func(transport tpm2.Transport, _ TPMFeatureFlags) (*Transport, error) {
 		out, err := WrapTransport(transport, permittedFeatures)
 		c.Assert(err, IsNil)
+		// Keep the underling connection open when the test calls Close()
+		// so that we can re-use it to perform a reset and clear.
 		out.SetKeepUnderlyingTransportOpenOnClose(true)
 		return out, nil
 	})
@@ -2162,11 +2132,10 @@ func (s *transportSuite) TestRestorePCRAllocateWithSimulator(c *C) {
 	// The intermediate transport is closed now, so wrap a new one to
 	// create a new passthrough device and context so we can reset the
 	// simulator again and make sure that the revert was saved.
-	newTransport, err := WrapTransport(s.Transport.Unwrap(), TPMFeatureShutdown|TPMFeatureNV)
-	newTransport.SetKeepUnderlyingTransportOpenOnClose(true)
+	device, err := s.Transport.ReuseTransport()
 	c.Assert(err, IsNil)
-	device := NewTransportPassthroughDevice(newTransport)
 	s.TPM, s.Transport = OpenTPMDevice(c, device)
+	s.Transport.SetKeepUnderlyingTransportOpenOnClose(true)
 
 	s.ResetTPMSimulator(c)
 
@@ -2177,4 +2146,27 @@ func (s *transportSuite) TestRestorePCRAllocateWithSimulator(c *C) {
 	c.Check(s.TPM.Close(), IsNil)
 
 	s.Transport = origTransport
+}
+
+func (s *transportSuite) TestReuseTransport(c *C) {
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
+
+	mainTransport := s.Transport.Unwrap()
+
+	c.Check(s.TPM.Close(), IsNil)
+
+	device, err := s.Transport.ReuseTransport()
+	c.Assert(err, IsNil)
+	s.TPM, s.Transport = OpenTPMDevice(c, device)
+	s.Transport.SetKeepUnderlyingTransportOpenOnClose(true)
+
+	c.Check(s.Transport.Unwrap(), Equals, mainTransport)
+
+	_, _, _, _, _, err = s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
+	c.Check(err, IsNil)
+
+	_, _, _, _, _, err = s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
+	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000002\)`)
+
+	c.Check(s.TPM.Close(), IsNil)
 }

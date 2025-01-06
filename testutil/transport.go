@@ -311,8 +311,10 @@ type Transport struct {
 	// back to a command called by a test
 	ResponseIntercept func(cmdCode tpm2.CommandCode, cmdHandles tpm2.HandleList, cmdAuthArea []tpm2.AuthCommand, cpBytes []byte, rsp *bytes.Buffer)
 
-	closeOnce sync.Once // only run Close once
-	keepOpen  bool      // Keep the underlying transport open on Close
+	closeOnce sync.Once  // only run Close once
+	closeMu   sync.Mutex // although tpm2.Transport requires Read/Write to be used from a single goroutine, the same is not true of Close.
+	closed    bool       // indicates that Close has been called
+	keepOpen  bool       // Keep the underlying transport open on Close
 }
 
 type responseReader struct {
@@ -1020,9 +1022,37 @@ func (t *Transport) restoreCommandCodeAuditStatus(tpm *tpm2.TPMContext) error {
 // SetKeepUpderlyingTransportOpenOnClose tells this transport not to call
 // [tpm2.Transport.Close] on the underlying transport when Close is called
 // on this transport. This leaves it free to be reused. Setting this to false
-// on an already "closed" transport will have no effect.
+// on an already "closed" transport will cause a panic.
 func (t *Transport) SetKeepUnderlyingTransportOpenOnClose(keepOpen bool) {
+	t.closeMu.Lock()
+	defer t.closeMu.Unlock()
+
+	if t.closed {
+		panic(tpm2.ErrTransportClosed)
+	}
 	t.keepOpen = keepOpen
+}
+
+// ReuseTransport returns a new TPMDevice that allows the underlying transport
+// to be re-used, with the same permitted features. This only works after calling
+// [Close] on a transport instance that is configured to not close the underlying
+// connection, using [SetKeepUnderlyingTransportOpenOnClose].
+func (t *Transport) ReuseTransport() (tpm2.TPMDevice, error) {
+	t.closeMu.Lock()
+	defer t.closeMu.Unlock()
+
+	if !t.closed {
+		return nil, errors.New("cannot rewrap transport that Close method hasn't been called on")
+	}
+	if !t.keepOpen {
+		return nil, errors.New("cannot rewrap transport that was closed without calling SetKeeyUnderlyingTransportOpenOnClose")
+	}
+
+	transport, err := WrapTransport(t.transport, t.permittedFeatures)
+	if err != nil {
+		return nil, err
+	}
+	return NewTransportPassthroughDevice(transport), nil
 }
 
 func (t *Transport) closeInternal() error {
@@ -1056,6 +1086,12 @@ func (t *Transport) closeInternal() error {
 	if err := t.restoreCommandCodeAuditStatus(tpm); err != nil {
 		errs = append(errs, err)
 	}
+
+	t.closeMu.Lock()
+	defer func() {
+		t.closed = true
+		t.closeMu.Unlock()
+	}()
 
 	if !t.keepOpen {
 		if err := t.transport.Close(); err != nil {
@@ -1124,6 +1160,9 @@ func (t *Transport) closeInternal() error {
 // can't be undone because, eg, the endorsement hierarchy was disabled and cannot
 // be reenabled, and TPMFeatureSetCommandCodeAuditStatus is not permitted, then an
 // error will be returned.
+//
+// If [SetKeepUpderlyingTransportOpenOnClose] is used, it may be possible to leave
+// the underlying transport open for re-use.
 func (t *Transport) Close() (err error) {
 	err = tpm2.ErrTransportClosed
 	t.closeOnce.Do(func() { err = t.closeInternal() })
