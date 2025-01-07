@@ -2132,10 +2132,11 @@ func (s *transportSuite) TestRestorePCRAllocateWithSimulator(c *C) {
 	// The intermediate transport is closed now, so wrap a new one to
 	// create a new passthrough device and context so we can reset the
 	// simulator again and make sure that the revert was saved.
-	device, err := s.Transport.ReuseTransport()
+	newTransport, err := WrapTransport(s.Transport.Unwrap(), TPMFeatureShutdown|TPMFeatureNV)
 	c.Assert(err, IsNil)
+	newTransport.SetKeepUnderlyingTransportOpenOnClose(true)
+	device := NewTransportPassthroughDevice(newTransport)
 	s.TPM, s.Transport = OpenTPMDevice(c, device)
-	s.Transport.SetKeepUnderlyingTransportOpenOnClose(true)
 
 	s.ResetTPMSimulator(c)
 
@@ -2146,27 +2147,4 @@ func (s *transportSuite) TestRestorePCRAllocateWithSimulator(c *C) {
 	c.Check(s.TPM.Close(), IsNil)
 
 	s.Transport = origTransport
-}
-
-func (s *transportSuite) TestReuseTransport(c *C) {
-	s.initTPMContext(c, TPMFeatureOwnerHierarchy)
-
-	mainTransport := s.Transport.Unwrap()
-
-	c.Check(s.TPM.Close(), IsNil)
-
-	device, err := s.Transport.ReuseTransport()
-	c.Assert(err, IsNil)
-	s.TPM, s.Transport = OpenTPMDevice(c, device)
-	s.Transport.SetKeepUnderlyingTransportOpenOnClose(true)
-
-	c.Check(s.Transport.Unwrap(), Equals, mainTransport)
-
-	_, _, _, _, _, err = s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
-	c.Check(err, IsNil)
-
-	_, _, _, _, _, err = s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), nil, NewRSAStorageKeyTemplate(), nil, nil, nil)
-	c.Check(err, ErrorMatches, `cannot complete write operation on Transport: command TPM_CC_CreatePrimary is trying to use a non-requested feature \(missing: 0x00000002\)`)
-
-	c.Check(s.TPM.Close(), IsNil)
 }

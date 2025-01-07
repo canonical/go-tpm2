@@ -1033,28 +1033,6 @@ func (t *Transport) SetKeepUnderlyingTransportOpenOnClose(keepOpen bool) {
 	t.keepOpen = keepOpen
 }
 
-// ReuseTransport returns a new TPMDevice that allows the underlying transport
-// to be re-used, with the same permitted features. This only works after calling
-// [Close] on a transport instance that is configured to not close the underlying
-// connection, using [SetKeepUnderlyingTransportOpenOnClose].
-func (t *Transport) ReuseTransport() (tpm2.TPMDevice, error) {
-	t.closeMu.Lock()
-	defer t.closeMu.Unlock()
-
-	if !t.closed {
-		return nil, errors.New("cannot rewrap transport that Close method hasn't been called on")
-	}
-	if !t.keepOpen {
-		return nil, errors.New("cannot rewrap transport that was closed without calling SetKeeyUnderlyingTransportOpenOnClose")
-	}
-
-	transport, err := WrapTransport(t.transport, t.permittedFeatures)
-	if err != nil {
-		return nil, err
-	}
-	return NewTransportPassthroughDevice(transport), nil
-}
-
 func (t *Transport) closeInternal() error {
 	tpm := tpm2.NewTPMContext(t.transport)
 
