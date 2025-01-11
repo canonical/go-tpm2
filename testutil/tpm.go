@@ -1074,15 +1074,18 @@ func ClearTPMUsingPlatformHierarchyT(t *testing.T, tpm *tpm2.TPMContext) {
 
 func resetTPMSimulator(tpm *tpm2.TPMContext, transport *mssim.Transport, startup bool) error {
 	if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
-		return err
+		return fmt.Errorf("shutdown failed: %w", err)
 	}
 	if err := transport.Reset(); err != nil {
-		return fmt.Errorf("resetting the simulator failed: %v", err)
+		return fmt.Errorf("resetting the simulator failed: %w", err)
 	}
 	if !startup {
 		return nil
 	}
-	return tpm.Startup(tpm2.StartupClear)
+	if err := tpm.Startup(tpm2.StartupClear); err != nil {
+		return fmt.Errorf("startup failed: %w", err)
+	}
+	return nil
 }
 
 // ResetTPMSimulatorT issues a Shutdown(Clear) -> Reset -> Startup(Clear) cycle of the
