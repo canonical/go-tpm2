@@ -366,10 +366,10 @@ func (t *tpmTransport) runCommand(cmd uint32, nargs int, args ...interface{}) er
 	if nargs > len(args) {
 		panic("insufficient command arguments")
 	}
-	if _, err := t.sendCommand(cmd, true, args[:nargs]); err != nil {
+	if _, err := t.sendCommand(cmd, true, args[:nargs]...); err != nil {
 		return err
 	}
-	_, err := t.recvResponse(true, args[nargs:])
+	_, err := t.recvResponse(true, args[nargs:]...)
 	return err
 }
 
