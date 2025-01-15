@@ -133,6 +133,15 @@ func NewMockPolicyPCRElement(pcrs PcrValueList) *policyElement {
 			PCR: &policyPCRElement{PCRs: pcrs}}}
 }
 
+func NewMockPolicyPCRDigestElement(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) *policyElement {
+	return &policyElement{
+		Type: commandPolicyPCRDigest,
+		Details: &policyElementDetails{
+			PCRDigest: &policyPCRDigestElement{
+				PCRDigest: pcrDigest,
+				PCRs:      pcrs}}}
+}
+
 func NewMockPolicyDuplicationSelectElement(objectName, newParentName tpm2.Name, includeObject bool) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyDuplicationSelect,

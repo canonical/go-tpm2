@@ -22,7 +22,12 @@ import (
 const (
 	pathForbiddenChars = "{}*<>"
 
-	commandRawPolicyOR tpm2.CommandCode = 0x20010171
+	// We use command codes to identify element types. In the case
+	// where we need a custom command code for a special element,
+	// we set the vendor bit (0x20000000) and also set one of the
+	// reserved bits (0xdfff0000)
+	commandRawPolicyOR     tpm2.CommandCode = 0x20010171
+	commandPolicyPCRDigest tpm2.CommandCode = 0x2002017F
 )
 
 var (
@@ -779,6 +784,17 @@ func (e *policyPCRElement) pcrValues() (tpm2.PCRValues, error) {
 	return values, nil
 }
 
+type policyPCRDigestElement struct {
+	PCRDigest tpm2.Digest
+	PCRs      tpm2.PCRSelectionList
+}
+
+func (*policyPCRDigestElement) name() string { return "TPM2_PolicyPCR assertion" }
+
+func (e *policyPCRDigestElement) run(runner policyRunner) error {
+	return runner.session().PolicyPCR(e.PCRDigest, e.PCRs)
+}
+
 type policyDuplicationSelectElement struct {
 	Object        tpm2.Name
 	NewParent     tpm2.Name
@@ -829,7 +845,8 @@ type policyElementDetails struct {
 	Password          *policyPasswordElement
 	NvWritten         *policyNvWrittenElement
 
-	RawOR *policyRawORElement
+	RawOR     *policyRawORElement
+	PCRDigest *policyPCRDigestElement
 }
 
 func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
@@ -864,6 +881,8 @@ func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
 		return &d.NvWritten
 	case commandRawPolicyOR:
 		return &d.RawOR
+	case commandPolicyPCRDigest:
+		return &d.PCRDigest
 	default:
 		return nil
 	}
@@ -911,6 +930,8 @@ func (e *policyElement) runner() policyElementRunner {
 		return e.Details.NvWritten
 	case commandRawPolicyOR:
 		return e.Details.RawOR
+	case commandPolicyPCRDigest:
+		return e.Details.PCRDigest
 	default:
 		panic("invalid type")
 	}

@@ -723,16 +723,16 @@ func (s *builderSuite) TestPolicyNameHashInvalidName(c *C) {
 		`could not build policy: encountered an error when calling PolicyNameHash: cannot compute nameHash: invalid name for handle 0`)
 }
 
-type testBuildPolicyPCRData struct {
+type testBuildPolicyPCRValuesData struct {
 	alg            tpm2.HashAlgorithmId
 	values         tpm2.PCRValues
 	expectedPcrs   PcrValueList
 	expectedDigest tpm2.Digest
 }
 
-func (s *builderSuite) testPolicyPCR(c *C, data *testBuildPolicyPCRData) {
+func (s *builderSuite) testPolicyPCRValues(c *C, data *testBuildPolicyPCRValuesData) {
 	builder := NewPolicyBuilder(data.alg)
-	digest, err := builder.RootBranch().PolicyPCR(data.values)
+	digest, err := builder.RootBranch().PolicyPCRValues(data.values)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
@@ -756,7 +756,7 @@ Policy {
 	c.Check(digest, DeepEquals, data.expectedDigest)
 }
 
-func (s *builderSuite) TestPolicyPCR(c *C) {
+func (s *builderSuite) TestPolicyPCRValues(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
 	foo := h.Sum(nil)
@@ -765,7 +765,7 @@ func (s *builderSuite) TestPolicyPCR(c *C) {
 	io.WriteString(h, "bar")
 	bar := h.Sum(nil)
 
-	s.testPolicyPCR(c, &testBuildPolicyPCRData{
+	s.testPolicyPCRValues(c, &testBuildPolicyPCRValuesData{
 		alg: tpm2.HashAlgorithmSHA256,
 		values: tpm2.PCRValues{
 			tpm2.HashAlgorithmSHA256: {
@@ -777,7 +777,7 @@ func (s *builderSuite) TestPolicyPCR(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "5dedc710ee0e797130756bd024372dfa9a9e3fc5b5c60897304fdda88ec2b887")})
 }
 
-func (s *builderSuite) TestPolicyPCRDifferentDigests(c *C) {
+func (s *builderSuite) TestPolicyPCRValuesDifferentDigests(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
 	foo := h.Sum(nil)
@@ -786,7 +786,7 @@ func (s *builderSuite) TestPolicyPCRDifferentDigests(c *C) {
 	io.WriteString(h, "bar")
 	bar := h.Sum(nil)
 
-	s.testPolicyPCR(c, &testBuildPolicyPCRData{
+	s.testPolicyPCRValues(c, &testBuildPolicyPCRValuesData{
 		alg: tpm2.HashAlgorithmSHA256,
 		values: tpm2.PCRValues{
 			tpm2.HashAlgorithmSHA256: {
@@ -798,7 +798,7 @@ func (s *builderSuite) TestPolicyPCRDifferentDigests(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "463dc37a6f3a37d7125524a2e6047c4befa650cdbb53369615503ca422f10da1")})
 }
 
-func (s *builderSuite) TestPolicyPCRDifferentSelection(c *C) {
+func (s *builderSuite) TestPolicyPCRValuesDifferentSelection(c *C) {
 	h := crypto.SHA1.New()
 	io.WriteString(h, "foo")
 	foo := h.Sum(nil)
@@ -807,7 +807,7 @@ func (s *builderSuite) TestPolicyPCRDifferentSelection(c *C) {
 	io.WriteString(h, "bar")
 	bar := h.Sum(nil)
 
-	s.testPolicyPCR(c, &testBuildPolicyPCRData{
+	s.testPolicyPCRValues(c, &testBuildPolicyPCRValuesData{
 		alg: tpm2.HashAlgorithmSHA256,
 		values: tpm2.PCRValues{
 			tpm2.HashAlgorithmSHA1: {
@@ -819,7 +819,7 @@ func (s *builderSuite) TestPolicyPCRDifferentSelection(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "52ec898cf6a800715e9314c90ba91636970ceeea6416bf2da62b5e633480aa43")})
 }
 
-func (s *builderSuite) TestPolicyPCRMultipleBanks(c *C) {
+func (s *builderSuite) TestPolicyPCRValuesMultipleBanks(c *C) {
 	// Make sure that a selection with multiple banks always produces the same value
 	// (the selection is sorted correctly)
 	h := crypto.SHA1.New()
@@ -830,7 +830,7 @@ func (s *builderSuite) TestPolicyPCRMultipleBanks(c *C) {
 	io.WriteString(h, "bar")
 	bar := h.Sum(nil)
 
-	s.testPolicyPCR(c, &testBuildPolicyPCRData{
+	s.testPolicyPCRValues(c, &testBuildPolicyPCRValuesData{
 		alg: tpm2.HashAlgorithmSHA256,
 		values: tpm2.PCRValues{
 			tpm2.HashAlgorithmSHA1: {
@@ -843,7 +843,7 @@ func (s *builderSuite) TestPolicyPCRMultipleBanks(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "5079c1d53de12dd44e988d5b0a31cd30701ffb24b7bd5d5b68d5f9f5819163be")})
 }
 
-func (s *builderSuite) TestPolicyPCRDifferentAlg(c *C) {
+func (s *builderSuite) TestPolicyPCRValuesDifferentAlg(c *C) {
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
 	foo := h.Sum(nil)
@@ -852,7 +852,7 @@ func (s *builderSuite) TestPolicyPCRDifferentAlg(c *C) {
 	io.WriteString(h, "bar")
 	bar := h.Sum(nil)
 
-	s.testPolicyPCR(c, &testBuildPolicyPCRData{
+	s.testPolicyPCRValues(c, &testBuildPolicyPCRValuesData{
 		alg: tpm2.HashAlgorithmSHA1,
 		values: tpm2.PCRValues{
 			tpm2.HashAlgorithmSHA256: {
@@ -864,28 +864,118 @@ func (s *builderSuite) TestPolicyPCRDifferentAlg(c *C) {
 		expectedDigest: internal_testutil.DecodeHexString(c, "45e5111828cf66c6c7f805f4e9691f6236892514")})
 }
 
-func (s *builderSuite) TestPolicyPCRInvalidBank(c *C) {
+func (s *builderSuite) TestPolicyPCRValuesInvalidBank(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	_, err := builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmNull: {4: nil}})
+	_, err := builder.RootBranch().PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmNull: {4: nil}})
 	c.Check(err, ErrorMatches, `invalid digest algorithm TPM_ALG_NULL`)
 	_, _, err = builder.Policy()
-	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCR: invalid digest algorithm TPM_ALG_NULL`)
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCRValues: invalid digest algorithm TPM_ALG_NULL`)
 }
 
-func (s *builderSuite) TestPolicyPCRInvalidDigest(c *C) {
+func (s *builderSuite) TestPolicyPCRValuesInvalidDigest(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	_, err := builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: []byte{0}}})
+	_, err := builder.RootBranch().PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: []byte{0}}})
 	c.Check(err, ErrorMatches, `invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
 	_, _, err = builder.Policy()
-	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCR: invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCRValues: invalid digest size for PCR 4, algorithm TPM_ALG_SHA256`)
 }
 
-func (s *builderSuite) TestPolicyPCRInvalidPCR(c *C) {
+func (s *builderSuite) TestPolicyPCRValuesInvalidPCRValues(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	_, err := builder.RootBranch().PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {-1: make([]byte, 32)}})
+	_, err := builder.RootBranch().PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {-1: make([]byte, 32)}})
 	c.Check(err, ErrorMatches, `invalid PCR -1: invalid PCR index \(< 0\)`)
 	_, _, err = builder.Policy()
-	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCR: invalid PCR -1: invalid PCR index \(< 0\)`)
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCRValues: invalid PCR -1: invalid PCR index \(< 0\)`)
+}
+
+type testBuildPolicyPCRDigestParams struct {
+	alg            tpm2.HashAlgorithmId
+	pcrDigest      tpm2.Digest
+	pcrs           tpm2.PCRSelectionList
+	expectedDigest tpm2.Digest
+}
+
+func (s *builderSuite) testPolicyPCRDigest(c *C, params *testBuildPolicyPCRDigestParams) {
+	builder := NewPolicyBuilder(params.alg)
+	digest, err := builder.RootBranch().PolicyPCRDigest(params.pcrDigest, params.pcrs)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, params.expectedDigest)
+
+	expectedPolicy := NewMockPolicy(
+		TaggedHashList{{HashAlg: params.alg, Digest: params.expectedDigest}}, nil,
+		NewMockPolicyPCRDigestElement(params.pcrDigest, params.pcrs))
+
+	digest, policy, err := builder.Policy()
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, params.expectedDigest)
+	c.Check(policy, testutil.TPMValueDeepEquals, expectedPolicy)
+	c.Check(policy.String(), Equals, fmt.Sprintf(`
+Policy {
+ # digest %v:%#x
+ PolicyPCR(pcrDigest:%#x, pcrs:%v)
+}`, params.alg, params.expectedDigest, params.pcrDigest, params.pcrs))
+	digest, err = builder.Digest()
+	c.Check(digest, DeepEquals, params.expectedDigest)
+}
+
+func (s *builderSuite) TestPolicyPCRDigest(c *C) {
+	s.testPolicyPCRDigest(c, &testBuildPolicyPCRDigestParams{
+		alg:            tpm2.HashAlgorithmSHA256,
+		pcrDigest:      internal_testutil.DecodeHexString(c, "e9d3c066fc725356cb68343917d7b2eccc60c6a041661bf729b261e51eb77eaa"),
+		pcrs:           tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}},
+		expectedDigest: internal_testutil.DecodeHexString(c, "64702c42ad8f53d49e8faddecf6d43603fdfb53825b2886c8d4af23f608055a2"),
+	})
+}
+
+func (s *builderSuite) TestPolicyPCRDigestDifferentDigest(c *C) {
+	s.testPolicyPCRDigest(c, &testBuildPolicyPCRDigestParams{
+		alg:            tpm2.HashAlgorithmSHA256,
+		pcrDigest:      internal_testutil.DecodeHexString(c, "cee46853032315f0674a5877674fa96a3320ddc4928df847bfd88754c24ebe1a"),
+		pcrs:           tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}},
+		expectedDigest: internal_testutil.DecodeHexString(c, "c39f2dc8e188d83dfe5d05e2b80182b945b41eadabc584b2fc352034f5d004ba"),
+	})
+}
+
+func (s *builderSuite) TestPolicyPCRDigestDifferentAlg(c *C) {
+	s.testPolicyPCRDigest(c, &testBuildPolicyPCRDigestParams{
+		alg:            tpm2.HashAlgorithmSHA1,
+		pcrDigest:      internal_testutil.DecodeHexString(c, "e7d69a3528db58f5b3ec93bb1a4e2cbc263def1a"),
+		pcrs:           tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}},
+		expectedDigest: internal_testutil.DecodeHexString(c, "65b7783b77bd5bbf53e750f7caa73738a818cc25"),
+	})
+}
+
+func (s *builderSuite) TestPolicyPCRDigestDifferentPCRs(c *C) {
+	s.testPolicyPCRDigest(c, &testBuildPolicyPCRDigestParams{
+		alg:            tpm2.HashAlgorithmSHA256,
+		pcrDigest:      internal_testutil.DecodeHexString(c, "e9d3c066fc725356cb68343917d7b2eccc60c6a041661bf729b261e51eb77eaa"),
+		pcrs:           tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA1, Select: []int{4, 7}}},
+		expectedDigest: internal_testutil.DecodeHexString(c, "089be967ffada634db67b67d6d52d1b45354a5bc1a34390879b6137856c87d2c"),
+	})
+}
+
+func (s *builderSuite) TestPolicyPCRDigestInvalidDigest(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyPCRDigest(make([]byte, 20), tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}})
+	c.Check(err, ErrorMatches, `invalid pcrDigest size`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCRDigest: invalid pcrDigest size`)
+}
+
+func (s *builderSuite) TestPolicyPCRDigestInvalidSelection(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyPCRDigest(make([]byte, 32), tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7, 50000}}})
+	c.Check(err, ErrorMatches, `invalid selection at 0`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCRDigest: invalid selection at 0`)
+}
+
+func (s *builderSuite) TestPolicyPCRDigestInvalidDigestAlgorithm(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	_, err := builder.RootBranch().PolicyPCRDigest(make([]byte, 32), tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmNull, Select: []int{4, 7}}})
+	c.Check(err, ErrorMatches, `invalid digest algorithm TPM_ALG_NULL at selection 0`)
+	_, _, err = builder.Policy()
+	c.Check(err, ErrorMatches, `could not build policy: encountered an error when calling PolicyPCRDigest: invalid digest algorithm TPM_ALG_NULL at selection 0`)
 }
 
 type testBuildPolicyDuplicationSelectData struct {

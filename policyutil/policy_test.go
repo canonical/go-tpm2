@@ -2163,7 +2163,7 @@ func (s *policySuite) TestPolicyAuthorizeWithMultiplePolicies(c *C) {
 	values := tpm2.PCRValues{
 		tpm2.HashAlgorithmSHA256: {
 			0: internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}}
-	builder.RootBranch().PolicyPCR(values)
+	builder.RootBranch().PolicyPCRValues(values)
 	_, policy1, err := builder.Policy()
 	c.Assert(err, IsNil)
 	c.Check(policy1.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
@@ -2172,7 +2172,7 @@ func (s *policySuite) TestPolicyAuthorizeWithMultiplePolicies(c *C) {
 	c.Assert(err, IsNil)
 
 	builder = NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	builder.RootBranch().PolicyPCR(values)
+	builder.RootBranch().PolicyPCRValues(values)
 	approvedPolicy, policy2, err := builder.Policy()
 	c.Assert(err, IsNil)
 	c.Check(policy2.Authorize(rand.Reader, pubKey, []byte("foo"), key, crypto.SHA256), IsNil)
@@ -3451,9 +3451,9 @@ func (s *policySuite) TestPolicyBranchesMissingBranchDigests(c *C) {
 	c.Check(pe.Path, Equals, "branch1")
 }
 
-func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
+func (s *policySuite) testPolicyPCRValues(c *C, values tpm2.PCRValues) error {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	builder.RootBranch().PolicyPCR(values)
+	builder.RootBranch().PolicyPCRValues(values)
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
@@ -3483,28 +3483,100 @@ func (s *policySuite) testPolicyPCR(c *C, values tpm2.PCRValues) error {
 	return nil
 }
 
-func (s *policySuite) TestPolicyPCR(c *C) {
+func (s *policySuite) TestPolicyPCRValues(c *C) {
 	_, values, err := s.TPM.PCRRead(tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}})
 	c.Assert(err, IsNil)
 
-	c.Check(s.testPolicyPCR(c, values), IsNil)
+	c.Check(s.testPolicyPCRValues(c, values), IsNil)
 }
 
-func (s *policySuite) TestPolicyPCRDifferentDigestAndSelection(c *C) {
+func (s *policySuite) TestPolicyPCRValuesDifferentDigestAndSelection(c *C) {
 	_, values, err := s.TPM.PCRRead(tpm2.PCRSelectionList{
 		{Hash: tpm2.HashAlgorithmSHA1, Select: []int{4}},
 		{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}})
 	c.Assert(err, IsNil)
 
-	c.Check(s.testPolicyPCR(c, values), IsNil)
+	c.Check(s.testPolicyPCRValues(c, values), IsNil)
 }
 
-func (s *policySuite) TestPolicyPCRFails(c *C) {
+func (s *policySuite) TestPolicyPCRValuesFails(c *C) {
 	values := tpm2.PCRValues{
 		tpm2.HashAlgorithmSHA256: {
 			0: internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}}
-	err := s.testPolicyPCR(c, values)
+	err := s.testPolicyPCRValues(c, values)
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
+	var e *tpm2.TPMParameterError
+	c.Assert(err, internal_testutil.ErrorAs, &e)
+	c.Check(e, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicyPCR, Code: tpm2.ErrorValue}, Index: 1})
+
+	var pe *PolicyError
+	c.Assert(err, internal_testutil.ErrorAs, &pe)
+	c.Check(pe.Path, Equals, "")
+}
+
+func (s *policySuite) testPolicyPCRDigest(c *C, pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) error {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
+	builder.RootBranch().PolicyPCRDigest(pcrDigest, pcrs)
+	expectedDigest, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	session := s.StartAuthSession(c, nil, nil, tpm2.SessionTypePolicy, nil, tpm2.HashAlgorithmSHA256)
+
+	result, err := policy.Execute(NewTPMPolicySession(s.TPM, session), nil, nil, nil)
+	if err != nil {
+		return err
+	}
+	c.Check(result.NewTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.InvalidTickets, internal_testutil.LenEquals, 0)
+	c.Check(result.AuthValueNeeded, internal_testutil.IsFalse)
+	c.Check(result.Path, Equals, "")
+	_, set := result.CommandCode()
+	c.Check(set, internal_testutil.IsFalse)
+	_, set = result.CpHash()
+	c.Check(set, internal_testutil.IsFalse)
+	_, set = result.NameHash()
+	c.Check(set, internal_testutil.IsFalse)
+	_, set = result.NvWritten()
+	c.Check(set, internal_testutil.IsFalse)
+
+	digest, err := s.TPM.PolicyGetDigest(session)
+	c.Check(err, IsNil)
+	c.Check(digest, DeepEquals, expectedDigest)
+
+	return nil
+}
+
+func (s *policySuite) TestPolicyPCRDigest(c *C) {
+	pcrs := tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}}
+	_, values, err := s.TPM.PCRRead(pcrs)
+	c.Assert(err, IsNil)
+
+	pcrs, pcrDigest, err := ComputePCRDigestFromAllValues(tpm2.HashAlgorithmSHA256, values)
+	c.Check(err, IsNil)
+
+	c.Check(s.testPolicyPCRDigest(c, pcrDigest, pcrs), IsNil)
+}
+
+func (s *policySuite) TestPolicyPCRDigestDifferentDigestAndSelection(c *C) {
+	pcrs := tpm2.PCRSelectionList{
+		{Hash: tpm2.HashAlgorithmSHA1, Select: []int{4}},
+		{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}},
+	}
+	_, values, err := s.TPM.PCRRead(pcrs)
+	c.Assert(err, IsNil)
+
+	pcrs, pcrDigest, err := ComputePCRDigestFromAllValues(tpm2.HashAlgorithmSHA256, values)
+	c.Check(err, IsNil)
+
+	c.Check(s.testPolicyPCRDigest(c, pcrDigest, pcrs), IsNil)
+}
+
+func (s *policySuite) TestPolicyPCRDigestFails(c *C) {
+	pcrs := tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}}
+
+	err := s.testPolicyPCRDigest(c, make([]byte, 32), pcrs)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
+
 	var e *tpm2.TPMParameterError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicyPCR, Code: tpm2.ErrorValue}, Index: 1})
@@ -3799,7 +3871,7 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 	bar := h.Sum(nil)
 
 	pcrValues := tpm2.PCRValues{tpm2.HashAlgorithmSHA256: {4: foo, 7: bar}}
-	builder.RootBranch().PolicyPCR(pcrValues)
+	builder.RootBranch().PolicyPCRValues(pcrValues)
 
 	_, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -4200,10 +4272,10 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelected(c *C) {
 	node := builder.RootBranch().AddBranchNode()
 
 	b1 := node.AddBranch("")
-	b1.PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
+	b1.PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
 
 	b2 := node.AddBranch("")
-	b2.PolicyPCR(pcrValues)
+	b2.PolicyPCRValues(pcrValues)
 
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -4242,10 +4314,10 @@ func (s *policySuitePCR) TestPolicyBranchesAutoSelectFail(c *C) {
 	node := builder.RootBranch().AddBranchNode()
 
 	b1 := node.AddBranch("")
-	b1.PolicyPCR(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
+	b1.PolicyPCRValues(tpm2.PCRValues{tpm2.HashAlgorithmSHA256: map[int]tpm2.Digest{7: pcrValues[tpm2.HashAlgorithmSHA256][7], 23: make(tpm2.Digest, 32)}})
 
 	b2 := node.AddBranch("")
-	b2.PolicyPCR(pcrValues)
+	b2.PolicyPCRValues(pcrValues)
 
 	_, policy, err := builder.Policy()
 	c.Assert(err, IsNil)

@@ -500,26 +500,26 @@ func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) (tpm2.Digest, err
 	return digest, nil
 }
 
-// PolicyPCR adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
+// PolicyPCRValues adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
 // supplied PCR values.
-func (b *PolicyBuilderBranch) PolicyPCR(values tpm2.PCRValues) (tpm2.Digest, error) {
+func (b *PolicyBuilderBranch) PolicyPCRValues(values tpm2.PCRValues) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
-		return nil, b.policy.fail("PolicyPCR", err)
+		return nil, b.policy.fail("PolicyPCRValues", err)
 	}
 
 	var pcrs pcrValueList
 	for alg := range values {
 		if !alg.IsValid() {
-			return nil, b.policy.fail("PolicyPCR", fmt.Errorf("invalid digest algorithm %v", alg))
+			return nil, b.policy.fail("PolicyPCRValues", fmt.Errorf("invalid digest algorithm %v", alg))
 		}
 		for pcr := range values[alg] {
 			s := tpm2.PCRSelect{pcr}
 			if _, err := s.ToBitmap(0); err != nil {
-				return nil, b.policy.fail("PolicyPCR", fmt.Errorf("invalid PCR %v: %w", pcr, err))
+				return nil, b.policy.fail("PolicyPCRValues", fmt.Errorf("invalid PCR %v: %w", pcr, err))
 			}
 			digest := values[alg][pcr]
 			if len(digest) != alg.Size() {
-				return nil, b.policy.fail("PolicyPCR", fmt.Errorf("invalid digest size for PCR %v, algorithm %v", pcr, alg))
+				return nil, b.policy.fail("PolicyPCRValues", fmt.Errorf("invalid digest size for PCR %v, algorithm %v", pcr, alg))
 			}
 			pcrs = append(pcrs, pcrValue{
 				PCR:    tpm2.Handle(pcr),
@@ -535,13 +535,50 @@ func (b *PolicyBuilderBranch) PolicyPCR(values tpm2.PCRValues) (tpm2.Digest, err
 		Details: &policyElementDetails{
 			PCR: &policyPCRElement{PCRs: pcrs}}}
 	if err := element.runner().run(&b.runner); err != nil {
-		return nil, b.policy.fail("PolicyPCR", fmt.Errorf("internal error: %w", err))
+		return nil, b.policy.fail("PolicyPCRValues", fmt.Errorf("internal error: %w", err))
 	}
 	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
 
 	digest, err := b.runner.session().PolicyGetDigest()
 	if err != nil {
-		return nil, b.policy.fail("PolicyPCR", fmt.Errorf("internal error: %w", err))
+		return nil, b.policy.fail("PolicyPCRValues", fmt.Errorf("internal error: %w", err))
+	}
+	return digest, nil
+}
+
+// PolicyPCRDigest adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
+// supplied PCR selection and digest.
+func (b *PolicyBuilderBranch) PolicyPCRDigest(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) (tpm2.Digest, error) {
+	if err := b.prepareToModifyBranch(); err != nil {
+		return nil, b.policy.fail("PolicyPCRDigest", err)
+	}
+
+	if len(pcrDigest) != b.alg().Size() {
+		return nil, b.policy.fail("PolicyPCRDigest", errors.New("invalid pcrDigest size"))
+	}
+	for i, pcr := range pcrs {
+		if !mu.IsValid(pcr) {
+			return nil, b.policy.fail("PolicyPCRDigest", fmt.Errorf("invalid selection at %d", i))
+		}
+		if !pcr.Hash.IsValid() {
+			return nil, b.policy.fail("PolicyPCRDigest", fmt.Errorf("invalid digest algorithm %v at selection %d", pcr.Hash, i))
+		}
+	}
+
+	element := &policyElement{
+		Type: commandPolicyPCRDigest,
+		Details: &policyElementDetails{
+			PCRDigest: &policyPCRDigestElement{
+				PCRDigest: pcrDigest,
+				PCRs:      pcrs}}}
+	if err := element.runner().run(&b.runner); err != nil {
+		return nil, b.policy.fail("PolicyPCRDigest", fmt.Errorf("internal error: %w", err))
+	}
+	b.policyBranch.Policy = append(b.policyBranch.Policy, element)
+
+	digest, err := b.runner.session().PolicyGetDigest()
+	if err != nil {
+		return nil, b.policy.fail("PolicyPCRDigest", fmt.Errorf("internal error: %w", err))
 	}
 	return digest, nil
 }
