@@ -47,8 +47,15 @@ type testSignPolicySignedAuthorizationData struct {
 func (s *authSuite) testSignPolicySignedAuthorization(c *C, data *testSignPolicySignedAuthorizationData) {
 	auth, err := SignPolicySignedAuthorization(rand.Reader, data.params, data.authKey, data.policyRef, data.signer, data.signerOpts)
 	c.Assert(err, IsNil)
+
+	var expectedCpHash tpm2.Digest
+	if data.params.CpHash != nil {
+		expectedCpHash, err = data.params.CpHash.Digest(data.params.HashAlg)
+		c.Check(err, IsNil)
+	}
+
 	c.Check(auth.NonceTPM, DeepEquals, data.params.NonceTPM)
-	c.Check(auth.CpHash, DeepEquals, data.params.CpHash)
+	c.Check(auth.CpHash, DeepEquals, expectedCpHash)
 	c.Check(auth.Expiration, DeepEquals, data.params.Expiration)
 	c.Check(auth.AuthKey, DeepEquals, data.authKey)
 	c.Check(auth.PolicyRef, DeepEquals, data.policyRef)
@@ -156,8 +163,11 @@ func (s *authSuite) TestSignPolicySignedAuthorizationWithCpHash(c *C) {
 	io.WriteString(h, "params")
 
 	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
-		session:        session,
-		params:         &PolicySignedParams{CpHash: h.Sum(nil)},
+		session: session,
+		params: &PolicySignedParams{
+			HashAlg: tpm2.HashAlgorithmSHA256,
+			CpHash:  CommandParameterDigest(tpm2.HashAlgorithmSHA256, h.Sum(nil)),
+		},
 		authKey:        authKey,
 		signer:         key,
 		signerOpts:     tpm2.HashAlgorithmSHA256,
@@ -219,8 +229,9 @@ func (s *authSuite) TestSignPolicySignedAuthorizationWithAllRestrictions(c *C) {
 	s.testSignPolicySignedAuthorization(c, &testSignPolicySignedAuthorizationData{
 		session: session,
 		params: &PolicySignedParams{
+			HashAlg:    tpm2.HashAlgorithmSHA256,
 			NonceTPM:   session.State().NonceTPM,
-			CpHash:     h.Sum(nil),
+			CpHash:     CommandParameterDigest(tpm2.HashAlgorithmSHA256, h.Sum(nil)),
 			Expiration: -100,
 		},
 		authKey:         authKey,

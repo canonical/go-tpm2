@@ -7,6 +7,7 @@ package policyutil
 import (
 	"crypto"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/canonical/go-tpm2"
@@ -26,7 +27,8 @@ func ComputePolicyAuthorizationTBSDigest(alg crypto.Hash, message []byte, policy
 	return h.Sum(nil)
 }
 
-// PolicyAuthorization corresponds to a signed authorization.
+// PolicyAuthorization corresponds to a signed authorization for a TPM2_PolicyAuthorize or
+// TPM2_PolicySigned assertion.
 type PolicyAuthorization struct {
 	AuthKey   *tpm2.Public    // The public key of the signer, associated with the corresponding assertion.
 	PolicyRef tpm2.Nonce      // The policy ref of the corresponding assertion
@@ -90,16 +92,23 @@ type PolicySignedAuthorization struct {
 	PolicyAuthorization
 }
 
+func computePolicySignedMessage(nonceTPM tpm2.Nonce, expiration int32, cpHash tpm2.Digest) []byte {
+	return mu.MustMarshalToBytes(mu.Raw(nonceTPM), expiration, mu.Raw(cpHash))
+}
+
 // Verify verifies the signature of this signed authorization.
 func (a *PolicySignedAuthorization) Verify() (ok bool, err error) {
-	msg := mu.MustMarshalToBytes(mu.Raw(a.NonceTPM), a.Expiration, mu.Raw(a.CpHash))
+	msg := computePolicySignedMessage(a.NonceTPM, a.Expiration, a.CpHash)
 	return a.PolicyAuthorization.Verify(msg)
 }
 
+// PolicySignedParams provide the parameters that a TPM2_PolicySigned assertion should
+// be bound to and can be passed to [SignPolicySignedAuthorization].
 type PolicySignedParams struct {
-	NonceTPM   tpm2.Nonce  // The TPM nonce of the session that an authorization should be bound to
-	CpHash     tpm2.Digest // The command parameters that an authorization should be bound to
-	Expiration int32       // The expiration time of an authorization
+	HashAlg    tpm2.HashAlgorithmId // The policy session digest algorithm
+	NonceTPM   tpm2.Nonce           // The TPM nonce of the session that an authorization should be bound to
+	CpHash     CpHash               // The command parameters that an authorization should be bound to
+	Expiration int32                // The expiration time of an authorization
 }
 
 // SignPolicySignedAuthorization creates a signed authorization that can be used by [Policy.Execute]
@@ -114,8 +123,9 @@ type PolicySignedParams struct {
 // If nonceTPM is supplied, the authorization will be bound to the session with the specified TPM
 // nonce. If it is not supplied, the authorization is not bound to a specific session.
 //
-// If cpHashA is supplied, the authorization will be bound to the corresponding command parameters.
-// If it is not supplied, the authorization is not bound to any specific command parameters.
+// If cpHash is supplied, the authorization will be bound to the corresponding command parameters.
+// If it is not supplied, the authorization is not bound to any specific command parameters. In this
+// case, it is important to supply the current session digest.
 //
 // If expiration is not zero, then the absolute value of this specifies an expiration time in
 // seconds, after which the authorization will expire. If nonceTPM is also provided, the expiration
@@ -130,10 +140,21 @@ type PolicySignedParams struct {
 // the next TPM reset if this occurs before the calculated expiration time
 func SignPolicySignedAuthorization(rand io.Reader, params *PolicySignedParams, authKey *tpm2.Public, policyRef tpm2.Nonce, signer crypto.Signer, opts crypto.SignerOpts) (*PolicySignedAuthorization, error) {
 	if params == nil {
-		params = new(PolicySignedParams)
+		params = &PolicySignedParams{
+			HashAlg: tpm2.HashAlgorithmNull,
+		}
 	}
 
-	msg := mu.MustMarshalToBytes(mu.Raw(params.NonceTPM), params.Expiration, mu.Raw(params.CpHash))
+	var cpHashA tpm2.Digest
+	if params.CpHash != nil {
+		var err error
+		cpHashA, err = params.CpHash.Digest(params.HashAlg)
+		if err != nil {
+			return nil, fmt.Errorf("cannot compute cpHash: %w", err)
+		}
+	}
+
+	msg := computePolicySignedMessage(params.NonceTPM, params.Expiration, cpHashA)
 	auth, err := SignPolicyAuthorization(rand, msg, authKey, policyRef, signer, opts)
 	if err != nil {
 		return nil, err
@@ -141,7 +162,7 @@ func SignPolicySignedAuthorization(rand io.Reader, params *PolicySignedParams, a
 
 	return &PolicySignedAuthorization{
 		NonceTPM:            params.NonceTPM,
-		CpHash:              params.CpHash,
+		CpHash:              cpHashA,
 		Expiration:          params.Expiration,
 		PolicyAuthorization: *auth,
 	}, nil

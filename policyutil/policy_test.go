@@ -1654,9 +1654,14 @@ func (s *policySuite) testPolicySigned(c *C, data *testExecutePolicySignedData) 
 			c.Check(authKey, DeepEquals, data.authKey.Name())
 			c.Check(policyRef, DeepEquals, data.policyRef)
 
+			var cpHash CpHash
+			if len(data.cpHashA) > 0 {
+				cpHash = CommandParameterDigest(tpm2.HashAlgorithmSHA256, data.cpHashA)
+			}
 			return SignPolicySignedAuthorization(rand.Reader, &PolicySignedParams{
+				HashAlg:    tpm2.HashAlgorithmSHA256,
 				NonceTPM:   sessionNonce,
-				CpHash:     data.cpHashA,
+				CpHash:     cpHash,
 				Expiration: data.expiration,
 			}, data.authKey, policyRef, data.signer, data.signerOpts)
 		},
