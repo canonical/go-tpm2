@@ -173,6 +173,17 @@ func (s *policySuiteNoTPM) TestPolicyAddDigestNameHash(c *C) {
 	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyNameHash assertion' task in root branch: cannot compute digest for policies with TPM2_PolicyNameHash assertion`)
 }
 
+func (s *policySuiteNoTPM) TestPolicyAddDigestPolicyPCRDigest(c *C) {
+	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
+	builder.RootBranch().PolicyPCRDigest(make([]byte, 20), tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{4, 7}}})
+
+	_, policy, err := builder.Policy()
+	c.Assert(err, IsNil)
+
+	_, err = policy.AddDigest(tpm2.HashAlgorithmSHA256)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR assertion' task in root branch: cannot compute digest for policies with TPM2_PolicyPCR assertions which contain pre-computed digests`)
+}
+
 func (s *policySuiteNoTPM) TestPolicyBranchesMultipleDigests(c *C) {
 	// Compute the expected digests using the low-level PolicyOR
 	var pHashListSHA1 tpm2.DigestList

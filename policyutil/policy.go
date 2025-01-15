@@ -286,6 +286,7 @@ type policyRunner interface {
 	authorize(auth ResourceContext, askForPolicy bool, usage *PolicySessionUsage, prefer tpm2.SessionType) (SessionContext, error)
 	runBranch(branches policyBranches) (selected int, err error)
 	runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error)
+	notifyPolicyPCRDigest() error
 }
 
 type taggedHash struct {
@@ -792,6 +793,9 @@ type policyPCRDigestElement struct {
 func (*policyPCRDigestElement) name() string { return "TPM2_PolicyPCR assertion" }
 
 func (e *policyPCRDigestElement) run(runner policyRunner) error {
+	if err := runner.notifyPolicyPCRDigest(); err != nil {
+		return err
+	}
 	return runner.session().PolicyPCR(e.PCRDigest, e.PCRs)
 }
 
@@ -1354,6 +1358,10 @@ func (r *policyExecuteRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	return approvedPolicy, ticket, nil
 }
 
+func (r *policyExecuteRunner) notifyPolicyPCRDigest() error {
+	return nil
+}
+
 func (r *policyExecuteRunner) selectBranch(branches policyBranches) (int, string, error) {
 	next, remaining := r.remaining.PopNextComponent()
 	if len(next) == 0 || next[0] == '*' {
@@ -1844,6 +1852,10 @@ func (r *policyComputeRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRe
 	return nil, nil, nil
 }
 
+func (r *policyComputeRunner) notifyPolicyPCRDigest() error {
+	return fmt.Errorf("cannot compute digest for policies with TPM2_PolicyPCR assertions which contain pre-computed digests")
+}
+
 func (r *policyComputeRunner) run(elements policyElements) error {
 	for len(elements) > 0 {
 		element := elements[0].runner()
@@ -2047,6 +2059,10 @@ func (r *policyValidateRunner) runBranch(branches policyBranches) (selected int,
 
 func (r *policyValidateRunner) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.Nonce, policies []*authorizedPolicy) (approvedPolicy tpm2.Digest, checkTicket *tpm2.TkVerified, err error) {
 	return nil, nil, nil
+}
+
+func (r *policyValidateRunner) notifyPolicyPCRDigest() error {
+	return nil
 }
 
 func (r *policyValidateRunner) run(elements policyElements) error {
@@ -2613,6 +2629,10 @@ func (r *policyStringifierRunner) runAuthorizedPolicy(keySign *tpm2.Public, poli
 	}
 	fmt.Fprintf(r.w, "\n%*s }", r.depth*3, "")
 	return nil, nil, nil
+}
+
+func (r *policyStringifierRunner) notifyPolicyPCRDigest() error {
+	return nil
 }
 
 func (r *policyStringifierRunner) run(elements policyElements) error {

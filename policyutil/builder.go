@@ -54,6 +54,10 @@ func (r *policyBuilderBranchRunner) runAuthorizedPolicy(keySign *tpm2.Public, po
 	return nil, nil, nil
 }
 
+func (r *policyBuilderBranchRunner) notifyPolicyPCRDigest() error {
+	return nil
+}
+
 // PolicyBuilderBranchNode is a point in a [PolicyBuilderBranch] to which sub-branches
 // can be added.
 type PolicyBuilderBranchNode struct {

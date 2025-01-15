@@ -190,6 +190,10 @@ func (w *treeWalker) runAuthorizedPolicy(keySign *tpm2.Public, policyRef tpm2.No
 	return nil, nil, nil
 }
 
+func (r *treeWalker) notifyPolicyPCRDigest() error {
+	return nil
+}
+
 func (w *treeWalker) runInternal(elements []policyElementRunner) error {
 	w.remaining = elements
 	for len(w.remaining) > 0 {
