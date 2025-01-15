@@ -447,12 +447,12 @@ func (b *PolicyBuilderBranch) PolicyCounterTimer(operandB tpm2.Operand, offset u
 //
 // As this binds the authorization to an object and and a policy has to have the same algorithm as
 // this, policies with this assertion can only be computed for a single digest algorithm.
-func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Named, params ...interface{}) (tpm2.Digest, error) {
+func (b *PolicyBuilderBranch) PolicyCpHash(cpHash CpHash) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return nil, b.policy.fail("PolicyCpHash", err)
 	}
 
-	cpHash, err := ComputeCpHash(b.alg(), code, handles, params...)
+	cpHashA, err := cpHash.Digest(b.alg())
 	if err != nil {
 		return nil, b.policy.fail("PolicyCpHash", fmt.Errorf("cannot compute cpHashA: %w", err))
 	}
@@ -460,7 +460,7 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 	element := &policyElement{
 		Type: tpm2.CommandPolicyCpHash,
 		Details: &policyElementDetails{
-			CpHash: &policyCpHashElement{Digest: cpHash}}}
+			CpHash: &policyCpHashElement{Digest: cpHashA}}}
 	if err := element.runner().run(&b.runner); err != nil {
 		return nil, b.policy.fail("PolicyCpHash", fmt.Errorf("internal error: %w", err))
 	}
@@ -478,12 +478,12 @@ func (b *PolicyBuilderBranch) PolicyCpHash(code tpm2.CommandCode, handles []Name
 //
 // As this binds the authorization to an object and and a policy has to have the same algorithm as
 // this, policies with this assertion can only be computed for a single digest algorithm.
-func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) (tpm2.Digest, error) {
+func (b *PolicyBuilderBranch) PolicyNameHash(nameHash NameHash) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return nil, b.policy.fail("PolicyNameHash", err)
 	}
 
-	nameHash, err := ComputeNameHash(b.alg(), handles...)
+	nameHashA, err := nameHash.Digest(b.alg())
 	if err != nil {
 		return nil, b.policy.fail("PolicyNameHash", fmt.Errorf("cannot compute nameHash: %w", err))
 	}
@@ -491,7 +491,7 @@ func (b *PolicyBuilderBranch) PolicyNameHash(handles ...Named) (tpm2.Digest, err
 	element := &policyElement{
 		Type: tpm2.CommandPolicyNameHash,
 		Details: &policyElementDetails{
-			NameHash: &policyNameHashElement{Digest: nameHash}}}
+			NameHash: &policyNameHashElement{Digest: nameHashA}}}
 	if err := element.runner().run(&b.runner); err != nil {
 		return nil, b.policy.fail("PolicyNameHash", fmt.Errorf("internal error: %w", err))
 	}

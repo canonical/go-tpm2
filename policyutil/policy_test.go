@@ -153,7 +153,7 @@ func (s *policySuiteNoTPM) TestPolicyBranchPathPopNextComponentMultipleIntermedi
 
 func (s *policySuiteNoTPM) TestPolicyAddDigestCpHash(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
-	builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))
+	builder.RootBranch().PolicyCpHash(CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())))
 
 	_, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -164,7 +164,7 @@ func (s *policySuiteNoTPM) TestPolicyAddDigestCpHash(c *C) {
 
 func (s *policySuiteNoTPM) TestPolicyAddDigestNameHash(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA1)
-	builder.RootBranch().PolicyNameHash(tpm2.MakeHandleName(tpm2.HandleOwner))
+	builder.RootBranch().PolicyNameHash(CommandHandles(tpm2.MakeHandleName(tpm2.HandleOwner)))
 
 	_, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
@@ -2363,7 +2363,7 @@ type testExecutePolicyCpHashData struct {
 
 func (s *policySuite) testPolicyCpHash(c *C, data *testExecutePolicyCpHashData) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	builder.RootBranch().PolicyCpHash(data.code, data.handles, data.params...)
+	builder.RootBranch().PolicyCpHash(CommandParameters(data.code, data.handles, data.params...))
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
@@ -2408,7 +2408,7 @@ func (s *policySuite) TestPolicyCpHash2(c *C) {
 
 func (s *policySuite) testPolicyNameHash(c *C, handles ...Named) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	builder.RootBranch().PolicyNameHash(handles...)
+	builder.RootBranch().PolicyNameHash(CommandHandles(handles...))
 	expectedDigest, policy, err := builder.Policy()
 	c.Assert(err, IsNil)
 
@@ -3871,7 +3871,7 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 	builder.RootBranch().PolicyAuthValue()
 	builder.RootBranch().PolicyCommandCode(tpm2.CommandUnseal)
 	builder.RootBranch().PolicyCounterTimer([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff}, 0, tpm2.OpUnsignedLT)
-	builder.RootBranch().PolicyCpHash(tpm2.CommandUnseal, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)})
+	builder.RootBranch().PolicyCpHash(CommandParameters(tpm2.CommandUnseal, []Named{append(tpm2.Name{0x00, 0x0b}, make(tpm2.Name, 32)...)}))
 
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")

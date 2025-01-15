@@ -572,16 +572,14 @@ func (s *builderSuite) TestPolicyCounterTimerDifferentOperation(c *C) {
 
 type testBuildPolicyCpHashData struct {
 	alg            tpm2.HashAlgorithmId
-	code           tpm2.CommandCode
-	handles        []Named
-	params         []interface{}
+	cpHash         CpHash
 	expectedCpHash tpm2.Digest
 	expectedDigest tpm2.Digest
 }
 
 func (s *builderSuite) testPolicyCpHash(c *C, data *testBuildPolicyCpHashData) {
 	builder := NewPolicyBuilder(data.alg)
-	digest, err := builder.RootBranch().PolicyCpHash(data.code, data.handles, data.params...)
+	digest, err := builder.RootBranch().PolicyCpHash(data.cpHash)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
@@ -605,55 +603,30 @@ Policy {
 func (s *builderSuite) TestPolicyCpHash(c *C) {
 	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
 		alg:            tpm2.HashAlgorithmSHA256,
-		code:           tpm2.CommandLoad,
-		handles:        []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}},
-		params:         []interface{}{tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())},
+		cpHash:         CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
 		expectedCpHash: internal_testutil.DecodeHexString(c, "0d5c70236d9181ea6b26fb203d8a45bbb3d982926d6cf4ba60ce0fe5d5717ac3"),
 		expectedDigest: internal_testutil.DecodeHexString(c, "79cefecd804486b13ac906b061a6d0faffacb46d7f387d91771b9455242de694")})
 }
 
-func (s *builderSuite) TestPolicyCpHashDifferentParams(c *C) {
+func (s *builderSuite) TestPolicyCpHashDifferentDigest(c *C) {
 	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
 		alg:            tpm2.HashAlgorithmSHA256,
-		code:           tpm2.CommandLoad,
-		handles:        []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}},
-		params:         []interface{}{tpm2.Private{1, 2, 3, 4, 5}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())},
+		cpHash:         CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4, 5}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
 		expectedCpHash: internal_testutil.DecodeHexString(c, "15fc1d7283e0f5f864651602c55f1d1dbebf7e573850bfae5235e94df0ac1fa1"),
 		expectedDigest: internal_testutil.DecodeHexString(c, "801e24b6989cfea7a0ec1d885d21aa9311331443d7f21e1bbcb51675b0927475")})
-}
-
-func (s *builderSuite) TestPolicyCpHashDifferentHandles(c *C) {
-	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
-		alg:            tpm2.HashAlgorithmSHA256,
-		code:           tpm2.CommandLoad,
-		handles:        []Named{tpm2.Name{0x40, 0x00, 0x00, 0x0b}},
-		params:         []interface{}{tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())},
-		expectedCpHash: internal_testutil.DecodeHexString(c, "4facb677c43722471af5c535353911e4882d26aa58f4859562b6861476f4aca3"),
-		expectedDigest: internal_testutil.DecodeHexString(c, "62d74f265639e887956694eb36a4106228a08879ce1ade983cf0b28c2415acbb")})
-}
-
-func (s *builderSuite) TestPolicyCpHashDifferentCommand(c *C) {
-	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
-		alg:            tpm2.HashAlgorithmSHA256,
-		code:           tpm2.CommandLoadExternal,
-		params:         []interface{}{mu.Sized((*tpm2.Sensitive)(nil)), mu.Sized(objectutil.NewRSAStorageKeyTemplate()), tpm2.HandleOwner},
-		expectedCpHash: internal_testutil.DecodeHexString(c, "bcbfc6e1846a7f58ed0c05ddf8a0ce7e2b3a50ba3f04e3ac87ee8c940a360f46"),
-		expectedDigest: internal_testutil.DecodeHexString(c, "f3d3c11955dd8dc8b45c6b66961cd929bc62a0fd263f5d7336139f30a166f011")})
 }
 
 func (s *builderSuite) TestPolicyCpHashSHA1(c *C) {
 	s.testPolicyCpHash(c, &testBuildPolicyCpHashData{
 		alg:            tpm2.HashAlgorithmSHA1,
-		code:           tpm2.CommandLoad,
-		handles:        []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}},
-		params:         []interface{}{tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())},
+		cpHash:         CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0x40, 0x00, 0x00, 0x01}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())),
 		expectedCpHash: internal_testutil.DecodeHexString(c, "d98ba8350f71c34132f62f50a6b9f21c4fa54f75"),
 		expectedDigest: internal_testutil.DecodeHexString(c, "a59f3e6a358dee7edfd733373d7c8a9851296d26")})
 }
 
 func (s *builderSuite) TestPolicyCpHashInvalidName(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	_, err := builder.RootBranch().PolicyCpHash(tpm2.CommandLoad, []Named{tpm2.Name{0, 0}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate()))
+	_, err := builder.RootBranch().PolicyCpHash(CommandParameters(tpm2.CommandLoad, []Named{tpm2.Name{0, 0}}, tpm2.Private{1, 2, 3, 4}, mu.Sized(objectutil.NewRSAStorageKeyTemplate())))
 	c.Check(err, ErrorMatches, `cannot compute cpHashA: invalid name for handle 0`)
 	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches,
@@ -662,14 +635,14 @@ func (s *builderSuite) TestPolicyCpHashInvalidName(c *C) {
 
 type testBuildPolicyNameHashData struct {
 	alg              tpm2.HashAlgorithmId
-	handles          []Named
+	nameHash         NameHash
 	expectedNameHash tpm2.Digest
 	expectedDigest   tpm2.Digest
 }
 
 func (s *builderSuite) testPolicyNameHash(c *C, data *testBuildPolicyNameHashData) {
 	builder := NewPolicyBuilder(data.alg)
-	digest, err := builder.RootBranch().PolicyNameHash(data.handles...)
+	digest, err := builder.RootBranch().PolicyNameHash(data.nameHash)
 	c.Check(err, IsNil)
 	c.Check(digest, DeepEquals, data.expectedDigest)
 
@@ -693,7 +666,7 @@ Policy {
 func (s *builderSuite) TestPolicyNameHash(c *C) {
 	s.testPolicyNameHash(c, &testBuildPolicyNameHashData{
 		alg:              tpm2.HashAlgorithmSHA256,
-		handles:          []Named{tpm2.MakeHandleName(tpm2.HandleOwner)},
+		nameHash:         CommandHandles(tpm2.MakeHandleName(tpm2.HandleOwner)),
 		expectedNameHash: internal_testutil.DecodeHexString(c, "16a3d3b482bb480394dfac704038a3708db2a77ccaa80ca419e91122406599ec"),
 		expectedDigest:   internal_testutil.DecodeHexString(c, "f46ca197c159be2500db41866e2713bd5e25cda9bbd46e2a398550010d7e5e5b")})
 }
@@ -701,7 +674,7 @@ func (s *builderSuite) TestPolicyNameHash(c *C) {
 func (s *builderSuite) TestPolicyNameHashDifferentHandles(c *C) {
 	s.testPolicyNameHash(c, &testBuildPolicyNameHashData{
 		alg:              tpm2.HashAlgorithmSHA256,
-		handles:          []Named{tpm2.MakeHandleName(tpm2.HandleEndorsement)},
+		nameHash:         CommandHandles(tpm2.MakeHandleName(tpm2.HandleEndorsement)),
 		expectedNameHash: internal_testutil.DecodeHexString(c, "c791c5d6c902890a3b91af630b09bc5b04cbe7cc6385708771f25aa6cb334ae3"),
 		expectedDigest:   internal_testutil.DecodeHexString(c, "3e3fbf3b3c59ba10ae0f02c691ceb60ba87fd7463c4100c1bb85c143e24e6eab")})
 }
@@ -709,14 +682,14 @@ func (s *builderSuite) TestPolicyNameHashDifferentHandles(c *C) {
 func (s *builderSuite) TestPolicyNameHashSHA1(c *C) {
 	s.testPolicyNameHash(c, &testBuildPolicyNameHashData{
 		alg:              tpm2.HashAlgorithmSHA1,
-		handles:          []Named{tpm2.MakeHandleName(tpm2.HandleOwner)},
+		nameHash:         CommandHandles(tpm2.MakeHandleName(tpm2.HandleOwner)),
 		expectedNameHash: internal_testutil.DecodeHexString(c, "97d538cbfae3f530b934596ea99c19a9b5c06d03"),
 		expectedDigest:   internal_testutil.DecodeHexString(c, "022794dd35419f458603c2c11808dced821078d2")})
 }
 
 func (s *builderSuite) TestPolicyNameHashInvalidName(c *C) {
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	_, err := builder.RootBranch().PolicyNameHash(tpm2.Name{0, 0})
+	_, err := builder.RootBranch().PolicyNameHash(CommandHandles(tpm2.Name{0, 0}))
 	c.Check(err, ErrorMatches, `cannot compute nameHash: invalid name for handle 0`)
 	_, _, err = builder.Policy()
 	c.Check(err, ErrorMatches,
@@ -1289,7 +1262,7 @@ func (s *builderSuite) TestPolicyORSHA1(c *C) {
 func (s *builderSuite) TestModifyFailedBranch(c *C) {
 	// XXX: Note that this only tests one method - this should be expanded to test all
 	builder := NewPolicyBuilder(tpm2.HashAlgorithmSHA256)
-	_, err := builder.RootBranch().PolicyNameHash(tpm2.Name{0, 0})
+	_, err := builder.RootBranch().PolicyNameHash(CommandHandles(tpm2.Name{0, 0}))
 	c.Check(err, ErrorMatches, `cannot compute nameHash: invalid name for handle 0`)
 	_, err = builder.RootBranch().PolicyAuthValue()
 	c.Check(err, ErrorMatches, `encountered an error when calling PolicyNameHash: cannot compute nameHash: invalid name for handle 0`)
