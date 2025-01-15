@@ -551,7 +551,8 @@ func (b *PolicyBuilderBranch) PolicyPCRValues(values tpm2.PCRValues) (tpm2.Diges
 }
 
 // PolicyPCRDigest adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
-// supplied PCR selection and digest.
+// supplied PCR selection and digest. The downside of this API instead of using [PolicyPCRValues] is
+// that policies with this element in can only be computed for a single digest.
 func (b *PolicyBuilderBranch) PolicyPCRDigest(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return nil, b.policy.fail("PolicyPCRDigest", err)
