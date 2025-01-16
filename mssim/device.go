@@ -182,11 +182,10 @@ func (d *Device) openInternal() (transport *Transport, err error) {
 	transport = tmp
 
 	// Ensure the simulator is powered on and NV is available.
-	var u32 uint32
-	if err := transport.platform.runCommand(cmdPowerOn, 0, &u32); err != nil {
+	if err := transport.PowerOn(); err != nil {
 		return nil, fmt.Errorf("cannot complete power on command on platform channel: %w", err)
 	}
-	if err := transport.platform.runCommand(cmdNVOn, 0, &u32); err != nil {
+	if err := transport.NVOn(); err != nil {
 		return nil, fmt.Errorf("cannot complete NV on command on plarform channel: %w", err)
 	}
 

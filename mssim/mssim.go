@@ -174,6 +174,55 @@ func (t *Transport) Reset() error {
 	return t.platform.runCommand(cmdReset, 0, &u32)
 }
 
+func (t *Transport) Restart() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdRestart, 0, &u32)
+}
+
+// PhysicalPresenceOn enables the indication of physical presence.
+func (t *Transport) PhysicalPresenceOn() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdPhysPresOn, 0, &u32)
+}
+
+// PhysicalPresenceOfff disables the indication of physical presence.
+func (t *Transport) PhysicalPresenceOff() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdPhysPresOff, 0, &u32)
+}
+
+// CancelOn enables the cancellation of the limited number of commands that
+// can be canceled.
+func (t *Transport) CancelOn() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdCancelOn, 0, &u32)
+}
+
+// CancelOff disables the cancellation of the limited number of commands that
+// can be canceled.
+func (t *Transport) CancelOff() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdCancelOff, 0, &u32)
+}
+
+// NVOn makes NV memory available.
+func (t *Transport) NVOn() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdNVOn, 0, &u32)
+}
+
+// NVOff makes NV memory unavailable.
+func (t *Transport) NVOff() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdNVOff, 0, &u32)
+}
+
+// TestFailureMode is used to force the TPM into failure mode during tests.
+func (t *Transport) TestFailureMode() error {
+	var u32 uint32
+	return t.platform.runCommand(cmdTestFailureMode, 0, &u32)
+}
+
 // SetLocality sets the locality for subsequent commands. The supplied value is
 // the numeric locality rather than the TPMA_LOCALITY representation. It returns the
 // currently set locality. Localities between 5 and 31 are invalid and thebehaviour
