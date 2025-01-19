@@ -133,7 +133,7 @@ func (t *Transport) RemoteHandshake() (uint32, SimulatorFlags, error) {
 		flags   SimulatorFlags
 		u32     uint32
 	)
-	if err := t.tpm.runCommand(cmdRemoteHandshake, 1, 0, &version, &flags, &u32); err != nil {
+	if err := t.tpm.runCommand(cmdRemoteHandshake, 1, 1, &version, &flags, &u32); err != nil {
 		return 0, 0, err
 	}
 	return version, flags, nil
