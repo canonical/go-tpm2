@@ -17,7 +17,7 @@ const (
 	// DefaultPort is the default IP port that the TPM channel of
 	// the simulator runs on. The platform port is normally this + 1,
 	// but can be customized by WithPlatformPort.
-	DefaultPort uint = 2321
+	DefaultPort uint16 = 2321
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 
 type deviceAddr struct {
 	Host string
-	Port uint
+	Port uint16
 }
 
 func (a deviceAddr) Network() string {
@@ -95,7 +95,7 @@ func WithHost(host string) DeviceOption {
 // WithPort is used to customize the TCP ports on which the TPM and platform
 // channels for the simulator are accessed. It sets the platform channel port
 // to the TPM channel port + 1.
-func WithPort(port uint) DeviceOption {
+func WithPort(port uint16) DeviceOption {
 	return func(d *Device) {
 		d.tpm.Port = port
 		d.platform.Port = port + 1
@@ -105,7 +105,7 @@ func WithPort(port uint) DeviceOption {
 // WithTPMPort is used to customize the TCP port on which the TPM channel
 // for the simulator is accessed. It doesn't modify the port for the platform
 // channel.
-func WithTPMPort(port uint) DeviceOption {
+func WithTPMPort(port uint16) DeviceOption {
 	return func(d *Device) {
 		d.tpm.Port = port
 	}
@@ -114,7 +114,7 @@ func WithTPMPort(port uint) DeviceOption {
 // WithPlatformPort is used to customize the TCP port on which the platform
 // chanel for the simulator is accessed. It doesn't modify the port for the
 // TPM channel
-func WithPlatformPort(port uint) DeviceOption {
+func WithPlatformPort(port uint16) DeviceOption {
 	return func(d *Device) {
 		d.platform.Port = port
 	}
@@ -178,7 +178,7 @@ func (d *Device) Host() string {
 //
 // Deprecated: Use [Device.TPMAddr] or [Device.PlatformAddr] instead.
 func (d *Device) Port() uint {
-	return d.tpm.Port
+	return uint(d.tpm.Port)
 }
 
 func (d *Device) openInternal() (transport *Transport, err error) {

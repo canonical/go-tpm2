@@ -572,6 +572,6 @@ func (t *tpmMainTransport) Close() error {
 //
 // Deprecated: Use [NewDevice], [NewLocalDevice] or [DefaultDevice].
 func OpenConnection(host string, port uint) (*Transport, error) {
-	device := NewDevice(WithHost(host), WithPort(port))
+	device := NewDevice(WithHost(host), WithPort(uint16(port)))
 	return device.openInternal()
 }

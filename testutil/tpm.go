@@ -169,7 +169,7 @@ var (
 	TPMDevicePath string = "/dev/tpm0"
 
 	// MssimPort defines the port number of the TPM simulator command port where TPMBackend is TPMBackendMssim.
-	MssimPort uint = mssim.DefaultPort
+	MssimPort uint16 = mssim.DefaultPort
 
 	wrapMssimTransport = WrapTransport
 
@@ -212,11 +212,18 @@ func AddCommandLineFlags() {
 	flag.Var(&PermittedTPMFeatures, "tpm-permitted-features", "Comma-separated list of features that tests can use on a TPM character device")
 
 	flag.StringVar(&TPMDevicePath, "tpm-path", "/dev/tpm0", "The path of the TPM character device to use for testing (default: /dev/tpm0)")
-	flag.UintVar(&MssimPort, "mssim-port", 2321, "The port number of the TPM simulator command channel (default: 2321)")
+	flag.Func("mssim-port", "The port number of the TPM simulator command channel (default: 2321)", func(opt string) error {
+		port, err := strconv.ParseUint(opt, 10, 16)
+		if err != nil {
+			return err
+		}
+		MssimPort = uint16(port)
+		return nil
+	})
 }
 
 type tpmSimulatorLaunchContext struct {
-	port               uint
+	port               uint16
 	persistentSavePath string
 	workDir            string
 	keepWorkDir        bool
@@ -512,7 +519,7 @@ Loop:
 type TPMSimulatorOptions struct {
 	// Port is the TCP port to use for the command channel. This port + 1 will also be used for the
 	// platform channel. If this is zero, then the value of [MssimPort] will be used.
-	Port uint
+	Port uint16
 
 	SourcePath     string    // Path for the source persistent data file
 	Manufacture    bool      // Indicates that the simulator should be executed in re-manufacture mode
