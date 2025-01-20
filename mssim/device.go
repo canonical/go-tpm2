@@ -15,7 +15,8 @@ import (
 
 const (
 	// DefaultPort is the default IP port that the TPM channel of
-	// the simulator runs on. The platform port is this + 1.
+	// the simulator runs on. The platform port is normally this + 1,
+	// but can be customized by WithPlatformPort.
 	DefaultPort uint = 2321
 )
 
@@ -44,37 +45,75 @@ func (a deviceAddr) String() string {
 	return net.JoinHostPort(a.Host, strconv.FormatUint(uint64(a.Port), 10))
 }
 
+// DeviceOption is an option passed to any function that creates
+// a new [Device] instance.
+type DeviceOption func(*Device)
+
 // Device describes a TPM simulator device.
 type Device struct {
-	tpm      *deviceAddr
-	platform *deviceAddr
+	tpm         deviceAddr
+	platform    deviceAddr
+	retryParams transportutil.RetryParams
 }
 
 // NewLocalDevice returns a new device structure for the specified port on the
 // local machine. It is safe to use from multiple goroutines simultaneously. Note
 // that this assumes the supplied port is for the TPM channel, and that the platform
-// channel is on the subsequent port.
-func NewLocalDevice(port uint) *Device {
-	return NewDevice("localhost", port)
+// channel is on the subsequent port. The default retry parameters have MaxRetries
+// set to 4, InitialBackoff set to 20ms and the BackoffRate set to 2.
+func NewLocalDevice(port uint, opts ...DeviceOption) *Device {
+	return NewDevice("localhost", port, opts...)
 }
 
 // NewDevice returns a new device structure for the specified host and port. It
 // is safe to use from multiple goroutines simultaneously. Note that this assumes
 // the supplied port is for the TPM channel, and that the platform channel is on
-// the subsequent port.
-func NewDevice(host string, port uint) *Device {
+// the subsequent port. The default retry parameters have MaxRetries set to 4,
+// InitialBackoff set to 20ms and the BackoffRate set to 2.
+func NewDevice(host string, port uint, opts ...DeviceOption) *Device {
 	if host == "" {
 		host = "localhost"
 	}
-	return &Device{
-		tpm: &deviceAddr{
+	dev := &Device{
+		tpm: deviceAddr{
 			Host: host,
 			Port: port,
 		},
-		platform: &deviceAddr{
+		platform: deviceAddr{
 			Host: host,
 			Port: port + 1,
 		},
+		retryParams: transportutil.RetryParams{
+			MaxRetries:     4,
+			InitialBackoff: 20 * time.Millisecond,
+			BackoffRate:    2,
+		},
+	}
+	for _, opt := range opts {
+		opt(dev)
+	}
+	return dev
+}
+
+// WithPlatformPort is used to customize a device if the simulator has a platform
+// channel on a port that isn't the TPM channel port + 1.
+func WithPlatformPort(port uint) DeviceOption {
+	return func(d *Device) {
+		d.platform = deviceAddr{
+			Host: d.tpm.Host,
+			Port: port,
+		}
+	}
+}
+
+// WithRetryParams is used to customize the retry parameters for a device.
+func WithRetryParams(maxRetries uint, initialBackoff time.Duration, backoffRate uint) DeviceOption {
+	return func(d *Device) {
+		d.retryParams = transportutil.RetryParams{
+			MaxRetries:     maxRetries,
+			InitialBackoff: initialBackoff,
+			BackoffRate:    backoffRate,
+		}
 	}
 }
 
@@ -106,6 +145,11 @@ func (d *Device) TPMAddr() net.Addr {
 // PlatformAddr returns the address of the platform channel for this device.
 func (d *Device) PlatformAddr() net.Addr {
 	return d.platform
+}
+
+// RetryParams returns the command retry parameters for this device.
+func (d *Device) RetryParams() transportutil.RetryParams {
+	return d.retryParams
 }
 
 // Host is the host that the TPM simulator is running on.
@@ -162,12 +206,7 @@ func (d *Device) openInternal() (transport *Transport, err error) {
 	// commands with. The retrier communicates with the supplied transport on a
 	// dedicated goroutine.
 	tmp.retrier = transportutil.NewRetrierTransport(
-		newTpmMainTransport(mux.NewTransport(), &tmp.locality, tpm.RemoteAddr(), tpm.LocalAddr()),
-		transportutil.RetryParams{
-			MaxRetries:     4,
-			InitialBackoff: 20 * time.Millisecond,
-			BackoffRate:    2,
-		})
+		newTpmMainTransport(mux.NewTransport(), &tmp.locality, tpm.RemoteAddr(), tpm.LocalAddr()), d.retryParams)
 
 	// Early exits from this point should see retrier.Close() being called to
 	// shut down the goroutines it starts.

@@ -43,10 +43,10 @@ type TCTI = Transport
 type Transport interface {
 	// Read is used to receive a response to a previously transmitted command.
 	// Implementations should support a response being read using multiple calls
-	// to Read (partial reads). The [internal.transportutil.BufferResponses]
-	// API can assist for transports that don't support this. Implementations that
-	// support partial reads should not return parts of more than one command in a
-	// single call.
+	// to Read (partial reads). The transportutil.BufferResponses API can assist
+	// for transports that don't support this. Implementations that support
+	// partial reads should not return parts of more than one command in a single
+	// call.
 	//
 	// Implementations should only use io.EOF to indicate that no more bytes will
 	// ever be read from this transport. Callers should be able to identify the end
@@ -56,8 +56,8 @@ type Transport interface {
 	// Write is used to transmit a serialized command to the TPM implementation.
 	// Implementations should support a command being sent across multiple calls
 	// to Write, and should be able to identify the end of a command based on the
-	// CommandHeader itself. The [internal.transportutil.BufferCommands] API can
-	// assist for transports that don't support this.
+	// CommandHeader itself. The transportutil.BufferCommands API can assist for
+	// transports that don't support this.
 	Write(p []byte) (int, error)
 
 	// Close closes the transport.

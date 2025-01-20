@@ -6,6 +6,8 @@ package mssim
 
 import (
 	"net"
+
+	"github.com/canonical/go-tpm2/transportutil"
 )
 
 type (
@@ -20,9 +22,10 @@ func MockNetDial(fn func(string, string) (net.Conn, error)) (restore func()) {
 	}
 }
 
-func NewMockDevice(tpm, platform *DeviceAddr) *Device {
+func NewMockDevice(tpm, platform *DeviceAddr, retryParams *transportutil.RetryParams) *Device {
 	return &Device{
-		tpm:      tpm,
-		platform: platform,
+		tpm:         *tpm,
+		platform:    *platform,
+		retryParams: *retryParams,
 	}
 }
