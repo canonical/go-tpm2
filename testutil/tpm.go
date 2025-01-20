@@ -169,7 +169,7 @@ var (
 	TPMDevicePath string = "/dev/tpm0"
 
 	// MssimPort defines the port number of the TPM simulator command port where TPMBackend is TPMBackendMssim.
-	MssimPort uint = 2321
+	MssimPort uint = mssim.DefaultPort
 
 	wrapMssimTransport = WrapTransport
 
@@ -266,7 +266,7 @@ func (c *tpmSimulatorLaunchContext) stopAndTerminate() (err error) {
 		c.captureErr("terminate", c.terminateFn(stopOk))
 	}()
 
-	device := mssim.NewLocalDevice(c.port)
+	device := mssim.NewDevice(mssim.WithPort(c.port))
 	tpm, err := tpm2.OpenTPMDevice(device)
 	if err != nil {
 		return fmt.Errorf("cannot open simulator connection for stop: %w", err)
@@ -482,7 +482,7 @@ func (c *tpmSimulatorLaunchContext) launch(opts *TPMSimulatorOptions) error {
 		return fmt.Errorf("cannot start simulator: %w", err)
 	}
 
-	device := mssim.NewLocalDevice(c.port)
+	device := mssim.NewDevice(mssim.WithPort(c.port))
 	var tpm *tpm2.TPMContext
 
 	// Give the simulator 5 seconds to start up
@@ -807,7 +807,7 @@ func newDevice(features TPMFeatureFlags) (tpm2.TPMDevice, error) {
 			}
 		}
 	case TPMBackendMssim:
-		device = mssim.NewLocalDevice(MssimPort)
+		device = mssim.NewDevice(mssim.WithPort(MssimPort))
 	}
 
 	return &tpmDevice{
@@ -1012,7 +1012,7 @@ func WrapSimulatorDevice(device *mssim.Device) tpm2.TPMDevice {
 func NewSimulatorDevice() tpm2.TPMDevice {
 	var device *mssim.Device
 	if TPMBackend == TPMBackendMssim {
-		device = mssim.NewLocalDevice(MssimPort)
+		device = mssim.NewDevice(mssim.WithPort(MssimPort))
 	}
 
 	return &simulatorDevice{device: device}

@@ -24,48 +24,48 @@ var (
 )
 
 func (s *deviceSuite) TestNewDevice(c *C) {
-	dev := NewDevice("localhost", 2321)
+	dev := NewDevice()
 	expectedDev := NewMockDevice(&DeviceAddr{Host: "localhost", Port: 2321}, &DeviceAddr{Host: "localhost", Port: 2322}, &defaultRetryParams)
 	c.Check(dev, DeepEquals, expectedDev)
 }
 
 func (s *deviceSuite) TestNewDeviceDifferentHost(c *C) {
-	dev := NewDevice("192.18.1.50", 2321)
+	dev := NewDevice(WithHost("192.18.1.50"))
 	expectedDev := NewMockDevice(&DeviceAddr{Host: "192.18.1.50", Port: 2321}, &DeviceAddr{Host: "192.18.1.50", Port: 2322}, &defaultRetryParams)
 	c.Check(dev, DeepEquals, expectedDev)
 }
 
 func (s *deviceSuite) TestNewDeviceDifferentPort(c *C) {
-	dev := NewDevice("localhost", 4444)
+	dev := NewDevice(WithPort(4444))
 	expectedDev := NewMockDevice(&DeviceAddr{Host: "localhost", Port: 4444}, &DeviceAddr{Host: "localhost", Port: 4445}, &defaultRetryParams)
 	c.Check(dev, DeepEquals, expectedDev)
 }
 
-func (s *deviceSuite) TestNewLocalDevice(c *C) {
-	dev := NewLocalDevice(2321)
-	expectedDev := NewMockDevice(&DeviceAddr{Host: "localhost", Port: 2321}, &DeviceAddr{Host: "localhost", Port: 2322}, &defaultRetryParams)
+func (s *deviceSuite) TestNewDeviceDifferentTPMPort(c *C) {
+	dev := NewDevice(WithTPMPort(4444))
+	expectedDev := NewMockDevice(&DeviceAddr{Host: "localhost", Port: 4444}, &DeviceAddr{Host: "localhost", Port: 2322}, &defaultRetryParams)
 	c.Check(dev, DeepEquals, expectedDev)
 }
 
-func (s *deviceSuite) TestNewLocalDeviceDifferentPort(c *C) {
-	dev := NewLocalDevice(4444)
-	expectedDev := NewMockDevice(&DeviceAddr{Host: "localhost", Port: 4444}, &DeviceAddr{Host: "localhost", Port: 4445}, &defaultRetryParams)
+func (s *deviceSuite) TestNewDeviceDifferentPlatformPort(c *C) {
+	dev := NewDevice(WithPlatformPort(4444))
+	expectedDev := NewMockDevice(&DeviceAddr{Host: "localhost", Port: 2321}, &DeviceAddr{Host: "localhost", Port: 4444}, &defaultRetryParams)
 	c.Check(dev, DeepEquals, expectedDev)
 }
 
-func (s *deviceSuite) TestInfoMethods(c *C) {
-	dev := NewLocalDevice(2321)
-	c.Check(dev.TPMAddr(), DeepEquals, DeviceAddr{Host: "localhost", Port: 2321})
-	c.Check(dev.PlatformAddr(), DeepEquals, DeviceAddr{Host: "localhost", Port: 2322})
-	c.Check(dev.RetryParams(), DeepEquals, defaultRetryParams)
-}
-
-func (s *deviceSuite) TestWithRetryParams(c *C) {
-	dev := NewLocalDevice(2321, WithRetryParams(10, 10*time.Millisecond, 3))
+func (s *deviceSuite) TestNewDeviceWithDifferentRetryParams(c *C) {
+	dev := NewDevice(WithRetryParams(10, 10*time.Millisecond, 3))
 	expectedDev := NewMockDevice(&DeviceAddr{Host: "localhost", Port: 2321}, &DeviceAddr{Host: "localhost", Port: 2322}, &transportutil.RetryParams{
 		MaxRetries:     10,
 		InitialBackoff: 10 * time.Millisecond,
 		BackoffRate:    3,
 	})
 	c.Check(dev, DeepEquals, expectedDev)
+}
+
+func (s *deviceSuite) TestInfoMethods(c *C) {
+	dev := NewDevice()
+	c.Check(dev.TPMAddr(), DeepEquals, DeviceAddr{Host: "localhost", Port: 2321})
+	c.Check(dev.PlatformAddr(), DeepEquals, DeviceAddr{Host: "localhost", Port: 2322})
+	c.Check(dev.RetryParams(), DeepEquals, defaultRetryParams)
 }

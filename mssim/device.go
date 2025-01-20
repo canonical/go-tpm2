@@ -20,14 +20,11 @@ const (
 	DefaultPort uint = 2321
 )
 
-func defaultDevice() *Device {
-	return NewLocalDevice(DefaultPort)
-}
-
 var (
 	// DefaultDevice is configured for the simulator, running locally
-	// with the default port for the TPM channel.
-	DefaultDevice *Device = defaultDevice()
+	// with the default port of 2321 for the TPM channel and 2322 for
+	// the platform channel.
+	DefaultDevice *Device = NewDevice()
 
 	netDial = net.Dial
 )
@@ -56,32 +53,23 @@ type Device struct {
 	retryParams transportutil.RetryParams
 }
 
-// NewLocalDevice returns a new device structure for the specified port on the
-// local machine. It is safe to use from multiple goroutines simultaneously. Note
-// that this assumes the supplied port is for the TPM channel, and that the platform
-// channel is on the subsequent port. The default retry parameters have MaxRetries
-// set to 4, InitialBackoff set to 20ms and the BackoffRate set to 2.
-func NewLocalDevice(port uint, opts ...DeviceOption) *Device {
-	return NewDevice("localhost", port, opts...)
-}
-
-// NewDevice returns a new device structure for the specified host and port. It
-// is safe to use from multiple goroutines simultaneously. Note that this assumes
-// the supplied port is for the TPM channel, and that the platform channel is on
-// the subsequent port. The default retry parameters have MaxRetries set to 4,
-// InitialBackoff set to 20ms and the BackoffRate set to 2.
-func NewDevice(host string, port uint, opts ...DeviceOption) *Device {
-	if host == "" {
-		host = "localhost"
-	}
+// NewDevice returns a new device structure. By default, the host is localhost,
+// the TPM channel port set to [DefaultPort], and it assumes that the platform
+// channel port is [DefaultPort] + 1. The default retry parameters have
+// MaxRetries set to 4, InitialBackoff set to 20ms and the BackoffRate set to 2.
+//
+// It can be customized by any of the [DeviceOption]s.
+//
+// The returned device is safe to use from multiple goroutines simultaneously.
+func NewDevice(opts ...DeviceOption) *Device {
 	dev := &Device{
 		tpm: deviceAddr{
-			Host: host,
-			Port: port,
+			Host: "localhost",
+			Port: DefaultPort,
 		},
 		platform: deviceAddr{
-			Host: host,
-			Port: port + 1,
+			Host: "localhost",
+			Port: DefaultPort + 1,
 		},
 		retryParams: transportutil.RetryParams{
 			MaxRetries:     4,
@@ -95,14 +83,40 @@ func NewDevice(host string, port uint, opts ...DeviceOption) *Device {
 	return dev
 }
 
-// WithPlatformPort is used to customize a device if the simulator has a platform
-// channel on a port that isn't the TPM channel port + 1.
+// WithHost is used to customize the host address on which the simulator's
+// TCP ports can be accessed. The default is localhost.
+func WithHost(host string) DeviceOption {
+	return func(d *Device) {
+		d.tpm.Host = host
+		d.platform.Host = host
+	}
+}
+
+// WithPort is used to customize the TCP ports on which the TPM and platform
+// channels for the simulator are accessed. It sets the platform channel port
+// to the TPM channel port + 1.
+func WithPort(port uint) DeviceOption {
+	return func(d *Device) {
+		d.tpm.Port = port
+		d.platform.Port = port + 1
+	}
+}
+
+// WithTPMPort is used to customize the TCP port on which the TPM channel
+// for the simulator is accessed. It doesn't modify the port for the platform
+// channel.
+func WithTPMPort(port uint) DeviceOption {
+	return func(d *Device) {
+		d.tpm.Port = port
+	}
+}
+
+// WithPlatformPort is used to customize the TCP port on which the platform
+// chanel for the simulator is accessed. It doesn't modify the port for the
+// TPM channel
 func WithPlatformPort(port uint) DeviceOption {
 	return func(d *Device) {
-		d.platform = deviceAddr{
-			Host: d.tpm.Host,
-			Port: port,
-		}
+		d.platform.Port = port
 	}
 }
 
