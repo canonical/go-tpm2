@@ -24,10 +24,35 @@ import (
 type SimulatorFlags uint32
 
 const (
+	// SimulatorFlagPlatformAvailable indicates that the platform hierarchy
+	// is available, and hardware platform functionality (eg, _TPM_Hash_Start)
+	// is also available.
 	SimulatorFlagPlatformAvailable SimulatorFlags = 1 << iota
+
+	// SimulatorFlagUsesTbs indicates that a resource manager is used. In
+	// this case, handles for transient objects and sessions returned to the
+	// caller are virtualized.
 	SimulatorFlagUsesTbs
+
+	// SimulatorFlagInRawMode indicates that no resource virtualization is
+	// performed.
 	SimulatorFlagInRawMode
+
+	// SimulatorFlagSupportsPP indicates that the simulator supports asserting
+	// physical presence.
 	SimulatorFlagSupportsPP
+
+	// SimulatorFlagsNoPowerCtl indicates that the simulator does not support
+	// power control commands.
+	SimulatorFlagsNoPowertCtl
+
+	// SimulatorFlagsNoLocalityCtl indicates that the simulator does not support
+	// controlling the command locality.
+	SimulatorFlagsNoLocalityCtl
+
+	// SimulatorFlagsNoNvCtl indicates that the simulator does not support any
+	// NV control commands.
+	SimulatorFlagsNoNvCtl
 )
 
 // PlatformCommandError corresponds to an error code in response to a platform command
@@ -43,6 +68,10 @@ func (e *PlatformCommandError) Error() string {
 	return fmt.Sprintf("received error code %d in response to platform command %d", e.Code, e.commandCode)
 }
 
+// ErrUnsupportedOperation is returned from a method of Transport if the
+// operation isn't supported by the attached simulator.
+var ErrUnsupportedOperation = errors.New("the simulator does not support this operation")
+
 // Tcti represents a connection to a TPM simulator that implements the Microsoft TPM2
 // simulator interface.
 //
@@ -52,6 +81,9 @@ type Tcti = Transport
 // Transport represents a connection to a TPM simulator that implements the Microsoft TPM2
 // simulator interface. It should not be used from multiple goroutines simultaneously.
 type Transport struct {
+	flags      SimulatorFlags
+	simVersion uint32
+
 	retrier  tpm2.Transport     // For handling TPM commands on the TPM channel
 	tpm      *tpmTransport      // For handling control commands on the TPM channel
 	platform *platformTransport // For handling control commands on the platform channel
@@ -105,11 +137,25 @@ func (t *Transport) Close() (err error) {
 	return err
 }
 
+// SimulatorVersion returns the version number reported by the simulator.
+func (t *Transport) SimulatorVersion() uint32 {
+	return t.simVersion
+}
+
+// SimulatorFlags indicates the flags reported by the simulator.
+func (t *Transport) SimulatorFlags() SimulatorFlags {
+	return t.flags
+}
+
 // HashStart begins a hash sequence with the _TPM_Hash_Start command on the TPM
 // connection. If a sequence is already in progress, a _TPM_Hash_End will be sent
 // for that sequence first. Whether this happens before or after TPM2_Startup
 // determines whether it is a H-CRTM sequence or a DRTM sequence.
 func (t *Transport) HashStart() (*HashSequence, error) {
+	if t.flags&SimulatorFlagPlatformAvailable == 0 {
+		return nil, ErrUnsupportedOperation
+	}
+
 	if t.hashSequence != nil {
 		if err := t.hashSequence.End(); err != nil {
 			return nil, fmt.Errorf("cannot end current hash sequence: %w", err)
@@ -124,19 +170,6 @@ func (t *Transport) HashStart() (*HashSequence, error) {
 	out := &HashSequence{transport: t}
 	t.hashSequence = out
 	return out, nil
-}
-
-// RemoteHandshake obtains the server version and flags.
-func (t *Transport) RemoteHandshake() (uint32, SimulatorFlags, error) {
-	var (
-		version uint32
-		flags   SimulatorFlags
-		u32     uint32
-	)
-	if err := t.tpm.runCommand(cmdRemoteHandshake, 1, 1, &version, &flags, &u32); err != nil {
-		return 0, 0, err
-	}
-	return version, flags, nil
 }
 
 // Stop submits a stop command on both the TPM command and platform
@@ -155,6 +188,10 @@ func (t *Transport) Stop() (err error) {
 // PowerOff puts the simulator into a power off state. It has no effect if the simulator
 // is already in a power off state.
 func (t *Transport) PowerOff() error {
+	if t.flags&SimulatorFlagsNoPowertCtl > 0 {
+		return ErrUnsupportedOperation
+	}
+
 	var u32 uint32
 	return t.platform.runCommand(cmdPowerOff, 0, &u32)
 }
@@ -163,6 +200,10 @@ func (t *Transport) PowerOff() error {
 // is already in a power off state. If the simulator was in a power off state, it results
 // in the execution of _TPM_Init().
 func (t *Transport) PowerOn() error {
+	if t.flags&SimulatorFlagsNoPowertCtl > 0 {
+		return ErrUnsupportedOperation
+	}
+
 	var u32 uint32
 	return t.platform.runCommand(cmdPowerOn, 0, &u32)
 }
@@ -181,12 +222,20 @@ func (t *Transport) Restart() error {
 
 // PhysicalPresenceOn enables the indication of physical presence.
 func (t *Transport) PhysicalPresenceOn() error {
+	if t.flags&SimulatorFlagSupportsPP == 0 {
+		return ErrUnsupportedOperation
+	}
+
 	var u32 uint32
 	return t.platform.runCommand(cmdPhysPresOn, 0, &u32)
 }
 
 // PhysicalPresenceOfff disables the indication of physical presence.
 func (t *Transport) PhysicalPresenceOff() error {
+	if t.flags&SimulatorFlagSupportsPP == 0 {
+		return ErrUnsupportedOperation
+	}
+
 	var u32 uint32
 	return t.platform.runCommand(cmdPhysPresOff, 0, &u32)
 }
@@ -207,12 +256,20 @@ func (t *Transport) CancelOff() error {
 
 // NVOn makes NV memory available.
 func (t *Transport) NVOn() error {
+	if t.flags&SimulatorFlagsNoNvCtl > 0 {
+		return ErrUnsupportedOperation
+	}
+
 	var u32 uint32
 	return t.platform.runCommand(cmdNVOn, 0, &u32)
 }
 
 // NVOff makes NV memory unavailable.
 func (t *Transport) NVOff() error {
+	if t.flags&SimulatorFlagsNoNvCtl > 0 {
+		return ErrUnsupportedOperation
+	}
+
 	var u32 uint32
 	return t.platform.runCommand(cmdNVOff, 0, &u32)
 }
@@ -223,15 +280,25 @@ func (t *Transport) TestFailureMode() error {
 	return t.platform.runCommand(cmdTestFailureMode, 0, &u32)
 }
 
+// Locality returns the current locality that commands sent on this transport
+// will be executed at.
+func (t *Transport) Locality() uint8 {
+	return uint8(atomic.LoadUint32(&t.locality))
+}
+
 // SetLocality sets the locality for subsequent commands. The supplied value is
-// the numeric locality rather than the TPMA_LOCALITY representation. It returns the
-// currently set locality. Localities between 5 and 31 are invalid and thebehaviour
-// of the simulator is not defined in this case.
-func (t *Transport) SetLocality(locality uint8) uint8 {
+// the numeric locality rather than the TPMA_LOCALITY representation. Localities
+// between 5 and 31 are invalid and the behaviour of the simulator is not defined
+// in this case.
+func (t *Transport) SetLocality(locality uint8) error {
+	if t.flags&SimulatorFlagsNoLocalityCtl > 0 {
+		return ErrUnsupportedOperation
+	}
 	// We use atomics here because the locality value is accessed from the
 	// dedicated goroutine that NewRetrierTransport creates to access the transport
 	// supplied to it (in this case, an instance of tpmMainTransport).
-	return uint8(atomic.SwapUint32(&t.locality, uint32(locality)))
+	atomic.SwapUint32(&t.locality, uint32(locality))
+	return nil
 }
 
 // TPMRemoteAddr returns the remote address of the TPM channel.

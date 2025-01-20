@@ -181,12 +181,22 @@ func (d *Device) openInternal() (transport *Transport, err error) {
 
 	transport = tmp
 
-	// Ensure the simulator is powered on and NV is available.
-	if err := transport.PowerOn(); err != nil {
-		return nil, fmt.Errorf("cannot complete power on command on platform channel: %w", err)
+	// Obtain information from the simulator
+	var u32 uint32
+	if err := transport.tpm.runCommand(cmdRemoteHandshake, 1, uint32(1), &transport.simVersion, &transport.flags, &u32); err != nil {
+		return nil, fmt.Errorf("cannot complete handshake with simulator: %w", err)
 	}
-	if err := transport.NVOn(); err != nil {
-		return nil, fmt.Errorf("cannot complete NV on command on plarform channel: %w", err)
+
+	// Ensure the simulator is powered on and NV is available.
+	if transport.flags&SimulatorFlagsNoPowertCtl == 0 {
+		if err := transport.PowerOn(); err != nil {
+			return nil, fmt.Errorf("cannot complete power on command on platform channel: %w", err)
+		}
+	}
+	if transport.flags&SimulatorFlagsNoNvCtl == 0 {
+		if err := transport.NVOn(); err != nil {
+			return nil, fmt.Errorf("cannot complete NV on command on plarform channel: %w", err)
+		}
 	}
 
 	return transport, nil
