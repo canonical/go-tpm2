@@ -1,6 +1,7 @@
 // Copyright 2019-2024 Canonical Ltd.
 // Licensed under the LGPLv3 with static-linking exception.
 // See LICENCE file for details.
+
 package mssim_test
 
 import (
