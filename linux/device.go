@@ -41,8 +41,6 @@ var (
 	// ErrNoTPMDevices indicates that there are no TPM devices.
 	ErrNoTPMDevices = errors.New("no TPM devices are available")
 
-	errClosed = errors.New("use of closed file")
-
 	sysfsPath = "/sys"
 )
 
