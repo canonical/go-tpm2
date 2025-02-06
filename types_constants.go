@@ -335,8 +335,11 @@ func (rc ResponseCode) N() uint8 {
 }
 
 const (
-	ResponseSuccess ResponseCode = 0
-	ResponseBadTag  ResponseCode = 0x1e
+	ResponseSuccess   ResponseCode = 0     // TPM_RC_SUCCESS
+	ResponseBadTag    ResponseCode = 0x1e  // TPM_RC_BAD_TAG
+	ResponseFailure   ResponseCode = 0x101 // TPM_RC_FAILURE
+	ResponseNeedsTest ResponseCode = 0x153 // TPM_RC_NEEDS_TEST
+	ResponseTesting   ResponseCode = 0x90a // TPM_RC_TESTING
 )
 
 // ArithmeticOp corresponds to the TPM_EO type.
