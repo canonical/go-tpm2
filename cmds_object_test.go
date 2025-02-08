@@ -14,24 +14,29 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/go-tpm2"
 	. "github.com/canonical/go-tpm2"
 	internal_crypt "github.com/canonical/go-tpm2/internal/crypt"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/objectutil"
+	"github.com/canonical/go-tpm2/policyutil"
 	"github.com/canonical/go-tpm2/testutil"
 	"github.com/canonical/go-tpm2/util"
 )
 
-type objectSuite struct {
-	testutil.TPMTest
+type objectMixin struct {
+	tpm *tpm2.TPMContext
 }
 
-func (s *objectSuite) SetUpSuite(c *C) {
-	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy
+func (m *objectMixin) setupTest(tpm *tpm2.TPMContext) (restore func(*C)) {
+	m.tpm = tpm
+	return func(_ *C) {
+		m.tpm = nil
+	}
 }
 
-func (s *objectSuite) checkPublicAgainstTemplate(c *C, public, template *Public) {
+func (m *objectMixin) checkPublicAgainstTemplate(c *C, public, template *Public) {
 	unique := public.Unique
 
 	var p *Public
@@ -52,22 +57,26 @@ func (s *objectSuite) checkPublicAgainstTemplate(c *C, public, template *Public)
 	case ObjectTypeECC:
 		c.Check(unique.ECC.X, internal_testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
 		c.Check(unique.ECC.Y, internal_testutil.LenEquals, template.Params.ECCDetail.CurveID.GoCurve().Params().BitSize/8)
+	case ObjectTypeSymCipher:
+		c.Check(unique.Sym, internal_testutil.LenEquals, template.NameAlg.Size())
+	case ObjectTypeKeyedHash:
+		c.Check(unique.KeyedHash, internal_testutil.LenEquals, template.NameAlg.Size())
 	}
 }
 
-func (s *objectSuite) checkCreationData(c *C, data *CreationData, hash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
+func (m *objectMixin) checkCreationData(c *C, data *CreationData, hash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
 	var parentQN Name
 	if parent.Handle().Type() == HandleTypePermanent {
 		parentQN = parent.Name()
 	} else {
 		var err error
-		_, _, parentQN, err = s.TPM.ReadPublic(parent)
+		_, _, parentQN, err = m.tpm.ReadPublic(parent)
 		c.Check(err, IsNil)
 	}
 
-	_, pcrValues, err := s.TPM.PCRRead(creationPCR)
+	_, pcrValues, err := m.tpm.PCRRead(creationPCR)
 	c.Assert(err, IsNil)
-	pcrDigest, err := util.ComputePCRDigest(template.NameAlg, creationPCR, pcrValues)
+	pcrDigest, err := policyutil.ComputePCRDigest(template.NameAlg, creationPCR, pcrValues)
 	c.Check(err, IsNil)
 
 	c.Check(data, NotNil)
@@ -88,19 +97,32 @@ func (s *objectSuite) checkCreationData(c *C, data *CreationData, hash Digest, t
 	c.Check(hash, DeepEquals, Digest(h.Sum(nil)))
 }
 
-func (s *objectSuite) checkCreationTicket(c *C, ticket *TkCreation, hierarchy Handle) {
+func (m *objectMixin) checkCreationTicket(c *C, ticket *TkCreation, hierarchy Handle) {
 	c.Check(ticket, NotNil)
 	c.Check(ticket.Tag, Equals, TagCreation)
+	c.Check(ticket.Hierarchy, Equals, hierarchy)
 
-	props, err := s.TPM.GetCapabilityTPMProperties(PropertyContextHash, 1)
-	c.Check(err, IsNil)
-	c.Assert(props, internal_testutil.LenEquals, 1)
-	c.Check(props[0].Property, Equals, PropertyContextHash)
+	value, err := m.tpm.GetCapabilityTPMProperty(PropertyContextHash)
+	c.Assert(err, IsNil)
+	contextHash := HashAlgorithmId(value)
 
-	contextHash := HashAlgorithmId(props[0].Value)
 	c.Check(contextHash.IsValid(), internal_testutil.IsTrue)
 
 	c.Check(ticket.Digest, internal_testutil.LenEquals, contextHash.Size())
+}
+
+type objectSuite struct {
+	testutil.TPMTest
+	objectMixin
+}
+
+func (s *objectSuite) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy
+}
+
+func (s *objectSuite) SetUpTest(c *C) {
+	s.TPMTest.SetUpTest(c)
+	s.AddFixtureCleanup(s.objectMixin.setupTest(s.TPM))
 }
 
 var _ = Suite(&objectSuite{})

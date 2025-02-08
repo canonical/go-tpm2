@@ -9,8 +9,92 @@ import (
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
+	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
+	"github.com/canonical/go-tpm2/objectutil"
 	"github.com/canonical/go-tpm2/testutil"
 )
+
+type hierarchySuite struct {
+	testutil.TPMTest
+	objectMixin
+}
+
+func (s *hierarchySuite) SetUpSuite(c *C) {
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeatureLockoutHierarchy | testutil.TPMFeaturePlatformHierarchy | testutil.TPMFeatureClear | testutil.TPMFeatureNV
+}
+
+func (s *hierarchySuite) SetUpTest(c *C) {
+	s.TPMTest.SetUpTest(c)
+	s.AddFixtureCleanup(s.objectMixin.setupTest(s.TPM))
+}
+
+var _ = Suite(&hierarchySuite{})
+
+type testCreatePrimaryParams struct {
+	hierarchy         ResourceContext
+	sensitive         *SensitiveCreate
+	template          *Public
+	outsideInfo       Data
+	creationPCR       PCRSelectionList
+	parentAuthSession SessionContext
+}
+
+func (s *hierarchySuite) testCreatePrimary(c *C, params *testCreatePrimaryParams) ResourceContext {
+	sessionHandle := authSessionHandle(data.parentAuthSession)
+
+	objectContext, outPublic, creationData, creationHash, creationTicket, err := s.TPM.CreatePrimary(params.hierarchy, params.sensitive, params.template, params.outsideInfo, params.creationPCR, params.parentAuthSession)
+	c.Assert(err, IsNil)
+
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	c.Check(cmd.RspHandle, Equals, objectContext.Handle())
+
+	c.Check(objectContext.Handle().Type(), Equals, HandleTypeTransient)
+
+	var sample ObjectContext
+	c.Assert(objectContext, internal_testutil.Implements, &sample)
+	c.Check(objectContext.(ObjectContext).Public(), testutil.TPMValueDeepEquals, outPublic)
+
+	s.checkPublicAgainstTemplate(c, outPublic, params.template)
+	s.checkCreationData(c, creationData, creationHash, params.template, params.outsideInfo, params.creationPCR, params.hierarchy)
+	s.checkCreationTicket(c, creationTicket, params.hierarchy.Handle())
+
+	return objectContext
+}
+
+func (s *hierarchySuite) TestCreatePrimaryRSAPrimaryStorage(c *C) {
+	s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		template:  objectutil.NewRSAStorageKeyTemplate(
+			objectutil.WithRSAUnique(make([]byte, 256),
+		),
+	})
+}
+
+func (s *hierarchySuite) TestCreatePrimaryECCPrimaryStorage(c *C) {
+	s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		template:  objectutil.NewECCStorageKeyTemplate(
+			objectutil.WithECCUnique(&ECCPoint{
+				X: make([]byte, 32),
+				Y: make([]byte, 32),
+			}),
+		),
+	})
+}
+
+func (s *hierarchySuite) TestCreatePrimaryEK(c *C) {
+	s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		template: objectutil.NewECCStorageKeyTemplate(
+			objectutil.WithAuthPolicy(internal_testutil.DecodeHexString(c, "837197674484B3F81A90CC8D46A5D724FD52D76E06520B64F2A1DA1B331469AA")),
+			objectutil.WithUserAuthMode(objectutil.RequirePolicy),
+			objectutil.WithAdminAuthMode(objectutil.RequirePolicy),
+			objectutil.WithRSAUnique(make([]byte, 256),
+		),
+	})
+}
 
 func TestCreatePrimary(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureNV)
@@ -39,76 +123,6 @@ func TestCreatePrimary(t *testing.T) {
 
 		return objectContext, outPublic
 	}
-
-	t.Run("RSASrk", func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
-
-		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
-		defer flushContext(t, tpm, objectContext)
-		verifyRSAAgainstTemplate(t, pub, &template)
-	})
-
-	t.Run("ECCSrk", func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeECC,
-			NameAlg: HashAlgorithmSHA1,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				ECCDetail: &ECCParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:  ECCScheme{Scheme: ECCSchemeNull},
-					CurveID: ECCCurveNIST_P256,
-					KDF:     KDFScheme{Scheme: KDFAlgorithmNull}}}}
-		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
-
-		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, creationPCR, nil)
-		defer flushContext(t, tpm, objectContext)
-		if len(pub.Unique.ECC.X) != 32 || len(pub.Unique.ECC.Y) != 32 {
-			t.Errorf("CreatePrimary returned object with invalid ECC coords")
-		}
-	})
-
-	t.Run("Ek", func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
-			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
-				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-
-		objectContext, pub := run(t, tpm.EndorsementHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
-		defer flushContext(t, tpm, objectContext)
-		verifyRSAAgainstTemplate(t, pub, &template)
-	})
 
 	t.Run("CreateWithAuthValue", func(t *testing.T) {
 		sensitive := SensitiveCreate{UserAuth: testAuth}
