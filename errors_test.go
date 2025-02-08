@@ -352,5 +352,34 @@ func (s *errorsSuite) TestResourceUnavailableErrorIs5(c *C) {
 func (s *errorsSuite) TestResourceUnavailableErrorUnwrap(c *C) {
 	err := NewResourceUnavailableError(0x81000001, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
 	c.Check(err.Unwrap(), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
+}
 
+func (s *errorsSuite) TestMissingPropertyErrorIs1(c *C) {
+	err := &MissingPropertyError[Property]{Capability: CapabilityTPMProperties, Property: PropertyManufacturer}
+	c.Check(err.Is(&MissingPropertyError[Property]{Capability: CapabilityTPMProperties, Property: PropertyManufacturer}), internal_testutil.IsTrue)
+}
+
+func (s *errorsSuite) TestMissingPropertyErrorIs2(c *C) {
+	err := &MissingPropertyError[CommandCode]{Capability: CapabilityCommands, Property: CommandUnseal}
+	c.Check(err.Is(&MissingPropertyError[CommandCode]{Capability: CapabilityCommands, Property: AnyCommandCode}), internal_testutil.IsTrue)
+}
+
+func (s *errorsSuite) TestMissingPropertyErrorIs3(c *C) {
+	err := &MissingPropertyError[CommandCode]{Capability: CapabilityCommands, Property: CommandUnseal}
+	c.Check(err.Is(&MissingPropertyError[CommandCode]{Capability: AnyCapability, Property: CommandUnseal}), internal_testutil.IsTrue)
+}
+
+func (s *errorsSuite) TestMissingPropertyErrorIs4(c *C) {
+	err := &MissingPropertyError[Property]{Capability: CapabilityTPMProperties, Property: PropertyManufacturer}
+	c.Check(err.Is(&MissingPropertyError[Property]{Capability: CapabilityTPMProperties, Property: PropertyStartupClear}), internal_testutil.IsFalse)
+}
+
+func (s *errorsSuite) TestMissingPropertyErrorIs5(c *C) {
+	err := &MissingPropertyError[Property]{Capability: CapabilityTPMProperties, Property: PropertyManufacturer}
+	c.Check(err.Is(&MissingPropertyError[Property]{Capability: CapabilityAuthPolicies, Property: PropertyStartupClear}), internal_testutil.IsFalse)
+}
+
+func (s *errorsSuite) TestMissingPropertyErrorIs6(c *C) {
+	err := &MissingPropertyError[Property]{Capability: CapabilityTPMProperties, Property: PropertyManufacturer}
+	c.Check(err.Is(&MissingPropertyError[CommandCode]{Capability: CapabilityCommands, Property: CommandUnseal}), internal_testutil.IsFalse)
 }

@@ -6,7 +6,6 @@ package tpm2
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 )
@@ -169,15 +168,15 @@ func (t *TPMContext) GetCapabilityAlgs(first AlgorithmId, propertyCount uint32, 
 }
 
 // GetCapabilityAlg is a convenience function for [TPMContext.GetCapability] that returns the
-// properties of the specified algorithm if it is supported by the TPM. If it isn't supported, an
-// error is returned.
+// properties of the specified algorithm if it is supported by the TPM. If the algorithm isn't
+// recognized, a *[MissingPropertyError[AlgorithmId]] error may be returned.
 func (t *TPMContext) GetCapabilityAlg(alg AlgorithmId, sessions ...SessionContext) (AlgorithmProperty, error) {
 	algs, err := t.GetCapabilityAlgs(alg, 1, sessions...)
 	if err != nil {
 		return AlgorithmProperty{}, err
 	}
 	if len(algs) == 0 || algs[0].Alg != alg {
-		return AlgorithmProperty{}, fmt.Errorf("algorithm %v does not exist", alg)
+		return AlgorithmProperty{}, &MissingPropertyError[AlgorithmId]{Capability: CapabilityAlgs, Property: alg}
 	}
 	return algs[0], nil
 }
@@ -206,15 +205,15 @@ func (t *TPMContext) GetCapabilityCommands(first CommandCode, propertyCount uint
 }
 
 // GetCapabilityCommand is a convenience function for [TPMContext.GetCapability] that returns the
-// attributes of the specified command if it is supported by the TPM. If it isn't supported, an
-// error is returned.
+// attributes of the specified command if it is supported by the TPM. If it isn't supported, a
+// *[MissingPropertyError[CommandCode]] error may be returned.
 func (t *TPMContext) GetCapabilityCommand(code CommandCode, sessions ...SessionContext) (CommandAttributes, error) {
 	commands, err := t.GetCapabilityCommands(code, 1, sessions...)
 	if err != nil {
 		return 0, err
 	}
 	if len(commands) == 0 || commands[0].CommandCode() != code {
-		return 0, fmt.Errorf("command %v does not exist", code)
+		return 0, &MissingPropertyError[CommandCode]{Capability: CapabilityCommands, Property: code}
 	}
 	return commands[0], nil
 }
@@ -337,14 +336,15 @@ func (t *TPMContext) GetCapabilityTPMProperties(first Property, propertyCount ui
 }
 
 // GetCapabilityTPMProperty is a convenience function for [TPMContext.GetCapability] that returns
-// the value of the specified property if it exists. If it doesn't exist, an error is returned.
+// the value of the specified property if it exists. If it doesn't exist, a
+// *[MissingPropertyError[Property]] error may be returned.
 func (t *TPMContext) GetCapabilityTPMProperty(property Property, sessions ...SessionContext) (uint32, error) {
 	props, err := t.GetCapabilityTPMProperties(property, 1, sessions...)
 	if err != nil {
 		return 0, err
 	}
 	if len(props) == 0 || props[0].Property != property {
-		return 0, fmt.Errorf("property %v does not exist", property)
+		return 0, &MissingPropertyError[Property]{Capability: CapabilityTPMProperties, Property: property}
 	}
 	return props[0].Value, nil
 }
@@ -382,7 +382,7 @@ func (t *TPMContext) GetMaxBufferSize(sessions ...SessionContext) (uint16, error
 		return 0, err
 	}
 	if n > math.MaxUint16 {
-		return 0, &InvalidResponseError{CommandGetCapability, errors.New("value out of range")}
+		return 0, &InvalidResponseError{CommandGetCapability, ErrCapabilityValueOutOfRange}
 	}
 	return uint16(n), nil
 }
@@ -406,7 +406,7 @@ func (t *TPMContext) GetMaxDigestSize(sessions ...SessionContext) (uint16, error
 		return 0, err
 	}
 	if n > 64 {
-		return 0, &InvalidResponseError{CommandGetCapability, errors.New("value out of range")}
+		return 0, &InvalidResponseError{CommandGetCapability, ErrCapabilityValueOutOfRange}
 	}
 	return uint16(n), nil
 }
@@ -443,14 +443,15 @@ func (t *TPMContext) GetNVBufferMax(sessions ...SessionContext) (int, error) {
 // GetNVMaxBufferSize is a convenience function for [TPMContext.GetCapability] that returns the
 // value of the [PropertyNVBufferMax] property, which indicates the maximum buffer size in bytes
 // supported by the TPM for arguments of the [MaxNVBuffer] type (used by [TPMContext.NVReadRaw]
-// and [TPMContext.NVWriteRaw]).
+// and [TPMContext.NVWriteRaw]). It may return a [ErrCapabilityValueOutOfRange] error if the
+// returned value doesn't fit into uint16.
 func (t *TPMContext) GetNVMaxBufferSize(sessions ...SessionContext) (uint16, error) {
 	n, err := t.GetCapabilityTPMProperty(PropertyNVBufferMax, sessions...)
 	if err != nil {
 		return 0, err
 	}
 	if n > math.MaxUint16 {
-		return 0, &InvalidResponseError{CommandGetCapability, errors.New("value out of range")}
+		return 0, &InvalidResponseError{CommandGetCapability, ErrCapabilityValueOutOfRange}
 	}
 	return uint16(n), nil
 }
@@ -476,14 +477,15 @@ func (t *TPMContext) GetNVMaxIndexSize(sessions ...SessionContext) (int, error) 
 
 // GetMinPCRSelectSize is a convenience function for [TPMContext.GetCapability] that returns the
 // value of the [PropertyPCRSelectMin] property, which indicates the minimum number of bytes in a
-// PCR selection.
+// PCR selection. It may return a [ErrCapabilityValueOutOfRange] error if the returned value
+// doesn't fit into uint8.
 func (t *TPMContext) GetMinPCRSelectSize(sessions ...SessionContext) (uint8, error) {
 	n, err := t.GetCapabilityTPMProperty(PropertyPCRSelectMin, sessions...)
 	if err != nil {
 		return 0, err
 	}
 	if n > math.MaxUint8 {
-		return 0, &InvalidResponseError{CommandGetCapability, errors.New("value out of range")}
+		return 0, &InvalidResponseError{CommandGetCapability, ErrCapabilityValueOutOfRange}
 	}
 	return uint8(n), nil
 }
@@ -542,14 +544,15 @@ func (t *TPMContext) GetCapabilityAuthPolicies(first Handle, propertyCount uint3
 
 // GetCapabilityAuthPolicy is a convenience function for [TPMContext.GetCapability], and returns
 // the auth policy digest associated with the supplied permanent handle, if there is one. This will
-// return a null hash if there is no auth policy digest.
+// return a null hash if there is no auth policy digest. If the handle isn't recognized, a
+// *[MissingPropertyError[Handle]] error may be returned.
 func (t *TPMContext) GetCapabilityAuthPolicy(handle Handle, sessions ...SessionContext) (TaggedHash, error) {
 	policies, err := t.GetCapabilityAuthPolicies(handle, 1, sessions...)
 	if err != nil {
 		return MakeTaggedHash(HashAlgorithmNull, nil), err
 	}
 	if len(policies) == 0 || policies[0].Handle != handle {
-		return MakeTaggedHash(HashAlgorithmNull, nil), fmt.Errorf("handle %v does no exist", handle)
+		return MakeTaggedHash(HashAlgorithmNull, nil), &MissingPropertyError[Handle]{Capability: CapabilityAuthPolicies, Property: handle}
 	}
 	return policies[0].PolicyHash, nil
 }

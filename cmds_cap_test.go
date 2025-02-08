@@ -131,7 +131,8 @@ func (s *capabilitiesSuite) TestGetCapabilityAlg(c *C) {
 
 func (s *capabilitiesSuite) TestGetCapabilityAlgMissing(c *C) {
 	_, err := s.TPM.GetCapabilityAlg(AlgorithmError)
-	c.Check(err, ErrorMatches, `algorithm 0x0000 does not exist`)
+	c.Check(err, ErrorMatches, `property 0x0000 of type tpm2.AlgorithmId for capability TPM_CAP_ALGS does not exist`)
+	c.Check(IsMissingPropertyError(err, CapabilityAlgs, AlgorithmError), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestIsAlgorithmSupported(c *C) {
@@ -289,7 +290,8 @@ func (s *capabilitiesSuite) TestGetCapabilityCommand(c *C) {
 
 func (s *capabilitiesSuite) TestGetCapabilityMissingCommand(c *C) {
 	_, err := s.TPM.GetCapabilityCommand(CommandFirst)
-	c.Check(err, ErrorMatches, `command 0x0000011a does not exist`)
+	c.Check(err, ErrorMatches, `property 0x0000011a of type tpm2.CommandCode for capability TPM_CAP_COMMANDS does not exist`)
+	c.Check(IsMissingPropertyError(err, CapabilityCommands, CommandFirst), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestIsCommandSupported(c *C) {
@@ -503,7 +505,8 @@ func (s *capabilitiesSuite) TestGetCapabilityTPMProperty(c *C) {
 
 func (s *capabilitiesSuite) TestGetCapabilityTPMPropertyInvalid(c *C) {
 	_, err := s.TPM.GetCapabilityTPMProperty(0x115)
-	c.Check(err, ErrorMatches, `property 277 does not exist`)
+	c.Check(err, ErrorMatches, `property 277 of type tpm2.Property for capability TPM_CAP_TPM_PROPERTIES does not exist`)
+	c.Check(IsMissingPropertyError(err, CapabilityTPMProperties, Property(0x115)), internal_testutil.IsTrue)
 }
 
 func (s *capabilitiesSuite) TestGetManufacturer(c *C) {

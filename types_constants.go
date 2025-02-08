@@ -335,6 +335,11 @@ func (rc ResponseCode) N() uint8 {
 }
 
 const (
+	// Note that we only define a very limited set of response codes
+	// (TPM_RC) where we use them directly. In most cases, the
+	// ResponseCode (TPM_RC) type is converted into a go error type
+	// by the DecodeResponseCode function.
+
 	ResponseSuccess   ResponseCode = 0     // TPM_RC_SUCCESS
 	ResponseBadTag    ResponseCode = 0x1e  // TPM_RC_BAD_TAG
 	ResponseFailure   ResponseCode = 0x101 // TPM_RC_FAILURE

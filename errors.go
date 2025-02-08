@@ -12,18 +12,23 @@ import (
 
 const (
 	// AnyCommandCode is used to match any command code when using IsTPMError,
-	// IsTPMHandleError, IsTPMParameterError, IsTPMSessionError and IsTPMWarning.
+	// IsTPMHandleError, IsTPMParameterError, IsTPMSessionError and IsTPMWarning,
+	// or to match any property when using IsMissingPropertyError with the
+	// CommandCode type parameter.
+	//
 	// As this sets the reserved bits, this can always be distringuished from a
 	// valid command code.
 	AnyCommandCode CommandCode = 0xc0000000
 
 	// AnyErrorCode is used to match any error code when using IsTPMError,
 	// IsTPMHandleError, IsTPMParameterError and IsTPMSessionError. As this
-	// is beyond the value of any error code, it can always be distinguished from
-	// a valid error code.
+	// is beyond the value of any error codes defined in this package, it
+	// can always be distinguished from a valid error code.
 	AnyErrorCode ErrorCode = 0xff
 
-	// AnyHandle is used to match any handle when using IsResourceUnavailableError.
+	// AnyHandle is used to match any handle when using IsResourceUnavailableError,
+	// or to match any property when using IsMissingPropertyError with the Handle
+	// type parameter.
 	AnyHandle Handle = 0xffffffff
 
 	// AnyHandleIndex is used to match any handle when using IsTPMHandleError.
@@ -44,7 +49,67 @@ const (
 	// As bit 10 is set, this is always an invalid vendor code so can be distinguished from
 	// a valid vendor code.
 	AnyVendorResponseCode ResponseCode = 0x900
+
+	// AnyCapability is used to match any capability when using IsMissingPropertyError.
+	AnyCapability Capability = 0xffffffff
+
+	// AnyProperty is used to match any property when using IsMissingPropertyError with
+	// the Property type parameter.
+	AnyProperty Property = 0xffffffff
+
+	// AnyAlgorithmId is used to match any property when using IsMissingPropertyError
+	// with the AlgorithmId type parameter.
+	AnyAlgorithmId AlgorithmId = 0xffff
 )
+
+// ErrCapabilityValueOutOfRange may be returned wrapped in *[InvalidResponseError]
+// from any TPM2_GetCapability utility function that checks the returned value.
+var ErrCapabilityValueOutOfRange = errors.New("the requested value is out of range")
+
+func (a AlgorithmId) isMissingPropertyErrorAnyValue() bool {
+	return a == AnyAlgorithmId
+}
+
+func (c CommandCode) isMissingPropertyErrorAnyValue() bool {
+	return c == AnyCommandCode
+}
+
+func (p Property) isMissingPropertyErrorAnyValue() bool {
+	return p == AnyProperty
+}
+
+func (h Handle) isMissingPropertyErrorAnyValue() bool {
+	return h == AnyHandle
+}
+
+type MissingPropertyErrorType interface {
+	AlgorithmId | CommandCode | Property | Handle
+	isMissingPropertyErrorAnyValue() bool
+}
+
+// MissingPropertyError may be returned by some TPM2_GetCapability utility functions
+// that are used to fetch a single property if they determine that the returned
+// property doesn't match the requested one.
+type MissingPropertyError[T MissingPropertyErrorType] struct {
+	Capability Capability
+	Property   T
+}
+
+func (e *MissingPropertyError[T]) Error() string {
+	return fmt.Sprintf("property %v of type %T for capability %v does not exist", e.Property, e.Property, e.Capability)
+}
+
+func (e *MissingPropertyError[T]) Is(target error) bool {
+	t, ok := target.(*MissingPropertyError[T])
+	if !ok {
+		return false
+	}
+	return (t.Capability == AnyCapability || t.Capability == e.Capability) && (t.Property.isMissingPropertyErrorAnyValue() || t.Property == e.Property)
+}
+
+func IsMissingPropertyError[T MissingPropertyErrorType](err error, capability Capability, property T) bool {
+	return errors.Is(err, &MissingPropertyError[T]{Capability: capability, Property: property})
+}
 
 // ResourceUnavailableError is returned from [TPMContext.NewResourceContext] if it is called with
 // a handle that does not correspond to a resource that is available on the TPM. This could be
