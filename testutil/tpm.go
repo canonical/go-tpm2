@@ -1086,6 +1086,7 @@ func resetTPMSimulator(tpm *tpm2.TPMContext, transport *mssim.Transport, startup
 	if err := transport.Reset(); err != nil {
 		return fmt.Errorf("resetting the simulator failed: %v", err)
 	}
+	tpm.PlatformHandleContext().SetAuthValue(nil)
 	if !startup {
 		return nil
 	}

@@ -5,7 +5,6 @@
 package tpm2_test
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
@@ -14,7 +13,6 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"reflect"
 	"testing"
 
 	. "github.com/canonical/go-tpm2"
@@ -124,88 +122,6 @@ func undefineNVSpace(t *testing.T, tpm *TPMContext, context, authHandle Resource
 	}
 }
 
-func verifyPublicAgainstTemplate(t *testing.T, public, template *Public) {
-	if public.Type != template.Type {
-		t.Errorf("public object has wrong type: %v", public.Type)
-	}
-	if public.NameAlg != template.NameAlg {
-		t.Errorf("public object has wrong name alg: %v", public.NameAlg)
-	}
-	if public.Attrs != template.Attrs {
-		t.Errorf("public object has wrong name attrs: %v", public.Attrs)
-	}
-	if !bytes.Equal(public.AuthPolicy, template.AuthPolicy) {
-		t.Errorf("public object has wrong auth policy")
-	}
-	pp, err := mu.MarshalToBytes(public.Params.Select(reflect.ValueOf(public.Type)))
-	if err != nil {
-		t.Errorf("cannot marshal public params: %v", err)
-	}
-	tp, err := mu.MarshalToBytes(template.Params.Select(reflect.ValueOf(template.Type)))
-	if err != nil {
-		t.Errorf("cannot marshal template params: %v", err)
-	}
-	if !bytes.Equal(pp, tp) {
-		t.Errorf("public object has wrong params")
-	}
-}
-
-func verifyRSAAgainstTemplate(t *testing.T, public, template *Public) {
-	if len(public.Unique.RSA) != int(template.Params.RSADetail.KeyBits)/8 {
-		t.Errorf("public object has wrong public key length (got %d bytes)", len(public.Unique.RSA))
-	}
-}
-
-func verifyCreationData(t *testing.T, tpm *TPMContext, creationData *CreationData, creationHash Digest, template *Public, outsideInfo Data, creationPCR PCRSelectionList, parent ResourceContext) {
-	var parentQualifiedName Name
-	if parent.Handle().Type() == HandleTypePermanent {
-		parentQualifiedName = parent.Name()
-	} else {
-		var err error
-		_, _, parentQualifiedName, err = tpm.ReadPublic(parent)
-		if err != nil {
-			t.Fatalf("ReadPublic failed: %v", err)
-		}
-	}
-
-	if !mu.DeepEqual(creationData.PCRSelect, creationPCR) {
-		t.Errorf("creation data has invalid pcrSelect")
-	}
-	if len(creationData.PCRDigest) != template.NameAlg.Size() {
-		t.Errorf("creation data has a pcrDigest of the wrong length (got %d)", len(creationData.PCRDigest))
-	}
-	if creationData.ParentNameAlg != AlgorithmId(parent.Name().Algorithm()) {
-		t.Errorf("creation data has the wrong parentNameAlg (got %v)", creationData.ParentNameAlg)
-	}
-	if !bytes.Equal(creationData.ParentName, parent.Name()) {
-		t.Errorf("creation data has the wrong parentName")
-	}
-	if !bytes.Equal(creationData.ParentQualifiedName, parentQualifiedName) {
-		t.Errorf("creation data has the wrong parentQualifiedName")
-	}
-	if !bytes.Equal(creationData.OutsideInfo, outsideInfo) {
-		t.Errorf("creation data has the wrong outsideInfo (got %x)", creationData.OutsideInfo)
-	}
-
-	hasher := template.NameAlg.NewHash()
-	if _, err := mu.MarshalToWriter(hasher, creationData); err != nil {
-		t.Fatalf("Failed to marshal creation data: %v", err)
-	}
-
-	if !bytes.Equal(hasher.Sum(nil), creationHash) {
-		t.Errorf("Invalid creation hash")
-	}
-}
-
-func verifyCreationTicket(t *testing.T, creationTicket *TkCreation, hierarchy HandleContext) {
-	if creationTicket.Tag != TagCreation {
-		t.Errorf("creation ticket has the wrong tag")
-	}
-	if creationTicket.Hierarchy != hierarchy.Handle() {
-		t.Errorf("creation ticket has the wrong hierarchy (got 0x%08x)", creationTicket.Hierarchy)
-	}
-}
-
 func computePCRDigestFromTPM(t *testing.T, tpm *TPMContext, alg HashAlgorithmId, pcrs PCRSelectionList) Digest {
 	_, pcrValues, err := tpm.PCRRead(pcrs)
 	if err != nil {
@@ -310,73 +226,6 @@ func createECCSrkForTesting(t *testing.T, tpm *TPMContext, userAuth Auth) Resour
 	return objectHandle
 }
 
-func createRSAEkForTesting(t *testing.T, tpm *TPMContext) ResourceContext {
-	template := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
-		AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
-			0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{
-					Algorithm: SymObjectAlgorithmAES,
-					KeyBits:   &SymKeyBitsU{Sym: 128},
-					Mode:      &SymModeU{Sym: SymModeCFB}},
-				Scheme:   RSAScheme{Scheme: RSASchemeNull},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	objectHandle, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("CreatePrimary failed: %v", err)
-	}
-	return objectHandle
-}
-
-func createAndLoadRSAAkForTesting(t *testing.T, tpm *TPMContext, ek ResourceContext, userAuth Auth) ResourceContext {
-	sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, sessionContext)
-
-	endorsement := tpm.EndorsementHandleContext()
-	sessionContext.SetAttrs(AttrContinueSession)
-
-	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
-		t.Fatalf("PolicySecret failed: %v", err)
-	}
-
-	template := Public{
-		Type:    ObjectTypeRSA,
-		NameAlg: HashAlgorithmSHA256,
-		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrSign,
-		Params: &PublicParamsU{
-			RSADetail: &RSAParams{
-				Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-				Scheme: RSAScheme{
-					Scheme:  RSASchemeRSASSA,
-					Details: &AsymSchemeU{RSASSA: &SigSchemeRSASSA{HashAlg: HashAlgorithmSHA256}}},
-				KeyBits:  2048,
-				Exponent: 0}}}
-	sensitiveCreate := SensitiveCreate{UserAuth: userAuth}
-	priv, pub, _, _, _, err := tpm.Create(ek, &sensitiveCreate, &template, nil, nil, sessionContext)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	if _, _, err := tpm.PolicySecret(endorsement, sessionContext, nil, nil, 0, nil); err != nil {
-		t.Fatalf("PolicySecret failed: %v", err)
-	}
-
-	akContext, err := tpm.Load(ek, priv, pub, sessionContext)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-	akContext.SetAuthValue(userAuth)
-	return akContext
-}
-
 func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent ResourceContext) ResourceContext {
 	template := Public{
 		Type:    ObjectTypeRSA,
@@ -402,37 +251,6 @@ func createAndLoadRSAPSSKeyForTesting(t *testing.T, tpm *TPMContext, parent Reso
 	}
 
 	return key
-}
-
-// Persist a transient object for testing. If the persistent handle is already in use, it tries to evict the
-// existing resource first. Fatal if persisting the transient object fails.
-func persistObjectForTesting(t *testing.T, tpm *TPMContext, auth, transient ResourceContext, persist Handle) ResourceContext {
-	if context, err := tpm.NewResourceContext(persist); err == nil {
-		_, err := tpm.EvictControl(auth, context, persist, nil)
-		if err != nil {
-			t.Logf("EvictControl failed whilst trying to remove a persistent handle that has previously been leaked: %v", err)
-		}
-	}
-	persistentContext, err := tpm.EvictControl(auth, transient, persist, nil)
-	if err != nil {
-		t.Fatalf("EvictControl failed: %v", err)
-	}
-	return persistentContext
-}
-
-// Evict a persistent object. Fails the test if the resource context is valid but the eviction doesn't succeed.
-func evictPersistentObject(t *testing.T, tpm *TPMContext, auth, context ResourceContext) {
-	if _, err := tpm.EvictControl(auth, context, context.Handle(), nil); err != nil {
-		t.Errorf("EvictControl failed: %v", err)
-	}
-}
-
-func verifyPersistentObjectEvicted(t *testing.T, tpm *TPMContext, auth, context ResourceContext) {
-	if context.Handle() == HandleUnassigned {
-		return
-	}
-	t.Errorf("Context is still live")
-	evictPersistentObject(t, tpm, auth, context)
 }
 
 // Flush a resource context. Fails the test if the resource context is valid but the flush doesn't succeed.

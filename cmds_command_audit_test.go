@@ -46,13 +46,23 @@ type testSetCommandCodeAuditStatusData struct {
 }
 
 func (s *commandCodeAuditSuiteBase) testSetCommandCodeAuditStatus(c *C, data *testSetCommandCodeAuditStatusData) {
+	sessionHandle := authSessionHandle(data.authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.authSession.State().NeedsPassword
+
 	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, data.alg, nil, nil, data.authSession), IsNil)
 	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, HashAlgorithmNull, data.setList, nil, data.authSession), IsNil)
 	c.Check(s.TPM.SetCommandCodeAuditStatus(data.auth, data.alg, nil, data.clearList, data.authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, authSessionHandle(data.authSession))
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.auth.AuthValue()))
+		}
+	}
 
 	commands, err := s.TPM.GetCapabilityAuditCommands(CommandFirst, CapabilityMaxProperties)
 	c.Assert(err, IsNil)
@@ -81,12 +91,25 @@ func (s *commandCodeAuditSuiteOwner) TestSetCommandCodeAuditStatus2(c *C) {
 }
 
 func (s *commandCodeAuditSuiteOwner) TestSetCommandCodeAuditStatusAuthSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+
 	s.testSetCommandCodeAuditStatus(c, &testSetCommandCodeAuditStatusData{
 		auth:             s.TPM.OwnerHandleContext(),
 		alg:              HashAlgorithmSHA256,
 		setList:          CommandCodeList{CommandClockSet, CommandStirRandom, CommandGetRandom},
 		clearList:        CommandCodeList{CommandGetRandom},
 		authSession:      s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession),
+		expectedCommands: CommandCodeList{CommandClockSet, CommandSetCommandCodeAuditStatus, CommandStirRandom}})
+}
+
+func (s *commandCodeAuditSuiteOwner) TestSetCommandCodeAuditStatusPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+
+	s.testSetCommandCodeAuditStatus(c, &testSetCommandCodeAuditStatusData{
+		auth:             s.TPM.OwnerHandleContext(),
+		alg:              HashAlgorithmSHA256,
+		setList:          CommandCodeList{CommandClockSet, CommandStirRandom, CommandGetRandom},
+		clearList:        CommandCodeList{CommandGetRandom},
 		expectedCommands: CommandCodeList{CommandClockSet, CommandSetCommandCodeAuditStatus, CommandStirRandom}})
 }
 

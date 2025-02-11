@@ -11,6 +11,7 @@ import (
 	"github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/mssim"
+	"github.com/canonical/go-tpm2/objectutil"
 
 	. "gopkg.in/check.v1"
 )
@@ -373,7 +374,10 @@ func (b *TPMTest) StartAuthSession(c *C, tpmKey, bind tpm2.ResourceContext, sess
 // hierarchy, with the template returned from StorageKeyRSATemplate. On success,
 // it returns the context for the newly created object. It asserts if it is not successful.
 func (b *TPMTest) CreateStoragePrimaryKeyRSA(c *C) tpm2.ResourceContext {
-	return b.CreatePrimary(c, tpm2.HandleOwner, NewRSAStorageKeyTemplate())
+	return b.CreatePrimary(c, tpm2.HandleOwner, objectutil.NewRSAStorageKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+		objectutil.WithRSAUnique(make([]byte, 256)),
+	))
 }
 
 // TPMSimulatorTest is a base test suite for all tests that require a TPM simulator.

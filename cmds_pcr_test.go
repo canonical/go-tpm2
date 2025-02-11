@@ -396,7 +396,8 @@ type testPCRAllocationParams struct {
 }
 
 func (s *pcrSuite) testPCRAllocation(c *C, params *testPCRAllocationParams) error {
-	sessionHandles := []Handle{authSessionHandle(params.authContextAuthSession)}
+	sessionHandle := authSessionHandle(params.authContextAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || params.authContextAuthSession.State().NeedsPassword
 
 	success, _, sizeNeeded, _, err := s.TPM.PCRAllocate(s.TPM.PlatformHandleContext(), params.allocation, params.authContextAuthSession)
 	if err != nil {
@@ -413,9 +414,20 @@ func (s *pcrSuite) testPCRAllocation(c *C, params *testPCRAllocationParams) erro
 	}
 	c.Check(sizeNeeded, internal_testutil.IntEqual, expectedSizeNeeded)
 
-	authArea := s.LastCommand(c).CmdAuthArea
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(s.TPM.PlatformHandleContext().AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(s.TPM.PlatformHandleContext().AuthValue()))
+		}
+	}
+	if params.authContextAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(params.authContextAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	s.ResetTPMSimulator(c)
 
@@ -452,7 +464,9 @@ func (s *pcrSuite) TestPCRAllocation2(c *C) {
 	c.Check(err, IsNil)
 }
 
-func (s *pcrSuite) TestPCRAllocationWithSession(c *C) {
+func (s *pcrSuite) TestPCRAllocationWithAuthSession(c *C) {
+	s.HierarchyChangeAuth(c, HandlePlatform, []byte("password"))
+
 	current, err := s.TPM.GetCapabilityPCRs()
 	c.Assert(err, IsNil)
 
@@ -462,6 +476,21 @@ func (s *pcrSuite) TestPCRAllocationWithSession(c *C) {
 	err = s.testPCRAllocation(c, &testPCRAllocationParams{
 		allocation:             current,
 		authContextAuthSession: s.StartAuthSession(c, nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256),
+	})
+	c.Check(err, IsNil)
+}
+
+func (s *pcrSuite) TestPCRAllocationWithPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandlePlatform, []byte("password"))
+
+	current, err := s.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+
+	for i := range current {
+		current[i].Select = []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
+	}
+	err = s.testPCRAllocation(c, &testPCRAllocationParams{
+		allocation: current,
 	})
 	c.Check(err, IsNil)
 }

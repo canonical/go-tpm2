@@ -25,6 +25,7 @@ type testEvictControlData struct {
 
 func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	sessionHandle := authSessionHandle(data.authAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.authAuthSession.State().NeedsPassword
 
 	object := s.CreatePrimary(c, data.auth.Handle(), testutil.NewRSAStorageKeyTemplate())
 
@@ -37,9 +38,20 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	c.Check(persist, Implements, &sample)
 	c.Check(persist.(ObjectContext).Public(), DeepEquals, object.(ObjectContext).Public())
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.auth.AuthValue()))
+		}
+	}
+	if data.authAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(data.authAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	pub, name, _, err := s.TPM.ReadPublic(persist)
 	c.Assert(err, IsNil)
@@ -50,11 +62,17 @@ func (s *contextSuiteBase) testEvictControl(c *C, data *testEvictControlData) {
 	c.Check(err, IsNil)
 	c.Check(persist2, IsNil)
 
-	c.Check(persist.Handle(), Equals, HandleUnassigned)
+	cmd = s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, HandlePW)
+	if len(data.auth.AuthValue()) == 0 {
+		c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+	} else {
+		c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.auth.AuthValue()))
+	}
 
-	_, _, _, err = s.TPM.ReadPublic(NewHandleContext(data.handle))
-	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
-	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandReadPublic, Code: ErrorHandle}, Index: 1})
+	c.Check(persist.Handle(), Equals, HandleUnassigned)
+	c.Check(s.TPM.DoesHandleExist(data.handle), internal_testutil.IsFalse)
 }
 
 type contextSuite struct {
@@ -280,17 +298,27 @@ func (s *contextSuite) TestEvictControl(c *C) {
 		handle: s.NextAvailableHandle(c, 0x81000000)})
 }
 
-func (s *contextSuite) TestEvictControlAuthAuthSession(c *C) {
+func (s *contextSuite) TestEvictControlAuthHMACSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
 	s.testEvictControl(c, &testEvictControlData{
 		auth:            s.TPM.OwnerHandleContext(),
 		handle:          s.NextAvailableHandle(c, 0x81000000),
-		authAuthSession: s.StartAuthSession(c, nil, s.TPM.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+		authAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
 }
 
-func (s *contextSuitePlatform) TestEvictControlAuthAuthSession(c *C) {
+func (s *contextSuitePlatform) TestEvictControlAuthHMACSession(c *C) {
+	s.HierarchyChangeAuth(c, HandlePlatform, []byte("password"))
 	s.testEvictControl(c, &testEvictControlData{
-		auth:   s.TPM.PlatformHandleContext(),
-		handle: s.NextAvailableHandle(c, 0x81800000)})
+		auth:            s.TPM.PlatformHandleContext(),
+		handle:          s.NextAvailableHandle(c, 0x81800000),
+		authAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+func (s *contextSuite) TestEvictControlAuthPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+	s.testEvictControl(c, &testEvictControlData{
+		auth:   s.TPM.OwnerHandleContext(),
+		handle: s.NextAvailableHandle(c, 0x81000000)})
 }
 
 func (s *contextSuite) TestFlushContextTransient(c *C) {

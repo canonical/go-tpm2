@@ -14,6 +14,9 @@ import (
 
 // NewExternalSealedObject is a wrapper around [objectutil.NewSealedObject] that sets
 // the noDA attribute.
+//
+// Deprecated: use [objectutil.NewSealedObject] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewExternalSealedObject(authValue tpm2.Auth, data []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	pub, sensitive, err := objectutil.NewSealedObject(rand.Reader, data, authValue,
 		objectutil.WithoutDictionaryAttackProtection())
@@ -43,6 +46,9 @@ func NewExternalRSAStoragePublicKey(key *rsa.PublicKey) *tpm2.Public {
 
 // NewExternalHMACKey is a wrapper around [objectutil.NewHMACKey] that sets the
 // noDA attribute.
+//
+// Deprecated: use [objectutil.NewHMACKey] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewExternalHMACKey(authValue tpm2.Auth, key []byte) (*tpm2.Public, *tpm2.Sensitive) {
 	pub, sensitive, err := objectutil.NewHMACKey(rand.Reader, key, authValue, objectutil.WithoutDictionaryAttackProtection())
 	if err != nil {

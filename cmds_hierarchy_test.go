@@ -5,9 +5,9 @@
 package tpm2_test
 
 import (
-	"bytes"
-	"testing"
+	. "gopkg.in/check.v1"
 
+	"github.com/canonical/go-tpm2"
 	. "github.com/canonical/go-tpm2"
 	internal_testutil "github.com/canonical/go-tpm2/internal/testutil"
 	"github.com/canonical/go-tpm2/objectutil"
@@ -40,7 +40,8 @@ type testCreatePrimaryParams struct {
 }
 
 func (s *hierarchySuite) testCreatePrimary(c *C, params *testCreatePrimaryParams) ResourceContext {
-	sessionHandle := authSessionHandle(data.parentAuthSession)
+	sessionHandle := authSessionHandle(params.parentAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || params.parentAuthSession.State().NeedsPassword
 
 	objectContext, outPublic, creationData, creationHash, creationTicket, err := s.TPM.CreatePrimary(params.hierarchy, params.sensitive, params.template, params.outsideInfo, params.creationPCR, params.parentAuthSession)
 	c.Assert(err, IsNil)
@@ -48,12 +49,23 @@ func (s *hierarchySuite) testCreatePrimary(c *C, params *testCreatePrimaryParams
 	cmd := s.LastCommand(c)
 	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
 	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(params.hierarchy.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(params.hierarchy.AuthValue()))
+		}
+	}
 	c.Check(cmd.RspHandle, Equals, objectContext.Handle())
+	if params.parentAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(params.parentAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	c.Check(objectContext.Handle().Type(), Equals, HandleTypeTransient)
 
 	var sample ObjectContext
-	c.Assert(objectContext, internal_testutil.Implements, &sample)
+	c.Assert(objectContext, Implements, &sample)
 	c.Check(objectContext.(ObjectContext).Public(), testutil.TPMValueDeepEquals, outPublic)
 
 	s.checkPublicAgainstTemplate(c, outPublic, params.template)
@@ -66,8 +78,8 @@ func (s *hierarchySuite) testCreatePrimary(c *C, params *testCreatePrimaryParams
 func (s *hierarchySuite) TestCreatePrimaryRSAPrimaryStorage(c *C) {
 	s.testCreatePrimary(c, &testCreatePrimaryParams{
 		hierarchy: s.TPM.OwnerHandleContext(),
-		template:  objectutil.NewRSAStorageKeyTemplate(
-			objectutil.WithRSAUnique(make([]byte, 256),
+		template: objectutil.NewRSAStorageKeyTemplate(
+			objectutil.WithRSAUnique(make([]byte, 256)),
 		),
 	})
 }
@@ -75,7 +87,7 @@ func (s *hierarchySuite) TestCreatePrimaryRSAPrimaryStorage(c *C) {
 func (s *hierarchySuite) TestCreatePrimaryECCPrimaryStorage(c *C) {
 	s.testCreatePrimary(c, &testCreatePrimaryParams{
 		hierarchy: s.TPM.OwnerHandleContext(),
-		template:  objectutil.NewECCStorageKeyTemplate(
+		template: objectutil.NewECCStorageKeyTemplate(
 			objectutil.WithECCUnique(&ECCPoint{
 				X: make([]byte, 32),
 				Y: make([]byte, 32),
@@ -86,475 +98,475 @@ func (s *hierarchySuite) TestCreatePrimaryECCPrimaryStorage(c *C) {
 
 func (s *hierarchySuite) TestCreatePrimaryEK(c *C) {
 	s.testCreatePrimary(c, &testCreatePrimaryParams{
-		hierarchy: s.TPM.OwnerHandleContext(),
-		template: objectutil.NewECCStorageKeyTemplate(
+		hierarchy: s.TPM.EndorsementHandleContext(),
+		template: objectutil.NewRSAStorageKeyTemplate(
 			objectutil.WithAuthPolicy(internal_testutil.DecodeHexString(c, "837197674484B3F81A90CC8D46A5D724FD52D76E06520B64F2A1DA1B331469AA")),
 			objectutil.WithUserAuthMode(objectutil.RequirePolicy),
 			objectutil.WithAdminAuthMode(objectutil.RequirePolicy),
-			objectutil.WithRSAUnique(make([]byte, 256),
+			objectutil.WithRSAUnique(make([]byte, 256)),
 		),
 	})
 }
 
-func TestCreatePrimary(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	run := func(t *testing.T, hierarchy ResourceContext, sensitive *SensitiveCreate, template *Public, outsideInfo Data, creationPCR PCRSelectionList, session SessionContext) (ResourceContext, *Public) {
-		objectContext, outPublic, creationData, creationHash, creationTicket, err := tpm.CreatePrimary(hierarchy, sensitive, template, outsideInfo, creationPCR, session)
-		if err != nil {
-			t.Fatalf("CreatePrimary failed: %v", err)
-		}
-		if _, ok := objectContext.(ObjectContext); !ok {
-			t.Errorf("CreatePrimary return an invalid resource type")
-		}
-
-		if objectContext.Handle().Type() != HandleTypeTransient {
-			t.Errorf("CreatePrimary returned an invalid handle 0x%08x", objectContext.Handle())
-		}
-		verifyPublicAgainstTemplate(t, outPublic, template)
-		verifyCreationData(t, tpm, creationData, creationHash, template, outsideInfo, creationPCR, hierarchy)
-		verifyCreationTicket(t, creationTicket, hierarchy)
-
-		nameAlgSize := template.NameAlg.Size()
-		if len(objectContext.Name()) != nameAlgSize+2 {
-			t.Errorf("CreatePrimary returned a name of the wrong length %d", len(objectContext.Name()))
-		}
-
-		return objectContext, outPublic
-	}
-
-	t.Run("CreateWithAuthValue", func(t *testing.T) {
-		sensitive := SensitiveCreate{UserAuth: testAuth}
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt | AttrNoDA,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
-
-		objectContext, pub := run(t, tpm.OwnerHandleContext(), &sensitive, &template, Data{}, creationPCR, nil)
-		defer flushContext(t, tpm, objectContext)
-		verifyRSAAgainstTemplate(t, pub, &template)
-
-		childTemplate := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrDecrypt | AttrSign,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{Algorithm: SymObjectAlgorithmNull},
-					Scheme:    RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:   2048,
-					Exponent:  0}}}
-
-		// We shouldn't need to call ResourceContext.SetAuthValue to use the primary object.
-		_, _, _, _, _, err := tpm.Create(objectContext, nil, &childTemplate, nil, nil, nil)
-		if err != nil {
-			t.Errorf("Use of authorization on primary key failed: %v", err)
-		}
-
-		// Verify that the primary object was created with the right auth value
-		objectContext.SetAuthValue(testAuth)
-		_, _, _, _, _, err = tpm.Create(objectContext, nil, &childTemplate, nil, nil, nil)
-		if err != nil {
-			t.Errorf("Use of authorization on primary key failed: %v", err)
-		}
+func (s *hierarchySuite) TestCreatePrimaryRSAWithUserAuth(c *C) {
+	srk := s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		sensitive: &SensitiveCreate{
+			UserAuth: []byte("1234"),
+		},
+		template: objectutil.NewRSAStorageKeyTemplate(
+			objectutil.WithRSAUnique(make([]byte, 256)),
+		),
 	})
 
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
+	// The returned object should already have the auth value set
+	c.Check(srk.AuthValue(), DeepEquals, []byte("1234"))
 
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
+	// Make sure we can use the auth value for user role.
+	s.ForgetCommands()
+	_, _, _, _, _, err := s.TPM.Create(srk, nil, objectutil.NewRSAKeyTemplate(objectutil.UsageSign), nil, nil, nil)
+	c.Check(err, IsNil)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth("1234"))
+}
 
-		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, nil)
-		defer flushContext(t, tpm, objectContext)
-		verifyRSAAgainstTemplate(t, pub, &template)
-	})
+func (s *hierarchySuite) TestCreatePrimaryRSAPrimaryStorageWithPWSession(c *C) {
+	s.HierarchyChangeAuth(c, tpm2.HandleOwner, []byte("password"))
 
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-
-		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, Data{}, PCRSelectionList{}, sessionContext)
-		defer flushContext(t, tpm, objectContext)
-		verifyRSAAgainstTemplate(t, pub, &template)
-	})
-
-	t.Run("WithOutsideInfo", func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-		creationPCR := PCRSelectionList{
-			{Hash: HashAlgorithmSHA1, Select: []int{0, 1}},
-			{Hash: HashAlgorithmSHA256, Select: []int{7, 8}}}
-		data := Data("foo")
-
-		objectContext, pub := run(t, tpm.OwnerHandleContext(), nil, &template, data, creationPCR, nil)
-		defer flushContext(t, tpm, objectContext)
-		verifyRSAAgainstTemplate(t, pub, &template)
-	})
-
-	t.Run("InvalidTemplate", func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeECC,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-
-		_, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
-		if !IsTPMParameterError(err, ErrorSymmetric, CommandCreatePrimary, 2) {
-			t.Errorf("CreatePrimary returned an unexpected error: %v", err)
-		}
+	s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		template: objectutil.NewRSAStorageKeyTemplate(
+			objectutil.WithRSAUnique(make([]byte, 256)),
+		),
 	})
 }
 
-func TestHierarchyControl(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
+func (s *hierarchySuite) TestCreatePrimaryRSAPrimaryStorageWithHMACSession(c *C) {
+	s.HierarchyChangeAuth(c, tpm2.HandleOwner, []byte("password"))
 
-	run := func(t *testing.T, authContext ResourceContext, enable Handle, state bool, session SessionContext) {
-		if err := tpm.HierarchyControl(authContext, enable, state, session); err != nil {
-			t.Errorf("HierarchyControl failed: %v", err)
-		}
-
-		props, err := tpm.GetCapabilityTPMProperties(PropertyStartupClear, 1)
-		if err != nil || len(props) == 0 {
-			t.Fatalf("GetCapability failed: %v", err)
-		}
-		var mask StartupClearAttributes
-		switch enable {
-		case HandleOwner:
-			mask = AttrShEnable
-		case HandleEndorsement:
-			mask = AttrEhEnable
-		}
-
-		var expected StartupClearAttributes
-		if state {
-			expected = mask
-		}
-
-		if StartupClearAttributes(props[0].Value)&mask != expected {
-			t.Errorf("Unexpected value")
-		}
-	}
-
-	t.Run("Owner", func(t *testing.T) {
-		run(t, tpm.OwnerHandleContext(), HandleOwner, false, nil)
-		run(t, tpm.PlatformHandleContext(), HandleOwner, true, nil)
-	})
-
-	t.Run("Endorsement", func(t *testing.T) {
-		run(t, tpm.EndorsementHandleContext(), HandleEndorsement, false, nil)
-		run(t, tpm.PlatformHandleContext(), HandleEndorsement, true, nil)
-	})
-
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		run(t, tpm.OwnerHandleContext(), HandleOwner, false, nil)
-		run(t, tpm.PlatformHandleContext(), HandleOwner, true, nil)
-	})
-
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.OwnerHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.OwnerHandleContext())
-
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-
-		run(t, tpm.OwnerHandleContext(), HandleOwner, false, sessionContext)
-		run(t, tpm.PlatformHandleContext(), HandleOwner, true, nil)
+	s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		template: objectutil.NewRSAStorageKeyTemplate(
+			objectutil.WithRSAUnique(make([]byte, 256)),
+		),
+		parentAuthSession: s.StartAuthSession(c, nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256),
 	})
 }
 
-func TestClear(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureLockoutHierarchy|testutil.TPMFeaturePlatformHierarchy|testutil.TPMFeatureClear|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	run := func(t *testing.T, authSession SessionContext) {
-		cleared := false
-
-		owner := tpm.OwnerHandleContext()
-
-		// Create storage primary key to test it gets evicted
-		primary := createRSASrkForTesting(t, tpm, nil)
-		// Persist storage primary key to test it gets evicted
-		primaryPersistHandle := Handle(0x8100ffff)
-		primaryPersist := persistObjectForTesting(t, tpm, owner, primary, primaryPersistHandle)
-		defer func() {
-			if cleared {
-				return
-			}
-			flushContext(t, tpm, primary)
-			evictPersistentObject(t, tpm, owner, primaryPersist)
-		}()
-
-		// Set endorsement hierarchy auth value (should be reset by Clear)
-		setHierarchyAuthForTest(t, tpm, tpm.EndorsementHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.EndorsementHandleContext())
-
-		// Set platform hierarchy auth value (shouldn't be reset by Clear)
-		setHierarchyAuthForTest(t, tpm, tpm.PlatformHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.PlatformHandleContext())
-
-		primaryHandle := primary.Handle()
-
-		// Perform the clear
-		if err := tpm.Clear(tpm.LockoutHandleContext(), authSession); err != nil {
-			t.Fatalf("Clear failed: %v", err)
-		}
-
-		cleared = true
-
-		// Verify that the objects we created have gone so we know that the command executed
-		if _, err := tpm.NewResourceContext(primaryHandle); err == nil {
-			t.Errorf("Clear didn't evict owner object")
-		}
-		if _, err := tpm.NewResourceContext(primaryPersistHandle); err == nil {
-			t.Errorf("Clear didn't evict owner object")
-		}
-
-		if tpm.EndorsementHandleContext().AuthValue() != nil {
-			t.Errorf("Clear didn't reset the authorization value for the EH ResourceContext")
-		}
-		if !bytes.Equal(tpm.PlatformHandleContext().AuthValue(), testAuth) {
-			t.Errorf("Clear reset the authorization value for the PH ResourceContext")
-		}
-	}
-
-	t.Run("NoAuth", func(t *testing.T) {
-		run(t, nil)
-	})
-	t.Run("UsePasswordAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		run(t, nil)
-	})
-	t.Run("UseSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.LockoutHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, sessionContext)
-	})
-	t.Run("UseUnboundSessionAuth", func(t *testing.T) {
-		setHierarchyAuthForTest(t, tpm, tpm.LockoutHandleContext())
-		defer resetHierarchyAuth(t, tpm, tpm.LockoutHandleContext())
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext)
-		run(t, sessionContext)
+func (s *hierarchySuite) TestCreatePrimaryRSAPrimaryStorageWithOutsideInfo(c *C) {
+	s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		template: objectutil.NewRSAStorageKeyTemplate(
+			objectutil.WithRSAUnique(make([]byte, 256)),
+		),
+		outsideInfo: []byte("foo"),
 	})
 }
 
-func TestHierarchyChangeAuth(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureEndorsementHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
+func (s *hierarchySuite) TestCreatePrimaryRSAPrimaryStorageWithCreationPCR(c *C) {
+	s.testCreatePrimary(c, &testCreatePrimaryParams{
+		hierarchy: s.TPM.OwnerHandleContext(),
+		template: objectutil.NewRSAStorageKeyTemplate(
+			objectutil.WithRSAUnique(make([]byte, 256)),
+		),
+		creationPCR: tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7}}},
+	})
+}
 
-	setAuth := func(t *testing.T, hierarchy ResourceContext, session SessionContext, testHierarchy func(t *testing.T)) {
-		if err := tpm.HierarchyChangeAuth(hierarchy, testAuth, session); err != nil {
-			t.Fatalf("HierarchyChangeAuth failed: %v", err)
+func (s *hierarchySuite) TestCreatePrimaryInvalidTemplate(c *C) {
+	template := Public{
+		Type:    ObjectTypeECC,
+		NameAlg: HashAlgorithmSHA256,
+		Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
+		Params: &PublicParamsU{
+			RSADetail: &RSAParams{
+				Symmetric: SymDefObject{
+					Algorithm: SymObjectAlgorithmAES,
+					KeyBits:   &SymKeyBitsU{Sym: 128},
+					Mode:      &SymModeU{Sym: SymModeCFB}},
+				Scheme:   RSAScheme{Scheme: RSASchemeNull},
+				KeyBits:  2048,
+				Exponent: 0}}}
+
+	_, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, &template, nil, nil, nil)
+	c.Check(IsTPMParameterError(err, ErrorSymmetric, CommandCreatePrimary, 2), internal_testutil.IsTrue)
+}
+
+type testHierarchyControlParams struct {
+	authContext            ResourceContext
+	enable                 Handle
+	state                  bool
+	authContextAuthSession SessionContext
+}
+
+func (s *hierarchySuite) testHierarchyControl(c *C, params *testHierarchyControlParams) {
+	sessionHandle := authSessionHandle(params.authContextAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || params.authContextAuthSession.State().NeedsPassword
+
+	c.Check(s.TPM.HierarchyControl(params.authContext, params.enable, params.state, params.authContextAuthSession), IsNil)
+
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(params.authContext.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(params.authContext.AuthValue()))
 		}
-
-		testHierarchy(t)
-		hierarchy.SetAuthValue(testAuth)
-		testHierarchy(t)
+	}
+	if params.authContextAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(params.authContextAuthSession.Handle(), Equals, HandleUnassigned)
 	}
 
-	resetAuth := func(t *testing.T, hierarchy ResourceContext, session SessionContext, testHierarchy func(*testing.T)) {
-		if err := tpm.HierarchyChangeAuth(hierarchy, nil, session); err != nil {
-			t.Errorf("HierarchyChangeAuth failed: %v", err)
-		}
+	val, err := s.TPM.GetCapabilityTPMProperty(PropertyStartupClear)
+	c.Check(err, IsNil)
 
-		testHierarchy(t)
-		hierarchy.SetAuthValue(nil)
-		testHierarchy(t)
+	var mask StartupClearAttributes
+	switch params.enable {
+	case HandleOwner:
+		mask = AttrShEnable
+	case HandleEndorsement:
+		mask = AttrEhEnable
 	}
 
-	createSrk := func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrUserWithAuth | AttrRestricted | AttrDecrypt,
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.OwnerHandleContext(), nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Errorf("CreatePrimary failed: %v", err)
-		}
-		flushContext(t, tpm, objectContext)
+	var expected StartupClearAttributes
+	if params.state {
+		expected = mask
 	}
-	createEk := func(t *testing.T) {
-		template := Public{
-			Type:    ObjectTypeRSA,
-			NameAlg: HashAlgorithmSHA256,
-			Attrs:   AttrFixedTPM | AttrFixedParent | AttrSensitiveDataOrigin | AttrAdminWithPolicy | AttrRestricted | AttrDecrypt,
-			AuthPolicy: []byte{0x83, 0x71, 0x97, 0x67, 0x44, 0x84, 0xb3, 0xf8, 0x1a, 0x90, 0xcc, 0x8d, 0x46, 0xa5, 0xd7, 0x24, 0xfd, 0x52,
-				0xd7, 0x6e, 0x06, 0x52, 0x0b, 0x64, 0xf2, 0xa1, 0xda, 0x1b, 0x33, 0x14, 0x69, 0xaa},
-			Params: &PublicParamsU{
-				RSADetail: &RSAParams{
-					Symmetric: SymDefObject{
-						Algorithm: SymObjectAlgorithmAES,
-						KeyBits:   &SymKeyBitsU{Sym: 128},
-						Mode:      &SymModeU{Sym: SymModeCFB}},
-					Scheme:   RSAScheme{Scheme: RSASchemeNull},
-					KeyBits:  2048,
-					Exponent: 0}}}
-		objectContext, _, _, _, _, err := tpm.CreatePrimary(tpm.EndorsementHandleContext(), nil, &template, nil, nil, nil)
-		if err != nil {
-			t.Errorf("CreatePrimary failed: %v", err)
-		}
-		flushContext(t, tpm, objectContext)
+	c.Check(StartupClearAttributes(val)&mask, Equals, expected)
+}
+
+func (s *hierarchySuite) TestHierarchyControlDisableOwner(c *C) {
+	s.testHierarchyControl(c, &testHierarchyControlParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		enable:      HandleOwner,
+		state:       false,
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyControlDisableEndorsement(c *C) {
+	s.testHierarchyControl(c, &testHierarchyControlParams{
+		authContext: s.TPM.EndorsementHandleContext(),
+		enable:      HandleEndorsement,
+		state:       false,
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyControlEnableOwner(c *C) {
+	s.testHierarchyControl(c, &testHierarchyControlParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		enable:      HandleOwner,
+		state:       false,
+	})
+	s.testHierarchyControl(c, &testHierarchyControlParams{
+		authContext: s.TPM.PlatformHandleContext(),
+		enable:      HandleOwner,
+		state:       true,
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyControlDisableOwnerPWAuth(c *C) {
+	s.HierarchyChangeAuth(c, tpm2.HandleOwner, []byte("password"))
+
+	s.testHierarchyControl(c, &testHierarchyControlParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		enable:      HandleOwner,
+		state:       false,
+	})
+	c.Assert(s.CommandLog(), internal_testutil.LenEquals, 2)
+	c.Assert(s.CommandLog()[0].CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(s.CommandLog()[0].CmdAuthArea[0].HMAC, DeepEquals, Auth("password"))
+}
+
+func (s *hierarchySuite) TestHierarchyControlDisableOwnerHMACAuth(c *C) {
+	s.HierarchyChangeAuth(c, tpm2.HandleOwner, []byte("password"))
+
+	s.testHierarchyControl(c, &testHierarchyControlParams{
+		authContext:            s.TPM.OwnerHandleContext(),
+		enable:                 HandleOwner,
+		state:                  false,
+		authContextAuthSession: s.StartAuthSession(c, nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyControlReenableOwnerWrongAuth(c *C) {
+	s.testHierarchyControl(c, &testHierarchyControlParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		enable:      HandleOwner,
+		state:       false,
+	})
+	err := s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), HandleOwner, true, nil)
+	c.Check(err, ErrorMatches, `TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyControl: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)`)
+	c.Check(IsTPMHandleError(err, ErrorHierarchy, CommandHierarchyControl, 1), internal_testutil.IsTrue)
+}
+
+func (s *hierarchySuite) testClear(c *C, auth ResourceContext, authSession SessionContext) {
+	sessionHandle := authSessionHandle(authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || authSession.State().NeedsPassword
+
+	origAuthValue := auth.AuthValue()
+
+	// Persist an owner object (should be cleared)
+	srk := s.CreateStoragePrimaryKeyRSA(c)
+	srkHandle := Handle(0x81000001)
+	s.EvictControl(c, HandleOwner, srk, srkHandle)
+	srkTransientHandle := srk.Handle()
+
+	// Change endorsement hierarchy auth (should be cleared)
+	s.HierarchyChangeAuth(c, tpm2.HandleEndorsement, []byte("1234"))
+
+	// Change platform hierarchy auth (shouldn't be cleared)
+	s.HierarchyChangeAuth(c, tpm2.HandlePlatform, []byte("1234"))
+	if auth.Handle() == HandlePlatform {
+		origAuthValue = []byte("1234")
 	}
 
-	t.Run("OwnerWithPW", func(t *testing.T) {
-		setAuth(t, tpm.OwnerHandleContext(), nil, createSrk)
-		resetAuth(t, tpm.OwnerHandleContext(), nil, createSrk)
-	})
+	c.Check(s.TPM.Clear(auth, authSession), IsNil)
 
-	t.Run("EndorsementWithPW", func(t *testing.T) {
-		setAuth(t, tpm.EndorsementHandleContext(), nil, createEk)
-		resetAuth(t, tpm.EndorsementHandleContext(), nil, createEk)
-	})
-
-	t.Run("OwnerWithBoundHMACSession/1", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(origAuthValue) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(origAuthValue))
 		}
-		defer flushContext(t, tpm, sessionContext)
-		sessionContext.SetAttrs(AttrContinueSession)
+	}
+	if authSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(authSession.Handle(), Equals, HandleUnassigned)
+	}
 
-		setAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
-		resetAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+	c.Check(s.TPM.DoesHandleExist(srkHandle), internal_testutil.IsFalse)
+	c.Check(s.TPM.DoesHandleExist(srkTransientHandle), internal_testutil.IsFalse)
+	c.Check(s.TPM.EndorsementHandleContext().AuthValue(), internal_testutil.LenEquals, 0)
+	c.Check(s.TPM.PlatformHandleContext().AuthValue(), DeepEquals, []byte("1234"))
+	c.Check(s.TPM.LockoutHandleContext().AuthValue(), internal_testutil.LenEquals, 0)
+
+	val, err := s.TPM.GetCapabilityTPMProperty(PropertyPermanent)
+	c.Assert(err, IsNil)
+	c.Check(PermanentAttributes(val)&(AttrOwnerAuthSet|AttrEndorsementAuthSet|AttrLockoutAuthSet), Equals, PermanentAttributes(0))
+}
+
+func (s *hierarchySuite) TestClear(c *C) {
+	s.testClear(c, s.TPM.LockoutHandleContext(), nil)
+}
+
+func (s *hierarchySuite) TestClearPlatform(c *C) {
+	s.testClear(c, s.TPM.PlatformHandleContext(), nil)
+}
+
+func (s *hierarchySuite) TestClearPWAuth(c *C) {
+	s.HierarchyChangeAuth(c, HandleLockout, []byte("password"))
+	s.testClear(c, s.TPM.LockoutHandleContext(), nil)
+}
+
+func (s *hierarchySuite) TestClearUnboundSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleLockout, []byte("password"))
+	s.testClear(c, s.TPM.LockoutHandleContext(), s.StartAuthSession(c, nil, nil, tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256))
+}
+
+func (s *hierarchySuite) TestClearBoundSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleLockout, []byte("password"))
+	s.testClear(c, s.TPM.LockoutHandleContext(), s.StartAuthSession(c, nil, s.TPM.LockoutHandleContext(), tpm2.SessionTypeHMAC, nil, tpm2.HashAlgorithmSHA256))
+}
+
+type testClearControlParams struct {
+	auth        ResourceContext
+	disable     bool
+	authSession SessionContext
+}
+
+func (s *hierarchySuite) testClearControl(c *C, params *testClearControlParams) {
+	sessionHandle := authSessionHandle(params.authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || params.authSession.State().NeedsPassword
+
+	c.Check(s.TPM.ClearControl(params.auth, params.disable, params.authSession), IsNil)
+
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(params.auth.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(params.auth.AuthValue()))
+		}
+	}
+	if params.authSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(params.authSession.Handle(), Equals, HandleUnassigned)
+	}
+
+	val, err := s.TPM.GetCapabilityTPMProperty(PropertyPermanent)
+	c.Check(err, IsNil)
+
+	var mask PermanentAttributes
+	if params.disable {
+		mask = AttrDisableClear
+	}
+	c.Check(PermanentAttributes(val)&mask, Equals, mask)
+}
+
+func (s *hierarchySuite) TestClearControlDisable(c *C) {
+	s.testClearControl(c, &testClearControlParams{
+		auth:    s.TPM.LockoutHandleContext(),
+		disable: true,
 	})
+}
 
-	t.Run("OwnerWithBoundHMACSession/2", func(t *testing.T) {
-		sessionContext1, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext1)
-
-		setAuth(t, tpm.OwnerHandleContext(), sessionContext1, createSrk)
-
-		sessionContext2, err := tpm.StartAuthSession(nil, tpm.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer verifyContextFlushed(t, tpm, sessionContext2)
-
-		resetAuth(t, tpm.OwnerHandleContext(), sessionContext2, createSrk)
+func (s *hierarchySuite) TestClearControlDisablePlatformAuth(c *C) {
+	s.testClearControl(c, &testClearControlParams{
+		auth:    s.TPM.PlatformHandleContext(),
+		disable: true,
 	})
+}
 
-	t.Run("OwnerWithUnboundHMACSession/1", func(t *testing.T) {
-		sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
-		}
-		defer flushContext(t, tpm, sessionContext)
-
-		sessionContext.SetAttrs(AttrContinueSession)
-
-		setAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
-		resetAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+func (s *hierarchySuite) TestClearControlEnablePlatformAuth(c *C) {
+	s.testClearControl(c, &testClearControlParams{
+		auth:    s.TPM.LockoutHandleContext(),
+		disable: true,
 	})
+	s.testClearControl(c, &testClearControlParams{
+		auth:    s.TPM.PlatformHandleContext(),
+		disable: false,
+	})
+}
 
-	t.Run("OwnerWithUnboundHMACSession/2", func(t *testing.T) {
-		// This test highlights a bug where we didn't preserve the value of Session.includeAuthValue (which should be true) before computing
-		// the response HMAC. It's not caught by OwnerWithUnboundHMACSession because the lack of session key combined with
-		// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth to bail out early
-		primary := createRSASrkForTesting(t, tpm, nil)
-		defer flushContext(t, tpm, primary)
+func (s *hierarchySuite) TestClearControlDisablePWAuth(c *C) {
+	s.HierarchyChangeAuth(c, HandleLockout, []byte("password"))
+	s.testClearControl(c, &testClearControlParams{
+		auth:    s.TPM.LockoutHandleContext(),
+		disable: true,
+	})
+}
 
-		sessionContext, err := tpm.StartAuthSession(primary, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
-		if err != nil {
-			t.Fatalf("StartAuthSession failed: %v", err)
+func (s *hierarchySuite) TestClearControlDisableHMACAuth(c *C) {
+	s.HierarchyChangeAuth(c, HandleLockout, []byte("password"))
+	s.testClearControl(c, &testClearControlParams{
+		auth:        s.TPM.LockoutHandleContext(),
+		disable:     true,
+		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+	})
+}
+
+type testHierarchyChangeAuthParams struct {
+	authContext            ResourceContext
+	newAuth                Auth
+	authContextAuthSession SessionContext
+}
+
+func (s *hierarchySuite) testHierarchyChangeAuth(c *C, params *testHierarchyChangeAuthParams) {
+	sessionHandle := authSessionHandle(params.authContextAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || params.authContextAuthSession.State().NeedsPassword
+
+	origAuthValue := params.authContext.AuthValue()
+
+	c.Check(s.TPM.HierarchyChangeAuth(params.authContext, params.newAuth, params.authContextAuthSession), IsNil)
+
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(origAuthValue) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(origAuthValue))
 		}
-		defer flushContext(t, tpm, sessionContext)
+	}
+	if params.authContextAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(params.authContextAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
-		sessionContext.SetAttrs(AttrContinueSession)
+	c.Check(params.authContext.AuthValue(), DeepEquals, []byte(params.newAuth))
 
-		setAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
-		resetAuth(t, tpm.OwnerHandleContext(), sessionContext, createSrk)
+	_, _, _, _, _, err := s.TPM.CreatePrimary(params.authContext, nil, objectutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
+	c.Check(err, IsNil)
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwner(c *C) {
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		newAuth:     []byte("1234"),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthEndorsement(c *C) {
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext: s.TPM.EndorsementHandleContext(),
+		newAuth:     []byte("1234"),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwnerDifferentNewAuth(c *C) {
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		newAuth:     []byte("5678"),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwnerPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		newAuth:     []byte("1234"),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwnerUnboundSession(c *C) {
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext:            s.TPM.OwnerHandleContext(),
+		newAuth:                []byte("1234"),
+		authContextAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwnerUnboundSessionWithPW(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext:            s.TPM.OwnerHandleContext(),
+		newAuth:                []byte("1234"),
+		authContextAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwnerBoundSession(c *C) {
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext:            s.TPM.OwnerHandleContext(),
+		newAuth:                []byte("1234"),
+		authContextAuthSession: s.StartAuthSession(c, nil, s.TPM.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwnerBoundSessionWithPW(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext:            s.TPM.OwnerHandleContext(),
+		newAuth:                []byte("1234"),
+		authContextAuthSession: s.StartAuthSession(c, nil, s.TPM.OwnerHandleContext(), SessionTypeHMAC, nil, HashAlgorithmSHA256),
+	})
+}
+
+func (s *hierarchySuite) TestHierarchyChangeAuthOwnerUnboundSessionWithSessionKey(c *C) {
+	// This test highlights a historical bug where we didn't preserve the value of sessionParam.IncludeAuthValue
+	// (which should be true) before computing the response HMAC. It wasn't caught by
+	// TestHierarchyChangeAuthOwnerUnboundSession because the lack of session key combined with
+	// a former implementation of sessionParam.ProcessResponseAuth bailing out early with success
+	// before checking the response HMAC.
+
+	tpmKey := s.CreateStoragePrimaryKeyRSA(c)
+
+	s.testHierarchyChangeAuth(c, &testHierarchyChangeAuthParams{
+		authContext:            s.TPM.OwnerHandleContext(),
+		newAuth:                []byte("1234"),
+		authContextAuthSession: s.StartAuthSession(c, tpmKey, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 	})
 }

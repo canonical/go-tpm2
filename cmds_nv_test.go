@@ -7,7 +7,6 @@ package tpm2_test
 import (
 	"crypto"
 	"crypto/rand"
-	"testing"
 
 	. "gopkg.in/check.v1"
 
@@ -73,6 +72,7 @@ type testNVDefineAndUndefineSpaceData struct {
 
 func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUndefineSpaceData) {
 	sessionHandle := authSessionHandle(data.authContextAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.authContextAuthSession.State().NeedsPassword
 
 	index, err := s.TPM.NVDefineSpace(data.authContext, data.auth, data.publicInfo, data.authContextAuthSession)
 	c.Assert(err, IsNil)
@@ -88,9 +88,16 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	c.Assert(index, internal_testutil.ConvertibleTo, &NvIndexContextImpl{})
 	c.Check(index.(*NvIndexContextImpl).Public(), testutil.TPMValueDeepEquals, data.publicInfo)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.authContext.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.authContext.AuthValue()))
+		}
+	}
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
@@ -104,13 +111,18 @@ func (s *nvSuiteBase) testDefineAndUndefineSpace(c *C, data *testNVDefineAndUnde
 	c.Check(s.TPM.NVUndefineSpace(data.authContext, index, data.authContextAuthSession), IsNil)
 	c.Check(index.Handle(), Equals, HandleUnassigned)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd = s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.authContext.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.authContext.AuthValue()))
+		}
+	}
 
-	_, _, err = s.TPM.NVReadPublic(NewHandleContext(data.publicInfo.Index))
-	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
-	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
+	c.Check(s.TPM.DoesHandleExist(data.publicInfo.Index), internal_testutil.IsFalse)
 }
 
 func (s *nvSuite) TestDefineAndUndefineSpace(c *C) {
@@ -150,9 +162,9 @@ func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthValue(c *C) {
 		// NVDefineSpace should set the auth value on the returned
 		// context.
 		c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
-		_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-		c.Assert(authArea, internal_testutil.LenEquals, 1)
-		c.Check(authArea[0].HMAC, DeepEquals, Auth(auth))
+		cmd := s.LastCommand(c)
+		c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+		c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(auth))
 	}
 
 	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
@@ -167,6 +179,8 @@ func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthValue(c *C) {
 }
 
 func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthContextSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+
 	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
 		authContext: s.TPM.OwnerHandleContext(),
 		publicInfo: &NVPublic{
@@ -175,6 +189,18 @@ func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthContextSession(c *C) {
 			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead),
 			Size:    64},
 		authContextAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession)})
+}
+
+func (s *nvSuite) TestDefineAndUndefineSpaceWithAuthContextPW(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("password"))
+
+	s.testDefineAndUndefineSpace(c, &testNVDefineAndUndefineSpaceData{
+		authContext: s.TPM.OwnerHandleContext(),
+		publicInfo: &NVPublic{
+			Index:   s.NextAvailableHandle(c, 0x0181f000),
+			NameAlg: HashAlgorithmSHA256,
+			Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteAll | AttrNVAuthRead),
+			Size:    64}})
 }
 
 type testNVUndefineSpaceSpecialData struct {
@@ -204,18 +230,27 @@ func (s *nvSuitePlatform) testUndefineSpaceSpecial(c *C, data *testNVUndefineSpa
 	c.Check(s.TPM.PolicyCommandCode(session, CommandNVUndefineSpaceSpecial), IsNil)
 
 	sessionHandles := []Handle{session.Handle(), authSessionHandle(data.platformAuthSession)}
+	sessionHMACIsPW := []bool{
+		false,
+		sessionHandles[1] == HandlePW || data.platformAuthSession.State().NeedsPassword,
+	}
 
 	c.Check(s.TPM.NVUndefineSpaceSpecial(index, s.TPM.PlatformHandleContext(), session, data.platformAuthSession), IsNil)
 	c.Check(index.Handle(), Equals, HandleUnassigned)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 2)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
-	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 2)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandles[0])
+	c.Check(cmd.CmdAuthArea[1].SessionHandle, Equals, sessionHandles[1])
+	if sessionHMACIsPW[1] {
+		if len(s.TPM.PlatformHandleContext().AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[1].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[1].HMAC, DeepEquals, Auth(s.TPM.PlatformHandleContext().AuthValue()))
+		}
+	}
 
-	_, _, err := s.TPM.NVReadPublic(NewHandleContext(pub.Index))
-	c.Assert(err, internal_testutil.ConvertibleTo, &TPMHandleError{})
-	c.Check(err.(*TPMHandleError), DeepEquals, &TPMHandleError{TPMError: &TPMError{Command: CommandNVReadPublic, Code: ErrorHandle}, Index: 1})
+	c.Check(s.TPM.DoesHandleExist(pub.Index), internal_testutil.IsFalse)
 
 	return nil
 }
@@ -225,8 +260,14 @@ func (s *nvSuitePlatform) TestUndefineSpaceSpecial(c *C) {
 }
 
 func (s *nvSuitePlatform) TestUndefineSpaceSpecialWithPlatformAuthSession(c *C) {
+	s.HierarchyChangeAuth(c, HandlePlatform, []byte("password"))
 	s.testUndefineSpaceSpecial(c, &testNVUndefineSpaceSpecialData{
 		platformAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+func (s *nvSuitePlatform) TestUndefineSpaceSpecialWithPlatformPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandlePlatform, []byte("password"))
+	s.testUndefineSpaceSpecial(c, &testNVUndefineSpaceSpecialData{})
 }
 
 func (s *nvSuitePlatform) TestUndefineSpaceSpecialMissingSession(c *C) {
@@ -257,6 +298,7 @@ func (s *nvSuite) TestWriteZeroSized(c *C) {
 }
 
 type testNVWriteAndReadData struct {
+	auth Auth
 	size uint16
 
 	writeData   []byte
@@ -270,20 +312,28 @@ type testNVWriteAndReadData struct {
 }
 
 func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
+	sessionHandle := authSessionHandle(data.authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.authSession.State().NeedsPassword
+
 	pub := &NVPublic{
 		Index:   s.NextAvailableHandle(c, 0x0181f000),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    data.size}
-	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
-
-	sessionHandle := authSessionHandle(data.authSession)
+	index := s.NVDefineSpace(c, HandleOwner, data.auth, pub)
 
 	c.Check(s.TPM.NVWrite(index, index, data.writeData, data.writeOffset, data.authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, data.auth)
+		}
+	}
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
@@ -295,9 +345,16 @@ func (s *nvSuite) testWriteAndRead(c *C, data *testNVWriteAndReadData) {
 	c.Check(err, IsNil)
 	c.Check(b, DeepEquals, data.expected)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd = s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, data.auth)
+		}
+	}
 }
 
 func (s *nvSuite) TestWriteAndRead(c *C) {
@@ -328,11 +385,21 @@ func (s *nvSuite) TestWriteAndReadPartialRead(c *C) {
 
 func (s *nvSuite) TestWriteAndReadWithAuthSession(c *C) {
 	s.testWriteAndRead(c, &testNVWriteAndReadData{
+		auth:        []byte("12345678"),
 		size:        8,
 		writeData:   []byte("zyxwvuts"),
 		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession),
 		readSize:    8,
 		expected:    []byte("zyxwvuts")})
+}
+
+func (s *nvSuite) TestWriteAndReadWithPWSession(c *C) {
+	s.testWriteAndRead(c, &testNVWriteAndReadData{
+		auth:      []byte("12345678"),
+		size:      8,
+		writeData: []byte("zyxwvuts"),
+		readSize:  8,
+		expected:  []byte("zyxwvuts")})
 }
 
 func (s *nvSuite) TestWriteAndReadLargerThanNVBufferMax(c *C) {
@@ -356,7 +423,10 @@ func (s *nvSuite) TestWriteAndReadLargerThanNVBufferMax(c *C) {
 		expected:  data})
 }
 
-func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
+func (s *nvSuite) testIncrementAndRead(c *C, auth Auth, authSession SessionContext) {
+	sessionHandle := authSessionHandle(authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || authSession.State().NeedsPassword
+
 	s.RequireCommand(c, CommandNVIncrement)
 
 	pub := &NVPublic{
@@ -364,15 +434,20 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeCounter.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    8}
-	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
-
-	sessionHandle := authSessionHandle(authSession)
+	index := s.NVDefineSpace(c, HandleOwner, auth, pub)
 
 	c.Check(s.TPM.NVIncrement(index, index, authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, auth)
+		}
+	}
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
@@ -383,9 +458,16 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 	initialValue, err := s.TPM.NVReadCounter(index, index, authSession)
 	c.Check(err, IsNil)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd = s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, auth)
+		}
+	}
 
 	c.Check(s.TPM.NVIncrement(index, index, authSession), IsNil)
 	value, err := s.TPM.NVReadCounter(index, index, authSession)
@@ -394,14 +476,19 @@ func (s *nvSuite) testIncrementAndRead(c *C, authSession SessionContext) {
 }
 
 func (s *nvSuite) TestIncrementAndRead(c *C) {
-	s.testIncrementAndRead(c, nil)
+	s.testIncrementAndRead(c, nil, nil)
 }
 
 func (s *nvSuite) TestIncrementAndReadWithAuthSession(c *C) {
-	s.testIncrementAndRead(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession))
+	s.testIncrementAndRead(c, []byte("1234"), s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession))
+}
+
+func (s *nvSuite) TestIncrementAndReadWithPWSession(c *C) {
+	s.testIncrementAndRead(c, []byte("5678"), nil)
 }
 
 type testNVExtendData struct {
+	auth        Auth
 	data        []byte
 	authSession SessionContext
 }
@@ -409,20 +496,28 @@ type testNVExtendData struct {
 func (s *nvSuite) testExtend(c *C, data *testNVExtendData) {
 	s.RequireCommand(c, CommandNVExtend)
 
+	sessionHandle := authSessionHandle(data.authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.authSession.State().NeedsPassword
+
 	pub := &NVPublic{
 		Index:   s.NextAvailableHandle(c, 0x0181f000),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeExtend.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    32}
-	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
-
-	sessionHandle := authSessionHandle(data.authSession)
+	index := s.NVDefineSpace(c, HandleOwner, data.auth, pub)
 
 	c.Check(s.TPM.NVExtend(index, index, data.data, data.authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, data.auth)
+		}
+	}
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
@@ -449,11 +544,19 @@ func (s *nvSuite) TestExtendDifferentData(c *C) {
 
 func (s *nvSuite) TestExtendWithAuthSession(c *C) {
 	s.testExtend(c, &testNVExtendData{
+		auth:        []byte("password"),
 		data:        []byte("foo"),
 		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
 }
 
+func (s *nvSuite) TestExtendWithPWSession(c *C) {
+	s.testExtend(c, &testNVExtendData{
+		auth: []byte("12345678"),
+		data: []byte("foo")})
+}
+
 type testNVSetBitsAndReadData struct {
+	auth        Auth
 	bits        []uint64
 	authSession SessionContext
 }
@@ -461,14 +564,15 @@ type testNVSetBitsAndReadData struct {
 func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 	s.RequireCommand(c, CommandNVSetBits)
 
+	sessionHandle := authSessionHandle(data.authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.authSession.State().NeedsPassword
+
 	pub := &NVPublic{
 		Index:   s.NextAvailableHandle(c, 0x0181f000),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeBits.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		Size:    8}
-	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
-
-	sessionHandle := authSessionHandle(data.authSession)
+	index := s.NVDefineSpace(c, HandleOwner, data.auth, pub)
 
 	var expected uint64
 	for _, b := range data.bits {
@@ -476,9 +580,16 @@ func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 		expected |= b
 	}
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, data.auth)
+		}
+	}
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
@@ -490,9 +601,16 @@ func (s *nvSuite) testSetBitsAndRead(c *C, data *testNVSetBitsAndReadData) {
 	c.Check(err, IsNil)
 	c.Check(value, Equals, expected)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd = s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, data.auth)
+		}
+	}
 }
 
 func (s *nvSuite) TestSetBitsAndRead(c *C) {
@@ -502,25 +620,40 @@ func (s *nvSuite) TestSetBitsAndRead(c *C) {
 
 func (s *nvSuite) TestSetBitsAndReadWithAuthSession(c *C) {
 	s.testSetBitsAndRead(c, &testNVSetBitsAndReadData{
+		auth:        []byte("password"),
 		bits:        []uint64{0x3a293e8e64736c75, 0xe89dc5bfff5bad0f, 0x0f77ffc72a0d78e1},
 		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256).WithAttrs(AttrContinueSession)})
 }
 
-func (s *nvSuite) testWriteLock(c *C, authSession SessionContext) {
+func (s *nvSuite) TestSetBitsAndReadWithPWSession(c *C) {
+	s.testSetBitsAndRead(c, &testNVSetBitsAndReadData{
+		auth: []byte("87654321"),
+		bits: []uint64{0x3a293e8e64736c75, 0xe89dc5bfff5bad0f, 0x0f77ffc72a0d78e1}})
+}
+
+func (s *nvSuite) testWriteLock(c *C, auth Auth, authSession SessionContext) {
+	sessionHandle := authSessionHandle(authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || authSession.State().NeedsPassword
+
 	pub := &NVPublic{
 		Index:   s.NextAvailableHandle(c, 0x0181ff00),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVWriteDefine | AttrNVAuthRead | AttrNVNoDA),
 		Size:    8}
-	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
-
-	sessionHandle := authSessionHandle(authSession)
+	index := s.NVDefineSpace(c, HandleOwner, auth, pub)
 
 	c.Check(s.TPM.NVWriteLock(index, index, authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, auth)
+		}
+	}
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
@@ -530,28 +663,40 @@ func (s *nvSuite) testWriteLock(c *C, authSession SessionContext) {
 }
 
 func (s *nvSuite) TestWriteLock(c *C) {
-	s.testWriteLock(c, nil)
+	s.testWriteLock(c, nil, nil)
 }
 
 func (s *nvSuite) TestWriteLockWithAuthSession(c *C) {
-	s.testWriteLock(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
+	s.testWriteLock(c, []byte("passphrase"), s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
 }
 
-func (s *nvSuite) testReadLock(c *C, authSession SessionContext) {
+func (s *nvSuite) TestWriteLockWithPWSession(c *C) {
+	s.testWriteLock(c, []byte("12345"), nil)
+}
+
+func (s *nvSuite) testReadLock(c *C, auth Auth, authSession SessionContext) {
+	sessionHandle := authSessionHandle(authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || authSession.State().NeedsPassword
+
 	pub := &NVPublic{
 		Index:   s.NextAvailableHandle(c, 0x0181ff00),
 		NameAlg: HashAlgorithmSHA256,
 		Attrs:   NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVReadStClear | AttrNVNoDA),
 		Size:    8}
-	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
-
-	sessionHandle := authSessionHandle(authSession)
+	index := s.NVDefineSpace(c, HandleOwner, auth, pub)
 
 	c.Check(s.TPM.NVReadLock(index, index, authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(auth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, auth)
+		}
+	}
 
 	pub, name, err := s.TPM.NVReadPublic(index)
 	c.Assert(err, IsNil)
@@ -561,11 +706,15 @@ func (s *nvSuite) testReadLock(c *C, authSession SessionContext) {
 }
 
 func (s *nvSuite) TestReadLock(c *C) {
-	s.testReadLock(c, nil)
+	s.testReadLock(c, nil, nil)
 }
 
 func (s *nvSuite) TestReadLockWithAuthSession(c *C) {
-	s.testReadLock(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
+	s.testReadLock(c, []byte("12345678"), s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
+}
+
+func (s *nvSuite) TestReadLockWithPWSession(c *C) {
+	s.testReadLock(c, []byte("87654321"), nil)
 }
 
 type testNVGlobalWriteLockData struct {
@@ -574,6 +723,9 @@ type testNVGlobalWriteLockData struct {
 }
 
 func (s *nvGlobalLockSuiteBase) testGlobalWriteLock(c *C, data *testNVGlobalWriteLockData) {
+	sessionHandle := authSessionHandle(data.authSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.authSession.State().NeedsPassword
+
 	var indices []ResourceContext
 
 	for _, pub := range []NVPublic{
@@ -593,13 +745,18 @@ func (s *nvGlobalLockSuiteBase) testGlobalWriteLock(c *C, data *testNVGlobalWrit
 		indices = append(indices, s.NVDefineSpace(c, HandleOwner, nil, &pub))
 	}
 
-	sessionHandle := authSessionHandle(data.authSession)
-
 	c.Check(s.TPM.NVGlobalWriteLock(data.auth, data.authSession), IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.auth.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.auth.AuthValue()))
+		}
+	}
 
 	for _, index := range indices {
 		pub, _, err := s.TPM.NVReadPublic(index)
@@ -618,16 +775,32 @@ func (s *nvGlobalLockSuite) TestGlobalWriteLock(c *C) {
 }
 
 func (s *nvGlobalLockSuite) TestGlobalWriteLockWithAuthSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("23456"))
 	s.testGlobalWriteLock(c, &testNVGlobalWriteLockData{
 		auth:        s.TPM.OwnerHandleContext(),
 		authSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+func (s *nvGlobalLockSuite) TestGlobalWriteLockWithPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("23456"))
+	s.testGlobalWriteLock(c, &testNVGlobalWriteLockData{
+		auth: s.TPM.OwnerHandleContext()})
 }
 
 func (s *nvGlobalLockSuitePlatform) TestGlobalWriteLockPlatform(c *C) {
 	s.testGlobalWriteLock(c, &testNVGlobalWriteLockData{auth: s.TPM.PlatformHandleContext()})
 }
 
-func (s *nvSuite) testChangeAuth(c *C, authSession SessionContext) {
+type testChangeAuthParams struct {
+	initialAuth Auth
+	newAuth     Auth
+	authSession SessionContext
+}
+
+func (s *nvSuite) testChangeAuth(c *C, params *testChangeAuthParams) {
+	sessionHandle := params.authSession.Handle()
+	sessionHMACIsPW := params.authSession.State().NeedsPassword
+
 	trial := util.ComputeAuthPolicy(HashAlgorithmSHA256)
 	trial.PolicyAuthValue()
 	trial.PolicyCommandCode(CommandNVChangeAuth)
@@ -638,27 +811,31 @@ func (s *nvSuite) testChangeAuth(c *C, authSession SessionContext) {
 		Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
 		AuthPolicy: trial.GetDigest(),
 		Size:       8}
-	index := s.NVDefineSpace(c, HandleOwner, nil, pub)
+	index := s.NVDefineSpace(c, HandleOwner, params.initialAuth, pub)
 
-	sessionHandle := authSession.Handle()
+	c.Check(s.TPM.PolicyAuthValue(params.authSession), IsNil)
+	c.Check(s.TPM.PolicyCommandCode(params.authSession, CommandNVChangeAuth), IsNil)
 
-	c.Check(s.TPM.PolicyAuthValue(authSession), IsNil)
-	c.Check(s.TPM.PolicyCommandCode(authSession, CommandNVChangeAuth), IsNil)
+	c.Check(s.TPM.NVChangeAuth(index, params.newAuth, params.authSession), IsNil)
 
-	newAuth := []byte("1234")
-
-	c.Check(s.TPM.NVChangeAuth(index, newAuth, authSession), IsNil)
-
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(params.initialAuth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, params.initialAuth)
+		}
+	}
 
 	// NVChangeAuth sets the auth value on index.
 	c.Check(s.TPM.NVWrite(index, index, nil, 0, nil), IsNil)
 
-	_, authArea, _ = s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].HMAC, DeepEquals, Auth(newAuth))
+	cmd = s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, HandlePW)
+	c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, params.newAuth)
 }
 
 func (s *nvSuite) TestChangeAuth(c *C) {
@@ -673,112 +850,26 @@ func (s *nvSuite) TestChangeAuth(c *C) {
 	// value in the session key, and as long as it's still bound when the session
 	// is used, the auth value is not appended to the session key for either the
 	// command or response HMAC keys.
-	s.testChangeAuth(c, s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256))
+	s.testChangeAuth(c, &testChangeAuthParams{
+		initialAuth: []byte("foo"),
+		newAuth:     []byte("bar"),
+		authSession: s.StartAuthSession(c, nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256),
+	})
 }
 
 func (s *nvSuite) TestChangeAuthSalted(c *C) {
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	// This test highlights a bug where we didn't preserve the value of
-	// Session.includeAuthValue (which should be true) before computing the response HMAC.
-	// It's not caught by the "Unsalted" test because the lack of session key combined with
-	// Session.includeAuthValue incorrectly being false was causing processResponseSessionAuth
-	// to bail out early (the HMAC check is optional if the HMAC key is zero length which is
-	// the case where includeAuthValue is false and there is no session key).
-	s.testChangeAuth(c, s.StartAuthSession(c, primary, nil, SessionTypePolicy, nil, HashAlgorithmSHA256))
-}
-
-func TestNVChangeAuth(t *testing.T) {
-	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeatureOwnerHierarchy|testutil.TPMFeatureNV)
-	defer closeTPM()
-
-	executePolicy := func(context SessionContext) {
-		if err := tpm.PolicyCommandCode(context, CommandNVChangeAuth); err != nil {
-			t.Fatalf("PolicyCommandCode failed: %v", err)
-		}
-		if err := tpm.PolicyAuthValue(context); err != nil {
-			t.Fatalf("PolicyAuthValue failed: %v", err)
-		}
-	}
-
-	trialSession, err := tpm.StartAuthSession(nil, nil, SessionTypeTrial, nil, HashAlgorithmSHA256)
-	if err != nil {
-		t.Fatalf("StartAuthSession failed: %v", err)
-	}
-	defer flushContext(t, tpm, trialSession)
-
-	executePolicy(trialSession)
-	authPolicy, err := tpm.PolicyGetDigest(trialSession)
-	if err != nil {
-		t.Fatalf("PolicyGetDigest failed: %v", err)
-	}
-
-	primary := createRSASrkForTesting(t, tpm, nil)
-	defer flushContext(t, tpm, primary)
-
-	for _, data := range []struct {
-		desc   string
-		tpmKey ResourceContext
-	}{
-		{
-			desc: "Unsalted",
-		},
-		{
-			desc:   "Salted",
-			tpmKey: primary,
-		},
-	} {
-		t.Run(data.desc, func(t *testing.T) {
-			pub := NVPublic{
-				Index:      Handle(0x0181ffff),
-				NameAlg:    HashAlgorithmSHA256,
-				Attrs:      NVTypeOrdinary.WithAttrs(AttrNVAuthWrite | AttrNVAuthRead | AttrNVNoDA),
-				AuthPolicy: authPolicy,
-				Size:       8}
-			rc, err := tpm.NVDefineSpace(tpm.OwnerHandleContext(), nil, &pub, nil)
-			if err != nil {
-				t.Fatalf("NVDefineSpace failed: %v", err)
-			}
-			defer undefineNVSpace(t, tpm, rc, tpm.OwnerHandleContext())
-
-			sessionContext, err := tpm.StartAuthSession(data.tpmKey, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
-			if err != nil {
-				t.Fatalf("StartAuthSession failed: %v", err)
-			}
-			defer flushContext(t, tpm, sessionContext)
-
-			executePolicy(sessionContext)
-
-			sessionContext.SetAttrs(AttrContinueSession)
-			if err := tpm.NVChangeAuth(rc, testAuth, sessionContext); err != nil {
-				t.Fatalf("NVChangeAuth failed: %v", err)
-			}
-
-			// We shouldn't have to call ResourceContext.SetAuthValue
-			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
-				t.Errorf("NVWrite failed: %v", err)
-			}
-
-			// Try again after calling ResourceContext.SetAuthValue to make sure that NVChangeAuth actually did change
-			// the auth value of the index.
-			rc.SetAuthValue(testAuth)
-			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
-				t.Errorf("NVWrite failed: %v", err)
-			}
-
-			executePolicy(sessionContext)
-
-			if err := tpm.NVChangeAuth(rc, nil, sessionContext); err != nil {
-				t.Errorf("NVChangeAuth failed: %v", err)
-			}
-
-			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
-				t.Errorf("NVWrite failed: %v", err)
-			}
-			rc.SetAuthValue(nil)
-			if err := tpm.NVWrite(rc, rc, make([]byte, 8), 0, nil); err != nil {
-				t.Errorf("NVWrite failed: %v", err)
-			}
-		})
-	}
+	// This test highlights a historical bug where we didn't preserve the value of
+	// sessionParam.IncludeAuthValue (which should be true) before computing the response HMAC.
+	// It wasn't initially caught by the "Unsalted" test because the lack of session key combined
+	// with sessionParam.IncludeAuthValue incorrectly being false was causing
+	// sessionParam.ProcessResponseAuth to bail out early with success (the HMAC check is optional
+	// if the HMAC key is zero length which is the case where IncludeAuthValue is false and there is
+	// no session key).
+	s.testChangeAuth(c, &testChangeAuthParams{
+		initialAuth: []byte("bar"),
+		newAuth:     []byte("foo"),
+		authSession: s.StartAuthSession(c, primary, nil, SessionTypePolicy, nil, HashAlgorithmSHA256),
+	})
 }

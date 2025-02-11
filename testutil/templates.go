@@ -37,12 +37,18 @@ func eccSchemeOption(scheme *tpm2.ECCScheme) objectutil.PublicTemplateOption {
 
 // NewRSAStorageKeyTemplate is a wrapper around [objectutil.NewRSAStorageKeyTemplate] that defines the
 // noDA attribute.
+//
+// Deprecated: Use [objectutil.NewRSAStorageKeyTemplate] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewRSAStorageKeyTemplate() *tpm2.Public {
 	return objectutil.NewRSAStorageKeyTemplate(objectutil.WithoutDictionaryAttackProtection())
 }
 
 // NewRestrictedRSASigningKeyTemplate is a wrapper around [objectutil.NewRSAAttestationKeyTemplate]
 // that defines the noDA attribute.
+//
+// Deprecated: Use [objectutil.NewRSAAttestationKeyTemplate] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewRestrictedRSASigningKeyTemplate(scheme *tpm2.RSAScheme) *tpm2.Public {
 	options := []objectutil.PublicTemplateOption{objectutil.WithoutDictionaryAttackProtection()}
 	if scheme != nil {
@@ -53,6 +59,9 @@ func NewRestrictedRSASigningKeyTemplate(scheme *tpm2.RSAScheme) *tpm2.Public {
 
 // NewRSAKeyTemplate is a wrapper around [objectutil.NewRSAKeyTemplate] that defines the noDA
 // attribute.
+//
+// Deprecated: Use [objectutil.NewRSAKeyTemplate] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewRSAKeyTemplate(usage objectutil.Usage, scheme *tpm2.RSAScheme) *tpm2.Public {
 	return objectutil.NewRSAKeyTemplate(usage,
 		objectutil.WithoutDictionaryAttackProtection(),
@@ -61,18 +70,27 @@ func NewRSAKeyTemplate(usage objectutil.Usage, scheme *tpm2.RSAScheme) *tpm2.Pub
 
 // NewSealedObject is a wrapper around [objectutil.NewSealedObjectTemplate] that defines the noDA
 // attribute.
+//
+// Deprecated: Use [objectutil.NewSealedObjectTemplate] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewSealedObjectTemplate() *tpm2.Public {
 	return objectutil.NewSealedObjectTemplate(objectutil.WithoutDictionaryAttackProtection())
 }
 
 // NewECCStorageKeyTemplate is a wrapper around [objectutil.NewECCStorageKeyTemplate] that defines the
 // noDA attribute.
+//
+// Deprecated: Use [objectutil.NewECCStorageKeyTemplate] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewECCStorageKeyTemplate() *tpm2.Public {
 	return objectutil.NewECCStorageKeyTemplate(objectutil.WithoutDictionaryAttackProtection())
 }
 
 // NewRestrictedECCSigningKeyTemplate is a wrapper around [objectutil.NewECCAttestationKeyTemplate]
 // that defines the noDA attribute.
+//
+// Deprecated: Use [objectutil.NewECCAttestationKeyTemplate] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewRestrictedECCSigningKeyTemplate(scheme *tpm2.ECCScheme) *tpm2.Public {
 	options := []objectutil.PublicTemplateOption{objectutil.WithoutDictionaryAttackProtection()}
 	if scheme != nil {
@@ -83,6 +101,9 @@ func NewRestrictedECCSigningKeyTemplate(scheme *tpm2.ECCScheme) *tpm2.Public {
 
 // NewECCKeyTemplate is a wrapper around [objectutil.NewECCKeyTemplate] that defines the noDA
 // attribute.
+//
+// Deprecated: Use [objectutil.NewECCKeyTemplate] with the
+// [objectutil.WithoutDictionaryAttackProtection] option.
 func NewECCKeyTemplate(usage objectutil.Usage, scheme *tpm2.ECCScheme) *tpm2.Public {
 	return objectutil.NewECCKeyTemplate(usage,
 		objectutil.WithoutDictionaryAttackProtection(),

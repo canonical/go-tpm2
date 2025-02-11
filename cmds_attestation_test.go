@@ -20,7 +20,7 @@ type attestationSuite struct {
 }
 
 func (s *attestationSuite) SetUpSuite(c *C) {
-	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy
+	s.TPMFeatures = testutil.TPMFeatureOwnerHierarchy | testutil.TPMFeatureEndorsementHierarchy | testutil.TPMFeatureNV
 }
 
 func (s *attestationSuite) checkAttestCommon(c *C, attest *Attest, tag StructTag, sign ResourceContext, signHierarchy Handle, qualifyingData Data) {
@@ -81,16 +81,38 @@ type testCertifyData struct {
 
 func (s *attestationSuite) testCertify(c *C, data *testCertifyData) {
 	sessionHandles := []Handle{authSessionHandle(data.objectAuthSession), authSessionHandle(data.signAuthSession)}
+	sessionHMACIsPW := []bool{
+		sessionHandles[0] == HandlePW,
+		data.sign != nil && (sessionHandles[1] == HandlePW || data.signAuthSession.State().NeedsPassword),
+	}
 
 	object := s.CreateStoragePrimaryKeyRSA(c)
 
 	certifyInfo, signature, err := s.TPM.Certify(object, data.sign, data.qualifyingData, data.inScheme, data.objectAuthSession, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 2)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
-	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 2)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandles[0])
+	if sessionHMACIsPW[0] {
+		c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+	}
+	c.Check(cmd.CmdAuthArea[1].SessionHandle, Equals, sessionHandles[1])
+	if sessionHMACIsPW[1] {
+		if len(data.sign.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[1].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[1].HMAC, DeepEquals, Auth(data.sign.AuthValue()))
+		}
+	}
+	if data.objectAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandles[0]), internal_testutil.IsFalse)
+		c.Check(data.objectAuthSession.Handle(), Equals, HandleUnassigned)
+	}
+	if data.signAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandles[1]), internal_testutil.IsFalse)
+		c.Check(data.signAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	s.checkAttestCommon(c, certifyInfo, TagAttestCertify, data.sign, data.signHierarchy, data.qualifyingData)
 	_, name, qn, err := s.TPM.ReadPublic(object)
@@ -107,7 +129,9 @@ func (s *attestationSuite) TestCertifyNoSignature(c *C) {
 
 func (s *attestationSuite) TestCertifyWithSignature(c *C) {
 	s.testCertify(c, &testCertifyData{
-		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
+		sign: s.CreatePrimary(c, HandleEndorsement, objectutil.NewRSAAttestationKeyTemplate(
+			objectutil.WithoutDictionaryAttackProtection(),
+		)),
 		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSAPSS,
@@ -122,7 +146,10 @@ func (s *attestationSuite) TestCertifyExtraData(c *C) {
 
 func (s *attestationSuite) TestCertifyInScheme(c *C) {
 	data := &testCertifyData{
-		sign: s.CreatePrimary(c, HandleEndorsement, testutil.NewRSAKeyTemplate(objectutil.UsageSign, nil)),
+		sign: s.CreatePrimary(c, HandleEndorsement, objectutil.NewRSAAttestationKeyTemplate(
+			objectutil.WithoutDictionaryAttackProtection(),
+			objectutil.WithRSAScheme(RSASchemeRSASSA, HashAlgorithmSHA1),
+		)),
 		inScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSASSA,
 			Details: &SigSchemeU{
@@ -138,10 +165,30 @@ func (s *attestationSuite) TestCertifyObjectAuthSession(c *C) {
 }
 
 func (s *attestationSuite) TestCertifySignAuthSession(c *C) {
+	sign, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAAttestationKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
 	s.testCertify(c, &testCertifyData{
-		sign:            s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
+		sign:            sign,
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSAPSS,
+			Details: &SigSchemeU{
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestCertifyWithSignPW(c *C) {
+	sign, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAAttestationKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	s.testCertify(c, &testCertifyData{
+		sign:          sign,
+		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
@@ -160,6 +207,7 @@ type testCertifyCreationData struct {
 
 func (s *attestationSuite) testCertifyCreation(c *C, data *testCertifyCreationData) {
 	sessionHandle := authSessionHandle(data.signAuthSession)
+	sessionHMACIsPW := data.sign != nil && (sessionHandle == HandlePW || data.signAuthSession.State().NeedsPassword)
 
 	object, _, _, creationHash, creationTicket, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), nil, testutil.NewRSAStorageKeyTemplate(), nil, nil, nil)
 	c.Assert(err, IsNil)
@@ -167,9 +215,20 @@ func (s *attestationSuite) testCertifyCreation(c *C, data *testCertifyCreationDa
 	certifyInfo, signature, err := s.TPM.CertifyCreation(data.sign, object, data.qualifyingData, creationHash, data.inScheme, creationTicket, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.sign.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.sign.AuthValue()))
+		}
+	}
+	if data.signAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(data.signAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	s.checkAttestCommon(c, certifyInfo, TagAttestCreation, data.sign, data.signHierarchy, data.qualifyingData)
 	c.Check(certifyInfo.Attested.Creation.ObjectName, DeepEquals, object.Name())
@@ -210,10 +269,30 @@ func (s *attestationSuite) TestCertifyCreationInScheme(c *C) {
 }
 
 func (s *attestationSuite) TestCertifyCreationSignAuthSession(c *C) {
+	sign, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAAttestationKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
 	s.testCertifyCreation(c, &testCertifyCreationData{
-		sign:            s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
+		sign:            sign,
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSAPSS,
+			Details: &SigSchemeU{
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestCertifyCreationSignPWSession(c *C) {
+	sign, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAAttestationKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	s.testCertifyCreation(c, &testCertifyCreationData{
+		sign:          sign,
+		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{
@@ -254,13 +333,25 @@ func (s *attestationSuite) testQuote(c *C, data *testQuoteData) {
 	}
 
 	sessionHandle := authSessionHandle(data.signAuthSession)
+	sessionHMACIsPW := data.sign != nil && (sessionHandle == HandlePW || data.signAuthSession.State().NeedsPassword)
 
 	quoted, signature, err := s.TPM.Quote(data.sign, data.qualifyingData, data.inScheme, data.pcrs, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.sign.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.sign.AuthValue()))
+		}
+	}
+	if data.signAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(data.signAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	s.checkAttestCommon(c, quoted, TagAttestQuote, data.sign, data.signHierarchy, data.qualifyingData)
 	_, pcrValues, err := s.TPM.PCRRead(data.pcrs)
@@ -337,6 +428,23 @@ func (s *attestationSuite) TestQuoteSignAuthSession(c *C) {
 				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
 }
 
+func (s *attestationSuite) TestQuoteSignPWSession(c *C) {
+	sign, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAAttestationKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	s.testQuote(c, &testQuoteData{
+		sign:          sign,
+		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
+		signHierarchy: HandleEndorsement,
+		alg:           HashAlgorithmSHA256,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSAPSS,
+			Details: &SigSchemeU{
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
+}
+
 type testGetTimeData struct {
 	sign                    ResourceContext
 	qualifyingData          Data
@@ -350,14 +458,40 @@ type testGetTimeData struct {
 
 func (s *attestationSuite) testGetTime(c *C, data *testGetTimeData) {
 	sessionHandles := []Handle{authSessionHandle(data.privacyAdminAuthSession), authSessionHandle(data.signAuthSession)}
+	sessionHMACIsPW := []bool{
+		sessionHandles[0] == HandlePW || data.privacyAdminAuthSession.State().NeedsPassword,
+		data.sign != nil && (sessionHandles[1] == HandlePW || data.signAuthSession.State().NeedsPassword),
+	}
 
 	timeInfo, signature, err := s.TPM.GetTime(s.TPM.EndorsementHandleContext(), data.sign, data.qualifyingData, data.inScheme, data.privacyAdminAuthSession, data.signAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 2)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandles[0])
-	c.Check(authArea[1].SessionHandle, Equals, sessionHandles[1])
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 2)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandles[0])
+	if sessionHMACIsPW[0] {
+		if len(s.TPM.EndorsementHandleContext().AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(s.TPM.EndorsementHandleContext().AuthValue()))
+		}
+	}
+	c.Check(cmd.CmdAuthArea[1].SessionHandle, Equals, sessionHandles[1])
+	if sessionHMACIsPW[1] {
+		if len(data.sign.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[1].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[1].HMAC, DeepEquals, Auth(data.sign.AuthValue()))
+		}
+	}
+	if data.privacyAdminAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandles[0]), internal_testutil.IsFalse)
+		c.Check(data.privacyAdminAuthSession.Handle(), Equals, HandleUnassigned)
+	}
+	if data.signAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandles[1]), internal_testutil.IsFalse)
+		c.Check(data.signAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	s.checkAttestCommon(c, timeInfo, TagAttestTime, data.sign, data.signHierarchy, data.qualifyingData)
 	time, err := s.TPM.ReadClock()
@@ -403,15 +537,41 @@ func (s *attestationSuite) TestGetTimeInScheme(c *C) {
 }
 
 func (s *attestationSuite) TestGetTimePrivacyAdminAuthSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleEndorsement, []byte("password"))
 	s.testGetTime(c, &testGetTimeData{
 		privacyAdminAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
 }
 
+func (s *attestationSuite) TestGetTimePrivacyAdminPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleEndorsement, []byte("password"))
+	s.testGetTime(c, &testGetTimeData{})
+}
+
 func (s *attestationSuite) TestGetTimeSignAuthSession(c *C) {
+	sign, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAAttestationKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
 	s.testGetTime(c, &testGetTimeData{
-		sign:            s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
+		sign:            sign,
 		signAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
 		signHierarchy:   HandleEndorsement,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSAPSS,
+			Details: &SigSchemeU{
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestGetTimeSignPWSession(c *C) {
+	sign, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.EndorsementHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAAttestationKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	s.testGetTime(c, &testGetTimeData{
+		sign:          sign,
+		signHierarchy: HandleEndorsement,
 		signScheme: &SigScheme{
 			Scheme: SigSchemeAlgRSAPSS,
 			Details: &SigSchemeU{

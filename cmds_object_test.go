@@ -141,13 +141,25 @@ type testCreateData struct {
 
 func (s *objectSuite) testCreate(c *C, data *testCreateData) (outPrivate Private, outPublic *Public) {
 	sessionHandle := authSessionHandle(data.parentAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.parentAuthSession.State().NeedsPassword
 
 	outPrivate, outPublic, creationData, creationHash, creationTicket, err := s.TPM.Create(data.parent, data.sensitive, data.template, data.outsideInfo, data.creationPCR, data.parentAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.parent.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.parent.AuthValue()))
+		}
+	}
+	if data.parentAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(data.parentAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	seedLength := data.template.NameAlg.Size()
 	if (data.template.Type == ObjectTypeRSA || data.template.Type == ObjectTypeECC) &&
@@ -209,6 +221,10 @@ func (s *objectSuite) TestCreateWithSensitive(c *C) {
 	recoveredData, err := s.TPM.Unseal(object, nil)
 	c.Check(err, IsNil)
 	c.Check(recoveredData, DeepEquals, SensitiveData(data))
+
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth("1234"))
 }
 
 func (s *objectSuite) TestCreateWithOutsideInfo(c *C) {
@@ -238,25 +254,58 @@ func (s *objectSuite) TestCreateWithParentAuthSession(c *C) {
 		hierarchy:         HandleOwner})
 }
 
-func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
-	sessionHandle := authSessionHandle(parentAuthSession)
+func (s *objectSuite) TestCreateWithParentPWSession(c *C) {
+	parent, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), &SensitiveCreate{UserAuth: []byte("password")}, objectutil.NewRSAStorageKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
 
-	primary := s.CreateStoragePrimaryKeyRSA(c)
+	s.testCreate(c, &testCreateData{
+		parent:        parent,
+		template:      objectutil.NewRSAKeyTemplate(objectutil.UsageSign),
+		sensitiveSize: 640,
+		hierarchy:     HandleOwner})
+}
 
-	priv, pub, _, _, _, err := s.TPM.Create(primary, nil, objectutil.NewRSAKeyTemplate(objectutil.UsageSign), nil, nil, nil)
+type testLoadParams struct {
+	parentAuthValue   []byte
+	parentAuthSession SessionContext
+}
+
+func (s *objectSuite) testLoad(c *C, params *testLoadParams) {
+	sessionHandle := authSessionHandle(params.parentAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || params.parentAuthSession.State().NeedsPassword
+
+	parent, _, _, _, _, err := s.TPM.CreatePrimary(s.TPM.OwnerHandleContext(), &SensitiveCreate{UserAuth: params.parentAuthValue}, objectutil.NewRSAStorageKeyTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+	), nil, nil, nil)
+	c.Assert(err, IsNil)
+
+	priv, pub, _, _, _, err := s.TPM.Create(parent, nil, objectutil.NewRSAKeyTemplate(objectutil.UsageSign), nil, nil, nil)
 	c.Assert(err, IsNil)
 
 	expectedName, err := pub.ComputeName()
 	c.Assert(err, IsNil)
 
-	object, err := s.TPM.Load(primary, priv, pub, parentAuthSession)
+	object, err := s.TPM.Load(parent, priv, pub, params.parentAuthSession)
 	c.Assert(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(parent.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(parent.AuthValue()))
+		}
+	}
+	if params.parentAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(params.parentAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
-	_, handle, _, _ := s.LastCommand(c).UnmarshalResponse(c)
+	handle := cmd.RspHandle
 
 	c.Check(object.Handle(), Equals, handle)
 	c.Check(object.Name(), DeepEquals, expectedName)
@@ -272,11 +321,15 @@ func (s *objectSuite) testLoad(c *C, parentAuthSession SessionContext) {
 }
 
 func (s *objectSuite) TestLoad(c *C) {
-	s.testLoad(c, nil)
+	s.testLoad(c, &testLoadParams{})
 }
 
 func (s *objectSuite) TestLoadWithParentAuthSession(c *C) {
-	s.testLoad(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
+	s.testLoad(c, &testLoadParams{parentAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+func (s *objectSuite) TestLoadWithParentPWSession(c *C) {
+	s.testLoad(c, &testLoadParams{parentAuthValue: []byte("1234")})
 }
 
 func (s *objectSuite) TestReadPublic(c *C) {
@@ -379,35 +432,49 @@ func (s *objectSuite) TestLoadExternalWithPrivate(c *C) {
 
 type testUnsealData struct {
 	secret          []byte
+	authValue       []byte
 	authPolicy      Digest
 	itemAuthSession SessionContext
 }
 
 func (s *objectSuite) testUnseal(c *C, data *testUnsealData) {
 	sessionHandle := authSessionHandle(data.itemAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || data.itemAuthSession.State().NeedsPassword
 
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	sensitive := SensitiveCreate{Data: data.secret}
-	template := testutil.NewSealedObjectTemplate()
-	template.AuthPolicy = data.authPolicy
-	if len(data.authPolicy) > 0 {
-		template.Attrs &^= AttrUserWithAuth
-	}
+	sensitive := SensitiveCreate{Data: data.secret, UserAuth: data.authValue}
+	template := objectutil.NewSealedObjectTemplate(
+		objectutil.WithoutDictionaryAttackProtection(),
+		objectutil.WithAuthPolicy(data.authPolicy),
+	)
 
 	priv, pub, _, _, _, err := s.TPM.Create(primary, &sensitive, template, nil, nil, nil)
-	c.Check(err, IsNil)
+	c.Assert(err, IsNil)
 
 	object, err := s.TPM.Load(primary, priv, pub, nil)
 	c.Assert(err, IsNil)
+
+	object.SetAuthValue(data.authValue)
 
 	unsealedSecret, err := s.TPM.Unseal(object, data.itemAuthSession)
 	c.Check(err, IsNil)
 	c.Check(unsealedSecret, DeepEquals, SensitiveData(data.secret))
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(data.authValue) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(data.authValue))
+		}
+	}
+	if data.itemAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(data.itemAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 }
 
 func (s *objectSuite) TestUnseal(c *C) {
@@ -424,6 +491,12 @@ func (s *objectSuite) TestUnsealWithItemAuthHMACSession(c *C) {
 	s.testUnseal(c, &testUnsealData{
 		secret:          []byte("sensitive data"),
 		itemAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)})
+}
+
+func (s *objectSuite) TestUnsealWithItemAuthPWSession(c *C) {
+	s.testUnseal(c, &testUnsealData{
+		secret:    []byte("sensitive data"),
+		authValue: []byte("password")})
 }
 
 func (s *objectSuite) TestUnsealWithItemAuthPolicySession(c *C) {
@@ -456,41 +529,81 @@ func (s *objectSuite) TestUnsealWithEncryptSession(c *C) {
 		itemAuthSession: session.WithAttrs(AttrResponseEncrypt)})
 }
 
-func (s *objectSuite) testObjectChangeAuth(c *C, objectAuthSession SessionContext) {
+func (s *objectSuite) testObjectChangeAuth(c *C, initialAuth, newAuth Auth, newObjectAuthSession func(ResourceContext) SessionContext) {
 	primary := s.CreateStoragePrimaryKeyRSA(c)
 
-	priv, pub, _, _, _, err := s.TPM.Create(primary, &SensitiveCreate{Data: []byte("foo")}, testutil.NewSealedObjectTemplate(), nil, nil, nil)
+	priv, pub, _, _, _, err := s.TPM.Create(primary, &SensitiveCreate{
+		UserAuth: initialAuth,
+		Data:     []byte("foo"),
+	}, testutil.NewSealedObjectTemplate(), nil, nil, nil)
 	c.Check(err, IsNil)
 
 	object, err := s.TPM.Load(primary, priv, pub, nil)
 	c.Assert(err, IsNil)
 
-	testAuth := []byte("1234")
+	object.SetAuthValue(initialAuth)
 
+	var objectAuthSession SessionContext
+	if newObjectAuthSession != nil {
+		objectAuthSession = newObjectAuthSession(object)
+	}
 	sessionHandle := authSessionHandle(objectAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || objectAuthSession.State().NeedsPassword
 
-	priv, err = s.TPM.ObjectChangeAuth(object, primary, testAuth, objectAuthSession)
+	priv, err = s.TPM.ObjectChangeAuth(object, primary, newAuth, objectAuthSession)
 	c.Check(err, IsNil)
 
-	_, authArea, _ := s.LastCommand(c).UnmarshalCommand(c)
-	c.Assert(authArea, internal_testutil.LenEquals, 1)
-	c.Check(authArea[0].SessionHandle, Equals, sessionHandle)
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(initialAuth) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, initialAuth)
+		}
+	}
+	if objectAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(objectAuthSession.Handle(), Equals, HandleUnassigned)
+	}
 
 	object, err = s.TPM.Load(primary, priv, pub, nil)
 	c.Assert(err, IsNil)
 
-	object.SetAuthValue(testAuth)
+	object.SetAuthValue(newAuth)
 
 	_, err = s.TPM.Unseal(object, nil)
 	c.Check(err, IsNil)
+
+	cmd = s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, HandlePW)
+	c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, newAuth)
 }
 
 func (s *objectSuite) TestObjectChangeAuth(c *C) {
-	s.testObjectChangeAuth(c, nil)
+	s.testObjectChangeAuth(c, nil, []byte("1234"), nil)
 }
 
-func (s *objectSuite) TestObjectChangeAuthWithObjectAuthSession(c *C) {
-	s.testObjectChangeAuth(c, s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256))
+func (s *objectSuite) TestObjectChangeAuthDifferentAuthValue(c *C) {
+	s.testObjectChangeAuth(c, nil, []byte("5678"), nil)
+}
+
+func (s *objectSuite) TestObjectChangeAuthWithObjectAuthSessionUnbound(c *C) {
+	s.testObjectChangeAuth(c, nil, []byte("1234"), func(_ ResourceContext) SessionContext {
+		return s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	})
+}
+
+func (s *objectSuite) TestObjectChangeAuthWithObjectAuthSessionBound(c *C) {
+	s.testObjectChangeAuth(c, []byte("4321"), []byte("1234"), func(bind ResourceContext) SessionContext {
+		return s.StartAuthSession(c, nil, bind, SessionTypeHMAC, nil, HashAlgorithmSHA256)
+	})
+}
+
+func (s *objectSuite) TestObjectChangeAuthWithPWSession(c *C) {
+	s.testObjectChangeAuth(c, []byte("1234"), []byte("4321"), nil)
 }
 
 func (s *objectSuite) TestMakeCredential(c *C) {
