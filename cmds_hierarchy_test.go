@@ -303,6 +303,91 @@ func (s *hierarchySuite) TestHierarchyControlReenableOwnerWrongAuth(c *C) {
 	c.Check(IsTPMHandleError(err, ErrorHierarchy, CommandHierarchyControl, 1), internal_testutil.IsTrue)
 }
 
+type testSetPrimaryPolicyParams struct {
+	authContext            ResourceContext
+	authPolicy             Digest
+	hashAlg                HashAlgorithmId
+	authContextAuthSession SessionContext
+}
+
+func (s *hierarchySuite) testSetPrimaryPolicy(c *C, params *testSetPrimaryPolicyParams) {
+	sessionHandle := authSessionHandle(params.authContextAuthSession)
+	sessionHMACIsPW := sessionHandle == HandlePW || params.authContextAuthSession.State().NeedsPassword
+
+	c.Check(s.TPM.SetPrimaryPolicy(params.authContext, params.authPolicy, params.hashAlg, params.authContextAuthSession), IsNil)
+
+	cmd := s.LastCommand(c)
+	c.Assert(cmd.CmdAuthArea, internal_testutil.LenEquals, 1)
+	c.Check(cmd.CmdAuthArea[0].SessionHandle, Equals, sessionHandle)
+	if sessionHMACIsPW {
+		if len(params.authContext.AuthValue()) == 0 {
+			c.Check(cmd.CmdAuthArea[0].HMAC, internal_testutil.LenEquals, 0)
+		} else {
+			c.Check(cmd.CmdAuthArea[0].HMAC, DeepEquals, Auth(params.authContext.AuthValue()))
+		}
+	}
+	if params.authContextAuthSession != nil {
+		c.Check(s.TPM.DoesHandleExist(sessionHandle), internal_testutil.IsFalse)
+		c.Check(params.authContextAuthSession.Handle(), Equals, HandleUnassigned)
+	}
+
+	digest, err := s.TPM.GetCapabilityAuthPolicy(params.authContext.Handle())
+	c.Assert(err, IsNil)
+	c.Check(digest.Digest(), DeepEquals, params.authPolicy)
+	c.Check(digest.HashAlg, Equals, params.hashAlg)
+}
+
+func (s *hierarchySuite) TestSetPrimaryPolicyOwner(c *C) {
+	s.testSetPrimaryPolicy(c, &testSetPrimaryPolicyParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		authPolicy:  internal_testutil.DecodeHexString(c, "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"),
+		hashAlg:     HashAlgorithmSHA256,
+	})
+}
+
+func (s *hierarchySuite) TestSetPrimaryPolicyEndorsement(c *C) {
+	s.testSetPrimaryPolicy(c, &testSetPrimaryPolicyParams{
+		authContext: s.TPM.EndorsementHandleContext(),
+		authPolicy:  internal_testutil.DecodeHexString(c, "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"),
+		hashAlg:     HashAlgorithmSHA256,
+	})
+}
+
+func (s *hierarchySuite) TestSetPrimaryPolicyOwnerDifferentPolicy(c *C) {
+	s.testSetPrimaryPolicy(c, &testSetPrimaryPolicyParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		authPolicy:  internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		hashAlg:     HashAlgorithmSHA256,
+	})
+}
+
+func (s *hierarchySuite) TestSetPrimaryPolicyOwnerDifferentAlg(c *C) {
+	s.testSetPrimaryPolicy(c, &testSetPrimaryPolicyParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		authPolicy:  internal_testutil.DecodeHexString(c, "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"),
+		hashAlg:     HashAlgorithmSHA1,
+	})
+}
+
+func (s *hierarchySuite) TestSetPrimaryPolicyOwnerWithAuthSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("12345678"))
+	s.testSetPrimaryPolicy(c, &testSetPrimaryPolicyParams{
+		authContext:            s.TPM.OwnerHandleContext(),
+		authPolicy:             internal_testutil.DecodeHexString(c, "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"),
+		hashAlg:                HashAlgorithmSHA256,
+		authContextAuthSession: s.StartAuthSession(c, nil, nil, SessionTypeHMAC, nil, HashAlgorithmSHA256),
+	})
+}
+
+func (s *hierarchySuite) TestSetPrimaryPolicyOwnerWithPWSession(c *C) {
+	s.HierarchyChangeAuth(c, HandleOwner, []byte("12345678"))
+	s.testSetPrimaryPolicy(c, &testSetPrimaryPolicyParams{
+		authContext: s.TPM.OwnerHandleContext(),
+		authPolicy:  internal_testutil.DecodeHexString(c, "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"),
+		hashAlg:     HashAlgorithmSHA256,
+	})
+}
+
 func (s *hierarchySuite) testClear(c *C, auth ResourceContext, authSession SessionContext) {
 	sessionHandle := authSessionHandle(authSession)
 	sessionHMACIsPW := sessionHandle == HandlePW || authSession.State().NeedsPassword

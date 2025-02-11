@@ -77,6 +77,7 @@ var commandInfoMap = map[tpm2.CommandCode]commandInfo{
 	tpm2.CommandHierarchyChangeAuth:        commandInfo{1, 1, false, true},
 	tpm2.CommandNVDefineSpace:              commandInfo{1, 1, false, true},
 	tpm2.CommandPCRAllocate:                commandInfo{1, 1, false, true},
+	tpm2.CommandSetPrimaryPolicy:           commandInfo{1, 1, false, true},
 	tpm2.CommandCreatePrimary:              commandInfo{1, 1, true, false},
 	tpm2.CommandNVGlobalWriteLock:          commandInfo{1, 1, false, true},
 	tpm2.CommandGetCommandAuditDigest:      commandInfo{2, 2, false, true},
@@ -293,8 +294,9 @@ type Transport struct {
 
 	currentCmd *cmdContext
 
-	hierarchyAuths map[tpm2.Handle]tpm2.Auth
-	handles        map[tpm2.Handle]*handleInfo
+	hierarchyAuths         map[tpm2.Handle]tpm2.Auth
+	handles                map[tpm2.Handle]*handleInfo
+	updatedPrimaryPolicies map[tpm2.Handle]bool
 
 	didClearControl        bool
 	didHierarchyControl    bool
@@ -484,6 +486,9 @@ func (t *Transport) readResponse() ([]byte, error) {
 		delete(t.hierarchyAuths, tpm2.HandleOwner)
 		delete(t.hierarchyAuths, tpm2.HandleEndorsement)
 		delete(t.hierarchyAuths, tpm2.HandleLockout)
+		delete(t.updatedPrimaryPolicies, tpm2.HandleOwner)
+		delete(t.updatedPrimaryPolicies, tpm2.HandleEndorsement)
+		delete(t.updatedPrimaryPolicies, tpm2.HandleLockout)
 
 		for h, info := range t.handles {
 			switch info.handle.Type() {
@@ -510,6 +515,8 @@ func (t *Transport) readResponse() ([]byte, error) {
 			}
 		}
 		t.hierarchyAuths[cmd.handles[0]] = newAuth
+	case tpm2.CommandSetPrimaryPolicy:
+		t.updatedPrimaryPolicies[cmd.handles[0]] = true
 	case tpm2.CommandNVDefineSpace:
 		// Record newly defined NV index
 		var auth tpm2.Auth
@@ -865,6 +872,17 @@ func (t *Transport) restoreHierarchyAuths(errs []error, tpm *tpm2.TPMContext) []
 	return errs
 }
 
+func (t *Transport) restorePrimaryPolicies(errs []error, tpm *tpm2.TPMContext) []error {
+	for handle := range t.updatedPrimaryPolicies {
+		rc := tpm.GetPermanentContext(handle)
+		if err := tpm.SetPrimaryPolicy(rc, nil, tpm2.HashAlgorithmNull, nil); err != nil {
+			errs = append(errs, fmt.Errorf("cannot clear auth policy for %v: %w", handle, err))
+		}
+	}
+
+	return errs
+}
+
 func (t *Transport) restorePcrAllocation(tpm *tpm2.TPMContext) error {
 	if !t.didUpdatePcrAllocation {
 		return nil
@@ -1049,6 +1067,8 @@ func (t *Transport) closeInternal() error {
 
 	errs = t.restoreHierarchyAuths(errs, tpm)
 
+	errs = t.restorePrimaryPolicies(errs, tpm)
+
 	if err := t.restorePcrAllocation(tpm); err != nil {
 		errs = append(errs, err)
 	}
@@ -1226,7 +1246,8 @@ func WrapTransport(transport tpm2.Transport, permittedFeatures TPMFeatureFlags) 
 		restoreCmdAuditStatus:      cmdAuditStatus,
 		restorePcrAllocationParams: pcrAllocation,
 		hierarchyAuths:             make(map[tpm2.Handle]tpm2.Auth),
-		handles:                    make(map[tpm2.Handle]*handleInfo)}
+		handles:                    make(map[tpm2.Handle]*handleInfo),
+		updatedPrimaryPolicies:     make(map[tpm2.Handle]bool)}
 	out.r = transportutil.BufferResponses(&responseReader{t: out}, maxResponseSize)
 	out.w = transportutil.BufferCommands(&commandSender{t: out}, maxCommandSize)
 	return out, nil

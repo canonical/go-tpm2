@@ -1102,6 +1102,61 @@ func (s *transportSuite) TestRestoreHierarchyAuthFailsIfHierarchyIsDisabled(c *C
 		`- cannot clear auth value for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_HierarchyChangeAuth: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)\n`)
 }
 
+func (s *transportSuite) testRestorePrimaryPolicy(c *C, handle tpm2.Handle, features TPMFeatureFlags) {
+	// Test that changes to the platform hierarchy policy are undone.
+	s.initTPMContext(c, features|TPMFeatureNV)
+
+	c.Check(s.TPM.SetPrimaryPolicy(s.TPM.GetPermanentContext(handle), internal_testutil.DecodeHexString(c, "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"), tpm2.HashAlgorithmSHA256, nil), IsNil)
+
+	c.Check(s.TPM.Close(), IsNil)
+
+	ta, err := s.rawTpm(c).GetCapabilityAuthPolicy(handle)
+	c.Assert(err, IsNil)
+	c.Check(ta.HashAlg, Equals, tpm2.HashAlgorithmNull)
+}
+
+func (s *transportSuite) TestRestorePrimaryPolicyOwner(c *C) {
+	s.testRestorePrimaryPolicy(c, tpm2.HandleOwner, TPMFeatureOwnerHierarchy)
+}
+
+func (s *transportSuite) TestRestorePrimaryPolicyEndorsement(c *C) {
+	s.testRestorePrimaryPolicy(c, tpm2.HandleEndorsement, TPMFeatureEndorsementHierarchy)
+}
+
+func (s *transportSuite) TestRestorePrimaryPolicyPlatform(c *C) {
+	s.testRestorePrimaryPolicy(c, tpm2.HandlePlatform, TPMFeaturePlatformHierarchy)
+}
+
+func (s *transportSuite) TestRestorePrimaryPolicyAfterDisablingHierarchy(c *C) {
+	// Test that changes to the owner hierarchy policy are undone if the
+	// hierarchy was disabled.
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureNV)
+
+	c.Check(s.TPM.SetPrimaryPolicy(s.TPM.OwnerHandleContext(), internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), tpm2.HashAlgorithmSHA256, nil), IsNil)
+	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
+
+	c.Check(s.TPM.Close(), IsNil)
+
+	ta, err := s.rawTpm(c).GetCapabilityAuthPolicy(tpm2.HandleOwner)
+	c.Assert(err, IsNil)
+	c.Check(ta.HashAlg, Equals, tpm2.HashAlgorithmNull)
+}
+
+func (s *transportSuite) TestRestorePrimaryPolicyAfterDisablingHierarchyAndPlatform(c *C) {
+	// Test that we get an error if a test changes the owner hierarchy policy, disables
+	// the hierarchy and then disables the platform hierarchy, preventing it from being
+	// undone.
+	s.initTPMContext(c, TPMFeatureOwnerHierarchy|TPMFeaturePlatformHierarchy|TPMFeatureStClearChange|TPMFeatureNV)
+
+	c.Check(s.TPM.SetPrimaryPolicy(s.TPM.OwnerHandleContext(), internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), tpm2.HashAlgorithmSHA256, nil), IsNil)
+	c.Check(s.TPM.HierarchyControl(s.TPM.OwnerHandleContext(), tpm2.HandleOwner, false, nil), IsNil)
+	c.Check(s.TPM.HierarchyControl(s.TPM.PlatformHandleContext(), tpm2.HandlePlatform, false, nil), IsNil)
+
+	c.Check(s.TPM.Close(), ErrorMatches, `cannot complete close operation on Transport: cannot cleanup TPM state because of the following errors:
+- cannot clear auth policy for TPM_RH_OWNER: TPM returned an error for handle 1 whilst executing command TPM_CC_SetPrimaryPolicy: TPM_RC_HIERARCHY \(hierarchy is not enabled or is not correct for the use\)
+`)
+}
+
 func (s *transportSuite) TestRestoreDisableClear(c *C) {
 	// Test that disableClear is restored correctly if the test can
 	// use the platform hierarchy.

@@ -38,19 +38,19 @@ type TPMFeatureFlags uint32
 
 const (
 	// TPMFeatureOwnerHierarchy indicates that the test requires the use of the storage hierarchy. The
-	// authorization value should be empty at the start of the test.
+	// authorization value and policy should be empty at the start of the test.
 	TPMFeatureOwnerHierarchy TPMFeatureFlags = (1 << iota)
 
 	// TPMFeatureEndorsementHierarchy indicates that the test requires the use of the endorsement hierarchy.
-	// The authorization value should be empty at the start of the test.
+	// The authorization value and policy should be empty at the start of the test.
 	TPMFeatureEndorsementHierarchy
 
 	// TPMFeatureLockoutHierarchy indicates that the test requires the use of the lockout hierarchy. The
-	// authorization value should be empty at the start of the test.
+	// authorization value and policy should be empty at the start of the test.
 	TPMFeatureLockoutHierarchy
 
 	// TPMFeaturePlatformHierarchy indicates that the test requires the use of the platform hierarchy. The
-	// authorization value should be empty at the start of the test.
+	// authorization value and policy should be empty at the start of the test.
 	TPMFeaturePlatformHierarchy
 
 	// TPMFeaturePCR indicates that the test requires the use of a PCR. This is only required for

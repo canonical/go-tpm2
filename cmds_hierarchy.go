@@ -207,6 +207,30 @@ func (t *TPMContext) HierarchyControl(authContext ResourceContext, enable Handle
 		Run(nil)
 }
 
+// SetPrimaryPolicy executes the TPM2_SetPrimaryPolicy command in order to set an authorization
+// policy for the permanent resource associated with authContext. The command requires authorization
+// with the user role for authContext, with session based authorization supplied via
+// authContextAuthSession.
+//
+// The caller can either use the permanent resource's existing authorization value or existing policy
+// (if there is one) to authorize.
+//
+// If authContext corresponds to a hierarchy that is disabled, a *[TPMHandleError] error will be
+// returned with the error code [ErrorHierarchy].
+//
+// If the size of the supplied digest is not consistent with the specified digest algorithm, a
+// *[TPMParameterError] error will be returned with the error code [ErrorSize] for parameter 1.
+//
+// To clear the authorization policy and return it to the empty value, pass a zero length policy
+// digest and [HashAlgorithmNull].
+func (t *TPMContext) SetPrimaryPolicy(authContext ResourceContext, authPolicy Digest, hashAlg HashAlgorithmId, authContextAuthSession SessionContext, sessions ...SessionContext) error {
+	return t.StartCommand(CommandSetPrimaryPolicy).
+		AddHandles(UseResourceContextWithAuth(authContext, authContextAuthSession)).
+		AddParams(authPolicy, hashAlg).
+		AddExtraSessions(sessions...).
+		Run(nil)
+}
+
 // Clear executes the TPM2_Clear command to remove all context associated with the current owner.
 // The command requires knowledge of the authorization value for either the platform or lockout
 // hierarchy. The hierarchy is specified by passing a ResourceContext corresponding to either
