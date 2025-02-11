@@ -411,7 +411,7 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}}, nil,
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigest}},
 				NewMockPolicyAuthorizeElement(nil, keySign),
@@ -711,7 +711,7 @@ func (s *builderSuite) testPolicyPCRValues(c *C, data *testBuildPolicyPCRValuesD
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: data.alg, Digest: data.expectedDigest}}, nil,
-		NewMockPolicyPCRElement(data.expectedPcrs))
+		NewMockPolicyPCRValuesElement(data.expectedPcrs))
 
 	expectedPcrs, expectedPcrDigest, err := ComputePCRDigestFromAllValues(data.alg, data.values)
 	c.Assert(err, IsNil)
@@ -876,7 +876,7 @@ func (s *builderSuite) testPolicyPCRDigest(c *C, params *testBuildPolicyPCRDiges
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: params.alg, Digest: params.expectedDigest}}, nil,
-		NewMockPolicyPCRDigestElement(params.pcrDigest, params.pcrs))
+		NewMockPolicyPCRElement(params.pcrDigest, params.pcrs))
 
 	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -1155,7 +1155,7 @@ func (s *builderSuite) testPolicyOR(c *C, data *testBuildPolicyORData) {
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: data.alg, Digest: data.expectedDigest}}, nil,
-		NewMockPolicyRawORElement(data.pHashList))
+		NewMockPolicyORElement(data.pHashList))
 
 	digest, policy, err := builder.Policy()
 	c.Check(err, IsNil)
@@ -1386,7 +1386,7 @@ func (s *builderSuite) TestPolicyBranches(c *C) {
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList[0]}},
 				NewMockPolicyAuthValueElement(),
@@ -1448,7 +1448,7 @@ func (s *builderSuite) TestPolicyPolicyCommitsCurrentBranchNode(c *C) {
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}}, nil,
 		NewMockPolicyNvWrittenElement(true),
 		NewMockPolicyCommandCodeElement(tpm2.CommandNVChangeAuth),
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: internal_testutil.DecodeHexString(c, "a74dbbf45ebe6b3c8328e37f878fbdff69cc1ca1a593faa5ffcd43f69c859c05")}},
 				NewMockPolicyAuthValueElement(),
@@ -1526,7 +1526,7 @@ func (s *builderSuite) TestEmptyBranchesAreOmitted(c *C) {
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}}, nil,
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: internal_testutil.DecodeHexString(c, "636ac47c3f990024d504fdcc720b6fc40df5d63a5df47acb33c8e157b08f672c")}},
 				NewMockPolicyAuthValueElement(),
@@ -1619,7 +1619,7 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[0]},
@@ -1633,7 +1633,7 @@ func (s *builderSuite) TestPolicyBranchesMultipleNodes(c *C) {
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
 			),
 		),
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"branch3", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[0]},
@@ -1801,13 +1801,13 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[0]},
 				},
 				NewMockPolicyAuthValueElement(),
-				NewMockPolicyORElement(
+				NewMockPolicyBranchNodeElement(
 					NewMockPolicyBranch(
 						"branch2", TaggedHashList{
 							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList2[0]},
@@ -1827,7 +1827,7 @@ func (s *builderSuite) TestPolicyBranchesEmbeddedNodes(c *C) {
 					{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList1[1]},
 				},
 				NewMockPolicySecretElement(tpm2.MakeHandleName(tpm2.HandleOwner), []byte("foo")),
-				NewMockPolicyORElement(
+				NewMockPolicyBranchNodeElement(
 					NewMockPolicyBranch(
 						"branch5", TaggedHashList{
 							{HashAlg: tpm2.HashAlgorithmSHA256, Digest: pHashList3[0]},
@@ -1945,7 +1945,7 @@ EK/T+zGscRZtl/3PtcUxX5w+5bjPWyQqtxp683o14Cw1JRv3s+UYs7cj6Q==
 
 	expectedPolicy := NewMockPolicy(
 		TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedDigest}}, nil,
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"", TaggedHashList{{HashAlg: tpm2.HashAlgorithmSHA256, Digest: expectedBranchDigests[0]}},
 				NewMockPolicyAuthValueElement(),

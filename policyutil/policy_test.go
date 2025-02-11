@@ -251,7 +251,7 @@ func (s *policySuiteNoTPM) TestPolicyBranchesMultipleDigests(c *C) {
 		},
 		nil,
 		NewMockPolicyNvWrittenElement(true),
-		NewMockPolicyORElement(
+		NewMockPolicyBranchNodeElement(
 			NewMockPolicyBranch(
 				"branch1", TaggedHashList{
 					{HashAlg: tpm2.HashAlgorithmSHA1, Digest: pHashListSHA1[0]},
@@ -3520,7 +3520,7 @@ func (s *policySuite) TestPolicyPCRValuesFails(c *C) {
 		tpm2.HashAlgorithmSHA256: {
 			0: internal_testutil.DecodeHexString(c, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")}}
 	err := s.testPolicyPCRValues(c, values)
-	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
+	c.Check(err, ErrorMatches, `cannot run 'TPM2_PolicyPCR values assertion' task in root branch: TPM returned an error for parameter 1 whilst executing command TPM_CC_PolicyPCR: TPM_RC_VALUE \(value is out of range or is not correct for the context\)`)
 	var e *tpm2.TPMParameterError
 	c.Assert(err, internal_testutil.ErrorAs, &e)
 	c.Check(e, DeepEquals, &tpm2.TPMParameterError{TPMError: &tpm2.TPMError{Command: tpm2.CommandPolicyPCR, Code: tpm2.ErrorValue}, Index: 1})

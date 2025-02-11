@@ -119,27 +119,27 @@ func NewMockPolicyBranch(name policyBranchName, digests taggedHashList, elements
 		Policy:        elements}
 }
 
-func NewMockPolicyORElement(branches ...*policyBranch) *policyElement {
+func NewMockPolicyBranchNodeElement(branches ...*policyBranch) *policyElement {
 	return &policyElement{
-		Type: tpm2.CommandPolicyOR,
+		Type: commandPolicyBranchNode,
 		Details: &policyElementDetails{
-			OR: &policyORElement{Branches: branches}}}
+			BranchNode: &policyBranchNodeElement{Branches: branches}}}
 }
 
-func NewMockPolicyPCRElement(pcrs PcrValueList) *policyElement {
+func NewMockPolicyPCRElement(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) *policyElement {
 	return &policyElement{
 		Type: tpm2.CommandPolicyPCR,
 		Details: &policyElementDetails{
-			PCR: &policyPCRElement{PCRs: pcrs}}}
-}
-
-func NewMockPolicyPCRDigestElement(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) *policyElement {
-	return &policyElement{
-		Type: commandPolicyPCRDigest,
-		Details: &policyElementDetails{
-			PCRDigest: &policyPCRDigestElement{
+			PCR: &policyPCRElement{
 				PCRDigest: pcrDigest,
 				PCRs:      pcrs}}}
+}
+
+func NewMockPolicyPCRValuesElement(pcrs PcrValueList) *policyElement {
+	return &policyElement{
+		Type: commandPolicyPCRValues,
+		Details: &policyElementDetails{
+			PCRValues: &policyPCRValuesElement{PCRs: pcrs}}}
 }
 
 func NewMockPolicyDuplicationSelectElement(objectName, newParentName tpm2.Name, includeObject bool) *policyElement {
@@ -165,11 +165,11 @@ func NewMockPolicyNvWrittenElement(writtenSet bool) *policyElement {
 			NvWritten: &policyNvWrittenElement{WrittenSet: writtenSet}}}
 }
 
-func NewMockPolicyRawORElement(pHashList tpm2.DigestList) *policyElement {
+func NewMockPolicyORElement(pHashList tpm2.DigestList) *policyElement {
 	return &policyElement{
-		Type: commandRawPolicyOR,
+		Type: tpm2.CommandPolicyOR,
 		Details: &policyElementDetails{
-			RawOR: &policyRawORElement{HashList: pHashList}}}
+			OR: &policyORElement{HashList: pHashList}}}
 }
 
 func NewMockPolicy(digests taggedHashList, authorizations []PolicyAuthorization, elements ...*policyElement) *Policy {

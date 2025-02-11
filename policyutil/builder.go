@@ -178,9 +178,9 @@ func (b *PolicyBuilderBranch) commitBranches(branches []*policyBranch) error {
 	// name when executing the policy.
 	default:
 		element := &policyElement{
-			Type: tpm2.CommandPolicyOR,
+			Type: commandPolicyBranchNode,
 			Details: &policyElementDetails{
-				OR: &policyORElement{Branches: branches}}}
+				BranchNode: &policyBranchNodeElement{Branches: branches}}}
 		if err := element.runner().run(&b.runner); err != nil {
 			return err
 		}
@@ -505,7 +505,10 @@ func (b *PolicyBuilderBranch) PolicyNameHash(nameHash NameHash) (tpm2.Digest, er
 }
 
 // PolicyPCRValues adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
-// supplied PCR values.
+// supplied PCR values. This stores the raw PCR values in the policy which permits it to be computed
+// for multiple digests using [Policy.AddDigest]. A downside of this is that it may occupy more space
+// for an assertion that contains more than a single PCR value compared with [PolicyPCRDigest],
+// depending on the selection of algorithms.
 func (b *PolicyBuilderBranch) PolicyPCRValues(values tpm2.PCRValues) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return nil, b.policy.fail("PolicyPCRValues", err)
@@ -535,9 +538,9 @@ func (b *PolicyBuilderBranch) PolicyPCRValues(values tpm2.PCRValues) (tpm2.Diges
 	})
 
 	element := &policyElement{
-		Type: tpm2.CommandPolicyPCR,
+		Type: commandPolicyPCRValues,
 		Details: &policyElementDetails{
-			PCR: &policyPCRElement{PCRs: pcrs}}}
+			PCRValues: &policyPCRValuesElement{PCRs: pcrs}}}
 	if err := element.runner().run(&b.runner); err != nil {
 		return nil, b.policy.fail("PolicyPCRValues", fmt.Errorf("internal error: %w", err))
 	}
@@ -551,8 +554,12 @@ func (b *PolicyBuilderBranch) PolicyPCRValues(values tpm2.PCRValues) (tpm2.Diges
 }
 
 // PolicyPCRDigest adds a TPM2_PolicyPCR assertion to this branch in order to bind the policy to the
-// supplied PCR selection and digest. The downside of this API instead of using [PolicyPCRValues] is
-// that policies with this element in can only be computed for a single digest.
+// supplied PCR selection and digest. The digest used to compute pcrDigest must match the algorithm
+// that this [PolicyBuilder] was constructed with.
+//
+// The downside of this API instead of using [PolicyPCRValues] is that policies with this element in
+// can only be computed for a single digest. It does have the advantage of potentially being more
+// space efficient when the assertion contains more than a single PCR, depending on algorithm selection.
 func (b *PolicyBuilderBranch) PolicyPCRDigest(pcrDigest tpm2.Digest, pcrs tpm2.PCRSelectionList) (tpm2.Digest, error) {
 	if err := b.prepareToModifyBranch(); err != nil {
 		return nil, b.policy.fail("PolicyPCRDigest", err)
@@ -571,9 +578,9 @@ func (b *PolicyBuilderBranch) PolicyPCRDigest(pcrDigest tpm2.Digest, pcrs tpm2.P
 	}
 
 	element := &policyElement{
-		Type: commandPolicyPCRDigest,
+		Type: tpm2.CommandPolicyPCR,
 		Details: &policyElementDetails{
-			PCRDigest: &policyPCRDigestElement{
+			PCR: &policyPCRElement{
 				PCRDigest: pcrDigest,
 				PCRs:      pcrs}}}
 	if err := element.runner().run(&b.runner); err != nil {
@@ -708,9 +715,9 @@ func (b *PolicyBuilderBranch) PolicyOR(pHashList ...tpm2.Digest) (tpm2.Digest, e
 	}
 
 	element := &policyElement{
-		Type: commandRawPolicyOR,
+		Type: tpm2.CommandPolicyOR,
 		Details: &policyElementDetails{
-			RawOR: &policyRawORElement{HashList: pHashList}}}
+			OR: &policyORElement{HashList: pHashList}}}
 	if err := element.runner().run(&b.runner); err != nil {
 		return nil, b.policy.fail("PolicyOR", fmt.Errorf("internal error: %w", err))
 	}
@@ -798,9 +805,9 @@ func NewPolicyBuilderOR(alg tpm2.HashAlgorithmId, policies ...*Policy) *PolicyBu
 	}
 
 	element := &policyElement{
-		Type: commandRawPolicyOR,
+		Type: tpm2.CommandPolicyOR,
 		Details: &policyElementDetails{
-			RawOR: &policyRawORElement{
+			OR: &policyORElement{
 				HashList: pHashList,
 			}}}
 	if err := element.runner().run(&b.root.runner); err != nil {

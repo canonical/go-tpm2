@@ -26,8 +26,8 @@ const (
 	// where we need a custom command code for a special element,
 	// we set the vendor bit (0x20000000) and also set one of the
 	// reserved bits (0xdfff0000)
-	commandRawPolicyOR     tpm2.CommandCode = 0x20010171
-	commandPolicyPCRDigest tpm2.CommandCode = 0x2002017F
+	commandPolicyBranchNode tpm2.CommandCode = 0x20010171
+	commandPolicyPCRValues  tpm2.CommandCode = 0x2002017F
 )
 
 var (
@@ -683,23 +683,23 @@ func (b policyBranches) selectBranch(next string) (int, error) {
 	}
 }
 
-type policyRawORElement struct {
+type policyORElement struct {
 	HashList tpm2.DigestList
 }
 
-func (*policyRawORElement) name() string { return "TPM2_PolicyOR assertion" }
+func (*policyORElement) name() string { return "TPM2_PolicyOR assertion" }
 
-func (e *policyRawORElement) run(runner policyRunner) error {
+func (e *policyORElement) run(runner policyRunner) error {
 	return runner.session().PolicyOR(e.HashList)
 }
 
-type policyORElement struct {
+type policyBranchNodeElement struct {
 	Branches policyBranches
 }
 
-func (*policyORElement) name() string { return "branch node" }
+func (*policyBranchNodeElement) name() string { return "branch node" }
 
-func (e *policyORElement) run(runner policyRunner) error {
+func (e *policyBranchNodeElement) run(runner policyRunner) error {
 	selected, err := runner.runBranch(e.Branches)
 	if err != nil {
 		return err
@@ -754,13 +754,13 @@ type pcrValue struct {
 
 type pcrValueList []pcrValue
 
-type policyPCRElement struct {
+type policyPCRValuesElement struct {
 	PCRs pcrValueList
 }
 
-func (*policyPCRElement) name() string { return "TPM2_PolicyPCR assertion" }
+func (*policyPCRValuesElement) name() string { return "TPM2_PolicyPCR values assertion" }
 
-func (e *policyPCRElement) run(runner policyRunner) error {
+func (e *policyPCRValuesElement) run(runner policyRunner) error {
 	values, err := e.pcrValues()
 	if err != nil {
 		return err
@@ -772,7 +772,7 @@ func (e *policyPCRElement) run(runner policyRunner) error {
 	return runner.session().PolicyPCR(pcrDigest, pcrs)
 }
 
-func (e *policyPCRElement) pcrValues() (tpm2.PCRValues, error) {
+func (e *policyPCRValuesElement) pcrValues() (tpm2.PCRValues, error) {
 	values := make(tpm2.PCRValues)
 	for i, value := range e.PCRs {
 		if value.PCR.Type() != tpm2.HandleTypePCR {
@@ -785,14 +785,14 @@ func (e *policyPCRElement) pcrValues() (tpm2.PCRValues, error) {
 	return values, nil
 }
 
-type policyPCRDigestElement struct {
+type policyPCRElement struct {
 	PCRDigest tpm2.Digest
 	PCRs      tpm2.PCRSelectionList
 }
 
-func (*policyPCRDigestElement) name() string { return "TPM2_PolicyPCR assertion" }
+func (*policyPCRElement) name() string { return "TPM2_PolicyPCR assertion" }
 
-func (e *policyPCRDigestElement) run(runner policyRunner) error {
+func (e *policyPCRElement) run(runner policyRunner) error {
 	if err := runner.notifyPolicyPCRDigest(); err != nil {
 		return err
 	}
@@ -849,8 +849,8 @@ type policyElementDetails struct {
 	Password          *policyPasswordElement
 	NvWritten         *policyNvWrittenElement
 
-	RawOR     *policyRawORElement
-	PCRDigest *policyPCRDigestElement
+	BranchNode *policyBranchNodeElement
+	PCRValues  *policyPCRValuesElement
 }
 
 func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
@@ -883,10 +883,10 @@ func (d *policyElementDetails) Select(selector reflect.Value) interface{} {
 		return &d.Password
 	case tpm2.CommandPolicyNvWritten:
 		return &d.NvWritten
-	case commandRawPolicyOR:
-		return &d.RawOR
-	case commandPolicyPCRDigest:
-		return &d.PCRDigest
+	case commandPolicyBranchNode:
+		return &d.BranchNode
+	case commandPolicyPCRValues:
+		return &d.PCRValues
 	default:
 		return nil
 	}
@@ -932,10 +932,10 @@ func (e *policyElement) runner() policyElementRunner {
 		return e.Details.Password
 	case tpm2.CommandPolicyNvWritten:
 		return e.Details.NvWritten
-	case commandRawPolicyOR:
-		return e.Details.RawOR
-	case commandPolicyPCRDigest:
-		return e.Details.PCRDigest
+	case commandPolicyBranchNode:
+		return e.Details.BranchNode
+	case commandPolicyPCRValues:
+		return e.Details.PCRValues
 	default:
 		panic("invalid type")
 	}
@@ -1875,7 +1875,14 @@ func (r *policyComputeRunner) run(elements policyElements) error {
 //
 // This will fail for policies that contain TPM2_PolicyCpHash or TPM2_PolicyNameHash
 // assertions, These can only be computed for a single digest algorithm, because they
-// are bound to a name.
+// are bound to a specific resource via its name.
+//
+// It will also fail for policies that contain TPM2_PolicyPCR assertions that were
+// added by [PolicyBuilderBranch.PolicyPCRDigest]. In order to compute policies
+// containing TPM2_PolicyPCR assertions for more than one digest, use the
+// [PolicyBuilderBranch.PolicyPCRValues] API, which stores the raw PCR values from
+// which a new digest can be computed (but may occupy more space for an assertion that
+// contains more than a single PCR value, depending on the selection of algorithms).
 func (p *Policy) AddDigest(alg tpm2.HashAlgorithmId) (tpm2.Digest, error) {
 	if !alg.Available() {
 		return nil, errors.New("unavailable algorithm")

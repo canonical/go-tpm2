@@ -666,9 +666,9 @@ func (s *policyPathWildcardResolver) resolve(branches policyBranches) (policyBra
 	walker := newTreeWalker(s, makeBeginBranchFn("", new(PolicyBranchDetails), false))
 	if err := walker.run(policyElements{
 		&policyElement{
-			Type: tpm2.CommandPolicyOR,
+			Type: commandPolicyBranchNode,
 			Details: &policyElementDetails{
-				OR: &policyORElement{Branches: branches},
+				BranchNode: &policyBranchNodeElement{Branches: branches},
 			},
 		},
 	}); err != nil {
