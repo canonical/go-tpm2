@@ -1080,13 +1080,19 @@ func ClearTPMUsingPlatformHierarchyT(t *testing.T, tpm *tpm2.TPMContext) {
 }
 
 func resetTPMSimulator(tpm *tpm2.TPMContext, transport *mssim.Transport, startup bool) error {
-	if err := tpm.Shutdown(tpm2.StartupClear); err != nil {
+	err := tpm.Shutdown(tpm2.StartupClear)
+	switch {
+	case tpm2.IsTPMError(err, tpm2.ErrorFailure, tpm2.CommandShutdown):
+		// ignore this - we still want to reset
+	case err != nil:
 		return err
 	}
+
 	if err := transport.Reset(); err != nil {
 		return fmt.Errorf("resetting the simulator failed: %v", err)
 	}
 	tpm.PlatformHandleContext().SetAuthValue(nil)
+
 	if !startup {
 		return nil
 	}
