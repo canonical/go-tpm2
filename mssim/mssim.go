@@ -274,7 +274,9 @@ func (t *Transport) NVOff() error {
 	return t.platform.runCommand(cmdNVOff, 0, &u32)
 }
 
-// TestFailureMode is used to force the TPM into failure mode during tests.
+// TestFailureMode is used to force the TPM into failure mode during tests. This
+// will be cleared again on the simulator side when a TPM2_SelfTest command is
+// executed.
 func (t *Transport) TestFailureMode() error {
 	var u32 uint32
 	return t.platform.runCommand(cmdTestFailureMode, 0, &u32)
