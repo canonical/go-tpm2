@@ -418,6 +418,10 @@ func nullResource() ResourceContext {
 	return newPermanentContext(HandleNull)
 }
 
+func unassignedResource() ResourceContext {
+	return newPermanentContext(HandleUnassigned)
+}
+
 type objectContext struct {
 	resourceContext
 }

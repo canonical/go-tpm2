@@ -193,6 +193,14 @@ func (s *hierarchySuite) TestCreatePrimaryInvalidTemplate(c *C) {
 	c.Check(IsTPMParameterError(err, ErrorSymmetric, CommandCreatePrimary, 2), internal_testutil.IsTrue)
 }
 
+func (s *hierarchySuite) TestCreatePrimaryWithNilHierarchy(c *C) {
+	template := objectutil.NewRSAStorageKeyTemplate(
+		objectutil.WithRSAUnique(make([]byte, 256)),
+	)
+	_, _, _, _, _, err := s.TPM.CreatePrimary(nil, nil, template, nil, nil, nil)
+	c.Check(IsTPMHandleError(err, ErrorValue, CommandCreatePrimary, 1), internal_testutil.IsTrue)
+}
+
 type testHierarchyControlParams struct {
 	authContext            ResourceContext
 	enable                 Handle

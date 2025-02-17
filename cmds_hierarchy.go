@@ -132,6 +132,13 @@ func (t *TPMContext) CreatePrimary(primaryObject ResourceContext, inSensitive *S
 		return nil, nil, nil, nil, nil, err
 	}
 
+	if primaryObject == nil {
+		// The convention in this pacage is to treat nil as TPM_RH_NULL.
+		// Don't do that here in order to avoid accidential usage of
+		// the null hierarchy.
+		primaryObject = unassignedResource()
+	}
+
 	if inSensitive == nil {
 		inSensitive = &SensitiveCreate{}
 	}
