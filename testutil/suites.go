@@ -307,6 +307,25 @@ func (b *TPMTest) RequireSymmetricAlgorithm(c *C, algorithm tpm2.SymObjectAlgori
 	}
 }
 
+// RequirePCRBank checks that a PCR bank for the specified algorithm is
+// enabled, and skips the test if it isn't. This will assert if the TPM
+// returns an error when querying the current PCR allocation.
+func (b *TPMTest) RequirePCRBank(c *C, alg tpm2.HashAlgorithmId) {
+	b.Transport.disableCommandLogging = true
+	defer func() { b.Transport.disableCommandLogging = false }()
+
+	pcrs, err := b.TPM.GetCapabilityPCRs()
+	c.Assert(err, IsNil)
+
+	for _, pcr := range pcrs {
+		if pcr.Hash == alg && len(pcr.Select) > 0 {
+			return
+		}
+	}
+
+	c.Skip(fmt.Sprintf("unsupported PCR bank %v", alg))
+}
+
 // ClearTPMUsingPlatformHierarchy enables the TPM2_Clear command and then
 // clears the TPM using the platform hierarchy. It causes the test to fail
 // if it isn't successful.

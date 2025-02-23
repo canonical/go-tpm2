@@ -251,6 +251,18 @@ func TestEventSequence(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
 	defer closeTPM()
 
+	pcrs, err := tpm.GetCapabilityPCRs()
+	if err != nil {
+		t.Fatalf("GetCapabilityPCRs failed: %v", err)
+	}
+	var algs []HashAlgorithmId
+	for _, pcr := range pcrs {
+		if len(pcr.Select) == 0 {
+			continue
+		}
+		algs = append(algs, pcr.Hash)
+	}
+
 	start := func(t *testing.T, auth Auth) ResourceContext {
 		seq, err := tpm.HashSequenceStart(auth, HashAlgorithmNull)
 		if err != nil {
@@ -264,8 +276,12 @@ func TestEventSequence(t *testing.T) {
 
 		var pcrValues PCRValues
 		if pcr > -1 {
+			var pcrs PCRSelectionList
+			for _, alg := range algs {
+				pcrs = append(pcrs, PCRSelection{Hash: alg, Select: []int{pcr}})
+			}
 			var err error
-			_, pcrValues, err = tpm.PCRRead(PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{pcr}}, {Hash: HashAlgorithmSHA1, Select: []int{pcr}}})
+			_, pcrValues, err = tpm.PCRRead(pcrs)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
@@ -321,7 +337,11 @@ func TestEventSequence(t *testing.T) {
 		if pcr < 0 {
 			return
 		}
-		_, updatedPcrValues, err := tpm.PCRRead(PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{pcr}}, {Hash: HashAlgorithmSHA1, Select: []int{pcr}}})
+		var pcrs PCRSelectionList
+		for _, alg := range algs {
+			pcrs = append(pcrs, PCRSelection{Hash: alg, Select: []int{pcr}})
+		}
+		_, updatedPcrValues, err := tpm.PCRRead(pcrs)
 		if err != nil {
 			t.Fatalf("PCRRead failed: %v", err)
 		}
@@ -450,6 +470,18 @@ func TestEventSequenceExecute(t *testing.T) {
 	tpm, _, closeTPM := testutil.NewTPMContextT(t, testutil.TPMFeaturePCR|testutil.TPMFeatureNV)
 	defer closeTPM()
 
+	pcrs, err := tpm.GetCapabilityPCRs()
+	if err != nil {
+		t.Fatalf("GetCapabilityPCRs failed: %v", err)
+	}
+	var algs []HashAlgorithmId
+	for _, pcr := range pcrs {
+		if len(pcr.Select) == 0 {
+			continue
+		}
+		algs = append(algs, pcr.Hash)
+	}
+
 	data := make([]byte, 2500)
 	rand.Read(data)
 
@@ -466,8 +498,12 @@ func TestEventSequenceExecute(t *testing.T) {
 
 		var pcrValues PCRValues
 		if pcr > -1 {
+			var pcrs PCRSelectionList
+			for _, alg := range algs {
+				pcrs = append(pcrs, PCRSelection{Hash: alg, Select: []int{pcr}})
+			}
 			var err error
-			_, pcrValues, err = tpm.PCRRead(PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{pcr}}, {Hash: HashAlgorithmSHA1, Select: []int{pcr}}})
+			_, pcrValues, err = tpm.PCRRead(pcrs)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
@@ -515,7 +551,11 @@ func TestEventSequenceExecute(t *testing.T) {
 		if pcr < 0 {
 			return
 		}
-		_, updatedPcrValues, err := tpm.PCRRead(PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{pcr}}, {Hash: HashAlgorithmSHA1, Select: []int{pcr}}})
+		var pcrs PCRSelectionList
+		for _, alg := range algs {
+			pcrs = append(pcrs, PCRSelection{Hash: alg, Select: []int{pcr}})
+		}
+		_, updatedPcrValues, err := tpm.PCRRead(pcrs)
 		if err != nil {
 			t.Fatalf("PCRRead failed: %v", err)
 		}

@@ -394,10 +394,24 @@ func (s *capabilitiesSuite) TestDoesSavedSessionNotExistPolicySession(c *C) {
 	c.Check(s.TPM.DoesSavedSessionExist(0x03000010), internal_testutil.IsFalse)
 }
 
-func (s *capabilitiesSuite) TestGetCapabilityPCRs(c *C) {
+func (s *capabilitiesSuite) TestGetCapabilityPCRsSHA1(c *C) {
+	s.RequirePCRBank(c, HashAlgorithmSHA1)
+
 	expected := PCRSelectionList{
 		{Hash: HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}, SizeOfSelect: 3},
 		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}, SizeOfSelect: 3}}
+
+	pcrs, err := s.TPM.GetCapabilityPCRs()
+	c.Check(err, IsNil)
+	c.Check(pcrs, capsInclude, expected)
+}
+
+func (s *capabilitiesSuite) TestGetCapabilityPCRsSHA384(c *C) {
+	s.RequirePCRBank(c, HashAlgorithmSHA384)
+
+	expected := PCRSelectionList{
+		{Hash: HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}, SizeOfSelect: 3},
+		{Hash: HashAlgorithmSHA384, Select: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}, SizeOfSelect: 3}}
 
 	pcrs, err := s.TPM.GetCapabilityPCRs()
 	c.Check(err, IsNil)
@@ -509,10 +523,12 @@ func (s *capabilitiesSuite) TestGetCapabilityTPMPropertyInvalid(c *C) {
 	c.Check(IsMissingPropertyError(err, CapabilityTPMProperties, Property(0x115)), internal_testutil.IsTrue)
 }
 
+const tpmManufacturerXYZ TPMManufacturer = 0x58595A20
+
 func (s *capabilitiesSuite) TestGetManufacturer(c *C) {
 	id, err := s.TPM.GetManufacturer()
 	c.Check(err, IsNil)
-	c.Check(id, internal_testutil.IsOneOf(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT, TPMManufacturerNTC, TPMManufacturerSTM})
+	c.Check(id, internal_testutil.IsOneOf(Equals), []TPMManufacturer{TPMManufacturerIBM, TPMManufacturerMSFT, TPMManufacturerNTC, TPMManufacturerSTM, tpmManufacturerXYZ})
 }
 
 func (s *capabilitiesSuite) testTestParms(c *C, params *PublicParams) {

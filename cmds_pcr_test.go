@@ -6,6 +6,9 @@ package tpm2_test
 
 import (
 	"bytes"
+	_ "crypto/sha1"
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"testing"
 
 	"github.com/canonical/go-tpm2"
@@ -43,10 +46,23 @@ func TestPCRExtend(t *testing.T) {
 			algorithms: []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256},
 			data:       []byte("foo"),
 		},
+		{
+			desc:       "4",
+			index:      0,
+			algorithms: []HashAlgorithmId{HashAlgorithmSHA384},
+			data:       []byte("foo"),
+		},
+		{
+			desc:       "5",
+			index:      3,
+			algorithms: []HashAlgorithmId{HashAlgorithmSHA256, HashAlgorithmSHA384},
+			data:       []byte("bar"),
+		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
 			pcrSelection := PCRSelectionList{}
 			for _, alg := range data.algorithms {
+				requirePCRBank(t, tpm, alg)
 				pcrSelection = append(pcrSelection, PCRSelection{Hash: alg, Select: []int{data.index}})
 			}
 
@@ -119,9 +135,19 @@ func TestPCREvent(t *testing.T) {
 		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
-			pcrSelection := PCRSelectionList{
-				{Hash: HashAlgorithmSHA1, Select: []int{data.index}},
-				{Hash: HashAlgorithmSHA256, Select: []int{data.index}}}
+			pcrs, err := tpm.GetCapabilityPCRs()
+			if err != nil {
+				t.Fatalf("GetCapabilityPCRs failed: %v", err)
+			}
+			var algs []HashAlgorithmId
+			var pcrSelection PCRSelectionList
+			for _, pcr := range pcrs {
+				if len(pcr.Select) == 0 {
+					continue
+				}
+				algs = append(algs, pcr.Hash)
+				pcrSelection = append(pcrSelection, PCRSelection{Hash: pcr.Hash, Select: []int{data.index}})
+			}
 
 			origUpdateCounter, origValues, err := tpm.PCRRead(pcrSelection)
 			if err != nil {
@@ -133,7 +159,7 @@ func TestPCREvent(t *testing.T) {
 				t.Fatalf("PCREvent failed: %v", err)
 			}
 
-			for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
+			for _, alg := range algs {
 				h := alg.NewHash()
 				h.Write(data.data)
 				expectedDigest := h.Sum(nil)
@@ -154,12 +180,12 @@ func TestPCREvent(t *testing.T) {
 				t.Fatalf("PCRRead failed: %v", err)
 			}
 
-			expectedUpdateCounter := origUpdateCounter + uint32(len(digests))
+			expectedUpdateCounter := origUpdateCounter + uint32(len(pcrSelection))
 			if newUpdateCounter != expectedUpdateCounter {
 				t.Errorf("Unexpected update count (got %d, expected %d)", newUpdateCounter, expectedUpdateCounter)
 			}
 
-			for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
+			for _, alg := range algs {
 				h := alg.NewHash()
 				h.Write(origValues[alg][data.index])
 				for _, d := range digests {
@@ -212,11 +238,21 @@ func TestPCRRead(t *testing.T) {
 			data:  []byte("5678"),
 		},
 	} {
-		_, err := tpm.PCREvent(tpm.PCRHandleContext(data.index), data.data, nil)
+		pcrs, err := tpm.GetCapabilityPCRs()
+		if err != nil {
+			t.Fatalf("GetCapabilityPCRs failed: %v", err)
+		}
+
+		_, err = tpm.PCREvent(tpm.PCRHandleContext(data.index), data.data, nil)
 		if err != nil {
 			t.Fatalf("PCREvent failed: %v", err)
 		}
-		for _, alg := range []HashAlgorithmId{HashAlgorithmSHA1, HashAlgorithmSHA256} {
+		for _, pcr := range pcrs {
+			if len(pcr.Select) == 0 {
+				continue
+			}
+			alg := pcr.Hash
+
 			if _, ok := expectedDigests[alg]; !ok {
 				expectedDigests[alg] = make(map[int]Digest)
 			}
@@ -247,36 +283,68 @@ func TestPCRRead(t *testing.T) {
 				{Hash: HashAlgorithmSHA256, Select: []int{1}}},
 		},
 		{
-			desc: "MultiplePCRSingleBank",
+			desc: "MultiplePCRSingleBankSHA1",
 			selection: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{2, 3, 1}}},
 		},
 		{
-			desc: "SinglePCRMultipleBank",
+			desc: "SinglePCRMultipleBankSHA1",
 			selection: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{2}},
 				{Hash: HashAlgorithmSHA256, Select: []int{2}}},
 		},
 		{
-			desc: "SinglePCRMultipleBank2",
+			desc: "SinglePCRMultipleBankSHA1_2",
 			selection: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{2}},
 				{Hash: HashAlgorithmSHA1, Select: []int{2}}},
 		},
 		{
-			desc: "MultiplePCRMultipleBank",
+			desc: "MultiplePCRMultipleBankSHA1",
 			selection: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{1, 2, 5}},
 				{Hash: HashAlgorithmSHA256, Select: []int{1, 5, 2}}},
 		},
 		{
-			desc: "MultipleRequest",
+			desc: "MultipleRequestSHA1",
 			selection: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{1, 2, 3, 4, 5}},
 				{Hash: HashAlgorithmSHA256, Select: []int{1, 5, 2, 3, 4}}},
 		},
+		{
+			desc: "MultiplePCRSingleBankSHA384",
+			selection: PCRSelectionList{
+				{Hash: HashAlgorithmSHA384, Select: []int{2, 3, 1}}},
+		},
+		{
+			desc: "SinglePCRMultipleBankSHA384",
+			selection: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{2}},
+				{Hash: HashAlgorithmSHA384, Select: []int{2}}},
+		},
+		{
+			desc: "SinglePCRMultipleBankSHA384_2",
+			selection: PCRSelectionList{
+				{Hash: HashAlgorithmSHA384, Select: []int{2}},
+				{Hash: HashAlgorithmSHA256, Select: []int{2}}},
+		},
+		{
+			desc: "MultiplePCRMultipleBankSHA384",
+			selection: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 5}},
+				{Hash: HashAlgorithmSHA384, Select: []int{1, 5, 2}}},
+		},
+		{
+			desc: "MultipleRequestSHA384",
+			selection: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{1, 2, 3, 4, 5}},
+				{Hash: HashAlgorithmSHA384, Select: []int{1, 5, 2, 3, 4}}},
+		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
+			for _, pcr := range data.selection {
+				requirePCRBank(t, tpm, pcr.Hash)
+			}
 			_, digests, err := tpm.PCRRead(data.selection)
 			if err != nil {
 				t.Fatalf("PCRRead failed: %v", err)

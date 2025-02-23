@@ -403,10 +403,26 @@ func (s *attestationSuite) TestQuoteInScheme(c *C) {
 	s.testQuote(c, data)
 }
 
-func (s *attestationSuite) TestQuoteDifferentPCRs(c *C) {
+func (s *attestationSuite) TestQuoteDifferentPCRsSHA1(c *C) {
+	s.RequirePCRBank(c, HashAlgorithmSHA1)
+
 	s.testQuote(c, &testQuoteData{
 		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
 		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA1, Select: []int{0}}, {Hash: HashAlgorithmSHA256, Select: []int{1, 2}}},
+		signHierarchy: HandleEndorsement,
+		alg:           HashAlgorithmSHA256,
+		signScheme: &SigScheme{
+			Scheme: SigSchemeAlgRSAPSS,
+			Details: &SigSchemeU{
+				RSAPSS: &SigSchemeRSAPSS{HashAlg: HashAlgorithmSHA256}}}})
+}
+
+func (s *attestationSuite) TestQuoteDifferentPCRsSHA384(c *C) {
+	s.RequirePCRBank(c, HashAlgorithmSHA384)
+
+	s.testQuote(c, &testQuoteData{
+		sign:          s.CreatePrimary(c, HandleEndorsement, testutil.NewRestrictedRSASigningKeyTemplate(nil)),
+		pcrs:          PCRSelectionList{{Hash: HashAlgorithmSHA384, Select: []int{0}}, {Hash: HashAlgorithmSHA256, Select: []int{1, 2}}},
 		signHierarchy: HandleEndorsement,
 		alg:           HashAlgorithmSHA256,
 		signScheme: &SigScheme{

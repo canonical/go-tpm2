@@ -269,6 +269,21 @@ func verifyContextFlushed(t *testing.T, tpm *TPMContext, context HandleContext) 
 	flushContext(t, tpm, context)
 }
 
+func requirePCRBank(t *testing.T, tpm *TPMContext, alg HashAlgorithmId) {
+	pcrs, err := tpm.GetCapabilityPCRs()
+	if err != nil {
+		t.Fatalf("GetCapabilityPCRs failed: %v", err)
+	}
+
+	for _, pcr := range pcrs {
+		if pcr.Hash == alg && len(pcr.Select) > 0 {
+			return
+		}
+	}
+
+	t.Skip(fmt.Sprintf("unsupported PCR bank %v", alg))
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(func() int {

@@ -8,6 +8,9 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	_ "crypto/sha1"
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"io"
 
 	. "gopkg.in/check.v1"
@@ -190,6 +193,8 @@ func (s *policySuite) TestPolicyPCR(c *C) {
 }
 
 func (s *policySuite) TestPolicyPCRSHA1(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA1)
+
 	h := crypto.SHA1.New()
 	io.WriteString(h, "foo")
 
@@ -199,7 +204,21 @@ func (s *policySuite) TestPolicyPCRSHA1(c *C) {
 		pcrs:      tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA256, Select: []int{0, 1, 2, 3, 4, 5, 6, 7}}}})
 }
 
-func (s *policySuite) TestPolicyPCRDifferentPCRs(c *C) {
+func (s *policySuite) TestPolicyPCRSHA384(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA384)
+
+	h := crypto.SHA384.New()
+	io.WriteString(h, "foo")
+
+	s.testPolicyPCR(c, &testPolicyPCRData{
+		alg:       tpm2.HashAlgorithmSHA384,
+		pcrDigest: h.Sum(nil),
+		pcrs:      tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA384, Select: []int{0, 1, 2, 3, 4, 5, 6, 7}}}})
+}
+
+func (s *policySuite) TestPolicyPCRMixedSHA1(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA1)
+
 	h := crypto.SHA256.New()
 	io.WriteString(h, "foo")
 
@@ -207,6 +226,18 @@ func (s *policySuite) TestPolicyPCRDifferentPCRs(c *C) {
 		alg:       tpm2.HashAlgorithmSHA256,
 		pcrDigest: h.Sum(nil),
 		pcrs:      tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA1, Select: []int{0, 1, 2, 3, 4, 5, 6, 7}}}})
+}
+
+func (s *policySuite) TestPolicyPCRMixedSHA384(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA384)
+
+	h := crypto.SHA256.New()
+	io.WriteString(h, "foo")
+
+	s.testPolicyPCR(c, &testPolicyPCRData{
+		alg:       tpm2.HashAlgorithmSHA256,
+		pcrDigest: h.Sum(nil),
+		pcrs:      tpm2.PCRSelectionList{{Hash: tpm2.HashAlgorithmSHA384, Select: []int{0, 1, 2, 3, 4, 5, 6, 7}}}})
 }
 
 type testPolicyNVData struct {

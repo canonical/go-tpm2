@@ -9,6 +9,9 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	_ "crypto/sha1"
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"encoding/binary"
 	"testing"
 	"time"
@@ -537,7 +540,7 @@ func TestPolicyPCR(t *testing.T) {
 
 	for _, data := range []struct {
 		desc   string
-		digest Digest
+		digest func(*testing.T) Digest
 		pcrs   PCRSelectionList
 	}{
 		{
@@ -545,15 +548,27 @@ func TestPolicyPCR(t *testing.T) {
 			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7}}},
 		},
 		{
-			desc: "SinglePCRMultipleBank",
+			desc: "SinglePCRMultipleBankSHA1_1",
 			pcrs: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{8}},
 				{Hash: HashAlgorithmSHA1, Select: []int{8}}},
 		},
 		{
-			desc: "SinglePCRMultipleBank2",
+			desc: "SinglePCRMultipleBankSHA1_2",
 			pcrs: PCRSelectionList{
 				{Hash: HashAlgorithmSHA1, Select: []int{8}},
+				{Hash: HashAlgorithmSHA256, Select: []int{8}}},
+		},
+		{
+			desc: "SinglePCRMultipleBankSHA384_1",
+			pcrs: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{8}},
+				{Hash: HashAlgorithmSHA384, Select: []int{8}}},
+		},
+		{
+			desc: "SinglePCRMultipleBankSHA384_2",
+			pcrs: PCRSelectionList{
+				{Hash: HashAlgorithmSHA384, Select: []int{8}},
 				{Hash: HashAlgorithmSHA256, Select: []int{8}}},
 		},
 		{
@@ -561,29 +576,55 @@ func TestPolicyPCR(t *testing.T) {
 			pcrs: PCRSelectionList{{Hash: HashAlgorithmSHA256, Select: []int{7, 8, 9}}},
 		},
 		{
-			desc: "MultiplePCRMultipleBank",
+			desc: "MultiplePCRMultipleBankSHA1",
 			pcrs: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{7, 8, 9}},
 				{Hash: HashAlgorithmSHA1, Select: []int{7, 8, 9}}},
 		},
 		{
-			desc: "WithDigest",
-			digest: computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, PCRSelectionList{
-				{Hash: HashAlgorithmSHA256, Select: []int{8}},
-				{Hash: HashAlgorithmSHA1, Select: []int{8}}}),
+			desc: "MultiplePCRMultipleBankSHA384",
+			pcrs: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{7, 8, 9}},
+				{Hash: HashAlgorithmSHA384, Select: []int{7, 8, 9}}},
+		},
+		{
+			desc: "WithDigestSHA1",
+			digest: func(t *testing.T) Digest {
+				return computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, PCRSelectionList{
+					{Hash: HashAlgorithmSHA256, Select: []int{8}},
+					{Hash: HashAlgorithmSHA1, Select: []int{8}}})
+			},
 			pcrs: PCRSelectionList{
 				{Hash: HashAlgorithmSHA256, Select: []int{8}},
 				{Hash: HashAlgorithmSHA1, Select: []int{8}}},
 		},
+		{
+			desc: "WithDigestSHA384",
+			digest: func(t *testing.T) Digest {
+				return computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, PCRSelectionList{
+					{Hash: HashAlgorithmSHA256, Select: []int{8}},
+					{Hash: HashAlgorithmSHA384, Select: []int{8}}})
+			},
+			pcrs: PCRSelectionList{
+				{Hash: HashAlgorithmSHA256, Select: []int{8}},
+				{Hash: HashAlgorithmSHA384, Select: []int{8}}},
+		},
 	} {
 		t.Run(data.desc, func(t *testing.T) {
+			for _, pcr := range data.pcrs {
+				requirePCRBank(t, tpm, pcr.Hash)
+			}
 			sessionContext, err := tpm.StartAuthSession(nil, nil, SessionTypePolicy, nil, HashAlgorithmSHA256)
 			if err != nil {
 				t.Fatalf("StartAuthSession failed: %v", err)
 			}
 			defer flushContext(t, tpm, sessionContext)
 
-			if err := tpm.PolicyPCR(sessionContext, data.digest, data.pcrs); err != nil {
+			var pcrDigest Digest
+			if data.digest != nil {
+				pcrDigest = data.digest(t)
+			}
+			if err := tpm.PolicyPCR(sessionContext, pcrDigest, data.pcrs); err != nil {
 				t.Fatalf("PolicyPCR failed: %v", err)
 			}
 
@@ -592,7 +633,6 @@ func TestPolicyPCR(t *testing.T) {
 				t.Fatalf("PolicyGetDigest failed: %v", err)
 			}
 
-			pcrDigest := data.digest
 			if len(pcrDigest) == 0 {
 				pcrDigest = computePCRDigestFromTPM(t, tpm, HashAlgorithmSHA256, data.pcrs)
 			}

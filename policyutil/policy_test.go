@@ -3506,10 +3506,23 @@ func (s *policySuite) TestPolicyPCRValues(c *C) {
 	c.Check(s.testPolicyPCRValues(c, values), IsNil)
 }
 
-func (s *policySuite) TestPolicyPCRValuesDifferentDigestAndSelection(c *C) {
+func (s *policySuite) TestPolicyPCRValuesDifferentDigestAndSelectionSHA1(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA1)
+
 	_, values, err := s.TPM.PCRRead(tpm2.PCRSelectionList{
 		{Hash: tpm2.HashAlgorithmSHA1, Select: []int{4}},
 		{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}}})
+	c.Assert(err, IsNil)
+
+	c.Check(s.testPolicyPCRValues(c, values), IsNil)
+}
+
+func (s *policySuite) TestPolicyPCRValuesDifferentDigestAndSelectionSHA384(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA384)
+
+	_, values, err := s.TPM.PCRRead(tpm2.PCRSelectionList{
+		{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}},
+		{Hash: tpm2.HashAlgorithmSHA384, Select: []int{4}}})
 	c.Assert(err, IsNil)
 
 	c.Check(s.testPolicyPCRValues(c, values), IsNil)
@@ -3573,10 +3586,28 @@ func (s *policySuite) TestPolicyPCRDigest(c *C) {
 	c.Check(s.testPolicyPCRDigest(c, pcrDigest, pcrs), IsNil)
 }
 
-func (s *policySuite) TestPolicyPCRDigestDifferentDigestAndSelection(c *C) {
+func (s *policySuite) TestPolicyPCRDigestDifferentDigestAndSelectionSHA1(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA1)
+
 	pcrs := tpm2.PCRSelectionList{
 		{Hash: tpm2.HashAlgorithmSHA1, Select: []int{4}},
 		{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}},
+	}
+	_, values, err := s.TPM.PCRRead(pcrs)
+	c.Assert(err, IsNil)
+
+	pcrs, pcrDigest, err := ComputePCRDigestFromAllValues(tpm2.HashAlgorithmSHA256, values)
+	c.Check(err, IsNil)
+
+	c.Check(s.testPolicyPCRDigest(c, pcrDigest, pcrs), IsNil)
+}
+
+func (s *policySuite) TestPolicyPCRDigestDifferentDigestAndSelectionSHA384(c *C) {
+	s.RequirePCRBank(c, tpm2.HashAlgorithmSHA384)
+
+	pcrs := tpm2.PCRSelectionList{
+		{Hash: tpm2.HashAlgorithmSHA256, Select: []int{7}},
+		{Hash: tpm2.HashAlgorithmSHA384, Select: []int{4}},
 	}
 	_, values, err := s.TPM.PCRRead(pcrs)
 	c.Assert(err, IsNil)
