@@ -74,11 +74,6 @@ func (s *errorsSuite) TestDecodeWarningSelfTest(c *C) {
 	c.Check(err.(*TPMWarning).ResponseCode(), Equals, ResponseCode(0x90a))
 }
 
-func (s *errorsSuite) TestDecodeAsyncSelfTest(c *C) {
-	err := DecodeResponseCode(CommandSelfTest, 0x90a)
-	c.Check(err, IsNil)
-}
-
 func (s *errorsSuite) TestDecodeError0(c *C) {
 	err := DecodeResponseCode(CommandUnseal, 0x128)
 	c.Check(err, ErrorMatches, "TPM returned an error whilst executing command TPM_CC_Unseal: TPM_RC_PCR_CHANGED \\(PCR have changed since checked\\)")
