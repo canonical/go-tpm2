@@ -397,6 +397,9 @@ func (t *Transport) readResponse() ([]byte, error) {
 
 	if rc != tpm2.ResponseSuccess {
 		// The TPM returned an error response, so there's nothing else to do
+		if t.ResponseIntercept != nil {
+			t.ResponseIntercept(cmd.code, cmd.handles, cmd.authArea, cmd.pBytes, rsp)
+		}
 		return rsp.Bytes(), nil
 	}
 
