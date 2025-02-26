@@ -289,7 +289,8 @@ func WriteResponsePacket(w io.Writer, rc ResponseCode, handle *Handle, parameter
 			return errors.New("inconsistent ResponseCode and parameters arguments")
 		}
 		header.ResponseSize = uint32(binary.Size(header))
-		return nil
+		_, err := mu.MarshalToWriter(w, header)
+		return err
 	}
 
 	// This is a success response.
