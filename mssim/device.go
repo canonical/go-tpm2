@@ -195,20 +195,22 @@ func (d *Device) openInternal() (transport *Transport, err error) {
 		return nil, fmt.Errorf("cannot connect to platform socket: %w", err)
 	}
 
+	var transportCloser *Transport
 	defer func() {
 		if err == nil {
 			return
 		}
 		switch {
-		case transport != nil: // Once we have a Transport, close it on error
-			transport.Close()
+		case transportCloser != nil: // Once we have a Transport, close it on error
+			transportCloser.Close()
 		default: // Before we have a Transport, close each TCP socket individually on error
 			platform.Close()
 			tpm.Close()
 		}
 	}()
 
-	tmp := new(Transport)
+	transport = new(Transport)
+	transportCloser = transport
 
 	// Build a threadsafe way to proxy calls to/from the TPM socket. We communicate
 	// with the TPM socket from:
@@ -220,20 +222,18 @@ func (d *Device) openInternal() (transport *Transport, err error) {
 	// Make a retrier for the main public tpm2.Transport API to communicate TPM
 	// commands with. The retrier communicates with the supplied transport on a
 	// dedicated goroutine.
-	tmp.retrier = transportutil.NewRetrierTransport(
-		newTpmMainTransport(mux.NewTransport(), &tmp.locality, tpm.RemoteAddr(), tpm.LocalAddr()), d.retryParams)
+	transport.retrier = transportutil.NewRetrierTransport(
+		newTpmMainTransport(mux.NewTransport(), &transport.locality, tpm.RemoteAddr(), tpm.LocalAddr()), d.retryParams)
 
 	// Early exits from this point should see retrier.Close() being called to
 	// shut down the goroutines it starts.
 
 	// Build another transport for control commands for the TPM socket, used
 	// on the current goroutine
-	tmp.tpm = newTpmTransport(mux.NewTransport(), tpm.RemoteAddr(), tpm.LocalAddr())
+	transport.tpm = newTpmTransport(mux.NewTransport(), tpm.RemoteAddr(), tpm.LocalAddr())
 
 	// Build a transport for hanlding control commands on the platform socket.
-	tmp.platform = newPlatformTransport(platform)
-
-	transport = tmp
+	transport.platform = newPlatformTransport(platform)
 
 	// Obtain information from the simulator
 	var u32 uint32
