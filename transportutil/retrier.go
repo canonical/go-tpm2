@@ -102,7 +102,7 @@ func (l *retrierLoop) runCommand(commandCode tpm2.CommandCode, cmd []byte) ([]by
 		// response header, so there are no more bytes for us to read.
 		err := tpm2.DecodeResponseCode(commandCode, hdr.ResponseCode)
 		if tries > 1 && (tpm2.IsTPMWarning(err, tpm2.WarningYielded, commandCode) ||
-			tpm2.IsTPMWarning(err, tpm2.WarningTesting, commandCode) ||
+			(tpm2.IsTPMWarning(err, tpm2.WarningTesting, commandCode) && commandCode != tpm2.CommandSelfTest) ||
 			tpm2.IsTPMWarning(err, tpm2.WarningRetry, commandCode)) {
 
 			// Yes, we have retries left and should retry. Sleep for the current retry delay
