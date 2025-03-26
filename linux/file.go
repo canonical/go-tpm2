@@ -5,12 +5,9 @@
 package linux
 
 import (
-	"errors"
 	"io"
 	"os"
 	"syscall"
-
-	"github.com/canonical/go-tpm2/transportutil"
 )
 
 // The TPM character device's read and poll implementations are a bit funky, in a way that
@@ -84,9 +81,12 @@ func (f *tpmFile) ReadNonBlocking(data []byte) (n int, err error) {
 		})
 		return true
 	}); err != nil {
-		// The only error that can be returned from this is poll.ErrFileClosing
-		// which is private
-		return 0, f.wrapErr("read", transportutil.ErrClosed)
+		// The only errors that can be returned from this are poll.ErrFileClosing,
+		// os.ErrDeadlineExceeded and poll.ErrNotPollable. However:
+		// - We are not setting a deadline, so we won't see os.ErrDeadlineExceeded.
+		// - We aren't requesting the current goroutine to wait, so we won't see poll.ErrNotPollable.
+		// Therefore, assume that the error is poll.ErrFileClosing, which is private.
+		return n, f.wrapErr("read", os.ErrClosed)
 	}
 	return n, f.wrapErr("read", readErr)
 }
@@ -104,9 +104,17 @@ func (f *tpmFile) Read(data []byte) (n int, err error) {
 		})
 		return n > 0
 	}); err != nil {
-		// The only error that can be returned from this is poll.ErrFileClosing
-		// which is private
-		return 0, f.wrapErr("read", transportutil.ErrClosed)
+		// The only errors that can be returned from this are poll.ErrFileClosing,
+		// os.ErrDeadlineExceeded and poll.ErrNotPollable. However:
+		// - We are not setting a deadline, so we won't see os.ErrDeadlineExceeded.
+		// - Although we are requesting the current goroutine to park if the fd isn't
+		//   ready, we should only see poll.ErrNotPollable if the opened fd was
+		//   pollable when it was opened but no longer is, which shouldn't happen. If
+		//   the fd isn't pollable when it's opened, it won't be registered with the
+		//   netpoller. In this case, the fd will be in blocking mode anyway, and so
+		//   we won't request the current goroutine to park.
+		// Therefore, assume that the error is poll.ErrFileClosing, which is private.
+		return n, f.wrapErr("read", os.ErrClosed)
 	}
 	return n, f.wrapErr("read", readErr)
 }
@@ -124,14 +132,20 @@ func (f *tpmFile) Write(data []byte) (n int, err error) {
 		})
 		return true
 	}); err != nil {
-		// The only error that can be returned from this is poll.ErrFileClosing
-		// which is private
-		return 0, f.wrapErr("write", transportutil.ErrClosed)
+		// The only errors that can be returned from this are poll.ErrFileClosing,
+		// os.ErrDeadlineExceeded and poll.ErrNotPollable. However:
+		// - We are not setting a deadline, so we won't see os.ErrDeadlineExceeded.
+		// - Although we are requesting the current goroutine to park if the fd isn't
+		//   ready, we should only see poll.ErrNotPollable if the opened fd was
+		//   pollable when it was opened but no longer is, which shouldn't happen. If
+		//   the fd isn't pollable when it's opened, it won't be registered with the
+		//   netpoller. In this case, the fd will be in blocking mode anyway, and so
+		//   we won't request the current goroutine to park.
+		// Therefore, assume that the error is poll.ErrFileClosing, which is private.
+		return 0, f.wrapErr("write", os.ErrClosed)
 	}
-	switch {
-	case errors.Is(writeErr, syscall.Errno(syscall.EBUSY)):
-		writeErr = transportutil.ErrBusy
-	case n < len(data) && writeErr == nil:
+
+	if n < len(data) && writeErr == nil {
 		writeErr = io.ErrShortWrite
 	}
 	return n, f.wrapErr("write", writeErr)
