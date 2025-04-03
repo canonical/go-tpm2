@@ -45,7 +45,7 @@ func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint32) error {
 
 	_, err = f.WriteString(cmd)
 	switch {
-	case errors.Is(err, syscall.EPERM):
+	case errors.Is(err, os.ErrPermission):
 		return ppi.ErrOperationUnsupported
 	case errors.Is(err, syscall.EFAULT):
 		return ppi.ErrOperationFailed
@@ -63,7 +63,10 @@ func (p *sysfsPpiImpl) StateTransitionAction() (ppi.StateTransitionAction, error
 	var action ppi.StateTransitionAction
 	var dummy string
 	if _, err := fmt.Sscanf(string(actionBytes), "%d:%s\n", &action, &dummy); err != nil {
-		return 0, fmt.Errorf("cannot scan transition action \"%s\": %w", string(actionBytes), err)
+		return 0, fmt.Errorf("cannot scan transition action %q: %w", string(actionBytes), err)
+	}
+	if action > ppi.StateTransitionActionOSVendorSpecific {
+		return 0, fmt.Errorf("invalid transition action %d", action)
 	}
 
 	return action, nil
@@ -73,10 +76,7 @@ func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus,
 	p.opsOnce.Do(func() {
 		p.ops, p.opsError = func() (map[ppi.OperationId]ppi.OperationStatus, error) {
 			opsFile, err := os.OpenFile(filepath.Join(p.sysfsPath, "tcg_operations"), os.O_RDONLY, 0)
-			switch {
-			case os.IsNotExist(err):
-				return nil, ppi.ErrOperationUnsupported
-			case err != nil:
+			if err != nil {
 				return nil, err
 			}
 			defer opsFile.Close()
@@ -129,14 +129,14 @@ func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 
 	var arg1, arg2 uint32
 	if _, err := fmt.Sscanf(rsp, "%d", &arg1); err != nil {
-		return nil, fmt.Errorf("cannot scan response \"%s\": %w", rsp, err)
+		return nil, fmt.Errorf("cannot scan response %q: %w", rsp, err)
 	}
 	if arg1 == 0 {
 		return nil, nil
 	}
 
 	if _, err := fmt.Sscanf(rsp, "%d%v:", &arg1, &arg2); err != nil {
-		return nil, fmt.Errorf("cannot scan response \"%s\": %w", rsp, err)
+		return nil, fmt.Errorf("cannot scan response %q: %w", rsp, err)
 	}
 
 	r := &ppi.OperationResponse{Operation: ppi.OperationId(arg1)}
