@@ -254,6 +254,26 @@ func ParseVersion(str string) (Version, error) {
 	return version, nil
 }
 
+// Compare compares the supplied version with this version. If they are both
+// equal, then 0 is returned. If v < other, then -1 is returned. If v > other,
+// then 1 is returned.
+func (v *Version) Compare(other Version) int {
+	switch {
+	case *v == other:
+		return 0
+	case v.Major < other.Major:
+		return -1
+	case v.Major > other.Major:
+		return 1
+	case v.Minor < other.Minor:
+		return -1
+	case v.Minor > other.Minor:
+		return 1
+	}
+	panic("not reached")
+}
+
+// String implements [fmt.Stringer].
 func (v *Version) String() string {
 	return fmt.Sprintf("%d.%d", v.Major, v.Minor)
 }

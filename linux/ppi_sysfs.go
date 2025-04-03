@@ -28,7 +28,7 @@ type sysfsPpiImpl struct {
 }
 
 func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint32) error {
-	if arg != nil && (p.Version.Major < 1 || p.Version.Minor < 3) {
+	if arg != nil && p.Version.Compare(ppi.Version13) < 0 {
 		return ppi.ErrOperationUnsupported
 	}
 

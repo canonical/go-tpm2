@@ -88,3 +88,15 @@ func (s *ppiSuite) TestParseVersionInvalid2(c *C) {
 	_, err := ParseVersion("-1.3")
 	c.Check(err, ErrorMatches, `expected integer`)
 }
+
+func (s *ppiSuite) TestVersionCompareEqual(c *C) {
+	c.Check(Version13.Compare(Version13), Equals, 0)
+}
+
+func (s *ppiSuite) TestVersionCompareLT(c *C) {
+	c.Check(Version12.Compare(Version13), Equals, -1)
+}
+
+func (s *ppiSuite) TestVersionCompareGT(c *C) {
+	c.Check(Version13.Compare(Version12), Equals, 1)
+}
