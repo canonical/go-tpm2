@@ -244,7 +244,7 @@ func (d *RawDevice) PhysicalPresenceInterface() (ppi.PPI, error) {
 		d.ppi, d.ppiErr = func() (ppi.PPI, error) {
 			backend, err := newSysfsPpi(filepath.Join(d.sysfsPath, "ppi"))
 			switch {
-			case os.IsNotExist(err):
+			case os.IsNotExist(err), os.IsPermission(err):
 				return nil, ErrNoPhysicalPresenceInterface
 			case err != nil:
 				return nil, fmt.Errorf("cannot initialize PPI backend: %w", err)
