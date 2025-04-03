@@ -26,7 +26,7 @@ var (
 )
 
 // OperationError represents an error associated with a PPI operation.
-type OperationError uint64
+type OperationError uint32
 
 func (e OperationError) Error() string {
 	switch {
@@ -44,7 +44,7 @@ func (e OperationError) Error() string {
 }
 
 // OperationId corresponds to a physical presence operation.
-type OperationId uint64
+type OperationId uint32
 
 const (
 	NoOperation OperationId = 0
@@ -163,7 +163,7 @@ func (op OperationId) SetPPRequiredOperationId() OperationId {
 }
 
 // OperationStatus indicates the status of a physical presence operation.
-type OperationStatus uint64
+type OperationStatus uint32
 
 func (s OperationStatus) String() string {
 	switch s {
@@ -206,7 +206,7 @@ const (
 
 // StateTransitionAction describes the action required to transition to the pre-OS
 // environment in order for the pending physical presence operation request to be executed.
-type StateTransitionAction uint64
+type StateTransitionAction uint32
 
 func (a StateTransitionAction) String() string {
 	switch a {
@@ -273,7 +273,7 @@ type OperationResponse struct {
 }
 
 // HashAlgorithms is a bit field of digest algorithms.
-type HashAlgorithms uint64
+type HashAlgorithms uint32
 
 // MakeHashAlgorithms coverts the supplied list of digest algorithms into a bit field.
 func MakeHashAlgorithms(algs ...tpm2.HashAlgorithmId) HashAlgorithms {

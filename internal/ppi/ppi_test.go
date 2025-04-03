@@ -25,7 +25,7 @@ func Test(t *testing.T) { TestingT(t) }
 type submittedOp struct {
 	op     ppi.OperationId
 	hasArg bool
-	arg    uint64
+	arg    uint32
 }
 
 type mockPPIBackend struct {
@@ -42,7 +42,7 @@ type mockPPIBackend struct {
 	rspErr error
 }
 
-func (b *mockPPIBackend) SubmitOperation(op ppi.OperationId, arg *uint64) error {
+func (b *mockPPIBackend) SubmitOperation(op ppi.OperationId, arg *uint32) error {
 	data := submittedOp{op: op}
 	if arg != nil {
 		data.hasArg = true

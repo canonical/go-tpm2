@@ -27,7 +27,7 @@ type sysfsPpiImpl struct {
 	opsError error
 }
 
-func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
+func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint32) error {
 	if arg != nil && (p.Version.Major < 1 || p.Version.Minor < 3) {
 		return ppi.ErrOperationUnsupported
 	}
@@ -40,7 +40,7 @@ func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint64) error {
 
 	cmd := strconv.FormatUint(uint64(op), 10)
 	if arg != nil {
-		cmd += " " + strconv.FormatUint(*arg, 10)
+		cmd += " " + strconv.FormatUint(uint64(*arg), 10)
 	}
 
 	_, err = f.WriteString(cmd)
@@ -127,7 +127,7 @@ func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 
 	rsp := string(rspBytes)
 
-	var arg1, arg2 uint64
+	var arg1, arg2 uint32
 	if _, err := fmt.Sscanf(rsp, "%d", &arg1); err != nil {
 		return nil, fmt.Errorf("cannot scan response \"%s\": %w", rsp, err)
 	}

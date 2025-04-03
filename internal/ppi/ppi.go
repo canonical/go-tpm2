@@ -13,7 +13,7 @@ import (
 )
 
 type PPIBackend interface {
-	SubmitOperation(op ppi.OperationId, arg *uint64) error
+	SubmitOperation(op ppi.OperationId, arg *uint32) error
 	StateTransitionAction() (ppi.StateTransitionAction, error)
 	OperationStatus(op ppi.OperationId) (ppi.OperationStatus, error)
 	OperationResponse() (*ppi.OperationResponse, error)
@@ -88,7 +88,7 @@ func (p *PPI) EnableAndClearTPM() error {
 
 func (p *PPI) SetPCRBanks(algs ...tpm2.HashAlgorithmId) error {
 	bits := ppi.MakeHashAlgorithms(algs...)
-	return p.functions.SubmitOperation(ppi.OperationSetPCRBanks, (*uint64)(&bits))
+	return p.functions.SubmitOperation(ppi.OperationSetPCRBanks, (*uint32)(&bits))
 }
 
 func (p *PPI) ChangeEPS() error {
