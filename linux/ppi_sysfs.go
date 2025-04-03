@@ -33,7 +33,10 @@ func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint32) error {
 	}
 
 	f, err := os.OpenFile(filepath.Join(p.sysfsPath, "request"), os.O_WRONLY, 0)
-	if err != nil {
+	switch {
+	case errors.Is(err, os.ErrPermission):
+		return ppi.ErrPermission
+	case err != nil:
 		return err
 	}
 	defer f.Close()

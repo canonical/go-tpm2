@@ -21,8 +21,12 @@ var (
 	ErrOperationUnsupported = errors.New("the requested PPI operation is unsupported")
 
 	// ErrOperationFailed indicates that the requested physical presence
-	// operation request failed.
-	ErrOperationFailed = errors.New("the PPI operation request failed")
+	// operation failed.
+	ErrOperationFailed = errors.New("the PPI operation failed")
+
+	// ErrPermission indicates that the requested physical presence operation
+	// cannot be performed because of insufficient permissions.
+	ErrPermission = errors.New("insufficent permissions to perform PPI operation")
 )
 
 // OperationError represents an error associated with a PPI operation.
