@@ -113,6 +113,9 @@ func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus,
 	if !implemented {
 		return ppi.OperationNotImplemented, nil
 	}
+	if status > ppi.OperationPPNotRequired {
+		return 0, fmt.Errorf("invalid operation status %d", status)
+	}
 	return status, nil
 }
 
