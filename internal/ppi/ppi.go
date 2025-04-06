@@ -5,7 +5,6 @@
 package ppi
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/canonical/go-tpm2"
@@ -20,6 +19,7 @@ type PPIBackend interface {
 }
 
 type PPI struct {
+	ppiType   ppi.Type
 	version   ppi.Version
 	functions PPIBackend
 
@@ -34,8 +34,9 @@ type PPI struct {
 	rspError error
 }
 
-func New(version ppi.Version, functions PPIBackend) *PPI {
+func New(ppiType ppi.Type, version ppi.Version, functions PPIBackend) *PPI {
 	return &PPI{
+		ppiType:   ppiType,
 		version:   version,
 		functions: functions,
 		ops:       make(map[ppi.OperationId]ppi.OperationStatus),
@@ -44,6 +45,10 @@ func New(version ppi.Version, functions PPIBackend) *PPI {
 
 func (p *PPI) submitOperation(op ppi.OperationId) error {
 	return p.functions.SubmitOperation(op, nil)
+}
+
+func (p *PPI) Type() ppi.Type {
+	return p.ppiType
 }
 
 func (p *PPI) Version() ppi.Version {
@@ -98,7 +103,7 @@ func (p *PPI) ChangeEPS() error {
 func (p *PPI) SetPPRequiredForOperation(op ppi.OperationId) error {
 	op = op.SetPPRequiredOperationId()
 	if op == ppi.NoOperation {
-		return errors.New("invalid operation")
+		return ppi.ErrOperationUnsupported
 	}
 	return p.submitOperation(op)
 }
@@ -106,7 +111,7 @@ func (p *PPI) SetPPRequiredForOperation(op ppi.OperationId) error {
 func (p *PPI) ClearPPRequiredForOperation(op ppi.OperationId) error {
 	op = op.ClearPPRequiredOperationId()
 	if op == ppi.NoOperation {
-		return errors.New("invalid operation")
+		return ppi.ErrOperationUnsupported
 	}
 	return p.submitOperation(op)
 }

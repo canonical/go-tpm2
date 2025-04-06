@@ -4,13 +4,23 @@
 
 package linux
 
-var NewSysfsPpi = newSysfsPpi
+import efi "github.com/canonical/go-efilib"
+
+var NewAcpiPpi = newAcpiPpi
 
 func MockSysfsPath(path string) (restore func()) {
 	orig := sysfsPath
 	sysfsPath = path
 	return func() {
 		sysfsPath = orig
+	}
+}
+
+func MockEFIVars(vars efi.VarsBackend) (restore func()) {
+	orig := customEfiVars
+	customEfiVars = vars
+	return func() {
+		customEfiVars = orig
 	}
 }
 

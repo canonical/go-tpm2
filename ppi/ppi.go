@@ -26,7 +26,7 @@ var (
 
 	// ErrPermission indicates that the requested physical presence operation
 	// cannot be performed because of insufficient permissions.
-	ErrPermission = errors.New("insufficent permissions to perform PPI operation")
+	ErrPermission = errors.New("insufficient permissions to perform PPI operation")
 )
 
 // OperationError represents an error associated with a PPI operation.
@@ -287,6 +287,7 @@ var (
 	Version11 = Version{Major: 1, Minor: 1}
 	Version12 = Version{Major: 1, Minor: 2}
 	Version13 = Version{Major: 1, Minor: 3}
+	Version14 = Version{Major: 1, Minor: 4}
 )
 
 // OperationResponse provides the response of the last operation executed by the pre-OS
@@ -334,8 +335,30 @@ const (
 	HashAlgorithmSHA3_512
 )
 
+// Type descibes the type of PPI implementation.
+type Type int
+
+const (
+	ACPI Type = iota + 1 // ACPI PPI implementation
+	EFI                  // EFI PPI implementation
+)
+
+// String implements [fmt.Stringer].
+func (t Type) String() string {
+	switch t {
+	case ACPI:
+		return "ACPI"
+	case EFI:
+		return "EFI"
+	default:
+		return fmt.Sprintf("invalid Type (%d)", t)
+	}
+}
+
 // PPI provides a way to interact with the physical presence interface associated with a TPM.
 type PPI interface {
+	Type() Type
+
 	Version() Version
 
 	// StateTransitionAction returns the action required to transition the device to the pre-OS

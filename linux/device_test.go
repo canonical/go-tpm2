@@ -5,16 +5,67 @@
 package linux_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"os/exec"
 	"path/filepath"
 
 	. "gopkg.in/check.v1"
 
+	efi "github.com/canonical/go-efilib"
 	internal_ppi "github.com/canonical/go-tpm2/internal/ppi"
+	internal_ppi_efi "github.com/canonical/go-tpm2/internal/ppi_efi"
 	. "github.com/canonical/go-tpm2/linux"
 	"github.com/canonical/go-tpm2/ppi"
 	"github.com/canonical/go-tpm2/testutil"
 )
+
+var efiPpGuid = efi.MakeGUID(0xaeb9c5c1, 0x94f1, 0x4d02, 0xbfd9, [...]uint8{0x46, 0x02, 0xdb, 0x2d, 0x3c, 0x54})
+
+type efiPpConfig struct {
+	StructVersion    uint32
+	PPICapabilities  uint32
+	PPIVersion       [8]byte
+	TransitionAction uint32
+	UserConfirmation [64]uint8
+}
+
+type efiPpVars struct {
+	supported bool
+	config    *efiPpConfig
+}
+
+func (v *efiPpVars) Get(name string, guid efi.GUID) (efi.VariableAttributes, []byte, error) {
+	if !v.supported {
+		return 0, nil, efi.ErrVarNotExist
+	}
+
+	if guid != efiPpGuid {
+		return 0, nil, efi.ErrVarNotExist
+	}
+
+	switch name {
+	case "Tcg2PhysicalPresenceFlags":
+		return efi.AttributeNonVolatile | efi.AttributeBootserviceAccess | efi.AttributeRuntimeAccess, []byte{0xe2, 0x00, 0x07, 0x00}, nil
+	case "Tcg2PhysicalPresenceConfig":
+		if v.config == nil {
+			return 0, nil, efi.ErrVarNotExist
+		}
+		buf := new(bytes.Buffer)
+		binary.Write(buf, binary.LittleEndian, v.config)
+		return efi.AttributeNonVolatile | efi.AttributeBootserviceAccess | efi.AttributeRuntimeAccess, buf.Bytes(), nil
+	default:
+		return 0, nil, efi.ErrVarNotExist
+	}
+}
+
+func (v *efiPpVars) Set(name string, guid efi.GUID, attrs efi.VariableAttributes, data []byte) error {
+	return efi.ErrVarsUnavailable
+}
+
+func (v *efiPpVars) List() ([]efi.VariableDescriptor, error) {
+	return nil, efi.ErrVarsUnavailable
+}
 
 type deviceSuite struct {
 	testutil.BaseTest
@@ -27,10 +78,16 @@ func (s *deviceSuite) SetUpTest(c *C) {
 
 var _ = Suite(&deviceSuite{})
 
-func (s *deviceSuite) newSysfsPPI(c *C, path string) ppi.PPI {
-	impl, err := NewSysfsPpi(path)
+func (s *deviceSuite) newEfiPPI(c *C, customVars efi.VarsBackend) ppi.PPI {
+	impl, version, err := internal_ppi_efi.NewBackend(customVars)
 	c.Assert(err, IsNil)
-	return internal_ppi.New(impl.Version, impl)
+	return internal_ppi.New(ppi.EFI, version, impl)
+}
+
+func (s *deviceSuite) newAcpiPPI(c *C, path string) ppi.PPI {
+	impl, err := NewAcpiPpi(path)
+	c.Assert(err, IsNil)
+	return internal_ppi.New(ppi.ACPI, impl.Version, impl)
 }
 
 func (s *deviceSuite) unpackTarball(c *C, path string) string {
@@ -373,11 +430,68 @@ func (s *deviceSuite) TestRawDeviceResourceManagedDeviceTPM1(c *C) {
 	c.Check(err, Equals, ErrNoResourceManagedDevice)
 }
 
-func (s *deviceSuite) TestRawDevicePhysicalPresenceInterface(c *C) {
+func (s *deviceSuite) TestRawDevicePhysicalPresenceInterfaceACPI(c *C) {
+	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
+	s.AddCleanup(MockSysfsPath(sysfsPath))
+	s.AddCleanup(MockEFIVars(new(efiPpVars)))
+
+	expected := s.newAcpiPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+
+	device, err := DefaultTPMDevice()
+	c.Assert(err, IsNil)
+
+	pp, err := device.PhysicalPresenceInterface()
+	c.Assert(err, IsNil)
+	c.Check(pp, DeepEquals, expected)
+}
+
+func (s *deviceSuite) TestRawDevicePhysicalPresenceInterfaceEFI(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
 
-	expected := s.newSysfsPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+	vars := &efiPpVars{
+		supported: true,
+		config: &efiPpConfig{
+			StructVersion:    1,
+			PPIVersion:       [8]byte{'1', '.', '4', 0, 0, 0, 0, 0},
+			TransitionAction: 2,
+		},
+	}
+	s.AddCleanup(MockEFIVars(vars))
+
+	expected := s.newEfiPPI(c, vars)
+
+	device, err := DefaultTPMDevice()
+	c.Assert(err, IsNil)
+
+	pp, err := device.PhysicalPresenceInterface()
+	c.Assert(err, IsNil)
+	c.Check(pp, DeepEquals, expected)
+}
+
+func (s *deviceSuite) TestRawDevicePhysicalPresenceInterfaceACPIPreferredOverIncompleteEFI(c *C) {
+	sysfsPath := s.unpackTarball(c, "testdata/tpm2-device-sysfs.tar")
+	s.AddCleanup(MockSysfsPath(sysfsPath))
+	s.AddCleanup(MockEFIVars(&efiPpVars{supported: true}))
+
+	expected := s.newAcpiPPI(c, filepath.Join(sysfsPath, "devices/platform/STM0125:00/tpm/tpm0/ppi"))
+
+	device, err := DefaultTPMDevice()
+	c.Assert(err, IsNil)
+
+	pp, err := device.PhysicalPresenceInterface()
+	c.Assert(err, IsNil)
+	c.Check(pp, DeepEquals, expected)
+}
+
+func (s *deviceSuite) TestRawDevicePhysicalPresenceInterfaceIncompleteEFI(c *C) {
+	sysfsPath := s.unpackTarball(c, "testdata/tpm1-device-sysfs.tar")
+	s.AddCleanup(MockSysfsPath(sysfsPath))
+
+	vars := &efiPpVars{supported: true}
+	s.AddCleanup(MockEFIVars(vars))
+
+	expected := s.newEfiPPI(c, vars)
 
 	device, err := DefaultTPMDevice()
 	c.Assert(err, IsNil)
@@ -390,6 +504,7 @@ func (s *deviceSuite) TestRawDevicePhysicalPresenceInterface(c *C) {
 func (s *deviceSuite) TestRawDevicePhysicalPresenceInterfaceNone(c *C) {
 	sysfsPath := s.unpackTarball(c, "testdata/tpm1-device-sysfs.tar")
 	s.AddCleanup(MockSysfsPath(sysfsPath))
+	s.AddCleanup(MockEFIVars(new(efiPpVars)))
 
 	device, err := DefaultTPMDevice()
 	c.Assert(err, IsNil)

@@ -16,8 +16,10 @@ import (
 	"strings"
 	"sync"
 
+	efi "github.com/canonical/go-efilib"
 	"github.com/canonical/go-tpm2"
 	internal_ppi "github.com/canonical/go-tpm2/internal/ppi"
+	internal_ppi_efi "github.com/canonical/go-tpm2/internal/ppi_efi"
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/go-tpm2/ppi"
 )
@@ -42,6 +44,8 @@ var (
 	ErrNoTPMDevices = errors.New("no TPM devices are available")
 
 	sysfsPath = "/sys"
+
+	customEfiVars efi.VarsBackend
 )
 
 type nonBlockingTpmFileReader struct {
@@ -238,26 +242,111 @@ type RawDevice struct {
 }
 
 // PhysicalPresenceInterface returns the physical presence interface associated
-// with this device.
+// with this device. This will return the EFI implementation if it's supported, else
+// it will return the ACPI implementation that is exposed via sysfs if supported.
+// If no implementation is supported, an [ErrNoPhysicalPresenceInterface] error
+// will be returned. Calling this function will always return either a pointer to
+// the same interface or the same error for the lifetime of a process.
 func (d *RawDevice) PhysicalPresenceInterface() (ppi.PPI, error) {
 	d.ppiOnce.Do(func() {
 		d.ppi, d.ppiErr = func() (ppi.PPI, error) {
-			backend, err := newSysfsPpi(filepath.Join(d.sysfsPath, "ppi"))
-			switch {
-			case errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission):
-				return nil, ErrNoPhysicalPresenceInterface
-			case err != nil:
-				return nil, fmt.Errorf("cannot initialize PPI backend: %w", err)
+			requestedPpiType, requestedPpiTypeSet := loadForcedPpiType()
+
+			var (
+				efiPpi ppi.PPI
+				efiErr error = ErrNoPhysicalPresenceInterface
+			)
+			if !requestedPpiTypeSet || requestedPpiType == ppi.EFI {
+				// Try to instantiate the EFI PPI implementation first. Linux only associates
+				// the ACPI PPI exposed via sysfs to TPM devices that have a corresponding
+				// node in the ACPI device tree. We'll implement the same behaviour for the
+				// EFI PPI - it will only be accessible from TPM device instances that have a
+				// node in the device tree.
+				_, efiErr = os.Stat(filepath.Join(d.sysfsPath, "device", "firmware_node"))
+				switch {
+				case errors.Is(efiErr, os.ErrNotExist) || errors.Is(efiErr, os.ErrPermission):
+					efiErr = ErrNoPhysicalPresenceInterface
+				case efiErr != nil:
+					efiErr = fmt.Errorf("cannot test whether TPM device is linked to a device tree node: %w", efiErr)
+				default:
+					var backend internal_ppi_efi.PPIBackend
+					var version ppi.Version
+					backend, version, efiErr = internal_ppi_efi.NewBackend(customEfiVars)
+					switch {
+					case errors.Is(efiErr, internal_ppi_efi.ErrUnavailable):
+						// EFI PPI is unavailable. Fall through to trying ACPI PPI.
+						efiErr = ErrNoPhysicalPresenceInterface
+					case efiErr != nil:
+						// Instantiating EFI PPI failed with an unexpected error.
+						// Do nothing with this error - it will be wrapped below.
+						// Fall through to trying ACPI PPI.
+					case backend.SupportsConfig():
+						// Use the EFI PPI implementation
+						return internal_ppi.New(ppi.EFI, version, backend), nil
+					default:
+						// The EFI PPI implementation doesn't support Tcg2PhysicalPresenceConfig.
+						// Save it for now, and only use it if we can't use the ACPI PPI
+						// implementation.
+						efiPpi = internal_ppi.New(ppi.EFI, version, backend)
+					}
+				}
 			}
 
-			return internal_ppi.New(backend.Version, backend), nil
+			var acpiErr error = ErrNoPhysicalPresenceInterface
+			if !requestedPpiTypeSet || requestedPpiType == ppi.ACPI {
+				// Try to instantiate the ACPI PPI implementation that's exposed via sysfs.
+				var backend *acpiPpiImpl
+				backend, acpiErr = newAcpiPpi(filepath.Join(d.sysfsPath, "ppi"))
+				switch {
+				case errors.Is(acpiErr, os.ErrNotExist) || errors.Is(acpiErr, os.ErrPermission):
+					// ACPI PPI is unavailable.
+					acpiErr = ErrNoPhysicalPresenceInterface
+				case acpiErr != nil:
+					// Instantiating ACPI PPI failed with an unexpected error.
+					// Do nothing with this error - it will be wrapped below.
+				default:
+					// Use the ACPI PPI implementation.
+					return internal_ppi.New(ppi.ACPI, backend.Version, backend), nil
+				}
+			}
+
+			if efiPpi != nil {
+				// We can't use the ACPI PPI implementation, but we can use the EFI PPI
+				// implementation with the caveat that it doesn't support
+				// Tcg2PhysicalPresenceConfig, so just return that.
+				return efiPpi, nil
+			}
+
+			// Instantiating a PPI instance failed, so handle the errors here.
+			switch {
+			case acpiErr == ErrNoPhysicalPresenceInterface && efiErr == ErrNoPhysicalPresenceInterface:
+				// Both PPI implementations are unavailable.
+				return nil, ErrNoPhysicalPresenceInterface
+			case efiErr == ErrNoPhysicalPresenceInterface:
+				// The EFI implementation is unavailable and the ACPI implementation returned an
+				// unexpected error. Return the ACPI error.
+				return nil, fmt.Errorf("no EFI PPI available and cannot initialize ACPI PPI backend: %w", acpiErr)
+			case acpiErr == ErrNoPhysicalPresenceInterface:
+				// The ACPI implementation is unavailable and the EFI implementation returned an
+				// unexpected error. Return the EFI error.
+				return nil, fmt.Errorf("no ACPI PPI available and cannot initialize EFI PPI backend: %w", efiErr)
+			default:
+				// Both implementations returned an unexpected error. Return both errors.
+				// TODO: Use errors.Join when we can depend on go1.20. For now, we'll
+				// return both errors without any wrapping.
+				return nil, fmt.Errorf("cannot initialize EFI PPI backend: %v\ncannot initialize ACPI PPI backend: %v", efiErr, acpiErr)
+
+			}
 		}()
 	})
+
 	return d.ppi, d.ppiErr
 }
 
 // ResourceManagedDevice returns the corresponding resource managed device if one
-// is available.
+// is available. If there isn't one, a [ErrNoResourceManagedDevice] error is returned.
+// Calling  this function will always return either a pointer to the same interface or
+// the same error for the lifetime of a process.
 func (d *RawDevice) ResourceManagedDevice() (*RMDevice, error) {
 	d.rmOnce.Do(func() {
 		d.rm, d.rmErr = func() (*RMDevice, error) {
@@ -415,9 +504,10 @@ func probeTpmDevices() (out []*RawDevice, err error) {
 	return out, nil
 }
 
-// ListTPMDevices returns a list of all TPM devices. Note that this returns
-// all devices, regardless of version. It is safe to call this function from
-// multiple goroutines simultaneously.
+// ListTPMDevices returns a list of all TPM devices. Note that this returns all
+// devices, regardless of version. Calling this function always returns the same
+// slice or the same error for the lifetime of a process. It is safe to call this
+// function from multiple goroutines simultaneously.
 func ListTPMDevices() (out []*RawDevice, err error) {
 	devices.once.Do(func() {
 		devices.devices, devices.err = probeTpmDevices()
@@ -425,8 +515,9 @@ func ListTPMDevices() (out []*RawDevice, err error) {
 	return devices.devices, devices.err
 }
 
-// ListTPMDevices returns a list of all TPM2 devices. It is safe to call this
-// function from multiple goroutines simultaneously.
+// ListTPMDevices returns a list of all TPM2 devices. Calling this function always
+// returns the same slice or the same error for the lifetime of a process. It is
+// safe to call this function from multiple goroutines simultaneously.
 func ListTPM2Devices() (out []*RawDevice, err error) {
 	candidates, err := ListTPMDevices()
 	if err != nil {
@@ -443,8 +534,10 @@ func ListTPM2Devices() (out []*RawDevice, err error) {
 }
 
 // DefaultTPMDevice returns the default TPM device. If there are no devices
-// available, then [ErrNoTPMDevices] is returned. It is safe to call this
-// function from multiple goroutines simultaneously.
+// available, then [ErrNoTPMDevices] is returned. Calling this function always
+// returns a pointer to the same device or the same error for the lifetime of
+// a process. It is safe to call this function from multiple goroutines
+// simultaneously.
 func DefaultTPMDevice() (*RawDevice, error) {
 	devices, err := ListTPMDevices()
 	if err != nil {
@@ -458,8 +551,10 @@ func DefaultTPMDevice() (*RawDevice, error) {
 
 // DefaultTPM2Device returns the default TPM2 device. If there are no devices
 // available, then [ErrNoTPMDevices] is returned. If the default TPM device is
-// not a TPM2 device, then [ErrDefaultNotTPM2Device] is returned. It is safe to
-// call this function from multiple goroutines simultaneously.
+// not a TPM2 device, then [ErrDefaultNotTPM2Device] is returned. Calling this
+// function always returns a pointer to the same device or the same error for the
+// lifetime of a process. It is safe to call this function from multiple goroutines
+// simultaneously.
 func DefaultTPM2Device() (*RawDevice, error) {
 	device, err := DefaultTPMDevice()
 	if err != nil {

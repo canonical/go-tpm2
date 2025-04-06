@@ -18,7 +18,7 @@ import (
 	"github.com/canonical/go-tpm2/ppi"
 )
 
-type sysfsPpiImpl struct {
+type acpiPpiImpl struct {
 	sysfsPath string
 	Version   ppi.Version
 
@@ -27,7 +27,7 @@ type sysfsPpiImpl struct {
 	opsError error
 }
 
-func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint32) error {
+func (p *acpiPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint32) error {
 	if arg != nil && p.Version.Compare(ppi.Version13) < 0 {
 		return ppi.ErrOperationUnsupported
 	}
@@ -57,7 +57,7 @@ func (p *sysfsPpiImpl) SubmitOperation(op ppi.OperationId, arg *uint32) error {
 	}
 }
 
-func (p *sysfsPpiImpl) StateTransitionAction() (ppi.StateTransitionAction, error) {
+func (p *acpiPpiImpl) StateTransitionAction() (ppi.StateTransitionAction, error) {
 	actionBytes, err := os.ReadFile(filepath.Join(p.sysfsPath, "transition_action"))
 	if err != nil {
 		return 0, err
@@ -75,7 +75,7 @@ func (p *sysfsPpiImpl) StateTransitionAction() (ppi.StateTransitionAction, error
 	return action, nil
 }
 
-func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus, error) {
+func (p *acpiPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus, error) {
 	p.opsOnce.Do(func() {
 		p.ops, p.opsError = func() (map[ppi.OperationId]ppi.OperationStatus, error) {
 			opsFile, err := os.OpenFile(filepath.Join(p.sysfsPath, "tcg_operations"), os.O_RDONLY, 0)
@@ -122,7 +122,7 @@ func (p *sysfsPpiImpl) OperationStatus(op ppi.OperationId) (ppi.OperationStatus,
 	return status, nil
 }
 
-func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
+func (p *acpiPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 	rspBytes, err := os.ReadFile(filepath.Join(p.sysfsPath, "response"))
 	switch {
 	case errors.Is(err, syscall.EFAULT):
@@ -152,7 +152,7 @@ func (p *sysfsPpiImpl) OperationResponse() (*ppi.OperationResponse, error) {
 	return r, nil
 }
 
-func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
+func newAcpiPpi(path string) (*acpiPpiImpl, error) {
 	versionBytes, err := os.ReadFile(filepath.Join(path, "version"))
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func newSysfsPpi(path string) (*sysfsPpiImpl, error) {
 		return nil, fmt.Errorf("cannot parse version: %w", err)
 	}
 
-	return &sysfsPpiImpl{
+	return &acpiPpiImpl{
 		sysfsPath: path,
 		Version:   version,
 	}, nil
