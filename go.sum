@@ -1,5 +1,7 @@
 github.com/canonical/go-efilib v1.5.0 h1:6Igh42xng23i9IJ992KsOHf/TE74VGGPZ1iW0JeRxSA=
 github.com/canonical/go-efilib v1.5.0/go.mod h1:n0Ttsy1JuHAvqaFbZBs6PAzoiiJdfkHsAmDOEbexYEQ=
+github.com/canonical/go-efilib v1.6.0 h1:0ZFcIclzoMBl6sAaHrSO98YVPUvKAPfXm6kjofhlHHw=
+github.com/canonical/go-efilib v1.6.0/go.mod h1:n0Ttsy1JuHAvqaFbZBs6PAzoiiJdfkHsAmDOEbexYEQ=
 github.com/canonical/go-kbkdf v0.0.0-20250104172618-3b1308f9acf9 h1:Twk1ZSTWRClfGShP16ePf2JIiayqWS4ix1rkAR6baag=
 github.com/canonical/go-kbkdf v0.0.0-20250104172618-3b1308f9acf9/go.mod h1:IneQ5/yQcfPXrGekEXpR6yeea55ZD24N5+kHzeDseOM=
 github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 h1:ZpnhV/YsD2/4cESfV5+Hoeu/iUR3ruzNvZ+yQfO03a0=

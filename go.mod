@@ -3,7 +3,7 @@ module github.com/canonical/go-tpm2
 go 1.18
 
 require (
-	github.com/canonical/go-efilib v1.5.0
+	github.com/canonical/go-efilib v1.6.0
 	github.com/canonical/go-kbkdf v0.0.0-20250104172618-3b1308f9acf9
 	github.com/snapcore/snapd v0.0.0-20201005140838-501d14ac146e
 	golang.org/x/crypto v0.9.0
