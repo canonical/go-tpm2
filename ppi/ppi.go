@@ -112,8 +112,13 @@ const (
 	// operation for TPM2 devices.
 	OperationSetPPRequiredForChangeEPS OperationId = 32
 
-	//OperationLogAllDigests                                           = 33
-	//OperationDisableEndorsementEnableStorageHierarchy                = 34
+	// OperationLogAllDigests corresponds to the LogAllDigests operation for TPM2 devices.
+	OperationLogAllDigests = 33
+
+	// OperationDisableEndorsementEnableStorageHierarchy corresponds to the
+	// DisableEndorsementEnableStorageHierarchy operation for TPM2 devices.
+	OperationDisableEndorsementEnableStorageHierarchy = 34
+
 	//OperationEnableBlockSIDFunc                                      = 96
 	//OperationDisableBlockSIDFunc                                     = 97
 	//OperationSetPPRequiredForEnableBlockSIDFuncTrue                  = 98
@@ -368,7 +373,8 @@ type PPI interface {
 	// OperationStatus returns the status of the specified operation.
 	OperationStatus(op OperationId) (OperationStatus, error)
 
-	// EnableTPM requests that the TPM be enabled by the platform firmware.
+	// EnableTPM requests that the TPM be enabled by the platform firmware by submitting
+	// the OperationEnableTPM operation.
 	// For TPM1.2 devices, the TPM is enabled by executing the TPM_PhysicalEnable command.
 	// For TPM2 devices, the TPM is enabled by not disabling the storage and endorsement hierarchies
 	// with TPM2_HierarchyControl after TPM2_Startup.
@@ -376,7 +382,8 @@ type PPI interface {
 	// order to complete the request.
 	EnableTPM() error
 
-	// DisableTPM requests that the TPM be disabled by the platform firmware.
+	// DisableTPM requests that the TPM be disabled by the platform firmware by submitting
+	// the OperationDisableTPM operation.
 	// For TPM1.2 devices, the TPM is disabled by executing the TPM_PhysicalDisable command.
 	// For TPM2 devices, the TPM is disabled by disabling the storage and endorsement hierarchies
 	// with TPM2_HierarchyControl after TPM2_Startup.
@@ -384,12 +391,14 @@ type PPI interface {
 	// order to complete the request.
 	DisableTPM() error
 
-	// ClearTPM requests that the TPM is cleared by the platform firmware.
+	// ClearTPM requests that the TPM is cleared by the platform firmware by submitting
+	// the OperationClearTPM operation.
 	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
 	// order to complete the request.
 	ClearTPM() error
 
-	// EnableAndClearTPM requests that the TPM is enabled and cleared by the platform firmware.
+	// EnableAndClearTPM requests that the TPM is enabled and cleared by the platform firmware
+	// by submitting the OperationEnableAndClearTPM operation.
 	// For TPM1.2 devices, this also activates the device with the TPM_PhysicalSetDeactivated
 	// command.
 	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
@@ -397,25 +406,42 @@ type PPI interface {
 	EnableAndClearTPM() error
 
 	// SetPCRBanks requests that the PCR banks associated with the specified algorithms are enabled
-	// by the platform firmware.
+	// by the platform firmware, by submitting the OperationSetPCRBanks operation. This is only
+	// implemented for TPM2 devices.
 	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
 	// order to complete the request.
 	SetPCRBanks(algs ...tpm2.HashAlgorithmId) error
 
-	// ChangeEPS requests that the TPM's endorsement primary seed is changed by the platform firmware.
-	// This is only implemented for TPM2 devices.
+	// ChangeEPS requests that the TPM's endorsement primary seed is changed by the platform firmware
+	// by submitting the OperationChangeEPS operation. This is only implemented for TPM2 devices.
 	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
 	// order to complete the request.
 	ChangeEPS() error
 
+	// LogAllDigests tells the platform firmware to add all supported digest algorithms to the TCG
+	// log on the next reboot (and only the next reboot), by submitting the OperationLogAllDigests
+	// operation.
+	LogAllDigests() error
+
+	// DisableEndorsementAndEnableStorageHierarchy requests that the TPM's endorsement hierarchy
+	// is disabled and the storage hierarchy is enabled by platform firmware, by submitting the
+	// OperationDisableEndorsementAndEnableStorageHierarchy operation. This is only implemented
+	// for TPM2 devices. The endorsement hierarchy is disabled with TPM2_HierarchyControl after
+	// TPM2_Startup.
+	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
+	// order to complete the request.
+	DisableEndorsementAndEnableStorageHierarchy() error
+
 	// SetPPRequiredForOperation requests that approval from a physically present user should be
-	// required for the specified operation.
+	// required for the specified operation, by submitting the operation associated with the
+	// return value of OperationId.SetPPRequiredOperationId for the specified operation.
 	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
 	// order to complete the request.
 	SetPPRequiredForOperation(op OperationId) error
 
 	// ClearPPRequiredForOperation requests that approval from a physically present user should not be
-	// required for the specified operation.
+	// required for the specified operation, by submitting the operation associated with the
+	// return value of OperationId.ClearPPRequiredOperationId for the specified operation.
 	// The caller needs to perform the action described by [PPI.StateTransitionAction] in
 	// order to complete the request.
 	ClearPPRequiredForOperation(op OperationId) error

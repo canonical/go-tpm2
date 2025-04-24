@@ -100,6 +100,14 @@ func (p *PPI) ChangeEPS() error {
 	return p.submitOperation(ppi.OperationChangeEPS)
 }
 
+func (p *PPI) LogAllDigests() error {
+	return p.submitOperation(ppi.OperationLogAllDigests)
+}
+
+func (p *PPI) DisableEndorsementAndEnableStorageHierarchy() error {
+	return p.submitOperation(ppi.OperationDisableEndorsementEnableStorageHierarchy)
+}
+
 func (p *PPI) SetPPRequiredForOperation(op ppi.OperationId) error {
 	op = op.SetPPRequiredOperationId()
 	if op == ppi.NoOperation {

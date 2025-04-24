@@ -225,6 +225,34 @@ func (s *ppiSuite) TestPPIChangeEPSErr(c *C) {
 	c.Check(backend.submitted, DeepEquals, []submittedOp(nil))
 }
 
+func (s *ppiSuite) TestPPILogAllDigest(c *C) {
+	backend := new(mockPPIBackend)
+	pp := New(ppi.ACPI, ppi.Version13, backend)
+	c.Check(pp.LogAllDigests(), IsNil)
+	c.Check(backend.submitted, DeepEquals, []submittedOp{{op: ppi.OperationLogAllDigests}})
+}
+
+func (s *ppiSuite) TestPPILogAllDigestErr(c *C) {
+	backend := &mockPPIBackend{submitErr: ppi.ErrOperationFailed}
+	pp := New(ppi.ACPI, ppi.Version13, backend)
+	c.Check(pp.LogAllDigests(), Equals, ppi.ErrOperationFailed)
+	c.Check(backend.submitted, DeepEquals, []submittedOp(nil))
+}
+
+func (s *ppiSuite) TestPPIDisableEndorsementAndEnableStorageHierarchy(c *C) {
+	backend := new(mockPPIBackend)
+	pp := New(ppi.ACPI, ppi.Version13, backend)
+	c.Check(pp.DisableEndorsementAndEnableStorageHierarchy(), IsNil)
+	c.Check(backend.submitted, DeepEquals, []submittedOp{{op: ppi.OperationDisableEndorsementEnableStorageHierarchy}})
+}
+
+func (s *ppiSuite) TestPPIDisableEndorsementandEnableStorageHierarchyErr(c *C) {
+	backend := &mockPPIBackend{submitErr: ppi.ErrOperationFailed}
+	pp := New(ppi.ACPI, ppi.Version13, backend)
+	c.Check(pp.DisableEndorsementAndEnableStorageHierarchy(), Equals, ppi.ErrOperationFailed)
+	c.Check(backend.submitted, DeepEquals, []submittedOp(nil))
+}
+
 func (s *ppiSuite) TestPPISetPPRequiredForOperationClearTPM(c *C) {
 	backend := new(mockPPIBackend)
 	pp := New(ppi.ACPI, ppi.Version13, backend)
