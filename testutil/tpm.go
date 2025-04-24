@@ -707,10 +707,24 @@ func (d *TransportBackedDevice) NumberOpen() int {
 }
 
 type duplicateTransport struct {
-	*Transport
-	device *TransportBackedDevice
+	transport *Transport
+	device    *TransportBackedDevice
 
 	closed bool
+}
+
+func (t *duplicateTransport) Read(p []byte) (int, error) {
+	if t.closed {
+		return 0, errors.New("transport already closed")
+	}
+	return t.transport.Read(p)
+}
+
+func (t *duplicateTransport) Write(p []byte) (int, error) {
+	if t.closed {
+		return 0, errors.New("transport already closed")
+	}
+	return t.transport.Write(p)
 }
 
 func (t *duplicateTransport) Close() error {
@@ -725,11 +739,11 @@ func (t *duplicateTransport) Close() error {
 	if !t.device.closable {
 		return nil
 	}
-	return t.Transport.Close()
+	return t.transport.Close()
 }
 
 func (t *duplicateTransport) Unwrap() tpm2.Transport {
-	return t.Transport
+	return t.transport
 }
 
 // Open implements [tpm2.TPMDevice.Open]. Whilst most implementations of this
@@ -747,7 +761,7 @@ func (d *TransportBackedDevice) Open() (tpm2.Transport, error) {
 
 	d.opened += 1
 	return &duplicateTransport{
-		Transport: d.transport,
+		transport: d.transport,
 		device:    d,
 	}, nil
 }
